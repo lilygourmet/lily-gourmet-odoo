@@ -175,6 +175,7 @@ export default function Calendar({ user, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('')
 
   const [selected, setSelected] = useState(null)
+  const [diffPopupOrder, setDiffPopupOrder] = useState(null)
   const [stepsMap, setStepsMap] = useState({})
   const [profiles, setProfiles] = useState({})
 
@@ -389,15 +390,21 @@ export default function Calendar({ user, onLogout }) {
   }, [currentMonday, filteredOrders, isSearching, typeFilter, statusFilter, stepsMap])
 
   function openCapsule(capsule) {
-    if (capsule.kind === 'item') {
-      setSelected({ order: capsule.order, focusItemId: capsule.item.id })
+    const focusItemId = capsule.kind === 'item' ? capsule.item.id : null
+    // Si la commande a une modification non vue ET pas annulee -> popup diff d'abord
+    if (capsule.order.modified_at && capsule.order.odoo_state !== 'cancel') {
+      setDiffPopupOrder({ order: capsule.order, focusItemId })
     } else {
-      setSelected({ order: capsule.order, focusItemId: null })
+      setSelected({ order: capsule.order, focusItemId })
     }
   }
 
   function openOrder(order) {
-    setSelected({ order, focusItemId: null })
+    if (order.modified_at && order.odoo_state !== 'cancel') {
+      setDiffPopupOrder({ order, focusItemId: null })
+    } else {
+      setSelected({ order, focusItemId: null })
+    }
   }
 
   return (
@@ -590,6 +597,17 @@ export default function Calendar({ user, onLogout }) {
             </div>
           </div>
         </div>
+      )}
+
+      {diffPopupOrder && (
+        <DiffPopup
+          order={diffPopupOrder.order}
+          onClose={() => setDiffPopupOrder(null)}
+          onViewDetails={() => {
+            setSelected({ order: diffPopupOrder.order, focusItemId: diffPopupOrder.focusItemId })
+            setDiffPopupOrder(null)
+          }}
+        />
       )}
 
       {selected && (
@@ -974,3 +992,159 @@ function GMItemCapsule({ order, item, stepsMap }) {
     </div>
   )
 }
+
+// ==========================================
+// DIFF POPUP - affiche les modifications d'une commande
+// ==========================================
+
+const DIFF_FIELD_LABELS = {
+  title: 'Produit',
+  theme: 'Thème',
+  message: 'Message',
+  age: 'Âge',
+  parfums: 'Parfums',
+  etages_count: 'Étages',
+  pers: 'Personnes / Boîte',
+  taille_value: 'Taille',
+  quantity: 'Quantité',
+  image_urls: 'Photos',
+  warnings: 'Avertissement',
+}
+
+function formatDiffValue(val) {
+  if (val == null || val === '') return '—'
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '—'
+    if (val.every(v => typeof v === 'string')) return val.join(', ')
+    return `${val.length} élément(s)`
+  }
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
+
+function DiffPopup({ order, onClose, onViewDetails }) {
+  const items = order.order_items || []
+  const itemsByIdx = new Map()
+  for (const it of items) itemsByIdx.set(it.item_idx, it)
+
+  // Construit la liste des modifications a afficher
+  const modifiedItems = items
+    .filter(it => it.last_changes && Object.keys(it.last_changes).length > 0)
+    .sort((a, b) => a.item_idx - b.item_idx)
+
+  // Items ajoutes ou supprimes (depuis last_changes_summary)
+  const summary = order.last_changes_summary || {}
+  const itemActions = []
+  for (const [key, changes] of Object.entries(summary)) {
+    const idx = parseInt(key.replace('item_', ''), 10)
+    if (Array.isArray(changes)) {
+      if (changes.includes('ajoute')) itemActions.push({ idx, action: 'ajoute', item: itemsByIdx.get(idx) })
+      if (changes.includes('supprime')) itemActions.push({ idx, action: 'supprime' })
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm animate-fadeIn"
+      onClick={onClose}
+    >
+      <div
+        className="bg-cream rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl border border-line"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="border-b border-line px-6 py-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[16px]">📝</span>
+            <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-gold font-bold">
+              Modification
+            </span>
+          </div>
+          <div className="font-fraunces italic text-[20px] font-medium text-ink leading-tight">
+            Cette commande a été modifiée
+          </div>
+          <div className="font-mono text-[11px] text-bordeaux mt-1.5">
+            {order.order_num} · {order.client_name}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-5 space-y-4">
+          {modifiedItems.length === 0 && itemActions.length === 0 && (
+            <div className="text-center text-ink-mute italic py-4">
+              Aucun détail disponible
+            </div>
+          )}
+
+          {/* Items modifies */}
+          {modifiedItems.map(item => (
+            <div key={item.id} className="rounded-lg border border-line/60 bg-cream-warm p-3">
+              <div className="font-mono text-[10px] tracking-wider uppercase text-bordeaux font-semibold mb-2">
+                {item.type}- {item.title}
+              </div>
+              <div className="space-y-1.5">
+                {Object.entries(item.last_changes).map(([field, change]) => (
+                  <div key={field} className="text-[12px] leading-snug">
+                    <span className="font-medium text-ink">
+                      {DIFF_FIELD_LABELS[field] || field}
+                    </span>
+                    <span className="text-ink-mute"> : </span>
+                    <span className="text-bordeaux line-through">
+                      {formatDiffValue(change.from)}
+                    </span>
+                    <span className="text-ink-mute mx-1">→</span>
+                    <span className="text-ok font-medium">
+                      {formatDiffValue(change.to)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Items ajoutes / supprimes */}
+          {itemActions.map(({ idx, action, item }) => (
+            <div key={`act-${idx}-${action}`} className="rounded-lg border border-gold/40 bg-gold/5 p-3">
+              <div className="text-[12px]">
+                {action === 'ajoute' ? (
+                  <>
+                    <span className="font-mono text-[10px] tracking-wider uppercase text-gold font-semibold">
+                      ➕ Item ajouté
+                    </span>
+                    {item && (
+                      <span className="text-ink ml-2">
+                        {item.type}- {item.title}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="font-mono text-[10px] tracking-wider uppercase text-bordeaux font-semibold">
+                    ➖ Item supprimé (idx {idx})
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-line px-6 py-4 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 text-[11px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded-lg hover:bg-cream-warm transition-all"
+          >
+            Fermer
+          </button>
+          <button
+            onClick={onViewDetails}
+            className="flex-1 px-4 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all"
+          >
+            Voir détails
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ==========================================
