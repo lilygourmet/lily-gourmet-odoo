@@ -3,9 +3,6 @@
 
 /**
  * Parse une commande Odoo + ses lignes en format app.
- * @param {Object} odooOrder - sale.order
- * @param {Array} odooLines - sale.order.line
- * @returns {Object|null}
  */
 export function parseOdooOrder(odooOrder, odooLines) {
   if (!odooOrder || !odooLines) return null
@@ -84,16 +81,21 @@ function parseItems(odooLines, warning) {
   const items = []
 
   for (const line of odooLines) {
-    const productName = line.name || ''
+    // IMPORTANT : trim() pour enlever les \n  en debut de nom
+    const productName = (line.name || '').trim()
 
     if (shouldIgnoreProduct(productName)) continue
 
     const quantity = parseFloat(line.product_uom_qty) || 0
     if (quantity === 0) continue
 
-    const type = /^CD-/i.test(productName.trim()) ? 'CD' : 'GM'
+    const type = /^CD-/i.test(productName) ? 'CD' : 'GM'
 
     const title = extractTitle(productName)
+
+    // Si on n'arrive pas a extraire un titre, on skip cette ligne
+    if (!title) continue
+
     const theme = extractField(productName, 'Thème', ['Age', 'Message', 'Option'])
     const age = extractField(productName, 'Age', ['Message', 'Option'])
     const message = extractField(productName, 'Message', ['Age', 'Option', 'Acompte'])
@@ -125,21 +127,30 @@ function parseItems(odooLines, warning) {
 }
 
 function extractTitle(productName) {
-  const match = productName.match(/^(?:CD-|GM-)\s*([^\n]+?)(?=\s*(?:Thème|Age|Message|Option)\s*:|$)/s)
-  if (match) return match[1].trim()
-  return productName.split('\n')[0].replace(/^(CD-|GM-)\s*/, '').trim()
+  // productName est deja trim()
+  // 1) On enleve le prefixe CD-/GM- (avec ou sans espace apres)
+  let cleaned = productName.replace(/^(CD-|GM-)\s*/i, '')
+
+  // 2) On prend tout jusqu'au premier "Thème:" / "Age:" / "Message:" / "Option:"
+  // (le tout en mode multiligne car le nom contient des \n)
+  const stopMatch = cleaned.match(/^([\s\S]*?)(?:\n\s*)?(?:Thème|Age|Message|Option)\s*:/m)
+  if (stopMatch) {
+    cleaned = stopMatch[1]
+  }
+
+  // 3) On nettoie : trim + remplace \n et multiples espaces par 1 espace
+  cleaned = cleaned.replace(/\s+/g, ' ').trim()
+
+  return cleaned || null
 }
 
 /**
  * Decompose le titre en parties (etages, pers, taille, parfums)
- * @param {string} title
- * @param {string} type - 'CD' ou 'GM'
  */
 function decomposeTitle(title, type) {
   const empty = { etages: null, pers: null, taille_value: null, parfums: [] }
   if (!title) return empty
 
-  // Etages : seulement pour CD-
   let etages = null
   if (type === 'CD') {
     const etagesMatch = title.match(/(\d+)\s*étages?/i)
@@ -157,7 +168,6 @@ function decomposeTitle(title, type) {
   let parfums = []
 
   if (type === 'CD') {
-    // CD- : 1er element = pers (nombre), reste = parfums
     if (etages && /^\d+$/.test(parts[0])) {
       pers = parseInt(parts[0], 10)
       parfums = parts.slice(1)
@@ -165,18 +175,16 @@ function decomposeTitle(title, type) {
       parfums = parts
     }
   } else {
-    // GM- : 1er element = "boite de N" (pers) OU taille texte
+    // GM-
     const first = parts[0]
     const boiteMatch = first.match(/^[Bb]oite\s+de\s+(\d+)$/i)
     if (boiteMatch) {
       pers = parseInt(boiteMatch[1], 10)
       parfums = parts.slice(1)
     } else if (/^\d+$/.test(first)) {
-      // Au cas ou : "(24, Mixte)" sans le mot "boite"
       pers = parseInt(first, 10)
       parfums = parts.slice(1)
     } else {
-      // Texte (Grand, Grand simple, 500g...) -> taille_value
       taille_value = first
       parfums = parts.slice(1)
     }
@@ -186,20 +194,26 @@ function decomposeTitle(title, type) {
 }
 
 function extractField(text, fieldName, stopWords) {
+  // Echapper les chars speciaux dans les stopWords (ex: 'è' dans 'Thème')
   const stopPattern = stopWords.map(w => `${w}\\s*:`).join('|')
-  const regex = new RegExp(`${fieldName}\\s*:\\s*([^\\n]*?)(?=\\s+(?:${stopPattern})|\\s*$)`, 's')
+  // Mode multiligne : on accepte \n entre les champs
+  const regex = new RegExp(
+    `${fieldName}\\s*:\\s*([\\s\\S]*?)(?=\\s*(?:${stopPattern})|\\s*$)`,
+    'i'
+  )
   const match = text.match(regex)
   if (!match) return null
 
   let value = match[1].trim()
   if (!value) return null
 
+  // Stop sur les autres mots cles si trouves
   for (const stop of stopWords) {
-    const stopIdx = value.search(new RegExp(`\\b${stop}\\s*:`))
+    const stopIdx = value.search(new RegExp(`\\b${stop}\\s*:`, 'i'))
     if (stopIdx !== -1) value = value.substring(0, stopIdx).trim()
   }
 
-  if (/^(Age|Message|Thème|Option)\s*:?\s*$/.test(value)) return null
+  if (/^(Age|Message|Thème|Option)\s*:?\s*$/i.test(value)) return null
 
   return cleanText(value)
 }
