@@ -21,7 +21,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // Verification du token
   const authHeader = req.headers['authorization'] || ''
   const tokenFromHeader = authHeader.startsWith('Bearer ')
     ? authHeader.substring(7).trim() : ''
@@ -43,9 +42,8 @@ export default async function handler(req, res) {
 
     console.log('[sync] Recuperation commandes Odoo...')
     const { orders, lines } = await fetchOdooOrders(uid)
-    console.log(`[sync] ${orders.length} commandes, ${lines.length} lignes`)
+    console.log(`[sync] ${orders.length} commandes (sale+cancel), ${lines.length} lignes`)
 
-    // Group lignes par order_id (et garde aussi product_id par ligne)
     const linesByOrderId = new Map()
     for (const line of lines) {
       const orderId = Array.isArray(line.order_id) ? line.order_id[0] : line.order_id
@@ -56,9 +54,7 @@ export default async function handler(req, res) {
     const parsed = parseOdooOrders(orders, linesByOrderId)
     console.log(`[sync] ${parsed.length} commandes avec items CD/GM`)
 
-    // Pour chaque item parse, on retrouve son product_id (depuis la ligne Odoo correspondante)
-    // Le parser ne le fait pas, on l'ajoute ici en faisant le matching par titre/index
-    enrichWithProductIds(parsed, linesByOrderId)
+    enrichWithLineIds(parsed, linesByOrderId)
 
     const supabase = createClient(
       process.env.VITE_SUPABASE_URL,
@@ -66,20 +62,19 @@ export default async function handler(req, res) {
       { auth: { persistSession: false } }
     )
 
-    // Upload des images produits (avec cache pour ne pas re-uploader)
-    console.log('[sync] Traitement images produits...')
-    const productImageUrls = await syncProductImages(supabase, uid, parsed)
-    console.log(`[sync] ${productImageUrls.size} images en cache`)
+    console.log('[sync] Traitement images attachments...')
+    const imagesByLineId = await syncLineAttachments(supabase, uid, parsed)
 
-    // Sync vers Supabase
-    const stats = await syncToSupabase(supabase, parsed, productImageUrls)
+    applyImageFallback(parsed, imagesByLineId)
+
+    const stats = await syncToSupabase(supabase, parsed)
 
     return res.status(200).json({
       success: true,
       duration_ms: Date.now() - startTime,
       odoo_orders_fetched: orders.length,
       orders_with_cd_gm: parsed.length,
-      images_in_cache: productImageUrls.size,
+      lines_with_images: imagesByLineId.size,
       ...stats,
     })
   } catch (e) {
@@ -154,9 +149,10 @@ async function fetchOdooOrders(uid) {
   const dateStart = fmtDate(today)
   const dateEnd = fmtDate(new Date(in14Days.getTime() + 86399999))
 
+  // On fetch sale + cancel pour pouvoir afficher les annulees barrees
   const orders = await odooSearchRead(uid, 'sale.order',
     [
-      ['state', '=', 'sale'],
+      ['state', 'in', ['sale', 'cancel']],
       ['commitment_date', '>=', dateStart],
       ['commitment_date', '<=', dateEnd],
     ],
@@ -181,14 +177,13 @@ async function fetchOdooOrders(uid) {
 }
 
 // ==========================================
-// MATCHING : retrouve le product_id Odoo de chaque item parse
+// MATCHING : retrouve le line_id de chaque item parse
 // ==========================================
 
-function enrichWithProductIds(parsedOrders, linesByOrderId) {
+function enrichWithLineIds(parsedOrders, linesByOrderId) {
   for (const po of parsedOrders) {
     const odooLines = linesByOrderId.get(po.odooId) || []
 
-    // On filtre les lignes Odoo qui correspondent a un item CD/GM (meme logique que le parser)
     const cdGmLines = odooLines.filter(line => {
       const trimmed = (line.name || '').trim()
       if (!/^(CD-|GM-)/i.test(trimmed)) return false
@@ -199,12 +194,13 @@ function enrichWithProductIds(parsedOrders, linesByOrderId) {
       return true
     })
 
-    // On match par index : le i-eme item parse correspond a la i-eme ligne CD/GM
     po.items.forEach((item, idx) => {
       const odooLine = cdGmLines[idx]
-      if (odooLine && Array.isArray(odooLine.product_id)) {
-        item.productId = odooLine.product_id[0]
+      if (odooLine) {
+        item.lineId = odooLine.id
+        item.productId = Array.isArray(odooLine.product_id) ? odooLine.product_id[0] : null
       } else {
+        item.lineId = null
         item.productId = null
       }
     })
@@ -212,94 +208,210 @@ function enrichWithProductIds(parsedOrders, linesByOrderId) {
 }
 
 // ==========================================
-// SYNC IMAGES PRODUITS (avec cache)
+// FETCH + UPLOAD ATTACHMENTS DES LIGNES
 // ==========================================
 
-async function syncProductImages(supabase, uid, parsedOrders) {
-  // Map<productId, publicUrl>
+async function syncLineAttachments(supabase, uid, parsedOrders) {
   const result = new Map()
 
-  // 1. Recolte tous les productId distincts
-  const productIds = new Set()
+  const lineIds = []
   for (const po of parsedOrders) {
     for (const item of po.items) {
-      if (item.productId) productIds.add(item.productId)
+      if (item.lineId) lineIds.push(item.lineId)
     }
   }
+  if (lineIds.length === 0) return result
 
-  if (productIds.size === 0) return result
+  const allAttachments = []
+  const batchSize = 100
+  for (let i = 0; i < lineIds.length; i += batchSize) {
+    const batch = lineIds.slice(i, i + batchSize)
+    const atts = await odooSearchRead(uid, 'ir.attachment',
+      [
+        ['res_model', '=', 'sale.order.line'],
+        ['res_id', 'in', batch],
+        ['mimetype', 'ilike', 'image/'],
+      ],
+      ['id', 'res_id', 'name', 'mimetype', 'file_size'],
+      {}
+    )
+    allAttachments.push(...atts)
+  }
 
-  // 2. Pour chaque productId, on regarde si on a deja l'image dans le bucket
-  // On nomme les fichiers comme product_<id>.jpg
-  const fileNames = Array.from(productIds).map(pid => `product_${pid}.jpg`)
+  console.log(`[sync] ${allAttachments.length} attachments image trouves`)
+  if (allAttachments.length === 0) return result
 
-  // List les fichiers existants dans le bucket
+  const attsByLineId = new Map()
+  for (const att of allAttachments) {
+    const lineId = att.res_id
+    if (!attsByLineId.has(lineId)) attsByLineId.set(lineId, [])
+    attsByLineId.get(lineId).push(att)
+  }
+
   const { data: existingFiles, error: listErr } = await supabase
-    .storage.from(STORAGE_BUCKET).list('', { limit: 1000 })
+    .storage.from(STORAGE_BUCKET).list('', { limit: 5000 })
 
   const existingSet = new Set()
   if (!listErr && existingFiles) {
     for (const f of existingFiles) existingSet.add(f.name)
   }
 
-  // 3. Pour ceux qui manquent, on telecharge depuis Odoo et upload dans Supabase
-  const missingProductIds = Array.from(productIds).filter(pid => !existingSet.has(`product_${pid}.jpg`))
+  const toDownload = []
+  for (const att of allAttachments) {
+    const ext = guessExt(att.mimetype)
+    const fileName = `line_${att.res_id}_att_${att.id}.${ext}`
+    if (!existingSet.has(fileName)) {
+      toDownload.push({ att, fileName })
+    }
+  }
 
-  if (missingProductIds.length > 0) {
-    console.log(`[sync] ${missingProductIds.length} images a telecharger depuis Odoo`)
+  console.log(`[sync] ${toDownload.length} images a telecharger depuis Odoo`)
 
-    // Recupere les images en batch (limite a 50 par appel pour eviter timeout)
-    const batchSize = 20
-    for (let i = 0; i < missingProductIds.length; i += batchSize) {
-      const batch = missingProductIds.slice(i, i + batchSize)
-      const products = await odooRead(uid, 'product.product', batch, ['id', 'image_1024'])
+  if (toDownload.length > 0) {
+    const dlBatchSize = 10
+    for (let i = 0; i < toDownload.length; i += dlBatchSize) {
+      const slice = toDownload.slice(i, i + dlBatchSize)
+      const ids = slice.map(s => s.att.id)
+      const datas = await odooRead(uid, 'ir.attachment', ids, ['datas'])
 
-      for (const p of products) {
-        if (!p.image_1024) continue
-        const fileName = `product_${p.id}.jpg`
-        // Decode base64 -> Buffer
-        const buffer = Buffer.from(p.image_1024, 'base64')
-        const { error: uploadErr } = await supabase
+      for (let j = 0; j < slice.length; j++) {
+        const { att, fileName } = slice[j]
+        const data = datas.find(d => d.id === att.id)
+        if (!data?.datas) continue
+
+        const buffer = Buffer.from(data.datas, 'base64')
+        const { error: upErr } = await supabase
           .storage.from(STORAGE_BUCKET)
           .upload(fileName, buffer, {
-            contentType: 'image/jpeg',
+            contentType: att.mimetype,
             upsert: true,
           })
-        if (uploadErr) {
-          console.error(`[sync] Erreur upload image ${fileName}:`, uploadErr.message)
+        if (upErr) {
+          console.error(`[sync] Erreur upload ${fileName}: ${upErr.message}`)
         }
       }
     }
   }
 
-  // 4. Genere les URLs publiques pour tous les productIds (existants + nouveaux)
-  for (const pid of productIds) {
-    const fileName = `product_${pid}.jpg`
-    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName)
-    if (data?.publicUrl) result.set(pid, data.publicUrl)
+  for (const [lineId, atts] of attsByLineId) {
+    const urls = []
+    for (const att of atts) {
+      const ext = guessExt(att.mimetype)
+      const fileName = `line_${lineId}_att_${att.id}.${ext}`
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName)
+      if (data?.publicUrl) urls.push(data.publicUrl)
+    }
+    if (urls.length > 0) result.set(lineId, urls)
   }
 
   return result
 }
 
+function guessExt(mimetype) {
+  if (!mimetype) return 'bin'
+  if (mimetype.includes('jpeg') || mimetype.includes('jpg')) return 'jpg'
+  if (mimetype.includes('png')) return 'png'
+  if (mimetype.includes('webp')) return 'webp'
+  if (mimetype.includes('gif')) return 'gif'
+  if (mimetype.includes('heic')) return 'heic'
+  return 'bin'
+}
+
 // ==========================================
-// SYNC SUPABASE (intelligent)
+// FALLBACK : GM- sans photo prend les photos des CD- de la commande
 // ==========================================
 
-async function syncToSupabase(supabase, parsedOrders, productImageUrls) {
+function applyImageFallback(parsedOrders, imagesByLineId) {
+  for (const po of parsedOrders) {
+    const cdImages = []
+    for (const item of po.items) {
+      if (item.type === 'CD' && item.lineId) {
+        const urls = imagesByLineId.get(item.lineId)
+        if (urls && urls.length > 0) cdImages.push(...urls)
+      }
+    }
+
+    for (const item of po.items) {
+      const ownUrls = item.lineId ? imagesByLineId.get(item.lineId) : null
+      if (ownUrls && ownUrls.length > 0) {
+        item.image_urls = ownUrls
+      } else if (item.type === 'GM' && cdImages.length > 0) {
+        item.image_urls = [...cdImages]
+      } else {
+        item.image_urls = []
+      }
+    }
+  }
+}
+
+// ==========================================
+// DETECTION DES MODIFICATIONS
+// ==========================================
+
+// Champs qu'on suit pour la detection de modifications
+const TRACKED_FIELDS = [
+  'title', 'theme', 'message', 'age', 'parfums',
+  'etages_count', 'pers', 'taille_value',
+  'quantity', 'image_urls', 'warnings',
+]
+
+// Compare 2 valeurs (gere arrays/objets via JSON)
+function isEqual(a, b) {
+  if (a === b) return true
+  if (a == null && b == null) return true
+  if (a == null || b == null) return false
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+// Renvoie un objet avec les champs modifies (avant/apres)
+// Ex: { title: { from: "x", to: "y" }, parfums: { from: [...], to: [...] } }
+function diffItems(existingItem, newRow) {
+  const changes = {}
+
+  // Mapping entre les champs JS du parser et les colonnes Supabase
+  const fieldMap = {
+    title: 'title',
+    theme: 'theme',
+    message: 'message',
+    age: 'age',
+    parfums: 'parfums',
+    etages_count: 'etages_count',
+    pers: 'pers',
+    taille_value: 'taille_value',
+    quantity: 'quantity',
+    image_urls: 'image_urls',
+    warnings: 'warnings',
+  }
+
+  for (const field of TRACKED_FIELDS) {
+    const col = fieldMap[field]
+    const oldVal = existingItem[col]
+    const newVal = newRow[col]
+    if (!isEqual(oldVal, newVal)) {
+      changes[field] = { from: oldVal, to: newVal }
+    }
+  }
+
+  return Object.keys(changes).length > 0 ? changes : null
+}
+
+// ==========================================
+// SYNC SUPABASE (intelligent + diff)
+// ==========================================
+
+async function syncToSupabase(supabase, parsedOrders) {
   let added = 0
   let updated = 0
+  let cancelled = 0
   let itemsAdded = 0
   let itemsUpdated = 0
+  let itemsModified = 0  // nb d'items qui ont eu un changement detecte
   let itemsDeleted = 0
   let warningResets = 0
   const errors = []
 
   for (const po of parsedOrders) {
     try {
-      // ==========================================
-      // 1) UPSERT order (sans toucher seller_*)
-      // ==========================================
       const orderRow = {
         order_num: po.orderNum,
         client_name: po.clientName,
@@ -312,48 +424,47 @@ async function syncToSupabase(supabase, parsedOrders, productImageUrls) {
 
       const { data: existingOrder } = await supabase
         .from('orders')
-        .select('id')
+        .select('id, odoo_state')
         .eq('odoo_id', po.odooId)
         .maybeSingle()
 
       let orderId
+      let isNewOrder = false
       if (existingOrder) {
         const { error } = await supabase
           .from('orders').update(orderRow).eq('id', existingOrder.id)
         if (error) throw error
         orderId = existingOrder.id
+        // Comptage : si l'etat passe a 'cancel', on incrémente cancelled
+        if (po.odooState === 'cancel' && existingOrder.odoo_state !== 'cancel') {
+          cancelled++
+        }
         updated++
       } else {
         const { data, error } = await supabase
           .from('orders').insert(orderRow).select('id').single()
         if (error) throw error
         orderId = data.id
+        isNewOrder = true
         added++
       }
 
-      // ==========================================
-      // 2) SYNC items (intelligent : par item_idx)
-      // ==========================================
-
-      // Recupere les items existants pour cette commande
+      // Recupere TOUS les champs des items existants pour faire le diff
       const { data: existingItems } = await supabase
         .from('order_items')
-        .select('id, item_idx, warnings')
+        .select('*')
         .eq('order_id', orderId)
 
       const existingByIdx = new Map()
-      for (const it of (existingItems || [])) {
-        existingByIdx.set(it.item_idx, it)
-      }
+      for (const it of (existingItems || [])) existingByIdx.set(it.item_idx, it)
 
-      // Pour chaque item parse, on UPDATE ou INSERT
       const newIdxSet = new Set()
+      const orderChanges = {}  // resume des changements au niveau commande
+      let orderHasChanges = false
+
       for (let idx = 0; idx < po.items.length; idx++) {
         const item = po.items[idx]
         newIdxSet.add(idx)
-
-        const imageUrl = item.productId ? productImageUrls.get(item.productId) : null
-        const imageUrls = imageUrl ? [imageUrl] : []
 
         const itemBaseRow = {
           type: item.type,
@@ -368,21 +479,32 @@ async function syncToSupabase(supabase, parsedOrders, productImageUrls) {
           taille_value: item.taille_value,
           taille_unit: null,
           warnings: item.warnings || [],
-          image_urls: imageUrls,
+          image_urls: item.image_urls || [],
           quantity: item.quantity,
         }
 
         const existing = existingByIdx.get(idx)
         if (existing) {
-          // UPDATE : on ne touche PAS a polys, delivered_at, delivered_by
+          // Detection des modifications
+          const changes = diffItems(existing, itemBaseRow)
+
+          const updateRow = { ...itemBaseRow }
+          if (changes) {
+            updateRow.last_changes = changes
+            updateRow.modified_at = new Date().toISOString()
+            itemsModified++
+            orderChanges[`item_${idx}`] = Object.keys(changes)
+            orderHasChanges = true
+          }
+
           const { error } = await supabase
             .from('order_items')
-            .update(itemBaseRow)
+            .update(updateRow)
             .eq('id', existing.id)
           if (error) throw error
           itemsUpdated++
 
-          // Si le warning a change, reset des warning_reads
+          // Reset warning_reads si warning a change
           const oldWarnings = JSON.stringify(existing.warnings || [])
           const newWarnings = JSON.stringify(item.warnings || [])
           if (oldWarnings !== newWarnings) {
@@ -390,7 +512,7 @@ async function syncToSupabase(supabase, parsedOrders, productImageUrls) {
             warningResets++
           }
         } else {
-          // INSERT : nouveau item
+          // Nouvel item
           const fullRow = {
             order_id: orderId,
             item_idx: idx,
@@ -399,15 +521,33 @@ async function syncToSupabase(supabase, parsedOrders, productImageUrls) {
           const { error } = await supabase.from('order_items').insert(fullRow)
           if (error) throw error
           itemsAdded++
+          // Si la commande existait deja mais qu'un item est ajoute, c'est une modif
+          if (!isNewOrder) {
+            orderChanges[`item_${idx}`] = ['ajoute']
+            orderHasChanges = true
+          }
         }
       }
 
-      // Items qui n'existent plus dans Odoo : DELETE
+      // Items supprimes
       for (const [idx, existing] of existingByIdx) {
         if (!newIdxSet.has(idx)) {
           await supabase.from('order_items').delete().eq('id', existing.id)
           itemsDeleted++
+          orderChanges[`item_${idx}`] = ['supprime']
+          orderHasChanges = true
         }
+      }
+
+      // Met a jour le drapeau "modifie" au niveau commande (si pas nouveau et qu'il y a eu changement)
+      if (!isNewOrder && orderHasChanges) {
+        await supabase
+          .from('orders')
+          .update({
+            modified_at: new Date().toISOString(),
+            last_changes_summary: orderChanges,
+          })
+          .eq('id', orderId)
       }
     } catch (e) {
       console.error(`[sync] Erreur sur ${po.orderNum}:`, e.message)
@@ -418,8 +558,10 @@ async function syncToSupabase(supabase, parsedOrders, productImageUrls) {
   return {
     added,
     updated,
+    cancelled,
     items_added: itemsAdded,
     items_updated: itemsUpdated,
+    items_modified: itemsModified,
     items_deleted: itemsDeleted,
     warning_resets: warningResets,
     errors_count: errors.length,
