@@ -313,9 +313,12 @@ export async function loadOrdersForWeek(monday) {
     .from('orders')
     .select(`
       id, order_num, client_name, delivery_at, seller_name,
+      odoo_state, modified_at, last_changes_summary,
       order_items (
         id, item_idx, type, title, etages_count, pers, parfums,
-        theme, message, age, warnings, image_urls, polys, quantity
+        taille_value, taille_unit,
+        theme, message, age, warnings, image_urls, polys, quantity,
+        modified_at, last_changes
       )
     `)
     .gte('delivery_at', start.toISOString())
@@ -338,9 +341,12 @@ export async function loadAllOrders() {
     .from('orders')
     .select(`
       id, order_num, client_name, delivery_at, seller_name,
+      odoo_state, modified_at, last_changes_summary,
       order_items (
         id, item_idx, type, title, etages_count, pers, parfums,
-        theme, message, age, warnings, image_urls, polys, quantity
+        taille_value, taille_unit,
+        theme, message, age, warnings, image_urls, polys, quantity,
+        modified_at, last_changes
       )
     `)
     .order('delivery_at', { ascending: false })

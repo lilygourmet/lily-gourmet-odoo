@@ -380,23 +380,9 @@ export default function OrderModal({ order, focusItemId, onClose, user, profiles
               <div className="font-mono text-[11px] tracking-[0.2em] text-bordeaux font-semibold mb-1">
                 {order.order_num}
               </div>
-              <div className={`font-fraunces italic text-[22px] font-medium text-ink leading-tight truncate ${order.odoo_state === 'cancel' ? 'line-through' : ''}`}>
+              <div className="font-fraunces italic text-[22px] font-medium text-ink leading-tight truncate">
                 {order.client_name || '—'}
               </div>
-              {(order.odoo_state === 'cancel' || order.modified_at) && (
-                <div className="flex gap-1.5 mt-1.5">
-                  {order.odoo_state === 'cancel' && (
-                    <span className="text-[9px] font-bold text-cream bg-ink-mute px-1.5 py-0.5 rounded tracking-wider uppercase">
-                      Annulé
-                    </span>
-                  )}
-                  {order.odoo_state !== 'cancel' && order.modified_at && (
-                    <span className="text-[9px] font-bold text-cream bg-gold px-1.5 py-0.5 rounded tracking-wider uppercase">
-                      Modifié
-                    </span>
-                  )}
-                </div>
-              )}
               <div className="font-mono text-[10px] tracking-wider text-ink-soft mt-1.5 capitalize">
                 {formatDeliveryDate(order.delivery_at)}
               </div>
@@ -537,16 +523,7 @@ function ItemBlock({
   canEdit, itemPolys, onPolyClick
 }) {
   const isCD = item.type === 'CD'
-  const warningText = (() => {
-    const w = item.warnings
-    if (!w) return null
-    if (typeof w === 'string') return w
-    if (Array.isArray(w)) {
-      return w.map(x => typeof x === 'string' ? x : (x?.text || '')).filter(Boolean).join('\n\n') || null
-    }
-    if (typeof w === 'object' && w.text) return w.text
-    return null
-  })()
+  const warningText = item.warnings?.text
   const photos = Array.isArray(sharedPhotos) ? sharedPhotos : []
 
   const photosBlurred = !!warningText && !isReadThisSession
@@ -566,15 +543,7 @@ function ItemBlock({
       parts.push(`${item.etages_count} étage${item.etages_count > 1 ? 's' : ''}`)
     }
     if (item.pers) {
-      // Pour les GM : si pers vient d'une "boite de N" -> on dit "boîte de N"
-      if (!isCD) {
-        parts.push(`boîte de ${item.pers}`)
-      } else {
-        parts.push(`${item.pers} pers`)
-      }
-    }
-    if (item.taille_value && !item.pers) {
-      parts.push(item.taille_value)
+      parts.push(`${item.pers} pers`)
     }
     return parts.length > 0 ? parts.join(' · ') : null
   })()
@@ -663,7 +632,9 @@ function ItemBlock({
             isCD ? 'text-bordeaux' : 'text-chocolate'
           }`}
         >
-          <span className="text-ink font-sans not-italic mr-2">×{item.quantity || 1}</span>
+          {item.quantity && item.quantity > 1 && (
+            <span className="text-ink font-sans not-italic mr-2">×{item.quantity}</span>
+          )}
           {shortName}
         </span>
 
@@ -744,13 +715,13 @@ function ItemBlock({
         </>
       )}
 
-      {isCD && (
+      {(item.theme || item.age || item.message) && (
         <>
           <div className="border-t border-dashed border-line my-4"></div>
           <div className="space-y-2.5 mb-4">
-            <InfoRow label="Thème" value={item.theme || '—'} />
-            <InfoRow label="Âge" value={item.age || '—'} />
-            <InfoRow label="Message" value={item.message || '—'} />
+            {item.theme && <InfoRow label="Thème" value={item.theme} />}
+            {item.age && <InfoRow label="Âge" value={item.age} />}
+            {item.message && <InfoRow label="Message" value={item.message} />}
           </div>
         </>
       )}

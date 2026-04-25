@@ -52,3 +52,19 @@ export async function deleteUser(userId) {
   })
   if (error) throw error
 }
+
+// Alias pour compat avec ancien code
+export const loadUsers = listUsers
+
+export const ROLE_LABELS = {
+  admin: 'Admin',
+  user: 'Utilisateur',
+}
+
+export const ROLE_COLORS = {
+  admin: 'bg-bordeaux text-cream',
+  user: 'bg-gold/20 text-chocolate',
+}
+
+// Re-export depuis auth.js pour compat
+export { changeMyPassword } from './auth'

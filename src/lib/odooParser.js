@@ -1,5 +1,7 @@
 // Parser pour les donnees Odoo Lily Gourmet (sync API)
 // Filtre CD- + GM- uniquement, ignore Bougies/Decoration
+// Warnings : extraits depuis les lignes Odoo "orphelines" (sans prefixe CD-/GM-)
+//            qui suivent immediatement une ligne CD- ou GM-
 
 /**
  * Parse une commande Odoo + ses lignes en format app.
@@ -20,9 +22,13 @@ export function parseOdooOrder(odooOrder, odooLines) {
     ? odooOrder.partner_id[1]
     : null
 
-  const warning = parseHtmlNote(odooOrder.note)
-
-  const items = parseItems(odooLines, warning)
+  // 1) Pre-traitement : pour chaque ligne, decide si c'est un produit CD/GM,
+  // un produit a ignorer (SA-, Acompte, Bougies...), ou une ligne "warning".
+  // Les lignes warning sont celles dont le name (apres trim) :
+  //   - ne commence pas par un prefixe connu
+  //   - n'est pas un montant/acompte
+  //   - vient APRES une ligne CD-/GM- (logique sequentielle)
+  const items = parseItems(odooLines)
   if (items.length === 0) return null
 
   return {
@@ -53,74 +59,89 @@ export function parseOdooOrders(odooOrders, linesByOrderId) {
 // HELPERS
 // ==========================================
 
-function parseHtmlNote(htmlNote) {
-  if (!htmlNote) return null
-  let text = htmlNote.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ')
-  text = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-  text = text.replace(/\s+/g, ' ').trim()
-  if (!text) return null
-  if (/^(Commentaire du client\s*:?)$/i.test(text)) return null
-  if (text.length < 3) return null
-  return text
-}
+const KNOWN_PREFIXES = /^(CD-|GM-|GM\s*-|SA-|E-|MI-|RA-|GS-|Acompte|Bougies)/i
 
-function shouldIgnoreProduct(productName) {
-  if (!productName) return true
+// Detecte les lignes 'warning' : pas de prefixe connu, pas un montant, contiennent du texte utile
+function isPotentialWarningLine(productName) {
+  if (!productName) return false
   const trimmed = productName.trim()
-
-  if (!/^(CD-|GM-|GM\s*-)/i.test(trimmed)) return true
-
-  if (/^(CD-|GM-)\s*Bougies/i.test(trimmed)) return true
-
-  if (/D[ée]coration\s+suppl[ée]mentaire/i.test(trimmed)) return true
-
-  return false
+  if (trimmed.length < 3) return false
+  // Si c'est un produit connu, ce n'est pas un warning
+  if (KNOWN_PREFIXES.test(trimmed)) return false
+  // Eviter "Down Payment" (acompte en anglais)
+  if (/^Down\s+Payment/i.test(trimmed)) return false
+  return true
 }
 
-function parseItems(odooLines, warning) {
+// Detecte si une ligne est un produit CD- ou GM- a garder
+function isCdGmProduct(productName) {
+  if (!productName) return false
+  const trimmed = productName.trim()
+  if (!/^(CD-|GM-|GM\s*-)/i.test(trimmed)) return false
+  if (/^(CD-|GM-)\s*Bougies/i.test(trimmed)) return false
+  if (/D[ée]coration\s+suppl[ée]mentaire/i.test(trimmed)) return false
+  return true
+}
+
+function parseItems(odooLines) {
   const items = []
+  let lastItemRef = null  // Reference vers le dernier item ajoute (pour rattacher les warnings)
 
   for (const line of odooLines) {
-    // IMPORTANT : trim() pour enlever les \n  en debut de nom
     const productName = (line.name || '').trim()
-
-    if (shouldIgnoreProduct(productName)) continue
-
     const quantity = parseFloat(line.product_uom_qty) || 0
-    if (quantity === 0) continue
 
-    const type = /^CD-/i.test(productName) ? 'CD' : 'GM'
+    // CAS 1 : Ligne CD- ou GM- a garder
+    if (isCdGmProduct(productName)) {
+      if (quantity === 0) continue
 
-    const title = extractTitle(productName)
+      const type = /^CD-/i.test(productName) ? 'CD' : 'GM'
+      const title = extractTitle(productName)
+      if (!title) continue
 
-    // Si on n'arrive pas a extraire un titre, on skip cette ligne
-    if (!title) continue
+      const theme = extractField(productName, 'Thème', ['Age', 'Message', 'Option'])
+      const age = extractField(productName, 'Age', ['Message', 'Option'])
+      const message = extractField(productName, 'Message', ['Age', 'Option', 'Acompte'])
 
-    const theme = extractField(productName, 'Thème', ['Age', 'Message', 'Option'])
-    const age = extractField(productName, 'Age', ['Message', 'Option'])
-    const message = extractField(productName, 'Message', ['Age', 'Option', 'Acompte'])
+      const decomposed = decomposeTitle(title, type)
 
-    const decomposed = decomposeTitle(title, type)
+      const priceUnit = parseFloat(line.price_unit) || 0
+      const isGift = priceUnit === 100
 
-    const priceUnit = parseFloat(line.price_unit) || 0
-    const isGift = priceUnit === 100
+      const item = {
+        type,
+        title: cleanText(title),
+        etages: decomposed.etages,
+        pers: decomposed.pers,
+        taille_value: decomposed.taille_value,
+        parfums: decomposed.parfums,
+        theme,
+        age,
+        message,
+        warnings: [],  // sera rempli par les lignes warning suivantes
+        quantity,
+        isGift,
+      }
+      items.push(item)
+      lastItemRef = item
+      continue
+    }
 
-    const warnings = warning ? [warning] : []
+    // CAS 2 : Ligne "warning" potentielle (suit un CD- ou GM-)
+    if (lastItemRef && isPotentialWarningLine(productName)) {
+      // Nettoie le texte (multiligne -> 1 ligne, espaces multiples)
+      const warningText = productName.replace(/\s+/g, ' ').trim()
+      if (warningText.length > 2) {
+        lastItemRef.warnings.push(warningText)
+      }
+      continue
+    }
 
-    items.push({
-      type,
-      title: cleanText(title),
-      etages: decomposed.etages,
-      pers: decomposed.pers,
-      taille_value: decomposed.taille_value,
-      parfums: decomposed.parfums,
-      theme,
-      age,
-      message,
-      warnings,
-      quantity,
-      isGift,
-    })
+    // CAS 3 : Tout le reste (SA-, Acompte, etc.) -> on coupe le rattachement warning
+    // pour eviter qu'une ligne warning d'un GM precedent soit attribuee au prochain CD
+    if (KNOWN_PREFIXES.test(productName) || /^Down\s+Payment/i.test(productName)) {
+      lastItemRef = null
+    }
   }
 
   return items
@@ -128,17 +149,13 @@ function parseItems(odooLines, warning) {
 
 function extractTitle(productName) {
   // productName est deja trim()
-  // 1) On enleve le prefixe CD-/GM- (avec ou sans espace apres)
   let cleaned = productName.replace(/^(CD-|GM-)\s*/i, '')
 
-  // 2) On prend tout jusqu'au premier "Thème:" / "Age:" / "Message:" / "Option:"
-  // (le tout en mode multiligne car le nom contient des \n)
   const stopMatch = cleaned.match(/^([\s\S]*?)(?:\n\s*)?(?:Thème|Age|Message|Option)\s*:/m)
   if (stopMatch) {
     cleaned = stopMatch[1]
   }
 
-  // 3) On nettoie : trim + remplace \n et multiples espaces par 1 espace
   cleaned = cleaned.replace(/\s+/g, ' ').trim()
 
   return cleaned || null
@@ -194,9 +211,7 @@ function decomposeTitle(title, type) {
 }
 
 function extractField(text, fieldName, stopWords) {
-  // Echapper les chars speciaux dans les stopWords (ex: 'è' dans 'Thème')
   const stopPattern = stopWords.map(w => `${w}\\s*:`).join('|')
-  // Mode multiligne : on accepte \n entre les champs
   const regex = new RegExp(
     `${fieldName}\\s*:\\s*([\\s\\S]*?)(?=\\s*(?:${stopPattern})|\\s*$)`,
     'i'
@@ -207,7 +222,6 @@ function extractField(text, fieldName, stopWords) {
   let value = match[1].trim()
   if (!value) return null
 
-  // Stop sur les autres mots cles si trouves
   for (const stop of stopWords) {
     const stopIdx = value.search(new RegExp(`\\b${stop}\\s*:`, 'i'))
     if (stopIdx !== -1) value = value.substring(0, stopIdx).trim()

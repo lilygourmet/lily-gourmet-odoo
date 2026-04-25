@@ -79,3 +79,26 @@ export async function changeMyPassword(userId, oldPassword, newPassword) {
   if (error) throw error
   return data
 }
+
+// Helpers complementaires
+export const canEditPolys = canCheck
+export const canUncheckSteps = canCheck
+export const canDeleteOrder = canDelete
+
+export function formatRelativeTime(date) {
+  if (!date) return ''
+  const d = new Date(date)
+  const now = new Date()
+  const diff = Math.floor((now - d) / 1000) // secondes
+
+  if (diff < 60) return "à l'instant"
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`
+  if (diff < 604800) return `il y a ${Math.floor(diff / 86400)} j`
+
+  // Plus d'une semaine -> date courte
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
