@@ -1,15 +1,25 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { supabase } from '../lib/supabase'
+import { parseOdooPdf } from '../lib/pdfParser'
 import {
+  saveOrdersFromPdf,
   loadOrdersForWeek,
   loadAllOrders,
   loadStepsForOrders,
+  getOrderNumsNeedingUpload,
+  deleteOrder,
   cleanupOldOrders,
   loadAllProfiles,
 } from '../lib/orders'
-import { logout, canSync, canManageUsers } from '../lib/auth'
+import { logout, canUploadPdf, canForceReupload, canManageUsers } from '../lib/auth'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
+import { extractImagesFromPdf, uploadImageToStorage, findOrderPageRanges } from '../lib/pdfImageExtractor'
 import OrderModal from './OrderModal'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
 const MONTH_NAMES = [
@@ -71,26 +81,13 @@ function getAnyOrderPhoto(order) {
   return null
 }
 
-// Adapté pour la nouvelle base : warnings est un ARRAY (pas un objet avec .text)
 function hasWarning(order) {
   const items = order.order_items || []
-  return items.some(i => Array.isArray(i.warnings) && i.warnings.length > 0)
+  return items.some(i => i.warnings && typeof i.warnings.text === 'string' && i.warnings.text.length > 0)
 }
 
 function itemHasWarning(item) {
-  return Array.isArray(item.warnings) && item.warnings.length > 0
-}
-
-function isCancelled(order) {
-  return order.odoo_state === 'cancel'
-}
-
-function isModified(order) {
-  return !!order.modified_at
-}
-
-function itemIsModified(item) {
-  return !!item.modified_at
+  return !!(item.warnings && typeof item.warnings.text === 'string' && item.warnings.text.length > 0)
 }
 
 function sequentialStepsForItem(item) {
@@ -166,6 +163,8 @@ function normalizeForSearch(str) {
 
 export default function Calendar({ user, onLogout }) {
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOf(new Date()))
+  const [importing, setImporting] = useState(false)
+  const [importStatus, setImportStatus] = useState('')
   const [orders, setOrders] = useState([])
   const [allOrders, setAllOrders] = useState([])
   const [loadingOrders, setLoadingOrders] = useState(true)
@@ -178,16 +177,17 @@ export default function Calendar({ user, onLogout }) {
   const [stepsMap, setStepsMap] = useState({})
   const [profiles, setProfiles] = useState({})
 
-  const [syncing, setSyncing] = useState(false)
-  const [syncStatus, setSyncStatus] = useState('')
-
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const userCanSync = canSync(user)
+  const canUpload = canUploadPdf(user)
+  const canForce = canForceReupload(user)
   const canAdmin = canManageUsers(user)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showChangePwd, setShowChangePwd] = useState(false)
+
+  const fileInputRef = useRef(null)
+  const fileInputForceRef = useRef(null)
 
   useEffect(() => {
     loadWeek()
@@ -274,20 +274,144 @@ export default function Calendar({ user, onLogout }) {
     if (onLogout) onLogout()
   }
 
-  // Bouton "Synchroniser maintenant" — TODO: brancher /api/sync-now en session 5b
-  async function handleSyncNow() {
-    if (syncing) return
-    setSyncing(true)
-    setSyncStatus('Synchronisation...')
+  function handleImportClick() {
+    fileInputRef.current?.click()
+  }
+
+  function handleForceImportClick() {
+    fileInputForceRef.current?.click()
+  }
+
+  async function parseSinglePdf(file) {
+    const arrayBuffer = await file.arrayBuffer()
+    const arrayBufferForImages = arrayBuffer.slice(0)
+
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+
+    const pageTexts = []
+    const italicSegmentsByPage = []
+    let fullText = ''
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum)
+      const textContent = await page.getTextContent()
+
+      const pageText = textContent.items.map(item => item.str).join(' ')
+      pageTexts.push(pageText)
+      fullText += `\n${pageText}\n`
+
+      const italicFont = findItalicFontName(textContent.items)
+      if (italicFont) {
+        const lines = groupItalicByLine(textContent.items, italicFont)
+        for (const line of lines) {
+          italicSegmentsByPage.push({ page: pageNum, y: line.y, text: line.text })
+        }
+      }
+    }
+
+    const parsedOrders = parseOdooPdf(fullText, italicSegmentsByPage, pageTexts)
+    return { parsedOrders, pageTexts, arrayBufferForImages }
+  }
+
+  async function handleFilesSelected(e, forceReupload = false) {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    console.log(`📄 ${files.length} fichier(s) sélectionné(s)`, forceReupload ? '(FORCE)' : '')
+    setImporting(true)
+
+    const totals = { inserted: 0, updated: 0, skipped: 0, photos: 0, errors: [] }
+
     try {
-      // TODO Session 5b : remplacer par fetch('/api/sync-now', { method: 'POST' })
-      // qui vérifie l'auth Supabase + perm_sync.
-      alert('🚧 Bouton synchroniser : à brancher en session 5b\n\nPour l\'instant la sync auto se fait toutes les 15 min via cron-job.org.')
-    } catch (e) {
-      alert(`Erreur : ${e.message}`)
+      for (let fIdx = 0; fIdx < files.length; fIdx++) {
+        const file = files[fIdx]
+        const prefix = files.length > 1 ? `PDF ${fIdx + 1}/${files.length} · ` : ''
+
+        setImportStatus(`${prefix}Lecture...`)
+        const { parsedOrders, pageTexts, arrayBufferForImages } = await parseSinglePdf(file)
+
+        setImportStatus(`${prefix}Comparaison...`)
+        const needsUpload = await getOrderNumsNeedingUpload(parsedOrders, forceReupload)
+
+        let orderImages = new Map()
+        if (needsUpload.size > 0) {
+          setImportStatus(`${prefix}Extraction photos...`)
+          const pageImages = await extractImagesFromPdf(arrayBufferForImages)
+          const orderNums = parsedOrders.map(o => o.orderNum)
+          const pageRanges = findOrderPageRanges(pageTexts, orderNums)
+
+          for (const [pageNum, blobs] of pageImages) {
+            for (const [orderNum, range] of pageRanges) {
+              if (pageNum >= range.startPage && pageNum <= range.endPage) {
+                if (!needsUpload.has(orderNum)) break
+                if (!orderImages.has(orderNum)) orderImages.set(orderNum, [])
+                orderImages.get(orderNum).push(...blobs)
+                break
+              }
+            }
+          }
+
+          setImportStatus(`${prefix}Upload photos...`)
+          const uploadPromises = []
+          for (const [orderNum, blobs] of orderImages) {
+            for (let i = 0; i < blobs.length; i++) {
+              const filename = `${orderNum}_${Date.now()}_${i}.jpg`
+              uploadPromises.push(
+                uploadImageToStorage(blobs[i], filename).then(url => ({ orderNum, url }))
+              )
+            }
+          }
+
+          const uploadResults = await Promise.all(uploadPromises)
+
+          const urlsByOrder = new Map()
+          for (const { orderNum, url } of uploadResults) {
+            if (!url) continue
+            if (!urlsByOrder.has(orderNum)) urlsByOrder.set(orderNum, [])
+            urlsByOrder.get(orderNum).push(url)
+            totals.photos++
+          }
+
+          for (const order of parsedOrders) {
+            if (!needsUpload.has(order.orderNum)) continue
+            const urls = urlsByOrder.get(order.orderNum) || []
+            const firstCDIdx = order.items.findIndex(it => it.type === 'CD')
+            const targetIdx = firstCDIdx >= 0 ? firstCDIdx : 0
+            if (order.items[targetIdx]) {
+              order.items[targetIdx].image_urls = urls
+              order.items[targetIdx].imageUrls = urls
+            }
+          }
+        }
+
+        setImportStatus(`${prefix}Sauvegarde...`)
+        const result = await saveOrdersFromPdf(parsedOrders, file.name, user.id, forceReupload)
+
+        totals.inserted += result.inserted
+        totals.updated += result.updated
+        totals.skipped += result.skipped
+        totals.errors.push(...result.errors)
+      }
+
+      await loadWeek()
+      loadAllOrders().then(data => setAllOrders(data))
+
+      let msg = forceReupload ? `✅ Import FORCÉ réussi !\n\n` : `✅ Import réussi !\n\n`
+      msg += `📥 ${totals.inserted} nouvelle(s)\n`
+      msg += `🔄 ${totals.updated} mise(s) à jour\n`
+      msg += `⏭ ${totals.skipped} inchangée(s) (skip)\n`
+      msg += `📸 ${totals.photos} photo(s) upload\n`
+      if (totals.errors.length > 0) {
+        msg += `\n⚠️ ${totals.errors.length} erreur(s) — voir console`
+      }
+      alert(msg)
+    } catch (err) {
+      console.error('❌ Erreur import :', err)
+      alert(`❌ Erreur : ${err.message}`)
     } finally {
-      setSyncing(false)
-      setSyncStatus('')
+      setImporting(false)
+      setImportStatus('')
+      e.target.value = ''
     }
   }
 
@@ -409,7 +533,7 @@ export default function Calendar({ user, onLogout }) {
           <div className="min-w-0 hidden sm:block">
             <div className="font-sans font-semibold text-[13px] tracking-[0.12em] text-ink leading-tight truncate">LILY GOURMET</div>
             <div className="font-mono text-[8px] tracking-[0.2em] uppercase text-bordeaux mt-0.5">
-              {user?.full_name || user?.username || 'Planning'}
+              {user?.full_name || user?.username || 'Planning CD'}
             </div>
           </div>
         </div>
@@ -434,26 +558,54 @@ export default function Calendar({ user, onLogout }) {
           )}
         </div>
 
-        {userCanSync && (
+        {canUpload && (
           <button
-            onClick={handleSyncNow}
-            disabled={syncing}
+            onClick={handleImportClick}
+            disabled={importing}
             className="flex items-center gap-2 px-3.5 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[11px] font-medium tracking-wider transition-all active:scale-[0.98] flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
-            title="Synchroniser depuis Odoo maintenant"
           >
-            {syncing ? (
+            {importing ? (
               <>
                 <span>⏳</span>
-                <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
+                <span className="hidden sm:inline">{importStatus || 'IMPORT...'}</span>
               </>
             ) : (
               <>
-                <span className="text-[14px] leading-none">🔄</span>
-                <span className="hidden sm:inline">SYNC</span>
+                <span className="text-[14px] leading-none">+</span>
+                <span className="hidden sm:inline">PDF</span>
               </>
             )}
           </button>
         )}
+
+        {canForce && !importing && (
+          <button
+            onClick={handleForceImportClick}
+            className="flex items-center gap-1 px-3 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[10px] font-medium tracking-wider transition-all active:scale-[0.98] flex-shrink-0"
+            title="Forcer le re-upload complet (texte + photos)"
+          >
+            <span>🔄</span>
+            <span className="hidden sm:inline">FORCE</span>
+          </button>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf"
+          multiple
+          onChange={e => handleFilesSelected(e, false)}
+          className="hidden"
+        />
+
+        <input
+          ref={fileInputForceRef}
+          type="file"
+          accept=".pdf"
+          multiple
+          onChange={e => handleFilesSelected(e, true)}
+          className="hidden"
+        />
 
         {canAdmin && (
           <button
@@ -657,23 +809,19 @@ function SearchResultRow({ order, stepsMap, onClick }) {
   const dt = new Date(order.delivery_at)
   const dateStr = `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`
   const photoUrl = getAnyOrderPhoto(order)
-  const cancelled = isCancelled(order)
-  const modified = isModified(order)
 
   return (
     <div
       onClick={onClick}
-      className={`bg-cream rounded-lg p-3 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all flex items-center gap-3 ${cancelled ? 'opacity-60' : ''}`}
+      className="bg-cream rounded-lg p-3 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all flex items-center gap-3"
     >
       {photoUrl && (
-        <img src={photoUrl} alt="" className={`w-12 h-12 rounded-md object-cover flex-shrink-0 ${cancelled ? 'grayscale' : ''}`} />
+        <img src={photoUrl} alt="" className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={`font-mono text-[11px] text-bordeaux font-semibold ${cancelled ? 'line-through' : ''}`}>{order.order_num}</span>
-          <span className={`text-[12px] text-ink font-medium truncate ${cancelled ? 'line-through' : ''}`}>{order.client_name || '—'}</span>
-          {cancelled && <CancelledBadge />}
-          {!cancelled && modified && <ModifiedBadge />}
+          <span className="font-mono text-[11px] text-bordeaux font-semibold">{order.order_num}</span>
+          <span className="text-[12px] text-ink font-medium truncate">{order.client_name || '—'}</span>
         </div>
         <div className="text-[11px] text-ink-soft mt-0.5">
           {dateStr} · {formatTime(dt)}
@@ -682,6 +830,36 @@ function SearchResultRow({ order, stepsMap, onClick }) {
       <ProgressDotsOrder order={order} stepsMap={stepsMap} />
     </div>
   )
+}
+
+function findItalicFontName(items) {
+  for (const item of items) {
+    if (item.fontName && /_f3$/.test(item.fontName)) return item.fontName
+  }
+  return null
+}
+
+function groupItalicByLine(items, italicFont) {
+  const italicItems = items.filter(it => it.fontName === italicFont && it.str.trim())
+  if (italicItems.length === 0) return []
+
+  const lines = []
+  let currentLine = null
+
+  for (const item of italicItems) {
+    const y = item.transform?.[5] ?? 0
+    if (currentLine && Math.abs(currentLine.y - y) < 2) {
+      currentLine.text += item.str
+    } else {
+      if (currentLine) lines.push(currentLine)
+      currentLine = { y, text: item.str }
+    }
+  }
+  if (currentLine) lines.push(currentLine)
+
+  return lines
+    .map(l => ({ y: l.y, text: l.text.replace(/\s+/g, ' ').trim() }))
+    .filter(l => l.text.length >= 3)
 }
 
 function FilterButton({ active, onClick, label, small }) {
@@ -729,14 +907,14 @@ function ProgressDotsRaw({ total, done }) {
   )
 }
 
-function MiniPhoto({ url, dimmed }) {
+function MiniPhoto({ url }) {
   if (!url) return null
   return (
     <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 border border-line/60 bg-cream-warm">
       <img
         src={url}
         alt=""
-        className={`w-full h-full object-cover ${dimmed ? 'grayscale' : ''}`}
+        className="w-full h-full object-cover"
         loading="lazy"
         onError={(e) => { e.currentTarget.style.display = 'none' }}
       />
@@ -766,28 +944,6 @@ function PolyBadge() {
   )
 }
 
-function CancelledBadge() {
-  return (
-    <span
-      className="font-sans text-[9px] font-bold text-cream bg-ink-mute px-1.5 py-0.5 rounded tracking-wider uppercase flex-shrink-0"
-      title="Commande annulée"
-    >
-      Annulé
-    </span>
-  )
-}
-
-function ModifiedBadge() {
-  return (
-    <span
-      className="font-sans text-[9px] font-bold text-cream bg-gold px-1.5 py-0.5 rounded tracking-wider uppercase flex-shrink-0"
-      title="Commande modifiée"
-    >
-      Modifié
-    </span>
-  )
-}
-
 function AllCapsule({ order, stepsMap }) {
   const deliveryTime = formatTime(new Date(order.delivery_at))
   const cdItems = order.order_items.filter(i => i.type === 'CD')
@@ -796,35 +952,24 @@ function AllCapsule({ order, stepsMap }) {
   const warningOnOrder = hasWarning(order)
   const mainCD = cdItems[0]
   const needsPolys = orderMainCdNeedsPolys(order)
-  const cancelled = isCancelled(order)
-  const modified = isModified(order)
-
-  const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-lg p-2 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
-      <div className="flex items-center justify-between mb-1.5 gap-1">
-        <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-          <span className="truncate">{order.order_num}</span>
+    <div className="bg-cream rounded-lg p-2 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5">
+          {order.order_num}
           {warningOnOrder && <WarningBadge />}
         </span>
-        <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+        <span className="font-mono text-[10px] text-ink-soft font-medium">{deliveryTime}</span>
       </div>
 
-      {(cancelled || modified) && (
-        <div className="flex gap-1 mb-1.5">
-          {cancelled && <CancelledBadge />}
-          {!cancelled && modified && <ModifiedBadge />}
-        </div>
-      )}
-
       <div className="flex items-center gap-2">
-        <MiniPhoto url={photoUrl} dimmed={cancelled} />
+        <MiniPhoto url={photoUrl} />
         <div className="flex-1 min-w-0">
           {mainCD ? (
             <div className="space-y-0.5">
               {(mainCD.etages_count || mainCD.pers) && (
-                <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
+                <div className="text-[11px] text-ink leading-tight">
                   {mainCD.etages_count && (
                     <span className="font-medium">
                       {mainCD.etages_count} étage{mainCD.etages_count > 1 ? 's' : ''}
@@ -835,13 +980,13 @@ function AllCapsule({ order, stepsMap }) {
                 </div>
               )}
               {mainCD.theme && (
-                <div className={`text-[10px] text-ink-soft italic leading-tight truncate ${titleClass}`}>
+                <div className="text-[10px] text-ink-soft italic leading-tight truncate">
                   {mainCD.theme}
                 </div>
               )}
             </div>
           ) : gmItems.length > 0 ? (
-            <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
+            <div className="text-[11px] text-ink leading-tight">
               {gmItems.length} accessoire{gmItems.length > 1 ? 's' : ''}
             </div>
           ) : null}
@@ -864,7 +1009,7 @@ function AllCapsule({ order, stepsMap }) {
       )}
 
       <div className="flex items-center justify-between mt-1.5">
-        <div>{!cancelled && needsPolys && <PolyBadge />}</div>
+        <div>{needsPolys && <PolyBadge />}</div>
         <ProgressDotsOrder order={order} stepsMap={stepsMap} />
       </div>
     </div>
@@ -876,33 +1021,23 @@ function CDItemCapsule({ order, item, stepsMap }) {
   const photoUrl = getAnyOrderPhoto(order)
   const itemWarning = itemHasWarning(item)
   const needsPolys = cdItemNeedsPolys(item)
-  const cancelled = isCancelled(order)
-  const modified = itemIsModified(item) || isModified(order)
-  const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-lg p-2 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
-      <div className="flex items-center justify-between mb-1.5 gap-1">
-        <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-          <span className="truncate">{order.order_num}</span>
-          <span className="text-[8px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
+    <div className="bg-cream rounded-lg p-2 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5">
+          {order.order_num}
+          <span className="text-[8px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded">CD</span>
           {itemWarning && <WarningBadge />}
         </span>
-        <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+        <span className="font-mono text-[10px] text-ink-soft font-medium">{deliveryTime}</span>
       </div>
 
-      {(cancelled || modified) && (
-        <div className="flex gap-1 mb-1.5">
-          {cancelled && <CancelledBadge />}
-          {!cancelled && modified && <ModifiedBadge />}
-        </div>
-      )}
-
       <div className="flex items-center gap-2">
-        <MiniPhoto url={photoUrl} dimmed={cancelled} />
+        <MiniPhoto url={photoUrl} />
         <div className="flex-1 min-w-0 space-y-0.5">
           {(item.etages_count || item.pers) && (
-            <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
+            <div className="text-[11px] text-ink leading-tight">
               {item.etages_count && (
                 <span className="font-medium">
                   {item.etages_count} étage{item.etages_count > 1 ? 's' : ''}
@@ -913,7 +1048,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
             </div>
           )}
           {item.theme && (
-            <div className={`text-[10px] text-ink-soft italic leading-tight truncate ${titleClass}`}>
+            <div className="text-[10px] text-ink-soft italic leading-tight truncate">
               {item.theme}
             </div>
           )}
@@ -921,7 +1056,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
       </div>
 
       <div className="flex items-center justify-between mt-1.5">
-        <div>{!cancelled && needsPolys && <PolyBadge />}</div>
+        <div>{needsPolys && <PolyBadge />}</div>
         <ProgressDotsItem item={item} stepsMap={stepsMap} />
       </div>
     </div>
@@ -932,36 +1067,26 @@ function GMItemCapsule({ order, item, stepsMap }) {
   const deliveryTime = formatTime(new Date(order.delivery_at))
   const photoUrl = getAnyOrderPhoto(order)
   const itemWarning = itemHasWarning(item)
-  const cancelled = isCancelled(order)
-  const modified = itemIsModified(item) || isModified(order)
-  const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-lg p-2 border border-line/60 hover:border-gold hover:shadow-sm cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
-      <div className="flex items-center justify-between mb-1.5 gap-1">
-        <span className={`font-mono text-[10px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-          <span className="truncate">{order.order_num}</span>
-          <span className="text-[8px] font-mono px-1 py-0.5 bg-gold/20 text-chocolate rounded flex-shrink-0">GM</span>
+    <div className="bg-cream rounded-lg p-2 border border-line/60 hover:border-gold hover:shadow-sm cursor-pointer transition-all">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-mono text-[10px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5">
+          {order.order_num}
+          <span className="text-[8px] font-mono px-1 py-0.5 bg-gold/20 text-chocolate rounded">GM</span>
           {itemWarning && <WarningBadge />}
         </span>
-        <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+        <span className="font-mono text-[10px] text-ink-soft font-medium">{deliveryTime}</span>
       </div>
 
-      {(cancelled || modified) && (
-        <div className="flex gap-1 mb-1.5">
-          {cancelled && <CancelledBadge />}
-          {!cancelled && modified && <ModifiedBadge />}
-        </div>
-      )}
-
       <div className="flex items-center gap-2">
-        <MiniPhoto url={photoUrl} dimmed={cancelled} />
+        <MiniPhoto url={photoUrl} />
         <div className="flex-1 min-w-0">
-          <div className={`text-[11px] text-ink leading-tight font-medium truncate ${titleClass}`}>
+          <div className="text-[11px] text-ink leading-tight font-medium truncate">
             {item.title || '—'}
           </div>
           {item.parfums && item.parfums.length > 0 && (
-            <div className={`text-[10px] text-ink-soft italic leading-tight truncate mt-0.5 ${titleClass}`}>
+            <div className="text-[10px] text-ink-soft italic leading-tight truncate mt-0.5">
               {item.parfums.join(', ')}
             </div>
           )}
