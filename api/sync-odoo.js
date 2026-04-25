@@ -1,6 +1,7 @@
 // Serverless function Vercel - Sync Odoo -> Supabase
 // Endpoint: POST /api/sync-odoo
-// Recupere les commandes Odoo des 2 prochaines semaines et les sync dans Supabase
+// Authentification : header "Authorization: Bearer <SYNC_SECRET_TOKEN>"
+//                    OU query string ?token=...
 
 import { createClient } from '@supabase/supabase-js'
 import { parseOdooOrders } from '../src/lib/odooParser.js'
@@ -10,34 +11,45 @@ import { parseOdooOrders } from '../src/lib/odooParser.js'
 // ==========================================
 
 export default async function handler(req, res) {
-  // CORS pour appel depuis le client
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end()
   }
 
-  // Accepte POST (manuel) et GET (cron Vercel)
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Verification du token
+  const authHeader = req.headers['authorization'] || ''
+  const tokenFromHeader = authHeader.startsWith('Bearer ')
+    ? authHeader.substring(7).trim()
+    : ''
+  const tokenFromQuery = (req.query?.token || '').toString().trim()
+  const providedToken = tokenFromHeader || tokenFromQuery
+
+  if (!process.env.SYNC_SECRET_TOKEN) {
+    return res.status(500).json({ error: 'Server misconfigured: SYNC_SECRET_TOKEN missing' })
+  }
+
+  if (providedToken !== process.env.SYNC_SECRET_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' })
   }
 
   const startTime = Date.now()
 
   try {
-    // 1. Auth Odoo
     console.log('[sync-odoo] Authentification Odoo...')
     const uid = await odooAuthenticate()
     console.log(`[sync-odoo] UID = ${uid}`)
 
-    // 2. Recupere les commandes des 2 prochaines semaines
     console.log('[sync-odoo] Recuperation commandes Odoo...')
     const { orders, lines } = await fetchOdooOrders(uid)
     console.log(`[sync-odoo] ${orders.length} commandes, ${lines.length} lignes`)
 
-    // 3. Group lignes par order_id
     const linesByOrderId = new Map()
     for (const line of lines) {
       const orderId = Array.isArray(line.order_id) ? line.order_id[0] : line.order_id
@@ -45,11 +57,9 @@ export default async function handler(req, res) {
       linesByOrderId.get(orderId).push(line)
     }
 
-    // 4. Parse avec odooParser
     const parsed = parseOdooOrders(orders, linesByOrderId)
     console.log(`[sync-odoo] ${parsed.length} commandes avec items CD/GM`)
 
-    // 5. Upsert dans Supabase
     const supabase = createClient(
       process.env.VITE_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -131,7 +141,6 @@ async function odooSearchRead(uid, model, domain, fields, opts = {}) {
 }
 
 async function fetchOdooOrders(uid) {
-  // Plage de dates : aujourd'hui -> dans 14 jours
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const in14Days = new Date(today)
@@ -143,7 +152,7 @@ async function fetchOdooOrders(uid) {
   }
 
   const dateStart = fmtDate(today)
-  const dateEnd = fmtDate(new Date(in14Days.getTime() + 86399999)) // fin de journee J+14
+  const dateEnd = fmtDate(new Date(in14Days.getTime() + 86399999))
 
   const orders = await odooSearchRead(
     uid,
@@ -157,7 +166,6 @@ async function fetchOdooOrders(uid) {
     { order: 'commitment_date asc', limit: 500 }
   )
 
-  // Recupere toutes les lignes en une seule requete
   const allLineIds = []
   for (const o of orders) {
     if (Array.isArray(o.order_line)) allLineIds.push(...o.order_line)
@@ -188,7 +196,6 @@ async function syncToSupabase(supabase, parsedOrders) {
 
   for (const po of parsedOrders) {
     try {
-      // 1. Upsert order
       const orderRow = {
         order_num: po.orderNum,
         client_name: po.clientName,
@@ -199,7 +206,6 @@ async function syncToSupabase(supabase, parsedOrders) {
         synced_at: new Date().toISOString(),
       }
 
-      // Cherche si la commande existe deja (par odoo_id)
       const { data: existing } = await supabase
         .from('orders')
         .select('id')
@@ -208,7 +214,6 @@ async function syncToSupabase(supabase, parsedOrders) {
 
       let orderId
       if (existing) {
-        // UPDATE
         const { error } = await supabase
           .from('orders')
           .update(orderRow)
@@ -217,7 +222,6 @@ async function syncToSupabase(supabase, parsedOrders) {
         orderId = existing.id
         updated++
       } else {
-        // INSERT
         const { data, error } = await supabase
           .from('orders')
           .insert(orderRow)
@@ -228,11 +232,8 @@ async function syncToSupabase(supabase, parsedOrders) {
         added++
       }
 
-      // 2. Supprime les anciens items et leurs steps (cascade)
-      // (Plus simple que de diff : on remplace tout)
       await supabase.from('order_items').delete().eq('order_id', orderId)
 
-      // 3. Insert les nouveaux items
       const itemRows = po.items.map((item, idx) => ({
         order_id: orderId,
         item_idx: idx,
