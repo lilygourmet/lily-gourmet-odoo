@@ -11,3 +11,52 @@ body {
   -webkit-font-smoothing: antialiased;
   margin: 0;
 }
+
+/* ============================================================
+   IMPRESSION - regles @media print
+   ============================================================ */
+
+@media print {
+  /* Cacher tout ce qui est UI app */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Afficher uniquement la zone d'impression */
+  .print-area, .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Forcer la mise en page A4 */
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm;
+  }
+
+  /* Saut de page entre commandes */
+  .print-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  /* Eviter les coupures dans une section */
+  .print-no-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Couleurs preservees */
+  .print-area {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

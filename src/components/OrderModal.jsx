@@ -3,6 +3,8 @@ import GmFicheModal from './GmFicheModal'
 import { detectTypeFromName, TYPE_EMOJIS, loadFichesForOrder } from '../lib/gmFiches'
 import { loadDoneByItemIds, markItemDone, unmarkItemDone } from '../lib/gmDone'
 import { loadPalette } from '../lib/palette'
+import PrintCommande from './PrintCommande'
+import { markOrderPrinted } from '../lib/printOrders'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -214,9 +216,28 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
       alert('Erreur : ' + e.message)
     }
   }
+
+  async function handlePrint() {
+    if (printing) return
+    setPrinting(true)
+    // Attendre 1 frame pour que le composant PrintCommande soit monte dans le DOM
+    await new Promise(r => requestAnimationFrame(r))
+    // Lancer l'impression
+    window.print()
+    // Marquer comme imprime apres l'impression (fenetre fermee)
+    try {
+      if (user?.id) {
+        await markOrderPrinted(order.id, user.id)
+      }
+    } catch (e) {
+      console.error('[print] erreur marquage:', e)
+    }
+    setPrinting(false)
+  }
   const [fichesByItemId, setFichesByItemId] = useState({})
   const [doneByItemId, setDoneByItemId] = useState({})
   const [palette, setPalette] = useState([])
+  const [printing, setPrinting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -507,6 +528,20 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
                   </>
                 )
               })()}
+              {!isPatissierMode && (
+                <button
+                  onClick={handlePrint}
+                  disabled={printing}
+                  className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all flex-shrink-0 ${
+                    order.printed_at
+                      ? 'border-ok text-ok hover:bg-ok hover:text-cream'
+                      : 'border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
+                  } disabled:opacity-50`}
+                  title={order.printed_at ? `Deja imprime · cliquer pour reimprimer` : 'Imprimer la fiche'}
+                >
+                  {printing ? '⏳' : (order.printed_at ? '🖨️' : '🖨️')}
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
@@ -633,6 +668,14 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
             ✕
           </button>
         </div>
+      )}
+
+      {printing && (
+        <PrintCommande
+          orders={[order]}
+          fichesByItemId={fichesByItemId}
+          palette={palette}
+        />
       )}
 
       {ficheItem && (

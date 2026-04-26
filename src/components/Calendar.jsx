@@ -11,6 +11,8 @@ import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
 import AdminGmConfig from './AdminGmConfig'
+import PrintBatchModal from './PrintBatchModal'
+import { filterUnprintedOrders, filterCurrentWeek } from '../lib/printOrders'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
 const MONTH_NAMES = [
@@ -198,6 +200,7 @@ export default function Calendar({ user, onLogout }) {
   const canAdmin = canManageUsers(user)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showGmConfig, setShowGmConfig] = useState(false)
+  const [showBatchPrint, setShowBatchPrint] = useState(false)
   const [viewMode, setViewMode] = useState(() => {
     // Si user n'est QUE patissier (pas admin), force mode patissier
     return isPatissierOnly(user) ? 'patissier' : 'admin'
@@ -322,6 +325,18 @@ export default function Calendar({ user, onLogout }) {
   }
 
   const isPatissierMode = viewMode === 'patissier'
+
+  // Commandes de la semaine courante non imprimees (pour le bouton batch)
+  const unprintedThisWeek = useMemo(() => {
+    const inWeek = filterCurrentWeek(orders, currentMonday)
+    return filterUnprintedOrders(inWeek)
+      .filter(o => o.odoo_state !== 'cancel') // exclure annulees
+      .sort((a, b) => {
+        const da = a.delivery_at ? new Date(a.delivery_at).getTime() : 0
+        const db = b.delivery_at ? new Date(b.delivery_at).getTime() : 0
+        return da - db
+      })
+  }, [orders, currentMonday])
   const isSearching = searchQuery.trim().length > 0
   const sourceOrders = isSearching ? allOrders : orders
 
@@ -476,6 +491,18 @@ export default function Calendar({ user, onLogout }) {
             </button>
           )}
         </div>
+
+        {/* Bouton impression batch (admin only, pas en mode patissier) */}
+        {canAdmin && !isPatissierMode && unprintedThisWeek.length > 0 && (
+          <button
+            onClick={() => setShowBatchPrint(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
+            title={`${unprintedThisWeek.length} commande(s) non imprimee(s) cette semaine`}
+          >
+            <span>🖨️</span>
+            <span>{unprintedThisWeek.length}</span>
+          </button>
+        )}
 
         {userCanSync && (
           <button
@@ -717,6 +744,19 @@ export default function Calendar({ user, onLogout }) {
           />
         )
       })()}
+
+      {showBatchPrint && (
+        <PrintBatchModal
+          orders={unprintedThisWeek}
+          user={user}
+          onClose={() => setShowBatchPrint(false)}
+          onPrinted={async () => {
+            // Recharger les commandes pour avoir les nouveaux printed_at
+            const fresh = await loadOrdersForWeek(currentMonday)
+            setOrders(fresh)
+          }}
+        />
+      )}
 
       {showGmConfig && (
         <AdminGmConfig onClose={() => setShowGmConfig(false)} />
