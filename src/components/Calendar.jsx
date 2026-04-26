@@ -89,11 +89,20 @@ function isCancelled(order) {
 }
 
 function isModified(order) {
-  return !!order.modified_at
+  // Une commande est "modifiee" UNIQUEMENT si :
+  // - Elle a un last_changes_summary non vide (= vraie modif detectee par sync Odoo)
+  if (order.last_changes_summary && Object.keys(order.last_changes_summary).length > 0) {
+    return true
+  }
+  return false
 }
 
 function itemIsModified(item) {
-  return !!item.modified_at
+  // Un item est modifie UNIQUEMENT si last_changes contient une entree
+  if (item.last_changes && Object.keys(item.last_changes).length > 0) {
+    return true
+  }
+  return false
 }
 
 function sequentialStepsForItem(item) {
@@ -443,7 +452,7 @@ export default function Calendar({ user, onLogout }) {
   function openCapsule(capsule) {
     const focusItemId = capsule.kind === 'item' ? capsule.item.id : null
     // Si la commande a une modification non vue ET pas annulee -> popup diff d'abord
-    if (capsule.order.modified_at && capsule.order.odoo_state !== 'cancel') {
+    if (capsule.order.last_changes_summary && Object.keys(capsule.order.last_changes_summary).length > 0 && capsule.order.odoo_state !== 'cancel') {
       setDiffPopupOrder({ order: capsule.order, focusItemId })
     } else {
       setSelected({ order: capsule.order, focusItemId })
@@ -451,7 +460,7 @@ export default function Calendar({ user, onLogout }) {
   }
 
   function openOrder(order) {
-    if (order.modified_at && order.odoo_state !== 'cancel') {
+    if (order.last_changes_summary && Object.keys(order.last_changes_summary).length > 0 && order.odoo_state !== 'cancel') {
       setDiffPopupOrder({ order, focusItemId: null })
     } else {
       setSelected({ order, focusItemId: null })
