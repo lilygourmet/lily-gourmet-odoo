@@ -547,7 +547,7 @@ export default function Calendar({ user, onLogout }) {
                     : 'text-ink-mute hover:text-ink'
                 }`}
               >
-                Calendrier
+                Admin
               </button>
               <button
                 onClick={() => setViewMode('patissier')}

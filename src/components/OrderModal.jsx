@@ -790,19 +790,7 @@ function ItemBlock({
       )}
 
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
-        {isPatissierMode && !isCD && (
-          <button
-            onClick={onToggleDone}
-            className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center text-[18px] font-bold flex-shrink-0 ${
-              isDone
-                ? 'bg-ok border-ok text-cream'
-                : 'bg-cream border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream active:scale-95'
-            }`}
-            title={isDone ? 'Marquer comme non fait' : 'Marquer comme fait'}
-          >
-            {isDone ? '✓' : ''}
-          </button>
-        )}
+
         {isCD ? (
           <span className="font-fraunces italic text-[22px] font-semibold tracking-wide text-bordeaux">
             <span className="text-ink font-sans not-italic mr-2">×{item.quantity || 1}</span>
@@ -928,6 +916,22 @@ function ItemBlock({
             <InfoRow label="Message" value={item.message || '—'} />
           </div>
         </>
+      )}
+
+      {isPatissierMode && !isCD && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={onToggleDone}
+            className={`px-5 py-2 rounded-full text-[12px] font-medium tracking-wider transition-all flex items-center gap-2 ${
+              isDone
+                ? 'bg-ok text-cream hover:bg-ok-deep'
+                : 'border-2 border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream active:scale-95'
+            }`}
+            title={isDone ? 'Cliquer pour annuler' : 'Marquer comme fait'}
+          >
+            {isDone ? '✓ Fait' : 'Marquer fait'}
+          </button>
+        </div>
       )}
 
       {!isPatissierMode && (
