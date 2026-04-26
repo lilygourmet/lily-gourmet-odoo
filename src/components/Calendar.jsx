@@ -165,6 +165,14 @@ function normalizeForSearch(str) {
   return str.toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
+
+function filterOrderItemsForView(order, isPatissierMode) {
+  if (!isPatissierMode) return order
+  // En mode patissier : on ne garde que les items GM
+  const filteredItems = (order.order_items || []).filter(i => i.type === 'GM')
+  return { ...order, order_items: filteredItems }
+}
+
 export default function Calendar({ user, onLogout }) {
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOf(new Date()))
   const [orders, setOrders] = useState([])
@@ -413,7 +421,7 @@ export default function Calendar({ user, onLogout }) {
         return dt >= dayStart && dt < dayEnd
       })
 
-      return { date: day, capsules: ordersToCapsules(dayOrders) }
+      return { date: day, capsules: ordersToCapsules(dayOrders.map(o => filterOrderItemsForView(o, isPatissierMode))) }
     })
   }, [currentMonday, filteredOrders, isSearching, typeFilter, statusFilter, stepsMap])
 
