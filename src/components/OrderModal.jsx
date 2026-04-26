@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import GmFicheModal from './GmFicheModal'
 import { detectTypeFromName, TYPE_EMOJIS, loadFichesForOrder } from '../lib/gmFiches'
 import { loadDoneByItemIds, markItemDone, unmarkItemDone } from '../lib/gmDone'
+import { loadPalette } from '../lib/palette'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -215,6 +216,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
   }
   const [fichesByItemId, setFichesByItemId] = useState({})
   const [doneByItemId, setDoneByItemId] = useState({})
+  const [palette, setPalette] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -234,6 +236,10 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     if (itemIds.length === 0) return
     loadDoneByItemIds(itemIds).then(map => setDoneByItemId(map)).catch(() => {})
   }, [order?.id])
+
+  useEffect(() => {
+    loadPalette().then(p => setPalette(p)).catch(() => {})
+  }, [])
   const [readThisSession, setReadThisSession] = useState(new Set())
   const [checkedSteps, setCheckedSteps] = useState({})
   const [loadingSteps, setLoadingSteps] = useState(true)
@@ -527,6 +533,13 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
                 canEdit={canEdit}
                 itemPolys={polysMap[item.id] || {}}
                 onPolyClick={handlePolyClick}
+                hasFiche={!!fichesByItemId[item.id]}
+                onOpenFiche={() => setFicheItem(item)}
+                isPatissierMode={isPatissierMode}
+                isDone={!!doneByItemId[item.id]}
+                onToggleDone={() => handleToggleDone(item.id)}
+                fiche={fichesByItemId[item.id] || null}
+                palette={palette}
               />
             ))}
 
@@ -562,7 +575,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
               </div>
             )}
 
-            {canDelete && !focusItemId && (
+            {canDelete && !focusItemId && !isPatissierMode && (
               <div className="pt-4 mt-2 border-t border-dashed border-line">
                 {!confirmingDelete ? (
                   <button
@@ -641,7 +654,7 @@ function ItemBlock({
   isStepChecked, onStepClick, loadingSteps,
   canEdit, itemPolys, onPolyClick,
   hasFiche, onOpenFiche,
-  isPatissierMode, isDone, onToggleDone, fiche
+  isPatissierMode, isDone, onToggleDone, fiche, palette
 }) {
   const isCD = item.type === 'CD'
   const warningText = (() => {
@@ -691,7 +704,7 @@ function ItemBlock({
   const sizesPerEtage = isCD ? computeSizesForCake(item.pers, etagesCount) : null
 
   return (
-    <div className={!isLast ? 'pb-6 border-b border-dashed border-line' : ''}>
+    <div className={`${!isLast ? 'pb-6 border-b border-dashed border-line' : ''} ${isPatissierMode && isDone ? 'opacity-50' : ''}`}>
 
       {warningText && (
         <div className="mb-4 rounded-lg border border-bordeaux bg-bordeaux/5 p-3">
@@ -765,6 +778,19 @@ function ItemBlock({
       )}
 
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+        {isPatissierMode && !isCD && (
+          <button
+            onClick={onToggleDone}
+            className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center text-[18px] font-bold flex-shrink-0 ${
+              isDone
+                ? 'bg-ok border-ok text-cream'
+                : 'bg-cream border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream active:scale-95'
+            }`}
+            title={isDone ? 'Marquer comme non fait' : 'Marquer comme fait'}
+          >
+            {isDone ? '✓' : ''}
+          </button>
+        )}
         {isCD ? (
           <span
             className="font-fraunces italic text-[22px] font-semibold tracking-wide text-bordeaux"
@@ -800,6 +826,16 @@ function ItemBlock({
           </span>
         )}
       </div>
+
+      {isPatissierMode && !isCD && fiche && (
+        <FichePatissierDetails fiche={fiche} palette={palette} />
+      )}
+
+      {isPatissierMode && !isCD && !fiche && (
+        <div className="mb-3 rounded-lg bg-bordeaux/10 border border-bordeaux/30 p-2 text-[11px] text-bordeaux">
+          Fiche a definir par l'admin
+        </div>
+      )}
 
       {parfumsText && (
         <div className="text-[14px] text-ink italic leading-snug mb-3">
@@ -882,20 +918,22 @@ function ItemBlock({
         </>
       )}
 
-      <div className="flex flex-wrap gap-2 mt-4">
-        {steps.map(step => {
-          const checked = isStepChecked(item.id, step)
-          return (
-            <StepBadge
-              key={step}
-              label={STEP_LABELS[step]}
-              checked={checked}
-              onClick={() => onStepClick(item, step)}
-              disabled={loadingSteps}
-            />
-          )
-        })}
-      </div>
+      {!isPatissierMode && (
+        <div className="flex flex-wrap gap-2 mt-4">
+          {steps.map(step => {
+            const checked = isStepChecked(item.id, step)
+            return (
+              <StepBadge
+                key={step}
+                label={STEP_LABELS[step]}
+                checked={checked}
+                onClick={() => onStepClick(item, step)}
+                disabled={loadingSteps}
+              />
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -961,5 +999,127 @@ function PolysButton({ value, selected, canEdit, onClick }) {
     >
       {value}
     </button>
+  )
+}
+
+
+// ============================================================
+// Composant : details de la fiche patissier (vue en lecture)
+// ============================================================
+function FichePatissierDetails({ fiche, palette }) {
+  if (!fiche) return null
+
+  // Resoudre les IDs de couleurs vers {nom, hex}
+  const resolveColors = (ids) => {
+    if (!Array.isArray(ids) || ids.length === 0) return []
+    return ids.map(id => {
+      if (typeof id === 'object' && id?.hex) return id
+      const c = palette.find(p => p.id === id)
+      return c || null
+    }).filter(Boolean)
+  }
+
+  const couleurs = resolveColors(fiche.couleurs || [])
+  const zigzagCouleurs = resolveColors(fiche.zigzag_couleurs || [])
+  const decos = Array.isArray(fiche.decos) ? fiche.decos : []
+
+  const TYPE_LABELS = {
+    cupcake: 'Cupcakes',
+    cakepop: 'Cakepops',
+    donut: 'Donuts',
+    magnum: 'Magnums',
+    sable: 'Sables',
+  }
+
+  function dimensionLabel() {
+    if (fiche.type_gm !== 'sable') return null
+    const f = fiche.forme
+    const t = fiche.taille
+    if (!f || !t) return null
+    if (f === 'rond')      return t === 'mini' ? '5 cm' : '7 cm'
+    if (f === 'carre')     return t === 'mini' ? '4×4 cm' : '6×6 cm'
+    if (f === 'decoupoir') return ''
+    return t === 'mini' ? 'Mini' : 'Grand'
+  }
+
+  return (
+    <div className="mb-3 rounded-lg bg-cream-warm border border-line/60 p-3 space-y-2 text-[12px]">
+
+      {fiche.taille && fiche.type_gm !== 'sable' && (
+        <div className="flex gap-2">
+          <span className="text-ink-mute uppercase tracking-wider text-[9px] font-semibold w-16">Taille</span>
+          <span className="text-ink font-medium capitalize">{fiche.taille}</span>
+        </div>
+      )}
+
+      {fiche.type_gm === 'sable' && (
+        <>
+          {fiche.forme && (
+            <div className="flex gap-2">
+              <span className="text-ink-mute uppercase tracking-wider text-[9px] font-semibold w-16">Forme</span>
+              <span className="text-ink font-medium capitalize">
+                {fiche.forme}
+                {dimensionLabel() && <span className="text-ink-soft"> · {dimensionLabel()}</span>}
+              </span>
+            </div>
+          )}
+          {fiche.bord && (
+            <div className="flex gap-2">
+              <span className="text-ink-mute uppercase tracking-wider text-[9px] font-semibold w-16">Bord</span>
+              <span className="text-ink font-medium capitalize">{fiche.bord}</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {couleurs.length > 0 && (
+        <div className="flex gap-2 items-start">
+          <span className="text-ink-mute uppercase tracking-wider text-[9px] font-semibold w-16 pt-0.5">Couleurs</span>
+          <div className="flex flex-wrap gap-1.5 flex-1">
+            {couleurs.map((c, i) => (
+              <span key={i} className="inline-flex items-center gap-1 bg-white rounded px-1.5 py-0.5 border border-line">
+                <span className="w-3 h-3 rounded-full border border-line" style={{ background: c.hex }}></span>
+                <span className="text-ink text-[11px]">{c.nom}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {fiche.voir_couleur_gateau && (
+        <div className="flex gap-2">
+          <span className="text-ink-mute uppercase tracking-wider text-[9px] font-semibold w-16">Aussi</span>
+          <span className="text-ink-soft italic">✦ Voir couleur gateau (idem CD)</span>
+        </div>
+      )}
+
+      {fiche.zigzag_mode && fiche.zigzag_mode !== 'pas' && (
+        <div className="flex gap-2 items-start">
+          <span className="text-ink-mute uppercase tracking-wider text-[9px] font-semibold w-16 pt-0.5">Zigzag</span>
+          <div className="flex-1">
+            {fiche.zigzag_mode === 'meme' && <span className="text-ink">Meme couleur</span>}
+            {fiche.zigzag_mode === 'differente' && (
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-ink">Different :</span>
+                {zigzagCouleurs.map((c, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 bg-white rounded px-1.5 py-0.5 border border-line">
+                    <span className="w-3 h-3 rounded-full border border-line" style={{ background: c.hex }}></span>
+                    <span className="text-ink text-[11px]">{c.nom}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {decos.length > 0 && (
+        <div className="flex gap-2">
+          <span className="text-ink-mute uppercase tracking-wider text-[9px] font-semibold w-16">Deco</span>
+          <span className="text-ink">{decos.join(' · ')}</span>
+        </div>
+      )}
+
+    </div>
   )
 }
