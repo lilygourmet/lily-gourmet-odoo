@@ -1,70 +1,137 @@
 import { supabase } from './supabase'
 
-export async function listUsers() {
+// ============================================================
+// Lecture
+// ============================================================
+
+export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
-    .order('full_name')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, created_at')
+    .order('created_at', { ascending: true })
+
   if (error) throw error
-  return data
+  return data || []
 }
 
-export async function createUser(opts) {
+// Alias compat
+export const loadAllProfiles = loadUsers
+
+// ============================================================
+// Creation
+// ============================================================
+
+export async function createUser({
+  username, password, full_name, role,
+  perm_sync = false, perm_check = false, perm_polys = false,
+  perm_delete = false, perm_patissier = false,
+}) {
   const { data, error } = await supabase.rpc('admin_create_user', {
-    p_username: opts.username,
-    p_password: opts.password,
-    p_full_name: opts.fullName,
-    p_role: opts.role,
-    p_perm_sync: opts.permSync || false,
-    p_perm_check: opts.permCheck !== false,
-    p_perm_polys: opts.permPolys !== false,
-    p_perm_delete: opts.permDelete || false,
+    p_username: username,
+    p_password: password,
+    p_full_name: full_name,
+    p_role: role,
+    p_perm_sync: perm_sync,
+    p_perm_check: perm_check,
+    p_perm_polys: perm_polys,
+    p_perm_delete: perm_delete,
+    p_perm_patissier: perm_patissier,
   })
+
   if (error) throw error
   return data
 }
 
-export async function updateUser(opts) {
-  const { error } = await supabase.rpc('admin_update_user', {
-    p_user_id: opts.userId,
-    p_full_name: opts.fullName,
-    p_role: opts.role,
-    p_active: opts.active,
-    p_perm_sync: opts.permSync,
-    p_perm_check: opts.permCheck,
-    p_perm_polys: opts.permPolys,
-    p_perm_delete: opts.permDelete,
+// Alias compat
+export const adminCreateUser = createUser
+
+// ============================================================
+// Mise a jour
+// ============================================================
+
+export async function updateUser(userId, {
+  username, full_name, role, active,
+  perm_sync, perm_check, perm_polys, perm_delete, perm_patissier,
+}) {
+  const { data, error } = await supabase.rpc('admin_update_user', {
+    p_user_id: userId,
+    p_username: username,
+    p_full_name: full_name,
+    p_role: role,
+    p_active: active,
+    p_perm_sync: perm_sync,
+    p_perm_check: perm_check,
+    p_perm_polys: perm_polys,
+    p_perm_delete: perm_delete,
+    p_perm_patissier: perm_patissier,
   })
+
   if (error) throw error
+  return data
 }
+
+// Alias compat
+export const adminUpdateUser = updateUser
+
+// ============================================================
+// Reset mot de passe (par admin)
+// ============================================================
 
 export async function resetUserPassword(userId, newPassword) {
-  const { error } = await supabase.rpc('admin_reset_password', {
+  const { data, error } = await supabase.rpc('admin_reset_password', {
     p_user_id: userId,
     p_new_password: newPassword,
   })
+
   if (error) throw error
+  return data
 }
+
+// Alias compat
+export const adminResetPassword = resetUserPassword
+
+// ============================================================
+// Suppression
+// ============================================================
 
 export async function deleteUser(userId) {
-  const { error } = await supabase.rpc('admin_delete_user', {
-    p_user_id: userId,
-  })
+  const { error } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', userId)
+
   if (error) throw error
+  return true
 }
 
-// Alias pour compat avec ancien code
-export const loadUsers = listUsers
+// Alias compat
+export const adminDeleteUser = deleteUser
+
+// ============================================================
+// Changement de mdp par l'utilisateur lui-meme
+// ============================================================
+
+export async function changeMyPassword(userId, oldPassword, newPassword) {
+  const { data, error } = await supabase.rpc('change_my_password', {
+    p_user_id: userId,
+    p_old_password: oldPassword,
+    p_new_password: newPassword,
+  })
+
+  if (error) throw error
+  return data
+}
+
+// ============================================================
+// Constantes UI
+// ============================================================
+
+export const ROLE_COLORS = {
+  admin: 'bg-bordeaux/15 text-bordeaux',
+  user:  'bg-line/30 text-ink-soft',
+}
 
 export const ROLE_LABELS = {
   admin: 'Admin',
-  user: 'Utilisateur',
+  user:  'Utilisateur',
 }
-
-export const ROLE_COLORS = {
-  admin: 'bg-bordeaux text-cream',
-  user: 'bg-gold/20 text-chocolate',
-}
-
-// Re-export depuis auth.js pour compat
-export { changeMyPassword } from './auth'

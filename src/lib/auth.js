@@ -63,6 +63,17 @@ export function canEditPolysPerm(user) {
   return user.role === 'admin' || user.perm_polys === true
 }
 
+export function canPatissier(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_patissier === true
+}
+
+// User est en mode "patissier seulement" si perm_patissier=true ET role !== 'admin'
+export function isPatissierOnly(user) {
+  if (!user) return false
+  return user.role !== 'admin' && user.perm_patissier === true
+}
+
 // Aliases compat avec ancien code (uploadPdf -> sync dans la nouvelle archi)
 export const canUploadPdf = canSync
 export const canForceReupload = canSync
