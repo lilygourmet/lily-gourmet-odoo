@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import GmFicheModal from './GmFicheModal'
 import { detectTypeFromName, TYPE_EMOJIS, loadFichesForOrder } from '../lib/gmFiches'
+import { loadDoneByItemIds, markItemDone, unmarkItemDone } from '../lib/gmDone'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -169,7 +170,7 @@ function buildHistory(order, checkedSteps, polysMap, profiles) {
   return events
 }
 
-export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, onClose, user, profiles, onStepsChanged, onPolysChanged, onOrderDeleted }) {
+export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, isPatissierMode, onClose, user, profiles, onStepsChanged, onPolysChanged, onOrderDeleted }) {
 
   // Raccourcis clavier : fleches gauche/droite pour naviguer entre commandes du jour
   useEffect(() => {
@@ -192,7 +193,28 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
   }, [dayOrders, order.id, onNavigate])
   const [zoomUrl, setZoomUrl] = useState(null)
   const [ficheItem, setFicheItem] = useState(null)
+
+  async function handleToggleDone(itemId) {
+    if (!user?.id) return
+    try {
+      if (doneByItemId[itemId]) {
+        await unmarkItemDone(itemId)
+        setDoneByItemId(prev => {
+          const copy = { ...prev }
+          delete copy[itemId]
+          return copy
+        })
+      } else {
+        const d = await markItemDone(itemId, user.id)
+        setDoneByItemId(prev => ({ ...prev, [itemId]: d }))
+      }
+    } catch (e) {
+      console.error('[done] erreur:', e)
+      alert('Erreur : ' + e.message)
+    }
+  }
   const [fichesByItemId, setFichesByItemId] = useState({})
+  const [doneByItemId, setDoneByItemId] = useState({})
 
   useEffect(() => {
     let cancelled = false
@@ -205,6 +227,13 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     }).catch(() => {})
     return () => { cancelled = true }
   }, [order?.id, ficheItem])
+
+  useEffect(() => {
+    if (!order?.id) return
+    const itemIds = (order.order_items || []).map(i => i.id)
+    if (itemIds.length === 0) return
+    loadDoneByItemIds(itemIds).then(map => setDoneByItemId(map)).catch(() => {})
+  }, [order?.id])
   const [readThisSession, setReadThisSession] = useState(new Set())
   const [checkedSteps, setCheckedSteps] = useState({})
   const [loadingSteps, setLoadingSteps] = useState(true)
@@ -398,7 +427,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
   } else {
     const cdItems = order.order_items.filter(i => i.type === 'CD').sort((a, b) => a.item_idx - b.item_idx)
     const gmItems = order.order_items.filter(i => i.type === 'GM').sort((a, b) => a.item_idx - b.item_idx)
-    displayedItems = [...cdItems, ...gmItems]
+    displayedItems = isPatissierMode ? [...gmItems] : [...cdItems, ...gmItems]
   }
 
   return (
@@ -611,7 +640,8 @@ function ItemBlock({
   isReadThisSession, onMarkRead,
   isStepChecked, onStepClick, loadingSteps,
   canEdit, itemPolys, onPolyClick,
-  hasFiche, onOpenFiche
+  hasFiche, onOpenFiche,
+  isPatissierMode, isDone, onToggleDone, fiche
 }) {
   const isCD = item.type === 'CD'
   const warningText = (() => {

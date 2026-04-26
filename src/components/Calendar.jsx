@@ -706,6 +706,7 @@ export default function Calendar({ user, onLogout }) {
             order={selected.order}
             focusItemId={selected.focusItemId}
             dayOrders={dayOrders}
+            isPatissierMode={isPatissierMode}
             onNavigate={(newOrder) => setSelected({ order: newOrder, focusItemId: null })}
             onClose={() => setSelected(null)}
             user={user}
