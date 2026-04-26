@@ -6,7 +6,7 @@ import {
   cleanupOldOrders,
   loadAllProfiles,
 } from '../lib/orders'
-import { logout, canSync, canManageUsers , canPatissier, isPatissierOnly } from '../lib/auth'
+import { logout, canSync, canManageUsers , canPatissier, isPatissierOnly, canPrintBatch } from '../lib/auth'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
@@ -493,7 +493,7 @@ export default function Calendar({ user, onLogout }) {
         </div>
 
         {/* Bouton impression batch - toujours visible avec compteur */}
-        {canAdmin && !isPatissierMode && (
+        {canPrintBatch(user) && !isPatissierMode && (
           <button
             onClick={() => unprintedThisWeek.length > 0 && setShowBatchPrint(true)}
             disabled={unprintedThisWeek.length === 0}

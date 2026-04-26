@@ -113,3 +113,13 @@ export function formatRelativeTime(date) {
   const year = d.getFullYear()
   return `${day}/${month}/${year}`
 }
+
+export function canPrintBatch(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_print_batch === true
+}
+
+export function canPrintSingle(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_print_single === true
+}

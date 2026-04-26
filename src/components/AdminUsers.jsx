@@ -40,10 +40,13 @@ export default function AdminUsers({ currentUser, onClose }) {
         password: formData.password,
         fullName: formData.fullName.trim(),
         role: formData.role,
-        permSync: formData.permSync,
-        permCheck: formData.permCheck,
-        permPolys: formData.permPolys,
-        permDelete: formData.permDelete,
+        perm_sync: formData.permSync,
+        perm_check: formData.permCheck,
+        perm_polys: formData.permPolys,
+        perm_delete: formData.permDelete,
+        perm_patissier: formData.permPatissier,
+        perm_print_batch: formData.permPrintBatch,
+        perm_print_single: formData.permPrintSingle,
       })
       setShowNewForm(false)
       await refresh()
@@ -54,15 +57,18 @@ export default function AdminUsers({ currentUser, onClose }) {
 
   async function handleUpdate(userId, formData) {
     try {
-      await updateUser({
-        userId,
-        fullName: formData.fullName.trim(),
+      await updateUser(userId, {
+        username: formData.username.trim(),
+        full_name: formData.fullName.trim(),
         role: formData.role,
         active: formData.active,
-        permSync: formData.permSync,
-        permCheck: formData.permCheck,
-        permPolys: formData.permPolys,
-        permDelete: formData.permDelete,
+        perm_sync: formData.permSync,
+        perm_check: formData.permCheck,
+        perm_polys: formData.permPolys,
+        perm_delete: formData.permDelete,
+        perm_patissier: formData.permPatissier,
+        perm_print_batch: formData.permPrintBatch,
+        perm_print_single: formData.permPrintSingle,
       })
       setEditingUser(null)
       await refresh()
@@ -212,6 +218,9 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
   if (user.perm_check) perms.push('Cocher')
   if (user.perm_polys) perms.push('Polys')
   if (user.perm_delete) perms.push('Supprimer')
+  if (user.perm_patissier) perms.push('Patissier')
+  if (user.perm_print_batch) perms.push('Imprimer batch')
+  if (user.perm_print_single) perms.push('Imprimer 1 cmd')
 
   return (
     <div className={`rounded-lg border p-3 transition-all ${user.active ? 'border-line/60 bg-cream' : 'border-line/40 bg-cream-warm opacity-60'}`}>
@@ -287,6 +296,9 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
     permCheck: initialData?.perm_check !== false,
     permPolys: initialData?.perm_polys !== false,
     permDelete: initialData?.perm_delete || false,
+    permPatissier: initialData?.perm_patissier || false,
+    permPrintBatch: initialData?.perm_print_batch || false,
+    permPrintSingle: initialData?.perm_print_single || false,
   })
 
   function handleSubmit() {
@@ -434,6 +446,24 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
             label="🗑 Supprimer une commande"
             checked={isAdmin || formData.permDelete}
             onChange={v => update('permDelete', v)}
+          />
+          <PermCheckbox
+            id="perm-patissier"
+            label="👨‍🍳 Mode Patissier (voit uniquement les GM)"
+            checked={isAdmin || formData.permPatissier}
+            onChange={v => update('permPatissier', v)}
+          />
+          <PermCheckbox
+            id="perm-print-batch"
+            label="🖨️ Imprimer toutes les commandes (batch)"
+            checked={isAdmin || formData.permPrintBatch}
+            onChange={v => update('permPrintBatch', v)}
+          />
+          <PermCheckbox
+            id="perm-print-single"
+            label="🖨️ Imprimer une commande seule"
+            checked={isAdmin || formData.permPrintSingle}
+            onChange={v => update('permPrintSingle', v)}
           />
         </div>
       </div>
