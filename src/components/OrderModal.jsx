@@ -442,7 +442,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
                 {order.order_num}
               </div>
               <div className={`font-fraunces italic text-[22px] font-medium text-ink leading-tight truncate ${order.odoo_state === 'cancel' ? 'line-through' : ''}`}>
-                {order.client_name || '—'}
+                {isPatissierMode ? `Commande ${order.order_num}` : (order.client_name || '—')}
               </div>
               {(order.odoo_state === 'cancel' || order.modified_at) && (
                 <div className="flex gap-1.5 mt-1.5">
