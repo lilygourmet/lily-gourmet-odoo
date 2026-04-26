@@ -10,6 +10,7 @@ import { logout, canSync, canManageUsers } from '../lib/auth'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
+import AdminGmConfig from './AdminGmConfig'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
 const MONTH_NAMES = [
@@ -188,6 +189,7 @@ export default function Calendar({ user, onLogout }) {
   const userCanSync = canSync(user)
   const canAdmin = canManageUsers(user)
   const [showAdmin, setShowAdmin] = useState(false)
+  const [showGmConfig, setShowGmConfig] = useState(false)
   const [showChangePwd, setShowChangePwd] = useState(false)
 
   useEffect(() => {
@@ -479,6 +481,16 @@ export default function Calendar({ user, onLogout }) {
 
         {canAdmin && (
           <button
+            onClick={() => setShowGmConfig(true)}
+            className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+            title="Configuration GM (palette couleurs)"
+          >
+            <span className="text-[14px]">🎨</span>
+          </button>
+        )}
+
+        {canAdmin && (
+          <button
             onClick={() => setShowAdmin(true)}
             className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
             title="Administration"
@@ -656,6 +668,10 @@ export default function Calendar({ user, onLogout }) {
           />
         )
       })()}
+
+      {showGmConfig && (
+        <AdminGmConfig onClose={() => setShowGmConfig(false)} />
+      )}
 
       {showAdmin && (
         <AdminUsers
