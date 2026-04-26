@@ -314,6 +314,7 @@ export async function loadOrdersForWeek(monday) {
     .select(`
       id, order_num, client_name, delivery_at, seller_name,
       odoo_state, modified_at, last_changes_summary,
+      printed_at, printed_by,
       order_items (
         id, item_idx, type, title, etages_count, pers, parfums,
         taille_value, taille_unit,

@@ -98,10 +98,8 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
   }
 
   return (
-    <div className={isLast ? '' : 'print-page-break'} style={{
-      minHeight: '27cm',
+    <div className="print-order-page" style={{
       padding: '0',
-      pageBreakAfter: isLast ? 'auto' : 'always',
     }}>
       {/* HEADER : logo + Lily Gourmet + nom client a droite */}
       <div className="print-no-break" style={{
@@ -291,17 +289,14 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
         </div>
       )}
 
-      {/* FOOTER */}
+      {/* FOOTER : en flux normal, 1 par commande */}
       <div style={{
-        position: 'absolute',
-        bottom: '1cm',
-        left: '1.5cm',
-        right: '1.5cm',
+        marginTop: '24px',
+        paddingTop: '6px',
+        borderTop: '0.5px solid #eee',
         fontSize: '9px',
         color: '#999',
         textAlign: 'center',
-        borderTop: '0.5px solid #eee',
-        paddingTop: '6px',
       }}>
         Lily Gourmet · Imprime le {printedAtStr} · Page {pageNumber}/{totalPages}
       </div>

@@ -2,11 +2,13 @@ import { supabase } from './supabase'
 
 // Marquer une commande comme imprimee
 export async function markOrderPrinted(orderId, userId) {
+  const now = new Date().toISOString()
   const { data, error } = await supabase
     .from('orders')
     .update({
-      printed_at: new Date().toISOString(),
+      printed_at: now,
       printed_by: userId,
+      modified_at: now,
     })
     .eq('id', orderId)
     .select()
@@ -19,11 +21,13 @@ export async function markOrderPrinted(orderId, userId) {
 // Marquer plusieurs commandes en une fois (batch)
 export async function markOrdersPrintedBatch(orderIds, userId) {
   if (!orderIds || orderIds.length === 0) return []
+  const now = new Date().toISOString()
   const { data, error } = await supabase
     .from('orders')
     .update({
-      printed_at: new Date().toISOString(),
+      printed_at: now,
       printed_by: userId,
+      modified_at: now,
     })
     .in('id', orderIds)
     .select()
@@ -40,7 +44,9 @@ export function isOrderUnprinted(order) {
   if (order.modified_at) {
     const printedAt = new Date(order.printed_at).getTime()
     const modifiedAt = new Date(order.modified_at).getTime()
-    if (modifiedAt > printedAt) return true
+    // Tolerance de 5 secondes : les triggers Supabase peuvent mettre
+    // a jour modified_at quelques ms apres printed_at lors du marquage
+    if (modifiedAt - printedAt > 5000) return true
   }
   return false
 }

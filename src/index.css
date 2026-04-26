@@ -17,12 +17,10 @@ body {
    ============================================================ */
 
 @media print {
-  /* Cacher tout ce qui est UI app */
   body * {
     visibility: hidden;
   }
 
-  /* Afficher uniquement la zone d'impression */
   .print-area, .print-area * {
     visibility: visible;
   }
@@ -34,29 +32,37 @@ body {
     width: 100%;
     background: white !important;
     color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  /* Forcer la mise en page A4 */
   @page {
     size: A4 portrait;
     margin: 1.5cm;
   }
 
-  /* Saut de page entre commandes */
-  .print-page-break {
-    page-break-after: always;
-    break-after: page;
+  /* Chaque commande = au moins 1 page complete + saut force apres */
+  .print-order-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: auto;
+    break-inside: auto;
+    display: block;
   }
 
-  /* Eviter les coupures dans une section */
-  .print-no-break {
+  .print-order-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  /* Empecher la coupure des photos individuelles */
+  .print-area img {
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  /* Couleurs preservees */
-  .print-area {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  .print-no-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
