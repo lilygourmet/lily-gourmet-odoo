@@ -6,7 +6,7 @@ import {
   cleanupOldOrders,
   loadAllProfiles,
 } from '../lib/orders'
-import { logout, canSync, canManageUsers } from '../lib/auth'
+import { logout, canSync, canManageUsers , canPatissier, isPatissierOnly } from '../lib/auth'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
@@ -190,6 +190,10 @@ export default function Calendar({ user, onLogout }) {
   const canAdmin = canManageUsers(user)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showGmConfig, setShowGmConfig] = useState(false)
+  const [viewMode, setViewMode] = useState(() => {
+    // Si user n'est QUE patissier (pas admin), force mode patissier
+    return isPatissierOnly(user) ? 'patissier' : 'admin'
+  })
   const [showChangePwd, setShowChangePwd] = useState(false)
 
   useEffect(() => {
@@ -309,6 +313,7 @@ export default function Calendar({ user, onLogout }) {
     }
   }
 
+  const isPatissierMode = viewMode === 'patissier'
   const isSearching = searchQuery.trim().length > 0
   const sourceOrders = isSearching ? allOrders : orders
 
@@ -319,6 +324,12 @@ export default function Calendar({ user, onLogout }) {
         const inOrderNum = normalizeForSearch(order.order_num).includes(q)
         const inClient = normalizeForSearch(order.client_name).includes(q)
         if (!inOrderNum && !inClient) return false
+      }
+
+      // En mode patissier : ne garder que les commandes avec au moins 1 GM
+      if (isPatissierMode) {
+        const hasGm = (order.order_items || []).some(i => i.type === 'GM')
+        if (!hasGm) return false
       }
 
       const cdItems = (order.order_items || []).filter(i => i.type === 'CD')
@@ -336,7 +347,7 @@ export default function Calendar({ user, onLogout }) {
 
       return true
     })
-  }, [sourceOrders, isSearching, searchQuery, typeFilter, statusFilter, stepsMap])
+  }, [sourceOrders, isSearching, searchQuery, typeFilter, statusFilter, stepsMap, isPatissierMode])
 
   function itemMatchesStatusFilter(item) {
     if (statusFilter === 'active') {
@@ -479,6 +490,35 @@ export default function Calendar({ user, onLogout }) {
           </button>
         )}
 
+
+        {/* Toggle Calendrier / Mode patissier */}
+        {(canAdmin || isPatissierOnly(user)) && (
+          isPatissierOnly(user) ? null : (
+            <div className="flex items-center gap-1 bg-cream/80 rounded-full p-0.5 border border-line">
+              <button
+                onClick={() => setViewMode('admin')}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-medium tracking-wider transition-all ${
+                  viewMode === 'admin'
+                    ? 'bg-bordeaux text-cream'
+                    : 'text-ink-mute hover:text-ink'
+                }`}
+              >
+                Calendrier
+              </button>
+              <button
+                onClick={() => setViewMode('patissier')}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-medium tracking-wider transition-all ${
+                  viewMode === 'patissier'
+                    ? 'bg-bordeaux text-cream'
+                    : 'text-ink-mute hover:text-ink'
+                }`}
+                title="Vue patissier (GM uniquement)"
+              >
+                👨‍🍳 Patissier
+              </button>
+            </div>
+          )
+        )}
         {canAdmin && (
           <button
             onClick={() => setShowGmConfig(true)}
