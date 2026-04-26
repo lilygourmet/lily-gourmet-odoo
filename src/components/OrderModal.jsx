@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
+import GmFicheModal from './GmFicheModal'
+import { detectTypeFromName, TYPE_EMOJIS, loadFichesForOrder } from '../lib/gmFiches'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -189,6 +191,20 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     return () => window.removeEventListener('keydown', handler)
   }, [dayOrders, order.id, onNavigate])
   const [zoomUrl, setZoomUrl] = useState(null)
+  const [ficheItem, setFicheItem] = useState(null)
+  const [fichesByItemId, setFichesByItemId] = useState({})
+
+  useEffect(() => {
+    let cancelled = false
+    if (!order?.id) return
+    loadFichesForOrder(order.id).then(fiches => {
+      if (cancelled) return
+      const map = {}
+      for (const f of fiches) map[f.order_item_id] = f
+      setFichesByItemId(map)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [order?.id, ficheItem])
   const [readThisSession, setReadThisSession] = useState(new Set())
   const [checkedSteps, setCheckedSteps] = useState({})
   const [loadingSteps, setLoadingSteps] = useState(true)
@@ -576,6 +592,16 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
           </button>
         </div>
       )}
+
+      {ficheItem && (
+        <GmFicheModal
+          item={ficheItem}
+          onClose={() => setFicheItem(null)}
+          onSaved={() => {
+            // Pas de refresh necessaire pour l'instant
+          }}
+        />
+      )}
     </>
   )
 }
@@ -584,7 +610,8 @@ function ItemBlock({
   item, sharedPhotos, isLast, onPhotoClick,
   isReadThisSession, onMarkRead,
   isStepChecked, onStepClick, loadingSteps,
-  canEdit, itemPolys, onPolyClick
+  canEdit, itemPolys, onPolyClick,
+  hasFiche, onOpenFiche
 }) {
   const isCD = item.type === 'CD'
   const warningText = (() => {
@@ -708,14 +735,34 @@ function ItemBlock({
       )}
 
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
-        <span
-          className={`font-fraunces italic text-[22px] font-semibold tracking-wide ${
-            isCD ? 'text-bordeaux' : 'text-chocolate'
-          }`}
-        >
-          <span className="text-ink font-sans not-italic mr-2">×{item.quantity || 1}</span>
-          {shortName}
-        </span>
+        {isCD ? (
+          <span
+            className="font-fraunces italic text-[22px] font-semibold tracking-wide text-bordeaux"
+          >
+            <span className="text-ink font-sans not-italic mr-2">×{item.quantity || 1}</span>
+            {shortName}
+          </span>
+        ) : (
+          <button
+            onClick={() => onOpenFiche && onOpenFiche()}
+            className="text-left group flex items-baseline gap-2 hover:opacity-75 transition-opacity"
+            title={hasFiche ? "Modifier la fiche patissier" : "Definir la fiche patissier"}
+          >
+            <span className="font-fraunces italic text-[22px] font-semibold tracking-wide text-chocolate group-hover:underline">
+              <span className="text-ink font-sans not-italic mr-2">×{item.quantity || 1}</span>
+              {shortName}
+            </span>
+            {hasFiche ? (
+              <span className="text-[9px] font-bold tracking-wider uppercase bg-ok/15 text-ok px-1.5 py-0.5 rounded">
+                ✓ Fiche
+              </span>
+            ) : (
+              <span className="text-[9px] font-bold tracking-wider uppercase bg-bordeaux/10 text-bordeaux px-1.5 py-0.5 rounded">
+                À définir
+              </span>
+            )}
+          </button>
+        )}
 
         {sizeLabel && (
           <span className="text-[14px] font-bold text-ink">
