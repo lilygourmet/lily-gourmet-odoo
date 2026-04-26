@@ -827,7 +827,10 @@ function ItemBlock({
       </div>
 
       {isPatissierMode && !isCD && fiche && (
-        <FichePatissierDetails fiche={fiche} palette={palette} />
+        <>
+          <FicheCompactLine fiche={fiche} palette={palette} qty={item.quantity || 1} parfumsArray={parfumsArray} />
+          <FichePatissierDetails fiche={fiche} palette={palette} />
+        </>
       )}
 
       {isPatissierMode && !isCD && !fiche && (
@@ -1021,6 +1024,54 @@ function PolysButton({ value, selected, canEdit, onClick }) {
 
 // ============================================================
 // Composant : details de la fiche patissier (vue en lecture)
+
+
+// ============================================================
+// Composant : ligne compacte resumant la fiche
+// Ex : "Sablés boite de 24 grand · 12 rond 7cm + 12 forme"
+// ============================================================
+function FicheCompactLine({ fiche, palette, qty, parfumsArray }) {
+  if (!fiche) return null
+
+  const parts = []
+
+  // Taille (grand/mini ou autre)
+  if (fiche.taille) {
+    parts.push(fiche.taille)
+  }
+
+  // Sablés : forme + dimension + bord
+  if (fiche.type_gm === 'sable') {
+    if (fiche.forme) {
+      let formeStr = fiche.forme
+      // Dimension auto pour rond et carré
+      if (fiche.forme === 'rond')   formeStr += fiche.taille === 'mini' ? ' 5cm' : ' 7cm'
+      if (fiche.forme === 'carre')  formeStr += fiche.taille === 'mini' ? ' 4×4cm' : ' 6×6cm'
+      parts.push(`${qty} ${formeStr}`)
+    }
+    if (fiche.bord) parts.push(`bord ${fiche.bord}`)
+  }
+
+  // Cupcakes / cakepops / magnums : parfums avec dispatch
+  if (parfumsArray && parfumsArray.length > 0 && fiche.type_gm !== 'sable') {
+    if (parfumsArray.length === 1) {
+      parts.push(parfumsArray[0])
+    } else {
+      const perParfum = Math.floor(qty / parfumsArray.length)
+      const dispatch = parfumsArray.map(p => `${perParfum} ${p}`).join(' + ')
+      parts.push(dispatch)
+    }
+  }
+
+  if (parts.length === 0) return null
+
+  return (
+    <div className="text-[13px] text-ink-soft leading-snug mb-2">
+      {parts.join(' · ')}
+    </div>
+  )
+}
+
 // ============================================================
 function FichePatissierDetails({ fiche, palette }) {
   if (!fiche) return null
