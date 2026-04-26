@@ -5,6 +5,7 @@ import { loadDoneByItemIds, markItemDone, unmarkItemDone } from '../lib/gmDone'
 import { loadPalette } from '../lib/palette'
 import PrintCommande from './PrintCommande'
 import { markOrderPrinted } from '../lib/printOrders'
+import { computeSizesForCake } from '../lib/cakeSizes'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -30,62 +31,9 @@ const MONTH_NAMES = [
 
 const POLYS_VALUES = ['0', '0.5', '1', '1.5', '2', '2.5', '3', '3.5']
 
-const SIZE_TABLE = [
-  { cm: 15, pers: 5 },
-  { cm: 20, pers: 10 },
-  { cm: 25, pers: 15 },
-  { cm: 30, pers: 20 },
-  { cm: 35, pers: 30 },
-  { cm: 40, pers: 40 },
-  { cm: 45, pers: 60 },
-  { cm: 50, pers: 80 },
-  { cm: 55, pers: 100 },
-  { cm: 60, pers: 130 },
-  { cm: 65, pers: 130 },
-  { cm: 70, pers: 200 },
-  { cm: 75, pers: 200 },
-  { cm: 80, pers: 200 },
-]
 
-function computeSizesForCake(pers, etages) {
-  if (!pers || !etages) return null
-  const e = Math.max(1, etages)
 
-  if (e === 1) {
-    const match = SIZE_TABLE.find(s => s.pers === pers)
-    return match ? [match.cm] : null
-  }
 
-  const allSolutions = []
-
-  function search(startIdx, remainingEtages, currentSum, currentPath) {
-    if (remainingEtages === 0) {
-      if (currentSum === pers) {
-        allSolutions.push([...currentPath])
-      }
-      return
-    }
-    const maxStart = SIZE_TABLE.length - remainingEtages
-    for (let i = startIdx; i <= maxStart; i++) {
-      const newSum = currentSum + SIZE_TABLE[i].pers
-      if (newSum > pers) break
-      search(i + 1, remainingEtages - 1, newSum, [...currentPath, SIZE_TABLE[i].cm])
-    }
-  }
-
-  search(0, e, 0, [])
-
-  if (allSolutions.length === 0) return null
-
-  allSolutions.sort((a, b) => {
-    const rangeA = a[a.length - 1] - a[0]
-    const rangeB = b[b.length - 1] - b[0]
-    if (rangeA !== rangeB) return rangeA - rangeB
-    return b[b.length - 1] - a[a.length - 1]
-  })
-
-  return allSolutions[0]
-}
 
 function formatDeliveryDate(date) {
   const d = new Date(date)
@@ -113,6 +61,27 @@ const STEP_LABELS = {
 function extractShortName(title, type) {
   if (!title) return type || ''
   let name = title.trim()
+
+  if (type === 'GM') {
+    // Pour GM : on garde "(boite de X)" mais on retire le reste de la parenthese
+    // Ex : "Sablés boite de 24 (Grand)" -> "Sablés (boite de 24)"
+    // Ex : "Cake pops (boite de 12, Mixte)" -> "Cake pops (boite de 12)"
+
+    // Extraire boite de X
+    const boiteMatch = name.match(/boite\s+de\s+(\d+)/i)
+    const boiteStr = boiteMatch ? `(boite de ${boiteMatch[1]})` : ''
+
+    // Retirer toute la parenthese
+    const parenIdx = name.indexOf('(')
+    if (parenIdx > 0) name = name.substring(0, parenIdx).trim()
+
+    // Retirer "boite de X" du nom (si pas dans la parenthese)
+    name = name.replace(/\s+boite\s+de\s+\d+.*$/i, '').trim()
+
+    return (name + (boiteStr ? ' ' + boiteStr : '')).toUpperCase()
+  }
+
+  // Pour CD : on retire la parenthese et "boite de X"
   const parenIdx = name.indexOf('(')
   if (parenIdx > 0) name = name.substring(0, parenIdx).trim()
   name = name.replace(/\s+boite\s+de\s+\d+.*$/i, '').trim()
@@ -835,11 +804,14 @@ function ItemBlock({
           </button>
         )}
         {isCD ? (
-          <span
-            className="font-fraunces italic text-[22px] font-semibold tracking-wide text-bordeaux"
-          >
+          <span className="font-fraunces italic text-[22px] font-semibold tracking-wide text-bordeaux">
             <span className="text-ink font-sans not-italic mr-2">×{item.quantity || 1}</span>
             {shortName}
+            {item.pers && (
+              <span className="text-ink font-sans not-italic ml-3 text-[16px] font-semibold">
+                {item.pers} pers{etagesCount > 1 ? ` · ${etagesCount} etages` : ''}
+              </span>
+            )}
           </span>
         ) : (
           <button
@@ -863,11 +835,7 @@ function ItemBlock({
           </button>
         )}
 
-        {sizeLabel && (
-          <span className="text-[14px] font-bold text-ink">
-            {sizeLabel}
-          </span>
-        )}
+        {/* sizeLabel masque - taille affichee plus bas */}
       </div>
 
       {isPatissierMode && !isCD && fiche && (
@@ -880,32 +848,33 @@ function ItemBlock({
         </div>
       )}
 
-      {parfumsText && (
-        <div className="text-[14px] text-ink italic leading-snug mb-3">
-          {parfumsText}
+      {parfumsText && !isCD && (
+        <div className="text-[14px] text-ink leading-snug mb-1">
+          <span className="text-ink-mute">Parfums :</span> {parfumsText}
+        </div>
+      )}
+
+      {!isCD && sizeLabel && (
+        <div className="text-[14px] text-ink leading-snug mb-3">
+          <span className="text-ink-mute">Taille :</span> {sizeLabel}
         </div>
       )}
 
       {isCD && sizesPerEtage && (
-        <div className="mb-3 rounded-lg bg-cream-warm border border-line/60 p-3">
-          <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-ink-mute font-semibold mb-2">
-            Tailles
-          </div>
-          <div className="space-y-1">
-            {sizesPerEtage.map((cm, i) => {
-              const parfum = parfumsArray[i] || null
-              return (
-                <div key={i} className="flex items-baseline gap-2 text-[13px] text-ink">
-                  <span className="font-mono text-[11px] text-bordeaux font-semibold min-w-[40px]">
-                    {cm} cm
-                  </span>
-                  {parfum && (
-                    <span className="italic text-ink-soft">· {parfum}</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+        <div className="mb-3 space-y-1">
+          {sizesPerEtage.map((cm, i) => {
+            const parfum = parfumsArray[i] || null
+            return (
+              <div key={i} className="text-[15px]">
+                <span className="font-semibold text-bordeaux">
+                  {etagesCount > 1 ? `Etage ${i + 1} : ` : ''}{cm} cm
+                </span>
+                {parfum && (
+                  <span className="italic text-ink-soft"> · {parfum}</span>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 

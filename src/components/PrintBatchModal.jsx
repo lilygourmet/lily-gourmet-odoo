@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { markOrdersPrintedBatch } from '../lib/printOrders'
 import { loadFichesForOrder, getSableDimensionLabel } from '../lib/gmFiches'
+import { computeSizesForCake } from '../lib/cakeSizes'
 import { loadPalette } from '../lib/palette'
 
 const DAY_NAMES_FULL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
@@ -13,6 +14,19 @@ function formatDateFr(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
   return `${DAY_NAMES_FULL[d.getDay()]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()} - ${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}`
+}
+
+
+function cleanParfums(parfumsArray) {
+  if (!Array.isArray(parfumsArray)) return []
+  const FORMES = ['carre', 'rectangle', 'rond', 'ovale', 'coeur', 'fleur', 'etoile']
+  return parfumsArray.filter(p => {
+    if (!p) return false
+    const lower = String(p).toLowerCase().trim()
+    if (/^\d+$/.test(lower)) return false
+    if (FORMES.includes(lower)) return false
+    return true
+  })
 }
 
 function escapeHtml(s) {
@@ -69,7 +83,9 @@ function renderOrderHtml(order, fichesByItemId, palette) {
           GATEAU(X)
         </div>
         ${cdItems.map(item => {
-          const parfumsArray = Array.isArray(item.parfums) ? item.parfums : []
+          const parfumsArray = cleanParfums(item.parfums)
+          const etagesCount = item.etages_count || 1
+          const sizesPerEtage = item.pers ? computeSizesForCake(item.pers, etagesCount) : null
           const polys = item.polys || {}
           const polysList = []
           for (const key of Object.keys(polys)) {
@@ -86,7 +102,17 @@ function renderOrderHtml(order, fichesByItemId, palette) {
               </div>
               <div style="font-size: 11.5px; color: #333; line-height: 1.5;">
                 ${item.pers ? `<div>${item.pers} personnes${item.etages_count > 1 ? ` · ${item.etages_count} etages` : ''}</div>` : ''}
-                ${parfumsArray.length > 0 ? `<div>Parfums : ${escapeHtml(parfumsArray.join(', '))}</div>` : ''}
+                ${sizesPerEtage ? `
+                  <div style="margin-top:4px;padding:6px 10px;background:#fff8e7;border-radius:4px;border:0.5px solid #f0e0a0;">
+                    <div style="font-size:10px;font-weight:bold;color:#7a5c00;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">Tailles</div>
+                    ${sizesPerEtage.map((cm, i) => `
+                      <div style="font-size:12px;color:#333;">
+                        <span style="font-weight:600;color:#7a5c00;">${cm} cm</span>
+                        ${parfumsArray[i] ? `<span style="font-style:italic;color:#666;"> · ${escapeHtml(parfumsArray[i])}</span>` : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : (parfumsArray.length > 0 ? `<div>Parfums : ${escapeHtml(parfumsArray.join(', '))}</div>` : '')}
                 ${item.theme ? `<div>Theme : ${escapeHtml(item.theme)}</div>` : ''}
                 ${item.age ? `<div>Age : ${escapeHtml(item.age)}</div>` : ''}
                 ${item.message ? `<div>Message : « ${escapeHtml(item.message)} »</div>` : ''}
@@ -109,7 +135,7 @@ function renderOrderHtml(order, fichesByItemId, palette) {
         </div>
         ${gmItems.map(item => {
           const fiche = fichesByItemId[item.id]
-          const parfumsArray = Array.isArray(item.parfums) ? item.parfums : []
+          const parfumsArray = cleanParfums(item.parfums)
           const qty = item.quantity || 1
           const couleurs = fiche ? resolveColors(fiche.couleurs || [], palette) : []
           const zigzagCouleurs = fiche ? resolveColors(fiche.zigzag_couleurs || [], palette) : []
@@ -119,11 +145,11 @@ function renderOrderHtml(order, fichesByItemId, palette) {
           return `
             <div style="margin-bottom: 10px;">
               <div style="font-size: 13px; font-weight: 600; margin-bottom: 3px;">
-                × ${qty} — ${escapeHtml(item.title)}
-                ${fiche?.taille && fiche.type_gm !== 'sable' ? `<span style="color:#666;font-weight:400;"> · ${escapeHtml(fiche.taille)}</span>` : ''}
+                × ${qty} ${escapeHtml(item.title)}
               </div>
               <div style="font-size: 11.5px; color: #333; line-height: 1.5;">
-                ${parfumsArray.length > 0 ? `<div>${parfumsArray.length === 1 ? escapeHtml(parfumsArray[0]) : parfumsArray.map(p => `${dispatchPerParfum} ${escapeHtml(p)}`).join(' · ')}</div>` : ''}
+                ${fiche?.taille && fiche.type_gm !== 'sable' ? `<div>Taille : ${escapeHtml(fiche.taille)}</div>` : ''}
+                ${parfumsArray.length > 0 ? `<div>Parfums : ${parfumsArray.length === 1 ? escapeHtml(parfumsArray[0]) : parfumsArray.map(p => `${dispatchPerParfum} ${escapeHtml(p)}`).join(' · ')}</div>` : ''}
                 ${!fiche ? `<div style="color:#c2185b;font-style:italic;">⚠ Fiche a definir</div>` : ''}
                 ${fiche?.type_gm === 'sable' ? `<div>Forme ${escapeHtml(fiche.forme || '')}${fiche.taille ? ` · ${escapeHtml(getSableDimensionLabel(fiche.forme, fiche.taille) || '')}` : ''}${fiche.bord ? ` · Bord ${escapeHtml(fiche.bord)}` : ''}</div>` : ''}
                 ${couleurs.length > 0 ? `<div>Couleurs : ${couleurs.map(c => `<span style="display:inline-flex;align-items:center;gap:3px;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.hex};border:0.5px solid #999;vertical-align:middle;"></span>${escapeHtml(c.nom)}</span>`).join(', ')}</div>` : ''}

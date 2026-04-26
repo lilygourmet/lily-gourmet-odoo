@@ -492,12 +492,21 @@ export default function Calendar({ user, onLogout }) {
           )}
         </div>
 
-        {/* Bouton impression batch (admin only, pas en mode patissier) */}
-        {canAdmin && !isPatissierMode && unprintedThisWeek.length > 0 && (
+        {/* Bouton impression batch - toujours visible avec compteur */}
+        {canAdmin && !isPatissierMode && (
           <button
-            onClick={() => setShowBatchPrint(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
-            title={`${unprintedThisWeek.length} commande(s) non imprimee(s) cette semaine`}
+            onClick={() => unprintedThisWeek.length > 0 && setShowBatchPrint(true)}
+            disabled={unprintedThisWeek.length === 0}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
+              unprintedThisWeek.length > 0
+                ? 'border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream cursor-pointer'
+                : 'border border-line text-ink-mute cursor-not-allowed opacity-60'
+            }`}
+            title={
+              unprintedThisWeek.length > 0
+                ? `${unprintedThisWeek.length} commande(s) non imprimee(s) cette semaine`
+                : 'Aucune nouvelle commande a imprimer'
+            }
           >
             <span>🖨️</span>
             <span>{unprintedThisWeek.length}</span>

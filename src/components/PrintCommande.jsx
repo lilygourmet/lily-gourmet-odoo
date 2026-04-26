@@ -1,4 +1,20 @@
 import { TYPE_LABELS, TYPE_EMOJIS, getSableDimensionLabel } from '../lib/gmFiches'
+import { computeSizesForCake } from '../lib/cakeSizes'
+
+
+function cleanParfums(parfumsArray) {
+  if (!Array.isArray(parfumsArray)) return []
+  const FORMES = ['carre', 'rectangle', 'rond', 'rectangle', 'ovale', 'coeur', 'fleur', 'etoile']
+  return parfumsArray.filter(p => {
+    if (!p) return false
+    const lower = String(p).toLowerCase().trim()
+    // Filtrer les nombres seuls
+    if (/^\d+$/.test(lower)) return false
+    // Filtrer les formes
+    if (FORMES.includes(lower)) return false
+    return true
+  })
+}
 
 // ============================================================
 // Composant : impression d'1 ou plusieurs commandes (A4 portrait)
@@ -309,7 +325,7 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
 // ============================================================
 
 function CdItemPrint({ item, index, totalCdItems }) {
-  const parfumsArray = Array.isArray(item.parfums) ? item.parfums : []
+  const parfumsArray = cleanParfums(item.parfums)
   const polys = item.polys || {}
   const polysList = []
   for (const key of Object.keys(polys)) {
@@ -318,6 +334,10 @@ function CdItemPrint({ item, index, totalCdItems }) {
     polysList.push({ etage: num, value: typeof v === 'object' ? v.value : v })
   }
   polysList.sort((a, b) => a.etage - b.etage)
+
+  // Calculer les tailles en cm
+  const etagesCount = item.etages_count || 1
+  const sizesPerEtage = item.pers ? computeSizesForCake(item.pers, etagesCount) : null
 
   return (
     <div className="print-no-break" style={{
@@ -330,13 +350,23 @@ function CdItemPrint({ item, index, totalCdItems }) {
       </div>
 
       <div style={{ fontSize: '12px', color: '#333', lineHeight: '1.6' }}>
-        {item.pers && (
-          <div>
-            {item.pers} personnes
-            {item.etages_count && item.etages_count > 1 && ` · ${item.etages_count} etages`}
+
+        {/* Tailles par etage avec parfum */}
+        {sizesPerEtage && (
+          <div style={{ marginTop: '4px', padding: '6px 10px', background: '#fff8e7', borderRadius: '4px', border: '0.5px solid #f0e0a0' }}>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#7a5c00', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '3px' }}>
+              Tailles
+            </div>
+            {sizesPerEtage.map((cm, i) => (
+              <div key={i} style={{ fontSize: '12px', color: '#333' }}>
+                <span style={{ fontWeight: '600', color: '#7a5c00' }}>{cm} cm</span>
+                {parfumsArray[i] && <span style={{ fontStyle: 'italic', color: '#666' }}> · {parfumsArray[i]}</span>}
+              </div>
+            ))}
           </div>
         )}
-        {parfumsArray.length > 0 && (
+
+        {!sizesPerEtage && parfumsArray.length > 0 && (
           <div>Parfums : {parfumsArray.join(', ')}</div>
         )}
         {item.theme && <div>Theme : {item.theme}</div>}
@@ -362,7 +392,7 @@ function CdItemPrint({ item, index, totalCdItems }) {
 // ============================================================
 
 function GmItemPrint({ item, fiche, palette, index, totalGmItems }) {
-  const parfumsArray = Array.isArray(item.parfums) ? item.parfums : []
+  const parfumsArray = cleanParfums(item.parfums)
   const qty = item.quantity || 1
 
   const couleurs = fiche ? resolveColors(fiche.couleurs || [], palette) : []
@@ -379,18 +409,19 @@ function GmItemPrint({ item, fiche, palette, index, totalGmItems }) {
       borderBottom: index < totalGmItems - 1 ? '0.5px dashed #ddd' : 'none',
     }}>
       <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
-        × {qty} — {item.title}
-        {fiche?.taille && fiche.type_gm !== 'sable' && (
-          <span style={{ color: '#666', fontWeight: '400' }}> · {fiche.taille}</span>
-        )}
+        × {qty} {item.title}
       </div>
 
       <div style={{ fontSize: '11.5px', color: '#333', lineHeight: '1.6' }}>
+        {/* Taille */}
+        {fiche?.taille && fiche.type_gm !== 'sable' && (
+          <div>Taille : {fiche.taille}</div>
+        )}
         {/* Parfums avec dispatch */}
         {parfumsArray.length > 0 && (
           <div>
-            {parfumsArray.length === 1
-              ? `${parfumsArray[0]}`
+            Parfums : {parfumsArray.length === 1
+              ? parfumsArray[0]
               : parfumsArray.map(p => `${dispatchPerParfum} ${p}`).join(' · ')
             }
           </div>
