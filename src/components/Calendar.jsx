@@ -275,20 +275,35 @@ export default function Calendar({ user, onLogout }) {
     if (onLogout) onLogout()
   }
 
-  // Bouton "Synchroniser maintenant" — TODO: brancher /api/sync-now en session 5b
+  // Bouton "Synchroniser maintenant" : appelle /api/sync-now
   async function handleSyncNow() {
     if (syncing) return
     setSyncing(true)
-    setSyncStatus('Synchronisation...')
+    setSyncStatus('Synchro...')
     try {
-      // TODO Session 5b : remplacer par fetch('/api/sync-now', { method: 'POST' })
-      // qui vérifie l'auth Supabase + perm_sync.
-      alert('🚧 Bouton synchroniser : à brancher en session 5b\n\nPour l\'instant la sync auto se fait toutes les 15 min via cron-job.org.')
+      const res = await fetch('/api/sync-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || `Erreur ${res.status}`)
+      }
+      // Rafraichir les commandes affichees
+      const fresh = await loadOrdersForWeek(currentMonday)
+      setOrders(fresh)
+      setSyncStatus('Synchronise')
+      setTimeout(() => setSyncStatus(''), 3000)
     } catch (e) {
-      alert(`Erreur : ${e.message}`)
+      console.error('[sync-now] Erreur:', e)
+      setSyncStatus('Erreur')
+      alert(`Erreur de synchronisation : ${e.message}`)
+      setTimeout(() => setSyncStatus(''), 3000)
     } finally {
       setSyncing(false)
-      setSyncStatus('')
     }
   }
 
