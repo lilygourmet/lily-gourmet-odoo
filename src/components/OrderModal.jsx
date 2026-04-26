@@ -167,7 +167,27 @@ function buildHistory(order, checkedSteps, polysMap, profiles) {
   return events
 }
 
-export default function OrderModal({ order, focusItemId, onClose, user, profiles, onStepsChanged, onPolysChanged, onOrderDeleted }) {
+export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, onClose, user, profiles, onStepsChanged, onPolysChanged, onOrderDeleted }) {
+
+  // Raccourcis clavier : fleches gauche/droite pour naviguer entre commandes du jour
+  useEffect(() => {
+    if (!dayOrders || dayOrders.length <= 1 || !onNavigate) return
+    const handler = (e) => {
+      // Ignorer si focus dans input/textarea/select
+      const tag = (e.target?.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      const idx = dayOrders.findIndex(o => o.id === order.id)
+      if (e.key === 'ArrowLeft' && idx > 0) {
+        e.preventDefault()
+        onNavigate(dayOrders[idx - 1])
+      } else if (e.key === 'ArrowRight' && idx >= 0 && idx < dayOrders.length - 1) {
+        e.preventDefault()
+        onNavigate(dayOrders[idx + 1])
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [dayOrders, order.id, onNavigate])
   const [zoomUrl, setZoomUrl] = useState(null)
   const [readThisSession, setReadThisSession] = useState(new Set())
   const [checkedSteps, setCheckedSteps] = useState({})
@@ -407,13 +427,43 @@ export default function OrderModal({ order, focusItemId, onClose, user, profiles
               )}
             </div>
 
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-              title="Fermer"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {dayOrders && dayOrders.length > 1 && (() => {
+                const idx = dayOrders.findIndex(o => o.id === order.id)
+                const prev = idx > 0 ? dayOrders[idx - 1] : null
+                const next = idx >= 0 && idx < dayOrders.length - 1 ? dayOrders[idx + 1] : null
+                return (
+                  <>
+                    <button
+                      onClick={() => prev && onNavigate && onNavigate(prev)}
+                      disabled={!prev}
+                      className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-mute disabled:hover:border-line disabled:cursor-not-allowed flex items-center justify-center transition-all"
+                      title={prev ? `Commande precedente (${prev.order_num})` : 'Premiere commande du jour'}
+                    >
+                      ‹
+                    </button>
+                    <span className="font-mono text-[10px] text-ink-mute tabular-nums px-1">
+                      {idx + 1}/{dayOrders.length}
+                    </span>
+                    <button
+                      onClick={() => next && onNavigate && onNavigate(next)}
+                      disabled={!next}
+                      className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-mute disabled:hover:border-line disabled:cursor-not-allowed flex items-center justify-center transition-all"
+                      title={next ? `Commande suivante (${next.order_num})` : 'Derniere commande du jour'}
+                    >
+                      ›
+                    </button>
+                  </>
+                )
+              })()}
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+                title="Fermer"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           <div className="px-6 py-5 space-y-6">

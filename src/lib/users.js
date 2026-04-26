@@ -17,8 +17,8 @@ export async function createUser(opts) {
     p_role: opts.role,
     p_perm_sync: opts.permSync || false,
     p_perm_check: opts.permCheck !== false,
+    p_perm_polys: opts.permPolys !== false,
     p_perm_delete: opts.permDelete || false,
-    p_perm_edit_warnings: opts.permEditWarnings || false,
   })
   if (error) throw error
   return data
@@ -32,8 +32,8 @@ export async function updateUser(opts) {
     p_active: opts.active,
     p_perm_sync: opts.permSync,
     p_perm_check: opts.permCheck,
+    p_perm_polys: opts.permPolys,
     p_perm_delete: opts.permDelete,
-    p_perm_edit_warnings: opts.permEditWarnings,
   })
   if (error) throw error
 }

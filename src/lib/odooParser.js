@@ -22,6 +22,12 @@ export function parseOdooOrder(odooOrder, odooLines) {
     ? odooOrder.partner_id[1]
     : null
 
+  // Vendeur : user_id (vendeur officiel) sinon create_uid (qui a confirme le devis)
+  const sellerName =
+    (Array.isArray(odooOrder.user_id) ? odooOrder.user_id[1] : null) ||
+    (Array.isArray(odooOrder.create_uid) ? odooOrder.create_uid[1] : null) ||
+    null
+
   // 1) Pre-traitement : pour chaque ligne, decide si c'est un produit CD/GM,
   // un produit a ignorer (SA-, Acompte, Bougies...), ou une ligne "warning".
   // Les lignes warning sont celles dont le name (apres trim) :
@@ -34,6 +40,7 @@ export function parseOdooOrder(odooOrder, odooLines) {
   return {
     orderNum,
     clientName,
+    sellerName,
     deliveryAt,
     deliverySlot,
     odooId: odooOrder.id,

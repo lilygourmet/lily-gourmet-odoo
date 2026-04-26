@@ -232,13 +232,13 @@ export async function deleteOrder(orderId) {
     for (const item of order.order_items) {
       if (Array.isArray(item.image_urls)) {
         for (const url of item.image_urls) {
-          const match = url.match(/\/images\/([^?]+)/)
+          const match = url.match(/\/product-images\/([^?]+)/)
           if (match) imagePaths.push(match[1])
         }
       }
     }
     if (imagePaths.length > 0) {
-      await supabase.storage.from('images').remove(imagePaths)
+      await supabase.storage.from('product-images').remove(imagePaths)
     }
   }
 
@@ -277,7 +277,7 @@ export async function cleanupOldOrders() {
     for (const item of o.order_items || []) {
       if (Array.isArray(item.image_urls)) {
         for (const url of item.image_urls) {
-          const match = url.match(/\/images\/([^?]+)/)
+          const match = url.match(/\/product-images\/([^?]+)/)
           if (match) imagePaths.push(match[1])
         }
       }
@@ -285,7 +285,7 @@ export async function cleanupOldOrders() {
   }
 
   if (imagePaths.length > 0) {
-    await supabase.storage.from('images').remove(imagePaths)
+    await supabase.storage.from('product-images').remove(imagePaths)
   }
 
   const orderIds = oldOrders.map(o => o.id)

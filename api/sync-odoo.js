@@ -156,7 +156,7 @@ async function fetchOdooOrders(uid) {
       ['commitment_date', '>=', dateStart],
       ['commitment_date', '<=', dateEnd],
     ],
-    ['id', 'name', 'partner_id', 'commitment_date', 'livraison_hour', 'state', 'note', 'order_line'],
+    ['id', 'name', 'partner_id', 'commitment_date', 'livraison_hour', 'state', 'note', 'order_line', 'user_id', 'create_uid'],
     { order: 'commitment_date asc', limit: 500 }
   )
 
@@ -415,6 +415,7 @@ async function syncToSupabase(supabase, parsedOrders) {
       const orderRow = {
         order_num: po.orderNum,
         client_name: po.clientName,
+        seller_name: po.sellerName,
         delivery_at: po.deliveryAt.toISOString(),
         delivery_slot: po.deliverySlot,
         odoo_id: po.odooId,

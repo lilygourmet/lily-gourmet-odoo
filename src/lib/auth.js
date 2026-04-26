@@ -58,9 +58,9 @@ export function canDelete(user) {
   return user.role === 'admin' || user.perm_delete === true
 }
 
-export function canEditWarnings(user) {
+export function canEditPolysPerm(user) {
   if (!user) return false
-  return user.role === 'admin' || user.perm_edit_warnings === true
+  return user.role === 'admin' || user.perm_polys === true
 }
 
 // Aliases compat avec ancien code (uploadPdf -> sync dans la nouvelle archi)
@@ -81,7 +81,7 @@ export async function changeMyPassword(userId, oldPassword, newPassword) {
 }
 
 // Helpers complementaires
-export const canEditPolys = canCheck
+export const canEditPolys = canEditPolysPerm
 export const canUncheckSteps = canCheck
 export const canDeleteOrder = canDelete
 

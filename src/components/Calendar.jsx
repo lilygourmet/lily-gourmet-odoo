@@ -610,18 +610,37 @@ export default function Calendar({ user, onLogout }) {
         />
       )}
 
-      {selected && (
-        <OrderModal
-          order={selected.order}
-          focusItemId={selected.focusItemId}
-          onClose={() => setSelected(null)}
-          user={user}
-          profiles={profiles}
-          onStepsChanged={handleStepsChanged}
-          onPolysChanged={handlePolysChanged}
-          onOrderDeleted={handleOrderDeleted}
-        />
-      )}
+      {selected && (() => {
+        // Liste des commandes du meme jour (non annulees en premier, puis annulees)
+        const selectedDayKey = selected.order.delivery_at?.slice(0, 10)
+        const dayOrders = filteredOrders
+          .filter(o => o.delivery_at?.slice(0, 10) === selectedDayKey)
+          .sort((a, b) => {
+            // Annulees a la fin
+            const aCancel = a.odoo_state === 'cancel' ? 1 : 0
+            const bCancel = b.odoo_state === 'cancel' ? 1 : 0
+            if (aCancel !== bCancel) return aCancel - bCancel
+            // Sinon par delivery_at puis order_num
+            if (a.delivery_at !== b.delivery_at) {
+              return (a.delivery_at || '').localeCompare(b.delivery_at || '')
+            }
+            return (a.order_num || '').localeCompare(b.order_num || '')
+          })
+        return (
+          <OrderModal
+            order={selected.order}
+            focusItemId={selected.focusItemId}
+            dayOrders={dayOrders}
+            onNavigate={(newOrder) => setSelected({ order: newOrder, focusItemId: null })}
+            onClose={() => setSelected(null)}
+            user={user}
+            profiles={profiles}
+            onStepsChanged={handleStepsChanged}
+            onPolysChanged={handlePolysChanged}
+            onOrderDeleted={handleOrderDeleted}
+          />
+        )
+      })()}
 
       {showAdmin && (
         <AdminUsers
