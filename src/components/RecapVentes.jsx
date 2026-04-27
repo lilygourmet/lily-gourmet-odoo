@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
+import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
 
 // ============================================================
 // Helper : genere le HTML d'UNE categorie pour impression
 // Mode 'product' : liste agregee par produit
 // Mode 'hour-client' : groupe par heure -> client -> produits
+// Mode 'delivery' : pour chaque commande livraison, affiche TOUTES ses lignes
 // ============================================================
-function renderCategoryHtml(cat, catLines, dateLabel, isLast) {
+function renderCategoryHtml(cat, catLines, dateLabel, isLast, allLines = []) {
   if (catLines.length === 0) return ''
 
   const total = sumQty(catLines)
@@ -25,14 +26,28 @@ function renderCategoryHtml(cat, catLines, dateLabel, isLast) {
     for (const [, entry] of grouped.entries()) {
       html += `<div class="item"><span class="qty">×${entry.totalQty}</span> ${entry.product_name}</div>`
     }
+  } else if (cat.viewMode === 'delivery') {
+    // Vue livraison : pour chaque commande LIVR, montre TOUTES les lignes
+    const grouped = groupDeliveriesWithFullOrder(catLines, allLines)
+    for (const [hour, clientMap] of grouped.entries()) {
+      html += `<div class="hour">${hour}</div>`
+      for (const [, entry] of clientMap.entries()) {
+        const orderTag = entry.orderNum ? `<span class="ordernum">${entry.orderNum}</span> — ` : ''
+        html += `<div class="client">${orderTag}${entry.clientName}</div>`
+        for (const item of entry.items) {
+          html += `<div class="item"><span class="qty">×${item.quantity}</span> ${item.product_name}</div>`
+        }
+      }
+    }
   } else {
     // Vue heure -> client -> produits (par defaut)
     const grouped = groupByHourThenClient(catLines)
     for (const [hour, clientMap] of grouped.entries()) {
       html += `<div class="hour">${hour}</div>`
-      for (const [client, items] of clientMap.entries()) {
-        html += `<div class="client">${client}</div>`
-        for (const item of items) {
+      for (const [, entry] of clientMap.entries()) {
+        const orderTag = entry.orderNum ? `<span class="ordernum">${entry.orderNum}</span> — ` : ''
+        html += `<div class="client">${orderTag}${entry.clientName}</div>`
+        for (const item of entry.items) {
           html += `<div class="item"><span class="qty">×${item.quantity}</span> ${item.product_name}</div>`
         }
       }
@@ -63,6 +78,7 @@ function printHtml(htmlBody, title) {
   .hour { font-weight: 600; color: #555; margin-top: 10px; padding-bottom: 2px;
           border-bottom: 0.5px solid #ddd; }
   .client { margin-left: 12px; font-weight: 500; color: #333; margin-top: 4px; }
+  .ordernum { font-family: monospace; font-size: 10px; color: #a8324b; font-weight: 600; letter-spacing: 0.5px; }
   .item { margin-left: 24px; color: #555; }
   .qty { display: inline-block; min-width: 32px; font-weight: 600; color: #a8324b; }
   @page { size: A4 portrait; margin: 1.5cm; }
@@ -91,14 +107,24 @@ function printHtml(htmlBody, title) {
 
 // ============================================================
 // Popup affiche le detail d'UNE categorie + bouton imprimer
+// 3 modes : 'product' (agrege), 'hour-client' (heure>client>items), 'delivery' (heure>cmd>tt items)
 // ============================================================
-function CategoryPopup({ cat, lines, dateLabel, onClose }) {
+function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
   const total = sumQty(lines)
   const isProductMode = cat.viewMode === 'product'
+  const isDeliveryMode = cat.viewMode === 'delivery'
 
   function handlePrintThisOne() {
-    const html = renderCategoryHtml(cat, lines, dateLabel, true)
+    const html = renderCategoryHtml(cat, lines, dateLabel, true, allLines)
     printHtml(html, `${cat.label} - ${dateLabel}`)
+  }
+
+  // Pre-calcule le contenu groupe selon le mode
+  let groupedHourClient = null
+  if (!isProductMode) {
+    groupedHourClient = isDeliveryMode
+      ? groupDeliveriesWithFullOrder(lines, allLines)
+      : groupByHourThenClient(lines)
   }
 
   return (
@@ -147,17 +173,24 @@ function CategoryPopup({ cat, lines, dateLabel, onClose }) {
               ))}
             </div>
           ) : (
-            // Vue heure -> client -> produits (toutes les autres)
+            // Vue heure -> (client+orderNum) -> produits — utilisee par hour-client ET delivery
             <div className="space-y-3">
-              {[...groupByHourThenClient(lines).entries()].map(([hour, clientMap]) => (
+              {[...groupedHourClient.entries()].map(([hour, clientMap]) => (
                 <div key={hour} className="border-b border-line/50 pb-3 last:border-0">
                   <div className="font-mono text-[11px] font-semibold text-ink-mute tracking-wider uppercase mb-2">
                     {hour}
                   </div>
-                  {[...clientMap.entries()].map(([client, items]) => (
-                    <div key={client} className="ml-2 mb-2">
-                      <div className="text-[13px] text-ink font-semibold mb-0.5">{client}</div>
-                      {items.map(item => (
+                  {[...clientMap.entries()].map(([key, entry]) => (
+                    <div key={key} className="ml-2 mb-2">
+                      <div className="text-[13px] font-semibold mb-0.5 flex gap-2 items-baseline">
+                        {entry.orderNum && (
+                          <span className="font-mono text-[10px] text-bordeaux tracking-wider">
+                            {entry.orderNum}
+                          </span>
+                        )}
+                        <span className="text-ink">— {entry.clientName}</span>
+                      </div>
+                      {entry.items.map(item => (
                         <div key={item.id} className="ml-4 text-[12px] text-ink-soft flex gap-2">
                           <span className="font-bold text-bordeaux min-w-[32px]">×{item.quantity}</span>
                           <span>{item.product_name}</span>
@@ -209,7 +242,7 @@ export default function RecapVentes({ onClose }) {
     let html = ''
     for (const cat of VENTE_CATEGORIES) {
       const catLines = linesForCategory(cat.id)
-      html += renderCategoryHtml(cat, catLines, dateLabel, false)
+      html += renderCategoryHtml(cat, catLines, dateLabel, false, lines)
     }
     if (!html) {
       alert('Aucune vente a imprimer pour cette date')
@@ -284,6 +317,7 @@ export default function RecapVentes({ onClose }) {
         <CategoryPopup
           cat={popupCat}
           lines={linesForCategory(popupCat.id)}
+          allLines={lines}
           dateLabel={dateLabel}
           onClose={() => setPopupCat(null)}
         />
