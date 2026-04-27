@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -24,7 +24,7 @@ export const loadAllProfiles = loadUsers
 export async function createUser({
   username, password, full_name, role,
   perm_sync = false, perm_check = false, perm_polys = false,
-  perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false,
+  perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false, perm_recaps = false,
 }) {
   const { data, error } = await supabase.rpc('admin_create_user', {
     p_username: username,
@@ -38,6 +38,7 @@ export async function createUser({
     p_perm_patissier: perm_patissier,
     p_perm_print_batch: perm_print_batch,
     p_perm_print_single: perm_print_single,
+    p_perm_recaps: perm_recaps,
   })
 
   if (error) throw error
@@ -54,7 +55,7 @@ export const adminCreateUser = createUser
 export async function updateUser(userId, {
   username, full_name, role, active,
   perm_sync, perm_check, perm_polys, perm_delete, perm_patissier,
-  perm_print_batch, perm_print_single,
+  perm_print_batch, perm_print_single, perm_recaps,
 }) {
   const { data, error } = await supabase.rpc('admin_update_user', {
     p_user_id: userId,
@@ -69,6 +70,7 @@ export async function updateUser(userId, {
     p_perm_patissier: perm_patissier,
     p_perm_print_batch: perm_print_batch,
     p_perm_print_single: perm_print_single,
+    p_perm_recaps: perm_recaps,
   })
 
   if (error) throw error

@@ -47,6 +47,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_patissier: formData.permPatissier,
         perm_print_batch: formData.permPrintBatch,
         perm_print_single: formData.permPrintSingle,
+        perm_recaps: formData.permRecaps,
       })
       setShowNewForm(false)
       await refresh()
@@ -69,6 +70,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_patissier: formData.permPatissier,
         perm_print_batch: formData.permPrintBatch,
         perm_print_single: formData.permPrintSingle,
+        perm_recaps: formData.permRecaps,
       })
       setEditingUser(null)
       await refresh()
@@ -221,6 +223,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
   if (user.perm_patissier) perms.push('Patissier')
   if (user.perm_print_batch) perms.push('Imprimer batch')
   if (user.perm_print_single) perms.push('Imprimer 1 cmd')
+  if (user.perm_recaps) perms.push('Recaps ventes')
 
   return (
     <div className={`rounded-lg border p-3 transition-all ${user.active ? 'border-line/60 bg-cream' : 'border-line/40 bg-cream-warm opacity-60'}`}>
@@ -299,6 +302,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
     permPatissier: initialData?.perm_patissier || false,
     permPrintBatch: initialData?.perm_print_batch || false,
     permPrintSingle: initialData?.perm_print_single || false,
+    permRecaps: initialData?.perm_recaps || false,
   })
 
   function handleSubmit() {
@@ -464,6 +468,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
             label="🖨️ Imprimer une commande seule"
             checked={isAdmin || formData.permPrintSingle}
             onChange={v => update('permPrintSingle', v)}
+          />
+          <PermCheckbox
+            id="perm-recaps"
+            label="📊 Voir les récaps de ventes"
+            checked={isAdmin || formData.permRecaps}
+            onChange={v => update('permRecaps', v)}
           />
         </div>
       </div>

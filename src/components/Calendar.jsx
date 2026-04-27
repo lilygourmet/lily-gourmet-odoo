@@ -6,12 +6,13 @@ import {
   cleanupOldOrders,
   loadAllProfiles,
 } from '../lib/orders'
-import { logout, canSync, canManageUsers , canPatissier, isPatissierOnly, canPrintBatch } from '../lib/auth'
+import { logout, canSync, canManageUsers , canPatissier, isPatissierOnly, canPrintBatch , canRecaps} from '../lib/auth'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
 import AdminGmConfig from './AdminGmConfig'
 import PrintBatchModal from './PrintBatchModal'
+import RecapVentes from './RecapVentes'
 import { filterUnprintedOrders, filterCurrentWeek } from '../lib/printOrders'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
@@ -208,6 +209,7 @@ export default function Calendar({ user, onLogout }) {
   const userCanSync = canSync(user)
   const canAdmin = canManageUsers(user)
   const [showAdmin, setShowAdmin] = useState(false)
+  const [showRecaps, setShowRecaps] = useState(false)
   const [showGmConfig, setShowGmConfig] = useState(false)
   const [showBatchPrint, setShowBatchPrint] = useState(false)
   const [viewMode, setViewMode] = useState(() => {
@@ -501,6 +503,17 @@ export default function Calendar({ user, onLogout }) {
           )}
         </div>
 
+                {/* Bouton recaps ventes */}
+        {canRecaps(user) && (
+          <button
+            onClick={() => setShowRecaps(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
+            title="Récap des ventes"
+          >
+            <span>📊</span>
+            <span>Récap</span>
+          </button>
+        )}
         {/* Bouton impression batch - toujours visible avec compteur */}
         {canPrintBatch(user) && !isPatissierMode && (
           <button
@@ -778,6 +791,10 @@ export default function Calendar({ user, onLogout }) {
 
       {showGmConfig && (
         <AdminGmConfig onClose={() => setShowGmConfig(false)} />
+      )}
+
+      {showRecaps && (
+        <RecapVentes onClose={() => setShowRecaps(false)} />
       )}
 
       {showAdmin && (

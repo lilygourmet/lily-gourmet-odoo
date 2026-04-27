@@ -69,6 +69,12 @@ export default async function handler(req, res) {
 
     const stats = await syncToSupabase(supabase, parsed)
 
+    // Sync table sales_lines pour les recaps de ventes
+    if (stats.orderIdMap) {
+      await syncSalesLines(supabase, parsed, linesByOrderId, stats.orderIdMap)
+      delete stats.orderIdMap
+    }
+
     return res.status(200).json({
       success: true,
       duration_ms: Date.now() - startTime,
@@ -204,6 +210,98 @@ function enrichWithLineIds(parsedOrders, linesByOrderId) {
         item.productId = null
       }
     })
+  }
+}
+
+
+// ==========================================
+// DETECTION PREFIXE + CATEGORIE pour recaps ventes
+// ==========================================
+
+function detectPrefixAndCategory(productName) {
+  const name = (productName || '').trim()
+  if (!name) return { prefix: null, category: 'AUTRE' }
+
+  // 1) Detection speciale : Livraison (pas de prefixe formel)
+  if (/livraison/i.test(name)) {
+    return { prefix: null, category: 'LIVR' }
+  }
+
+  // 2) Detection prefixe : 1-5 caracteres alphanum suivi d'un tiret
+  const match = name.match(/^([A-Z][A-Z0-9]{0,4})-\s*/i)
+  if (!match) {
+    return { prefix: null, category: 'AUTRE' }
+  }
+
+  const prefix = match[1].toUpperCase() + '-'
+
+  // 3) Mapping prefixe -> categorie de vente
+  const PREFIX_TO_CATEGORY = {
+    'CD-': 'CD',
+    'GM-': 'CD',
+    'GMD-': 'CD',
+    'E-': 'PROD',
+    'MI-': 'PROD',
+    'GS-': 'PROD',
+    'SA-': 'SALES',
+    'SAK-': 'SALES',
+    'RA-': 'RAHN',
+    'H-': 'RAHN',
+    'N-': 'RAHN',
+    'V-': 'VIENN',
+    'B-': 'VIENN',
+  }
+
+  const category = PREFIX_TO_CATEGORY[prefix] || 'AUTRE'
+  return { prefix, category }
+}
+
+// ==========================================
+// SYNC TABLE sales_lines (toutes les ventes pour recaps)
+// ==========================================
+
+async function syncSalesLines(supabase, parsedOrders, linesByOrderId, orderIdMap) {
+  const allRows = []
+
+  for (const po of parsedOrders) {
+    const odooLines = linesByOrderId.get(po.odooId) || []
+    const supabaseOrderId = orderIdMap.get(po.odooId)
+    if (!supabaseOrderId) continue
+
+    for (const line of odooLines) {
+      const productName = (line.name || '').trim()
+      if (!productName) continue
+
+      const qty = parseFloat(line.product_uom_qty) || 0
+      if (qty === 0) continue
+
+      const { prefix, category } = detectPrefixAndCategory(productName)
+
+      allRows.push({
+        order_id: supabaseOrderId,
+        odoo_line_id: line.id,
+        product_name: productName,
+        prefix: prefix,
+        category: category,
+        quantity: qty,
+        client_name: po.clientName,
+        delivery_at: po.deliveryAt,
+        order_num: po.orderNum,
+      })
+    }
+  }
+
+  if (allRows.length === 0) return
+
+  // Upsert sur odoo_line_id (chaque ligne Odoo a un id unique)
+  const { error } = await supabase
+    .from('sales_lines')
+    .upsert(allRows, { onConflict: 'odoo_line_id' })
+
+  if (error) {
+    console.error('[sync sales_lines] erreur:', error)
+  } else {
+    console.log(`[sync sales_lines] ${allRows.length} lignes mises a jour`)
   }
 }
 
@@ -400,6 +498,7 @@ function diffItems(existingItem, newRow) {
 // ==========================================
 
 async function syncToSupabase(supabase, parsedOrders) {
+  const orderIdMap = new Map()
   let added = 0
   let updated = 0
   let cancelled = 0
@@ -436,6 +535,7 @@ async function syncToSupabase(supabase, parsedOrders) {
           .from('orders').update(orderRow).eq('id', existingOrder.id)
         if (error) throw error
         orderId = existingOrder.id
+        orderIdMap.set(po.odooId, orderId)
         // Comptage : si l'etat passe a 'cancel', on incrémente cancelled
         if (po.odooState === 'cancel' && existingOrder.odoo_state !== 'cancel') {
           cancelled++
@@ -446,6 +546,7 @@ async function syncToSupabase(supabase, parsedOrders) {
           .from('orders').insert(orderRow).select('id').single()
         if (error) throw error
         orderId = data.id
+        orderIdMap.set(po.odooId, orderId)
         isNewOrder = true
         added++
       }
@@ -556,7 +657,7 @@ async function syncToSupabase(supabase, parsedOrders) {
     }
   }
 
-  return {
+  return { orderIdMap, 
     added,
     updated,
     cancelled,

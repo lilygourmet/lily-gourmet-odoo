@@ -123,3 +123,8 @@ export function canPrintSingle(user) {
   if (!user) return false
   return user.role === 'admin' || user.perm_print_single === true
 }
+
+export function canRecaps(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_recaps === true
+}
