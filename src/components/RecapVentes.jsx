@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
+import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
 
 // ============================================================
 // Helper : genere le HTML d'UNE categorie pour impression
@@ -49,6 +49,30 @@ function renderCategoryHtml(cat, catLines, dateLabel, isLast, allLines = []) {
         }
       }
     }
+  } else if (cat.viewMode === 'odoo-table') {
+    // Vue Tableau Odoo : tableau Article / Cmd / Livré / Reste
+    const grouped = groupByProductWithDelivered(catLines)
+    let totalOrd = 0, totalDel = 0, totalRem = 0
+    html += `<table class="odoo-table"><thead><tr>
+      <th>Article</th><th class="num">Cmd</th><th class="num">Livré</th><th class="num">Reste</th>
+    </tr></thead><tbody>`
+    for (const [, entry] of grouped.entries()) {
+      totalOrd += entry.ordered
+      totalDel += entry.delivered
+      totalRem += entry.remaining
+      html += `<tr>
+        <td>${entry.name}</td>
+        <td class="num">${entry.ordered}</td>
+        <td class="num">${entry.delivered}</td>
+        <td class="num">${entry.remaining}</td>
+      </tr>`
+    }
+    html += `</tbody><tfoot><tr>
+      <td><strong>Total</strong></td>
+      <td class="num"><strong>${totalOrd}</strong></td>
+      <td class="num"><strong>${totalDel}</strong></td>
+      <td class="num"><strong>${totalRem}</strong></td>
+    </tr></tfoot></table>`
   } else {
     // Vue heure -> client -> produits (par defaut)
     const grouped = groupByHourThenClient(catLines)
@@ -89,6 +113,13 @@ function printHtml(htmlBody, title) {
   .ordernum { font-family: monospace; font-size: 9px; color: #a8324b; font-weight: 600; letter-spacing: 0.4px; }
   .item { margin-left: 16px; color: #555; }
   .qty { display: inline-block; min-width: 26px; font-weight: 600; color: #a8324b; }
+  .odoo-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .odoo-table th { text-align: left; padding: 6px 4px; border-bottom: 1px solid #a8324b;
+                   color: #a8324b; font-weight: 600; }
+  .odoo-table th.num, .odoo-table td.num { text-align: right; }
+  .odoo-table td { padding: 4px; border-bottom: 0.5px solid #eee; }
+  .odoo-table tfoot td { border-top: 1px solid #a8324b; border-bottom: none;
+                         padding-top: 6px; }
   @page { size: A4 portrait; margin: 1.2cm; }
 </style></head><body>${htmlBody}</body></html>`
 
@@ -117,11 +148,102 @@ function printHtml(htmlBody, title) {
 // Popup affiche le detail d'UNE categorie + bouton imprimer
 // 3 modes : 'product' (agrege), 'hour-client' (heure>client>items), 'delivery' (heure>cmd>tt items)
 // ============================================================
+// ============================================================
+// Sous-composant : vue tableau Odoo avec filtres internes
+// (filtre additionnel en plus des filtres globaux deja appliques)
+// ============================================================
+function OdooTableView({ lines }) {
+  const [clientsMode, setClientsMode] = useState('contains')
+  const [clientsTerms, setClientsTerms] = useState('')
+  const [articlesMode, setArticlesMode] = useState('contains')
+  const [articlesTerms, setArticlesTerms] = useState('')
+
+  const filtered = filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms })
+  const isFiltered = clientsTerms.trim() !== '' || articlesTerms.trim() !== ''
+
+  const grouped = groupByProductWithDelivered(filtered)
+  let totalOrd = 0, totalDel = 0, totalRem = 0
+  const rows = [...grouped.entries()]
+  for (const [, e] of rows) { totalOrd += e.ordered; totalDel += e.delivered; totalRem += e.remaining }
+
+  return (
+    <div>
+      {/* Mini barre de filtres */}
+      <div className="bg-cream/60 rounded-lg border border-line px-3 py-2 mb-4 flex flex-col gap-2 text-[11px]">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-[9px] tracking-[0.15em] uppercase font-bold text-bordeaux w-[55px]">Clients</span>
+          <select value={clientsMode} onChange={e => setClientsMode(e.target.value)}
+                  className="px-2 py-0.5 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux text-[10px]">
+            <option value="contains">Contient</option>
+            <option value="not_contains">Ne contient pas</option>
+          </select>
+          <input type="text" value={clientsTerms} onChange={e => setClientsTerms(e.target.value)}
+                 placeholder={clientsMode === 'contains' ? 'agdal, souissi...' : 'vitrine, magasin...'}
+                 className="flex-1 min-w-[140px] px-2 py-0.5 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux"/>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-[9px] tracking-[0.15em] uppercase font-bold text-bordeaux w-[55px]">Articles</span>
+          <select value={articlesMode} onChange={e => setArticlesMode(e.target.value)}
+                  className="px-2 py-0.5 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux text-[10px]">
+            <option value="contains">Contient</option>
+            <option value="not_contains">Ne contient pas</option>
+          </select>
+          <input type="text" value={articlesTerms} onChange={e => setArticlesTerms(e.target.value)}
+                 placeholder={articlesMode === 'contains' ? 'fraisier...' : 'bougies, déco...'}
+                 className="flex-1 min-w-[140px] px-2 py-0.5 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux"/>
+          {isFiltered && (
+            <button onClick={() => { setClientsTerms(''); setArticlesTerms('') }}
+                    className="px-2 py-0.5 text-bordeaux hover:bg-bordeaux/10 rounded-full text-[10px] font-medium">
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tableau */}
+      {rows.length === 0 ? (
+        <div className="text-center text-ink-mute italic py-8 text-[12px]">Aucun article ne correspond au filtre</div>
+      ) : (
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-bordeaux">
+              <th className="text-left py-2 font-mono text-[10px] tracking-wider uppercase text-bordeaux">Article</th>
+              <th className="text-right py-2 font-mono text-[10px] tracking-wider uppercase text-bordeaux">Cmd</th>
+              <th className="text-right py-2 font-mono text-[10px] tracking-wider uppercase text-bordeaux">Livré</th>
+              <th className="text-right py-2 font-mono text-[10px] tracking-wider uppercase text-bordeaux">Reste</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([name, entry]) => (
+              <tr key={name} className="border-b border-line/30">
+                <td className="py-1.5 text-ink">{entry.name}</td>
+                <td className="py-1.5 text-right text-ink">{entry.ordered}</td>
+                <td className="py-1.5 text-right text-ink-soft">{entry.delivered}</td>
+                <td className="py-1.5 text-right font-semibold text-bordeaux">{entry.remaining}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-bordeaux">
+              <td className="py-2 font-semibold text-ink">Total</td>
+              <td className="py-2 text-right font-semibold text-ink">{totalOrd}</td>
+              <td className="py-2 text-right font-semibold text-ink">{totalDel}</td>
+              <td className="py-2 text-right font-semibold text-bordeaux">{totalRem}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </div>
+  )
+}
+
 function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
-  const total = sumQty(lines)
   const isProductMode = cat.viewMode === 'product'
   const isDeliveryMode = cat.viewMode === 'delivery'
   const isDeliveryAllMode = cat.viewMode === 'delivery-all'
+  const isOdooTableMode = cat.viewMode === 'odoo-table'
+
+  const total = sumQty(lines)
 
   function handlePrintThisOne() {
     const html = renderCategoryHtml(cat, lines, dateLabel, true, allLines)
@@ -130,7 +252,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
 
   // Pre-calcule le contenu groupe selon le mode
   let groupedHourClient = null
-  if (!isProductMode) {
+  if (!isProductMode && !isOdooTableMode) {
     if (isDeliveryMode) {
       groupedHourClient = groupDeliveriesWithFullOrder(lines, allLines)
     } else if (isDeliveryAllMode) {
@@ -143,7 +265,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
          onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl border border-line"
+      <div className={`bg-cream rounded-2xl w-full ${isOdooTableMode ? 'max-w-3xl' : 'max-w-2xl'} max-h-[85vh] overflow-y-auto shadow-2xl border border-line`}
            onClick={e => e.stopPropagation()}>
 
         {/* Header popup */}
@@ -175,6 +297,8 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
         <div className="px-6 py-4">
           {lines.length === 0 ? (
             <div className="text-center text-ink-mute italic py-12">Aucune vente pour cette catégorie</div>
+          ) : isOdooTableMode ? (
+            <OdooTableView lines={lines} />
           ) : isProductMode ? (
             // Vue agregee par produit (PROD)
             <div className="space-y-1">

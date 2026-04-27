@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import Login from './components/Login'
 import Calendar from './components/Calendar'
-import { getCurrentUser } from './lib/auth'
+import RecapVentes from './components/RecapVentes'
+import { getCurrentUser, logout } from './lib/auth'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -19,6 +20,7 @@ function App() {
   }
 
   function handleLogout() {
+    logout()
     setUser(null)
   }
 
@@ -31,6 +33,11 @@ function App() {
   }
 
   if (!user) return <Login onLoginSuccess={handleLoginSuccess} />
+
+  // Role 'recap' : acces direct a la page Recap, pas de calendrier
+  if (user.role === 'recap') {
+    return <RecapVentes user={user} onLogout={handleLogout} fullscreen />
+  }
 
   return <Calendar user={user} onLogout={handleLogout} />
 }

@@ -38,7 +38,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       await createUser({
         username: formData.username.trim().toLowerCase(),
         password: formData.password,
-        fullName: formData.fullName.trim(),
+        full_name: formData.fullName.trim(),
         role: formData.role,
         perm_sync: formData.permSync,
         perm_check: formData.permCheck,
@@ -401,6 +401,11 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
             label="Admin"
             active={formData.role === 'admin'}
             onClick={() => update('role', 'admin')}
+          />
+          <RoleButton
+            label="Récap"
+            active={formData.role === 'recap'}
+            onClick={() => update('role', 'recap')}
           />
         </div>
       </div>

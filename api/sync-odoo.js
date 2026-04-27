@@ -177,7 +177,7 @@ async function fetchOdooOrders(uid) {
   if (allLineIds.length > 0) {
     lines = await odooSearchRead(uid, 'sale.order.line',
       [['id', 'in', allLineIds]],
-      ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'price_unit'],
+      ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'qty_delivered', 'price_unit'],
       {}
     )
   }
@@ -297,6 +297,8 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
       const qty = parseFloat(line.product_uom_qty) || 0
       if (qty === 0) continue
 
+      const qtyDelivered = parseFloat(line.qty_delivered) || 0
+
       // Skip les lignes Acompte / Down Payment (ce sont des montants, pas des produits)
       if (/^(Acompte|Down\s+Payment)/i.test(productName)) continue
 
@@ -309,6 +311,7 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
         prefix: prefix,
         category: category,
         quantity: qty,
+        qty_delivered: qtyDelivered,
         client_name: clientName,
         delivery_at: deliveryAt,
         order_num: orderNum,

@@ -26,19 +26,21 @@ export async function createUser({
   perm_sync = false, perm_check = false, perm_polys = false,
   perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false, perm_recaps = false,
 }) {
-  const { data, error } = await supabase.rpc('admin_create_user', {
-    p_username: username,
-    p_password: password,
-    p_full_name: full_name,
-    p_role: role,
-    p_perm_sync: perm_sync,
-    p_perm_check: perm_check,
-    p_perm_polys: perm_polys,
-    p_perm_delete: perm_delete,
-    p_perm_patissier: perm_patissier,
-    p_perm_print_batch: perm_print_batch,
-    p_perm_print_single: perm_print_single,
-    p_perm_recaps: perm_recaps,
+  const { data, error } = await supabase.rpc('create_user_v2', {
+    payload: {
+      username,
+      password,
+      full_name,
+      role,
+      perm_sync,
+      perm_check,
+      perm_polys,
+      perm_delete,
+      perm_patissier,
+      perm_print_batch,
+      perm_print_single,
+      perm_recaps,
+    },
   })
 
   if (error) throw error
@@ -136,9 +138,11 @@ export async function changeMyPassword(userId, oldPassword, newPassword) {
 export const ROLE_COLORS = {
   admin: 'bg-bordeaux/15 text-bordeaux',
   user:  'bg-line/30 text-ink-soft',
+  recap: 'bg-amber-100 text-amber-800',
 }
 
 export const ROLE_LABELS = {
   admin: 'Admin',
   user:  'Utilisateur',
+  recap: 'Récap',
 }

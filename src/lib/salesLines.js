@@ -14,7 +14,8 @@ export const VENTE_CATEGORIES = [
   { id: 'RAHN',   label: 'Vente RA H N',      prefixes: ['RA-', 'H-', 'N-'],     emoji: '🥐', dbCategory: 'RAHN',  viewMode: 'hour-client' },
   { id: 'SALES',  label: 'Vente Salés',       prefixes: ['SA-', 'SAK-'],         emoji: '🥪', dbCategory: 'SALES', viewMode: 'hour-client' },
   { id: 'VIENN',  label: 'Vente Vienn/Jus',   prefixes: ['V-', 'B-'],            emoji: '🥖', dbCategory: 'VIENN', viewMode: 'hour-client' },
-  { id: 'ALL',    label: 'Toutes commandes',  prefixes: [],                      emoji: '📋', dbCategory: null,    viewMode: 'delivery-all' },
+  { id: 'ALL',     label: 'Toutes commandes',  prefixes: [],                      emoji: '📋', dbCategory: null,    viewMode: 'delivery-all' },
+  { id: 'ODOO',    label: 'Récap 16h',         prefixes: [],                      emoji: '📊', dbCategory: null,    viewMode: 'odoo-table' },
 ]
 
 // Charge toutes les sales_lines pour une date donnee
@@ -126,6 +127,52 @@ export function groupDeliveriesWithFullOrder(livrLines, allLines) {
 // Total quantite d'une liste
 export function sumQty(lines) {
   return lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
+}
+
+// Retire le prefixe [XXX] d'un nom de produit (ex: "[241] E- Fraisier (5)" -> "E- Fraisier (5)")
+// Retire aussi les notes apres le \n (Thème, Message, etc.)
+export function stripOdooPrefix(name) {
+  if (!name) return ''
+  let s = String(name).trim()
+  // Enleve [XXX] au debut
+  s = s.replace(/^\[\d+\]\s*/, '')
+  // Coupe a la premiere ligne (pas de Thème:, Message:, etc.)
+  const nl = s.indexOf('\n')
+  if (nl !== -1) s = s.substring(0, nl).trim()
+  return s
+}
+
+// Groupe les lignes par nom de produit (apres strip du prefixe [XXX])
+// Retourne une Map<cleanName, { name, ordered, delivered, remaining, lines[] }>
+// Triee par nom alphabetique
+export function groupByProductWithDelivered(lines) {
+  const result = new Map()
+
+  for (const line of lines) {
+    const cleanName = stripOdooPrefix(line.product_name)
+    if (!cleanName) continue
+
+    if (!result.has(cleanName)) {
+      result.set(cleanName, {
+        name: cleanName,
+        ordered: 0,
+        delivered: 0,
+        lines: [],
+      })
+    }
+    const entry = result.get(cleanName)
+    entry.ordered += parseFloat(line.quantity) || 0
+    entry.delivered += parseFloat(line.qty_delivered) || 0
+    entry.lines.push(line)
+  }
+
+  // Calcule remaining et trie par nom
+  for (const entry of result.values()) {
+    entry.remaining = entry.ordered - entry.delivered
+  }
+
+  const sorted = [...result.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr'))
+  return new Map(sorted)
 }
 
 // Groupe les lignes par produit (meme product_name = meme groupe)
