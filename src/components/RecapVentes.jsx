@@ -10,14 +10,11 @@ import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupBy
 function renderCategoryHtml(cat, catLines, dateLabel, isLast, allLines = []) {
   if (catLines.length === 0) return ''
 
-  const total = sumQty(catLines)
-
   let html = `<div class="cat-page">
     <div class="header">
-      <h1>${cat.emoji} ${cat.label}</h1>
+      <h1>${cat.label}</h1>
       <div class="date">${dateLabel}</div>
     </div>
-    <div class="total-row">Total : <span class="total-qty">${total}</span></div>
     <div class="content">`
 
   if (cat.viewMode === 'product') {
@@ -65,23 +62,21 @@ function printHtml(htmlBody, title) {
   const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, sans-serif; color: #1a1a1a; background: white; }
+  body { font-family: -apple-system, sans-serif; color: #1a1a1a; background: white; font-size: 10px; }
   .cat-page { padding: 0; page-break-after: always; break-after: page; }
   .cat-page:last-child { page-break-after: auto; break-after: auto; }
-  .header { border-bottom: 1.5px solid #a8324b; padding-bottom: 12px; margin-bottom: 16px; }
-  h1 { font-size: 22px; color: #a8324b; margin-bottom: 4px; }
-  .date { font-size: 12px; color: #666; }
-  .total-row { font-size: 14px; font-weight: 600; margin-bottom: 16px; padding: 8px 12px;
-               background: #fff8e7; border-radius: 4px; border: 0.5px solid #f0e0a0; }
-  .total-qty { color: #a8324b; font-size: 16px; }
-  .content { font-size: 12px; line-height: 1.6; }
-  .hour { font-weight: 600; color: #555; margin-top: 10px; padding-bottom: 2px;
-          border-bottom: 0.5px solid #ddd; }
-  .client { margin-left: 12px; font-weight: 500; color: #333; margin-top: 4px; }
-  .ordernum { font-family: monospace; font-size: 10px; color: #a8324b; font-weight: 600; letter-spacing: 0.5px; }
-  .item { margin-left: 24px; color: #555; }
-  .qty { display: inline-block; min-width: 32px; font-weight: 600; color: #a8324b; }
-  @page { size: A4 portrait; margin: 1.5cm; }
+  .header { display: flex; justify-content: space-between; align-items: baseline;
+            border-bottom: 1px solid #a8324b; padding-bottom: 4px; margin-bottom: 8px; }
+  h1 { font-size: 14px; color: #a8324b; font-weight: 600; }
+  .date { font-size: 10px; color: #666; }
+  .content { font-size: 10px; line-height: 1.35; }
+  .hour { font-weight: 600; color: #555; margin-top: 6px; padding-bottom: 1px;
+          border-bottom: 0.5px solid #ddd; font-size: 9px; }
+  .client { margin-left: 8px; font-weight: 500; color: #333; margin-top: 2px; font-size: 10px; }
+  .ordernum { font-family: monospace; font-size: 9px; color: #a8324b; font-weight: 600; letter-spacing: 0.4px; }
+  .item { margin-left: 16px; color: #555; }
+  .qty { display: inline-block; min-width: 26px; font-weight: 600; color: #a8324b; }
+  @page { size: A4 portrait; margin: 1.2cm; }
 </style></head><body>${htmlBody}</body></html>`
 
   const iframe = document.createElement('iframe')
