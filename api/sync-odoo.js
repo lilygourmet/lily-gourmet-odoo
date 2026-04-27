@@ -70,8 +70,10 @@ export default async function handler(req, res) {
     const stats = await syncToSupabase(supabase, parsed)
 
     // Sync table sales_lines pour les recaps de ventes
+    // On passe TOUTES les commandes Odoo brutes (pas seulement les CD/GM)
+    // pour capturer aussi les commandes 100% E-, MI-, SA-, etc.
     if (stats.orderIdMap) {
-      await syncSalesLines(supabase, parsed, linesByOrderId, stats.orderIdMap)
+      await syncSalesLines(supabase, orders, linesByOrderId, stats.orderIdMap)
       delete stats.orderIdMap
     }
 
@@ -219,8 +221,11 @@ function enrichWithLineIds(parsedOrders, linesByOrderId) {
 // ==========================================
 
 function detectPrefixAndCategory(productName) {
-  const name = (productName || '').trim()
+  let name = (productName || '').trim()
   if (!name) return { prefix: null, category: 'AUTRE' }
+
+  // 0) Retirer le prefixe Odoo type [123] si present
+  name = name.replace(/^\[\d+\]\s*/, '').trim()
 
   // 1) Detection speciale : Livraison (pas de prefixe formel)
   if (/livraison/i.test(name)) {
@@ -258,22 +263,42 @@ function detectPrefixAndCategory(productName) {
 
 // ==========================================
 // SYNC TABLE sales_lines (toutes les ventes pour recaps)
+// Itere sur les commandes Odoo BRUTES (pas seulement les CD/GM)
+// pour capturer toutes les ventes : E-, MI-, SA-, etc.
 // ==========================================
 
-async function syncSalesLines(supabase, parsedOrders, linesByOrderId, orderIdMap) {
+async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) {
   const allRows = []
 
-  for (const po of parsedOrders) {
-    const odooLines = linesByOrderId.get(po.odooId) || []
-    const supabaseOrderId = orderIdMap.get(po.odooId)
-    if (!supabaseOrderId) continue
+  for (const odooOrder of odooOrders) {
+    // Skip les commandes annulees (on garde uniquement sale + done)
+    if (odooOrder.state === 'cancel') continue
 
+    const orderNum = odooOrder.name
+    if (!orderNum) continue
+
+    const commitmentDate = odooOrder.commitment_date
+    if (!commitmentDate) continue
+    const deliveryAt = new Date(commitmentDate.replace(' ', 'T') + 'Z')
+
+    const clientName = Array.isArray(odooOrder.partner_id)
+      ? odooOrder.partner_id[1]
+      : null
+
+    // order_id Supabase si la commande a ete syncee dans `orders` (cas CD/GM)
+    // sinon null (cas commande 100% E-/MI-/SA-/etc.)
+    const supabaseOrderId = orderIdMap.get(odooOrder.id) || null
+
+    const odooLines = linesByOrderId.get(odooOrder.id) || []
     for (const line of odooLines) {
       const productName = (line.name || '').trim()
       if (!productName) continue
 
       const qty = parseFloat(line.product_uom_qty) || 0
       if (qty === 0) continue
+
+      // Skip les lignes Acompte / Down Payment (ce sont des montants, pas des produits)
+      if (/^(Acompte|Down\s+Payment)/i.test(productName)) continue
 
       const { prefix, category } = detectPrefixAndCategory(productName)
 
@@ -284,9 +309,9 @@ async function syncSalesLines(supabase, parsedOrders, linesByOrderId, orderIdMap
         prefix: prefix,
         category: category,
         quantity: qty,
-        client_name: po.clientName,
-        delivery_at: po.deliveryAt,
-        order_num: po.orderNum,
+        client_name: clientName,
+        delivery_at: deliveryAt,
+        order_num: orderNum,
       })
     }
   }
