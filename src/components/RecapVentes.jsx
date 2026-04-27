@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
-import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, sumQty } from '../lib/salesLines'
+import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
 
 // ============================================================
 // Helper : genere le HTML d'UNE categorie pour impression
+// Mode 'product' : liste agregee par produit
+// Mode 'hour-client' : groupe par heure -> client -> produits
 // ============================================================
 function renderCategoryHtml(cat, catLines, dateLabel, isLast) {
   if (catLines.length === 0) return ''
 
   const total = sumQty(catLines)
-  const grouped = groupByHourThenClient(catLines)
 
   let html = `<div class="cat-page">
     <div class="header">
@@ -18,12 +19,22 @@ function renderCategoryHtml(cat, catLines, dateLabel, isLast) {
     <div class="total-row">Total : <span class="total-qty">${total}</span></div>
     <div class="content">`
 
-  for (const [hour, clientMap] of grouped.entries()) {
-    html += `<div class="hour">${hour}</div>`
-    for (const [client, items] of clientMap.entries()) {
-      html += `<div class="client">${client}</div>`
-      for (const item of items) {
-        html += `<div class="item"><span class="qty">×${item.quantity}</span> ${item.product_name}</div>`
+  if (cat.viewMode === 'product') {
+    // Vue agregee par produit
+    const grouped = groupByProduct(catLines)
+    for (const [, entry] of grouped.entries()) {
+      html += `<div class="item"><span class="qty">×${entry.totalQty}</span> ${entry.product_name}</div>`
+    }
+  } else {
+    // Vue heure -> client -> produits (par defaut)
+    const grouped = groupByHourThenClient(catLines)
+    for (const [hour, clientMap] of grouped.entries()) {
+      html += `<div class="hour">${hour}</div>`
+      for (const [client, items] of clientMap.entries()) {
+        html += `<div class="client">${client}</div>`
+        for (const item of items) {
+          html += `<div class="item"><span class="qty">×${item.quantity}</span> ${item.product_name}</div>`
+        }
       }
     }
   }
@@ -83,7 +94,7 @@ function printHtml(htmlBody, title) {
 // ============================================================
 function CategoryPopup({ cat, lines, dateLabel, onClose }) {
   const total = sumQty(lines)
-  const grouped = groupByHourThenClient(lines)
+  const isProductMode = cat.viewMode === 'product'
 
   function handlePrintThisOne() {
     const html = renderCategoryHtml(cat, lines, dateLabel, true)
@@ -125,9 +136,20 @@ function CategoryPopup({ cat, lines, dateLabel, onClose }) {
         <div className="px-6 py-4">
           {lines.length === 0 ? (
             <div className="text-center text-ink-mute italic py-12">Aucune vente pour cette catégorie</div>
+          ) : isProductMode ? (
+            // Vue agregee par produit (PROD)
+            <div className="space-y-1">
+              {[...groupByProduct(lines).entries()].map(([name, entry]) => (
+                <div key={name} className="flex gap-3 py-1.5 border-b border-line/30 last:border-0">
+                  <span className="font-bold text-bordeaux min-w-[40px] text-[14px]">×{entry.totalQty}</span>
+                  <span className="text-[13px] text-ink">{entry.product_name}</span>
+                </div>
+              ))}
+            </div>
           ) : (
+            // Vue heure -> client -> produits (toutes les autres)
             <div className="space-y-3">
-              {[...grouped.entries()].map(([hour, clientMap]) => (
+              {[...groupByHourThenClient(lines).entries()].map(([hour, clientMap]) => (
                 <div key={hour} className="border-b border-line/50 pb-3 last:border-0">
                   <div className="font-mono text-[11px] font-semibold text-ink-mute tracking-wider uppercase mb-2">
                     {hour}
@@ -173,7 +195,9 @@ export default function RecapVentes({ onClose }) {
   }, [date])
 
   function linesForCategory(catId) {
-    return lines.filter(l => l.category === catId)
+    const cat = VENTE_CATEGORIES.find(c => c.id === catId)
+    if (!cat) return []
+    return linesForCategoryHelper(lines, cat)
   }
 
   const dateLabel = new Date(date).toLocaleDateString('fr-FR', {
