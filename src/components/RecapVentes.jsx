@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
+import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
 
 // ============================================================
 // Helper : genere le HTML d'UNE categorie pour impression
@@ -26,6 +26,19 @@ function renderCategoryHtml(cat, catLines, dateLabel, isLast, allLines = []) {
   } else if (cat.viewMode === 'delivery') {
     // Vue livraison : pour chaque commande LIVR, montre TOUTES les lignes
     const grouped = groupDeliveriesWithFullOrder(catLines, allLines)
+    for (const [hour, clientMap] of grouped.entries()) {
+      html += `<div class="hour">${hour}</div>`
+      for (const [, entry] of clientMap.entries()) {
+        const orderTag = entry.orderNum ? `<span class="ordernum">${entry.orderNum}</span> — ` : ''
+        html += `<div class="client">${orderTag}${entry.clientName}</div>`
+        for (const item of entry.items) {
+          html += `<div class="item"><span class="qty">×${item.quantity}</span> ${item.product_name}</div>`
+        }
+      }
+    }
+  } else if (cat.viewMode === 'delivery-all') {
+    // Vue Toutes commandes : toutes les commandes du jour, toutes leurs lignes
+    const grouped = groupAllOrdersByHour(catLines)
     for (const [hour, clientMap] of grouped.entries()) {
       html += `<div class="hour">${hour}</div>`
       for (const [, entry] of clientMap.entries()) {
@@ -108,6 +121,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
   const total = sumQty(lines)
   const isProductMode = cat.viewMode === 'product'
   const isDeliveryMode = cat.viewMode === 'delivery'
+  const isDeliveryAllMode = cat.viewMode === 'delivery-all'
 
   function handlePrintThisOne() {
     const html = renderCategoryHtml(cat, lines, dateLabel, true, allLines)
@@ -117,9 +131,13 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
   // Pre-calcule le contenu groupe selon le mode
   let groupedHourClient = null
   if (!isProductMode) {
-    groupedHourClient = isDeliveryMode
-      ? groupDeliveriesWithFullOrder(lines, allLines)
-      : groupByHourThenClient(lines)
+    if (isDeliveryMode) {
+      groupedHourClient = groupDeliveriesWithFullOrder(lines, allLines)
+    } else if (isDeliveryAllMode) {
+      groupedHourClient = groupAllOrdersByHour(lines)
+    } else {
+      groupedHourClient = groupByHourThenClient(lines)
+    }
   }
 
   return (
@@ -206,12 +224,25 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
 // ============================================================
 // Composant principal
 // ============================================================
-export default function RecapVentes({ onClose }) {
+// ============================================================
+// Composant principal
+// Mode "popup" (par defaut) : ouvert depuis le calendrier admin, bouton ✕ pour fermer
+// Mode "fullscreen" : utilisateur avec role 'recap' qui n'a que cette page,
+//                     pas de bouton fermer, mais bouton "Déconnexion"
+// ============================================================
+export default function RecapVentes({ onClose, user = null, onLogout = null, fullscreen = false }) {
   const todayStr = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(todayStr)
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
   const [popupCat, setPopupCat] = useState(null)
+  // Filtres : pour chaque (clients/articles) un mode + un champ de termes
+  // mode : 'contains' (=garder uniquement les lignes qui matchent)
+  //        'not_contains' (=retirer les lignes qui matchent)
+  const [clientsMode, setClientsMode] = useState('not_contains')
+  const [clientsTerms, setClientsTerms] = useState('')
+  const [articlesMode, setArticlesMode] = useState('not_contains')
+  const [articlesTerms, setArticlesTerms] = useState('')
 
   useEffect(() => {
     (async () => {
@@ -222,7 +253,18 @@ export default function RecapVentes({ onClose }) {
     })()
   }, [date])
 
+  // Lignes apres application des filtres (utilise pour les vues + popups + impression)
+  const filteredLines = filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms })
+  const isFiltered = clientsTerms.trim() !== '' || articlesTerms.trim() !== ''
+
   function linesForCategory(catId) {
+    const cat = VENTE_CATEGORIES.find(c => c.id === catId)
+    if (!cat) return []
+    return linesForCategoryHelper(filteredLines, cat)
+  }
+
+  // Version non filtree, pour calculer le total complet (Option C : 7/9)
+  function linesForCategoryFull(catId) {
     const cat = VENTE_CATEGORIES.find(c => c.id === catId)
     if (!cat) return []
     return linesForCategoryHelper(lines, cat)
@@ -237,7 +279,7 @@ export default function RecapVentes({ onClose }) {
     let html = ''
     for (const cat of VENTE_CATEGORIES) {
       const catLines = linesForCategory(cat.id)
-      html += renderCategoryHtml(cat, catLines, dateLabel, false, lines)
+      html += renderCategoryHtml(cat, catLines, dateLabel, false, filteredLines)
     }
     if (!html) {
       alert('Aucune vente a imprimer pour cette date')
@@ -248,14 +290,23 @@ export default function RecapVentes({ onClose }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm overflow-y-auto p-4">
-        <div className="max-w-7xl mx-auto bg-cream rounded-2xl shadow-2xl border border-line my-4">
+      <div className={fullscreen
+          ? "min-h-screen bg-cream"
+          : "fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm overflow-y-auto p-4"}>
+        <div className={fullscreen
+            ? "max-w-7xl mx-auto"
+            : "max-w-7xl mx-auto bg-cream rounded-2xl shadow-2xl border border-line my-4"}>
 
           {/* Header principal */}
-          <div className="sticky top-4 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-center justify-between gap-3 flex-wrap z-10">
+          <div className={fullscreen
+              ? "bg-cream border-b border-line px-6 py-4 flex items-center justify-between gap-3 flex-wrap"
+              : "sticky top-4 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-center justify-between gap-3 flex-wrap z-10"}>
             <div className="flex items-center gap-3">
               <div className="font-mono text-[11px] tracking-[0.2em] text-bordeaux font-bold">RECAP</div>
               <h2 className="font-fraunces italic text-[24px] font-medium text-ink">Récap des ventes</h2>
+              {fullscreen && user?.full_name && (
+                <span className="text-[12px] text-ink-mute italic ml-2">— {user.full_name}</span>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <input type="date" value={date} onChange={e => setDate(e.target.value)}
@@ -264,20 +315,83 @@ export default function RecapVentes({ onClose }) {
                       className="px-4 py-2 bg-bordeaux text-cream rounded-full text-[11px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all">
                 🖨️ Tout imprimer
               </button>
-              <button onClick={onClose}
-                      className="w-9 h-9 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all">
-                ✕
-              </button>
+              {fullscreen ? (
+                <button onClick={onLogout}
+                        className="px-4 py-2 border border-line text-ink-soft rounded-full text-[11px] font-medium tracking-wider hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-all">
+                  Déconnexion
+                </button>
+              ) : (
+                <button onClick={onClose}
+                        className="w-9 h-9 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all">
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
-          {/* 7 cases cliquables */}
+          {/* Barre de filtres */}
+          <div className="bg-cream/60 border-b border-line px-6 py-3 flex flex-col gap-2 text-[12px]">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[10px] tracking-[0.15em] uppercase font-bold text-bordeaux w-[60px]">Clients</span>
+              <select
+                value={clientsMode}
+                onChange={e => setClientsMode(e.target.value)}
+                className="px-2 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux text-[11px]"
+              >
+                <option value="contains">Contient</option>
+                <option value="not_contains">Ne contient pas</option>
+              </select>
+              <input
+                type="text"
+                value={clientsTerms}
+                onChange={e => setClientsTerms(e.target.value)}
+                placeholder={clientsMode === 'contains' ? 'agdal, souissi...' : 'vitrine, magasin...'}
+                className="flex-1 min-w-[180px] px-2.5 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux"
+              />
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[10px] tracking-[0.15em] uppercase font-bold text-bordeaux w-[60px]">Articles</span>
+              <select
+                value={articlesMode}
+                onChange={e => setArticlesMode(e.target.value)}
+                className="px-2 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux text-[11px]"
+              >
+                <option value="contains">Contient</option>
+                <option value="not_contains">Ne contient pas</option>
+              </select>
+              <input
+                type="text"
+                value={articlesTerms}
+                onChange={e => setArticlesTerms(e.target.value)}
+                placeholder={articlesMode === 'contains' ? 'fraisier, framboisier...' : 'bougies, déco...'}
+                className="flex-1 min-w-[180px] px-2.5 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux"
+              />
+              {isFiltered && (
+                <>
+                  <button
+                    onClick={() => { setClientsTerms(''); setArticlesTerms('') }}
+                    className="px-2.5 py-1 text-bordeaux hover:bg-bordeaux/10 rounded-full text-[11px] font-medium"
+                  >
+                    ✕ Réinitialiser
+                  </button>
+                  <span className="text-[11px] text-ink-mute italic">
+                    {filteredLines.length} / {lines.length} lignes
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Cases cliquables (8 categories) */}
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {loading ? (
               <div className="col-span-full text-center text-ink-mute italic py-12">Chargement...</div>
             ) : VENTE_CATEGORIES.map(cat => {
               const catLines = linesForCategory(cat.id)
+              const catLinesFull = linesForCategoryFull(cat.id)
               const total = sumQty(catLines)
+              const totalFull = sumQty(catLinesFull)
+              const showSlash = isFiltered && total !== totalFull
 
               return (
                 <button key={cat.id}
@@ -290,7 +404,14 @@ export default function RecapVentes({ onClose }) {
                         {cat.label}
                       </span>
                     </div>
-                    <span className="font-fraunces italic text-[22px] font-semibold text-ink">{total}</span>
+                    <span className="font-fraunces italic text-[22px] font-semibold text-ink">
+                      {total}
+                      {showSlash && (
+                        <span className="text-[14px] text-ink-mute font-normal ml-0.5">
+                          /{totalFull}
+                        </span>
+                      )}
+                    </span>
                   </div>
 
                   {catLines.length === 0 ? (
@@ -312,7 +433,7 @@ export default function RecapVentes({ onClose }) {
         <CategoryPopup
           cat={popupCat}
           lines={linesForCategory(popupCat.id)}
-          allLines={lines}
+          allLines={filteredLines}
           dateLabel={dateLabel}
           onClose={() => setPopupCat(null)}
         />

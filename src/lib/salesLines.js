@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
 
-// Definition des 7 categories de ventes (correspond aux prefixes)
+// Definition des categories de ventes (correspond aux prefixes)
 // `dbCategory` : valeur de sales_lines.category a filtrer (peut etre identique a id ou differente)
+//                Si null, on prend toutes les categories (pour ALL)
 // `viewMode` : 'product' = agregation par produit
 //              'hour-client' = heure -> (client + order_num) -> produits
 //              'delivery' = comme hour-client mais affiche TOUTES les lignes de chaque commande
@@ -13,6 +14,7 @@ export const VENTE_CATEGORIES = [
   { id: 'RAHN',   label: 'Vente RA H N',      prefixes: ['RA-', 'H-', 'N-'],     emoji: '🥐', dbCategory: 'RAHN',  viewMode: 'hour-client' },
   { id: 'SALES',  label: 'Vente Salés',       prefixes: ['SA-', 'SAK-'],         emoji: '🥪', dbCategory: 'SALES', viewMode: 'hour-client' },
   { id: 'VIENN',  label: 'Vente Vienn/Jus',   prefixes: ['V-', 'B-'],            emoji: '🥖', dbCategory: 'VIENN', viewMode: 'hour-client' },
+  { id: 'ALL',    label: 'Toutes commandes',  prefixes: [],                      emoji: '📋', dbCategory: null,    viewMode: 'delivery-all' },
 ]
 
 // Charge toutes les sales_lines pour une date donnee
@@ -149,7 +151,92 @@ export function groupByProduct(lines) {
 
 // Filtre les lignes pour une categorie donnee de VENTE_CATEGORIES
 // Utilise `dbCategory` (la vraie valeur stockee en DB) pour filtrer
+// Si dbCategory est null, retourne TOUTES les lignes (cas 'ALL' = Toutes commandes)
 export function linesForCategory(allLines, cat) {
-  const dbCat = cat.dbCategory || cat.id
-  return allLines.filter(l => l.category === dbCat)
+  if (!cat) return []
+  if (cat.dbCategory === null) return allLines
+  return allLines.filter(l => l.category === cat.dbCategory)
+}
+
+// Filtre les lignes selon des regles configurables
+// opts: { clientsMode, clientsTerms, articlesMode, articlesTerms }
+//   - clientsMode : 'contains' | 'not_contains'
+//   - clientsTerms : string separee par virgule (ex: "vitrine, magasin")
+//   - articlesMode : 'contains' | 'not_contains'
+//   - articlesTerms : string separee par virgule
+// Match insensible a la casse, qui contient
+// Si terms est vide => filtre inactif sur ce champ
+export function filterLines(lines, opts = {}) {
+  const {
+    clientsMode = 'not_contains', clientsTerms = '',
+    articlesMode = 'not_contains', articlesTerms = '',
+  } = opts
+
+  const cTerms = clientsTerms.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  const aTerms = articlesTerms.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+
+  if (cTerms.length === 0 && aTerms.length === 0) return lines
+
+  return lines.filter(line => {
+    const client = (line.client_name || '').toLowerCase()
+    const product = (line.product_name || '').toLowerCase()
+
+    // Filtre clients
+    if (cTerms.length > 0) {
+      const matchAny = cTerms.some(t => client.includes(t))
+      if (clientsMode === 'contains' && !matchAny) return false
+      if (clientsMode === 'not_contains' && matchAny) return false
+    }
+
+    // Filtre articles
+    if (aTerms.length > 0) {
+      const matchAny = aTerms.some(t => product.includes(t))
+      if (articlesMode === 'contains' && !matchAny) return false
+      if (articlesMode === 'not_contains' && matchAny) return false
+    }
+
+    return true
+  })
+}
+
+// Pour 'Toutes les commandes' : groupe par heure -> commande,
+// affiche TOUTES les lignes de chaque commande (toutes categories confondues)
+// On parcourt directement toutes les lignes et on les regroupe par order_num.
+// La premiere ligne rencontree pour une commande donne l'heure et le nom client.
+export function groupAllOrdersByHour(allLines) {
+  // Index : order_num -> { firstLine, lines[] }
+  const byOrder = new Map()
+  for (const line of allLines) {
+    const num = line.order_num || ''
+    if (!byOrder.has(num)) {
+      byOrder.set(num, { firstLine: line, lines: [] })
+    }
+    byOrder.get(num).lines.push(line)
+  }
+
+  // Pour chaque commande, classe sous l'heure de delivery_at de la premiere ligne
+  const result = new Map()
+  for (const [orderNum, { firstLine, lines }] of byOrder.entries()) {
+    const dt = new Date(firstLine.delivery_at)
+    const hourKey = `${String(dt.getHours()).padStart(2, '0')}h-${String(dt.getHours() + 1).padStart(2, '0')}h`
+    const clientName = firstLine.client_name || 'Sans nom'
+    const clientKey = `${orderNum}|${clientName}`
+
+    if (!result.has(hourKey)) result.set(hourKey, new Map())
+
+    // Trie les lignes : LIVR en premier, puis CD, puis le reste
+    const sorted = [...lines].sort((a, b) => {
+      const orderA = a.category === 'LIVR' ? 0 : a.category === 'CD' ? 1 : 2
+      const orderB = b.category === 'LIVR' ? 0 : b.category === 'CD' ? 1 : 2
+      return orderA - orderB
+    })
+
+    result.get(hourKey).set(clientKey, {
+      clientName,
+      orderNum,
+      items: sorted,
+    })
+  }
+
+  return result
 }
