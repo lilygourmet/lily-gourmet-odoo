@@ -20,13 +20,9 @@ export const VENTE_CATEGORIES = [
 
 // Charge toutes les sales_lines pour une date donnee
 export async function loadSalesLinesForDate(date) {
-  // date est une string YYYY-MM-DD venant de l'input
-  // On construit explicitement les bornes UTC pour eviter les problemes timezone
-  // start = jour selectionne 00:00 UTC, end = jour+1 00:00 UTC
   const [yyyy, mm, dd] = String(date).split('-').map(Number)
   const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
   const end = new Date(Date.UTC(yyyy, mm - 1, dd + 1, 0, 0, 0))
-  console.log('[loadSalesLines] date:', date, 'start:', start.toISOString(), 'end:', end.toISOString())
 
   const { data, error } = await supabase
     .from('sales_lines')
@@ -39,8 +35,44 @@ export async function loadSalesLinesForDate(date) {
     console.error('[loadSalesLines] erreur:', error)
     return []
   }
-  console.log('[loadSalesLines] DATA recue:', data?.length, 'lignes', data)
   return data || []
+}
+
+// Charge les sales_lines sur une plage de N jours a partir de fromDate
+export async function loadSalesLinesForRange(fromDate, daysCount) {
+  const [yyyy, mm, dd] = String(fromDate).split('-').map(Number)
+  const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
+  const end = new Date(Date.UTC(yyyy, mm - 1, dd + daysCount, 0, 0, 0))
+
+  const { data, error } = await supabase
+    .from('sales_lines')
+    .select('*')
+    .gte('delivery_at', start.toISOString())
+    .lt('delivery_at', end.toISOString())
+    .order('delivery_at', { ascending: true })
+
+  if (error) {
+    console.error('[loadSalesLinesForRange] erreur:', error)
+    return []
+  }
+  return data || []
+}
+
+// Definition des prefixes pour la vue Prod (catégories user)
+export const PROD_VIEW_CATEGORIES = {
+  prod:  { label: 'Production', emoji: '🥐', prefixes: ['E-', 'MI-', 'V-'] },
+  sales: { label: 'Salés',      emoji: '🥪', prefixes: ['SA-', 'SAK-', 'GS-'] },
+}
+
+// Filtre les sales_lines selon une categorie user 'prod' ou 'sales'
+export function filterLinesForProdCategory(lines, category) {
+  const def = PROD_VIEW_CATEGORIES[category]
+  if (!def) return []
+  const prefixes = def.prefixes
+  return lines.filter(l => {
+    const name = l.product_name || ''
+    return prefixes.some(p => name.toUpperCase().startsWith(p.toUpperCase()))
+  })
 }
 
 // Groupe les lignes par heure -> (client + order_num) -> articles

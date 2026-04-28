@@ -49,6 +49,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_print_single: formData.permPrintSingle,
         perm_recaps: formData.permRecaps,
         perm_define_gm: formData.permDefineGM,
+        prod_category: formData.prodCategory,
       })
       setShowNewForm(false)
       await refresh()
@@ -73,6 +74,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_print_single: formData.permPrintSingle,
         perm_recaps: formData.permRecaps,
         perm_define_gm: formData.permDefineGM,
+        prod_category: formData.prodCategory,
       })
       setEditingUser(null)
       await refresh()
@@ -222,11 +224,13 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
   if (user.perm_check) perms.push('Cocher')
   if (user.perm_polys) perms.push('Polys')
   if (user.perm_delete) perms.push('Supprimer')
-  if (user.perm_patissier) perms.push('Patissier')
+  if (user.perm_patissier) perms.push('Accessoires')
   if (user.perm_print_batch) perms.push('Imprimer batch')
   if (user.perm_print_single) perms.push('Imprimer 1 cmd')
   if (user.perm_recaps) perms.push('Recaps ventes')
   if (user.perm_define_gm) perms.push('Définir GM')
+  if (user.prod_category === 'prod') perms.push('Vue Prod')
+  if (user.prod_category === 'sales') perms.push('Vue Salés')
 
   return (
     <div className={`rounded-lg border p-3 transition-all ${user.active ? 'border-line/60 bg-cream' : 'border-line/40 bg-cream-warm opacity-60'}`}>
@@ -307,6 +311,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
     permPrintSingle: initialData?.perm_print_single || false,
     permRecaps: initialData?.perm_recaps || false,
     permDefineGM: initialData?.perm_define_gm || false,
+    prodCategory: initialData?.prod_category || null,
   })
 
   function handleSubmit() {
@@ -462,7 +467,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
           />
           <PermCheckbox
             id="perm-patissier"
-            label="👨‍🍳 Mode Patissier (voit uniquement les GM)"
+            label="🧁 Mode Accessoires (voit uniquement les GM)"
             checked={isAdmin || formData.permPatissier}
             onChange={v => update('permPatissier', v)}
           />
@@ -490,6 +495,31 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
             checked={isAdmin || formData.permDefineGM}
             onChange={v => update('permDefineGM', v)}
           />
+        </div>
+
+        {/* Categorie production (radio) */}
+        <div className="mt-3 pt-3 border-t border-line">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Vue production</div>
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { v: null, l: 'Aucune' },
+              { v: 'prod', l: '🥐 Production' },
+              { v: 'sales', l: '🥪 Salés' },
+            ].map(opt => (
+              <button
+                key={opt.v ?? 'none'}
+                type="button"
+                onClick={() => update('prodCategory', opt.v)}
+                className={`px-3 py-1 rounded-full text-[11px] border transition-colors ${
+                  formData.prodCategory === opt.v
+                    ? 'bg-bordeaux text-cream border-bordeaux'
+                    : 'bg-cream-warm text-ink-mute border-line hover:border-bordeaux'
+                }`}
+              >
+                {opt.l}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

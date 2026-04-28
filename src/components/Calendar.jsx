@@ -6,7 +6,7 @@ import {
   cleanupOldOrders,
   loadAllProfiles,
 } from '../lib/orders'
-import { logout, canSync, canManageUsers , canPatissier, isPatissierOnly, canPrintBatch , canRecaps} from '../lib/auth'
+import { logout, canSync, canManageUsers, canPatissier, isPatissierOnly, canPrintBatch, canRecaps, isAdmin } from '../lib/auth'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
@@ -185,7 +185,12 @@ function filterOrderItemsForView(order, isPatissierMode) {
   return { ...order, order_items: filteredItems }
 }
 
-export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
+export default function Calendar({ user, onLogout, activeView, onNavigate }) {
+  // Helpers nav
+  const goPatissier = () => onNavigate && onNavigate('patissier')
+  const goProd = () => onNavigate && onNavigate('prod')
+  const goSales = () => onNavigate && onNavigate('sales')
+  const goRecap = () => onNavigate && onNavigate('recap')
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOf(new Date()))
   const [orders, setOrders] = useState([])
   const [allOrders, setAllOrders] = useState([])
@@ -554,10 +559,10 @@ export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
           )}
         </div>
 
-        {/* Bouton recaps ventes */}
+        {/* Bouton recaps ventes : ouvre la vue plein ecran */}
         {canRecaps(user) && (
           <button
-            onClick={() => setShowRecaps(true)}
+            onClick={goRecap}
             className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
             title="Récap des ventes"
           >
@@ -566,14 +571,36 @@ export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
           </button>
         )}
         {/* Bouton mode patissier (admin uniquement) */}
-        {onSwitchToPatissier && (
+        {isAdmin(user) && (
           <button
-            onClick={onSwitchToPatissier}
+            onClick={goPatissier}
             className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
-            title="Vue pâtissier"
+            title="Vue accessoires"
           >
-            <span>🍰</span>
-            <span>Pâtissier</span>
+            <span>🧁</span>
+            <span>Accessoires</span>
+          </button>
+        )}
+        {/* Bouton mode prod (admin uniquement) */}
+        {isAdmin(user) && (
+          <button
+            onClick={goProd}
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
+            title="Vue production"
+          >
+            <span>🥐</span>
+            <span>Prod</span>
+          </button>
+        )}
+        {/* Bouton mode sales (admin uniquement) */}
+        {isAdmin(user) && (
+          <button
+            onClick={goSales}
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
+            title="Vue salés"
+          >
+            <span>🥪</span>
+            <span>Salés</span>
           </button>
         )}
         {/* Bouton impression batch - toujours visible avec compteur */}
@@ -827,9 +854,7 @@ export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
         <AdminGmConfig onClose={() => setShowGmConfig(false)} />
       )}
 
-      {showRecaps && (
-        <RecapVentes onClose={() => setShowRecaps(false)} />
-      )}
+      {/* Modal Recap : remplace par navigation plein ecran via onNavigate */}
 
       {showAdmin && (
         <AdminUsers

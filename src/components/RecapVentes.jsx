@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
+import AppHeader from './AppHeader'
 
 // ============================================================
 // Helper : genere le HTML d'UNE categorie pour impression
@@ -364,7 +365,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
 // Mode "fullscreen" : utilisateur avec role 'recap' qui n'a que cette page,
 //                     pas de bouton fermer, mais bouton "Déconnexion"
 // ============================================================
-export default function RecapVentes({ onClose, user = null, onLogout = null, fullscreen = false }) {
+export default function RecapVentes({ onClose, user = null, onLogout = null, fullscreen = false, activeView, onNavigate }) {
   const todayStr = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(todayStr)
   const [lines, setLines] = useState([])
@@ -426,6 +427,25 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
 
   return (
     <>
+      {fullscreen && (
+        <AppHeader
+          user={user}
+          activeView={activeView || 'recap'}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-[10px] tracking-[0.2em] text-bordeaux font-bold uppercase">📊 Récap</span>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                   className="px-2.5 py-1 border border-line rounded-full text-[11px] bg-cream focus:outline-none focus:border-bordeaux"/>
+            <button onClick={handlePrintAll}
+                    className="px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[10px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all">
+              🖨 Tout imprimer
+            </button>
+          </div>
+        </AppHeader>
+      )}
+
       <div className={fullscreen
           ? "min-h-screen bg-cream"
           : "fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm overflow-y-auto p-4"}>
@@ -433,37 +453,27 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
             ? "max-w-7xl mx-auto"
             : "max-w-7xl mx-auto bg-cream rounded-2xl shadow-2xl border border-line my-4"}>
 
-          {/* Header principal */}
-          <div className={fullscreen
-              ? "bg-cream border-b border-line px-6 py-4 flex items-center justify-between gap-3 flex-wrap"
-              : "sticky top-4 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-center justify-between gap-3 flex-wrap z-10"}>
-            <div className="flex items-center gap-3">
-              <div className="font-mono text-[11px] tracking-[0.2em] text-bordeaux font-bold">RECAP</div>
-              <h2 className="font-fraunces italic text-[24px] font-medium text-ink">Récap des ventes</h2>
-              {fullscreen && user?.full_name && (
-                <span className="text-[12px] text-ink-mute italic ml-2">— {user.full_name}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                     className="px-3 py-2 border border-line rounded-full text-[13px] bg-cream focus:outline-none focus:border-bordeaux"/>
-              <button onClick={handlePrintAll}
-                      className="px-4 py-2 bg-bordeaux text-cream rounded-full text-[11px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all">
-                🖨️ Tout imprimer
-              </button>
-              {fullscreen ? (
-                <button onClick={onLogout}
-                        className="px-4 py-2 border border-line text-ink-soft rounded-full text-[11px] font-medium tracking-wider hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-all">
-                  Déconnexion
+          {/* Header (uniquement en mode modal) */}
+          {!fullscreen && (
+            <div className="sticky top-4 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-center justify-between gap-3 flex-wrap z-10">
+              <div className="flex items-center gap-3">
+                <div className="font-mono text-[11px] tracking-[0.2em] text-bordeaux font-bold">RECAP</div>
+                <h2 className="font-fraunces italic text-[24px] font-medium text-ink">Récap des ventes</h2>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                       className="px-3 py-2 border border-line rounded-full text-[13px] bg-cream focus:outline-none focus:border-bordeaux"/>
+                <button onClick={handlePrintAll}
+                        className="px-4 py-2 bg-bordeaux text-cream rounded-full text-[11px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all">
+                  🖨️ Tout imprimer
                 </button>
-              ) : (
                 <button onClick={onClose}
                         className="w-9 h-9 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all">
                   ✕
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Barre de filtres */}
           <div className="bg-cream/60 border-b border-line px-6 py-3 flex flex-col gap-2 text-[12px]">

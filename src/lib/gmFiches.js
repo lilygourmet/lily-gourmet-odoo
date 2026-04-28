@@ -440,7 +440,17 @@ export async function loadOrdersWithFichesForDate(date) {
   const [yyyy, mm, dd] = String(date).split('-').map(Number)
   const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
   const end = new Date(Date.UTC(yyyy, mm - 1, dd + 1, 0, 0, 0))
+  return await _loadOrdersWithFichesForBounds(start, end)
+}
 
+export async function loadOrdersWithFichesForRange(fromDate, daysCount) {
+  const [yyyy, mm, dd] = String(fromDate).split('-').map(Number)
+  const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
+  const end = new Date(Date.UTC(yyyy, mm - 1, dd + daysCount, 0, 0, 0))
+  return await _loadOrdersWithFichesForBounds(start, end)
+}
+
+async function _loadOrdersWithFichesForBounds(start, end) {
   const { data: orders, error: e1 } = await supabase
     .from('orders')
     .select('id, order_num, client_name, delivery_at, delivery_slot, odoo_state')

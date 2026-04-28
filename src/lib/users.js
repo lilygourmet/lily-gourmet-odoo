@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -25,6 +25,7 @@ export async function createUser({
   username, password, full_name, role,
   perm_sync = false, perm_check = false, perm_polys = false,
   perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false, perm_recaps = false, perm_define_gm = false,
+  prod_category = null,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
@@ -41,6 +42,7 @@ export async function createUser({
       perm_print_single,
       perm_recaps,
       perm_define_gm,
+      prod_category,
     },
   })
 
@@ -59,6 +61,7 @@ export async function updateUser(userId, {
   username, full_name, role, active,
   perm_sync, perm_check, perm_polys, perm_delete, perm_patissier,
   perm_print_batch, perm_print_single, perm_recaps, perm_define_gm,
+  prod_category,
 }) {
   // Update direct via supabase pour gerer toutes les permissions
   // (la fonction SQL admin_update_user n'a pas perm_define_gm)
@@ -76,6 +79,7 @@ export async function updateUser(userId, {
   if (perm_print_single !== undefined) updates.perm_print_single = perm_print_single
   if (perm_recaps !== undefined) updates.perm_recaps = perm_recaps
   if (perm_define_gm !== undefined) updates.perm_define_gm = perm_define_gm
+  if (prod_category !== undefined) updates.prod_category = prod_category
 
   const { data, error } = await supabase
     .from('profiles')
