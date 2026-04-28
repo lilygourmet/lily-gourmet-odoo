@@ -72,10 +72,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         {/* Logo cliquable -> calendrier */}
         <button
           onClick={() => admin && onNavigate && onNavigate('calendar')}
-          className={`flex items-center gap-2 ${admin ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} flex-shrink-0`}
+          className={`flex items-center gap-2.5 ${admin ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} flex-shrink-0`}
         >
-          <span className="font-fraunces italic text-[20px] text-bordeaux font-medium">G+L</span>
-          <span className="font-mono text-[10px] tracking-[0.2em] text-ink-mute uppercase hidden sm:inline">Lily Gourmet</span>
+          <img src="/Logo_LG.jpg" alt="Lily Gourmet" className="w-8 h-8 object-contain" />
+          <div className="hidden sm:block text-left">
+            <div className="font-sans font-semibold text-[12px] tracking-[0.12em] text-ink leading-tight">LILY GOURMET</div>
+            {user?.full_name && (
+              <div className="font-mono text-[8px] tracking-[0.2em] uppercase text-bordeaux mt-0.5">{user.full_name}</div>
+            )}
+          </div>
         </button>
 
         {/* Navigation */}

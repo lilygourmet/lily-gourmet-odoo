@@ -540,16 +540,6 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
       />
 
       <header className="bg-cream border-b border-line px-4 py-3 flex items-center justify-between flex-shrink-0 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <img src="/Logo_LG.jpg" alt="Lily Gourmet" className="w-9 h-9 object-contain flex-shrink-0" />
-          <div className="min-w-0 hidden sm:block">
-            <div className="font-sans font-semibold text-[13px] tracking-[0.12em] text-ink leading-tight truncate">LILY GOURMET</div>
-            <div className="font-mono text-[8px] tracking-[0.2em] uppercase text-bordeaux mt-0.5">
-              {user?.full_name || user?.username || 'Planning'}
-            </div>
-          </div>
-        </div>
-
         <div className="flex-1 max-w-xs relative">
           <input
             type="text"
