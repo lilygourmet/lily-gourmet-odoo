@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -26,6 +26,7 @@ export async function createUser({
   perm_sync = false, perm_check = false, perm_polys = false,
   perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false, perm_recaps = false, perm_define_gm = false,
   prod_category = null,
+  perm_prod = false, perm_sales = false, team_id = null,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
@@ -43,6 +44,9 @@ export async function createUser({
       perm_recaps,
       perm_define_gm,
       prod_category,
+      perm_prod,
+      perm_sales,
+      team_id,
     },
   })
 
@@ -62,9 +66,8 @@ export async function updateUser(userId, {
   perm_sync, perm_check, perm_polys, perm_delete, perm_patissier,
   perm_print_batch, perm_print_single, perm_recaps, perm_define_gm,
   prod_category,
+  perm_prod, perm_sales, team_id,
 }) {
-  // Update direct via supabase pour gerer toutes les permissions
-  // (la fonction SQL admin_update_user n'a pas perm_define_gm)
   const updates = {}
   if (username !== undefined) updates.username = username
   if (full_name !== undefined) updates.full_name = full_name
@@ -80,6 +83,9 @@ export async function updateUser(userId, {
   if (perm_recaps !== undefined) updates.perm_recaps = perm_recaps
   if (perm_define_gm !== undefined) updates.perm_define_gm = perm_define_gm
   if (prod_category !== undefined) updates.prod_category = prod_category
+  if (perm_prod !== undefined) updates.perm_prod = perm_prod
+  if (perm_sales !== undefined) updates.perm_sales = perm_sales
+  if (team_id !== undefined) updates.team_id = team_id
 
   const { data, error } = await supabase
     .from('profiles')
@@ -92,6 +98,38 @@ export async function updateUser(userId, {
     throw new Error('Aucun utilisateur modifié (RLS ou ID invalide ?)')
   }
   return data[0]
+}
+
+// ============================================================
+// Teams
+// ============================================================
+
+export async function loadTeams() {
+  const { data, error } = await supabase
+    .from('teams')
+    .select('*')
+    .order('ordre', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function createTeam(name) {
+  const { data, error } = await supabase
+    .from('teams')
+    .insert({ name: name.trim(), ordre: 99 })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteTeam(teamId) {
+  const { error } = await supabase
+    .from('teams')
+    .delete()
+    .eq('id', teamId)
+  if (error) throw error
+  return true
 }
 
 // Alias compat

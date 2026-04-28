@@ -4,9 +4,10 @@ import {
   isLotDone, isItemFullyDone, aggregateByProduct,
   markLotDone, unmarkLotDone, markItemAllDone, unmarkItemAllDone,
   TYPE_LABELS, TYPE_EMOJIS,
-  getRealQuantity,
+  getRealQuantity, loadGmLogs,
 } from '../lib/gmFiches'
 import AppHeader from './AppHeader'
+import ActivityLog, { relativeTime } from './ActivityLog'
 
 const DAYS = 14
 
@@ -108,7 +109,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
   const datesWithLines = [...byDate.keys()].sort()
 
   return (
-    <div className="min-h-screen bg-cream pb-12">
+    <div className="min-h-screen bg-cream pb-40">
       <AppHeader
         user={user}
         activeView={activeView || 'patissier'}
@@ -283,6 +284,22 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
           >×</button>
         </div>
       )}
+
+      {/* Footer logs */}
+      <ActivityLog
+        loadFn={() => loadGmLogs(14)}
+        refreshKey={data.length}
+        formatEntry={(log) => {
+          const who = log.profiles?.full_name || log.profiles?.username || '?'
+          const oi = log.order_items
+          const ord = oi?.orders
+          const qty = oi ? (oi.quantity || 0) * (oi.pers || 1) : ''
+          const what = oi ? `${oi.title || ''}${qty ? ' ×' + qty : ''}` : '(item supprimé)'
+          const where = ord?.order_num ? ` pour ${ord.order_num}${ord.client_name ? ' · ' + ord.client_name : ''}` : ''
+          const lotInfo = log.lot_idx >= 0 ? ` [lot ${log.lot_idx + 1}]` : ''
+          return `${relativeTime(log.done_at)} — ${who} a fait ${what}${lotInfo}${where}`
+        }}
+      />
     </div>
   )
 }

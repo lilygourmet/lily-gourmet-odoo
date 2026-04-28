@@ -13,6 +13,7 @@ import OrderModal from './OrderModal'
 import AdminGmConfig from './AdminGmConfig'
 import PrintBatchModal from './PrintBatchModal'
 import RecapVentes from './RecapVentes'
+import AppHeader from './AppHeader'
 import { filterUnprintedOrders, filterCurrentWeek } from '../lib/printOrders'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
@@ -527,6 +528,16 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">
+      <AppHeader
+        user={user}
+        activeView={activeView || 'calendar'}
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+        onSyncSuccess={async () => {
+          const fresh = await loadOrdersForWeek(currentMonday)
+          setOrders(fresh)
+        }}
+      />
 
       <header className="bg-cream border-b border-line px-4 py-3 flex items-center justify-between flex-shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -558,51 +569,6 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
             </button>
           )}
         </div>
-
-        {/* Bouton recaps ventes : ouvre la vue plein ecran */}
-        {canRecaps(user) && (
-          <button
-            onClick={goRecap}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
-            title="Récap des ventes"
-          >
-            <span>📊</span>
-            <span>Récap</span>
-          </button>
-        )}
-        {/* Bouton mode patissier (admin uniquement) */}
-        {isAdmin(user) && (
-          <button
-            onClick={goPatissier}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
-            title="Vue accessoires"
-          >
-            <span>🧁</span>
-            <span>Accessoires</span>
-          </button>
-        )}
-        {/* Bouton mode prod (admin uniquement) */}
-        {isAdmin(user) && (
-          <button
-            onClick={goProd}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
-            title="Vue production"
-          >
-            <span>🥐</span>
-            <span>Prod</span>
-          </button>
-        )}
-        {/* Bouton mode sales (admin uniquement) */}
-        {isAdmin(user) && (
-          <button
-            onClick={goSales}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
-            title="Vue salés"
-          >
-            <span>🥪</span>
-            <span>Salés</span>
-          </button>
-        )}
         {/* Bouton impression batch - toujours visible avec compteur */}
         {canPrintBatch(user) && !isPatissierMode && (
           <button
@@ -624,63 +590,6 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
           </button>
         )}
 
-        {userCanSync && (
-          <button
-            onClick={handleSyncNow}
-            disabled={syncing}
-            className="flex items-center gap-2 px-3.5 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[11px] font-medium tracking-wider transition-all active:scale-[0.98] flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
-            title="Synchroniser depuis Odoo maintenant"
-          >
-            {syncing ? (
-              <>
-                <span>⏳</span>
-                <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
-              </>
-            ) : (
-              <>
-                <span className="text-[14px] leading-none">🔄</span>
-                <span className="hidden sm:inline">SYNC</span>
-              </>
-            )}
-          </button>
-        )}
-
-
-        {canAdmin && (
-          <button
-            onClick={() => setShowGmConfig(true)}
-            className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-            title="Configuration GM (palette couleurs)"
-          >
-            <span className="text-[14px]">🎨</span>
-          </button>
-        )}
-
-        {canAdmin && (
-          <button
-            onClick={() => setShowAdmin(true)}
-            className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-            title="Administration"
-          >
-            ⚙️
-          </button>
-        )}
-
-        <button
-          onClick={() => setShowChangePwd(true)}
-          className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-          title="Changer mon mot de passe"
-        >
-          🔑
-        </button>
-
-        <button
-          onClick={handleLogout}
-          className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-          title="Se déconnecter"
-        >
-          ⏻
-        </button>
       </header>
 
       {!isSearching && (

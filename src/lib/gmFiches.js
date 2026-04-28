@@ -430,6 +430,33 @@ export async function unmarkItemAllDone(orderItemId) {
   return true
 }
 
+// Charge l'historique des actions gm_done (14 derniers jours)
+export async function loadGmLogs(daysBack = 14) {
+  const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000)
+  const { data, error } = await supabase
+    .from('gm_done')
+    .select(`
+      id, order_item_id, lot_idx, done_at, done_by,
+      profiles:done_by(full_name, username),
+      order_items:order_item_id(title, quantity, pers, order_id, orders:order_id(order_num, client_name))
+    `)
+    .gte('done_at', since.toISOString())
+    .order('done_at', { ascending: false })
+    .limit(500)
+
+  if (error) {
+    console.warn('[loadGmLogs] join echec, fallback:', error)
+    const { data: simple } = await supabase
+      .from('gm_done')
+      .select('*')
+      .gte('done_at', since.toISOString())
+      .order('done_at', { ascending: false })
+      .limit(500)
+    return simple || []
+  }
+  return data || []
+}
+
 // ============================================================
 // AGREGATION POUR VUE PATISSIER
 // ============================================================

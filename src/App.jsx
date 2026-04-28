@@ -18,7 +18,11 @@ function App() {
     if (stored) {
       // Vue par défaut selon le role/permissions
       if (stored.role === 'recap') setActiveView('recap')
-      else if (isProdOnly(stored)) setActiveView(stored.prod_category === 'sales' ? 'sales' : 'prod')
+      else if (isProdOnly(stored)) {
+        // Si seulement perm_sales : vue sales par defaut, sinon prod
+        if (stored.perm_sales && !stored.perm_prod) setActiveView('sales')
+        else setActiveView('prod')
+      }
       else if (isPatissierOnly(stored)) setActiveView('patissier')
       else setActiveView('calendar')
     }
@@ -28,7 +32,10 @@ function App() {
   function handleLoginSuccess(u) {
     setUser(u)
     if (u.role === 'recap') setActiveView('recap')
-    else if (isProdOnly(u)) setActiveView(u.prod_category === 'sales' ? 'sales' : 'prod')
+    else if (isProdOnly(u)) {
+      if (u.perm_sales && !u.perm_prod) setActiveView('sales')
+      else setActiveView('prod')
+    }
     else if (isPatissierOnly(u)) setActiveView('patissier')
     else setActiveView('calendar')
   }

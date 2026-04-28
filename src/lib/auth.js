@@ -134,10 +134,28 @@ export function canDefineGM(user) {
   return user.role === 'admin' || user.perm_define_gm === true
 }
 
-// Vue Prod : user a une categorie ('prod' ou 'sales') OU est admin
+// Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false
-  return user.role === 'admin' || !!user.prod_category
+  return user.role === 'admin' || user.perm_prod === true || user.perm_sales === true
+}
+
+export function canSeeProd(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_prod === true
+}
+
+export function canSeeSales(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_sales === true
+}
+
+// User est en mode "prod-only" si il a perm_prod ou perm_sales mais n'est pas admin et pas patissier
+export function isProdOnly(user) {
+  if (!user) return false
+  if (user.role === 'admin') return false
+  if (user.perm_patissier) return false
+  return user.perm_prod === true || user.perm_sales === true
 }
 
 // Categorie de production assignee a l'utilisateur ('prod' | 'sales' | null)
@@ -146,8 +164,4 @@ export function getProdCategory(user) {
   return user.prod_category || null
 }
 
-// User est en mode "prod-only" si prod_category != null ET role !== 'admin'
-export function isProdOnly(user) {
-  if (!user) return false
-  return user.role !== 'admin' && !!user.prod_category
-}
+// User est en mode "prod-only" : voir au-dessus

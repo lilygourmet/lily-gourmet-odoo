@@ -5,17 +5,41 @@ import {
   updateUser,
   resetUserPassword,
   deleteUser,
+  loadTeams,
+  createTeam,
+  deleteTeam,
   ROLE_LABELS,
   ROLE_COLORS,
 } from '../lib/users'
 
 export default function AdminUsers({ currentUser, onClose }) {
   const [users, setUsers] = useState([])
+  const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNewForm, setShowNewForm] = useState(false)
+  const [showTeamMgr, setShowTeamMgr] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [resetPasswordFor, setResetPasswordFor] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [collapsedTeams, setCollapsedTeams] = useState({})  // { teamId: true } = replie
+  const [dragOverTeam, setDragOverTeam] = useState(null)
+  const [draggedUser, setDraggedUser] = useState(null)
+
+  function toggleTeam(teamId) {
+    setCollapsedTeams(prev => ({ ...prev, [teamId]: !prev[teamId] }))
+  }
+
+  // Drag & drop : deplacer un user vers une autre equipe
+  async function handleDropUserOnTeam(user, newTeamId) {
+    const targetId = newTeamId === '__none__' ? null : newTeamId
+    if (user.team_id === targetId) return  // pas de changement
+    try {
+      await updateUser(user.id, { team_id: targetId })
+      await refresh()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
+  }
 
   useEffect(() => {
     refresh()
@@ -24,13 +48,34 @@ export default function AdminUsers({ currentUser, onClose }) {
   async function refresh() {
     setLoading(true)
     try {
-      const data = await loadUsers()
+      const [data, teamsData] = await Promise.all([loadUsers(), loadTeams()])
       setUsers(data || [])
+      setTeams(teamsData || [])
     } catch (e) {
       console.error('loadUsers error:', e)
       alert(`Erreur de chargement : ${e.message}`)
     }
     setLoading(false)
+  }
+
+  async function handleCreateTeam(name) {
+    if (!name || !name.trim()) return
+    try {
+      await createTeam(name)
+      await refresh()
+    } catch (e) {
+      alert(`Erreur création équipe : ${e.message}`)
+    }
+  }
+
+  async function handleDeleteTeam(teamId) {
+    if (!confirm('Supprimer cette équipe ?')) return
+    try {
+      await deleteTeam(teamId)
+      await refresh()
+    } catch (e) {
+      alert(`Erreur : ${e.message}`)
+    }
   }
 
   async function handleCreate(formData) {
@@ -50,6 +95,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_recaps: formData.permRecaps,
         perm_define_gm: formData.permDefineGM,
         prod_category: formData.prodCategory,
+        perm_prod: formData.permProd,
+        perm_sales: formData.permSales,
+        team_id: formData.teamId,
       })
       setShowNewForm(false)
       await refresh()
@@ -75,6 +123,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_recaps: formData.permRecaps,
         perm_define_gm: formData.permDefineGM,
         prod_category: formData.prodCategory,
+        perm_prod: formData.permProd,
+        perm_sales: formData.permSales,
+        team_id: formData.teamId,
       })
       setEditingUser(null)
       await refresh()
@@ -139,15 +190,23 @@ export default function AdminUsers({ currentUser, onClose }) {
             </div>
           )}
 
-          {/* Bouton ajouter user */}
+          {/* Boutons ajouter user + gerer equipes */}
           {!loading && !showNewForm && !editingUser && (
-            <button
-              onClick={() => setShowNewForm(true)}
-              className="w-full px-4 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all flex items-center justify-center gap-2"
-            >
-              <span>+</span>
-              <span>Ajouter un utilisateur</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowNewForm(true)}
+                className="flex-1 px-4 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all flex items-center justify-center gap-2"
+              >
+                <span>+</span>
+                <span>Ajouter utilisateur</span>
+              </button>
+              <button
+                onClick={() => setShowTeamMgr(true)}
+                className="px-4 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-cream-warm text-ink border border-line rounded-lg hover:border-bordeaux transition-all"
+              >
+                Gérer équipes
+              </button>
+            </div>
           )}
 
           {/* Form création */}
@@ -156,32 +215,99 @@ export default function AdminUsers({ currentUser, onClose }) {
               onSubmit={handleCreate}
               onCancel={() => setShowNewForm(false)}
               isNew={true}
+              teams={teams}
             />
           )}
 
-          {/* Liste users */}
+          {/* Liste users groupes par equipe */}
           {!loading && !showNewForm && (
-            <div className="space-y-2">
-              {users.map(u => (
-                <div key={u.id}>
-                  {editingUser?.id === u.id ? (
-                    <UserForm
-                      initialData={u}
-                      onSubmit={(data) => handleUpdate(u.id, data)}
-                      onCancel={() => setEditingUser(null)}
-                      isNew={false}
-                    />
-                  ) : (
-                    <UserCard
-                      user={u}
-                      isCurrentUser={u.id === currentUser?.id}
-                      onEdit={() => setEditingUser(u)}
-                      onResetPassword={() => setResetPasswordFor(u)}
-                      onDelete={() => setConfirmDelete(u)}
-                    />
-                  )}
-                </div>
-              ))}
+            <div className="space-y-4">
+              {(() => {
+                // Grouper users par team_id
+                const groups = new Map()
+                for (const u of users) {
+                  const tid = u.team_id || '__none__'
+                  if (!groups.has(tid)) groups.set(tid, [])
+                  groups.get(tid).push(u)
+                }
+                // Ordre : teams ordonnés (TOUS, meme vides) + Aucune équipe à la fin
+                const orderedTeams = [...teams].sort((a, b) => (a.ordre || 0) - (b.ordre || 0))
+                const sections = []
+                for (const t of orderedTeams) {
+                  sections.push({ team: t, users: groups.get(t.id) || [] })
+                }
+                if (groups.has('__none__')) {
+                  sections.push({ team: { id: '__none__', name: 'Sans équipe' }, users: groups.get('__none__') })
+                } else {
+                  // Toujours montrer la zone "Sans equipe" pour permettre le drop
+                  sections.push({ team: { id: '__none__', name: 'Sans équipe' }, users: [] })
+                }
+                return sections.map(({ team, users: teamUsers }) => {
+                  const isCollapsed = collapsedTeams[team.id]
+                  const isDragOver = dragOverTeam === team.id
+                  return (
+                    <div
+                      key={team.id}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverTeam(team.id) }}
+                      onDragLeave={() => setDragOverTeam(null)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        if (draggedUser) handleDropUserOnTeam(draggedUser, team.id)
+                        setDragOverTeam(null)
+                        setDraggedUser(null)
+                      }}
+                      className={`rounded-lg ${isDragOver ? 'bg-bordeaux/5 ring-2 ring-bordeaux/30' : ''}`}
+                    >
+                      <button
+                        onClick={() => toggleTeam(team.id)}
+                        className="w-full flex items-center gap-2 mb-2 pb-1 border-b border-bordeaux/30 hover:bg-cream-warm/30 px-1 py-1 rounded transition-colors"
+                      >
+                        <span className="text-[10px] text-ink-mute">{isCollapsed ? '▶' : '▼'}</span>
+                        <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-bordeaux font-bold">
+                          {team.name}
+                        </span>
+                        <span className="text-[10px] text-ink-mute">({teamUsers.length})</span>
+                      </button>
+                      {!isCollapsed && (
+                        <div className="space-y-2">
+                          {teamUsers.map(u => (
+                            <div
+                              key={u.id}
+                              draggable={editingUser?.id !== u.id}
+                              onDragStart={() => setDraggedUser(u)}
+                              onDragEnd={() => { setDraggedUser(null); setDragOverTeam(null) }}
+                              className={`${draggedUser?.id === u.id ? 'opacity-50' : ''} cursor-move`}
+                            >
+                              {editingUser?.id === u.id ? (
+                                <UserForm
+                                  initialData={u}
+                                  onSubmit={(data) => handleUpdate(u.id, data)}
+                                  onCancel={() => setEditingUser(null)}
+                                  isNew={false}
+                                  teams={teams}
+                                />
+                              ) : (
+                                <UserCard
+                                  user={u}
+                                  isCurrentUser={u.id === currentUser?.id}
+                                  onEdit={() => setEditingUser(u)}
+                                  onResetPassword={() => setResetPasswordFor(u)}
+                                  onDelete={() => setConfirmDelete(u)}
+                                />
+                              )}
+                            </div>
+                          ))}
+                          {teamUsers.length === 0 && (
+                            <div className="text-[10px] text-ink-mute italic py-2 px-2">
+                              Glisser un user ici
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              })()}
 
               {users.length === 0 && (
                 <div className="text-center text-ink-mute italic py-4">
@@ -210,6 +336,93 @@ export default function AdminUsers({ currentUser, onClose }) {
           onConfirm={() => handleDelete(confirmDelete.id)}
         />
       )}
+
+      {/* Modal gestion équipes */}
+      {showTeamMgr && (
+        <TeamManagerModal
+          teams={teams}
+          users={users}
+          onClose={() => setShowTeamMgr(false)}
+          onCreate={handleCreateTeam}
+          onDelete={handleDeleteTeam}
+        />
+      )}
+    </div>
+  )
+}
+
+// ==========================================
+// MODAL : GESTION DES EQUIPES
+// ==========================================
+function TeamManagerModal({ teams, users, onClose, onCreate, onDelete }) {
+  const [newName, setNewName] = useState('')
+
+  function countUsers(teamId) {
+    return users.filter(u => u.team_id === teamId).length
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4"
+         onClick={onClose}>
+      <div className="bg-cream rounded-2xl w-full max-w-md p-5 shadow-2xl border border-line"
+           onClick={e => e.stopPropagation()}>
+        <h3 className="font-fraunces italic text-[20px] text-ink mb-3">Gestion des équipes</h3>
+
+        {/* Liste équipes */}
+        <div className="space-y-1 mb-4 max-h-[40vh] overflow-y-auto">
+          {teams.length === 0 ? (
+            <p className="text-[12px] text-ink-mute italic">Aucune équipe</p>
+          ) : teams.map(t => {
+            const count = countUsers(t.id)
+            return (
+              <div key={t.id} className="flex items-center justify-between px-3 py-2 bg-cream-warm rounded border border-line/60">
+                <div>
+                  <span className="text-[13px] font-medium text-ink">{t.name}</span>
+                  <span className="text-[10px] text-ink-mute ml-2">({count} user{count !== 1 ? 's' : ''})</span>
+                </div>
+                <button
+                  onClick={() => onDelete(t.id)}
+                  className="w-6 h-6 rounded-full text-ink-mute hover:bg-bordeaux/10 hover:text-bordeaux transition-colors text-[14px]"
+                  title={count > 0 ? "Les users de cette équipe redeviendront 'sans équipe'" : "Supprimer"}
+                >
+                  ×
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Ajout */}
+        <div className="flex gap-2 pt-3 border-t border-line">
+          <input
+            type="text"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            placeholder="Nom de la nouvelle équipe"
+            className="flex-1 px-3 py-2 text-[12px] border border-line rounded-lg bg-cream-warm focus:outline-none focus:border-bordeaux"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && newName.trim()) {
+                onCreate(newName)
+                setNewName('')
+              }
+            }}
+          />
+          <button
+            onClick={() => { if (newName.trim()) { onCreate(newName); setNewName('') } }}
+            disabled={!newName.trim()}
+            className="px-4 py-2 bg-bordeaux text-cream rounded-lg text-[11px] disabled:opacity-50 hover:bg-bordeaux-deep"
+          >
+            Ajouter
+          </button>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="mt-3 w-full py-2 border border-line rounded-full text-[12px] text-ink-soft hover:bg-cream-warm"
+        >
+          Fermer
+        </button>
+      </div>
     </div>
   )
 }
@@ -229,8 +442,8 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
   if (user.perm_print_single) perms.push('Imprimer 1 cmd')
   if (user.perm_recaps) perms.push('Recaps ventes')
   if (user.perm_define_gm) perms.push('Définir GM')
-  if (user.prod_category === 'prod') perms.push('Vue Prod')
-  if (user.prod_category === 'sales') perms.push('Vue Salés')
+  if (user.perm_prod) perms.push('Vue Prod')
+  if (user.perm_sales) perms.push('Vue Salés')
 
   return (
     <div className={`rounded-lg border p-3 transition-all ${user.active ? 'border-line/60 bg-cream' : 'border-line/40 bg-cream-warm opacity-60'}`}>
@@ -295,7 +508,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
 // FORMULAIRE (création + édition)
 // ==========================================
 
-function UserForm({ onSubmit, onCancel, initialData, isNew }) {
+function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
   const [formData, setFormData] = useState({
     username: initialData?.username || '',
     fullName: initialData?.full_name || '',
@@ -312,6 +525,9 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
     permRecaps: initialData?.perm_recaps || false,
     permDefineGM: initialData?.perm_define_gm || false,
     prodCategory: initialData?.prod_category || null,
+    permProd: initialData?.perm_prod || false,
+    permSales: initialData?.perm_sales || false,
+    teamId: initialData?.team_id || null,
   })
 
   function handleSubmit() {
@@ -497,29 +713,38 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
           />
         </div>
 
-        {/* Categorie production (radio) */}
+        {/* Vue Production : 2 checkboxes (prod + salés) */}
         <div className="mt-3 pt-3 border-t border-line">
           <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Vue production</div>
-          <div className="flex gap-1.5 flex-wrap">
-            {[
-              { v: null, l: 'Aucune' },
-              { v: 'prod', l: '🥐 Production' },
-              { v: 'sales', l: '🥪 Salés' },
-            ].map(opt => (
-              <button
-                key={opt.v ?? 'none'}
-                type="button"
-                onClick={() => update('prodCategory', opt.v)}
-                className={`px-3 py-1 rounded-full text-[11px] border transition-colors ${
-                  formData.prodCategory === opt.v
-                    ? 'bg-bordeaux text-cream border-bordeaux'
-                    : 'bg-cream-warm text-ink-mute border-line hover:border-bordeaux'
-                }`}
-              >
-                {opt.l}
-              </button>
-            ))}
+          <div className="flex flex-col gap-1">
+            <PermCheckbox
+              id="perm-prod"
+              label="🥐 Production (E-, MI-, V-)"
+              checked={isAdmin || formData.permProd}
+              onChange={v => update('permProd', v)}
+            />
+            <PermCheckbox
+              id="perm-sales"
+              label="🥪 Salés (SA-, SAK-, GS-)"
+              checked={isAdmin || formData.permSales}
+              onChange={v => update('permSales', v)}
+            />
           </div>
+        </div>
+
+        {/* Equipe (dropdown) */}
+        <div className="mt-3 pt-3 border-t border-line">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Équipe</div>
+          <select
+            value={formData.teamId || ''}
+            onChange={e => update('teamId', e.target.value || null)}
+            className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
+          >
+            <option value="">— Aucune équipe —</option>
+            {(teams || []).map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 

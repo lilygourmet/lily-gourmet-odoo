@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { loadSalesLinesForRange, PROD_VIEW_CATEGORIES, filterLinesForProdCategory } from '../lib/salesLines'
-import { loadProdDoneForLines, markProdLineDone, unmarkProdLineDone } from '../lib/prodDone'
+import { loadProdDoneForLines, markProdLineDone, unmarkProdLineDone, loadProdLogs } from '../lib/prodDone'
 import { isAdmin } from '../lib/auth'
 import AppHeader from './AppHeader'
+import ActivityLog, { relativeTime } from './ActivityLog'
 
 export default function ProdView({ user, onLogout, onNavigate, activeView, forcedCategory }) {
   const [lines, setLines] = useState([])
@@ -13,7 +14,19 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
   const [printDate, setPrintDate] = useState(null)
   const [expandedKey, setExpandedKey] = useState(null)  // pour vue par produit
 
-  const category = forcedCategory || user?.prod_category || (isAdmin(user) ? 'prod' : null)
+  // category peut etre 'prod', 'sales', ou un array ['prod', 'sales']
+  // Determination :
+  // 1) Si forcedCategory passe en prop (admin via App.jsx) -> utiliser
+  // 2) Sinon, basé sur perm_prod + perm_sales du user
+  // 3) Fallback : prod_category (legacy) ou 'prod' pour admin
+  const category = useMemo(() => {
+    if (forcedCategory) return forcedCategory
+    if (user?.perm_prod && user?.perm_sales) return ['prod', 'sales']
+    if (user?.perm_prod) return 'prod'
+    if (user?.perm_sales) return 'sales'
+    if (user?.prod_category) return user.prod_category
+    return isAdmin(user) ? 'prod' : null
+  }, [forcedCategory, user?.perm_prod, user?.perm_sales, user?.prod_category, user?.role])
 
   // Date locale (pas UTC) pour eviter les decalages timezone
   const todayStr = (() => {
@@ -109,7 +122,18 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     setPrintDate(null)
   }
 
-  const def = category ? PROD_VIEW_CATEGORIES[category] : null
+  // def : utilise pour afficher emoji/label. Si array -> emoji combine + label combine.
+  const def = useMemo(() => {
+    if (!category) return null
+    if (Array.isArray(category)) {
+      const cats = category.map(c => PROD_VIEW_CATEGORIES[c]).filter(Boolean)
+      return {
+        emoji: cats.map(c => c.emoji).join(' '),
+        label: cats.map(c => c.label).join(' + '),
+      }
+    }
+    return PROD_VIEW_CATEGORIES[category]
+  }, [category])
 
   if (!category) {
     return (
@@ -122,10 +146,10 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
   const datesWithLines = [...byDate.keys()].sort()
 
   return (
-    <div className="min-h-screen bg-cream pb-12">
+    <div className="min-h-screen bg-cream pb-40">
       <AppHeader
         user={user}
-        activeView={activeView || (category === 'sales' ? 'sales' : 'prod')}
+        activeView={activeView || (Array.isArray(category) ? 'prod' : (category === 'sales' ? 'sales' : 'prod'))}
         onNavigate={onNavigate}
         onLogout={onLogout}
       />
@@ -267,6 +291,19 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
           </div>
         </div>
       )}
+
+      {/* Footer logs */}
+      <ActivityLog
+        loadFn={() => loadProdLogs(14)}
+        refreshKey={lines.length + doneMap.size}
+        formatEntry={(log) => {
+          const who = log.profiles?.full_name || log.profiles?.username || '?'
+          const sl = log.sales_lines
+          const what = sl ? `${sl.product_name || ''} ×${sl.quantity || ''}` : `(ligne supprimée)`
+          const where = sl?.order_num ? ` pour ${sl.order_num}${sl.client_name ? ' · ' + sl.client_name : ''}` : ''
+          return `${relativeTime(log.done_at)} — ${who} a fait ${what}${where}`
+        }}
+      />
     </div>
   )
 }

@@ -64,14 +64,19 @@ export const PROD_VIEW_CATEGORIES = {
   sales: { label: 'Salés',      emoji: '🥪', prefixes: ['SA-', 'SAK-', 'GS-'] },
 }
 
-// Filtre les sales_lines selon une categorie user 'prod' ou 'sales'
+// Filtre les sales_lines selon une categorie 'prod' ou 'sales' OU un array de categories
 export function filterLinesForProdCategory(lines, category) {
-  const def = PROD_VIEW_CATEGORIES[category]
-  if (!def) return []
-  const prefixes = def.prefixes
+  // Support array : si on passe ['prod', 'sales'], on filtre pour les 2
+  const categories = Array.isArray(category) ? category : [category]
+  const allPrefixes = []
+  for (const cat of categories) {
+    const def = PROD_VIEW_CATEGORIES[cat]
+    if (def) allPrefixes.push(...def.prefixes)
+  }
+  if (allPrefixes.length === 0) return []
   return lines.filter(l => {
     const name = l.product_name || ''
-    return prefixes.some(p => name.toUpperCase().startsWith(p.toUpperCase()))
+    return allPrefixes.some(p => name.toUpperCase().startsWith(p.toUpperCase()))
   })
 }
 

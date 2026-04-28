@@ -35,3 +35,32 @@ export async function unmarkProdLineDone(odooLineId) {
   if (error) throw error
   return true
 }
+
+// Charge l'historique des actions prod_done (14 derniers jours)
+// Avec join sur profiles (qui a fait) + sales_lines (quoi)
+export async function loadProdLogs(daysBack = 14) {
+  const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000)
+  const { data, error } = await supabase
+    .from('prod_done')
+    .select(`
+      id, odoo_line_id, done_at, done_by,
+      profiles:done_by(full_name, username),
+      sales_lines:odoo_line_id(product_name, quantity, client_name, order_num)
+    `)
+    .gte('done_at', since.toISOString())
+    .order('done_at', { ascending: false })
+    .limit(500)
+
+  if (error) {
+    console.warn('[loadProdLogs] join echec, fallback:', error)
+    // Fallback : pas de join (peut arriver si FK mal definie)
+    const { data: simple } = await supabase
+      .from('prod_done')
+      .select('*')
+      .gte('done_at', since.toISOString())
+      .order('done_at', { ascending: false })
+      .limit(500)
+    return simple || []
+  }
+  return data || []
+}
