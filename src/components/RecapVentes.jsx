@@ -51,12 +51,15 @@ function renderCategoryHtml(cat, catLines, dateLabel, isLast, allLines = []) {
     }
   } else if (cat.viewMode === 'odoo-table') {
     // Vue Tableau Odoo : tableau Article / Cmd / Livré / Reste
-    const grouped = groupByProductWithDelivered(catLines)
+    // Exclure clients 'vitrine' et lignes ou reste=0
+    const filteredLines = catLines.filter(l => !/vitrine/i.test(l.client_name || ''))
+    const grouped = groupByProductWithDelivered(filteredLines)
     let totalOrd = 0, totalDel = 0, totalRem = 0
     html += `<table class="odoo-table"><thead><tr>
       <th>Article</th><th class="num">Cmd</th><th class="num">Livré</th><th class="num">Reste</th>
     </tr></thead><tbody>`
     for (const [, entry] of grouped.entries()) {
+      if (entry.remaining <= 0) continue  // Skip si tout livre
       totalOrd += entry.ordered
       totalDel += entry.delivered
       totalRem += entry.remaining
@@ -153,15 +156,22 @@ function printHtml(htmlBody, title) {
 // (filtre additionnel en plus des filtres globaux deja appliques)
 // ============================================================
 function OdooTableView({ lines }) {
-  const [clientsMode, setClientsMode] = useState('contains')
-  const [clientsTerms, setClientsTerms] = useState('')
+  // Filtres locaux par defaut : exclure 'vitrine' et lignes ou reste = 0
+  const [clientsMode, setClientsMode] = useState('not_contains')
+  const [clientsTerms, setClientsTerms] = useState('vitrine')
   const [articlesMode, setArticlesMode] = useState('contains')
   const [articlesTerms, setArticlesTerms] = useState('')
 
   const filtered = filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms })
   const isFiltered = clientsTerms.trim() !== '' || articlesTerms.trim() !== ''
 
-  const grouped = groupByProductWithDelivered(filtered)
+  // Filtrer aussi les lignes ou reste=0 (= tout livre, plus rien a faire)
+  const groupedRaw = groupByProductWithDelivered(filtered)
+  const grouped = new Map()
+  for (const [k, e] of groupedRaw.entries()) {
+    if (e.remaining > 0) grouped.set(k, e)
+  }
+
   let totalOrd = 0, totalDel = 0, totalRem = 0
   const rows = [...grouped.entries()]
   for (const [, e] of rows) { totalOrd += e.ordered; totalDel += e.delivered; totalRem += e.remaining }

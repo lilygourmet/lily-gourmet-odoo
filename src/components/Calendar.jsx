@@ -335,6 +335,50 @@ export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
     }
   }
 
+  // SYNC AUTO toutes les 15 min, pause si onglet inactif
+  useEffect(() => {
+    const INTERVAL_MS = 15 * 60 * 1000  // 15 minutes
+    let timer = null
+
+    async function silentSync() {
+      // sync silencieuse : pas d'alerte si erreur, pas de status visible
+      if (document.hidden) return  // skip si onglet inactif
+      if (syncing) return  // skip si deja en cours
+      try {
+        await fetch('/api/sync-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.id }),
+        })
+        const fresh = await loadOrdersForWeek(currentMonday)
+        setOrders(fresh)
+      } catch (e) {
+        console.warn('[sync auto] erreur (ignoree):', e.message)
+      }
+    }
+
+    function start() {
+      stop()
+      timer = setInterval(silentSync, INTERVAL_MS)
+    }
+    function stop() {
+      if (timer) { clearInterval(timer); timer = null }
+    }
+
+    function onVisibilityChange() {
+      if (document.hidden) stop()
+      else { silentSync(); start() }  // sync immediat au retour + relance timer
+    }
+
+    if (!document.hidden) start()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, currentMonday])
+
   const isPatissierMode = viewMode === 'patissier'
 
   // Commandes de la semaine courante non imprimees (pour le bouton batch)
