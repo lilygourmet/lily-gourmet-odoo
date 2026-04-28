@@ -435,6 +435,31 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
         <div
           className="bg-cream rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl border border-line"
           onClick={e => e.stopPropagation()}
+          onTouchStart={e => {
+            // Track le debut du swipe (uniquement si 1 doigt et pas de scroll vertical actif)
+            if (e.touches.length !== 1) return
+            const t = e.touches[0]
+            window.__swipeStartX = t.clientX
+            window.__swipeStartY = t.clientY
+            window.__swipeTime = Date.now()
+          }}
+          onTouchEnd={e => {
+            if (window.__swipeStartX == null || !dayOrders || dayOrders.length <= 1) return
+            const t = e.changedTouches[0]
+            const dx = t.clientX - window.__swipeStartX
+            const dy = t.clientY - window.__swipeStartY
+            const dt = Date.now() - (window.__swipeTime || 0)
+            window.__swipeStartX = null
+            // Swipe horizontal rapide : >50px en X, <50px en Y, <500ms
+            if (Math.abs(dx) > 50 && Math.abs(dy) < 50 && dt < 500) {
+              const idx = dayOrders.findIndex(o => o.id === order.id)
+              if (dx < 0 && idx >= 0 && idx < dayOrders.length - 1) {
+                onNavigate && onNavigate(dayOrders[idx + 1])  // swipe gauche -> suivant
+              } else if (dx > 0 && idx > 0) {
+                onNavigate && onNavigate(dayOrders[idx - 1])  // swipe droite -> precedent
+              }
+            }
+          }}
         >
           <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-start justify-between gap-4 z-10">
             <div className="min-w-0 flex-1">
