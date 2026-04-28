@@ -48,6 +48,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_print_batch: formData.permPrintBatch,
         perm_print_single: formData.permPrintSingle,
         perm_recaps: formData.permRecaps,
+        perm_define_gm: formData.permDefineGM,
       })
       setShowNewForm(false)
       await refresh()
@@ -71,6 +72,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_print_batch: formData.permPrintBatch,
         perm_print_single: formData.permPrintSingle,
         perm_recaps: formData.permRecaps,
+        perm_define_gm: formData.permDefineGM,
       })
       setEditingUser(null)
       await refresh()
@@ -224,6 +226,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
   if (user.perm_print_batch) perms.push('Imprimer batch')
   if (user.perm_print_single) perms.push('Imprimer 1 cmd')
   if (user.perm_recaps) perms.push('Recaps ventes')
+  if (user.perm_define_gm) perms.push('Définir GM')
 
   return (
     <div className={`rounded-lg border p-3 transition-all ${user.active ? 'border-line/60 bg-cream' : 'border-line/40 bg-cream-warm opacity-60'}`}>
@@ -303,6 +306,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
     permPrintBatch: initialData?.perm_print_batch || false,
     permPrintSingle: initialData?.perm_print_single || false,
     permRecaps: initialData?.perm_recaps || false,
+    permDefineGM: initialData?.perm_define_gm || false,
   })
 
   function handleSubmit() {
@@ -479,6 +483,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew }) {
             label="📊 Voir les récaps de ventes"
             checked={isAdmin || formData.permRecaps}
             onChange={v => update('permRecaps', v)}
+          />
+          <PermCheckbox
+            id="perm-define-gm"
+            label="✏️ Définir les détails GM"
+            checked={isAdmin || formData.permDefineGM}
+            onChange={v => update('permDefineGM', v)}
           />
         </div>
       </div>

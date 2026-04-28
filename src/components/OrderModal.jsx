@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import GmFicheModal from './GmFicheModal'
+import GmFicheModal from './GMDetailsModal'
 import { detectTypeFromName, TYPE_EMOJIS, loadFichesForOrder } from '../lib/gmFiches'
 import { loadDoneByItemIds, markItemDone, unmarkItemDone } from '../lib/gmDone'
 import { loadPalette } from '../lib/palette'

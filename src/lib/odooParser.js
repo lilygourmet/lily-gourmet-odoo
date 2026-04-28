@@ -66,7 +66,7 @@ export function parseOdooOrders(odooOrders, linesByOrderId) {
 // HELPERS
 // ==========================================
 
-const KNOWN_PREFIXES = /^(CD-|GM-|GM\s*-|SA-|E-|MI-|RA-|GS-|Acompte|Bougies)/i
+const KNOWN_PREFIXES = /^(CD-|GM-|GM\s*-|GMD-|SA-|SAK-|E-|MI-|RA-|GS-|V-|B-|H-|N-|Acompte|Bougies|Down\s+Payment)/i
 
 // Detecte les lignes 'warning' : pas de prefixe connu, pas un montant, contiennent du texte utile
 function isPotentialWarningLine(productName) {
@@ -80,12 +80,12 @@ function isPotentialWarningLine(productName) {
   return true
 }
 
-// Detecte si une ligne est un produit CD- ou GM- a garder
+// Detecte si une ligne est un produit CD- / GM- / GMD- a garder
 function isCdGmProduct(productName) {
   if (!productName) return false
   const trimmed = productName.trim()
-  if (!/^(CD-|GM-|GM\s*-)/i.test(trimmed)) return false
-  if (/^(CD-|GM-)\s*Bougies/i.test(trimmed)) return false
+  if (!/^(CD-|GM-|GM\s*-|GMD-)/i.test(trimmed)) return false
+  if (/^(CD-|GM-|GMD-)\s*Bougies/i.test(trimmed)) return false
   if (/D[ée]coration\s+suppl[ée]mentaire/i.test(trimmed)) return false
   return true
 }
@@ -156,7 +156,7 @@ function parseItems(odooLines) {
 
 function extractTitle(productName) {
   // productName est deja trim()
-  let cleaned = productName.replace(/^(CD-|GM-)\s*/i, '')
+  let cleaned = productName.replace(/^(CD-|GM-|GMD-)\s*/i, '')
 
   const stopMatch = cleaned.match(/^([\s\S]*?)(?:\n\s*)?(?:Thème|Age|Message|Option)\s*:/m)
   if (stopMatch) {

@@ -128,3 +128,8 @@ export function canRecaps(user) {
   if (!user) return false
   return user.role === 'admin' || user.perm_recaps === true
 }
+
+export function canDefineGM(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_define_gm === true
+}
