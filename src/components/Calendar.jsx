@@ -185,7 +185,7 @@ function filterOrderItemsForView(order, isPatissierMode) {
   return { ...order, order_items: filteredItems }
 }
 
-export default function Calendar({ user, onLogout }) {
+export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOf(new Date()))
   const [orders, setOrders] = useState([])
   const [allOrders, setAllOrders] = useState([])
@@ -503,7 +503,7 @@ export default function Calendar({ user, onLogout }) {
           )}
         </div>
 
-                {/* Bouton recaps ventes */}
+        {/* Bouton recaps ventes */}
         {canRecaps(user) && (
           <button
             onClick={() => setShowRecaps(true)}
@@ -512,6 +512,17 @@ export default function Calendar({ user, onLogout }) {
           >
             <span>📊</span>
             <span>Récap</span>
+          </button>
+        )}
+        {/* Bouton mode patissier (admin uniquement) */}
+        {onSwitchToPatissier && (
+          <button
+            onClick={onSwitchToPatissier}
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0"
+            title="Vue pâtissier"
+          >
+            <span>🍰</span>
+            <span>Pâtissier</span>
           </button>
         )}
         {/* Bouton impression batch - toujours visible avec compteur */}

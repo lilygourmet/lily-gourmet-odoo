@@ -429,3 +429,197 @@ export async function unmarkItemAllDone(orderItemId) {
   if (error) throw error
   return true
 }
+
+// ============================================================
+// AGREGATION POUR VUE PATISSIER
+// ============================================================
+
+// Charge toutes les commandes (avec items + fiches GM) pour une date
+// Retourne : [{ order, items: [{ item, fiche }] }]
+export async function loadOrdersWithFichesForDate(date) {
+  const [yyyy, mm, dd] = String(date).split('-').map(Number)
+  const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
+  const end = new Date(Date.UTC(yyyy, mm - 1, dd + 1, 0, 0, 0))
+
+  const { data: orders, error: e1 } = await supabase
+    .from('orders')
+    .select('id, order_num, client_name, delivery_at, delivery_slot, odoo_state')
+    .gte('delivery_at', start.toISOString())
+    .lt('delivery_at', end.toISOString())
+    .neq('odoo_state', 'cancel')
+    .order('delivery_at', { ascending: true })
+
+  if (e1) throw e1
+  if (!orders || orders.length === 0) return []
+
+  const orderIds = orders.map(o => o.id)
+  const { data: items, error: e2 } = await supabase
+    .from('order_items')
+    .select('id, order_id, type, title, quantity, pers, parfum, parfums, image_urls, taille_value')
+    .in('order_id', orderIds)
+    .eq('type', 'GM')
+
+  if (e2) throw e2
+  if (!items || items.length === 0) return []
+
+  const itemIds = items.map(i => i.id)
+  const [{ data: fiches }, { data: dones }] = await Promise.all([
+    supabase.from('gm_fiches').select('*').in('order_item_id', itemIds),
+    supabase.from('gm_done').select('*').in('order_item_id', itemIds),
+  ])
+
+  const fichesByItem = {}
+  for (const f of fiches || []) fichesByItem[f.order_item_id] = f
+  const donesByItem = {}
+  for (const d of dones || []) {
+    if (!donesByItem[d.order_item_id]) donesByItem[d.order_item_id] = []
+    donesByItem[d.order_item_id].push(d)
+  }
+
+  const itemsByOrder = {}
+  for (const it of items) {
+    if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
+    itemsByOrder[it.order_id].push({
+      item: it,
+      fiche: fichesByItem[it.id] || null,
+      dones: donesByItem[it.id] || [],
+    })
+  }
+
+  // Filtrer les commandes qui ont au moins 1 item GM
+  return orders
+    .filter(o => itemsByOrder[o.id] && itemsByOrder[o.id].length > 0)
+    .map(o => ({ order: o, items: itemsByOrder[o.id] }))
+}
+
+// Verifie si un lot est marque fait (compare lot_idx)
+export function isLotDone(dones, lotIdx) {
+  if (!Array.isArray(dones)) return false
+  return dones.some(d => d.lot_idx === lotIdx)
+}
+
+// Verifie si tous les lots d'un item sont faits
+export function isItemFullyDone(fiche, dones) {
+  if (!fiche || !Array.isArray(dones)) return false
+  if (fiche.parfum_normal) return dones.length > 0  // 1 done suffit pour parfum_normal
+  const lotsCount = (fiche.lots || []).length
+  if (lotsCount === 0) return false
+  for (let i = 0; i < lotsCount; i++) {
+    if (!dones.some(d => d.lot_idx === i)) return false
+  }
+  return true
+}
+
+// Cle de fusion pour aggreger des lots IDENTIQUES (meme parfum, couleur, zigzag, perles, forme, bord)
+function lotFusionKey(lot, productType) {
+  return [
+    productType,
+    lot.parfum || '',
+    lot.couleur_id || '',
+    lot.has_zigzag ? '1' : '0',
+    lot.zigzag_couleur_id || '',
+    lot.has_perles ? '1' : '0',
+    lot.perles_couleur_id || '',
+    lot.forme || '',
+    lot.bord || '',
+  ].join('|')
+}
+
+// Vue PAR PRODUIT : agrege tous les lots de toutes les commandes du jour
+// Groupe : type_gm -> parfum -> [lots fusionnes]
+// Retour : [{ typeGm, label, parfums: { parfum: [{ qty, lot, sources: [{itemId, lotIdx, orderNum, clientName}] }] } }]
+export function aggregateByProduct(ordersWithFiches) {
+  // typeGm -> parfum -> fusionKey -> { qty, lot, sources, doneCount }
+  const tree = {}
+
+  for (const { order, items } of ordersWithFiches) {
+    for (const { item, fiche, dones } of items) {
+      // Items sans fiche : ajout dans une categorie speciale "non_defini"
+      if (!fiche) {
+        const typeGm = '__non_defini__'
+        if (!tree[typeGm]) tree[typeGm] = {}
+        const parfum = '__pasdefini__'
+        if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
+        const key = `nodef|${item.id}`
+        tree[typeGm][parfum][key] = {
+          qty: getRealQuantity(item),
+          lot: { parfum: 'Pas défini', qty: getRealQuantity(item) },
+          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, qty: getRealQuantity(item), title: item.title }],
+          doneCount: 0,
+          totalSources: 1,
+          notDefined: true,
+          itemTitle: item.title,
+        }
+        continue
+      }
+
+      const typeGm = fiche.type_gm
+      if (!typeGm) continue
+
+      if (!tree[typeGm]) tree[typeGm] = {}
+
+      // Cas parfum_normal : 1 entree speciale
+      if (fiche.parfum_normal) {
+        const parfum = '__normal__'
+        const key = `normal|${item.id}`
+        if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
+        tree[typeGm][parfum][key] = {
+          qty: getRealQuantity(item),
+          lot: { parfum: 'Parfum normal', qty: getRealQuantity(item) },
+          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name }],
+          doneCount: dones.length > 0 ? 1 : 0,
+          totalSources: 1,
+        }
+        continue
+      }
+
+      const lots = Array.isArray(fiche.lots) ? fiche.lots : []
+      lots.forEach((lot, lotIdx) => {
+        const parfum = lot.parfum || '__sansparfum__'
+        if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
+        const key = lotFusionKey(lot, typeGm)
+
+        if (!tree[typeGm][parfum][key]) {
+          tree[typeGm][parfum][key] = {
+            qty: 0,
+            lot: { ...lot },  // exemplaire
+            sources: [],
+            doneCount: 0,
+            totalSources: 0,
+          }
+        }
+        const entry = tree[typeGm][parfum][key]
+        entry.qty += parseFloat(lot.qty) || 0
+        entry.totalSources += 1
+        entry.sources.push({
+          itemId: item.id,
+          lotIdx,
+          orderNum: order.order_num,
+          clientName: order.client_name,
+          qty: parseFloat(lot.qty) || 0,
+        })
+        if (isLotDone(dones, lotIdx)) entry.doneCount += 1
+      })
+    }
+  }
+
+  // Convertir en array pour le rendu
+  const products = []
+  for (const typeGm of Object.keys(tree)) {
+    const parfumsObj = {}
+    for (const parfum of Object.keys(tree[typeGm])) {
+      parfumsObj[parfum] = Object.values(tree[typeGm][parfum])
+    }
+    const isNonDefini = typeGm === '__non_defini__'
+    products.push({
+      typeGm,
+      label: isNonDefini ? 'Pas défini' : (TYPE_LABELS[typeGm] || typeGm),
+      emoji: isNonDefini ? '⚠️' : (TYPE_EMOJIS[typeGm] || '✏️'),
+      parfums: parfumsObj,
+      isNonDefini,
+    })
+  }
+  // Mettre les "non defini" en premier
+  products.sort((a, b) => (a.isNonDefini ? -1 : 0) - (b.isNonDefini ? -1 : 0))
+  return products
+}

@@ -82,10 +82,12 @@ export async function updateUser(userId, {
     .update(updates)
     .eq('id', userId)
     .select()
-    .single()
 
   if (error) throw error
-  return data
+  if (!data || data.length === 0) {
+    throw new Error('Aucun utilisateur modifié (RLS ou ID invalide ?)')
+  }
+  return data[0]
 }
 
 // Alias compat
