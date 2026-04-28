@@ -87,7 +87,21 @@ function isCdGmProduct(productName) {
   if (!/^(CD-|GM-|GM\s*-|GMD-)/i.test(trimmed)) return false
   if (/^(CD-|GM-|GMD-)\s*Bougies/i.test(trimmed)) return false
   if (/D[ée]coration\s+suppl[ée]mentaire/i.test(trimmed)) return false
+  // Ignorer les toppers (decoration cake)
+  if (/^CD-\s*Happy\s+Birthday\s+Topper/i.test(trimmed)) return false
+  if (/\btopper\b/i.test(trimmed)) return false
   return true
+}
+
+// Detecte les lignes Odoo a IGNORER completement (pas warning, pas produit)
+// E-, MI-, RA-, GS-, V-, B-, H-, N- = produits qu'on ne veut ni en commande ni en warning
+// [XXX] devant un de ces prefixes aussi
+function isIgnoredProduct(productName) {
+  if (!productName) return false
+  const trimmed = productName.trim()
+  // Retirer le [XXX] eventuel au debut
+  const noRef = trimmed.replace(/^\[\s*\d+\s*\]\s*/, '')
+  return /^(E-|MI-|RA-|GS-|V-|B-|H-|N-|SA-|SAK-|Acompte|Down\s+Payment)/i.test(noRef)
 }
 
 function parseItems(odooLines) {
@@ -125,7 +139,7 @@ function parseItems(odooLines) {
         theme,
         age,
         message,
-        warnings: [],  // sera rempli par les lignes warning suivantes
+        warnings: [],
         quantity,
         isGift,
       }
@@ -134,9 +148,15 @@ function parseItems(odooLines) {
       continue
     }
 
-    // CAS 2 : Ligne "warning" potentielle (suit un CD- ou GM-)
+    // CAS 2 : Lignes a ignorer completement (E-, MI-, RA-, [474] E-, etc.)
+    // Important : ce check vient AVANT le check warning pour eviter de les traiter en warning
+    if (isIgnoredProduct(productName)) {
+      lastItemRef = null  // coupe le rattachement warning
+      continue
+    }
+
+    // CAS 3 : Ligne "warning" potentielle (suit un CD- ou GM-)
     if (lastItemRef && isPotentialWarningLine(productName)) {
-      // Nettoie le texte (multiligne -> 1 ligne, espaces multiples)
       const warningText = productName.replace(/\s+/g, ' ').trim()
       if (warningText.length > 2) {
         lastItemRef.warnings.push(warningText)
@@ -144,8 +164,7 @@ function parseItems(odooLines) {
       continue
     }
 
-    // CAS 3 : Tout le reste (SA-, Acompte, etc.) -> on coupe le rattachement warning
-    // pour eviter qu'une ligne warning d'un GM precedent soit attribuee au prochain CD
+    // CAS 4 : Tout le reste (SA-, Acompte, etc.) -> coupe le rattachement warning
     if (KNOWN_PREFIXES.test(productName) || /^Down\s+Payment/i.test(productName)) {
       lastItemRef = null
     }
@@ -191,12 +210,24 @@ function decomposeTitle(title, type) {
   let taille_value = null
   let parfums = []
 
+  // Formes connues pour CD-
+  const FORMES = /^(carr[eé]|rectangle|rond|bomb[eé]|coeur|c\u0153ur)$/i
+
   if (type === 'CD') {
-    if (etages && /^\d+$/.test(parts[0])) {
-      pers = parseInt(parts[0], 10)
-      parfums = parts.slice(1)
-    } else {
-      parfums = parts
+    // Parser intelligent : scanner tous les elements pour identifier
+    // - nombres = pers (priorité au plus grand si plusieurs, mais en general il n'y en a qu'un)
+    // - mots qui matchent FORMES = taille_value
+    // - reste = parfums
+    for (const p of parts) {
+      if (/^\d+$/.test(p)) {
+        // C'est un nombre = pers
+        if (pers === null) pers = parseInt(p, 10)
+        // Si on a deja un pers, on ignore les autres nombres (cas rare)
+      } else if (FORMES.test(p)) {
+        taille_value = p
+      } else {
+        parfums.push(p)
+      }
     }
   } else {
     // GM-

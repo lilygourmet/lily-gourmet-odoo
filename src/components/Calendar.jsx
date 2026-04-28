@@ -357,7 +357,14 @@ export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
         const q = normalizeForSearch(searchQuery.trim())
         const inOrderNum = normalizeForSearch(order.order_num).includes(q)
         const inClient = normalizeForSearch(order.client_name).includes(q)
-        if (!inOrderNum && !inClient) return false
+        // Recherche dans theme, message, age, title des items
+        const inItems = (order.order_items || []).some(i =>
+          normalizeForSearch(i.theme).includes(q) ||
+          normalizeForSearch(i.message).includes(q) ||
+          normalizeForSearch(i.title).includes(q) ||
+          normalizeForSearch(i.age).includes(q)
+        )
+        if (!inOrderNum && !inClient && !inItems) return false
       }
 
       // En mode patissier : ne garder que les commandes avec au moins 1 GM
