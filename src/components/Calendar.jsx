@@ -575,34 +575,6 @@ export default function Calendar({ user, onLogout, onSwitchToPatissier }) {
         )}
 
 
-        {/* Toggle Calendrier / Mode patissier */}
-        {(canAdmin || isPatissierOnly(user)) && (
-          isPatissierOnly(user) ? null : (
-            <div className="flex items-center gap-1 bg-cream/80 rounded-full p-0.5 border border-line">
-              <button
-                onClick={() => setViewMode('admin')}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-medium tracking-wider transition-all ${
-                  viewMode === 'admin'
-                    ? 'bg-bordeaux text-cream'
-                    : 'text-ink-mute hover:text-ink'
-                }`}
-              >
-                Admin
-              </button>
-              <button
-                onClick={() => setViewMode('patissier')}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-medium tracking-wider transition-all ${
-                  viewMode === 'patissier'
-                    ? 'bg-bordeaux text-cream'
-                    : 'text-ink-mute hover:text-ink'
-                }`}
-                title="Vue patissier (GM uniquement)"
-              >
-                👨‍🍳 Patissier
-              </button>
-            </div>
-          )
-        )}
         {canAdmin && (
           <button
             onClick={() => setShowGmConfig(true)}

@@ -199,10 +199,21 @@ export function groupByProduct(lines) {
 // Filtre les lignes pour une categorie donnee de VENTE_CATEGORIES
 // Utilise `dbCategory` (la vraie valeur stockee en DB) pour filtrer
 // Si dbCategory est null, retourne TOUTES les lignes (cas 'ALL' = Toutes commandes)
+// Pour la categorie CD, on exclut les Toppers et Bougies (ce ne sont pas des "vraies" cmd CD)
 export function linesForCategory(allLines, cat) {
   if (!cat) return []
   if (cat.dbCategory === null) return allLines
-  return allLines.filter(l => l.category === cat.dbCategory)
+  let lines = allLines.filter(l => l.category === cat.dbCategory)
+  if (cat.dbCategory === 'CD') {
+    lines = lines.filter(l => {
+      const name = l.product_name || ''
+      if (/\btopper\b/i.test(name)) return false
+      if (/^(CD-|GM-|GMD-)\s*Bougies/i.test(name)) return false
+      if (/D[ée]coration\s+suppl[ée]mentaire/i.test(name)) return false
+      return true
+    })
+  }
+  return lines
 }
 
 // Filtre les lignes selon des regles configurables
