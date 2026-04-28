@@ -399,9 +399,11 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
   })
 
   // Imprime TOUTES les categories non vides (1 par page)
+  // Exclut "Toutes commandes" et "Recap 16h" (vues d'audit, trop volumineuses)
   function handlePrintAll() {
     let html = ''
     for (const cat of VENTE_CATEGORIES) {
+      if (cat.id === 'ALL' || cat.id === 'ODOO') continue
       const catLines = linesForCategory(cat.id)
       html += renderCategoryHtml(cat, catLines, dateLabel, false, filteredLines)
     }
