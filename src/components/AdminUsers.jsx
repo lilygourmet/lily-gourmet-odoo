@@ -17,6 +17,7 @@ export default function AdminUsers({ currentUser, onClose }) {
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNewForm, setShowNewForm] = useState(false)
+  const [duplicateFromUser, setDuplicateFromUser] = useState(null)
   const [showTeamMgr, setShowTeamMgr] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [resetPasswordFor, setResetPasswordFor] = useState(null)
@@ -99,8 +100,10 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_sales: formData.permSales,
         team_id: formData.teamId,
         perm_calendar: formData.permCalendar,
+        perm_labels: formData.permLabels,
       })
       setShowNewForm(false)
+      setDuplicateFromUser(null)
       await refresh()
     } catch (e) {
       alert(`Erreur création : ${e.message}`)
@@ -128,6 +131,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_sales: formData.permSales,
         team_id: formData.teamId,
         perm_calendar: formData.permCalendar,
+        perm_labels: formData.permLabels,
       })
       setEditingUser(null)
       await refresh()
@@ -214,10 +218,18 @@ export default function AdminUsers({ currentUser, onClose }) {
           {/* Form création */}
           {showNewForm && (
             <UserForm
+              initialData={duplicateFromUser ? {
+                // Copier toutes les permissions sauf username/password/full_name
+                ...duplicateFromUser,
+                username: '',
+                full_name: '',
+                id: undefined,
+              } : undefined}
               onSubmit={handleCreate}
-              onCancel={() => setShowNewForm(false)}
+              onCancel={() => { setShowNewForm(false); setDuplicateFromUser(null) }}
               isNew={true}
               teams={teams}
+              duplicatedFromName={duplicateFromUser ? (duplicateFromUser.full_name || duplicateFromUser.username) : null}
             />
           )}
 
@@ -295,6 +307,7 @@ export default function AdminUsers({ currentUser, onClose }) {
                                   onEdit={() => setEditingUser(u)}
                                   onResetPassword={() => setResetPasswordFor(u)}
                                   onDelete={() => setConfirmDelete(u)}
+                                  onDuplicate={() => { setDuplicateFromUser(u); setShowNewForm(true) }}
                                 />
                               )}
                             </div>
@@ -433,7 +446,7 @@ function TeamManagerModal({ teams, users, onClose, onCreate, onDelete }) {
 // CARTE UTILISATEUR
 // ==========================================
 
-function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
+function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onDuplicate }) {
   const perms = []
   if (user.perm_sync) perms.push('Sync')
   if (user.perm_check) perms.push('Cocher')
@@ -493,6 +506,15 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
         >
           🔑 Reset MDP
         </button>
+        {onDuplicate && (
+          <button
+            onClick={onDuplicate}
+            className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded hover:bg-cream-warm transition-all"
+            title="Créer un nouvel utilisateur avec les mêmes permissions"
+          >
+            ⎘ Dupliquer
+          </button>
+        )}
         {!isCurrentUser && (
           <button
             onClick={onDelete}
@@ -510,7 +532,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete }) {
 // FORMULAIRE (création + édition)
 // ==========================================
 
-function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
+function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicatedFromName = null }) {
   const [formData, setFormData] = useState({
     username: initialData?.username || '',
     fullName: initialData?.full_name || '',
@@ -531,6 +553,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
     permSales: initialData?.perm_sales || false,
     teamId: initialData?.team_id || null,
     permCalendar: initialData?.perm_calendar !== undefined ? initialData.perm_calendar : false,
+    permLabels: initialData?.perm_labels !== undefined ? initialData.perm_labels : false,
   })
 
   function handleSubmit() {
@@ -560,7 +583,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
   return (
     <div className="rounded-lg border border-bordeaux bg-bordeaux/5 p-4 space-y-3">
       <div className="font-mono text-[11px] tracking-[0.15em] uppercase text-bordeaux font-semibold mb-1">
-        {isNew ? 'Nouveau utilisateur' : 'Modifier'}
+        {isNew ? (duplicatedFromName ? `Dupliqué de ${duplicatedFromName}` : 'Nouvel utilisateur') : 'Modifier'}
       </div>
 
       {/* Username (uniquement à la création) */}
@@ -711,6 +734,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
             label="📊 Voir les récaps de ventes"
             checked={isAdmin || formData.permRecaps}
             onChange={v => update('permRecaps', v)}
+          />
+          <PermCheckbox
+            id="perm-labels"
+            label="🏷️ Imprimer les étiquettes Zebra"
+            checked={isAdmin || formData.permLabels}
+            onChange={v => update('permLabels', v)}
           />
           <PermCheckbox
             id="perm-define-gm"

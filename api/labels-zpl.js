@@ -84,11 +84,11 @@ async function fetchLabelsForDate(date, uid) {
   const startUTC = `${date} 00:00:00`
   const endUTC = `${date} 23:59:59`
 
-  // 1) Tous les MO WHLVP du jour
+  // 1) Tous les MO WHLVP du jour, NON terminés (exclure cancel + done)
   const productions = await odooSearchRead(uid, 'mrp.production', [
     ['date_planned_finished', '>=', startUTC],
     ['date_planned_finished', '<=', endUTC],
-    ['state', '!=', 'cancel'],
+    ['state', 'not in', ['cancel', 'done']],
     ['name', 'ilike', 'WHLVP'],
   ], ['id', 'name', 'origin', 'state', 'product_id', 'product_qty'])
 

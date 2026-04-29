@@ -14,7 +14,6 @@ import AdminGmConfig from './AdminGmConfig'
 import PrintBatchModal from './PrintBatchModal'
 import RecapVentes from './RecapVentes'
 import AppHeader from './AppHeader'
-import LabelsButton from './LabelsButton'
 import { filterUnprintedOrders, filterCurrentWeek } from '../lib/printOrders'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
@@ -610,8 +609,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
               <span>{unprintedThisWeek.length}</span>
             </button>
           )}
-          {/* Bouton etiquettes Zebra (admin uniquement) */}
-          {isAdmin(user) && !isPatissierMode && <LabelsButton />}
+          {/* Bouton Etiquettes Zebra deplace dans AppHeader */}
         </div>
 
       </header>

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { isAdmin, canRecaps, canSync, canSeeCalendar } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
+import LabelsButton from './LabelsButton'
 
 // ============================================================
 // AppHeader : header de navigation unifie
@@ -117,6 +118,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Actions : sync + roue + logout */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Bouton Etiquettes Zebra (admin ou perm_labels) */}
+          {canPrintLabels(user) && <LabelsButton />}
+
           {/* Heure derniere sync : visible pour tous */}
           {lastSyncAt && !syncing && (
             <span className="font-mono text-[9px] text-ink-mute hidden md:inline" title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}>

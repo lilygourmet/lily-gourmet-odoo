@@ -140,6 +140,12 @@ export function canSeeCalendar(user) {
   return user.role === 'admin' || user.perm_calendar === true
 }
 
+// User peut imprimer les etiquettes Zebra (admin ou perm_labels=true)
+export function canPrintLabels(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_labels === true
+}
+
 // Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false
