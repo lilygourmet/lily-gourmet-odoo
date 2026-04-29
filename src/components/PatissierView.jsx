@@ -361,23 +361,18 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
       }
     }
     return (
-      <div className={`bg-amber-50 border border-amber-200 rounded p-2 flex items-center gap-2 ${undefDone ? 'opacity-70' : ''}`}>
-        <div className="w-10 h-10 rounded bg-amber-100 flex items-center justify-center text-[16px] text-amber-700 flex-shrink-0">⚠</div>
+      <button
+        onClick={toggleUndefDone}
+        className={`w-full text-left bg-amber-50 border border-amber-200 rounded p-2 flex items-center gap-2 transition-all hover:border-amber-400 ${undefDone ? 'opacity-60' : ''}`}
+      >
+        <div className={`w-10 h-10 rounded flex items-center justify-center text-[16px] flex-shrink-0 ${undefDone ? 'bg-success/10 text-success' : 'bg-amber-100 text-amber-700'}`}>
+          {undefDone ? '✓' : '⚠'}
+        </div>
         <div className="flex-1 min-w-0">
           <div className={`text-[12px] font-medium text-amber-900 truncate ${undefDone ? 'line-through' : ''}`}>{item.title}</div>
-          <div className="text-[10px] text-amber-700 italic">À définir</div>
+          <div className="text-[10px] text-amber-700 italic">{undefDone ? 'Fait' : 'À définir'}</div>
         </div>
-        <button
-          onClick={toggleUndefDone}
-          className={`text-[9px] px-2 py-0.5 rounded-full whitespace-nowrap transition-colors ${
-            undefDone
-              ? 'bg-success/10 text-success border border-success/30'
-              : 'bg-bordeaux text-cream border border-bordeaux hover:bg-bordeaux-deep'
-          }`}
-        >
-          {undefDone ? '✓' : 'Tout fait'}
-        </button>
-      </div>
+      </button>
     )
   }
 
