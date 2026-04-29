@@ -35,25 +35,26 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return () => clearInterval(t)
   }, [])
 
-  // Auto-sync toutes les 5 min (si user a la perm + page visible + dernier sync > 4 min)
+  // Auto-sync toutes les 5 min (si user a la perm + dernier sync > 4 min)
   useEffect(() => {
     if (!userCanSync) return
-    const AUTO_SYNC_MS = 5 * 60 * 1000      // tente toutes les 5 min
-    const MIN_INTERVAL_MS = 4 * 60 * 1000   // mais skip si dernier sync < 4 min
+    const CHECK_MS = 60 * 1000              // verifie chaque minute
+    const MIN_INTERVAL_MS = 5 * 60 * 1000   // sync si dernier > 5 min
 
     async function tryAutoSync() {
-      if (document.hidden) return
       if (syncing) return
-      // Re-lire le localStorage (peut etre a jour par un autre onglet)
       const lastStr = localStorage.getItem('lastSyncAt')
       const last = lastStr ? new Date(lastStr) : null
       if (last && (Date.now() - last.getTime()) < MIN_INTERVAL_MS) return
+      console.log('[auto-sync] declenchement')
       try {
         await handleSync()
       } catch (_) { /* handleSync gere deja l'erreur */ }
     }
 
-    const t = setInterval(tryAutoSync, AUTO_SYNC_MS)
+    // Tick imm\u00e9diat puis chaque minute
+    tryAutoSync()
+    const t = setInterval(tryAutoSync, CHECK_MS)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSync])
