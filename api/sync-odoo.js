@@ -269,13 +269,21 @@ function detectPrefixAndCategory(productName) {
 
 async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) {
   const allRows = []
+  const cancelledOdooLineIds = []
 
   for (const odooOrder of odooOrders) {
-    // Skip les commandes annulees (on garde uniquement sale + done)
-    if (odooOrder.state === 'cancel') continue
-
     const orderNum = odooOrder.name
     if (!orderNum) continue
+
+    const odooLines = linesByOrderId.get(odooOrder.id) || []
+
+    // Si la commande est annulee, on collecte ses odoo_line_id pour les supprimer apres
+    if (odooOrder.state === 'cancel') {
+      for (const line of odooLines) {
+        cancelledOdooLineIds.push(line.id)
+      }
+      continue
+    }
 
     const commitmentDate = odooOrder.commitment_date
     if (!commitmentDate) continue
@@ -289,7 +297,6 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
     // sinon null (cas commande 100% E-/MI-/SA-/etc.)
     const supabaseOrderId = orderIdMap.get(odooOrder.id) || null
 
-    const odooLines = linesByOrderId.get(odooOrder.id) || []
     for (const line of odooLines) {
       const productName = (line.name || '').trim()
       if (!productName) continue
@@ -316,6 +323,19 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
         delivery_at: deliveryAt,
         order_num: orderNum,
       })
+    }
+  }
+
+  // Supprimer les lignes des commandes annulees (passees a cancel)
+  if (cancelledOdooLineIds.length > 0) {
+    const { error: delErr } = await supabase
+      .from('sales_lines')
+      .delete()
+      .in('odoo_line_id', cancelledOdooLineIds)
+    if (delErr) {
+      console.error('[sync sales_lines] erreur suppression annulees:', delErr)
+    } else {
+      console.log(`[sync sales_lines] ${cancelledOdooLineIds.length} lignes annulees supprimees`)
     }
   }
 
