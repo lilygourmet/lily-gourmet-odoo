@@ -1,0 +1,192 @@
+import { useState, useEffect } from 'react'
+
+export default function LabelsButton() {
+  const [open, setOpen] = useState(false)
+  const [counts, setCounts] = useState({})  // { date: count }
+  const [selected, setSelected] = useState({})  // { date: true/false }
+  const [loadingCounts, setLoadingCounts] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+
+  function getDates() {
+    const d = new Date()
+    const j0 = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const d1 = new Date(d); d1.setDate(d.getDate() + 1)
+    const j1 = `${d1.getFullYear()}-${String(d1.getMonth() + 1).padStart(2, '0')}-${String(d1.getDate()).padStart(2, '0')}`
+    const d2 = new Date(d); d2.setDate(d.getDate() + 2)
+    const j2 = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, '0')}-${String(d2.getDate()).padStart(2, '0')}`
+    return [j0, j1, j2]
+  }
+
+  function fmtDayLabel(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const date = new Date(y, m - 1, d)
+    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+  }
+
+  async function loadCounts() {
+    const dates = getDates()
+    setLoadingCounts(true)
+    try {
+      const r = await fetch(`/api/labels-zpl?dates=${dates.join(',')}&count=1`)
+      if (!r.ok) throw new Error(`Erreur ${r.status}`)
+      const data = await r.json()
+      const map = {}
+      for (const c of data.counts) map[c.date] = c.count
+      setCounts(map)
+    } catch (e) {
+      console.error('[labels] count error:', e)
+      alert('Erreur au comptage : ' + e.message)
+    } finally {
+      setLoadingCounts(false)
+    }
+  }
+
+  async function downloadSelected() {
+    const dates = Object.keys(selected).filter(d => selected[d])
+    if (dates.length === 0) {
+      alert('Sélectionne au moins un jour')
+      return
+    }
+    setDownloading(true)
+    try {
+      const r = await fetch(`/api/labels-zpl?dates=${dates.join(',')}`)
+      if (!r.ok) {
+        const txt = await r.text()
+        throw new Error(`Erreur ${r.status} : ${txt}`)
+      }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const fname = dates.length === 1
+        ? `etiquettes-${dates[0]}.zpl`
+        : `etiquettes-${dates[0]}_a_${dates[dates.length - 1]}.zpl`
+      a.download = fname
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setOpen(false)
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  function toggleDate(date) {
+    setSelected(prev => ({ ...prev, [date]: !prev[date] }))
+  }
+
+  useEffect(() => {
+    if (open) {
+      setSelected({})
+      loadCounts()
+    }
+  }, [open])
+
+  const dates = getDates()
+  const items = [
+    { date: dates[0], label: "Aujourd'hui", detail: fmtDayLabel(dates[0]) },
+    { date: dates[1], label: 'Demain', detail: fmtDayLabel(dates[1]) },
+    { date: dates[2], label: 'Après-demain', detail: fmtDayLabel(dates[2]) },
+  ]
+
+  const totalSelected = Object.entries(selected)
+    .filter(([d, v]) => v)
+    .reduce((sum, [d]) => sum + (counts[d] || 0), 0)
+  const nbDaysSelected = Object.values(selected).filter(Boolean).length
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="px-2.5 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0"
+        title="Imprimer les étiquettes Zebra"
+      >
+        Étiquettes
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
+             onClick={() => setOpen(false)}>
+          <div className="bg-cream rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-line"
+               onClick={e => e.stopPropagation()}>
+            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">Étiquettes Zebra</h3>
+            <p className="text-[12px] text-ink-mute mb-4">
+              Coche les jours à imprimer. Seuls les composants CD non-faits sont inclus.
+            </p>
+
+            <div className="space-y-2">
+              {items.map(item => {
+                const count = counts[item.date]
+                const isChecked = !!selected[item.date]
+                const isEmpty = count === 0
+                return (
+                  <button
+                    key={item.date}
+                    onClick={() => !isEmpty && toggleDate(item.date)}
+                    disabled={isEmpty || loadingCounts}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded border text-left transition-colors ${
+                      isEmpty
+                        ? 'bg-cream-warm/30 border-line/40 text-ink-mute cursor-not-allowed'
+                        : isChecked
+                        ? 'bg-bordeaux/10 border-bordeaux'
+                        : 'bg-cream-warm border-line hover:border-bordeaux hover:bg-bordeaux/5'
+                    }`}
+                  >
+                    <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center text-[11px] ${
+                      isChecked ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream'
+                    }`}>
+                      {isChecked ? '✓' : ''}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-[13px] font-medium text-ink">{item.label}</div>
+                      <div className="text-[11px] text-ink-mute capitalize">{item.detail}</div>
+                    </div>
+                    <div className="text-right">
+                      {loadingCounts ? (
+                        <span className="text-[10px] text-ink-mute italic">...</span>
+                      ) : count === undefined ? (
+                        <span className="text-[10px] text-ink-mute">?</span>
+                      ) : count === 0 ? (
+                        <span className="text-[10px] text-ink-mute">Aucune</span>
+                      ) : (
+                        <span className="font-mono text-[12px] text-bordeaux font-bold">{count}</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Resume */}
+            {nbDaysSelected > 0 && (
+              <div className="mt-3 px-3 py-2 bg-bordeaux/5 border border-bordeaux/20 rounded text-[12px] text-bordeaux">
+                <span className="font-bold">{totalSelected}</span> étiquettes sur <span className="font-bold">{nbDaysSelected}</span> jour{nbDaysSelected > 1 ? 's' : ''}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setOpen(false)}
+                className="flex-1 py-2 border border-line rounded-full text-[12px] text-ink-soft hover:bg-cream-warm"
+              >Annuler</button>
+              <button
+                onClick={downloadSelected}
+                disabled={downloading || totalSelected === 0}
+                className={`flex-1 py-2 rounded-full text-[12px] font-medium transition-colors ${
+                  totalSelected === 0 || downloading
+                    ? 'bg-line/40 text-ink-mute cursor-not-allowed'
+                    : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'
+                }`}
+              >
+                {downloading ? '⏳ Génération...' : '🖨 Télécharger'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

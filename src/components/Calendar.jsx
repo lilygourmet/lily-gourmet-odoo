@@ -14,6 +14,7 @@ import AdminGmConfig from './AdminGmConfig'
 import PrintBatchModal from './PrintBatchModal'
 import RecapVentes from './RecapVentes'
 import AppHeader from './AppHeader'
+import LabelsButton from './LabelsButton'
 import { filterUnprintedOrders, filterCurrentWeek } from '../lib/printOrders'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
@@ -559,59 +560,63 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
             </button>
           )}
         </div>
-        {/* Bouton impression batch - toujours visible avec compteur */}
-        {canPrintBatch(user) && !isPatissierMode && (
-          <button
-            onClick={() => unprintedThisWeek.length > 0 && setShowBatchPrint(true)}
-            disabled={unprintedThisWeek.length === 0}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
-              unprintedThisWeek.length > 0
-                ? 'border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream cursor-pointer'
-                : 'border border-line text-ink-mute cursor-not-allowed opacity-60'
-            }`}
-            title={
-              unprintedThisWeek.length > 0
-                ? `${unprintedThisWeek.length} commande(s) non imprimee(s) cette semaine`
-                : 'Aucune nouvelle commande a imprimer'
-            }
-          >
-            <span>🖨️</span>
-            <span>{unprintedThisWeek.length}</span>
-          </button>
+        {/* Navigation semaine (au centre/gauche) */}
+        {!isSearching && (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={() => setCurrentMonday(addDays(currentMonday, -7))}
+              className="w-8 h-8 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+              title="Semaine précédente"
+            >‹</button>
+            <div className="text-center min-w-[140px] px-1">
+              <div className="font-fraunces text-[13px] font-medium text-ink capitalize leading-tight">
+                {formatWeekRange(currentMonday)}
+              </div>
+              <div className="font-mono text-[8px] tracking-[0.15em] uppercase text-ink-mute">
+                Sem. {getWeekNumber(currentMonday)} {loadingOrders && '·...'}
+              </div>
+            </div>
+            <button
+              onClick={() => setCurrentMonday(addDays(currentMonday, 7))}
+              className="w-8 h-8 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+              title="Semaine suivante"
+            >›</button>
+            <button
+              onClick={() => setCurrentMonday(getMondayOf(new Date()))}
+              className="px-2.5 py-1 text-[9px] font-mono tracking-[0.15em] uppercase text-bordeaux border border-bordeaux rounded-full hover:bg-bordeaux hover:text-cream transition-all flex-shrink-0"
+            >Aujourd'hui</button>
+          </div>
         )}
+
+        {/* Groupe Imprimer + Etiquettes a droite */}
+        <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+          {/* Bouton impression batch */}
+          {canPrintBatch(user) && !isPatissierMode && (
+            <button
+              onClick={() => unprintedThisWeek.length > 0 && setShowBatchPrint(true)}
+              disabled={unprintedThisWeek.length === 0}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0 ${
+                unprintedThisWeek.length > 0
+                  ? 'border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream cursor-pointer'
+                  : 'border border-line text-ink-mute cursor-not-allowed opacity-60'
+              }`}
+              title={
+                unprintedThisWeek.length > 0
+                  ? `${unprintedThisWeek.length} commande(s) non imprimee(s) cette semaine`
+                  : 'Aucune nouvelle commande a imprimer'
+              }
+            >
+              <span>🖨️</span>
+              <span>{unprintedThisWeek.length}</span>
+            </button>
+          )}
+          {/* Bouton etiquettes Zebra (admin uniquement) */}
+          {isAdmin(user) && !isPatissierMode && <LabelsButton />}
+        </div>
 
       </header>
 
-      {!isSearching && (
-        <div className="bg-cream-warm border-b border-line px-4 py-3 flex items-center justify-center gap-3 flex-shrink-0">
-          <button
-            onClick={() => setCurrentMonday(addDays(currentMonday, -7))}
-            className="w-9 h-9 rounded-full bg-cream border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-          >
-            ‹
-          </button>
-          <div className="text-center min-w-[180px]">
-            <div className="font-fraunces text-[15px] font-medium text-ink capitalize leading-tight">
-              {formatWeekRange(currentMonday)}
-            </div>
-            <div className="font-mono text-[9px] tracking-[0.15em] uppercase text-ink-mute mt-0.5">
-              Semaine {getWeekNumber(currentMonday)} {loadingOrders && '· chargement...'}
-            </div>
-          </div>
-          <button
-            onClick={() => setCurrentMonday(addDays(currentMonday, 7))}
-            className="w-9 h-9 rounded-full bg-cream border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-          >
-            ›
-          </button>
-          <button
-            onClick={() => setCurrentMonday(getMondayOf(new Date()))}
-            className="ml-3 px-3 py-1.5 text-[10px] font-mono tracking-[0.15em] uppercase text-bordeaux border border-bordeaux rounded-full hover:bg-bordeaux hover:text-cream transition-all"
-          >
-            Aujourd'hui
-          </button>
-        </div>
-      )}
+      {/* Ancienne barre semaine supprimee, integree au header ci-dessus */}
 
       <div className="bg-cream border-b border-line px-4 py-2.5 flex flex-col items-center gap-2 flex-shrink-0">
         <div className="flex items-center justify-center gap-2 flex-wrap">
