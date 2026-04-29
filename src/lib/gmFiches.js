@@ -595,24 +595,17 @@ export function aggregateByProduct(ordersWithFiches) {
 
       if (!tree[typeGm]) tree[typeGm] = {}
 
-      // Cas parfum_normal : grouper par les vrais parfums Odoo (Chocolat, Vanille, etc.)
-      // Si pas de odoo_parfums : tomber sur __normal__
+      // Cas parfum_normal : 1 entree speciale
       if (fiche.parfum_normal) {
-        const odooParfums = (fiche.odoo_parfums && fiche.odoo_parfums.length > 0)
-          ? fiche.odoo_parfums
-          : ['__normal__']
-        for (const parfum of odooParfums) {
-          const key = `normal|${item.id}|${parfum}`
-          if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
-          // Si plusieurs parfums, on divise la qté (ex: 12 cupcakes 2 parfums = 6 par parfum)
-          const qtyByParfum = Math.round(getRealQuantity(item) / odooParfums.length)
-          tree[typeGm][parfum][key] = {
-            qty: qtyByParfum,
-            lot: { parfum: parfum === '__normal__' ? 'Parfum normal' : parfum, qty: qtyByParfum, isParfumNormal: true },
-            sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name }],
-            doneCount: dones.length > 0 ? 1 : 0,
-            totalSources: 1,
-          }
+        const parfum = '__normal__'
+        const key = `normal|${item.id}`
+        if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
+        tree[typeGm][parfum][key] = {
+          qty: getRealQuantity(item),
+          lot: { parfum: 'Parfum normal', qty: getRealQuantity(item) },
+          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name }],
+          doneCount: dones.length > 0 ? 1 : 0,
+          totalSources: 1,
         }
         continue
       }

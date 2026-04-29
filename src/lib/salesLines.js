@@ -18,36 +18,15 @@ export const VENTE_CATEGORIES = [
   { id: 'ODOO',    label: 'Récap 16h',         prefixes: [],                      emoji: '📊', dbCategory: null,    viewMode: 'odoo-table' },
 ]
 
-// Convertit un order_items + son order parent en "ligne" compatible avec le code existant
-function itemToLine(item, order) {
-  const title = item.title || ''
-  // Extraire le prefixe du title (ex: "SA-", "SAK-", "GS-", "E-", "MI-", "V-", "CD-", etc.)
-  const prefMatch = title.match(/^([A-Z]+-)/)
-  const prefix = prefMatch ? prefMatch[1] : ''
-  return {
-    id: `${order.id}_${item.id}`,
-    odoo_line_id: item.id,        // pour compat prod_done (qui utilise odoo_line_id)
-    order_id: order.id,
-    order_num: order.order_num,
-    client_name: order.client_name,
-    delivery_at: order.delivery_at,
-    product_name: title,
-    prefix,
-    quantity: item.quantity || 1,
-    qty_delivered: 0,             // pas track dans order_items
-    category: null,                // calculée à la volée par filterLinesForProdCategory
-  }
-}
-
-// Charge toutes les "lignes" pour une date donnee (depuis order_items)
+// Charge toutes les sales_lines pour une date donnee
 export async function loadSalesLinesForDate(date) {
   const [yyyy, mm, dd] = String(date).split('-').map(Number)
   const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
   const end = new Date(Date.UTC(yyyy, mm - 1, dd + 1, 0, 0, 0))
 
   const { data, error } = await supabase
-    .from('orders')
-    .select('id, order_num, client_name, delivery_at, odoo_state, order_items (id, title, quantity)')
+    .from('sales_lines')
+    .select('*')
     .gte('delivery_at', start.toISOString())
     .lt('delivery_at', end.toISOString())
     .order('delivery_at', { ascending: true })
@@ -56,25 +35,18 @@ export async function loadSalesLinesForDate(date) {
     console.error('[loadSalesLines] erreur:', error)
     return []
   }
-  const lines = []
-  for (const order of (data || [])) {
-    if (order.odoo_state === 'cancel') continue   // exclure les annulees
-    for (const item of (order.order_items || [])) {
-      lines.push(itemToLine(item, order))
-    }
-  }
-  return lines
+  return data || []
 }
 
-// Charge les "lignes" sur une plage de N jours a partir de fromDate (depuis order_items)
+// Charge les sales_lines sur une plage de N jours a partir de fromDate
 export async function loadSalesLinesForRange(fromDate, daysCount) {
   const [yyyy, mm, dd] = String(fromDate).split('-').map(Number)
   const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
   const end = new Date(Date.UTC(yyyy, mm - 1, dd + daysCount, 0, 0, 0))
 
   const { data, error } = await supabase
-    .from('orders')
-    .select('id, order_num, client_name, delivery_at, odoo_state, order_items (id, title, quantity)')
+    .from('sales_lines')
+    .select('*')
     .gte('delivery_at', start.toISOString())
     .lt('delivery_at', end.toISOString())
     .order('delivery_at', { ascending: true })
@@ -83,28 +55,14 @@ export async function loadSalesLinesForRange(fromDate, daysCount) {
     console.error('[loadSalesLinesForRange] erreur:', error)
     return []
   }
-  const lines = []
-  for (const order of (data || [])) {
-    if (order.odoo_state === 'cancel') continue   // exclure les annulees
-    for (const item of (order.order_items || [])) {
-      lines.push(itemToLine(item, order))
-    }
-  }
-  return lines
+  return data || []
 }
 
 // Definition des prefixes pour la vue Prod (catégories user)
 export const PROD_VIEW_CATEGORIES = {
-  prod:  { label: 'Production', emoji: '🥐', prefixes: ['E-', 'MI-', 'V-', 'GS-'] },
+  prod:  { label: 'Production', emoji: '🥐', prefixes: ['E-', 'MI-', 'V-'] },
   sales: { label: 'Salés',      emoji: '🥪', prefixes: ['SA-', 'SAK-', 'GS-'] },
 }
-
-// Patterns GS- qui vont dans Prod (gateaux secs/cookies, pas des salés)
-// Le reste des GS- (mini sablés thym, ghriba behla, ...) reste dans Salés
-const GS_PROD_PATTERNS = [
-  /^GS-\s*plateau\s*gateau\s*sec/i,
-  /^GS-\s*cookies?\b/i,
-]
 
 // Filtre les sales_lines selon une categorie 'prod' ou 'sales' OU un array de categories
 export function filterLinesForProdCategory(lines, category) {
@@ -117,14 +75,8 @@ export function filterLinesForProdCategory(lines, category) {
   }
   if (allPrefixes.length === 0) return []
   return lines.filter(l => {
-    const name = (l.product_name || '').trim()
-    if (!allPrefixes.some(p => name.toUpperCase().startsWith(p.toUpperCase()))) return false
-    const isGsProdPattern = GS_PROD_PATTERNS.some(rx => rx.test(name))
-    // Si on est en vue Salés uniquement (pas Prod) : exclure les GS- prod (cookies, plateau)
-    if (categories.includes('sales') && !categories.includes('prod') && isGsProdPattern) return false
-    // Si on est en vue Prod uniquement (pas Salés) et que c'est un GS- mais PAS un GS- prod : exclure
-    if (categories.includes('prod') && !categories.includes('sales') && /^GS-/i.test(name) && !isGsProdPattern) return false
-    return true
+    const name = l.product_name || ''
+    return allPrefixes.some(p => name.toUpperCase().startsWith(p.toUpperCase()))
   })
 }
 
