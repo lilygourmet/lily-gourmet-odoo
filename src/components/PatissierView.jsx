@@ -72,7 +72,9 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
     for (const { items } of ordersList) {
       for (const { fiche, dones } of items) {
         if (!fiche) {
-          toDo += 1  // pas defini = a faire
+          // Items "à définir" : consideres faits si lotIdx -1 est marque
+          if (isLotDone(dones, -1)) done += 1
+          else toDo += 1
           continue
         }
         if (isItemFullyDone(fiche, dones)) done += 1
@@ -88,7 +90,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
     const todoOrders = dayOrders.map(({ order, items }) => ({
       order,
       items: items.filter(({ fiche, dones }) => {
-        if (!fiche) return true
+        if (!fiche) return !isLotDone(dones, -1)
         return !isItemFullyDone(fiche, dones)
       }),
     })).filter(({ items }) => items.length > 0)
@@ -164,7 +166,10 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
               const filteredOrders = dayOrders.map(({ order, items }) => ({
                 order,
                 items: items.filter(({ fiche, dones }) => {
-                  if (!fiche) return tab === 'todo'  // non defini : seulement dans 'a faire'
+                  if (!fiche) {
+                    const isDone = isLotDone(dones, -1)
+                    return tab === 'todo' ? !isDone : isDone
+                  }
                   const isDone = isItemFullyDone(fiche, dones)
                   return tab === 'todo' ? !isDone : isDone
                 }),
@@ -344,13 +349,34 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
   const photoUrl = Array.isArray(item.image_urls) && item.image_urls[0] ? item.image_urls[0] : null
 
   if (!fiche) {
+    const undefDone = isLotDone(dones, -1)
+    async function toggleUndefDone() {
+      try {
+        if (undefDone) await unmarkLotDone(item.id, -1)
+        else await markLotDone(item.id, -1, currentUserId)
+        onChange && onChange()
+      } catch (e) {
+        console.error(e)
+        alert('Erreur : ' + e.message)
+      }
+    }
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded p-2 flex items-center gap-2">
+      <div className={`bg-amber-50 border border-amber-200 rounded p-2 flex items-center gap-2 ${undefDone ? 'opacity-70' : ''}`}>
         <div className="w-10 h-10 rounded bg-amber-100 flex items-center justify-center text-[16px] text-amber-700 flex-shrink-0">⚠</div>
         <div className="flex-1 min-w-0">
-          <div className="text-[12px] font-medium text-amber-900 truncate">{item.title}</div>
+          <div className={`text-[12px] font-medium text-amber-900 truncate ${undefDone ? 'line-through' : ''}`}>{item.title}</div>
           <div className="text-[10px] text-amber-700 italic">À définir</div>
         </div>
+        <button
+          onClick={toggleUndefDone}
+          className={`text-[9px] px-2 py-0.5 rounded-full whitespace-nowrap transition-colors ${
+            undefDone
+              ? 'bg-success/10 text-success border border-success/30'
+              : 'bg-bordeaux text-cream border border-bordeaux hover:bg-bordeaux-deep'
+          }`}
+        >
+          {undefDone ? '✓' : 'Tout fait'}
+        </button>
       </div>
     )
   }
@@ -410,7 +436,13 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-[12px] font-medium text-ink">{TYPE_LABELS[typeGm]} ({realQty})</span>
             {fiche.is_mixte && <span className="text-[9px] font-mono text-bordeaux uppercase tracking-wider">MIXTE</span>}
-            {fiche.parfum_normal && <span className="text-[10px] text-ink-mute italic">parfum normal</span>}
+            {fiche.parfum_normal && (
+              <span className="text-[10px] text-ink-mute italic">
+                {Array.isArray(item.parfums) && item.parfums.length > 0
+                  ? item.parfums.join(', ')
+                  : 'parfum normal'}
+              </span>
+            )}
           </div>
           {fiche.note_patissier && (
             <div className="text-[10px] text-amber-700 italic mt-0.5">📝 {fiche.note_patissier}</div>
@@ -672,9 +704,10 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
       const t = new Date(order.delivery_at)
       const hour = `${String(t.getHours()).padStart(2, '0')}h${String(t.getMinutes()).padStart(2, '0')}`
       let itemsHtml = ''
-      for (const { item, fiche } of items) {
+      for (const { item, fiche, dones } of items) {
         const realQty = getRealQuantity(item)
         if (!fiche) {
+          if (isLotDone(dones, -1)) continue
           itemsHtml += `<div style="margin:2px 0;color:#a85"><strong>×${realQty}</strong> ${item.title} <em>(à définir)</em></div>`
           continue
         }
@@ -682,7 +715,10 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         const label = TYPE_LABELS[typeGm] || typeGm
         let lotsHtml = ''
         if (fiche.parfum_normal) {
-          lotsHtml = ' <em style="color:#888">parfum normal</em>'
+          const parfumsLabel = Array.isArray(item.parfums) && item.parfums.length > 0
+            ? item.parfums.join(', ')
+            : 'parfum normal'
+          lotsHtml = ` <em style="color:#888">${parfumsLabel}</em>`
         } else {
           for (const lot of (fiche.lots || [])) {
             const couleur = findCol(lot.couleur_id)
