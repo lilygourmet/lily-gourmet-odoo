@@ -560,9 +560,9 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
             </button>
           )}
         </div>
-        {/* Navigation semaine (au centre/gauche) */}
+        {/* Navigation semaine (centree) */}
         {!isSearching && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0 mx-auto">
             <button
               onClick={() => setCurrentMonday(addDays(currentMonday, -7))}
               className="w-8 h-8 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"

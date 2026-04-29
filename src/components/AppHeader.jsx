@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { isAdmin, canRecaps, canSync } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
@@ -22,6 +22,26 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [showPalette, setShowPalette] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState('')
+  const [lastSyncAt, setLastSyncAt] = useState(() => {
+    const v = localStorage.getItem('lastSyncAt')
+    return v ? new Date(v) : null
+  })
+  const [, setNow] = useState(0)
+
+  // Refresh affichage relatif chaque minute
+  useEffect(() => {
+    const t = setInterval(() => setNow(n => n + 1), 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  function fmtRelative(d) {
+    if (!d) return ''
+    const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+    if (diff < 60) return 'à l\'instant'
+    if (diff < 3600) return `il y a ${Math.floor(diff / 60)}min`
+    if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+  }
 
   async function handleSync() {
     if (syncing) return
@@ -36,6 +56,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
       setSyncStatus('Synchronisé')
+      const now = new Date()
+      setLastSyncAt(now)
+      localStorage.setItem('lastSyncAt', now.toISOString())
       if (onSyncSuccess) onSyncSuccess()
       setTimeout(() => setSyncStatus(''), 2500)
     } catch (e) {
@@ -96,24 +119,31 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {/* Sync */}
           {userCanSync && (
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
-              title="Synchroniser depuis Odoo"
-            >
-              {syncing ? (
-                <>
-                  <span>⏳</span>
-                  <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
-                </>
-              ) : (
-                <>
-                  <span>🔄</span>
-                  <span className="hidden sm:inline">SYNC</span>
-                </>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
+                title={lastSyncAt ? `Dernière synchro : ${lastSyncAt.toLocaleString('fr-FR')}` : 'Synchroniser depuis Odoo'}
+              >
+                {syncing ? (
+                  <>
+                    <span>⏳</span>
+                    <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🔄</span>
+                    <span className="hidden sm:inline">SYNC</span>
+                  </>
+                )}
+              </button>
+              {lastSyncAt && !syncing && (
+                <span className="font-mono text-[9px] text-ink-mute hidden md:inline">
+                  {fmtRelative(lastSyncAt)}
+                </span>
               )}
-            </button>
+            </div>
           )}
 
           {/* Roue (admin only) */}
