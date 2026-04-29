@@ -269,7 +269,14 @@ function detectPrefixAndCategory(productName) {
 
 async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) {
   const allRows = []
-  const cancelledOdooLineIds = []
+  const activeLineIds = new Set()      // Lignes Odoo encore valides (qty>0, commande non annulee)
+  const obsoleteLineIds = new Set()    // Lignes a supprimer (cancel, qty=0, acompte)
+
+  // Bornes de la fenetre de sync (meme calcul que fetchOdooOrders)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const in14Days = new Date(today)
+  in14Days.setDate(in14Days.getDate() + 14)
 
   for (const odooOrder of odooOrders) {
     const orderNum = odooOrder.name
@@ -277,11 +284,9 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
 
     const odooLines = linesByOrderId.get(odooOrder.id) || []
 
-    // Si la commande est annulee, on collecte ses odoo_line_id pour les supprimer apres
+    // Commande annulee : toutes ses lignes sont obsoletes
     if (odooOrder.state === 'cancel') {
-      for (const line of odooLines) {
-        cancelledOdooLineIds.push(line.id)
-      }
+      for (const line of odooLines) obsoleteLineIds.add(line.id)
       continue
     }
 
@@ -293,24 +298,23 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
       ? odooOrder.partner_id[1]
       : null
 
-    // order_id Supabase si la commande a ete syncee dans `orders` (cas CD/GM)
-    // sinon null (cas commande 100% E-/MI-/SA-/etc.)
     const supabaseOrderId = orderIdMap.get(odooOrder.id) || null
 
     for (const line of odooLines) {
       const productName = (line.name || '').trim()
-      if (!productName) continue
-
       const qty = parseFloat(line.product_uom_qty) || 0
-      if (qty === 0) continue
+      const isAcompte = /^(Acompte|Down\s+Payment)/i.test(productName)
+
+      // Ligne obsolete : qty<=0, nom vide, ou acompte
+      if (!productName || qty <= 0 || isAcompte) {
+        obsoleteLineIds.add(line.id)
+        continue
+      }
 
       const qtyDelivered = parseFloat(line.qty_delivered) || 0
-
-      // Skip les lignes Acompte / Down Payment (ce sont des montants, pas des produits)
-      if (/^(Acompte|Down\s+Payment)/i.test(productName)) continue
-
       const { prefix, category } = detectPrefixAndCategory(productName)
 
+      activeLineIds.add(line.id)
       allRows.push({
         order_id: supabaseOrderId,
         odoo_line_id: line.id,
@@ -326,30 +330,67 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
     }
   }
 
-  // Supprimer les lignes des commandes annulees (passees a cancel)
-  if (cancelledOdooLineIds.length > 0) {
-    const { error: delErr } = await supabase
-      .from('sales_lines')
-      .delete()
-      .in('odoo_line_id', cancelledOdooLineIds)
-    if (delErr) {
-      console.error('[sync sales_lines] erreur suppression annulees:', delErr)
-    } else {
-      console.log(`[sync sales_lines] ${cancelledOdooLineIds.length} lignes annulees supprimees`)
+  // 1) Supprimer toutes les lignes obsoletes (annulees / qty 0 / acompte) ET
+  //    toutes les lignes orphelines dans la fenetre (= en DB mais plus dans Odoo,
+  //    typiquement supprimees manuellement d'une commande qui reste active)
+  const fmtDate = (d) => {
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  }
+  const dateStart = fmtDate(today)
+  const dateEnd = fmtDate(new Date(in14Days.getTime() + 86399999))
+
+  // Recuperer toutes les lignes existantes en DB dans la fenetre
+  const { data: existingDbLines, error: fetchErr } = await supabase
+    .from('sales_lines')
+    .select('odoo_line_id')
+    .gte('delivery_at', dateStart)
+    .lte('delivery_at', dateEnd)
+
+  if (fetchErr) {
+    console.error('[sync sales_lines] erreur fetch existing:', fetchErr)
+  }
+
+  const toDeleteIds = new Set(obsoleteLineIds)
+  if (existingDbLines) {
+    for (const row of existingDbLines) {
+      // Si une ligne en DB n'est plus active dans Odoo => orpheline => a supprimer
+      if (!activeLineIds.has(row.odoo_line_id)) {
+        toDeleteIds.add(row.odoo_line_id)
+      }
     }
   }
 
-  if (allRows.length === 0) return
+  if (toDeleteIds.size > 0) {
+    const idsArr = Array.from(toDeleteIds)
+    // Batch par 500 pour eviter les URL trop longues
+    for (let i = 0; i < idsArr.length; i += 500) {
+      const slice = idsArr.slice(i, i + 500)
+      const { error: delErr } = await supabase
+        .from('sales_lines')
+        .delete()
+        .in('odoo_line_id', slice)
+      if (delErr) {
+        console.error('[sync sales_lines] erreur suppression:', delErr)
+      }
+    }
+    console.log(`[sync sales_lines] ${toDeleteIds.size} lignes supprimees (annulees/qty0/orphelines)`)
+  }
 
-  // Upsert sur odoo_line_id (chaque ligne Odoo a un id unique)
+  // 2) Upsert des lignes actives
+  if (allRows.length === 0) {
+    console.log('[sync sales_lines] aucune ligne active')
+    return
+  }
+
   const { error } = await supabase
     .from('sales_lines')
     .upsert(allRows, { onConflict: 'odoo_line_id' })
 
   if (error) {
-    console.error('[sync sales_lines] erreur:', error)
+    console.error('[sync sales_lines] erreur upsert:', error)
   } else {
-    console.log(`[sync sales_lines] ${allRows.length} lignes mises a jour`)
+    console.log(`[sync sales_lines] ${allRows.length} lignes actives mises a jour`)
   }
 }
 
