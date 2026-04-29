@@ -410,7 +410,11 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-[12px] font-medium text-ink">{TYPE_LABELS[typeGm]} ({realQty})</span>
             {fiche.is_mixte && <span className="text-[9px] font-mono text-bordeaux uppercase tracking-wider">MIXTE</span>}
-            {fiche.parfum_normal && <span className="text-[10px] text-ink-mute italic">parfum normal</span>}
+            {fiche.parfum_normal && (
+              <span className="text-[10px] text-ink-mute italic">
+                parfum normal{(fiche.odoo_parfums && fiche.odoo_parfums.length > 0) ? ` · ${fiche.odoo_parfums.join(', ')}` : ''}
+              </span>
+            )}
           </div>
           {fiche.note_patissier && (
             <div className="text-[10px] text-amber-700 italic mt-0.5">📝 {fiche.note_patissier}</div>
@@ -682,7 +686,10 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         const label = TYPE_LABELS[typeGm] || typeGm
         let lotsHtml = ''
         if (fiche.parfum_normal) {
-          lotsHtml = ' <em style="color:#888">parfum normal</em>'
+          const parfumLabel = (fiche.odoo_parfums && fiche.odoo_parfums.length > 0)
+            ? fiche.odoo_parfums.join(', ')
+            : 'parfum normal'
+          lotsHtml = ` <em style="color:#888">${parfumLabel} <span style="color:#bbb">(parfum normal)</span></em>`
         } else {
           for (const lot of (fiche.lots || [])) {
             const couleur = findCol(lot.couleur_id)
