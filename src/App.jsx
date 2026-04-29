@@ -16,10 +16,11 @@ function App() {
     const stored = getCurrentUser()
     setUser(stored)
     if (stored) {
-      // Vue par défaut selon le role/permissions
+      // Vue par défaut selon le role/permissions (priorité : recap > calendrier > prod-only > patissier > calendar)
       if (stored.role === 'recap') setActiveView('recap')
+      else if (stored.role === 'admin') setActiveView('calendar')
+      else if (stored.perm_calendar) setActiveView('calendar')
       else if (isProdOnly(stored)) {
-        // Si seulement perm_sales : vue sales par defaut, sinon prod
         if (stored.perm_sales && !stored.perm_prod) setActiveView('sales')
         else setActiveView('prod')
       }
@@ -32,6 +33,8 @@ function App() {
   function handleLoginSuccess(u) {
     setUser(u)
     if (u.role === 'recap') setActiveView('recap')
+    else if (u.role === 'admin') setActiveView('calendar')
+    else if (u.perm_calendar) setActiveView('calendar')
     else if (isProdOnly(u)) {
       if (u.perm_sales && !u.perm_prod) setActiveView('sales')
       else setActiveView('prod')

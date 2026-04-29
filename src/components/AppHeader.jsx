@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { isAdmin, canRecaps, canSync } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -94,8 +94,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       <div className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
         {/* Logo cliquable -> calendrier */}
         <button
-          onClick={() => admin && onNavigate && onNavigate('calendar')}
-          className={`flex items-center gap-2.5 ${admin ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} flex-shrink-0`}
+          onClick={() => canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
+          className={`flex items-center gap-2.5 ${canSeeCalendar(user) ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} flex-shrink-0`}
         >
           <img src="/Logo_LG.jpg" alt="Lily Gourmet" className="w-8 h-8 object-contain" />
           <div className="hidden sm:block text-left">
@@ -108,7 +108,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Navigation */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {navBtn('calendar', '📅', 'Calendrier', admin)}
+          {navBtn('calendar', '📅', 'Calendrier', canSeeCalendar(user))}
           {navBtn('recap', '📊', 'Récap', canRecaps(user))}
           {navBtn('prod', '🥐', 'Prod', admin || (isProdUser && user.perm_prod))}
           {navBtn('sales', '🥪', 'Salés', admin || (isProdUser && user.perm_sales))}
@@ -117,33 +117,33 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Actions : sync + roue + logout */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* Sync */}
+          {/* Heure derniere sync : visible pour tous */}
+          {lastSyncAt && !syncing && (
+            <span className="font-mono text-[9px] text-ink-mute hidden md:inline" title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}>
+              sync {fmtRelative(lastSyncAt)}
+            </span>
+          )}
+
+          {/* Sync (bouton) seulement si user a la perm */}
           {userCanSync && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
-                title={lastSyncAt ? `Dernière synchro : ${lastSyncAt.toLocaleString('fr-FR')}` : 'Synchroniser depuis Odoo'}
-              >
-                {syncing ? (
-                  <>
-                    <span>⏳</span>
-                    <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <span>🔄</span>
-                    <span className="hidden sm:inline">SYNC</span>
-                  </>
-                )}
-              </button>
-              {lastSyncAt && !syncing && (
-                <span className="font-mono text-[9px] text-ink-mute hidden md:inline">
-                  {fmtRelative(lastSyncAt)}
-                </span>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
+              title={lastSyncAt ? `Dernière synchro : ${lastSyncAt.toLocaleString('fr-FR')}` : 'Synchroniser depuis Odoo'}
+            >
+              {syncing ? (
+                <>
+                  <span>⏳</span>
+                  <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
+                </>
+              ) : (
+                <>
+                  <span>🔄</span>
+                  <span className="hidden sm:inline">SYNC</span>
+                </>
               )}
-            </div>
+            </button>
           )}
 
           {/* Roue (admin only) */}

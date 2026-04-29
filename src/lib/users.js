@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -26,27 +26,14 @@ export async function createUser({
   perm_sync = false, perm_check = false, perm_polys = false,
   perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false, perm_recaps = false, perm_define_gm = false,
   prod_category = null,
-  perm_prod = false, perm_sales = false, team_id = null,
+  perm_prod = false, perm_sales = false, team_id = null, perm_calendar = false,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
-      username,
-      password,
-      full_name,
-      role,
-      perm_sync,
-      perm_check,
-      perm_polys,
-      perm_delete,
-      perm_patissier,
-      perm_print_batch,
-      perm_print_single,
-      perm_recaps,
-      perm_define_gm,
-      prod_category,
-      perm_prod,
-      perm_sales,
-      team_id,
+      username, password, full_name, role,
+      perm_sync, perm_check, perm_polys, perm_delete, perm_patissier,
+      perm_print_batch, perm_print_single, perm_recaps, perm_define_gm,
+      prod_category, perm_prod, perm_sales, team_id, perm_calendar,
     },
   })
 
@@ -66,7 +53,7 @@ export async function updateUser(userId, {
   perm_sync, perm_check, perm_polys, perm_delete, perm_patissier,
   perm_print_batch, perm_print_single, perm_recaps, perm_define_gm,
   prod_category,
-  perm_prod, perm_sales, team_id,
+  perm_prod, perm_sales, team_id, perm_calendar,
 }) {
   const updates = {}
   if (username !== undefined) updates.username = username
@@ -86,6 +73,7 @@ export async function updateUser(userId, {
   if (perm_prod !== undefined) updates.perm_prod = perm_prod
   if (perm_sales !== undefined) updates.perm_sales = perm_sales
   if (team_id !== undefined) updates.team_id = team_id
+  if (perm_calendar !== undefined) updates.perm_calendar = perm_calendar
 
   const { data, error } = await supabase
     .from('profiles')

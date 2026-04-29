@@ -98,6 +98,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_prod: formData.permProd,
         perm_sales: formData.permSales,
         team_id: formData.teamId,
+        perm_calendar: formData.permCalendar,
       })
       setShowNewForm(false)
       await refresh()
@@ -126,6 +127,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_prod: formData.permProd,
         perm_sales: formData.permSales,
         team_id: formData.teamId,
+        perm_calendar: formData.permCalendar,
       })
       setEditingUser(null)
       await refresh()
@@ -528,6 +530,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
     permProd: initialData?.perm_prod || false,
     permSales: initialData?.perm_sales || false,
     teamId: initialData?.team_id || null,
+    permCalendar: initialData?.perm_calendar !== undefined ? initialData.perm_calendar : false,
   })
 
   function handleSubmit() {
@@ -663,6 +666,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
             checked={isAdmin || formData.permSync}
             onChange={v => update('permSync', v)}
           />
+          {(isAdmin || formData.permCalendar) && <>
           <PermCheckbox
             id="perm-check"
             label="✅ Cocher les étapes (Couvert / Fini / Rangé)"
@@ -681,12 +685,14 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
             checked={isAdmin || formData.permDelete}
             onChange={v => update('permDelete', v)}
           />
+          </>}
           <PermCheckbox
             id="perm-patissier"
             label="🧁 Mode Accessoires (voit uniquement les GM)"
             checked={isAdmin || formData.permPatissier}
             onChange={v => update('permPatissier', v)}
           />
+          {(isAdmin || formData.permCalendar) && <>
           <PermCheckbox
             id="perm-print-batch"
             label="🖨️ Imprimer toutes les commandes (batch)"
@@ -699,6 +705,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
             checked={isAdmin || formData.permPrintSingle}
             onChange={v => update('permPrintSingle', v)}
           />
+          </>}
           <PermCheckbox
             id="perm-recaps"
             label="📊 Voir les récaps de ventes"
@@ -713,10 +720,16 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [] }) {
           />
         </div>
 
-        {/* Vue Production : 2 checkboxes (prod + salés) */}
+        {/* Vue Production : 3 checkboxes (calendrier + prod + sales) */}
         <div className="mt-3 pt-3 border-t border-line">
           <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Vue production</div>
           <div className="flex flex-col gap-1">
+            <PermCheckbox
+              id="perm-calendar"
+              label="📅 Calendrier"
+              checked={isAdmin || formData.permCalendar}
+              onChange={v => update('permCalendar', v)}
+            />
             <PermCheckbox
               id="perm-prod"
               label="🥐 Production (E-, MI-, V-)"

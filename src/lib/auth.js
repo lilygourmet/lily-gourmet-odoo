@@ -134,6 +134,12 @@ export function canDefineGM(user) {
   return user.role === 'admin' || user.perm_define_gm === true
 }
 
+// User peut voir le calendrier (admin ou perm_calendar=true)
+export function canSeeCalendar(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_calendar === true
+}
+
 // Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false
@@ -150,10 +156,11 @@ export function canSeeSales(user) {
   return user.role === 'admin' || user.perm_sales === true
 }
 
-// User est en mode "prod-only" si il a perm_prod ou perm_sales mais n'est pas admin et pas patissier
+// User est en mode "prod-only" : pas admin, pas calendar, pas patissier, mais a perm_prod ou perm_sales
 export function isProdOnly(user) {
   if (!user) return false
   if (user.role === 'admin') return false
+  if (user.perm_calendar) return false
   if (user.perm_patissier) return false
   return user.perm_prod === true || user.perm_sales === true
 }
