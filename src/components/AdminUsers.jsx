@@ -101,6 +101,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         team_id: formData.teamId,
         perm_calendar: formData.permCalendar,
         perm_labels: formData.permLabels,
+        perm_freezer: formData.permFreezer,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -132,6 +133,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         team_id: formData.teamId,
         perm_calendar: formData.permCalendar,
         perm_labels: formData.permLabels,
+        perm_freezer: formData.permFreezer,
       })
       setEditingUser(null)
       await refresh()
@@ -554,6 +556,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     teamId: initialData?.team_id || null,
     permCalendar: initialData?.perm_calendar !== undefined ? initialData.perm_calendar : false,
     permLabels: initialData?.perm_labels !== undefined ? initialData.perm_labels : false,
+    permFreezer: initialData?.perm_freezer !== undefined ? initialData.perm_freezer : false,
   })
 
   function handleSubmit() {
@@ -740,6 +743,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="🏷️ Imprimer les étiquettes Zebra"
             checked={isAdmin || formData.permLabels}
             onChange={v => update('permLabels', v)}
+          />
+          <PermCheckbox
+            id="perm-freezer"
+            label="❄️ Voir liste sortie congélateur"
+            checked={isAdmin || formData.permFreezer}
+            onChange={v => update('permFreezer', v)}
           />
           <PermCheckbox
             id="perm-define-gm"

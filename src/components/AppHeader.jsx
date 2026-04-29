@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -114,6 +114,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {navBtn('prod', '🥐', 'Prod', admin || (isProdUser && user.perm_prod))}
           {navBtn('sales', '🥪', 'Salés', admin || (isProdUser && user.perm_sales))}
           {navBtn('patissier', '🧁', 'Accessoires', admin || isPatissierUser)}
+          {navBtn('freezer', '❄️', 'Sortie', canSeeFreezer(user))}
         </div>
 
         {/* Actions : sync + roue + logout */}

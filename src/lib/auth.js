@@ -146,6 +146,12 @@ export function canPrintLabels(user) {
   return user.role === 'admin' || user.perm_labels === true
 }
 
+// User peut voir la liste sortie congelo (admin ou perm_freezer=true)
+export function canSeeFreezer(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_freezer === true
+}
+
 // Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false

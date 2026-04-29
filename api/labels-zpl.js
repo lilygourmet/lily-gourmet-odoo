@@ -53,12 +53,37 @@ function fmtDateLine(dateStr, hour, minute) {
   return `${dow} ${dd}/${mm}/${yyyy} ${hh}:${min}`
 }
 
-// "20 cm CD* (Citron)" ou "15 cm cakedesign (Vanille)" -> "20 cm Citron"
-function parseComponentLabel(productName) {
+// Parse les noms de produits cakedesign Odoo :
+//  - "20 cm CD* (Citron)" / "15 cm cakedesign (Vanille)" -> "20 cm Citron"
+//  - "40x40 Cakedesign CD* (Praliné)" -> "40x40 Praliné"
+//  - "CD- Cakedesign Plaque supreme amande CD*" -> "Plaque suprême amande" (parfum ajoute apres)
+// Exclut "CD- Ganache cakedesign (...)" (ingredient)
+// Retourne { taille, parfum } ou null
+function parseComponent(productName) {
   if (!productName) return null
-  const m = productName.match(/(\d+)\s*cm\s+(?:CD\*?|cakedesign)\s*\(([^)]+)\)/i)
-  if (!m) return null
-  return `${m[1]} cm ${m[2].trim()}`
+  if (/ganache\s+cakedesign/i.test(productName)) return null
+
+  // Rond
+  let m = productName.match(/(\d+)\s*cm\s+(?:CD\*?|cakedesign)\s*\(([^)]+)\)/i)
+  if (m) return { taille: `${m[1]} cm`, parfum: m[2].trim() }
+
+  // Carre
+  m = productName.match(/(\d+)\s*x\s*(\d+)\s*cakedesign(?:\s+CD\*?)?\s*\(([^)]+)\)/i)
+  if (m) return { taille: `${m[1]}x${m[2]}`, parfum: m[3].trim() }
+
+  // Plaque supreme amande (parfum vient du parent)
+  if (/cakedesign\s+plaque\s+supreme\s+amande/i.test(productName)) {
+    return { taille: 'Plaque suprême amande', parfum: '' }
+  }
+
+  return null
+}
+
+// Utilitaire pour formater l'article : "15 cm Vanille" / "40x40 Praliné" / "Plaque suprême amande Vanille"
+function formatArticleLine(taille, parfum) {
+  if (!taille) return ''
+  if (!parfum) return taille
+  return `${taille} ${parfum}`
 }
 
 function escZpl(s) {
@@ -94,18 +119,21 @@ async function fetchLabelsForDate(date, uid) {
 
   if (!productions.length) return []
 
-  // 2) On filtre les MO ENFANTS (au format "X cm cakedesign|CD*")
+  // 2) On filtre les MO ENFANTS (cakedesign : ronds, carrés, plaques)
   const childMos = []
   for (const p of productions) {
     const productName = Array.isArray(p.product_id) ? p.product_id[1] : p.product_id
     if (!productName) continue
-    if (!/cm\s+(?:CD\*?|cakedesign)/i.test(productName)) continue
+    const parsed = parseComponent(productName)
+    if (!parsed) continue
     childMos.push({
       id: p.id,
       name: p.name,
       productName,
       productQty: p.product_qty || 1,
       origin: p.origin || '',
+      taille: parsed.taille,
+      parfum: parsed.parfum,
     })
   }
 
@@ -118,20 +146,24 @@ async function fetchLabelsForDate(date, uid) {
   // On collecte tous les noms de parents a chercher
   const parentNames = [...new Set(childMos.map(c => c.origin).filter(o => /^WHLVP\/MO\//i.test(o)))]
 
-  // 4) On charge tous ces parents en 1 seule requete (sans filtre de date, peut etre n'importe quand)
-  let parentMap = {}  // name -> origin (qui contient le scode)
+  // 4) On charge tous ces parents en 1 seule requete + leur product_id (pour Plaque)
+  let parentMap = {}  // name -> { scode, productName }
   if (parentNames.length > 0) {
     const parents = await odooSearchRead(uid, 'mrp.production', [
       ['name', 'in', parentNames],
-    ], ['id', 'name', 'origin'])
+    ], ['id', 'name', 'origin', 'product_id'])
     for (const par of parents) {
       const m = (par.origin || '').match(/S\d{3,}/i)
-      if (m) parentMap[par.name] = m[0].toUpperCase()
+      const parentProductName = Array.isArray(par.product_id) ? par.product_id[1] : ''
+      parentMap[par.name] = {
+        scode: m ? m[0].toUpperCase() : '',
+        productName: parentProductName,
+      }
     }
   }
 
   // 5) On charge les heures de livraison via sale.order
-  const scodes = [...new Set(Object.values(parentMap))]
+  const scodes = [...new Set(Object.values(parentMap).map(p => p.scode).filter(Boolean))]
   const orderInfo = {}
   if (scodes.length > 0) {
     const orders = await odooSearchRead(uid, 'sale.order', [['name', 'in', scodes]],
@@ -142,10 +174,17 @@ async function fetchLabelsForDate(date, uid) {
   // 6) On genere les etiquettes
   const labels = []
   for (const child of childMos) {
-    const articleLine = parseComponentLabel(child.productName)
-    if (!articleLine) continue
-    const scode = parentMap[child.origin]
+    const parent = parentMap[child.origin] || { scode: '', productName: '' }
+    const scode = parent.scode
     if (!scode) continue
+    // Si pas de parfum (cas Plaque suprême amande), extraire du parent
+    let parfum = child.parfum
+    if (!parfum && parent.productName) {
+      const pm = parent.productName.match(/\(([^,)]+)(?:,\s*([^)]+))?\)/)
+      if (pm) parfum = (pm[2] || pm[1] || '').trim()
+    }
+    const articleLine = formatArticleLine(child.taille, parfum)
+    if (!articleLine) continue
     const ord = orderInfo[scode]
     let hour = 0, minute = 0
     if (ord && ord.commitment_date) {
