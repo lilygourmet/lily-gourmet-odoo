@@ -425,6 +425,39 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
     printHtml(html, `Recap ventes - ${dateLabel}`)
   }
 
+  // ============================================================
+  // Helpers pour les boutons rapides de date
+  // ============================================================
+  // Calcule un yyyy-mm-dd a partir d'aujourd'hui + offset (en jours)
+  function dateOffset(days) {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  // Calcule l'offset entre la date selectionnee et aujourd'hui (en jours)
+  const selectedOffset = (() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const sel = new Date(date); sel.setHours(0, 0, 0, 0)
+    return Math.round((sel - today) / (1000 * 60 * 60 * 24))
+  })()
+
+  // Bouton rapide pour une date relative
+  function QuickDateBtn({ offset, label }) {
+    const isActive = selectedOffset === offset
+    return (
+      <button
+        onClick={() => setDate(dateOffset(offset))}
+        className={`px-3 py-1 rounded-full text-[10px] font-medium tracking-wider transition-all ${
+          isActive
+            ? 'bg-bordeaux text-cream border border-bordeaux'
+            : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
+        }`}
+      >
+        {label}
+      </button>
+    )
+  }
+
   return (
     <>
       {fullscreen && (
@@ -433,17 +466,42 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           activeView={activeView || 'recap'}
           onNavigate={onNavigate}
           onLogout={onLogout}
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[10px] tracking-[0.2em] text-bordeaux font-bold uppercase">📊 Récap</span>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                   className="px-2.5 py-1 border border-line rounded-full text-[11px] bg-cream focus:outline-none focus:border-bordeaux"/>
-            <button onClick={handlePrintAll}
-                    className="px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[10px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all">
-              🖨 Tout imprimer
-            </button>
+        />
+      )}
+
+      {/* Sous-header Recap : selecteur de date + boutons rapides + imprimer */}
+      {fullscreen && (
+        <div className="bg-cream-warm/30 border-b border-line py-3 px-4 sticky top-[57px] z-20 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-fraunces italic text-[18px] text-ink">📊 Récap</span>
+              <span className="capitalize font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux font-bold ml-1">
+                {dateLabel}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Boutons rapides */}
+              <QuickDateBtn offset={0} label="Aujourd'hui" />
+              <QuickDateBtn offset={1} label="Demain" />
+              <QuickDateBtn offset={2} label="+2j" />
+              <QuickDateBtn offset={3} label="+3j" />
+              {/* Selecteur de date libre (toutes dates passees ET futures) */}
+              <input
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                className="px-2.5 py-1 border border-line rounded-full text-[11px] bg-cream focus:outline-none focus:border-bordeaux"
+                title="Choisir n'importe quelle date"
+              />
+              <button
+                onClick={handlePrintAll}
+                className="px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[10px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all"
+              >
+                🖨 Tout imprimer
+              </button>
+            </div>
           </div>
-        </AppHeader>
+        </div>
       )}
 
       <div className={fullscreen
@@ -461,6 +519,10 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                 <h2 className="font-fraunces italic text-[24px] font-medium text-ink">Récap des ventes</h2>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                <QuickDateBtn offset={0} label="Aujourd'hui" />
+                <QuickDateBtn offset={1} label="Demain" />
+                <QuickDateBtn offset={2} label="+2j" />
+                <QuickDateBtn offset={3} label="+3j" />
                 <input type="date" value={date} onChange={e => setDate(e.target.value)}
                        className="px-3 py-2 border border-line rounded-full text-[13px] bg-cream focus:outline-none focus:border-bordeaux"/>
                 <button onClick={handlePrintAll}
