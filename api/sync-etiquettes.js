@@ -140,11 +140,12 @@ async function fetchEtiquettesArticles(uid) {
   const filtered = []
   for (const t of all) {
     const cat = detectCategory(t.name)
-    if (!cat) continue
+    if (cat === null) continue
     if (/plateau/i.test(t.name)) continue           // pas de plateaux
     if (/miss\s*pistache/i.test(t.name)) continue   // exclu
     if (/paris\s*brest/i.test(t.name)) continue     // exclu
     if (/maatouk/i.test(t.name)) continue           // exclu (Supreme amande/pistache Maatouk)
+    if (/\btatin\b/i.test(t.name)) continue         // exclu
 
     filtered.push({
       odoo_template_id: t.id,

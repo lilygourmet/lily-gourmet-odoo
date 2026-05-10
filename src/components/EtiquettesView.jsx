@@ -29,7 +29,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
 
   // Articles filtres : exclusions + tri alpha cote client (au cas ou DB pas a jour)
   const cleanedArticles = useMemo(() => {
-    const excludePatterns = [/miss\s*pistache/i, /paris\s*brest/i, /maatouk/i, /plateau/i]
+    const excludePatterns = [/miss\s*pistache/i, /paris\s*brest/i, /maatouk/i, /plateau/i, /\btatin\b/i]
     const cleaned = articles.filter(a => {
       for (const pat of excludePatterns) {
         if (pat.test(a.name)) return false
