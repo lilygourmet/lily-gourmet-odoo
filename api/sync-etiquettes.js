@@ -127,8 +127,7 @@ function detectCategory(name) {
 }
 
 async function fetchEtiquettesArticles(uid) {
-  // On recupere TOUS les product.template puis on filtre par prefixe
-  // (plus simple et fiable que de filtrer par nom dans Odoo)
+  // 1. Recupere TOUS les product.template puis filtre par prefixe
   const all = await odooSearchRead(uid, 'product.template',
     [
       ['sale_ok', '=', true],
@@ -138,29 +137,38 @@ async function fetchEtiquettesArticles(uid) {
     { limit: 5000 }
   )
 
-  const result = []
+  const filtered = []
   for (const t of all) {
     const cat = detectCategory(t.name)
     if (!cat) continue
+    if (/plateau/i.test(t.name)) continue   // exclure les plateaux
 
-    // Exclure les plateaux (trop gros, pas pour etiquettes)
-    if (/plateau/i.test(t.name)) continue
-
-    result.push({
+    filtered.push({
       odoo_template_id: t.id,
       category: cat,
       name: t.name,
       sale_ok: !!t.sale_ok,
       image_b64: t.image_1024 || null,
       sequence: t.sequence || 0,
-      // Tailles : pour les entremets uniquement (5/10/15/20 standard)
-      // Tiramisu et autres exceptions seront geres cote UI selon ce qui existe
-      sizes: cat === 'cd' ? ENTREMETS_SIZES : null,
+      sizes: null,   // sera rempli juste apres pour les entremets
     })
   }
 
-  // Tri par categorie puis sequence puis nom
-  result.sort((a, b) => {
+  // 2. Pour les entremets (cd) : recuperer les vraies tailles via les variantes
+  const entremetsIds = filtered.filter(a => a.category === 'cd').map(a => a.odoo_template_id)
+  if (entremetsIds.length > 0) {
+    const sizesByTemplateId = await fetchEntremetsSizes(uid, entremetsIds)
+    for (const article of filtered) {
+      if (article.category === 'cd') {
+        const sizes = sizesByTemplateId.get(article.odoo_template_id)
+        // Si pas de variantes trouvees, fallback sur 5/10/15/20
+        article.sizes = sizes && sizes.length > 0 ? sizes : ENTREMETS_SIZES
+      }
+    }
+  }
+
+  // 3. Tri par categorie puis sequence puis nom
+  filtered.sort((a, b) => {
     if (a.category !== b.category) {
       const order = { cd: 0, gs: 1, su: 2 }
       return order[a.category] - order[b.category]
@@ -168,6 +176,68 @@ async function fetchEtiquettesArticles(uid) {
     if (a.sequence !== b.sequence) return a.sequence - b.sequence
     return a.name.localeCompare(b.name)
   })
+
+  return filtered
+}
+
+// Recupere les tailles reelles (en personnes) depuis les variantes Odoo
+// Les tailles sont des "product.attribute.value" liees au template via attribute_line_ids
+async function fetchEntremetsSizes(uid, templateIds) {
+  const result = new Map()
+
+  // 1. Recupere les attribute lines pour ces templates
+  const attrLines = await odooSearchRead(uid, 'product.template.attribute.line',
+    [
+      ['product_tmpl_id', 'in', templateIds],
+    ],
+    ['id', 'product_tmpl_id', 'attribute_id', 'value_ids'],
+    { limit: 5000 }
+  )
+
+  // 2. Collecte tous les value_ids pour les charger en une fois
+  const allValueIds = new Set()
+  for (const line of attrLines) {
+    if (Array.isArray(line.value_ids)) {
+      for (const v of line.value_ids) allValueIds.add(v)
+    }
+  }
+
+  if (allValueIds.size === 0) return result
+
+  // 3. Charge les valeurs (ex: "5", "10", "15"...)
+  const values = await odooSearchRead(uid, 'product.attribute.value',
+    [['id', 'in', Array.from(allValueIds)]],
+    ['id', 'name', 'attribute_id'],
+    { limit: 5000 }
+  )
+
+  const valueById = new Map()
+  for (const v of values) {
+    valueById.set(v.id, v)
+  }
+
+  // 4. Pour chaque template, extraire les tailles numeriques
+  // On filtre uniquement les valeurs qui sont des nombres (= "Nombre de personnes")
+  for (const line of attrLines) {
+    const tmplId = Array.isArray(line.product_tmpl_id) ? line.product_tmpl_id[0] : line.product_tmpl_id
+    if (!result.has(tmplId)) result.set(tmplId, [])
+
+    for (const valueId of (line.value_ids || [])) {
+      const v = valueById.get(valueId)
+      if (!v) continue
+      // Le nom de la valeur est typiquement "5", "10", "15", "20"
+      const num = parseInt(String(v.name).trim(), 10)
+      if (!isNaN(num) && num >= 1 && num <= 100) {
+        result.get(tmplId).push(num)
+      }
+    }
+  }
+
+  // 5. Pour chaque template : tri + dedup + EXCLUSION du 1 (individuels)
+  for (const [tmplId, sizes] of result.entries()) {
+    const unique = [...new Set(sizes)].filter(s => s > 1).sort((a, b) => a - b)
+    result.set(tmplId, unique)
+  }
 
   return result
 }

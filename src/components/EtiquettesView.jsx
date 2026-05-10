@@ -212,7 +212,7 @@ export default function EtiquettesView({ user }) {
 
 function ArticleCard({ article, qtys, setQty, getQty }) {
   const isEntremets = article.category === 'cd'
-  const sizes = isEntremets ? (article.sizes || ENTREMETS_SIZES) : null
+  const sizes = isEntremets ? (Array.isArray(article.sizes) && article.sizes.length > 0 ? article.sizes : []) : null
 
   // Total selectionne pour cet article (toutes tailles confondues)
   const totalForArticle = sizes
