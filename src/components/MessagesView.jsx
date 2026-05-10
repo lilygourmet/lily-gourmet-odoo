@@ -10,13 +10,16 @@ import {
 
 // ============================================================
 // MessagesView : impression d'etiquettes messages
-// Format etiquette 10x29.7 cm portrait, 5 zones
+// Format : A4 portrait avec colonne centrale de 10,5cm (la feuille
+// est coupee en deux apres impression)
+// 5 zones de 5,94cm de haut, centrees verticalement
 // ============================================================
 
 const FONT_OPTIONS = [
   { id: 'pacifico', label: 'Cursive (Pacifico)', css: "'Pacifico', cursive" },
   { id: 'dancing', label: 'Dancing Script', css: "'Dancing Script', cursive" },
   { id: 'sacramento', label: 'Sacramento', css: "'Sacramento', cursive" },
+  { id: 'great', label: 'Great Vibes', css: "'Great Vibes', cursive" },
   { id: 'serif', label: 'Serif', css: "Georgia, 'Times New Roman', serif" },
   { id: 'sans', label: 'Sans-serif', css: "system-ui, -apple-system, sans-serif" },
 ]
@@ -33,13 +36,15 @@ const ARABIC_FONT_OPTIONS = [
 export default function MessagesView({ user, activeView, onNavigate, onLogout }) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('cd')   // 'cd' | 'prod'
   const [selected, setSelected] = useState(new Set())
-  const [doubleSize, setDoubleSize] = useState(new Set())   // ids des messages en x2
-  const [editing, setEditing] = useState({})                 // id -> texte modifie
+  const [doubleSize, setDoubleSize] = useState(new Set())
+  const [editing, setEditing] = useState({})
   const [showPrinted, setShowPrinted] = useState(false)
   const [latinFont, setLatinFont] = useState(FONT_OPTIONS[0])
   const [arabicFont, setArabicFont] = useState(ARABIC_FONT_OPTIONS[0])
-  const [freeMessages, setFreeMessages] = useState([])       // messages libres ajoutes
+  const [sizeFactor, setSizeFactor] = useState(100)   // 50 a 150% override de l'auto-fit
+  const [freeMessages, setFreeMessages] = useState([])
   const [showFreeForm, setShowFreeForm] = useState(false)
   const [freeText, setFreeText] = useState('')
 
@@ -57,14 +62,13 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
   useEffect(() => { refresh() }, [])
 
-  // Charger Google Fonts une fois
   useEffect(() => {
     const id = 'messages-view-fonts'
     if (document.getElementById(id)) return
     const link = document.createElement('link')
     link.id = id
     link.rel = 'stylesheet'
-    link.href = 'https://fonts.googleapis.com/css2?family=Pacifico&family=Dancing+Script:wght@400;700&family=Sacramento&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Reem+Kufi:wght@400;700&family=El+Messiri:wght@400;700&family=Tajawal:wght@400;700&display=swap'
+    link.href = 'https://fonts.googleapis.com/css2?family=Pacifico&family=Dancing+Script:wght@400;700&family=Sacramento&family=Great+Vibes&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Reem+Kufi:wght@400;700&family=El+Messiri:wght@400;700&family=Tajawal:wght@400;700&display=swap'
     document.head.appendChild(link)
   }, [])
 
@@ -75,37 +79,31 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   const cdMessages = useMemo(() => orderMessages.filter(m => m.source === 'cd'), [orderMessages])
   const prodMessages = useMemo(() => orderMessages.filter(m => m.source === 'prod'), [orderMessages])
 
-  // allMessages = libres + commandes (pour la pagination feuilles)
   const allMessages = useMemo(() => {
     return [...freeMessages, ...orderMessages]
   }, [freeMessages, orderMessages])
 
+  const currentTabMessages = activeTab === 'cd' ? cdMessages : prodMessages
+
   function toggleSelect(id) {
     const next = new Set(selected)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+    if (next.has(id)) next.delete(id); else next.add(id)
     setSelected(next)
   }
-
   function toggleDouble(id) {
     const next = new Set(doubleSize)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+    if (next.has(id)) next.delete(id); else next.add(id)
     setDoubleSize(next)
   }
-
   function getMessageText(msg) {
     return editing[msg.id] !== undefined ? editing[msg.id] : msg.text
   }
-
   function setMessageText(id, text) {
     setEditing(e => ({ ...e, [id]: text }))
   }
-
-  function selectAll() {
-    setSelected(new Set(allMessages.map(m => m.id)))
+  function selectAllInTab() {
+    setSelected(new Set([...selected, ...currentTabMessages.map(m => m.id), ...freeMessages.map(m => m.id)]))
   }
-
   function clearAll() {
     setSelected(new Set())
   }
@@ -115,16 +113,10 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     if (!t) return
     const id = `libre:${Date.now()}`
     setFreeMessages(prev => [...prev, {
-      id,
-      sourceKey: id,
-      type: 'free',
-      raw: t,
-      text: t,
+      id, sourceKey: id, type: 'free', source: 'free',
+      raw: t, text: t,
       isArabic: isArabic(t),
-      orderNum: null,
-      clientName: null,
-      deliveryAt: null,
-      printedAt: null,
+      orderNum: null, clientName: null, deliveryAt: null, printedAt: null,
     }])
     setSelected(prev => new Set([...prev, id]))
     setFreeText('')
@@ -137,13 +129,12 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     const nextD = new Set(doubleSize); nextD.delete(id); setDoubleSize(nextD)
   }
 
-  // Calculer les pages : chaque feuille = 5 zones, x2 = 2 zones
+  // Pages : 5 zones par feuille, x2 = 2 zones
   const pages = useMemo(() => {
     const selectedMsgs = allMessages.filter(m => selected.has(m.id))
     const pages = []
     let currentPage = []
     let currentZones = 0
-
     for (const msg of selectedMsgs) {
       const zones = doubleSize.has(msg.id) ? 2 : 1
       if (currentZones + zones > 5) {
@@ -158,23 +149,19 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     return pages
   }, [allMessages, selected, doubleSize])
 
-  // Imprimer : ouvrir window.print apres avoir genere le HTML
   async function handlePrint() {
     if (pages.length === 0) {
       alert('Aucun message selectionne')
       return
     }
     const html = buildPrintHtml(pages)
-    const w = window.open('', '_blank', 'width=400,height=900')
+    const w = window.open('', '_blank', 'width=600,height=900')
     if (!w) { alert('Popup bloquee'); return }
     w.document.write(html)
     w.document.close()
     w.focus()
-    setTimeout(() => {
-      w.print()
-    }, 500)
+    setTimeout(() => { w.print() }, 700)
 
-    // Marquer comme imprimes (les messages depuis commandes seulement)
     const toMark = allMessages.filter(m => selected.has(m.id) && m.type === 'order' && !m.printedAt)
     for (const msg of toMark) {
       try {
@@ -186,28 +173,70 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     refresh()
   }
 
+  // ============================================================
+  // Calcul auto-fit : taille de police pour remplir une zone
+  // Zone : 105mm large x 59,4mm haut (single) ou 118,8mm haut (double)
+  // Avec marges internes 10mm => surface utile ~95mm x ~50mm
+  // ============================================================
+  function computeFontSizes(text, zones, isLayout) {
+    const widthMm = 95
+    const heightMm = zones === 2 ? 109 : 50
+    const factor = sizeFactor / 100
+
+    if (isLayout) {
+      // greeting (~22% hauteur), nom (~60% hauteur)
+      const greetingMaxH = heightMm * 0.22
+      const nameMaxH = heightMm * 0.60
+
+      // Pour script fonts, hauteur cap ~ font-size * 0.7
+      // 1mm = 2.83pt
+      const greetingLen = 19   // "Joyeux Anniversaire"
+      const nameLen = Math.max(text.split(/\s+/).slice(1).join(' ').length, 5)
+
+      const greetingByH = greetingMaxH * 2.83 / 0.8
+      const greetingByW = (widthMm * 2.83) / (greetingLen * 0.55)
+      const greetingPt = Math.min(greetingByH, greetingByW) * factor
+
+      const nameByH = nameMaxH * 2.83 / 0.8
+      const nameByW = (widthMm * 2.83) / (nameLen * 0.55)
+      const namePt = Math.min(nameByH, nameByW) * factor
+
+      return {
+        greetingPt: Math.max(10, Math.min(greetingPt, 50)),
+        namePt: Math.max(24, Math.min(namePt, 180)),
+      }
+    } else {
+      const lines = text.split('\n')
+      const lineCount = Math.max(lines.length, 1)
+      const longestLine = Math.max(...lines.map(l => l.length), 5)
+
+      const byH = (heightMm / lineCount) * 2.83 / 0.8
+      const byW = (widthMm * 2.83) / (longestLine * 0.55)
+      const pt = Math.min(byH, byW) * factor
+
+      return { textPt: Math.max(14, Math.min(pt, 140)) }
+    }
+  }
+
   function buildPrintHtml(pages) {
     const renderMsg = (msg, zones) => {
       const text = getMessageText(msg)
       const ar = isArabic(text)
       const fontFamily = ar ? arabicFont.css : latinFont.css
       const layout = detectBirthdayLayout(text)
-      const heightCm = zones === 2 ? 11.88 : 5.94
+      const heightMm = zones === 2 ? 118.8 : 59.4
+      const sizes = computeFontSizes(text, zones, !!layout)
 
       let inner
       if (layout) {
-        // Format anniversaire : greeting petit en haut, nom plus gros
-        const nameSize = zones === 2 ? 56 : 36
         inner = `
-          <div style="font-family: ${fontFamily}; font-size: ${zones === 2 ? 28 : 20}px; line-height: 1; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(layout.greeting)}</div>
-          <div style="font-family: ${fontFamily}; font-size: ${nameSize}px; line-height: 1.1; margin-top: 4mm; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(layout.name)}</div>
+          <div style="font-family: ${fontFamily}; font-size: ${sizes.greetingPt}pt; line-height: 1; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(layout.greeting)}</div>
+          <div style="font-family: ${fontFamily}; font-size: ${sizes.namePt}pt; line-height: 1.05; margin-top: 4mm; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(layout.name)}</div>
         `
       } else {
-        // Texte libre : pas d'agrandissement
-        const size = zones === 2 ? 32 : 22
-        inner = `<div style="font-family: ${fontFamily}; font-size: ${size}px; line-height: 1.3; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(text)}</div>`
+        inner = `<div style="font-family: ${fontFamily}; font-size: ${sizes.textPt}pt; line-height: 1.2; white-space: pre-wrap; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(text)}</div>`
       }
-      return `<div class="msg" style="height: ${heightCm}cm;">${inner}<div class="cut"></div></div>`
+      return `<div class="msg" style="height: ${heightMm}mm;">${inner}<div class="cut"></div></div>`
     }
 
     const renderPage = (items) => {
@@ -219,34 +248,38 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       const remaining = 5 - usedZones
       const emptyTop = Math.floor(remaining / 2)
       const emptyBottom = remaining - emptyTop
-      const emptyTopHtml = emptyTop > 0 ? `<div class="empty" style="height: ${emptyTop * 5.94}cm;"></div>` : ''
-      const emptyBottomHtml = emptyBottom > 0 ? `<div class="empty" style="height: ${emptyBottom * 5.94}cm;"></div>` : ''
-      return `<div class="page">${emptyTopHtml}${html}${emptyBottomHtml}</div>`
+      const emptyTopHtml = emptyTop > 0 ? `<div style="height: ${emptyTop * 59.4}mm;"></div>` : ''
+      const emptyBottomHtml = emptyBottom > 0 ? `<div style="height: ${emptyBottom * 59.4}mm;"></div>` : ''
+      return `<div class="page"><div class="strip">${emptyTopHtml}${html}${emptyBottomHtml}</div></div>`
     }
 
     const css = `
-      @page { size: 100mm 297mm; margin: 0; }
+      @page { size: A4 portrait; margin: 0; }
       * { box-sizing: border-box; }
       html, body { margin: 0; padding: 0; }
       body { font-family: sans-serif; }
       .page {
-        width: 100mm; height: 297mm;
-        padding: 4mm; display: flex; flex-direction: column;
+        width: 210mm; height: 297mm;
+        display: flex; align-items: stretch; justify-content: center;
         page-break-after: always;
       }
       .page:last-child { page-break-after: auto; }
+      .strip {
+        width: 105mm; height: 297mm;
+        display: flex; flex-direction: column;
+      }
       .msg {
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         text-align: center;
-        padding: 4mm;
+        padding: 6mm 5mm;
         position: relative;
+        overflow: hidden;
       }
       .cut {
-        position: absolute; bottom: 0; left: 4mm; right: 4mm;
+        position: absolute; bottom: 0; left: 6mm; right: 6mm;
         border-top: 1px dashed #888;
       }
-      .empty { /* zone vide, pas de pointille */ }
       @media screen {
         body { background: #ddd; padding: 20px; }
         .page { background: white; margin: 0 auto 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
@@ -254,7 +287,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     `
     const pagesHtml = pages.map(renderPage).join('')
     return `<!doctype html><html><head><meta charset="utf-8"><title>Etiquettes</title>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pacifico&family=Dancing+Script:wght@400;700&family=Sacramento&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Reem+Kufi:wght@400;700&family=El+Messiri:wght@400;700&family=Tajawal:wght@400;700&display=swap">
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pacifico&family=Dancing+Script:wght@400;700&family=Sacramento&family=Great+Vibes&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Reem+Kufi:wght@400;700&family=El+Messiri:wght@400;700&family=Tajawal:wght@400;700&display=swap">
       <style>${css}</style></head><body>${pagesHtml}</body></html>`
   }
 
@@ -264,230 +297,199 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} onSyncSuccess={refresh} />
+
       <div className="max-w-6xl mx-auto px-4 py-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">💌</span>
-          <h1 className="font-mono text-[14px] tracking-[0.15em] uppercase text-bordeaux font-bold">
-            Messages
-          </h1>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">💌</span>
+            <h1 className="font-mono text-[14px] tracking-[0.15em] uppercase text-bordeaux font-bold">
+              Messages — Aujourd'hui
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowPrinted(!showPrinted)}
+              className={`text-[11px] px-3 py-1.5 rounded-full border transition-colors ${
+                showPrinted ? 'bg-bordeaux text-cream border-bordeaux' : 'border-line text-ink-soft hover:border-bordeaux'
+              }`}
+            >
+              {showPrinted ? '✓ Voir imprimés' : 'Voir imprimés'}
+            </button>
+            <button onClick={selectAllInTab} className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux">Tout cocher</button>
+            <button onClick={clearAll} className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux">Tout décocher</button>
+          </div>
         </div>
-        <div className="flex gap-2">
+
+        {/* Onglets CD / Prod */}
+        <div className="flex gap-1 mb-4 border-b border-line">
           <button
-            onClick={() => setShowPrinted(!showPrinted)}
-            className={`text-[11px] px-3 py-1.5 rounded-full border transition-colors ${
-              showPrinted
-                ? 'bg-bordeaux text-cream border-bordeaux'
-                : 'border-line text-ink-soft hover:border-bordeaux'
+            onClick={() => setActiveTab('cd')}
+            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
+              activeTab === 'cd' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
             }`}
           >
-            {showPrinted ? '✓ Voir imprimés' : 'Voir imprimés'}
+            🎂 Gâteaux ({cdMessages.length})
           </button>
           <button
-            onClick={selectAll}
-            className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux"
+            onClick={() => setActiveTab('prod')}
+            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
+              activeTab === 'prod' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
+            }`}
           >
-            Tout cocher
-          </button>
-          <button
-            onClick={clearAll}
-            className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux"
-          >
-            Tout décocher
+            🥐 Production ({prodMessages.length})
           </button>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        {/* Liste gauche */}
-        <div>
-          {/* Bouton + Message libre */}
-          {!showFreeForm && (
-            <button
-              onClick={() => setShowFreeForm(true)}
-              className="w-full mb-3 py-2 border-2 border-dashed border-bordeaux/40 rounded-lg text-bordeaux text-[12px] hover:bg-bordeaux/5"
-            >
-              + Ajouter un message libre
-            </button>
-          )}
-          {showFreeForm && (
-            <div className="bg-cream-warm border border-bordeaux/30 rounded-lg p-3 mb-3">
-              <textarea
-                value={freeText}
-                onChange={e => setFreeText(e.target.value)}
-                placeholder="Tapez votre message..."
-                className="w-full text-[13px] p-2 border border-line rounded resize-y min-h-[60px] mb-2"
-                autoFocus
-              />
-              <div className="flex flex-wrap gap-1 mb-2">
-                {EMOJI_PICKER.map(e => (
-                  <button
-                    key={e}
-                    onClick={() => setFreeText(t => t + e)}
-                    className="text-[16px] px-1.5 py-0.5 hover:bg-cream rounded"
-                  >{e}</button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={addFreeMessage}
-                  className="text-[11px] px-3 py-1 bg-bordeaux text-cream rounded"
-                >Ajouter</button>
-                <button
-                  onClick={() => { setShowFreeForm(false); setFreeText('') }}
-                  className="text-[11px] px-3 py-1 border border-line rounded text-ink-mute"
-                >Annuler</button>
-              </div>
-            </div>
-          )}
-
-          {/* Messages libres */}
-          {freeMessages.length > 0 && (
-            <div className="mb-4">
-              <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2">Messages libres</div>
-              {freeMessages.map(msg => (
-                <MessageItem
-                  key={msg.id}
-                  msg={msg}
-                  selected={selected.has(msg.id)}
-                  doubleSize={doubleSize.has(msg.id)}
-                  text={getMessageText(msg)}
-                  onToggle={() => toggleSelect(msg.id)}
-                  onToggleDouble={() => toggleDouble(msg.id)}
-                  onTextChange={t => setMessageText(msg.id, t)}
-                  onRemove={() => removeFreeMessage(msg.id)}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+          {/* Liste gauche */}
+          <div>
+            {/* Bouton + Message libre */}
+            {!showFreeForm && (
+              <button
+                onClick={() => setShowFreeForm(true)}
+                className="w-full mb-3 py-2 border-2 border-dashed border-bordeaux/40 rounded-lg text-bordeaux text-[12px] hover:bg-bordeaux/5"
+              >
+                + Ajouter un message libre
+              </button>
+            )}
+            {showFreeForm && (
+              <div className="bg-cream-warm border border-bordeaux/30 rounded-lg p-3 mb-3">
+                <textarea
+                  value={freeText}
+                  onChange={e => setFreeText(e.target.value)}
+                  placeholder="Tapez votre message... (Entrée = retour ligne)"
+                  className="w-full text-[13px] p-2 border border-line rounded resize-y min-h-[60px] mb-2"
+                  autoFocus
                 />
-              ))}
-            </div>
-          )}
-
-          {/* Messages par source */}
-          {loading ? (
-            <div className="text-center text-ink-mute italic py-8">Chargement...</div>
-          ) : cdMessages.length === 0 && prodMessages.length === 0 ? (
-            <div className="text-center text-ink-mute italic py-8">
-              {freeMessages.length === 0 ? "Aucun message aujourd'hui" : ''}
-            </div>
-          ) : (
-            <>
-              {/* Section CD (gateaux) */}
-              {cdMessages.length > 0 && (
-                <div className="mb-5">
-                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2 flex items-center gap-2">
-                    🎂 Gâteaux <span className="text-ink-mute font-normal">({cdMessages.length})</span>
-                  </div>
-                  <div className="space-y-2">
-                    {cdMessages.map(msg => (
-                      <MessageItem
-                        key={msg.id}
-                        msg={msg}
-                        selected={selected.has(msg.id)}
-                        doubleSize={doubleSize.has(msg.id)}
-                        text={getMessageText(msg)}
-                        onToggle={() => toggleSelect(msg.id)}
-                        onToggleDouble={() => toggleDouble(msg.id)}
-                        onTextChange={t => setMessageText(msg.id, t)}
-                      />
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {EMOJI_PICKER.map(e => (
+                    <button key={e} onClick={() => setFreeText(t => t + e)} className="text-[16px] px-1.5 py-0.5 hover:bg-cream rounded">{e}</button>
+                  ))}
                 </div>
-              )}
-
-              {/* Section Prod (entremets / mignardises) */}
-              {prodMessages.length > 0 && (
-                <div className="mb-5">
-                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2 flex items-center gap-2">
-                    🥐 Production <span className="text-ink-mute font-normal">({prodMessages.length})</span>
-                  </div>
-                  <div className="space-y-2">
-                    {prodMessages.map(msg => (
-                      <MessageItem
-                        key={msg.id}
-                        msg={msg}
-                        selected={selected.has(msg.id)}
-                        doubleSize={doubleSize.has(msg.id)}
-                        text={getMessageText(msg)}
-                        onToggle={() => toggleSelect(msg.id)}
-                        onToggleDouble={() => toggleDouble(msg.id)}
-                        onTextChange={t => setMessageText(msg.id, t)}
-                      />
-                    ))}
-                  </div>
+                <div className="flex gap-2">
+                  <button onClick={addFreeMessage} className="text-[11px] px-3 py-1 bg-bordeaux text-cream rounded">Ajouter</button>
+                  <button onClick={() => { setShowFreeForm(false); setFreeText('') }} className="text-[11px] px-3 py-1 border border-line rounded text-ink-mute">Annuler</button>
                 </div>
-              )}
-            </>
-          )}
-        </div>
+              </div>
+            )}
 
-        {/* Aperçu droite */}
-        <div className="space-y-3 lg:sticky lg:top-20 self-start">
-          <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux">
-            Aperçu ({pages.length} feuille{pages.length > 1 ? 's' : ''})
-          </div>
+            {/* Messages libres */}
+            {freeMessages.length > 0 && (
+              <div className="mb-4">
+                <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2">Messages libres</div>
+                <div className="space-y-2">
+                  {freeMessages.map(msg => (
+                    <MessageItem
+                      key={msg.id} msg={msg}
+                      selected={selected.has(msg.id)} doubleSize={doubleSize.has(msg.id)}
+                      text={getMessageText(msg)}
+                      onToggle={() => toggleSelect(msg.id)} onToggleDouble={() => toggleDouble(msg.id)}
+                      onTextChange={t => setMessageText(msg.id, t)}
+                      onRemove={() => removeFreeMessage(msg.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {pages.length === 0 ? (
-              <div className="text-center text-ink-mute italic text-[11px] py-4 border border-dashed border-line rounded">
-                Cochez des messages
+            {/* Messages de l'onglet actif */}
+            {loading ? (
+              <div className="text-center text-ink-mute italic py-8">Chargement...</div>
+            ) : currentTabMessages.length === 0 ? (
+              <div className="text-center text-ink-mute italic py-8">
+                {activeTab === 'cd' ? 'Aucun message gâteau' : 'Aucun message production'} aujourd'hui
               </div>
             ) : (
-              pages.map((page, i) => (
-                <PagePreview
-                  key={i}
-                  pageItems={page}
-                  latinFont={latinFont}
-                  arabicFont={arabicFont}
-                  getText={getMessageText}
-                />
-              ))
+              <div className="space-y-2">
+                {currentTabMessages.map(msg => (
+                  <MessageItem
+                    key={msg.id} msg={msg}
+                    selected={selected.has(msg.id)} doubleSize={doubleSize.has(msg.id)}
+                    text={getMessageText(msg)}
+                    onToggle={() => toggleSelect(msg.id)} onToggleDouble={() => toggleDouble(msg.id)}
+                    onTextChange={t => setMessageText(msg.id, t)}
+                  />
+                ))}
+              </div>
             )}
           </div>
 
-          <div>
-            <label className="text-[10px] text-ink-mute block mb-1">Police latine</label>
-            <select
-              value={latinFont.id}
-              onChange={e => setLatinFont(FONT_OPTIONS.find(f => f.id === e.target.value))}
-              className="w-full text-[12px] border border-line rounded px-2 py-1"
-            >
-              {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
-          </div>
+          {/* Aperçu droite */}
+          <div className="space-y-3 lg:sticky lg:top-20 self-start">
+            <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux">
+              Aperçu A4 ({pages.length} feuille{pages.length > 1 ? 's' : ''})
+            </div>
 
-          <div>
-            <label className="text-[10px] text-ink-mute block mb-1">Police arabe</label>
-            <select
-              value={arabicFont.id}
-              onChange={e => setArabicFont(ARABIC_FONT_OPTIONS.find(f => f.id === e.target.value))}
-              className="w-full text-[12px] border border-line rounded px-2 py-1"
-            >
-              {ARABIC_FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
-          </div>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {pages.length === 0 ? (
+                <div className="text-center text-ink-mute italic text-[11px] py-4 border border-dashed border-line rounded">
+                  Cochez des messages
+                </div>
+              ) : (
+                pages.map((page, i) => (
+                  <PagePreview
+                    key={i} pageItems={page}
+                    latinFont={latinFont} arabicFont={arabicFont}
+                    sizeFactor={sizeFactor}
+                    getText={getMessageText}
+                  />
+                ))
+              )}
+            </div>
 
-          <button
-            onClick={handlePrint}
-            disabled={selected.size === 0}
-            className="w-full py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            🖨 Imprimer ({selected.size} message{selected.size > 1 ? 's' : ''})
-          </button>
+            <div>
+              <label className="text-[10px] text-ink-mute block mb-1">Police latine</label>
+              <select
+                value={latinFont.id}
+                onChange={e => setLatinFont(FONT_OPTIONS.find(f => f.id === e.target.value))}
+                className="w-full text-[12px] border border-line rounded px-2 py-1"
+              >
+                {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10px] text-ink-mute block mb-1">Police arabe</label>
+              <select
+                value={arabicFont.id}
+                onChange={e => setArabicFont(ARABIC_FONT_OPTIONS.find(f => f.id === e.target.value))}
+                className="w-full text-[12px] border border-line rounded px-2 py-1"
+              >
+                {ARABIC_FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10px] text-ink-mute block mb-1">Taille texte ({sizeFactor}%)</label>
+              <input
+                type="range" min="50" max="150" step="5"
+                value={sizeFactor}
+                onChange={e => setSizeFactor(parseInt(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <button
+              onClick={handlePrint}
+              disabled={selected.size === 0}
+              className="w-full py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              🖨 Imprimer ({selected.size} message{selected.size > 1 ? 's' : ''})
+            </button>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   )
 }
 
 // ============================================================
-// Sous-composants
+// MessageItem : carte d'un message dans la liste
 // ============================================================
-
 function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble, onTextChange, onRemove }) {
   const [editing, setEditing] = useState(false)
   const ar = isArabic(text)
-
   const time = msg.deliveryAt ? new Date(msg.deliveryAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null
 
   return (
@@ -512,48 +514,41 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
             {msg.type === 'free' && <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full">libre</span>}
           </div>
           {editing ? (
-            <input
-              type="text"
+            <textarea
               value={text}
               onChange={e => onTextChange(e.target.value)}
               onBlur={() => setEditing(false)}
-              onKeyDown={e => { if (e.key === 'Enter') setEditing(false) }}
               autoFocus
-              className="w-full text-[13px] border border-bordeaux rounded px-1.5 py-0.5"
+              rows={Math.max(2, text.split('\n').length)}
+              className="w-full text-[13px] border border-bordeaux rounded px-1.5 py-1 resize-y"
               style={ar ? { direction: 'rtl', textAlign: 'right' } : {}}
             />
           ) : (
             <div
-              className="text-[13px] font-medium text-ink"
+              className="text-[13px] font-medium text-ink whitespace-pre-wrap"
               style={ar ? { direction: 'rtl', textAlign: 'right' } : {}}
             >{text}</div>
           )}
-          {msg.type === 'order' && msg.raw !== text && (
+          {msg.type === 'order' && msg.raw !== text && !editing && (
             <div className="text-[10px] text-ink-mute italic mt-0.5">Original : {msg.raw}</div>
           )}
         </div>
 
         <div className="flex flex-col gap-1 flex-shrink-0">
           <button
-            onClick={() => setEditing(true)}
-            className="text-[10px] px-2 py-0.5 border border-line rounded text-ink-mute hover:border-bordeaux hover:text-bordeaux"
+            onClick={() => setEditing(!editing)}
+            className={`text-[10px] px-2 py-0.5 border rounded ${editing ? 'bg-bordeaux text-cream border-bordeaux' : 'border-line text-ink-mute hover:border-bordeaux hover:text-bordeaux'}`}
             title="Modifier"
-          >✎</button>
+          >{editing ? '✓' : '✎'}</button>
           <button
             onClick={onToggleDouble}
             className={`text-[10px] px-2 py-0.5 rounded border ${
-              doubleSize
-                ? 'bg-amber-100 text-amber-800 border-amber-400'
-                : 'border-line text-ink-mute hover:border-bordeaux'
+              doubleSize ? 'bg-amber-100 text-amber-800 border-amber-400' : 'border-line text-ink-mute hover:border-bordeaux'
             }`}
             title="Double taille (occupe 2 zones)"
           >{doubleSize ? 'x2' : 'x1'}</button>
           {onRemove && (
-            <button
-              onClick={onRemove}
-              className="text-[10px] px-2 py-0.5 border border-line rounded text-red-700 hover:border-red-400"
-              title="Supprimer"
-            >×</button>
+            <button onClick={onRemove} className="text-[10px] px-2 py-0.5 border border-line rounded text-red-700 hover:border-red-400" title="Supprimer">×</button>
           )}
         </div>
       </div>
@@ -561,53 +556,68 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
   )
 }
 
-function PagePreview({ pageItems, latinFont, arabicFont, getText }) {
+// ============================================================
+// PagePreview : aperçu d'une feuille A4 avec colonne centrale 10,5cm
+// ============================================================
+function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText }) {
   const usedZones = pageItems.reduce((s, p) => s + p.zones, 0)
   const emptyZones = 5 - usedZones
   const emptyTop = Math.floor(emptyZones / 2)
   const emptyBottom = emptyZones - emptyTop
 
-  return (
-    <div className="bg-white border border-line rounded shadow-sm" style={{ width: '120px', aspectRatio: '10/29.7', padding: '4px', display: 'flex', flexDirection: 'column', margin: '0 auto' }}>
-      {emptyTop > 0 && <div style={{ flex: emptyTop }} />}
-      {pageItems.map(({ msg, zones }, i) => {
-        const text = getText(msg)
-        const ar = isArabic(text)
-        const fontFamily = ar ? arabicFont.css : latinFont.css
-        const layout = detectBirthdayLayout(text)
+  const factor = sizeFactor / 100
 
-        return (
-          <div key={msg.id} style={{
-            flex: zones,
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            padding: '3px', position: 'relative',
-            borderBottom: '1px dashed #b0b0b0',
-          }}>
-            {layout ? (
-              <>
+  return (
+    <div className="bg-white border border-line rounded shadow-sm" style={{
+      width: '170px', aspectRatio: '210/297', display: 'flex', justifyContent: 'center', margin: '0 auto'
+    }}>
+      <div style={{ width: '50%', display: 'flex', flexDirection: 'column' }}>
+        {emptyTop > 0 && <div style={{ flex: emptyTop }} />}
+        {pageItems.map(({ msg, zones }) => {
+          const text = getText(msg)
+          const ar = isArabic(text)
+          const fontFamily = ar ? arabicFont.css : latinFont.css
+          const layout = detectBirthdayLayout(text)
+
+          return (
+            <div key={msg.id} style={{
+              flex: zones,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              padding: '3px', borderBottom: '1px dashed #b0b0b0',
+              overflow: 'hidden',
+            }}>
+              {layout ? (
+                <>
+                  <div style={{
+                    fontFamily, fontSize: `${(zones === 2 ? 9 : 6) * factor}px`,
+                    textAlign: 'center', lineHeight: 1,
+                    direction: ar ? 'rtl' : 'ltr',
+                  }}>{layout.greeting}</div>
+                  <div style={{
+                    fontFamily, fontSize: `${(zones === 2 ? 18 : 12) * factor}px`,
+                    textAlign: 'center', lineHeight: 1.05,
+                    marginTop: '2px',
+                    direction: ar ? 'rtl' : 'ltr',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    maxWidth: '100%',
+                  }}>{layout.name}</div>
+                </>
+              ) : (
                 <div style={{
-                  fontFamily, fontSize: zones === 2 ? '12px' : '8px',
-                  textAlign: 'center', lineHeight: 1,
+                  fontFamily,
+                  fontSize: `${(zones === 2 ? 13 : 9) * factor}px`,
+                  textAlign: 'center', lineHeight: 1.2,
                   direction: ar ? 'rtl' : 'ltr',
-                }}>{layout.greeting}</div>
-                <div style={{
-                  fontFamily, fontSize: zones === 2 ? '20px' : '13px',
-                  textAlign: 'center', lineHeight: 1.1, marginTop: '2px',
-                  direction: ar ? 'rtl' : 'ltr',
-                }}>{layout.name}</div>
-              </>
-            ) : (
-              <div style={{
-                fontFamily, fontSize: zones === 2 ? '14px' : '10px',
-                textAlign: 'center', lineHeight: 1.2,
-                direction: ar ? 'rtl' : 'ltr',
-              }}>{text}</div>
-            )}
-          </div>
-        )
-      })}
-      {emptyBottom > 0 && <div style={{ flex: emptyBottom }} />}
+                  whiteSpace: 'pre-wrap',
+                  maxWidth: '100%',
+                }}>{text}</div>
+              )}
+            </div>
+          )
+        })}
+        {emptyBottom > 0 && <div style={{ flex: emptyBottom }} />}
+      </div>
     </div>
   )
 }
