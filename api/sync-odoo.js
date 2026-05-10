@@ -336,6 +336,15 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
       .filter(l => l.display_type === 'line_note')
       .map(l => String(l.name || '').trim())
       .filter(Boolean)
+
+    // DEBUG : pour 1 commande de test, log tous les display_types des lignes
+    if (orderNum === 'S48319') {
+      console.log(`[sync DEBUG ${orderNum}] ${odooLines.length} lignes Odoo:`)
+      for (const l of odooLines) {
+        console.log(`  - id=${l.id} display_type=${l.display_type || 'null'} name="${String(l.name || '').slice(0, 60)}" qty=${l.product_uom_qty}`)
+      }
+      console.log(`[sync DEBUG ${orderNum}] noteLines trouvees: ${noteLines.length}`, noteLines)
+    }
     if (noteLines.length > 0) {
       orderNote = noteLines.join('\n')
       // Retire balises HTML basiques au cas ou
