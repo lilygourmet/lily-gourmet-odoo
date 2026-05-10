@@ -431,7 +431,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
         </div>
 
         {/* Contenu */}
-        <div className="px-6 py-4">
+        <div className={`px-6 py-4 ${cart.length > 0 ? 'pb-72' : ''}`}>
           {lines.length === 0 ? (
             <div className="text-center text-ink-mute italic py-12">Aucune vente pour cette catégorie</div>
           ) : isOdooTableMode ? (
