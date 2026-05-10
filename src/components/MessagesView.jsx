@@ -302,12 +302,26 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   }
 
   function buildPrintHtml(pages) {
-    const renderMsg = (msg, zones) => {
+    const renderPage = (items) => {
+      // Position absolue de chaque message : top fixe en mm
+      let topMm = 0
+      const blocks = []
+      for (const { msg, zones } of items) {
+        const heightMm = zones === 2 ? 116 : 58
+        blocks.push({ msg, zones, topMm, heightMm })
+        topMm += heightMm
+      }
+      const html = blocks.map(({ msg, zones, topMm, heightMm }) => {
+        return renderMsgAbsolute(msg, zones, topMm, heightMm)
+      }).join('')
+      return `<div class="page"><div class="strip">${html}</div></div>`
+    }
+
+    const renderMsgAbsolute = (msg, zones, topMm, heightMm) => {
       const text = getMessageText(msg)
       const ar = isArabic(text)
       const fontFamily = ar ? arabicFont.css : latinFont.css
       const layout = detectBirthdayLayout(text)
-      const heightMm = zones === 2 ? 116 : 58   // legerement reduit pour eviter debordement
       const sizes = computeFontSizes(text, zones, !!layout)
 
       let inner
@@ -319,19 +333,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       } else {
         inner = `<div style="font-family: ${fontFamily}; font-size: ${sizes.textPt}pt; line-height: 1.2; white-space: pre-wrap; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(text)}</div>`
       }
-      return `<div class="msg" style="height: ${heightMm}mm;">${inner}<div class="cut"></div></div>`
-    }
-
-    const renderPage = (items) => {
-      let usedZones = 0
-      const html = items.map(({ msg, zones }) => {
-        usedZones += zones
-        return renderMsg(msg, zones)
-      }).join('')
-      const remaining = 5 - usedZones
-      // Toujours en haut : tout l'espace vide va en bas
-      const emptyBottomHtml = remaining > 0 ? `<div style="flex: 0 0 auto; height: ${remaining * 58}mm;"></div>` : ''
-      return `<div class="page"><div class="strip">${html}${emptyBottomHtml}</div></div>`
+      return `<div class="msg" style="top: ${topMm}mm; height: ${heightMm}mm;">${inner}<div class="cut"></div></div>`
     }
 
     const css = `
@@ -341,27 +343,27 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       body { font-family: sans-serif; }
       .page {
         width: 210mm; height: 297mm;
-        display: flex; align-items: stretch; justify-content: center;
+        position: relative;
         page-break-after: always;
         overflow: hidden;
       }
       .page:last-child { page-break-after: auto; }
       .strip {
+        position: absolute;
+        left: 52.5mm;          /* (210-105)/2 = 52.5 pour centrer */
+        top: 0;
         width: 105mm; height: 297mm;
-        display: flex; flex-direction: column;
         overflow: hidden;
       }
       .msg {
-        flex: 0 0 auto;
+        position: absolute;
+        left: 0; right: 0;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         text-align: center;
         padding: 6mm 6mm;
-        position: relative;
         overflow: hidden;
         word-break: break-word;
-        page-break-inside: avoid;
-        break-inside: avoid;
       }
       .msg > div { max-width: 100%; }
       .cut {
