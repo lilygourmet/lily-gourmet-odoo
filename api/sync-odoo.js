@@ -177,7 +177,7 @@ async function fetchOdooOrders(uid) {
   if (allLineIds.length > 0) {
     lines = await odooSearchRead(uid, 'sale.order.line',
       [['id', 'in', allLineIds]],
-      ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'qty_delivered', 'price_unit'],
+      ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'qty_delivered', 'price_unit', 'display_type', 'sequence'],
       {}
     )
   }
@@ -329,11 +329,16 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
     const partnerId = Array.isArray(odooOrder.partner_id) ? odooOrder.partner_id[0] : null
     const clientPhone = partnerId ? (phoneByPartnerId.get(partnerId) || null) : null
 
-    // Note de la commande (peut contenir URL maps/adresse)
-    // Odoo stocke parfois en HTML, on convertit en texte brut
-    let orderNote = String(odooOrder.note || '').trim()
-    if (orderNote) {
-      // Retire balises HTML basiques
+    // Note : chercher dans les lignes display_type='line_note' (les notes inline ajoutees sous une ligne)
+    // Concatener tous les contenus de ces lignes, ils peuvent contenir un lien Maps
+    let orderNote = null
+    const noteLines = odooLines
+      .filter(l => l.display_type === 'line_note')
+      .map(l => String(l.name || '').trim())
+      .filter(Boolean)
+    if (noteLines.length > 0) {
+      orderNote = noteLines.join('\n')
+      // Retire balises HTML basiques au cas ou
       orderNote = orderNote
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/p>/gi, '\n')
@@ -344,8 +349,24 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .trim() || null
-    } else {
-      orderNote = null
+    }
+
+    // Fallback : si pas de note inline, prendre le champ note de la commande
+    if (!orderNote) {
+      let cmdNote = String(odooOrder.note || '').trim()
+      if (cmdNote) {
+        cmdNote = cmdNote
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/p>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .trim()
+        if (cmdNote) orderNote = cmdNote
+      }
     }
 
     const supabaseOrderId = orderIdMap.get(odooOrder.id) || null
