@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -27,6 +27,7 @@ export async function createUser({
   perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false, perm_recaps = false, perm_define_gm = false,
   prod_category = null,
   perm_prod = false, perm_sales = false, team_id = null, perm_calendar = false, perm_labels = false, perm_freezer = false,
+  perm_messages = false, perm_etiquettes = false,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
@@ -34,10 +35,25 @@ export async function createUser({
       perm_sync, perm_check, perm_polys, perm_delete, perm_patissier,
       perm_print_batch, perm_print_single, perm_recaps, perm_define_gm,
       prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer,
+      perm_messages, perm_etiquettes,
     },
   })
 
   if (error) throw error
+
+  // Si l'utilisateur a ete cree, on s'assure que perm_messages et perm_etiquettes
+  // sont bien sauvegardees (au cas ou la fonction RPC ne les gere pas encore)
+  if (data && data.id) {
+    try {
+      await supabase
+        .from('profiles')
+        .update({ perm_messages, perm_etiquettes })
+        .eq('id', data.id)
+    } catch (e) {
+      console.error('[createUser] Failed to sync perm_messages/perm_etiquettes:', e)
+    }
+  }
+
   return data
 }
 
@@ -54,6 +70,7 @@ export async function updateUser(userId, {
   perm_print_batch, perm_print_single, perm_recaps, perm_define_gm,
   prod_category,
   perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer,
+  perm_messages, perm_etiquettes,
 }) {
   const updates = {}
   if (username !== undefined) updates.username = username
@@ -76,6 +93,8 @@ export async function updateUser(userId, {
   if (perm_calendar !== undefined) updates.perm_calendar = perm_calendar
   if (perm_labels !== undefined) updates.perm_labels = perm_labels
   if (perm_freezer !== undefined) updates.perm_freezer = perm_freezer
+  if (perm_messages !== undefined) updates.perm_messages = perm_messages
+  if (perm_etiquettes !== undefined) updates.perm_etiquettes = perm_etiquettes
 
   const { data, error } = await supabase
     .from('profiles')
