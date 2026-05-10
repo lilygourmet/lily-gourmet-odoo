@@ -298,33 +298,87 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
   const isDeliveryAllMode = cat.viewMode === 'delivery-all'
   const isOdooTableMode = cat.viewMode === 'odoo-table'
 
-  // State pour le sous-popup d'impression d'etiquettes
-  const [labelTask, setLabelTask] = useState(null)   // { mode, orderNum, clientName, productName?, items? }
+  // Sous-popup pour choisir le nb d'etiquettes pour 1 article
+  const [labelTask, setLabelTask] = useState(null)
+  // Panier d'etiquettes a imprimer (cumule des clics)
+  const [cart, setCart] = useState([])
+  // State telechargement
+  const [downloading, setDownloading] = useState(false)
 
   function onPickItem(orderNum, clientName, item) {
-    // Article unique (plateau, boite...) -> popup nb etiquettes
     setLabelTask({
       mode: 'single',
       orderNum,
       clientName,
       productName: item.product_name,
-      defaultCount: Math.max(1, Number(item.quantity) || 1),
+      defaultCount: 1,
     })
   }
 
   function onPickIndiv(orderNum, clientName, indivItems) {
-    // Individuels regroupes -> generation directe
+    // Ajout direct au panier (pas de popup)
     const items = indivItems.map(it => ({
       name: shortIndivName(it.product_name),
       qty: Number(it.quantity) || 1,
     }))
-    setLabelTask({
+    addToCart({
       mode: 'indiv',
       orderNum,
       clientName,
       items,
+      // Pour affichage panier
+      displayLabel: `${orderNum} ${clientName} · Individuels (${items.reduce((s, it) => s + it.qty, 0)})`,
+      labelCount: Math.ceil(items.length / 3),  // 3 indiv par etiquette
     })
   }
+
+  function addToCart(entry) {
+    setCart(c => [...c, { ...entry, id: Date.now() + Math.random() }])
+  }
+
+  function removeFromCart(id) {
+    setCart(c => c.filter(e => e.id !== id))
+  }
+
+  function clearCart() {
+    if (cart.length === 0) return
+    if (!confirm('Vider le panier ?')) return
+    setCart([])
+  }
+
+  async function downloadAll() {
+    if (cart.length === 0) return
+    setDownloading(true)
+    try {
+      const r = await fetch('/api/labels-client-zpl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch: cart }),
+      })
+      if (!r.ok) {
+        const txt = await r.text()
+        throw new Error(`Erreur ${r.status}: ${txt}`)
+      }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `etiquettes-${new Date().toISOString().slice(0, 10)}.zpl`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      // Vide le panier apres telechargement reussi
+      setCart([])
+    } catch (e) {
+      alert('Erreur generation : ' + e.message)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  // Total etiquettes dans le panier
+  const totalLabels = cart.reduce((s, e) => s + (e.labelCount || 1), 0)
 
   const total = sumQty(lines)
 
@@ -348,7 +402,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
          onClick={onClose}>
-      <div className={`bg-cream rounded-2xl w-full ${isOdooTableMode ? 'max-w-3xl' : 'max-w-2xl'} max-h-[85vh] overflow-y-auto shadow-2xl border border-line`}
+      <div className={`relative bg-cream rounded-2xl w-full ${isOdooTableMode ? 'max-w-3xl' : 'max-w-2xl'} max-h-[85vh] overflow-y-auto shadow-2xl border border-line`}
            onClick={e => e.stopPropagation()}>
 
         {/* Header popup */}
@@ -422,29 +476,32 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
           task={labelTask}
           onClose={() => setLabelTask(null)}
           onConfirm={(count) => {
-            downloadClientLabel({
+            const cleanProduct = String(labelTask.productName || '').replace(/^\[\d+\]\s*/, '')
+            addToCart({
               mode: 'single',
               orderNum: labelTask.orderNum,
               clientName: labelTask.clientName,
               productName: labelTask.productName,
               count,
+              displayLabel: `${labelTask.orderNum} ${labelTask.clientName} · ${cleanProduct} ${count > 1 ? '×' + count : ''}`.trim(),
+              labelCount: count,
             })
             setLabelTask(null)
           }}
         />
       )}
-      {/* Mode indiv : telechargement direct sans popup */}
-      {labelTask && labelTask.mode === 'indiv' && (() => {
-        downloadClientLabel({
-          mode: 'indiv',
-          orderNum: labelTask.orderNum,
-          clientName: labelTask.clientName,
-          items: labelTask.items,
-        })
-        // Ferme le sous-popup directement (pas de UI)
-        setTimeout(() => setLabelTask(null), 100)
-        return null
-      })()}
+
+      {/* Barre panier en bas */}
+      {cart.length > 0 && (
+        <CartBar
+          cart={cart}
+          totalLabels={totalLabels}
+          downloading={downloading}
+          onRemove={removeFromCart}
+          onClear={clearCart}
+          onDownload={downloadAll}
+        />
+      )}
     </div>
   )
 }
@@ -550,7 +607,19 @@ function LabelCountPopup({ task, onClose, onConfirm }) {
             onClick={() => setCount(c => Math.max(1, c - 1))}
             className="px-4 py-2 text-bordeaux hover:bg-bordeaux/5 text-[18px]"
           >−</button>
-          <span className="text-[18px] font-bold">{count}</span>
+          <input
+            type="number"
+            min="1"
+            max="99"
+            value={count}
+            onChange={e => {
+              const v = parseInt(e.target.value, 10)
+              if (isNaN(v)) setCount(1)
+              else setCount(Math.max(1, Math.min(99, v)))
+            }}
+            onFocus={e => e.target.select()}
+            className="text-[18px] font-bold text-center bg-transparent border-none outline-none w-16"
+          />
           <button
             type="button"
             onClick={() => setCount(c => Math.min(99, c + 1))}
@@ -574,32 +643,45 @@ function LabelCountPopup({ task, onClose, onConfirm }) {
 }
 
 // ============================================================
-// Telechargement etiquette client (appel API)
+// Barre panier d'etiquettes (sticky en bas du popup)
 // ============================================================
-async function downloadClientLabel(payload) {
-  try {
-    const r = await fetch('/api/labels-client-zpl', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!r.ok) {
-      const txt = await r.text()
-      throw new Error(`Erreur ${r.status}: ${txt}`)
-    }
-    const blob = await r.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const safeOrderNum = String(payload.orderNum || 'cmd').replace(/[^A-Za-z0-9]/g, '')
-    a.download = `etiquette-${safeOrderNum}.zpl`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    alert('Erreur generation etiquette : ' + e.message)
-  }
+function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload }) {
+  return (
+    <div className="sticky bottom-0 left-0 right-0 bg-cream border-t border-bordeaux/40 p-3 max-h-[40vh] overflow-y-auto z-10">
+      <div className="text-[10px] uppercase tracking-wider text-bordeaux font-bold mb-2">
+        Panier — {totalLabels} étiquette{totalLabels > 1 ? 's' : ''}
+      </div>
+
+      <div className="flex flex-col gap-1 mb-3">
+        {cart.map(entry => (
+          <div key={entry.id} className="flex justify-between items-center text-[11px] px-2 py-1.5 bg-bordeaux/10 rounded text-bordeaux-deep">
+            <span className="truncate">{entry.displayLabel}</span>
+            <button
+              onClick={() => onRemove(entry.id)}
+              className="text-bordeaux hover:bg-bordeaux/10 rounded px-1.5 ml-2 flex-shrink-0"
+              title="Retirer"
+            >✕</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={onClear}
+          className="px-3 py-2 border border-line rounded-full text-[11px] text-ink-soft hover:bg-cream-warm flex-shrink-0"
+        >Vider</button>
+        <button
+          onClick={onDownload}
+          disabled={downloading}
+          className={`flex-1 py-2 rounded-full text-[12px] font-medium transition-colors ${
+            downloading ? 'bg-line/40 text-ink-mute cursor-not-allowed' : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'
+          }`}
+        >
+          {downloading ? '⏳ Génération...' : `🖨 Télécharger ZPL (${totalLabels} étiquette${totalLabels > 1 ? 's' : ''})`}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // ============================================================

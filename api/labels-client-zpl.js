@@ -128,53 +128,70 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {}
-    const mode = body.mode || 'single'
-    const orderNum = String(body.orderNum || '').trim()
-    const clientName = String(body.clientName || '').trim()
 
-    if (!orderNum && !clientName) {
-      return res.status(400).json({ error: 'orderNum or clientName required' })
+    // Mode batch : liste d'entrees a generer en bloc
+    if (Array.isArray(body.batch)) {
+      let zpl = ''
+      for (const entry of body.batch) {
+        zpl += buildZplForEntry(entry)
+      }
+      return res.status(200)
+        .setHeader('Content-Type', 'text/plain; charset=utf-8')
+        .setHeader('Content-Disposition', `attachment; filename="etiquettes-batch.zpl"`)
+        .send(zpl)
     }
 
-    let zpl = ''
+    // Mode single (1 entree)
+    const zpl = buildZplForEntry(body)
+    if (!zpl) return res.status(400).json({ error: 'invalid entry' })
 
-    if (mode === 'single') {
-      const productName = cleanProductName(body.productName)
-      const count = Math.max(1, Math.min(99, Number(body.count) || 1))
-
-      for (let i = 1; i <= count; i++) {
-        zpl += buildSingleLabel({
-          orderNum, clientName, productName,
-          index: i,
-          total: count,
-        })
-      }
-    } else if (mode === 'indiv') {
-      const items = Array.isArray(body.items) ? body.items.filter(it => it && it.name && it.qty > 0) : []
-      if (items.length === 0) {
-        return res.status(400).json({ error: 'items required for indiv mode' })
-      }
-
-      const chunks = chunkIndiv(items)
-      const total = chunks.length
-      chunks.forEach((chunk, idx) => {
-        zpl += buildIndivLabel({
-          orderNum, clientName,
-          items: chunk,
-          index: idx + 1,
-          total,
-        })
-      })
-    } else {
-      return res.status(400).json({ error: `unknown mode: ${mode}` })
-    }
-
+    const safeOrderNum = String(body.orderNum || 'cmd').replace(/[^A-Za-z0-9]/g, '')
     res.status(200)
       .setHeader('Content-Type', 'text/plain; charset=utf-8')
-      .setHeader('Content-Disposition', `attachment; filename="etiquette-${orderNum}.zpl"`)
+      .setHeader('Content-Disposition', `attachment; filename="etiquette-${safeOrderNum}.zpl"`)
       .send(zpl)
   } catch (e) {
     console.error('[labels-client-zpl] error:', e)
     return res.status(500).json({ error: e.message })
   }
+}
+
+// Genere le ZPL pour 1 entree du panier
+function buildZplForEntry(entry) {
+  const mode = entry.mode || 'single'
+  const orderNum = String(entry.orderNum || '').trim()
+  const clientName = String(entry.clientName || '').trim()
+
+  if (!orderNum && !clientName) return ''
+
+  let zpl = ''
+
+  if (mode === 'single') {
+    const productName = cleanProductName(entry.productName)
+    const count = Math.max(1, Math.min(99, Number(entry.count) || 1))
+
+    for (let i = 1; i <= count; i++) {
+      zpl += buildSingleLabel({
+        orderNum, clientName, productName,
+        index: i,
+        total: count,
+      })
+    }
+  } else if (mode === 'indiv') {
+    const items = Array.isArray(entry.items) ? entry.items.filter(it => it && it.name && it.qty > 0) : []
+    if (items.length === 0) return ''
+
+    const chunks = chunkIndiv(items)
+    const total = chunks.length
+    chunks.forEach((chunk, idx) => {
+      zpl += buildIndivLabel({
+        orderNum, clientName,
+        items: chunk,
+        index: idx + 1,
+        total,
+      })
+    })
+  }
+
+  return zpl
 }
