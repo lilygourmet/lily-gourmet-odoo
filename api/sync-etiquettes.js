@@ -141,7 +141,10 @@ async function fetchEtiquettesArticles(uid) {
   for (const t of all) {
     const cat = detectCategory(t.name)
     if (!cat) continue
-    if (/plateau/i.test(t.name)) continue   // exclure les plateaux
+    if (/plateau/i.test(t.name)) continue           // pas de plateaux
+    if (/miss\s*pistache/i.test(t.name)) continue   // exclu
+    if (/paris\s*brest/i.test(t.name)) continue     // exclu
+    if (/maatouk/i.test(t.name)) continue           // exclu (Supreme amande/pistache Maatouk)
 
     filtered.push({
       odoo_template_id: t.id,
@@ -167,14 +170,15 @@ async function fetchEtiquettesArticles(uid) {
     }
   }
 
-  // 3. Tri par categorie puis sequence puis nom
+  // 3. Tri par categorie puis alphabetique sur le nom (sans le prefixe [123])
   filtered.sort((a, b) => {
     if (a.category !== b.category) {
       const order = { cd: 0, gs: 1, su: 2 }
       return order[a.category] - order[b.category]
     }
-    if (a.sequence !== b.sequence) return a.sequence - b.sequence
-    return a.name.localeCompare(b.name)
+    const cleanA = a.name.replace(/^\[\d+\]\s*/, '').trim()
+    const cleanB = b.name.replace(/^\[\d+\]\s*/, '').trim()
+    return cleanA.localeCompare(cleanB, 'fr')
   })
 
   return filtered

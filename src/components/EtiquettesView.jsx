@@ -116,49 +116,52 @@ export default function EtiquettesView({ user }) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-fraunces italic text-[22px] text-ink">🏷 Étiquettes</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="text-[10px] px-2.5 py-1.5 border border-line text-ink-soft hover:bg-cream-warm rounded-full font-medium tracking-wider"
-            title="Recharger les articles depuis Odoo"
-          >
-            {syncing ? '⏳ Sync...' : '🔄 Sync articles'}
-          </button>
+    <div className="max-w-6xl mx-auto px-4 pb-4">
+      {/* Header sticky : reste visible quand on scrolle */}
+      <div className="sticky top-0 z-30 bg-cream pt-4 pb-2 -mx-4 px-4 border-b border-line/40">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-fraunces italic text-[22px] text-ink">🏷 Étiquettes</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="text-[10px] px-2.5 py-1.5 border border-line text-ink-soft hover:bg-cream-warm rounded-full font-medium tracking-wider"
+              title="Recharger les articles depuis Odoo"
+            >
+              {syncing ? '⏳ Sync...' : '🔄 Sync articles'}
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-white border border-line rounded-full mb-4">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 px-3 py-1.5 text-[12px] rounded-full font-medium transition-colors ${
-              tab === t.id
-                ? 'bg-bordeaux text-cream'
-                : 'text-ink-soft hover:bg-cream-warm'
-            }`}
-          >
-            {t.icon} {t.label} <span className="opacity-70">({counts[t.id] || 0})</span>
-          </button>
-        ))}
-      </div>
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 bg-white border border-line rounded-full mb-2">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 px-3 py-1.5 text-[12px] rounded-full font-medium transition-colors ${
+                tab === t.id
+                  ? 'bg-bordeaux text-cream'
+                  : 'text-ink-soft hover:bg-cream-warm'
+              }`}
+            >
+              {t.icon} {t.label} <span className="opacity-70">({counts[t.id] || 0})</span>
+            </button>
+          ))}
+        </div>
 
-      {/* Search */}
-      <input
-        type="text"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder={`Rechercher dans ${TABS.find(t => t.id === tab)?.label.toLowerCase()}...`}
-        className="w-full text-[12px] px-3 py-2 mb-4 border border-line rounded-md bg-white"
-      />
+        {/* Search */}
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={`Rechercher dans ${TABS.find(t => t.id === tab)?.label.toLowerCase()}...`}
+          className="w-full text-[12px] px-3 py-2 border border-line rounded-md bg-white"
+        />
+      </div>
 
       {/* Grid articles */}
+      <div className="pt-4">
       {loading ? (
         <div className="text-center text-ink-mute py-12 text-[13px]">Chargement...</div>
       ) : filteredArticles.length === 0 ? (
@@ -178,6 +181,7 @@ export default function EtiquettesView({ user }) {
           ))}
         </div>
       )}
+      </div>
 
       {/* Bottom bar */}
       {totalLabels > 0 && (
