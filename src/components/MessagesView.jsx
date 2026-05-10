@@ -74,7 +74,9 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   }, [])
 
   const orderMessages = useMemo(() => {
-    return showPrinted ? messages : messages.filter(m => !m.printedAt)
+    return showPrinted
+      ? messages.filter(m => m.printedAt)      // imprimes seulement
+      : messages.filter(m => !m.printedAt)     // non-imprimes seulement
   }, [messages, showPrinted])
 
   const cdMessages = useMemo(() => orderMessages.filter(m => m.source === 'cd'), [orderMessages])
