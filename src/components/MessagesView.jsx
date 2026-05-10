@@ -191,9 +191,34 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       let totalLines = 0
       for (const line of textStr.split('\n')) {
         if (line.length === 0) { totalLines += 1; continue }
-        totalLines += Math.ceil(line.length / charsPerLine)
+        // Compter les lignes en respectant les mots (pas de coupure mid-word)
+        const words = line.split(/\s+/)
+        let currentLine = 0
+        for (const word of words) {
+          if (word.length === 0) continue
+          if (currentLine === 0) {
+            currentLine = word.length
+          } else if (currentLine + 1 + word.length <= charsPerLine) {
+            currentLine += 1 + word.length
+          } else {
+            totalLines += 1
+            currentLine = word.length
+          }
+        }
+        if (currentLine > 0) totalLines += 1
       }
       return totalLines
+    }
+
+    // Le mot le plus long doit tenir sur une ligne (contrainte de largeur min)
+    function maxWordLength(textStr) {
+      let max = 0
+      for (const line of textStr.split('\n')) {
+        for (const word of line.split(/\s+/)) {
+          if (word.length > max) max = word.length
+        }
+      }
+      return Math.max(max, 1)
     }
 
     function heightAtSize(ptSize, lineCount) {
@@ -202,7 +227,12 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     }
 
     function fitSize(textStr, heightMmAvail, minPt, maxPt) {
-      let lo = minPt, hi = maxPt
+      // Contrainte: le mot le plus long doit tenir sur la largeur
+      const longest = maxWordLength(textStr)
+      const ptByWidth = (widthMm * 2.83) / (longest * 0.55)   // 1mm = 2.83pt
+      const cappedMax = Math.min(maxPt, ptByWidth)
+
+      let lo = minPt, hi = cappedMax
       let best = minPt
       while (lo <= hi) {
         const mid = Math.floor((lo + hi) / 2)
@@ -266,11 +296,9 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         return renderMsg(msg, zones)
       }).join('')
       const remaining = 5 - usedZones
-      const emptyTop = Math.floor(remaining / 2)
-      const emptyBottom = remaining - emptyTop
-      const emptyTopHtml = emptyTop > 0 ? `<div style="flex: 0 0 auto; height: ${emptyTop * 59.4}mm;"></div>` : ''
-      const emptyBottomHtml = emptyBottom > 0 ? `<div style="flex: 0 0 auto; height: ${emptyBottom * 59.4}mm;"></div>` : ''
-      return `<div class="page"><div class="strip">${emptyTopHtml}${html}${emptyBottomHtml}</div></div>`
+      // Toujours en haut : tout l'espace vide va en bas
+      const emptyBottomHtml = remaining > 0 ? `<div style="flex: 0 0 auto; height: ${remaining * 59.4}mm;"></div>` : ''
+      return `<div class="page"><div class="strip">${html}${emptyBottomHtml}</div></div>`
     }
 
     const css = `
@@ -589,11 +617,9 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
 function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText, computeSizes }) {
   const usedZones = pageItems.reduce((s, p) => s + p.zones, 0)
   const emptyZones = 5 - usedZones
-  const emptyTop = Math.floor(emptyZones / 2)
-  const emptyBottom = emptyZones - emptyTop
+  const emptyBottom = emptyZones   // toujours en bas
 
   // Echelle aperçu : la colonne fait 105mm => on l'affiche en ~85px
-  // Donc 1pt = (85px / 105mm) / 2.83pt-per-mm = ~0.286 px/pt
   const ptToPx = 0.286
 
   return (
@@ -601,7 +627,6 @@ function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText, co
       width: '170px', aspectRatio: '210/297', display: 'flex', justifyContent: 'center', margin: '0 auto'
     }}>
       <div style={{ width: '50%', display: 'flex', flexDirection: 'column' }}>
-        {emptyTop > 0 && <div style={{ flex: emptyTop }} />}
         {pageItems.map(({ msg, zones }) => {
           const text = getText(msg)
           const ar = isArabic(text)
