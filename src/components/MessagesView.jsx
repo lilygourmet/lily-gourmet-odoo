@@ -1,12 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import {
-  loadMessagesForRange,
-  groupMessagesByDay,
+  loadMessagesToday,
   markMessagePrinted,
   detectBirthdayLayout,
   isArabic,
-  expandShorthand,
   EMOJI_PICKER,
 } from '../lib/messages'
 
@@ -48,11 +46,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   async function refresh() {
     setLoading(true)
     try {
-      const today = new Date()
-      const yyyy = today.getFullYear()
-      const mm = String(today.getMonth() + 1).padStart(2, '0')
-      const dd = String(today.getDate()).padStart(2, '0')
-      const data = await loadMessagesForRange(`${yyyy}-${mm}-${dd}`, 7)
+      const data = await loadMessagesToday()
       setMessages(data)
     } catch (e) {
       console.error('[MessagesView]', e)
@@ -74,16 +68,17 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     document.head.appendChild(link)
   }, [])
 
-  // Tous les messages affiches : commandes + libres
-  const allMessages = useMemo(() => {
-    const orderMsgs = showPrinted
-      ? messages
-      : messages.filter(m => !m.printedAt)
-    return [...freeMessages, ...orderMsgs]
-  }, [messages, freeMessages, showPrinted])
+  const orderMessages = useMemo(() => {
+    return showPrinted ? messages : messages.filter(m => !m.printedAt)
+  }, [messages, showPrinted])
 
-  const groupedByDay = useMemo(() => groupMessagesByDay(allMessages.filter(m => m.type === 'order')), [allMessages])
-  const sortedDays = useMemo(() => [...groupedByDay.keys()].sort(), [groupedByDay])
+  const cdMessages = useMemo(() => orderMessages.filter(m => m.source === 'cd'), [orderMessages])
+  const prodMessages = useMemo(() => orderMessages.filter(m => m.source === 'prod'), [orderMessages])
+
+  // allMessages = libres + commandes (pour la pagination feuilles)
+  const allMessages = useMemo(() => {
+    return [...freeMessages, ...orderMessages]
+  }, [freeMessages, orderMessages])
 
   function toggleSelect(id) {
     const next = new Set(selected)
@@ -222,9 +217,11 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         return renderMsg(msg, zones)
       }).join('')
       const remaining = 5 - usedZones
-      const emptyHeightCm = remaining * 5.94
-      const emptyHtml = remaining > 0 ? `<div class="empty" style="height: ${emptyHeightCm}cm;"></div>` : ''
-      return `<div class="page">${html}${emptyHtml}</div>`
+      const emptyTop = Math.floor(remaining / 2)
+      const emptyBottom = remaining - emptyTop
+      const emptyTopHtml = emptyTop > 0 ? `<div class="empty" style="height: ${emptyTop * 5.94}cm;"></div>` : ''
+      const emptyBottomHtml = emptyBottom > 0 ? `<div class="empty" style="height: ${emptyBottom * 5.94}cm;"></div>` : ''
+      return `<div class="page">${emptyTopHtml}${html}${emptyBottomHtml}</div>`
     }
 
     const css = `
@@ -365,25 +362,23 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
             </div>
           )}
 
-          {/* Messages par jour */}
+          {/* Messages par source */}
           {loading ? (
             <div className="text-center text-ink-mute italic py-8">Chargement...</div>
-          ) : sortedDays.length === 0 ? (
+          ) : cdMessages.length === 0 && prodMessages.length === 0 ? (
             <div className="text-center text-ink-mute italic py-8">
-              {freeMessages.length === 0 ? 'Aucun message dans les commandes des 7 prochains jours' : ''}
+              {freeMessages.length === 0 ? "Aucun message aujourd'hui" : ''}
             </div>
           ) : (
-            sortedDays.map(dayKey => {
-              const dayMsgs = groupedByDay.get(dayKey) || []
-              const date = new Date(dayKey + 'T00:00:00')
-              const dayLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-              return (
-                <div key={dayKey} className="mb-5">
-                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2">
-                    {dayLabel} <span className="text-ink-mute">({dayMsgs.length})</span>
+            <>
+              {/* Section CD (gateaux) */}
+              {cdMessages.length > 0 && (
+                <div className="mb-5">
+                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2 flex items-center gap-2">
+                    🎂 Gâteaux <span className="text-ink-mute font-normal">({cdMessages.length})</span>
                   </div>
                   <div className="space-y-2">
-                    {dayMsgs.map(msg => (
+                    {cdMessages.map(msg => (
                       <MessageItem
                         key={msg.id}
                         msg={msg}
@@ -397,8 +392,31 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
                     ))}
                   </div>
                 </div>
-              )
-            })
+              )}
+
+              {/* Section Prod (entremets / mignardises) */}
+              {prodMessages.length > 0 && (
+                <div className="mb-5">
+                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2 flex items-center gap-2">
+                    🥐 Production <span className="text-ink-mute font-normal">({prodMessages.length})</span>
+                  </div>
+                  <div className="space-y-2">
+                    {prodMessages.map(msg => (
+                      <MessageItem
+                        key={msg.id}
+                        msg={msg}
+                        selected={selected.has(msg.id)}
+                        doubleSize={doubleSize.has(msg.id)}
+                        text={getMessageText(msg)}
+                        onToggle={() => toggleSelect(msg.id)}
+                        onToggleDouble={() => toggleDouble(msg.id)}
+                        onTextChange={t => setMessageText(msg.id, t)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -546,9 +564,12 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
 function PagePreview({ pageItems, latinFont, arabicFont, getText }) {
   const usedZones = pageItems.reduce((s, p) => s + p.zones, 0)
   const emptyZones = 5 - usedZones
+  const emptyTop = Math.floor(emptyZones / 2)
+  const emptyBottom = emptyZones - emptyTop
 
   return (
     <div className="bg-white border border-line rounded shadow-sm" style={{ width: '120px', aspectRatio: '10/29.7', padding: '4px', display: 'flex', flexDirection: 'column', margin: '0 auto' }}>
+      {emptyTop > 0 && <div style={{ flex: emptyTop }} />}
       {pageItems.map(({ msg, zones }, i) => {
         const text = getText(msg)
         const ar = isArabic(text)
@@ -586,7 +607,7 @@ function PagePreview({ pageItems, latinFont, arabicFont, getText }) {
           </div>
         )
       })}
-      {emptyZones > 0 && <div style={{ flex: emptyZones }} />}
+      {emptyBottom > 0 && <div style={{ flex: emptyBottom }} />}
     </div>
   )
 }

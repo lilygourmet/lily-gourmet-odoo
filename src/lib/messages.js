@@ -12,16 +12,56 @@ export function isArabic(text) {
   return /[\u0600-\u06FF\u0750-\u077F]/.test(text)
 }
 
-// Auto-replace J.A / JA / HB par leur version longue
-// Respecte la casse et la position (debut de chaine ou apres espace)
+// Capitalise chaque mot (premiere lettre majuscule)
+// Garde les caracteres arabes / emojis intacts
+function capitalizeWords(str) {
+  if (!str) return ''
+  return str.replace(/(^|\s|-)([a-zA-ZÀ-ÿ])/g, (m, sep, c) => sep + c.toUpperCase())
+            .replace(/(^|\s|-)([a-zA-ZÀ-ÿ])(\S*)/g, (m, sep, c, rest) => sep + c.toUpperCase() + rest.toLowerCase())
+}
+
+// Auto-replace J.A / JA / J A / H.B / HB / H B etc. par leur version longue
+// + capitalise les prenoms qui suivent
 export function expandShorthand(raw) {
   if (!raw) return ''
   let s = String(raw).trim()
 
-  // J.A ou JA en debut de chaine ou apres espace -> "Joyeux Anniversaire"
-  s = s.replace(/(^|\s)(J\.?A)(?=\s|$)/g, '$1Joyeux Anniversaire')
-  // HB en debut de chaine ou apres espace -> "Happy Birthday"
-  s = s.replace(/(^|\s)(HB)(?=\s|$)/g, '$1Happy Birthday')
+  // Normaliser : remplacer toutes les variantes de J.A / JA / J A par "Joyeux Anniversaire"
+  // Variantes acceptees : J.A, JA, J A, j.a, ja, j a (au debut ou apres espace)
+  s = s.replace(/(^|\s)(J\s*\.?\s*A)(?=\s|$)/gi, '$1Joyeux Anniversaire')
+
+  // Variantes H.B / HB / H B -> "Happy Birthday"
+  s = s.replace(/(^|\s)(H\s*\.?\s*B)(?=\s|$)/gi, '$1Happy Birthday')
+
+  // Remplacer aussi "joyeux anniversaire" / "happy birthday" en minuscules par version capitalisee
+  s = s.replace(/joyeux\s+anniversaire/gi, 'Joyeux Anniversaire')
+  s = s.replace(/happy\s+birthday/gi, 'Happy Birthday')
+
+  // Capitaliser le reste (prenoms et premiere lettre du message)
+  // Si le message contient une formule connue, capitaliser ce qui suit
+  const formules = [
+    /^(Joyeux Anniversaire)\s+(.+)$/i,
+    /^(Happy Birthday)\s+(.+)$/i,
+    /^(Felicitations|Félicitations)\s+(.+)$/i,
+    /^(Bienvenue)\s+(.+)$/i,
+  ]
+  for (const rx of formules) {
+    const m = s.match(rx)
+    if (m) {
+      s = `${m[1]} ${capitalizeWords(m[2])}`
+      break
+    }
+  }
+
+  // Si pas une formule connue, juste capitaliser la premiere lettre
+  // (sauf si c'est de l'arabe)
+  if (!/[\u0600-\u06FF]/.test(s) && s.length > 0) {
+    // Verifier si pas deja capitalisee
+    const first = s.charAt(0)
+    if (first !== first.toUpperCase()) {
+      s = first.toUpperCase() + s.slice(1)
+    }
+  }
 
   return s
 }
@@ -49,6 +89,29 @@ export function detectBirthdayLayout(text) {
   return null
 }
 
+// Categorie source d'un message : 'cd' (gateaux) | 'prod' (entremets/mignardises) | 'accessoire' | 'autre'
+// On utilise le category deja stocke dans sales_lines par le sync, en fallback sur le prefixe du nom
+export function classifyMessageSource(line) {
+  const cat = (line.category || '').toUpperCase()
+  if (cat === 'CD') return 'cd'
+  if (cat === 'PROD') return 'prod'
+
+  // Fallback sur le prefixe (sales_lines.prefix ou parser le nom)
+  const name = String(line.product_name || '').replace(/^\[\d+\]\s*/, '').trim()
+  if (/^(CD-|GM-|GMD-)/i.test(name)) return 'cd'
+  if (/^(E-|MI-|V-)/i.test(name)) return 'prod'
+  if (/^GS-/i.test(name)) return 'prod' // GS- aussi en prod (cookies/plateaux)
+
+  // Accessoires connus (issus de la vue Patissier)
+  if (/cupcakes?/i.test(name)) return 'accessoire'
+  if (/magnums?\b/i.test(name)) return 'accessoire'
+  if (/cake\s*pops?/i.test(name)) return 'accessoire'
+  if (/boite\s+signature/i.test(name)) return 'accessoire'
+  if (/sabl[eé]s?\s+boite/i.test(name)) return 'accessoire'
+
+  return 'autre'
+}
+
 // Extrait le message d'un product_name d'apres le motif "Message: ..." ou "Message : ..."
 // Renvoie null si pas de message
 export function extractMessage(productName) {
@@ -64,8 +127,67 @@ export function extractMessage(productName) {
 }
 
 // ============================================================
-// Charger les messages depuis sales_lines (7 jours par defaut)
+// Charger les messages d'aujourd'hui uniquement
+// Exclut les accessoires (Cupcakes, Magnums, Cake pops, etc.)
 // ============================================================
+export async function loadMessagesToday() {
+  const today = new Date()
+  const yyyy = today.getFullYear()
+  const mm = String(today.getMonth() + 1).padStart(2, '0')
+  const dd = String(today.getDate()).padStart(2, '0')
+  const fromDateStr = `${yyyy}-${mm}-${dd}`
+
+  const lines = await loadSalesLinesForRange(fromDateStr, 1)
+
+  // Charger les messages deja imprimes pour annoter
+  const { data: printed } = await supabase
+    .from('messages_printed')
+    .select('source_key, printed_at, printed_by')
+    .order('printed_at', { ascending: false })
+    .limit(2000)
+
+  const printedMap = new Map()
+  if (printed) {
+    for (const p of printed) {
+      if (!printedMap.has(p.source_key)) printedMap.set(p.source_key, p)
+    }
+  }
+
+  const messages = []
+  for (const line of lines) {
+    const source = classifyMessageSource(line)
+    if (source === 'accessoire' || source === 'autre') continue
+
+    const raw = extractMessage(line.product_name)
+    if (!raw) continue
+
+    const expanded = expandShorthand(raw)
+    const sourceKey = `ligne:${line.odoo_line_id}`
+    const printedInfo = printedMap.get(sourceKey)
+
+    messages.push({
+      id: sourceKey,
+      sourceKey,
+      type: 'order',
+      source,                // 'cd' | 'prod'
+      raw,
+      text: expanded,
+      isArabic: isArabic(expanded),
+      orderNum: line.order_num,
+      clientName: line.client_name,
+      deliveryAt: line.delivery_at,
+      productName: line.product_name,
+      odooLineId: line.odoo_line_id,
+      printedAt: printedInfo?.printed_at || null,
+      printedBy: printedInfo?.printed_by || null,
+    })
+  }
+
+  messages.sort((a, b) => new Date(a.deliveryAt) - new Date(b.deliveryAt))
+  return messages
+}
+
+// Garder l'ancienne fonction pour compat (utilisee nulle part en V2 mais au cas ou)
 export async function loadMessagesForRange(fromDateStr, daysCount = 7) {
   const lines = await loadSalesLinesForRange(fromDateStr, daysCount)
 
@@ -79,9 +201,7 @@ export async function loadMessagesForRange(fromDateStr, daysCount = 7) {
   const printedMap = new Map()
   if (printed) {
     for (const p of printed) {
-      if (!printedMap.has(p.source_key)) {
-        printedMap.set(p.source_key, p)
-      }
+      if (!printedMap.has(p.source_key)) printedMap.set(p.source_key, p)
     }
   }
 
