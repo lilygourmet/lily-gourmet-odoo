@@ -177,44 +177,68 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   // Calcul auto-fit : taille de police pour remplir une zone
   // Zone : 105mm large x 59,4mm haut (single) ou 118,8mm haut (double)
   // Avec marges internes 10mm => surface utile ~95mm x ~50mm
+  // Le texte peut etre wrappe sur plusieurs lignes
   // ============================================================
   function computeFontSizes(text, zones, isLayout) {
     const widthMm = 95
     const heightMm = zones === 2 ? 109 : 50
     const factor = sizeFactor / 100
 
+    // Estime combien de lignes occupera un texte a une font-size donnee (en pt)
+    // 1pt ~ 0.353mm, largeur d'un char ~ 0.55 * font-size pour script fonts
+    function linesAtSize(textStr, ptSize) {
+      const charWidthMm = ptSize * 0.353 * 0.55
+      const charsPerLine = Math.max(1, Math.floor(widthMm / charWidthMm))
+      let totalLines = 0
+      for (const line of textStr.split('\n')) {
+        if (line.length === 0) { totalLines += 1; continue }
+        totalLines += Math.ceil(line.length / charsPerLine)
+      }
+      return totalLines
+    }
+
+    function heightAtSize(ptSize, lineCount) {
+      // line-height ~ 1.15 pour script fonts
+      return lineCount * ptSize * 0.353 * 1.15
+    }
+
+    // Cherche la plus grande font-size qui fait tenir le texte dans (widthMm x heightMmAvail)
+    function fitSize(textStr, heightMmAvail, minPt, maxPt) {
+      let lo = minPt, hi = maxPt
+      let best = minPt
+      while (lo <= hi) {
+        const mid = (lo + hi) / 2
+        const lines = linesAtSize(textStr, mid)
+        const h = heightAtSize(mid, lines)
+        if (h <= heightMmAvail) {
+          best = mid
+          lo = mid + 1
+        } else {
+          hi = mid - 1
+        }
+      }
+      return best
+    }
+
     if (isLayout) {
-      // greeting (~22% hauteur), nom (~60% hauteur)
-      const greetingMaxH = heightMm * 0.22
-      const nameMaxH = heightMm * 0.60
+      // greeting (~25% hauteur), nom (~70% hauteur, peut wrapper)
+      const greetingMaxH = heightMm * 0.25
+      const nameMaxH = heightMm * 0.70
 
-      // Pour script fonts, hauteur cap ~ font-size * 0.7
-      // 1mm = 2.83pt
-      const greetingLen = 19   // "Joyeux Anniversaire"
-      const nameLen = Math.max(text.split(/\s+/).slice(1).join(' ').length, 5)
+      const greetingPt = fitSize('Joyeux Anniversaire', greetingMaxH, 8, 50) * factor
 
-      const greetingByH = greetingMaxH * 2.83 / 0.8
-      const greetingByW = (widthMm * 2.83) / (greetingLen * 0.55)
-      const greetingPt = Math.min(greetingByH, greetingByW) * factor
-
-      const nameByH = nameMaxH * 2.83 / 0.8
-      const nameByW = (widthMm * 2.83) / (nameLen * 0.55)
-      const namePt = Math.min(nameByH, nameByW) * factor
+      // Pour le nom : peut etre sur plusieurs lignes
+      const nameStr = text.replace(/^(Joyeux Anniversaire|Happy Birthday|عيد ميلاد سعيد)\s+/i, '')
+      const namePt = fitSize(nameStr, nameMaxH, 14, 200) * factor
 
       return {
-        greetingPt: Math.max(10, Math.min(greetingPt, 50)),
-        namePt: Math.max(24, Math.min(namePt, 180)),
+        greetingPt: Math.max(8, Math.min(greetingPt, 50)),
+        namePt: Math.max(14, Math.min(namePt, 200)),
       }
     } else {
-      const lines = text.split('\n')
-      const lineCount = Math.max(lines.length, 1)
-      const longestLine = Math.max(...lines.map(l => l.length), 5)
-
-      const byH = (heightMm / lineCount) * 2.83 / 0.8
-      const byW = (widthMm * 2.83) / (longestLine * 0.55)
-      const pt = Math.min(byH, byW) * factor
-
-      return { textPt: Math.max(14, Math.min(pt, 140)) }
+      // Texte libre : peut etre multi-lignes
+      const textPt = fitSize(text, heightMm, 10, 160) * factor
+      return { textPt: Math.max(10, Math.min(textPt, 160)) }
     }
   }
 
@@ -433,6 +457,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
                     latinFont={latinFont} arabicFont={arabicFont}
                     sizeFactor={sizeFactor}
                     getText={getMessageText}
+                    computeSizes={computeFontSizes}
                   />
                 ))
               )}
@@ -558,14 +583,17 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
 
 // ============================================================
 // PagePreview : aperçu d'une feuille A4 avec colonne centrale 10,5cm
+// Utilise computeFontSizes pour matcher l'impression
 // ============================================================
-function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText }) {
+function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText, computeSizes }) {
   const usedZones = pageItems.reduce((s, p) => s + p.zones, 0)
   const emptyZones = 5 - usedZones
   const emptyTop = Math.floor(emptyZones / 2)
   const emptyBottom = emptyZones - emptyTop
 
-  const factor = sizeFactor / 100
+  // Echelle aperçu : la colonne fait 105mm => on l'affiche en ~85px
+  // Donc 1pt = (85px / 105mm) / 2.83pt-per-mm = ~0.286 px/pt
+  const ptToPx = 0.286
 
   return (
     <div className="bg-white border border-line rounded shadow-sm" style={{
@@ -578,38 +606,41 @@ function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText }) 
           const ar = isArabic(text)
           const fontFamily = ar ? arabicFont.css : latinFont.css
           const layout = detectBirthdayLayout(text)
+          const sizes = computeSizes(text, zones, !!layout)
 
           return (
             <div key={msg.id} style={{
               flex: zones,
               display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
-              padding: '3px', borderBottom: '1px dashed #b0b0b0',
+              padding: '4px', borderBottom: '1px dashed #b0b0b0',
               overflow: 'hidden',
             }}>
               {layout ? (
                 <>
                   <div style={{
-                    fontFamily, fontSize: `${(zones === 2 ? 9 : 6) * factor}px`,
+                    fontFamily, fontSize: `${sizes.greetingPt * ptToPx}px`,
                     textAlign: 'center', lineHeight: 1,
                     direction: ar ? 'rtl' : 'ltr',
+                    wordBreak: 'break-word',
                   }}>{layout.greeting}</div>
                   <div style={{
-                    fontFamily, fontSize: `${(zones === 2 ? 18 : 12) * factor}px`,
+                    fontFamily, fontSize: `${sizes.namePt * ptToPx}px`,
                     textAlign: 'center', lineHeight: 1.05,
                     marginTop: '2px',
                     direction: ar ? 'rtl' : 'ltr',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    wordBreak: 'break-word',
                     maxWidth: '100%',
                   }}>{layout.name}</div>
                 </>
               ) : (
                 <div style={{
                   fontFamily,
-                  fontSize: `${(zones === 2 ? 13 : 9) * factor}px`,
+                  fontSize: `${sizes.textPt * ptToPx}px`,
                   textAlign: 'center', lineHeight: 1.2,
                   direction: ar ? 'rtl' : 'ltr',
                   whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
                   maxWidth: '100%',
                 }}>{text}</div>
               )}
