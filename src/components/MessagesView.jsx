@@ -176,16 +176,15 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   // ============================================================
   // Calcul auto-fit : taille de police pour remplir une zone
   // Zone : 105mm large x 59,4mm haut (single) ou 118,8mm haut (double)
-  // Avec marges internes 10mm => surface utile ~95mm x ~50mm
+  // Avec marges internes ~12mm => surface utile ~93mm x ~47mm (single)
   // Le texte peut etre wrappe sur plusieurs lignes
+  // On vise 88% de la hauteur dispo pour avoir une marge de securite
   // ============================================================
   function computeFontSizes(text, zones, isLayout) {
-    const widthMm = 95
-    const heightMm = zones === 2 ? 109 : 50
+    const widthMm = 93
+    const heightMm = (zones === 2 ? 107 : 47) * 0.88   // marge de securite 12%
     const factor = sizeFactor / 100
 
-    // Estime combien de lignes occupera un texte a une font-size donnee (en pt)
-    // 1pt ~ 0.353mm, largeur d'un char ~ 0.55 * font-size pour script fonts
     function linesAtSize(textStr, ptSize) {
       const charWidthMm = ptSize * 0.353 * 0.55
       const charsPerLine = Math.max(1, Math.floor(widthMm / charWidthMm))
@@ -198,16 +197,15 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     }
 
     function heightAtSize(ptSize, lineCount) {
-      // line-height ~ 1.15 pour script fonts
-      return lineCount * ptSize * 0.353 * 1.15
+      // line-height ~ 1.2 pour script fonts
+      return lineCount * ptSize * 0.353 * 1.2
     }
 
-    // Cherche la plus grande font-size qui fait tenir le texte dans (widthMm x heightMmAvail)
     function fitSize(textStr, heightMmAvail, minPt, maxPt) {
       let lo = minPt, hi = maxPt
       let best = minPt
       while (lo <= hi) {
-        const mid = (lo + hi) / 2
+        const mid = Math.floor((lo + hi) / 2)
         const lines = linesAtSize(textStr, mid)
         const h = heightAtSize(mid, lines)
         if (h <= heightMmAvail) {
@@ -221,24 +219,22 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     }
 
     if (isLayout) {
-      // greeting (~25% hauteur), nom (~70% hauteur, peut wrapper)
       const greetingMaxH = heightMm * 0.25
-      const nameMaxH = heightMm * 0.70
+      const nameMaxH = heightMm * 0.65   // 65% pour le nom (laisse 10% pour la marge entre)
 
-      const greetingPt = fitSize('Joyeux Anniversaire', greetingMaxH, 8, 50) * factor
+      const greetingPt = fitSize('Joyeux Anniversaire', greetingMaxH, 8, 40) * factor
 
-      // Pour le nom : peut etre sur plusieurs lignes
       const nameStr = text.replace(/^(Joyeux Anniversaire|Happy Birthday|عيد ميلاد سعيد)\s+/i, '')
-      const namePt = fitSize(nameStr, nameMaxH, 14, 200) * factor
+      const namePt = fitSize(nameStr, nameMaxH, 14, 150) * factor
 
       return {
-        greetingPt: Math.max(8, Math.min(greetingPt, 50)),
-        namePt: Math.max(14, Math.min(namePt, 200)),
+        greetingPt: Math.max(8, Math.min(greetingPt, 40)),
+        namePt: Math.max(14, Math.min(namePt, 150)),
       }
     } else {
-      // Texte libre : peut etre multi-lignes
-      const textPt = fitSize(text, heightMm, 10, 160) * factor
-      return { textPt: Math.max(10, Math.min(textPt, 160)) }
+      // Texte libre : utilise toute la zone
+      const textPt = fitSize(text, heightMm, 10, 130) * factor
+      return { textPt: Math.max(10, Math.min(textPt, 130)) }
     }
   }
 
@@ -272,8 +268,8 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       const remaining = 5 - usedZones
       const emptyTop = Math.floor(remaining / 2)
       const emptyBottom = remaining - emptyTop
-      const emptyTopHtml = emptyTop > 0 ? `<div style="height: ${emptyTop * 59.4}mm;"></div>` : ''
-      const emptyBottomHtml = emptyBottom > 0 ? `<div style="height: ${emptyBottom * 59.4}mm;"></div>` : ''
+      const emptyTopHtml = emptyTop > 0 ? `<div style="flex: 0 0 auto; height: ${emptyTop * 59.4}mm;"></div>` : ''
+      const emptyBottomHtml = emptyBottom > 0 ? `<div style="flex: 0 0 auto; height: ${emptyBottom * 59.4}mm;"></div>` : ''
       return `<div class="page"><div class="strip">${emptyTopHtml}${html}${emptyBottomHtml}</div></div>`
     }
 
@@ -286,20 +282,25 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         width: 210mm; height: 297mm;
         display: flex; align-items: stretch; justify-content: center;
         page-break-after: always;
+        overflow: hidden;
       }
       .page:last-child { page-break-after: auto; }
       .strip {
         width: 105mm; height: 297mm;
         display: flex; flex-direction: column;
+        overflow: hidden;
       }
       .msg {
+        flex: 0 0 auto;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         text-align: center;
-        padding: 6mm 5mm;
+        padding: 6mm 6mm;
         position: relative;
         overflow: hidden;
+        word-break: break-word;
       }
+      .msg > div { max-width: 100%; }
       .cut {
         position: absolute; bottom: 0; left: 6mm; right: 6mm;
         border-top: 1px dashed #888;
