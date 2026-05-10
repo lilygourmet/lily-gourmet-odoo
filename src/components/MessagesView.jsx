@@ -310,13 +310,17 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         blocks.push({ msg, zones, topMm, heightMm })
         topMm += heightMm
       }
-      const html = blocks.map(({ msg, zones, topMm, heightMm }) => {
-        return renderMsgAbsolute(msg, zones, topMm, heightMm)
+      // Le dernier message d'une page pleine (5 zones occupees) n'a pas de pointille
+      const totalZones = items.reduce((s, { zones }) => s + zones, 0)
+      const lastIdx = blocks.length - 1
+      const html = blocks.map(({ msg, zones, topMm, heightMm }, idx) => {
+        const showCut = !(totalZones === 5 && idx === lastIdx)
+        return renderMsgAbsolute(msg, zones, topMm, heightMm, showCut)
       }).join('')
       return `<div class="page"><div class="strip">${html}</div></div>`
     }
 
-    const renderMsgAbsolute = (msg, zones, topMm, heightMm) => {
+    const renderMsgAbsolute = (msg, zones, topMm, heightMm, showCut) => {
       const text = getMessageText(msg)
       const ar = isArabic(text)
       const fontFamily = ar ? arabicFont.css : latinFont.css
@@ -332,7 +336,8 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       } else {
         inner = `<div style="font-family: ${fontFamily}; font-size: ${sizes.textPt}pt; line-height: 1.2; white-space: pre-wrap; ${ar ? 'direction: rtl;' : ''}">${escapeHtml(text)}</div>`
       }
-      return `<div class="msg" style="top: ${topMm}mm; height: ${heightMm}mm;">${inner}<div class="cut"></div></div>`
+      const cutHtml = showCut ? '<div class="cut"></div>' : ''
+      return `<div class="msg" style="top: ${topMm}mm; height: ${heightMm}mm;">${inner}${cutHtml}</div>`
     }
 
     const css = `
