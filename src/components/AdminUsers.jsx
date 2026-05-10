@@ -102,6 +102,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_calendar: formData.permCalendar,
         perm_labels: formData.permLabels,
         perm_freezer: formData.permFreezer,
+        perm_messages: formData.permMessages,
+        perm_etiquettes: formData.permEtiquettes,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -134,6 +136,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_calendar: formData.permCalendar,
         perm_labels: formData.permLabels,
         perm_freezer: formData.permFreezer,
+        perm_messages: formData.permMessages,
+        perm_etiquettes: formData.permEtiquettes,
       })
       setEditingUser(null)
       await refresh()
@@ -557,6 +561,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permCalendar: initialData?.perm_calendar !== undefined ? initialData.perm_calendar : false,
     permLabels: initialData?.perm_labels !== undefined ? initialData.perm_labels : false,
     permFreezer: initialData?.perm_freezer !== undefined ? initialData.perm_freezer : false,
+    permMessages: initialData?.perm_messages !== undefined ? initialData.perm_messages : false,
+    permEtiquettes: initialData?.perm_etiquettes !== undefined ? initialData.perm_etiquettes : false,
   })
 
   function handleSubmit() {
@@ -740,7 +746,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
           />
           <PermCheckbox
             id="perm-labels"
-            label="🏷️ Imprimer les étiquettes Zebra"
+            label="🏷️ Imprimer les étiquettes CD (Zebra)"
             checked={isAdmin || formData.permLabels}
             onChange={v => update('permLabels', v)}
           />
@@ -749,6 +755,18 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="❄️ Voir liste sortie congélateur"
             checked={isAdmin || formData.permFreezer}
             onChange={v => update('permFreezer', v)}
+          />
+          <PermCheckbox
+            id="perm-messages"
+            label="💌 Voir l'onglet Messages"
+            checked={isAdmin || formData.permMessages}
+            onChange={v => update('permMessages', v)}
+          />
+          <PermCheckbox
+            id="perm-etiquettes"
+            label="🏷 Voir l'onglet Étiquettes (Entremets/GS/Surgelés)"
+            checked={isAdmin || formData.permEtiquettes}
+            onChange={v => update('permEtiquettes', v)}
           />
           <PermCheckbox
             id="perm-define-gm"
