@@ -197,7 +197,13 @@ export function groupDeliveriesWithFullOrder(livrLines, allLines) {
       return 0
     })
 
-    clientMap.set(clientKey, { clientName, orderNum, items: sortedLines })
+    clientMap.set(clientKey, {
+      clientName,
+      clientPhone: livr.client_phone || null,
+      orderNote: livr.order_note || null,
+      orderNum,
+      items: sortedLines,
+    })
   }
   return result
 }

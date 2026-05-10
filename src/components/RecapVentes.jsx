@@ -46,6 +46,14 @@ function isClickableCategory(cat) {
   return cat?.viewMode === 'hour-client' || cat?.viewMode === 'delivery-all'
 }
 
+// Extrait une URL Google Maps / Maps.app.goo / OpenStreetMap d'un texte
+function extractMapsUrl(text) {
+  if (!text) return null
+  const re = /(https?:\/\/(?:www\.)?(?:google\.[a-z.]+\/maps[^\s<>"]+|maps\.app\.goo\.gl\/[^\s<>"]+|maps\.google\.[a-z.]+\/[^\s<>"]+|goo\.gl\/maps\/[^\s<>"]+|openstreetmap\.org\/[^\s<>"]+|waze\.com\/[^\s<>"]+))/i
+  const m = text.match(re)
+  return m ? m[1] : null
+}
+
 // ============================================================
 // Helper : genere le HTML d'UNE categorie pour impression
 // Mode 'product' : liste agregee par produit
@@ -431,7 +439,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
         </div>
 
         {/* Contenu */}
-        <div className={`px-6 py-4 ${cart.length > 0 ? 'pb-72' : ''}`}>
+        <div className={`px-6 py-4 ${cart.length > 0 ? 'pb-[50vh]' : ''}`}>
           {lines.length === 0 ? (
             <div className="text-center text-ink-mute italic py-12">Aucune vente pour cette catégorie</div>
           ) : isOdooTableMode ? (
@@ -459,6 +467,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
                       key={key}
                       entry={entry}
                       clickable={isClickableCategory(cat)}
+                      showContact={isDeliveryMode}
                       onPickItem={onPickItem}
                       onPickIndiv={onPickIndiv}
                     />
@@ -509,11 +518,16 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
 // ============================================================
 // Bloc client : entete + items (clickable ou non) + indiv groupes
 // ============================================================
-function ClientBlock({ entry, clickable, onPickItem, onPickIndiv }) {
+function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv }) {
   const { normal, indiv } = splitItems(entry.items)
   const indivQty = sumIndivQty(indiv)
   const orderNum = entry.orderNum || ''
   const clientName = entry.clientName || ''
+  const clientPhone = entry.clientPhone || null
+  const orderNote = entry.orderNote || null
+
+  // Detection d'URL Google Maps dans la note
+  const mapsUrl = orderNote ? extractMapsUrl(orderNote) : null
 
   return (
     <div className="ml-2 mb-2">
@@ -525,6 +539,37 @@ function ClientBlock({ entry, clickable, onPickItem, onPickIndiv }) {
         )}
         <span className="text-ink">— {clientName}</span>
       </div>
+
+      {/* Telephone + note : seulement en mode livraison */}
+      {showContact && (clientPhone || orderNote) && (
+        <div className="ml-2 mb-1 text-[11px] text-ink-soft flex flex-col gap-0.5">
+          {clientPhone && (
+            <a
+              href={`tel:${clientPhone.replace(/\s/g, '')}`}
+              className="text-bordeaux hover:underline"
+              onClick={e => e.stopPropagation()}
+            >
+              📞 {clientPhone}
+            </a>
+          )}
+          {mapsUrl && (
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-bordeaux hover:underline"
+              onClick={e => e.stopPropagation()}
+            >
+              📍 Voir sur Maps
+            </a>
+          )}
+          {orderNote && !mapsUrl && (
+            <div className="text-ink-mute italic whitespace-pre-wrap">
+              {orderNote}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Items normaux : cliquables si la categorie le permet */}
       {normal.map(item => (

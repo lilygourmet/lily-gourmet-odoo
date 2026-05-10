@@ -73,7 +73,7 @@ export default async function handler(req, res) {
     // On passe TOUTES les commandes Odoo brutes (pas seulement les CD/GM)
     // pour capturer aussi les commandes 100% E-, MI-, SA-, etc.
     if (stats.orderIdMap) {
-      await syncSalesLines(supabase, orders, linesByOrderId, stats.orderIdMap)
+      await syncSalesLines(supabase, orders, linesByOrderId, stats.orderIdMap, uid)
       delete stats.orderIdMap
     }
 
@@ -267,7 +267,7 @@ function detectPrefixAndCategory(productName) {
 // pour capturer toutes les ventes : E-, MI-, SA-, etc.
 // ==========================================
 
-async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) {
+async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, uid) {
   const allRows = []
   const activeLineIds = new Set()      // Lignes Odoo encore valides (qty>0, commande non annulee)
   const obsoleteLineIds = new Set()    // Lignes a supprimer (cancel, qty=0, acompte)
@@ -277,6 +277,33 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
   today.setHours(0, 0, 0, 0)
   const in14Days = new Date(today)
   in14Days.setDate(in14Days.getDate() + 14)
+
+  // Recuperer les telephones des clients en batch
+  // On collecte d'abord tous les partner_ids unique
+  const partnerIds = new Set()
+  for (const o of odooOrders) {
+    if (Array.isArray(o.partner_id) && o.partner_id[0]) {
+      partnerIds.add(o.partner_id[0])
+    }
+  }
+  const phoneByPartnerId = new Map()
+  if (uid && partnerIds.size > 0) {
+    try {
+      const partners = await odooSearchRead(uid, 'res.partner',
+        [['id', 'in', Array.from(partnerIds)]],
+        ['id', 'phone', 'mobile'],
+        { limit: 5000 }
+      )
+      for (const p of partners) {
+        // Prefere mobile, fallback sur phone
+        const tel = (p.mobile || p.phone || '').toString().trim() || null
+        if (tel) phoneByPartnerId.set(p.id, tel)
+      }
+      console.log(`[sync] ${phoneByPartnerId.size} telephones recuperes pour ${partnerIds.size} partners`)
+    } catch (e) {
+      console.error('[sync] erreur recup telephones partners:', e.message)
+    }
+  }
 
   for (const odooOrder of odooOrders) {
     const orderNum = odooOrder.name
@@ -297,6 +324,29 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
     const clientName = Array.isArray(odooOrder.partner_id)
       ? odooOrder.partner_id[1]
       : null
+
+    // Telephone client (mobile prefere, fallback phone)
+    const partnerId = Array.isArray(odooOrder.partner_id) ? odooOrder.partner_id[0] : null
+    const clientPhone = partnerId ? (phoneByPartnerId.get(partnerId) || null) : null
+
+    // Note de la commande (peut contenir URL maps/adresse)
+    // Odoo stocke parfois en HTML, on convertit en texte brut
+    let orderNote = String(odooOrder.note || '').trim()
+    if (orderNote) {
+      // Retire balises HTML basiques
+      orderNote = orderNote
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .trim() || null
+    } else {
+      orderNote = null
+    }
 
     const supabaseOrderId = orderIdMap.get(odooOrder.id) || null
 
@@ -324,6 +374,8 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap) 
         quantity: qty,
         qty_delivered: qtyDelivered,
         client_name: clientName,
+        client_phone: clientPhone,
+        order_note: orderNote,
         delivery_at: deliveryAt,
         order_num: orderNum,
       })
