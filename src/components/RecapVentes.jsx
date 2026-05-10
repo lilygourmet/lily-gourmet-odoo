@@ -3,6 +3,50 @@ import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupBy
 import AppHeader from './AppHeader'
 
 // ============================================================
+// Helpers etiquettes par commande
+// ============================================================
+
+// Une ligne est "individuelle" si son nom contient "(1)" (taille 1 personne)
+// Exemples : "[140] E- Fraisier (1)", "E-Pistache fleur d'oranger (1)"
+function isIndivLine(item) {
+  const name = item?.product_name || ''
+  return /\(1\)/.test(name)
+}
+
+// Extrait le nom court d'un produit individuel
+// "[140] E- Fraisier (1)" -> "Fraisier"
+// "E-Cheesecake Exotique (1)" -> "Cheesecake Exotique"
+function shortIndivName(productName) {
+  return String(productName || '')
+    .replace(/^\[\d+\]\s*/, '')   // retire [123]
+    .replace(/^E-\s*/i, '')        // retire E-
+    .replace(/\s*\(1\)\s*$/, '')   // retire (1)
+    .replace(/\s+Message:.*$/, '') // retire Message: ...
+    .trim()
+}
+
+// Separe les items en deux : non-indiv (cliquables individuellement) et indiv (groupes)
+function splitItems(items) {
+  const normal = []
+  const indiv = []
+  for (const it of items) {
+    if (isIndivLine(it)) indiv.push(it)
+    else normal.push(it)
+  }
+  return { normal, indiv }
+}
+
+// Total quantite indiv d'une commande
+function sumIndivQty(items) {
+  return items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
+}
+
+// Categories ou les lignes sont cliquables pour generer une etiquette
+function isClickableCategory(cat) {
+  return cat?.viewMode === 'hour-client' || cat?.viewMode === 'delivery-all'
+}
+
+// ============================================================
 // Helper : genere le HTML d'UNE categorie pour impression
 // Mode 'product' : liste agregee par produit
 // Mode 'hour-client' : groupe par heure -> client -> produits
@@ -254,6 +298,34 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
   const isDeliveryAllMode = cat.viewMode === 'delivery-all'
   const isOdooTableMode = cat.viewMode === 'odoo-table'
 
+  // State pour le sous-popup d'impression d'etiquettes
+  const [labelTask, setLabelTask] = useState(null)   // { mode, orderNum, clientName, productName?, items? }
+
+  function onPickItem(orderNum, clientName, item) {
+    // Article unique (plateau, boite...) -> popup nb etiquettes
+    setLabelTask({
+      mode: 'single',
+      orderNum,
+      clientName,
+      productName: item.product_name,
+      defaultCount: Math.max(1, Number(item.quantity) || 1),
+    })
+  }
+
+  function onPickIndiv(orderNum, clientName, indivItems) {
+    // Individuels regroupes -> generation directe
+    const items = indivItems.map(it => ({
+      name: shortIndivName(it.product_name),
+      qty: Number(it.quantity) || 1,
+    }))
+    setLabelTask({
+      mode: 'indiv',
+      orderNum,
+      clientName,
+      items,
+    })
+  }
+
   const total = sumQty(lines)
 
   function handlePrintThisOne() {
@@ -329,22 +401,13 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
                     {hour}
                   </div>
                   {[...clientMap.entries()].map(([key, entry]) => (
-                    <div key={key} className="ml-2 mb-2">
-                      <div className="text-[13px] font-semibold mb-0.5 flex gap-2 items-baseline">
-                        {entry.orderNum && (
-                          <span className="font-mono text-[10px] text-bordeaux tracking-wider">
-                            {entry.orderNum}
-                          </span>
-                        )}
-                        <span className="text-ink">— {entry.clientName}</span>
-                      </div>
-                      {entry.items.map(item => (
-                        <div key={item.id} className="ml-4 text-[12px] text-ink-soft flex gap-2">
-                          <span className="font-bold text-bordeaux min-w-[32px]">×{item.quantity}</span>
-                          <span>{item.product_name}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <ClientBlock
+                      key={key}
+                      entry={entry}
+                      clickable={isClickableCategory(cat)}
+                      onPickItem={onPickItem}
+                      onPickIndiv={onPickIndiv}
+                    />
                   ))}
                 </div>
               ))}
@@ -352,13 +415,193 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
           )}
         </div>
       </div>
+
+      {/* Sous-popup pour choisir nb etiquettes (mode single uniquement) */}
+      {labelTask && labelTask.mode === 'single' && (
+        <LabelCountPopup
+          task={labelTask}
+          onClose={() => setLabelTask(null)}
+          onConfirm={(count) => {
+            downloadClientLabel({
+              mode: 'single',
+              orderNum: labelTask.orderNum,
+              clientName: labelTask.clientName,
+              productName: labelTask.productName,
+              count,
+            })
+            setLabelTask(null)
+          }}
+        />
+      )}
+      {/* Mode indiv : telechargement direct sans popup */}
+      {labelTask && labelTask.mode === 'indiv' && (() => {
+        downloadClientLabel({
+          mode: 'indiv',
+          orderNum: labelTask.orderNum,
+          clientName: labelTask.clientName,
+          items: labelTask.items,
+        })
+        // Ferme le sous-popup directement (pas de UI)
+        setTimeout(() => setLabelTask(null), 100)
+        return null
+      })()}
     </div>
   )
 }
 
 // ============================================================
-// Composant principal
+// Bloc client : entete + items (clickable ou non) + indiv groupes
 // ============================================================
+function ClientBlock({ entry, clickable, onPickItem, onPickIndiv }) {
+  const { normal, indiv } = splitItems(entry.items)
+  const indivQty = sumIndivQty(indiv)
+  const orderNum = entry.orderNum || ''
+  const clientName = entry.clientName || ''
+
+  return (
+    <div className="ml-2 mb-2">
+      <div className="text-[13px] font-semibold mb-0.5 flex gap-2 items-baseline">
+        {orderNum && (
+          <span className="font-mono text-[10px] text-bordeaux tracking-wider">
+            {orderNum}
+          </span>
+        )}
+        <span className="text-ink">— {clientName}</span>
+      </div>
+
+      {/* Items normaux : cliquables si la categorie le permet */}
+      {normal.map(item => (
+        clickable ? (
+          <button
+            key={item.id}
+            onClick={() => onPickItem(orderNum, clientName, item)}
+            className="ml-4 text-[12px] text-bordeaux font-medium flex gap-2 hover:bg-bordeaux/10 px-2 py-1 rounded transition-colors text-left w-full"
+          >
+            <span className="font-mono min-w-[32px]">×{item.quantity}</span>
+            <span>{item.product_name}</span>
+          </button>
+        ) : (
+          <div key={item.id} className="ml-4 text-[12px] text-ink-soft flex gap-2">
+            <span className="font-bold text-bordeaux min-w-[32px]">×{item.quantity}</span>
+            <span>{item.product_name}</span>
+          </div>
+        )
+      ))}
+
+      {/* Indiv : ligne unique cliquable + detail dessous */}
+      {indiv.length > 0 && (
+        <>
+          {clickable ? (
+            <button
+              onClick={() => onPickIndiv(orderNum, clientName, indiv)}
+              className="ml-4 text-[12px] text-bordeaux font-medium flex gap-2 hover:bg-bordeaux/10 px-2 py-1 rounded transition-colors text-left w-full"
+            >
+              <span className="font-mono min-w-[32px]">×{indivQty}</span>
+              <span>Individuels</span>
+            </button>
+          ) : (
+            <div className="ml-4 text-[12px] text-ink-soft flex gap-2">
+              <span className="font-bold text-bordeaux min-w-[32px]">×{indivQty}</span>
+              <span>Individuels</span>
+            </div>
+          )}
+          <div className="ml-12 text-[11px] text-ink-mute leading-relaxed">
+            {indiv.map(it => (
+              <div key={it.id}>
+                {it.quantity} {shortIndivName(it.product_name)}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// Sous-popup : choisir le nombre d'etiquettes
+// ============================================================
+function LabelCountPopup({ task, onClose, onConfirm }) {
+  const [count, setCount] = useState(task.defaultCount || 1)
+  const cleanProduct = String(task.productName || '').replace(/^\[\d+\]\s*/, '')
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-cream rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-line"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Imprimer étiquettes</h3>
+        <div className="text-[11px] text-ink-mute mb-3 font-mono">
+          {task.orderNum} · {task.clientName}
+        </div>
+
+        <div className="bg-cream-warm border border-line rounded-md px-3 py-2 mb-4 text-[12px] text-ink">
+          {cleanProduct}
+        </div>
+
+        <div className="text-[11px] text-ink-soft mb-2">Combien d'étiquettes ?</div>
+        <div className="flex items-center justify-between border border-bordeaux rounded-md mb-4">
+          <button
+            type="button"
+            onClick={() => setCount(c => Math.max(1, c - 1))}
+            className="px-4 py-2 text-bordeaux hover:bg-bordeaux/5 text-[18px]"
+          >−</button>
+          <span className="text-[18px] font-bold">{count}</span>
+          <button
+            type="button"
+            onClick={() => setCount(c => Math.min(99, c + 1))}
+            className="px-4 py-2 text-bordeaux hover:bg-bordeaux/5 text-[18px]"
+          >+</button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 border border-line rounded-full text-[12px] text-ink-soft hover:bg-cream-warm"
+          >Annuler</button>
+          <button
+            onClick={() => onConfirm(count)}
+            className="flex-1 py-2 rounded-full text-[12px] font-medium bg-bordeaux text-cream hover:bg-bordeaux-deep"
+          >🖨 Imprimer</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Telechargement etiquette client (appel API)
+// ============================================================
+async function downloadClientLabel(payload) {
+  try {
+    const r = await fetch('/api/labels-client-zpl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!r.ok) {
+      const txt = await r.text()
+      throw new Error(`Erreur ${r.status}: ${txt}`)
+    }
+    const blob = await r.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const safeOrderNum = String(payload.orderNum || 'cmd').replace(/[^A-Za-z0-9]/g, '')
+    a.download = `etiquette-${safeOrderNum}.zpl`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('Erreur generation etiquette : ' + e.message)
+  }
+}
+
 // ============================================================
 // Composant principal
 // Mode "popup" (par defaut) : ouvert depuis le calendrier admin, bouton ✕ pour fermer
