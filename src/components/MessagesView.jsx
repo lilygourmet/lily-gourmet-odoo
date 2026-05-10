@@ -205,7 +205,8 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   // ============================================================
   function computeFontSizes(text, zones, isLayout) {
     const widthMm = 90   // 9cm max (zone 10,5cm avec marges)
-    const heightMm = (zones === 2 ? 107 : 47) * 0.88
+    const heightMm = (zones === 2 ? 105 : 46) * 0.80   // marge 20% pour eviter tout debordement
+    const factor = sizeFactor / 100
     const factor = sizeFactor / 100
 
     const ar = isArabic(text)
@@ -306,7 +307,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       const ar = isArabic(text)
       const fontFamily = ar ? arabicFont.css : latinFont.css
       const layout = detectBirthdayLayout(text)
-      const heightMm = zones === 2 ? 118.8 : 59.4
+      const heightMm = zones === 2 ? 116 : 58   // legerement reduit pour eviter debordement
       const sizes = computeFontSizes(text, zones, !!layout)
 
       let inner
@@ -329,7 +330,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       }).join('')
       const remaining = 5 - usedZones
       // Toujours en haut : tout l'espace vide va en bas
-      const emptyBottomHtml = remaining > 0 ? `<div style="flex: 0 0 auto; height: ${remaining * 59.4}mm;"></div>` : ''
+      const emptyBottomHtml = remaining > 0 ? `<div style="flex: 0 0 auto; height: ${remaining * 58}mm;"></div>` : ''
       return `<div class="page"><div class="strip">${html}${emptyBottomHtml}</div></div>`
     }
 
@@ -359,6 +360,8 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         position: relative;
         overflow: hidden;
         word-break: break-word;
+        page-break-inside: avoid;
+        break-inside: avoid;
       }
       .msg > div { max-width: 100%; }
       .cut {
