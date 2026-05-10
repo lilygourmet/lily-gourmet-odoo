@@ -346,17 +346,18 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       html, body { margin: 0; padding: 0; }
       body { font-family: sans-serif; }
       .page {
-        width: 210mm; height: 297mm;
+        width: 210mm; height: 296mm;
         position: relative;
-        page-break-after: always;
         overflow: hidden;
       }
-      .page:last-child { page-break-after: auto; }
+      .page + .page {
+        page-break-before: always;
+      }
       .strip {
         position: absolute;
-        left: 52.5mm;          /* (210-105)/2 = 52.5 pour centrer */
+        left: 52.5mm;
         top: 0;
-        width: 105mm; height: 297mm;
+        width: 105mm; height: 296mm;
         overflow: hidden;
       }
       .msg {
