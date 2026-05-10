@@ -50,24 +50,28 @@ function stripOdooPrefix(name) {
 }
 
 function buildSingleZpl(name, subtitle) {
-  // Format basique 4x6 pouces (203dpi -> 812x1218 dots)
+  // Format Zebra 5cm x 2.5cm (203dpi -> 400 x 200 dots)
   // Texte centre, nom en gros, subtitle en plus petit
   const lines = []
-  lines.push('^XA')           // start
+  lines.push('^XA')
+  lines.push('^CI28')         // UTF-8
   lines.push('^MMT')          // mode tear-off
-  lines.push('^PW812')        // print width
-  lines.push('^LL406')        // label length (2 pouces)
+  lines.push('^PW400')        // print width 5cm
+  lines.push('^LL200')        // label length 2.5cm
   lines.push('^LS0')
 
-  // Nom : font 0 (sans-serif), grand, centre
-  lines.push('^FT50,150^A0N,60,60^FB712,2,0,C,0^FD' + escapeZpl(name) + '^FS')
-
+  // Nom : centre, 2 lignes max si long
+  // Si subtitle present : nom en haut (Y=20), subtitle en bas (Y=130)
+  // Si pas de subtitle : nom au milieu
   if (subtitle) {
-    lines.push('^FT50,260^A0N,40,40^FB712,1,0,C,0^FD' + escapeZpl(subtitle) + '^FS')
+    lines.push('^FT10,55^A0N,32,32^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
+    lines.push('^FT10,160^A0N,28,28^FB380,1,0,C,0^FD' + escapeZpl(subtitle) + '^FS')
+  } else {
+    lines.push('^FT10,110^A0N,36,36^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
   }
 
-  lines.push('^PQ1,0,1,Y')   // 1 etiquette
-  lines.push('^XZ')          // end
+  lines.push('^PQ1,0,1,Y')
+  lines.push('^XZ')
   return lines.join('\n')
 }
 
