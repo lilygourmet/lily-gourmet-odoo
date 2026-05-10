@@ -329,13 +329,38 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
     const partnerId = Array.isArray(odooOrder.partner_id) ? odooOrder.partner_id[0] : null
     const clientPhone = partnerId ? (phoneByPartnerId.get(partnerId) || null) : null
 
-    // Note : chercher dans les lignes display_type='line_note' (les notes inline ajoutees sous une ligne)
-    // Concatener tous les contenus de ces lignes, ils peuvent contenir un lien Maps
+    // Note : chercher uniquement les lignes display_type='line_note' qui sont
+    // SOUS la ligne Livraison (pas les notes sous d'autres articles).
+    // On trie par sequence, on trouve la ligne Livraison, puis on prend les line_note
+    // qui suivent immediatement (jusqu'a la prochaine ligne non-note).
     let orderNote = null
-    const noteLines = odooLines
-      .filter(l => l.display_type === 'line_note')
-      .map(l => String(l.name || '').trim())
-      .filter(Boolean)
+    const sortedLines = [...odooLines].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+
+    // Trouve l'index de la ligne Livraison (produit dont le nom contient "Livraison")
+    let livrIdx = -1
+    for (let i = 0; i < sortedLines.length; i++) {
+      const ln = sortedLines[i]
+      if (ln.display_type) continue   // skip sections/notes
+      if (/livraison/i.test(ln.name || '')) {
+        livrIdx = i
+        break
+      }
+    }
+
+    // Si on a trouve une ligne Livraison, on prend les line_note qui suivent
+    const noteLines = []
+    if (livrIdx >= 0) {
+      for (let i = livrIdx + 1; i < sortedLines.length; i++) {
+        const ln = sortedLines[i]
+        if (ln.display_type === 'line_note') {
+          const txt = String(ln.name || '').trim()
+          if (txt) noteLines.push(txt)
+        } else {
+          // Lignes section ou produit -> on s'arrete
+          break
+        }
+      }
+    }
 
     if (noteLines.length > 0) {
       orderNote = noteLines.join('\n')
