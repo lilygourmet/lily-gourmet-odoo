@@ -647,7 +647,11 @@ function LabelCountPopup({ task, onClose, onConfirm }) {
 // ============================================================
 function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload }) {
   return (
-    <div className="sticky bottom-0 left-0 right-0 bg-cream border-t border-bordeaux/40 p-3 max-h-[40vh] overflow-y-auto z-10">
+    <div
+      className="fixed bottom-0 left-0 right-0 bg-cream border-t-2 border-bordeaux p-3 max-h-[40vh] overflow-y-auto z-[70] shadow-2xl"
+      onClick={e => e.stopPropagation()}
+      onMouseDown={e => e.stopPropagation()}
+    >
       <div className="text-[10px] uppercase tracking-wider text-bordeaux font-bold mb-2">
         Panier — {totalLabels} étiquette{totalLabels > 1 ? 's' : ''}
       </div>
@@ -657,9 +661,10 @@ function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload
           <div key={entry.id} className="flex justify-between items-center text-[11px] px-2 py-1.5 bg-bordeaux/10 rounded text-bordeaux-deep">
             <span className="truncate">{entry.displayLabel}</span>
             <button
-              onClick={() => onRemove(entry.id)}
+              onClick={(e) => { e.stopPropagation(); onRemove(entry.id) }}
               className="text-bordeaux hover:bg-bordeaux/10 rounded px-1.5 ml-2 flex-shrink-0"
               title="Retirer"
+              type="button"
             >✕</button>
           </div>
         ))}
@@ -667,12 +672,14 @@ function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload
 
       <div className="flex gap-2">
         <button
-          onClick={onClear}
+          onClick={(e) => { e.stopPropagation(); onClear() }}
+          type="button"
           className="px-3 py-2 border border-line rounded-full text-[11px] text-ink-soft hover:bg-cream-warm flex-shrink-0"
         >Vider</button>
         <button
-          onClick={onDownload}
+          onClick={(e) => { e.stopPropagation(); onDownload() }}
           disabled={downloading}
+          type="button"
           className={`flex-1 py-2 rounded-full text-[12px] font-medium transition-colors ${
             downloading ? 'bg-line/40 text-ink-mute cursor-not-allowed' : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'
           }`}
