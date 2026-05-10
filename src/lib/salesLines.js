@@ -85,9 +85,10 @@ const GS_PROD_PATTERNS = [
 ]
 
 // Helper : verifie si un nom de produit matche un des prefixes
+// (ignore le code Odoo [123] eventuel en tete)
 function matchesAnyPrefix(name, prefixes) {
-  const upperName = name.toUpperCase()
-  return prefixes.some(p => upperName.startsWith(p.toUpperCase()))
+  const cleaned = String(name).replace(/^\[\d+\]\s*/, '').toUpperCase()
+  return prefixes.some(p => cleaned.startsWith(p.toUpperCase()))
 }
 
 // Filtre les sales_lines pour une categorie ('prod' | 'sales' | array)
@@ -109,8 +110,10 @@ export function filterLinesForProdCategory(lines, category) {
     const name = (l.product_name || '').trim()
     if (!name) return false
 
-    const isGsProdPattern = GS_PROD_PATTERNS.some(rx => rx.test(name))
-    const isGs = /^GS-/i.test(name)
+    // Nom sans le code Odoo [123] eventuel pour les tests de pattern
+    const cleanedName = name.replace(/^\[\d+\]\s*/, '')
+    const isGsProdPattern = GS_PROD_PATTERNS.some(rx => rx.test(cleanedName))
+    const isGs = /^GS-/i.test(cleanedName)
 
     // 2) Logique d'inclusion par prefix
     // Cas A : on veut PROD ET SALES (cumul) → on prend tout ce qui matche un des prefixes
