@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import AppHeader from './AppHeader'
 import { loadEtiquettesArticles, makeQtyKey, buildZplLabels, syncEtiquettesFromOdoo } from '../lib/etiquettes.js'
 
 const TABS = [
@@ -9,7 +10,7 @@ const TABS = [
 
 const ENTREMETS_SIZES = [5, 10, 15, 20]
 
-export default function EtiquettesView({ user }) {
+export default function EtiquettesView({ user, activeView, onNavigate, onLogout }) {
   const [tab, setTab] = useState('cd')
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,20 +27,42 @@ export default function EtiquettesView({ user }) {
     return () => { mounted = false }
   }, [])
 
+  // Articles filtres : exclusions + tri alpha cote client (au cas ou DB pas a jour)
+  const cleanedArticles = useMemo(() => {
+    const excludePatterns = [/miss\s*pistache/i, /paris\s*brest/i, /maatouk/i, /plateau/i]
+    const cleaned = articles.filter(a => {
+      for (const pat of excludePatterns) {
+        if (pat.test(a.name)) return false
+      }
+      return true
+    })
+    // Tri par categorie puis alphabetique
+    cleaned.sort((a, b) => {
+      if (a.category !== b.category) {
+        const order = { cd: 0, gs: 1, su: 2 }
+        return order[a.category] - order[b.category]
+      }
+      const cleanA = a.name.replace(/^\[\d+\]\s*/, '').trim()
+      const cleanB = b.name.replace(/^\[\d+\]\s*/, '').trim()
+      return cleanA.localeCompare(cleanB, 'fr')
+    })
+    return cleaned
+  }, [articles])
+
   const filteredArticles = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return articles.filter(a => {
+    return cleanedArticles.filter(a => {
       if (a.category !== tab) return false
       if (q && !a.name.toLowerCase().includes(q)) return false
       return true
     })
-  }, [articles, tab, search])
+  }, [cleanedArticles, tab, search])
 
   const counts = useMemo(() => {
     const c = { cd: 0, gs: 0, su: 0 }
-    for (const a of articles) c[a.category] = (c[a.category] || 0) + 1
+    for (const a of cleanedArticles) c[a.category] = (c[a.category] || 0) + 1
     return c
-  }, [articles])
+  }, [cleanedArticles])
 
   function setQty(key, newVal) {
     const v = Math.max(0, Math.min(99, newVal))
@@ -116,9 +139,11 @@ export default function EtiquettesView({ user }) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 pb-4">
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <div className="max-w-6xl mx-auto px-4 pb-4">
       {/* Header sticky : reste visible quand on scrolle */}
-      <div className="sticky top-0 z-30 bg-cream pt-4 pb-2 -mx-4 px-4 border-b border-line/40">
+      <div className="sticky top-[60px] z-20 bg-cream pt-4 pb-2 -mx-4 px-4 border-b border-line/40">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-fraunces italic text-[22px] text-ink">🏷 Étiquettes</h2>
           <div className="flex items-center gap-2">
@@ -206,6 +231,7 @@ export default function EtiquettesView({ user }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
