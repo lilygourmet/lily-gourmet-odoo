@@ -185,69 +185,88 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     refresh()
   }
 
+  // Mesure la vraie largeur d'un texte avec canvas (precise pour script fonts)
+  function measureTextWidth(text, fontFamily, fontSizePt) {
+    const canvas = measureTextWidth._canvas || (measureTextWidth._canvas = document.createElement('canvas'))
+    const ctx = canvas.getContext('2d')
+    // 1pt ~ 1.333px a 96dpi
+    const pxSize = fontSizePt * 1.333
+    ctx.font = `${pxSize}px ${fontFamily}`
+    return ctx.measureText(text).width / 3.78   // px -> mm (96dpi)
+  }
+
   // ============================================================
   // Calcul auto-fit : taille de police pour remplir une zone
   // Zone : 105mm large x 59,4mm haut (single) ou 118,8mm haut (double)
-  // Avec marges internes ~12mm => surface utile ~93mm x ~47mm (single)
-  // Le texte peut etre wrappe sur plusieurs lignes
-  // On vise 88% de la hauteur dispo pour avoir une marge de securite
+  // Surface utile : ~93mm x ~47mm avec marges
+  // Le texte peut etre wrappe sur plusieurs lignes mais pas mid-word
   // ============================================================
   function computeFontSizes(text, zones, isLayout) {
-    const widthMm = 93
-    const heightMm = (zones === 2 ? 107 : 47) * 0.88   // marge de securite 12%
+    const widthMm = 90   // 9cm max (zone 10,5cm avec marges)
+    const heightMm = (zones === 2 ? 107 : 47) * 0.88
     const factor = sizeFactor / 100
 
+    const ar = isArabic(text)
+    const fontFamily = ar ? arabicFont.css : latinFont.css
+
+    // Largeur reelle d'un texte a une font-size donnee
+    function widthAt(textStr, ptSize) {
+      return measureTextWidth(textStr, fontFamily, ptSize)
+    }
+
+    // Combien de lignes pour un texte (split par mots, jamais mid-word)
     function linesAtSize(textStr, ptSize) {
-      const charWidthMm = ptSize * 0.353 * 0.55
-      const charsPerLine = Math.max(1, Math.floor(widthMm / charWidthMm))
       let totalLines = 0
       for (const line of textStr.split('\n')) {
         if (line.length === 0) { totalLines += 1; continue }
-        // Compter les lignes en respectant les mots (pas de coupure mid-word)
-        const words = line.split(/\s+/)
-        let currentLine = 0
+        const words = line.split(/\s+/).filter(Boolean)
+        let currentWidth = 0
+        let currentLineExists = false
         for (const word of words) {
-          if (word.length === 0) continue
-          if (currentLine === 0) {
-            currentLine = word.length
-          } else if (currentLine + 1 + word.length <= charsPerLine) {
-            currentLine += 1 + word.length
+          const wordW = widthAt(word, ptSize)
+          const spaceW = widthAt(' ', ptSize)
+          if (!currentLineExists) {
+            currentWidth = wordW
+            currentLineExists = true
+          } else if (currentWidth + spaceW + wordW <= widthMm) {
+            currentWidth += spaceW + wordW
           } else {
             totalLines += 1
-            currentLine = word.length
+            currentWidth = wordW
           }
         }
-        if (currentLine > 0) totalLines += 1
+        if (currentLineExists) totalLines += 1
       }
       return totalLines
     }
 
-    // Le mot le plus long doit tenir sur une ligne (contrainte de largeur min)
-    function maxWordLength(textStr) {
-      let max = 0
-      for (const line of textStr.split('\n')) {
-        for (const word of line.split(/\s+/)) {
-          if (word.length > max) max = word.length
-        }
-      }
-      return Math.max(max, 1)
-    }
-
     function heightAtSize(ptSize, lineCount) {
-      // line-height ~ 1.2 pour script fonts
       return lineCount * ptSize * 0.353 * 1.2
     }
 
-    function fitSize(textStr, heightMmAvail, minPt, maxPt) {
-      // Contrainte: le mot le plus long doit tenir sur la largeur
-      const longest = maxWordLength(textStr)
-      const ptByWidth = (widthMm * 2.83) / (longest * 0.55)   // 1mm = 2.83pt
-      const cappedMax = Math.min(maxPt, ptByWidth)
+    function maxWordWidthAt(textStr, ptSize) {
+      let max = 0
+      for (const line of textStr.split('\n')) {
+        for (const word of line.split(/\s+/).filter(Boolean)) {
+          const w = widthAt(word, ptSize)
+          if (w > max) max = w
+        }
+      }
+      return max
+    }
 
-      let lo = minPt, hi = cappedMax
+    function fitSize(textStr, heightMmAvail, minPt, maxPt) {
+      let lo = minPt, hi = maxPt
       let best = minPt
       while (lo <= hi) {
         const mid = Math.floor((lo + hi) / 2)
+        // Test: le mot le plus long doit tenir en largeur
+        const maxWordW = maxWordWidthAt(textStr, mid)
+        if (maxWordW > widthMm) {
+          hi = mid - 1
+          continue
+        }
+        // Test: hauteur totale doit tenir
         const lines = linesAtSize(textStr, mid)
         const h = heightAtSize(mid, lines)
         if (h <= heightMmAvail) {
@@ -262,7 +281,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
     if (isLayout) {
       const greetingMaxH = heightMm * 0.25
-      const nameMaxH = heightMm * 0.65   // 65% pour le nom (laisse 10% pour la marge entre)
+      const nameMaxH = heightMm * 0.65
 
       const greetingPt = fitSize('Joyeux Anniversaire', greetingMaxH, 8, 40) * factor
 
@@ -274,7 +293,6 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         namePt: Math.max(14, Math.min(namePt, 150)),
       }
     } else {
-      // Texte libre : utilise toute la zone
       const textPt = fitSize(text, heightMm, 10, 130) * factor
       return { textPt: Math.max(10, Math.min(textPt, 130)) }
     }
