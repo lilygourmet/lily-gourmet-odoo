@@ -301,7 +301,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   }
 
   function buildPrintHtml(pages) {
-    const renderPage = (items) => {
+    const renderPage = (items, pageIdx) => {
       // Position absolue de chaque message : top fixe en mm
       let topMm = 0
       const blocks = []
@@ -310,14 +310,14 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         blocks.push({ msg, zones, topMm, heightMm })
         topMm += heightMm
       }
-      // Le dernier message d'une page pleine (5 zones occupees) n'a pas de pointille
       const totalZones = items.reduce((s, { zones }) => s + zones, 0)
       const lastIdx = blocks.length - 1
       const html = blocks.map(({ msg, zones, topMm, heightMm }, idx) => {
         const showCut = !(totalZones === 5 && idx === lastIdx)
         return renderMsgAbsolute(msg, zones, topMm, heightMm, showCut)
       }).join('')
-      return `<div class="page"><div class="strip">${html}</div></div>`
+      const breakStyle = pageIdx > 0 ? ' style="page-break-before: always;"' : ''
+      return `<div class="page"${breakStyle}><div class="strip">${html}</div></div>`
     }
 
     const renderMsgAbsolute = (msg, zones, topMm, heightMm, showCut) => {
@@ -342,22 +342,21 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
     const css = `
       @page { size: A4 portrait; margin: 0; }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 210mm; }
       body { font-family: sans-serif; }
       .page {
-        width: 210mm; height: 296mm;
+        width: 210mm;
+        height: 296mm;
         position: relative;
         overflow: hidden;
-      }
-      .page + .page {
-        page-break-before: always;
       }
       .strip {
         position: absolute;
         left: 52.5mm;
         top: 0;
-        width: 105mm; height: 296mm;
+        width: 105mm;
+        height: 296mm;
         overflow: hidden;
       }
       .msg {
@@ -380,7 +379,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         .page { background: white; margin: 0 auto 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
       }
     `
-    const pagesHtml = pages.map(renderPage).join('')
+    const pagesHtml = pages.map((p, i) => renderPage(p, i)).join('')
     return `<!doctype html><html><head><meta charset="utf-8"><title>Etiquettes</title>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pacifico&family=Dancing+Script:wght@400;700&family=Sacramento&family=Great+Vibes&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Reem+Kufi:wght@400;700&family=El+Messiri:wght@400;700&family=Tajawal:wght@400;700&display=swap">
       <style>${css}</style></head><body>${pagesHtml}</body></html>`
