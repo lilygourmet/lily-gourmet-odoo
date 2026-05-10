@@ -102,9 +102,9 @@ export default function LabelsButton() {
       <button
         onClick={() => setOpen(!open)}
         className="px-2.5 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0"
-        title="Imprimer les étiquettes Zebra"
+        title="Imprimer les étiquettes CD du jour (Zebra)"
       >
-        Étiquettes
+        Étiquettes CD
       </button>
 
       {open && (
@@ -115,7 +115,7 @@ export default function LabelsButton() {
           {/* Dropdown ancre sous le bouton */}
           <div className="absolute right-0 top-full mt-2 z-[80] w-[300px] bg-cream rounded-xl shadow-2xl border border-line p-3"
                onClick={e => e.stopPropagation()}>
-            <h3 className="font-fraunces italic text-[15px] text-ink mb-1">Étiquettes Zebra</h3>
+            <h3 className="font-fraunces italic text-[15px] text-ink mb-1">Étiquettes CD</h3>
             <p className="text-[10px] text-ink-mute mb-3">
               Coche les jours à imprimer.
             </p>

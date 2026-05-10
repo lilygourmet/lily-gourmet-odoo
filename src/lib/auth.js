@@ -158,6 +158,12 @@ export function canSeeMessages(user) {
   return user.role === 'admin' || user.perm_messages === true
 }
 
+// User peut voir l'onglet Etiquettes (Entremets/GS/Surgeles) (admin ou perm_etiquettes=true)
+export function canSeeEtiquettes(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_etiquettes === true
+}
+
 // Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false
