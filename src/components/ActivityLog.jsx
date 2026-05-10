@@ -30,7 +30,7 @@ export default function ActivityLog({ loadFn, formatEntry, refreshKey }) {
       <div className="max-w-3xl mx-auto px-4 py-2">
         <div className="flex items-center justify-between mb-1">
           <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux font-bold">
-            📋 Activité (14 jours)
+            📋 Activité (7 jours)
           </span>
           <span className="text-[10px] text-ink-mute">
             {logs.length} action{logs.length !== 1 ? 's' : ''}

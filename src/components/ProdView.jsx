@@ -294,7 +294,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
 
       {/* Footer logs */}
       <ActivityLog
-        loadFn={() => loadProdLogs(14)}
+        loadFn={() => loadProdLogs(7)}
         refreshKey={lines.length + doneMap.size}
         formatEntry={(log) => {
           const who = log.profiles?.full_name || log.profiles?.username || '?'
