@@ -98,9 +98,9 @@ export default function LabelsButton() {
   const nbDaysSelected = Object.values(selected).filter(Boolean).length
 
   return (
-    <>
+    <div className="relative">
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen(!open)}
         className="px-2.5 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0"
         title="Imprimer les étiquettes Zebra"
       >
@@ -108,16 +108,19 @@ export default function LabelsButton() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
-             onClick={() => setOpen(false)}>
-          <div className="bg-cream rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-line"
+        <>
+          {/* Backdrop transparent pour fermer au clic exterieur */}
+          <div className="fixed inset-0 z-[70]" onClick={() => setOpen(false)} />
+
+          {/* Dropdown ancre sous le bouton */}
+          <div className="absolute right-0 top-full mt-2 z-[80] w-[300px] bg-cream rounded-xl shadow-2xl border border-line p-3"
                onClick={e => e.stopPropagation()}>
-            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">Étiquettes Zebra</h3>
-            <p className="text-[12px] text-ink-mute mb-4">
-              Coche les jours à imprimer. Seuls les composants CD non-faits sont inclus.
+            <h3 className="font-fraunces italic text-[15px] text-ink mb-1">Étiquettes Zebra</h3>
+            <p className="text-[10px] text-ink-mute mb-3">
+              Coche les jours à imprimer.
             </p>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {items.map(item => {
                 const count = counts[item.date]
                 const isChecked = !!selected[item.date]
@@ -127,7 +130,7 @@ export default function LabelsButton() {
                     key={item.date}
                     onClick={() => !isEmpty && toggleDate(item.date)}
                     disabled={isEmpty || loadingCounts}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded border text-left transition-colors ${
+                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded border text-left transition-colors ${
                       isEmpty
                         ? 'bg-cream-warm/30 border-line/40 text-ink-mute cursor-not-allowed'
                         : isChecked
@@ -135,24 +138,24 @@ export default function LabelsButton() {
                         : 'bg-cream-warm border-line hover:border-bordeaux hover:bg-bordeaux/5'
                     }`}
                   >
-                    <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center text-[11px] ${
+                    <div className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center text-[10px] ${
                       isChecked ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream'
                     }`}>
                       {isChecked ? '✓' : ''}
                     </div>
-                    <div className="flex-1">
-                      <div className="text-[13px] font-medium text-ink">{item.label}</div>
-                      <div className="text-[11px] text-ink-mute capitalize">{item.detail}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] font-medium text-ink leading-tight">{item.label}</div>
+                      <div className="text-[10px] text-ink-mute capitalize leading-tight">{item.detail}</div>
                     </div>
-                    <div className="text-right">
+                    <div className="flex-shrink-0">
                       {loadingCounts ? (
-                        <span className="text-[10px] text-ink-mute italic">...</span>
+                        <span className="text-[9px] text-ink-mute italic">...</span>
                       ) : count === undefined ? (
-                        <span className="text-[10px] text-ink-mute">?</span>
+                        <span className="text-[9px] text-ink-mute">?</span>
                       ) : count === 0 ? (
-                        <span className="text-[10px] text-ink-mute">Aucune</span>
+                        <span className="text-[9px] text-ink-mute">Aucune</span>
                       ) : (
-                        <span className="font-mono text-[12px] text-bordeaux font-bold">{count}</span>
+                        <span className="font-mono text-[11px] text-bordeaux font-bold">{count}</span>
                       )}
                     </div>
                   </button>
@@ -160,33 +163,32 @@ export default function LabelsButton() {
               })}
             </div>
 
-            {/* Resume */}
             {nbDaysSelected > 0 && (
-              <div className="mt-3 px-3 py-2 bg-bordeaux/5 border border-bordeaux/20 rounded text-[12px] text-bordeaux">
-                <span className="font-bold">{totalSelected}</span> étiquettes sur <span className="font-bold">{nbDaysSelected}</span> jour{nbDaysSelected > 1 ? 's' : ''}
+              <div className="mt-2 px-2 py-1.5 bg-bordeaux/5 border border-bordeaux/20 rounded text-[11px] text-bordeaux">
+                <span className="font-bold">{totalSelected}</span> étiquettes / <span className="font-bold">{nbDaysSelected}</span> jour{nbDaysSelected > 1 ? 's' : ''}
               </div>
             )}
 
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-2 mt-3">
               <button
                 onClick={() => setOpen(false)}
-                className="flex-1 py-2 border border-line rounded-full text-[12px] text-ink-soft hover:bg-cream-warm"
+                className="flex-1 py-1.5 border border-line rounded-full text-[11px] text-ink-soft hover:bg-cream-warm"
               >Annuler</button>
               <button
                 onClick={downloadSelected}
                 disabled={downloading || totalSelected === 0}
-                className={`flex-1 py-2 rounded-full text-[12px] font-medium transition-colors ${
+                className={`flex-1 py-1.5 rounded-full text-[11px] font-medium transition-colors ${
                   totalSelected === 0 || downloading
                     ? 'bg-line/40 text-ink-mute cursor-not-allowed'
                     : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'
                 }`}
               >
-                {downloading ? '⏳ Génération...' : '🖨 Télécharger'}
+                {downloading ? '⏳' : '🖨 Télécharger'}
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
-    </>
+    </div>
   )
 }
