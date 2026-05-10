@@ -261,6 +261,16 @@ export async function markMessagePrinted(sourceKey, messageText, userId) {
   return true
 }
 
+// Annuler le statut imprime (supprime toutes les entrees pour cette sourceKey)
+export async function unmarkMessagePrinted(sourceKey) {
+  const { error } = await supabase
+    .from('messages_printed')
+    .delete()
+    .eq('source_key', sourceKey)
+  if (error) throw error
+  return true
+}
+
 // ============================================================
 // Picker emoji : liste curee
 // ============================================================

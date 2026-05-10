@@ -3,6 +3,7 @@ import AppHeader from './AppHeader'
 import {
   loadMessagesToday,
   markMessagePrinted,
+  unmarkMessagePrinted,
   detectBirthdayLayout,
   isArabic,
   EMOJI_PICKER,
@@ -127,6 +128,17 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     setFreeMessages(prev => prev.filter(m => m.id !== id))
     const next = new Set(selected); next.delete(id); setSelected(next)
     const nextD = new Set(doubleSize); nextD.delete(id); setDoubleSize(nextD)
+  }
+
+  async function handleUnmarkPrinted(msg) {
+    if (!msg.printedAt) return
+    if (!confirm(`Marquer "${msg.text}" comme NON imprimé ?`)) return
+    try {
+      await unmarkMessagePrinted(msg.sourceKey)
+      refresh()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
   }
 
   // Pages : 5 zones par feuille, x2 = 2 zones
@@ -440,6 +452,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
                       onToggle={() => toggleSelect(msg.id)} onToggleDouble={() => toggleDouble(msg.id)}
                       onTextChange={t => setMessageText(msg.id, t)}
                       onRemove={() => removeFreeMessage(msg.id)}
+                      onUnmarkPrinted={() => handleUnmarkPrinted(msg)}
                     />
                   ))}
                 </div>
@@ -462,6 +475,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
                     text={getMessageText(msg)}
                     onToggle={() => toggleSelect(msg.id)} onToggleDouble={() => toggleDouble(msg.id)}
                     onTextChange={t => setMessageText(msg.id, t)}
+                    onUnmarkPrinted={() => handleUnmarkPrinted(msg)}
                   />
                 ))}
               </div>
@@ -541,7 +555,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 // ============================================================
 // MessageItem : carte d'un message dans la liste
 // ============================================================
-function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble, onTextChange, onRemove }) {
+function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble, onTextChange, onRemove, onUnmarkPrinted }) {
   const [editing, setEditing] = useState(false)
   const ar = isArabic(text)
   const time = msg.deliveryAt ? new Date(msg.deliveryAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null
@@ -564,7 +578,15 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
             {time && <span className="font-mono text-[9px] text-ink-mute">{time}</span>}
             {msg.clientName && <span className="text-[10px] text-ink-soft truncate">{msg.clientName}</span>}
             {ar && <span className="bg-purple-100 text-purple-800 text-[9px] px-1.5 py-0.5 rounded-full">AR</span>}
-            {msg.printedAt && <span className="bg-green-100 text-green-800 text-[9px] px-1.5 py-0.5 rounded-full">imprimé</span>}
+            {msg.printedAt && (
+              <button
+                onClick={onUnmarkPrinted}
+                className="bg-green-100 text-green-800 hover:bg-red-100 hover:text-red-800 text-[9px] px-1.5 py-0.5 rounded-full transition-colors cursor-pointer"
+                title="Cliquer pour marquer comme NON imprimé"
+              >
+                ✓ imprimé · annuler
+              </button>
+            )}
             {msg.type === 'free' && <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full">libre</span>}
           </div>
           {editing ? (
