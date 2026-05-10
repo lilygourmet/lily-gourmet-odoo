@@ -36,31 +36,55 @@ export async function unmarkProdLineDone(odooLineId) {
   return true
 }
 
-// Charge l'historique des actions prod_done (14 derniers jours)
-// Avec join sur profiles (qui a fait) + sales_lines (quoi)
-export async function loadProdLogs(daysBack = 14) {
+// Charge l'historique des actions prod_done (N derniers jours)
+// Fetch separe pour profiles et sales_lines (plus fiable que join Supabase)
+export async function loadProdLogs(daysBack = 7) {
   const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000)
-  const { data, error } = await supabase
+
+  // 1) Logs bruts
+  const { data: logs, error } = await supabase
     .from('prod_done')
-    .select(`
-      id, odoo_line_id, done_at, done_by,
-      profiles:done_by(full_name, username),
-      sales_lines:odoo_line_id(product_name, quantity, client_name, order_num)
-    `)
+    .select('id, odoo_line_id, done_at, done_by')
     .gte('done_at', since.toISOString())
     .order('done_at', { ascending: false })
     .limit(500)
 
   if (error) {
-    console.warn('[loadProdLogs] join echec, fallback:', error)
-    // Fallback : pas de join (peut arriver si FK mal definie)
-    const { data: simple } = await supabase
-      .from('prod_done')
-      .select('*')
-      .gte('done_at', since.toISOString())
-      .order('done_at', { ascending: false })
-      .limit(500)
-    return simple || []
+    console.error('[loadProdLogs] erreur:', error)
+    return []
   }
-  return data || []
+  if (!logs || logs.length === 0) return []
+
+  // 2) Fetch profiles en une fois
+  const userIds = [...new Set(logs.map(l => l.done_by).filter(Boolean))]
+  let profilesMap = new Map()
+  if (userIds.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, full_name, username')
+      .in('id', userIds)
+    if (profs) {
+      profilesMap = new Map(profs.map(p => [p.id, p]))
+    }
+  }
+
+  // 3) Fetch sales_lines en une fois
+  const lineIds = [...new Set(logs.map(l => l.odoo_line_id).filter(Boolean))]
+  let linesMap = new Map()
+  if (lineIds.length > 0) {
+    const { data: lines } = await supabase
+      .from('sales_lines')
+      .select('odoo_line_id, product_name, quantity, client_name, order_num')
+      .in('odoo_line_id', lineIds)
+    if (lines) {
+      linesMap = new Map(lines.map(l => [l.odoo_line_id, l]))
+    }
+  }
+
+  // 4) Joindre cote JS
+  return logs.map(log => ({
+    ...log,
+    profiles: profilesMap.get(log.done_by) || null,
+    sales_lines: linesMap.get(log.odoo_line_id) || null,
+  }))
 }
