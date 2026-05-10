@@ -207,7 +207,6 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     const widthMm = 90   // 9cm max (zone 10,5cm avec marges)
     const heightMm = (zones === 2 ? 105 : 46) * 0.80   // marge 20% pour eviter tout debordement
     const factor = sizeFactor / 100
-    const factor = sizeFactor / 100
 
     const ar = isArabic(text)
     const fontFamily = ar ? arabicFont.css : latinFont.css
