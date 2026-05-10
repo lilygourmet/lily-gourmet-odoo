@@ -5,6 +5,7 @@ import RecapVentes from './components/RecapVentes'
 import PatissierView from './components/PatissierView'
 import ProdView from './components/ProdView'
 import FreezerView from './components/FreezerView'
+import MessagesView from './components/MessagesView'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly } from './lib/auth'
 
 function App() {
@@ -72,6 +73,7 @@ function App() {
   if (activeView === 'prod') return <ProdView {...navProps} forcedCategory="prod" />
   if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
   if (activeView === 'freezer') return <FreezerView {...navProps} />
+  if (activeView === 'messages') return <MessagesView {...navProps} />
   // Default = Calendar
   return <Calendar {...navProps} />
 }

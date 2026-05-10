@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import AppHeader from './AppHeader'
 import {
   loadMessagesForRange,
   groupMessagesByDay,
@@ -31,7 +32,7 @@ const ARABIC_FONT_OPTIONS = [
 ]
 
 // ============================================================
-export default function MessagesView({ user }) {
+export default function MessagesView({ user, activeView, onNavigate, onLogout }) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(new Set())
@@ -264,7 +265,9 @@ export default function MessagesView({ user }) {
   // RENDER
   // ============================================================
   return (
-    <div className="max-w-6xl mx-auto px-4 py-4">
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} onSyncSuccess={refresh} />
+      <div className="max-w-6xl mx-auto px-4 py-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -453,6 +456,7 @@ export default function MessagesView({ user }) {
             🖨 Imprimer ({selected.size} message{selected.size > 1 ? 's' : ''})
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

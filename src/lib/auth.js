@@ -152,6 +152,12 @@ export function canSeeFreezer(user) {
   return user.role === 'admin' || user.perm_freezer === true
 }
 
+// User peut voir l'onglet Messages (admin ou perm_messages=true)
+export function canSeeMessages(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_messages === true
+}
+
 // Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false
