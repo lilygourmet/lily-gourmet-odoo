@@ -300,7 +300,10 @@ function OdooTableView({ lines }) {
   )
 }
 
-function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
+function CategoryPopup({
+  cat, lines, allLines, dateLabel, onClose,
+  cart, onAddToCart, onRemoveFromCart, onClearCart, onDownloadCart, downloadingCart,
+}) {
   const isProductMode = cat.viewMode === 'product'
   const isDeliveryMode = cat.viewMode === 'delivery'
   const isDeliveryAllMode = cat.viewMode === 'delivery-all'
@@ -308,10 +311,6 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
 
   // Sous-popup pour choisir le nb d'etiquettes pour 1 article
   const [labelTask, setLabelTask] = useState(null)
-  // Panier d'etiquettes a imprimer (cumule des clics)
-  const [cart, setCart] = useState([])
-  // State telechargement
-  const [downloading, setDownloading] = useState(false)
 
   function onPickItem(orderNum, clientName, item) {
     setLabelTask({
@@ -329,7 +328,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
       name: shortIndivName(it.product_name),
       qty: Number(it.quantity) || 1,
     }))
-    addToCart({
+    onAddToCart({
       mode: 'indiv',
       orderNum,
       clientName,
@@ -338,51 +337,6 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
       displayLabel: `${orderNum} ${clientName} · Individuels (${items.reduce((s, it) => s + it.qty, 0)})`,
       labelCount: Math.ceil(items.length / 3),  // 3 indiv par etiquette
     })
-  }
-
-  function addToCart(entry) {
-    setCart(c => [...c, { ...entry, id: Date.now() + Math.random() }])
-  }
-
-  function removeFromCart(id) {
-    setCart(c => c.filter(e => e.id !== id))
-  }
-
-  function clearCart() {
-    if (cart.length === 0) return
-    if (!confirm('Vider le panier ?')) return
-    setCart([])
-  }
-
-  async function downloadAll() {
-    if (cart.length === 0) return
-    setDownloading(true)
-    try {
-      const r = await fetch('/api/labels-client-zpl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batch: cart }),
-      })
-      if (!r.ok) {
-        const txt = await r.text()
-        throw new Error(`Erreur ${r.status}: ${txt}`)
-      }
-      const blob = await r.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `etiquettes-${new Date().toISOString().slice(0, 10)}.zpl`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      // Vide le panier apres telechargement reussi
-      setCart([])
-    } catch (e) {
-      alert('Erreur generation : ' + e.message)
-    } finally {
-      setDownloading(false)
-    }
   }
 
   // Total etiquettes dans le panier
@@ -486,7 +440,7 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
           onClose={() => setLabelTask(null)}
           onConfirm={(count) => {
             const cleanProduct = String(labelTask.productName || '').replace(/^\[\d+\]\s*/, '')
-            addToCart({
+            onAddToCart({
               mode: 'single',
               orderNum: labelTask.orderNum,
               clientName: labelTask.clientName,
@@ -505,10 +459,10 @@ function CategoryPopup({ cat, lines, allLines, dateLabel, onClose }) {
         <CartBar
           cart={cart}
           totalLabels={totalLabels}
-          downloading={downloading}
-          onRemove={removeFromCart}
-          onClear={clearCart}
-          onDownload={downloadAll}
+          downloading={downloadingCart}
+          onRemove={onRemoveFromCart}
+          onClear={() => onClearCart()}
+          onDownload={onDownloadCart}
         />
       )}
     </div>
@@ -756,6 +710,91 @@ function LabelCountPopup({ task, onClose, onConfirm }) {
 }
 
 // ============================================================
+// ============================================================
+// FloatingCart : badge compact en bas a droite, s'etend au clic
+// Visible quand le panier a au moins 1 element ET qu'aucune popup n'est ouverte
+// ============================================================
+function FloatingCart({ cart, totalLabels, expanded, onToggle, onRemove, onClear, onDownload, downloading }) {
+  return (
+    <div
+      className="fixed bottom-6 right-6 z-[65]"
+      onClick={e => e.stopPropagation()}
+    >
+      {expanded ? (
+        /* Panneau etendu : liste des etiquettes + actions */
+        <div className="bg-cream border border-bordeaux/40 rounded-2xl shadow-2xl w-[320px] max-h-[60vh] flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
+            <div className="font-fraunces italic text-[15px] text-ink leading-none">
+              Panier
+            </div>
+            <button
+              onClick={onToggle}
+              className="w-7 h-7 rounded-full hover:bg-line/30 flex items-center justify-center text-ink-mute"
+              aria-label="Réduire le panier"
+            >
+              <i className="ti ti-chevron-down text-[16px]" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-bordeaux font-mono">
+            {totalLabels} étiquette{totalLabels > 1 ? 's' : ''} · {cart.length} ligne{cart.length > 1 ? 's' : ''}
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 pb-2 space-y-1">
+            {cart.map(entry => (
+              <div
+                key={entry.id}
+                className="flex items-start gap-2 px-2 py-1.5 bg-cream-warm/50 rounded text-[11px] text-ink-soft"
+              >
+                <span className="flex-1 min-w-0 leading-tight">{entry.displayLabel}</span>
+                <button
+                  onClick={() => onRemove(entry.id)}
+                  className="flex-shrink-0 w-5 h-5 rounded-full hover:bg-bordeaux/10 flex items-center justify-center text-ink-mute hover:text-bordeaux"
+                  aria-label="Retirer du panier"
+                >
+                  <i className="ti ti-x text-[12px]" aria-hidden="true"></i>
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 px-3 py-3 border-t border-line">
+            <button
+              onClick={onClear}
+              className="flex-1 py-1.5 border border-line rounded-full text-[11px] text-ink-soft hover:bg-cream-warm"
+            >
+              Vider
+            </button>
+            <button
+              onClick={onDownload}
+              disabled={downloading || cart.length === 0}
+              className={`flex-[2] py-1.5 rounded-full text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                downloading || cart.length === 0
+                  ? 'bg-line/40 text-ink-mute cursor-not-allowed'
+                  : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'
+              }`}
+            >
+              <i className={`ti ${downloading ? 'ti-loader-2 animate-spin' : 'ti-printer'} text-[13px]`} aria-hidden="true"></i>
+              {downloading ? 'Génération…' : 'Télécharger ZPL'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Badge compact */
+        <button
+          onClick={onToggle}
+          className="bg-bordeaux text-cream rounded-full shadow-2xl hover:bg-bordeaux-deep transition-colors flex items-center gap-2 pl-3 pr-4 py-2.5 group"
+          title="Voir le panier d'étiquettes"
+        >
+          <i className="ti ti-shopping-cart text-[18px]" aria-hidden="true"></i>
+          <span className="font-mono font-bold text-[13px]">{totalLabels}</span>
+          <span className="text-[11px] uppercase tracking-wider opacity-90">
+            étiquette{totalLabels > 1 ? 's' : ''}
+          </span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
 // Barre panier d'etiquettes (sticky en bas du popup)
 // ============================================================
 function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload }) {
@@ -878,6 +917,70 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
   const [clientsTerms, setClientsTerms] = useState('')
   const [articlesMode, setArticlesMode] = useState('not_contains')
   const [articlesTerms, setArticlesTerms] = useState('')
+
+  // Panier d'etiquettes partage entre toutes les popups categories.
+  // Persiste en localStorage pour survivre a un refresh.
+  const CART_KEY = 'lg_label_cart_v1'
+  const [cart, setCart] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CART_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  })
+  const [cartExpanded, setCartExpanded] = useState(false)
+  const [downloadingCart, setDownloadingCart] = useState(false)
+
+  // Sauvegarde automatique du panier
+  useEffect(() => {
+    try { localStorage.setItem(CART_KEY, JSON.stringify(cart)) } catch {}
+  }, [cart])
+
+  function addToCart(entry) {
+    setCart(c => [...c, { ...entry, id: Date.now() + Math.random() }])
+  }
+
+  function removeFromCart(id) {
+    setCart(c => c.filter(e => e.id !== id))
+  }
+
+  function clearCart(skipConfirm = false) {
+    if (cart.length === 0) return
+    if (!skipConfirm && !confirm('Vider le panier ?')) return
+    setCart([])
+    setCartExpanded(false)
+  }
+
+  async function downloadCart() {
+    if (cart.length === 0) return
+    setDownloadingCart(true)
+    try {
+      const r = await fetch('/api/labels-client-zpl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch: cart }),
+      })
+      if (!r.ok) {
+        const txt = await r.text()
+        throw new Error(`Erreur ${r.status}: ${txt}`)
+      }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `etiquettes-${new Date().toISOString().slice(0, 10)}.zpl`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      clearCart(true)
+    } catch (e) {
+      alert('Erreur generation : ' + e.message)
+    } finally {
+      setDownloadingCart(false)
+    }
+  }
+
+  const totalLabels = cart.reduce((s, e) => s + (e.labelCount || 1), 0)
 
   useEffect(() => {
     (async () => {
@@ -1186,6 +1289,26 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           allLines={filteredLines}
           dateLabel={dateLabel}
           onClose={() => setPopupCat(null)}
+          cart={cart}
+          onAddToCart={addToCart}
+          onRemoveFromCart={removeFromCart}
+          onClearCart={clearCart}
+          onDownloadCart={downloadCart}
+          downloadingCart={downloadingCart}
+        />
+      )}
+
+      {/* Panier flottant : visible quand le panier n'est pas vide ET aucune popup ouverte */}
+      {cart.length > 0 && !popupCat && (
+        <FloatingCart
+          cart={cart}
+          totalLabels={totalLabels}
+          expanded={cartExpanded}
+          onToggle={() => setCartExpanded(v => !v)}
+          onRemove={removeFromCart}
+          onClear={() => clearCart()}
+          onDownload={downloadCart}
+          downloading={downloadingCart}
         />
       )}
     </>
