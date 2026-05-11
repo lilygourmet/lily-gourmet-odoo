@@ -525,9 +525,22 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv })
   const clientName = entry.clientName || ''
   const clientPhone = entry.clientPhone || null
   const orderNote = entry.orderNote || null
+  const orderTotal = typeof entry.orderTotal === 'number' ? entry.orderTotal : null
+  const orderAcompte = typeof entry.orderAcompte === 'number' ? entry.orderAcompte : null
 
   // Detection d'URL Google Maps dans la note
   const mapsUrl = orderNote ? extractMapsUrl(orderNote) : null
+
+  // Format montant en DH sans centimes inutiles (1 900 DH au lieu de 1 900,00 DH)
+  function fmtMad(v) {
+    if (v === null || v === undefined || isNaN(v)) return ''
+    const rounded = Math.round(Math.abs(v) * 100) / 100
+    // Affiche avec virgule + centimes uniquement si non entier
+    const formatted = Number.isInteger(rounded)
+      ? rounded.toLocaleString('fr-FR')
+      : rounded.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return `${v < 0 ? '−' : ''}${formatted} DH`
+  }
 
   return (
     <div className="ml-2 mb-2">
@@ -570,6 +583,61 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv })
           )}
         </div>
       )}
+
+      {/* Montants Total / Acompte / Reste : seulement en mode livraison */}
+      {showContact && orderTotal !== null && orderTotal > 0 && (() => {
+        const acompte = orderAcompte || 0
+        const reste = orderTotal - acompte
+        // Cas 1 : pas d'acompte -> "1 900 DH a encaisser"
+        if (acompte === 0) {
+          return (
+            <div className="ml-2 mb-1 text-[11px] flex items-center gap-1.5">
+              <span className="font-mono tracking-wide text-bordeaux font-medium">
+                {fmtMad(orderTotal)}
+              </span>
+              <span className="text-ink-mute">à encaisser</span>
+            </div>
+          )
+        }
+        // Cas 2 : reste exactement 0 -> commande payee
+        if (Math.abs(reste) < 0.01) {
+          return (
+            <div className="ml-2 mb-1 text-[11px] flex items-center gap-1.5 flex-wrap">
+              <span className="font-mono text-ink-soft">{fmtMad(orderTotal)}</span>
+              <span className="text-ink-mute">·</span>
+              <span className="text-ink-mute">acompte</span>
+              <span className="font-mono text-ink-soft">{fmtMad(acompte)}</span>
+              <span className="text-ink-mute">·</span>
+              <span className="text-success font-medium">payé</span>
+            </div>
+          )
+        }
+        // Cas 3 : reste > 0 -> "reste 400 DH"
+        if (reste > 0) {
+          return (
+            <div className="ml-2 mb-1 text-[11px] flex items-center gap-1.5 flex-wrap">
+              <span className="font-mono text-ink-soft">{fmtMad(orderTotal)}</span>
+              <span className="text-ink-mute">·</span>
+              <span className="text-ink-mute">acompte</span>
+              <span className="font-mono text-ink-soft">{fmtMad(acompte)}</span>
+              <span className="text-ink-mute">·</span>
+              <span className="text-ink-mute">reste</span>
+              <span className="font-mono text-bordeaux font-medium">{fmtMad(reste)}</span>
+            </div>
+          )
+        }
+        // Cas 4 : reste < 0 -> trop percu, a rendre
+        return (
+          <div className="ml-2 mb-1 text-[11px] flex items-center gap-1.5 flex-wrap">
+            <span className="font-mono text-ink-soft">{fmtMad(orderTotal)}</span>
+            <span className="text-ink-mute">·</span>
+            <span className="text-ink-mute">acompte</span>
+            <span className="font-mono text-ink-soft">{fmtMad(acompte)}</span>
+            <span className="text-ink-mute">·</span>
+            <span className="text-success font-medium">{fmtMad(Math.abs(reste))} à rendre</span>
+          </div>
+        )
+      })()}
 
       {/* Items normaux : cliquables si la categorie le permet */}
       {normal.map(item => (

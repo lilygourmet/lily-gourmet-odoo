@@ -171,7 +171,7 @@ async function fetchOdooOrders(uid) {
       ['commitment_date', '>=', dateStart],
       ['commitment_date', '<=', dateEnd],
     ],
-    ['id', 'name', 'partner_id', 'commitment_date', 'livraison_hour', 'state', 'note', 'order_line', 'user_id', 'create_uid', 'warehouse_id'],
+    ['id', 'name', 'partner_id', 'commitment_date', 'livraison_hour', 'state', 'note', 'order_line', 'user_id', 'create_uid', 'warehouse_id', 'amount_total'],
     { order: 'commitment_date asc', limit: 500 }
   )
 
@@ -355,6 +355,23 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
     // Entrepot (warehouse_id renvoye par Odoo sous forme [id, "Nom"])
     const warehouse = Array.isArray(odooOrder.warehouse_id) ? odooOrder.warehouse_id[1] : null
 
+    // Montant total de la commande (TTC, Odoo amount_total)
+    const orderTotal = parseFloat(odooOrder.amount_total) || 0
+
+    // Acompte : somme des price_unit des lignes "Acompte" ou "Down Payment".
+    // Ces lignes sont generalement saisies avec qty=0 et price_unit=montant verse.
+    // On boucle d'abord pour cumuler avant de les ignorer dans la boucle principale.
+    let orderAcompte = 0
+    for (const l of odooLines) {
+      const pname = (l.name || '').trim()
+      if (/^(Acompte|Down\s+Payment)/i.test(pname)) {
+        const pu = parseFloat(l.price_unit) || 0
+        const q = parseFloat(l.product_uom_qty) || 0
+        // Si qty=0 le montant verse est dans price_unit. Sinon on prend qty * price_unit
+        orderAcompte += q > 0 ? q * pu : pu
+      }
+    }
+
     // Note : chercher uniquement les lignes display_type='line_note' qui sont
     // SOUS la ligne Livraison (pas les notes sous d'autres articles).
     // On trie par sequence, on trouve la ligne Livraison, puis on prend les line_note
@@ -450,6 +467,8 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
         client_phone: clientPhone,
         order_note: orderNote,
         warehouse: warehouse,
+        order_total: orderTotal,
+        order_acompte: orderAcompte,
         delivery_at: deliveryAt,
         order_num: orderNum,
       })
