@@ -87,19 +87,23 @@ function buildSingleZpl(name, subtitle, priceLine) {
   lines.push('^LL200')        // label length 2.5cm
   lines.push('^LS0')
 
-  // 3 cas : nom seul / nom+pers / nom+pers+prix
+  // 4 cas selon ce qu'on doit afficher :
+  // - nom seul         -> nom centre vertical (Y=100)
+  // - nom + prix       -> nom haut + prix bas (cas GS/SU sans taille)
+  // - nom + pers       -> nom haut + pers bas (cas E- avec taille, sans prix)
+  // - nom + pers + prix -> 3 lignes (cas GS/SU avec taille + prix)
   // L'etiquette fait 200 dots de haut. On centre le bloc dans la zone Y=20..180.
   if (priceLine && subtitle) {
     // 3 lignes : nom (haut), pers (milieu), prix (bas)
-    // Nom : Y=20 (2 lignes possibles)
     lines.push('^FT10,55^A0N,28,28^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
-    // Pers : Y=120
     lines.push('^FT10,135^A0N,24,24^FB380,1,0,C,0^FD' + escapeZpl(subtitle) + '^FS')
-    // Prix : Y=170
     lines.push('^FT10,185^A0N,28,28^FB380,1,0,C,0^FD' + escapeZpl(priceLine) + '^FS')
+  } else if (priceLine) {
+    // 2 lignes : nom (haut, en gros) + prix (bas) - cas typique GS/SU sans taille
+    lines.push('^FT10,75^A0N,32,32^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
+    lines.push('^FT10,170^A0N,32,32^FB380,1,0,C,0^FD' + escapeZpl(priceLine) + '^FS')
   } else if (subtitle) {
-    // 2 lignes : nom (60% haut) + pers (40% bas), groupes au centre vertical
-    // Bloc total : nom de Y=45 a Y=110, pers a Y=150
+    // 2 lignes : nom (haut) + pers (bas), groupes au centre vertical
     lines.push('^FT10,75^A0N,32,32^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
     lines.push('^FT10,160^A0N,28,28^FB380,1,0,C,0^FD' + escapeZpl(subtitle) + '^FS')
   } else {
