@@ -72,11 +72,26 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     return map
   }, [lines])
 
+  // Helpers status : permet de lire l'etat actuel d'une ligne dans doneMap
+  // Une entree dans doneMap signifie soit 'done', soit 'cancelled'.
+  // Absence d'entree = "a faire".
+  function getStatus(odooLineId) {
+    const entry = doneMap.get(odooLineId)
+    if (!entry) return null
+    return entry.status === 'cancelled' ? 'cancelled' : 'done'
+  }
+  function isDoneStatus(odooLineId) { return getStatus(odooLineId) === 'done' }
+  function isCancelledStatus(odooLineId) { return getStatus(odooLineId) === 'cancelled' }
+
+  // Limite Salés au flux d'origine : 'cancelled' utile uniquement pour Prod
+  const supportsCancellation = category === 'prod'
+
+  // Click sur le bouton "Fait" : ajoute 'done', ou retire si deja 'done'
   async function toggle(line) {
-    const isDone = doneMap.has(line.odoo_line_id)
+    const status = getStatus(line.odoo_line_id)
     try {
-      if (isDone) await unmarkProdLineDone(line.odoo_line_id)
-      else await markProdLineDone(line.odoo_line_id, user?.id)
+      if (status === 'done') await unmarkProdLineDone(line.odoo_line_id)
+      else await markProdLineDone(line.odoo_line_id, user?.id, 'done')
       await refresh()
     } catch (e) {
       console.error(e)
@@ -84,15 +99,28 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     }
   }
 
-  // Marque/demarque toutes les lignes d'un produit agrege
+  // Click sur le bouton "Annuler" : ajoute 'cancelled', ou retire si deja 'cancelled'
+  async function cancel(line) {
+    const status = getStatus(line.odoo_line_id)
+    try {
+      if (status === 'cancelled') await unmarkProdLineDone(line.odoo_line_id)
+      else await markProdLineDone(line.odoo_line_id, user?.id, 'cancelled')
+      await refresh()
+    } catch (e) {
+      console.error(e)
+      alert('Erreur : ' + e.message)
+    }
+  }
+
+  // Marque/demarque toutes les lignes d'un produit agrege (boutons en haut de groupe)
   async function toggleProductGroup(productLines, allDone) {
     try {
       for (const l of productLines) {
-        const isDone = doneMap.has(l.odoo_line_id)
+        const isDone = isDoneStatus(l.odoo_line_id)
         if (allDone && isDone) {
           await unmarkProdLineDone(l.odoo_line_id)
         } else if (!allDone && !isDone) {
-          await markProdLineDone(l.odoo_line_id, user?.id)
+          await markProdLineDone(l.odoo_line_id, user?.id, 'done')
         }
       }
       await refresh()
@@ -107,7 +135,8 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
   }
 
   function handlePrint(date) {
-    const dayLines = (byDate.get(date) || []).filter(l => !doneMap.has(l.odoo_line_id))
+    // On imprime uniquement les lignes "a faire" (ni done ni cancelled)
+    const dayLines = (byDate.get(date) || []).filter(l => getStatus(l.odoo_line_id) === null)
     if (dayLines.length === 0) {
       alert('Rien à imprimer pour ce jour')
       return
@@ -201,9 +230,10 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
               const d = new Date(date)
               const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
               const tab = tabsByDate[date] || 'todo'
-              const todo = dayLines.filter(l => !doneMap.has(l.odoo_line_id))
-              const done = dayLines.filter(l => doneMap.has(l.odoo_line_id))
-              const visibleLines = tab === 'todo' ? todo : done
+              const todo = dayLines.filter(l => getStatus(l.odoo_line_id) === null)
+              const done = dayLines.filter(l => isDoneStatus(l.odoo_line_id))
+              const cancelled = dayLines.filter(l => isCancelledStatus(l.odoo_line_id))
+              const visibleLines = tab === 'todo' ? todo : tab === 'done' ? done : cancelled
 
               return (
                 <div key={date} className="bg-white rounded-lg border border-line p-3">
@@ -227,6 +257,16 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
                               : done.length === 0 ? 'text-ink-mute/60' : 'text-ink-mute hover:text-bordeaux'
                           }`}
                         >Faites ({done.length})</button>
+                        {supportsCancellation && (
+                          <button
+                            onClick={() => setDayTab(date, 'cancelled')}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+                              tab === 'cancelled'
+                                ? 'bg-[#A03333] text-cream'
+                                : cancelled.length === 0 ? 'text-ink-mute/60' : 'text-ink-mute hover:text-[#A03333]'
+                            }`}
+                          >Annulées ({cancelled.length})</button>
+                        )}
                       </div>
                       {todo.length > 0 && (
                         <button
@@ -240,16 +280,24 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
 
                   {visibleLines.length === 0 ? (
                     <div className="text-center text-ink-mute italic py-3 text-[11px]">
-                      {tab === 'todo' ? 'Tout est fait ✓' : 'Rien fait pour le moment'}
+                      {tab === 'todo' ? 'Tout est traité ✓' : tab === 'done' ? 'Rien fait pour le moment' : 'Aucune annulée'}
                     </div>
                   ) : viewMode === 'client' ? (
-                    <ClientView lines={visibleLines} doneMap={doneMap} onToggle={toggle} />
+                    <ClientView
+                      lines={visibleLines}
+                      doneMap={doneMap}
+                      onToggle={toggle}
+                      onCancel={cancel}
+                      supportsCancellation={supportsCancellation}
+                    />
                   ) : (
                     <ProductView
                       lines={visibleLines}
                       doneMap={doneMap}
                       onToggleGroup={toggleProductGroup}
                       onToggleSingle={toggle}
+                      onCancelSingle={cancel}
+                      supportsCancellation={supportsCancellation}
                       expandedKey={expandedKey}
                       setExpandedKey={setExpandedKey}
                       dateKey={date}
@@ -274,7 +322,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
               {datesWithLines.map(d => {
                 const dt = new Date(d)
                 const lab = dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-                const todoCount = (byDate.get(d) || []).filter(l => !doneMap.has(l.odoo_line_id)).length
+                const todoCount = (byDate.get(d) || []).filter(l => getStatus(l.odoo_line_id) === null).length
                 return (
                   <button
                     key={d}
@@ -300,10 +348,10 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
         </div>
       )}
 
-      {/* Footer logs : filtre selon la categorie courante (Prod vs Sales) */}
+      {/* Footer logs : 3 derniers jours, filtre par categorie, distingue fait/annule */}
       <ActivityLog
         loadFn={async () => {
-          const allLogs = await loadProdLogs(7)
+          const allLogs = await loadProdLogs(3)
           if (!category) return allLogs
           // On filtre les logs en utilisant la meme regle que les lignes affichees,
           // pour qu'un user en mode Sales ne voie pas les logs de Prod (et vice-versa).
@@ -313,7 +361,6 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
           const filteredFakes = filterLinesForProdCategory(fakeLines, category)
           const keptLogIds = new Set(filteredFakes.map(f => f._log.id))
           return allLogs.filter(log => {
-            // Garder aussi les logs orphelins (ligne supprimee) pour ne pas tout cacher
             if (!log.sales_lines) return false
             return keptLogIds.has(log.id)
           })
@@ -324,7 +371,8 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
           const sl = log.sales_lines
           const what = sl ? `${sl.product_name || ''} ×${sl.quantity || ''}` : `(ligne supprimée)`
           const where = sl?.order_num ? ` pour ${sl.order_num}${sl.client_name ? ' · ' + sl.client_name : ''}` : ''
-          return `${relativeTime(log.done_at)} — ${who} a fait ${what}${where}`
+          const verb = log.status === 'cancelled' ? 'a annulé' : 'a fait'
+          return `${relativeTime(log.done_at)} — ${who} ${verb} ${what}${where}`
         }}
       />
     </div>
@@ -351,36 +399,66 @@ function VitrinePill() {
 }
 
 // Vue par client : ligne par ligne
-function ClientView({ lines, doneMap, onToggle }) {
+function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation }) {
   const sorted = [...lines].sort((a, b) => new Date(a.delivery_at) - new Date(b.delivery_at))
   return (
     <div className="space-y-1">
       {sorted.map(line => {
-        const isDone = doneMap.has(line.odoo_line_id)
+        const entry = doneMap.get(line.odoo_line_id)
+        const status = entry ? (entry.status === 'cancelled' ? 'cancelled' : 'done') : null
+        const isDone = status === 'done'
+        const isCancelled = status === 'cancelled'
         const t = new Date(line.delivery_at)
         const hour = `${String(t.getHours()).padStart(2, '0')}h${String(t.getMinutes()).padStart(2, '0')}`
+
+        const wrapperClass = isDone
+          ? 'bg-success/5 border-success/20 line-through text-ink-mute'
+          : isCancelled
+            ? 'bg-[#A03333]/5 border-[#A03333]/30 line-through text-[#A03333]/70'
+            : 'bg-cream-warm/50 border-line/60 hover:border-bordeaux'
+
         return (
-          <button
+          <div
             key={line.id}
-            onClick={() => onToggle(line)}
-            className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded border transition-all ${
-              isDone
-                ? 'bg-success/5 border-success/20 line-through text-ink-mute'
-                : 'bg-cream-warm/50 border-line/60 hover:border-bordeaux'
-            }`}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded border transition-all ${wrapperClass}`}
           >
-            <span className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] ${
-              isDone ? 'bg-success border-success text-cream' : 'border-line'
-            }`}>
-              {isDone ? '✓' : ''}
-            </span>
-            <span className="font-mono text-[10px] text-ink-mute w-12 flex-shrink-0">{hour}</span>
-            <span className="font-mono text-[10px] text-bordeaux flex-shrink-0">{line.order_num}</span>
-            <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
-            <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
-            <span className="text-[12px] text-ink min-w-0 flex-1 truncate">{line.product_name}</span>
-            {isReservationVitrine(line) && <VitrinePill />}
-          </button>
+            {/* Click sur la zone principale = toggle "Fait" */}
+            <button
+              onClick={() => onToggle(line)}
+              className="flex-1 min-w-0 flex items-center gap-2 text-left"
+              title={isDone ? 'Cliquer pour annuler la coche' : 'Marquer comme fait'}
+            >
+              <span className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] ${
+                isDone
+                  ? 'bg-success border-success text-cream'
+                  : isCancelled
+                    ? 'border-[#A03333]/30 bg-[#A03333]/5 text-[#A03333]/60'
+                    : 'border-line'
+              }`}>
+                {isDone ? '✓' : isCancelled ? '−' : ''}
+              </span>
+              <span className="font-mono text-[10px] text-ink-mute w-12 flex-shrink-0">{hour}</span>
+              <span className="font-mono text-[10px] text-bordeaux flex-shrink-0">{line.order_num}</span>
+              <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
+              <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
+              <span className="text-[12px] text-ink min-w-0 flex-1 truncate">{line.product_name}</span>
+              {isReservationVitrine(line) && <VitrinePill />}
+            </button>
+            {/* Bouton Annuler (croix rouge) - uniquement pour Prod */}
+            {supportsCancellation && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCancel(line) }}
+                className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                  isCancelled
+                    ? 'bg-[#A03333] text-cream hover:bg-[#7a2525]'
+                    : 'border border-[#A03333]/40 text-[#A03333] hover:bg-[#A03333] hover:text-cream'
+                }`}
+                title={isCancelled ? 'Retirer l\'annulation' : 'Marquer comme annulé'}
+              >
+                <i className="ti ti-x text-[12px]" aria-hidden="true"></i>
+              </button>
+            )}
+          </div>
         )
       })}
     </div>
@@ -388,7 +466,14 @@ function ClientView({ lines, doneMap, onToggle }) {
 }
 
 // Vue par produit : agrégé, click pour expand
-function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKey, setExpandedKey, dateKey }) {
+function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSingle, supportsCancellation, expandedKey, setExpandedKey, dateKey }) {
+  // Helper local : extrait le status d'une ligne
+  function statusOf(odooLineId) {
+    const e = doneMap.get(odooLineId)
+    if (!e) return null
+    return e.status === 'cancelled' ? 'cancelled' : 'done'
+  }
+
   // Agréger par product_name
   const grouped = useMemo(() => {
     const map = new Map()
@@ -405,8 +490,18 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKe
   return (
     <div className="space-y-1">
       {grouped.map((g, i) => {
-        const allDone = g.lines.every(l => doneMap.has(l.odoo_line_id))
-        const someDone = g.lines.some(l => doneMap.has(l.odoo_line_id))
+        const doneLines = g.lines.filter(l => statusOf(l.odoo_line_id) === 'done')
+        const cancelledLines = g.lines.filter(l => statusOf(l.odoo_line_id) === 'cancelled')
+        const todoLines = g.lines.filter(l => statusOf(l.odoo_line_id) === null)
+        const allDone = todoLines.length === 0 && doneLines.length > 0
+        const someDone = doneLines.length > 0
+        const allCancelled = todoLines.length === 0 && doneLines.length === 0 && cancelledLines.length > 0
+
+        // Quantites
+        const sumQty = (arr) => arr.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
+        const todoQty = sumQty(todoLines)
+        const totalQty = g.totalQty
+
         const fusionKey = `${dateKey}|${g.name}`
         const isExpanded = expandedKey === fusionKey
 
@@ -417,7 +512,9 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKe
 
         return (
           <div key={i} className={`rounded border ${
-            allDone ? 'bg-success/5 border-success/20' : 'bg-cream-warm/50 border-line/60'
+            allCancelled ? 'bg-[#A03333]/5 border-[#A03333]/20'
+              : allDone ? 'bg-success/5 border-success/20'
+              : 'bg-cream-warm/50 border-line/60'
           }`}>
             <div className="flex items-center gap-2 px-2 py-1.5">
               <button
@@ -431,8 +528,20 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKe
               >
                 {allDone ? '✓' : someDone ? '½' : ''}
               </button>
-              <span className="font-bold text-bordeaux flex-shrink-0">×{g.totalQty}</span>
-              <span className={`text-[12px] flex-1 min-w-0 ${allDone ? 'line-through text-ink-mute' : 'text-ink'}`}>
+              {/* Quantite restante / total. Si tout fait/annule -> juste le total barre */}
+              {todoQty < totalQty && todoQty > 0 ? (
+                <span className="font-bold flex-shrink-0">
+                  <span className="text-bordeaux">×{todoQty}</span>
+                  <span className="text-ink-mute font-normal text-[11px]"> / ×{totalQty}</span>
+                </span>
+              ) : (
+                <span className="font-bold text-bordeaux flex-shrink-0">×{totalQty}</span>
+              )}
+              <span className={`text-[12px] flex-1 min-w-0 ${
+                allCancelled ? 'line-through text-[#A03333]/70'
+                  : allDone ? 'line-through text-ink-mute'
+                  : 'text-ink'
+              }`}>
                 {g.name}
               </span>
               {allVitrine && <VitrinePill />}
@@ -460,30 +569,53 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKe
             {isExpanded && (
               <div className="px-2 pb-2 ml-7 space-y-0.5 border-t border-line/30 pt-1">
                 {g.lines.map(line => {
-                  const isDone = doneMap.has(line.odoo_line_id)
+                  const lineStatus = statusOf(line.odoo_line_id)
+                  const isDone = lineStatus === 'done'
+                  const isCancelled = lineStatus === 'cancelled'
                   const t = new Date(line.delivery_at)
                   const hour = `${String(t.getHours()).padStart(2, '0')}h${String(t.getMinutes()).padStart(2, '0')}`
+                  const txtClass = isCancelled
+                    ? 'line-through text-[#A03333]/70'
+                    : isDone
+                      ? 'line-through text-ink-mute'
+                      : 'text-ink-soft hover:bg-cream-warm'
+
                   return (
-                    <button
-                      key={line.id}
-                      onClick={() => onToggleSingle(line)}
-                      className={`w-full text-left flex items-center gap-2 px-2 py-0.5 rounded transition-all text-[11px] ${
-                        isDone
-                          ? 'line-through text-ink-mute'
-                          : 'text-ink-soft hover:bg-cream-warm'
-                      }`}
-                    >
-                      <span className={`flex-shrink-0 w-3 h-3 rounded-full border flex items-center justify-center text-[8px] ${
-                        isDone ? 'bg-success border-success text-cream' : 'border-line'
-                      }`}>
-                        {isDone ? '✓' : ''}
-                      </span>
-                      <span className="font-mono text-[9px] text-ink-mute w-10">{hour}</span>
-                      <span className="font-mono text-[9px] text-bordeaux">{line.order_num}</span>
-                      <span className="truncate max-w-[120px]">— {line.client_name}</span>
-                      <span className="font-bold text-bordeaux">×{line.quantity}</span>
-                      {isReservationVitrine(line) && <VitrinePill />}
-                    </button>
+                    <div key={line.id} className={`w-full flex items-center gap-2 px-2 py-0.5 rounded transition-all text-[11px] ${txtClass}`}>
+                      <button
+                        onClick={() => onToggleSingle(line)}
+                        className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                        title={isDone ? 'Cliquer pour annuler la coche' : 'Marquer comme fait'}
+                      >
+                        <span className={`flex-shrink-0 w-3 h-3 rounded-full border flex items-center justify-center text-[8px] ${
+                          isDone
+                            ? 'bg-success border-success text-cream'
+                            : isCancelled
+                              ? 'border-[#A03333]/30 bg-[#A03333]/5 text-[#A03333]/60'
+                              : 'border-line'
+                        }`}>
+                          {isDone ? '✓' : isCancelled ? '−' : ''}
+                        </span>
+                        <span className="font-mono text-[9px] text-ink-mute w-10">{hour}</span>
+                        <span className="font-mono text-[9px] text-bordeaux">{line.order_num}</span>
+                        <span className="truncate max-w-[120px]">— {line.client_name}</span>
+                        <span className="font-bold text-bordeaux">×{line.quantity}</span>
+                        {isReservationVitrine(line) && <VitrinePill />}
+                      </button>
+                      {supportsCancellation && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onCancelSingle(line) }}
+                          className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                            isCancelled
+                              ? 'bg-[#A03333] text-cream hover:bg-[#7a2525]'
+                              : 'border border-[#A03333]/40 text-[#A03333] hover:bg-[#A03333] hover:text-cream'
+                          }`}
+                          title={isCancelled ? 'Retirer l\'annulation' : 'Marquer comme annulé'}
+                        >
+                          <i className="ti ti-x text-[10px]" aria-hidden="true"></i>
+                        </button>
+                      )}
+                    </div>
                   )
                 })}
               </div>

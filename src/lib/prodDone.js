@@ -1,6 +1,9 @@
 import { supabase } from './supabase'
 
-// Charge les prod_done pour un set de odoo_line_id
+// Statuts gérés : 'done' (fait) et 'cancelled' (annulé).
+// L'absence d'entrée pour une odoo_line_id => "à faire".
+
+// Charge toutes les entrees prod_done pour un set de odoo_line_id
 export async function loadProdDoneForLines(odooLineIds) {
   if (!odooLineIds || odooLineIds.length === 0) return []
   const { data, error } = await supabase
@@ -14,19 +17,26 @@ export async function loadProdDoneForLines(odooLineIds) {
   return data || []
 }
 
-// Marque une ligne comme faite
-export async function markProdLineDone(odooLineId, userId) {
+// Marque une ligne comme faite (ou annulee selon status)
+export async function markProdLineDone(odooLineId, userId, status = 'done') {
   const { data, error } = await supabase
     .from('prod_done')
-    .upsert({ odoo_line_id: odooLineId, done_by: userId, done_at: new Date().toISOString() },
-            { onConflict: 'odoo_line_id' })
+    .upsert(
+      {
+        odoo_line_id: odooLineId,
+        done_by: userId,
+        done_at: new Date().toISOString(),
+        status,
+      },
+      { onConflict: 'odoo_line_id' }
+    )
     .select()
     .single()
   if (error) throw error
   return data
 }
 
-// Demarque une ligne (la remet en a faire)
+// Demarque une ligne (la remet en a faire) — supprime quelque soit le status
 export async function unmarkProdLineDone(odooLineId) {
   const { error } = await supabase
     .from('prod_done')
@@ -36,15 +46,15 @@ export async function unmarkProdLineDone(odooLineId) {
   return true
 }
 
-// Charge l'historique des actions prod_done (N derniers jours)
+// Charge l'historique des actions prod_done (par défaut 3 derniers jours)
 // Fetch separe pour profiles et sales_lines (plus fiable que join Supabase)
-export async function loadProdLogs(daysBack = 7) {
+export async function loadProdLogs(daysBack = 3) {
   const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000)
 
-  // 1) Logs bruts
+  // 1) Logs bruts (inclut status pour distinguer fait/annule)
   const { data: logs, error } = await supabase
     .from('prod_done')
-    .select('id, odoo_line_id, done_at, done_by')
+    .select('id, odoo_line_id, done_at, done_by, status')
     .gte('done_at', since.toISOString())
     .order('done_at', { ascending: false })
     .limit(500)
