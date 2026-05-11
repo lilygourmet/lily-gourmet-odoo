@@ -331,6 +331,25 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
   )
 }
 
+// Helper : detecte si une ligne vient de l'entrepot Reservation Vitrine
+function isReservationVitrine(line) {
+  if (!line || !line.warehouse) return false
+  return /r[eé]servation.*vitrine/i.test(line.warehouse)
+}
+
+// Mini pill "Vitrine" pour signaler une commande de l'entrepot Reservation Vitrine
+function VitrinePill() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#FDF4DE] text-[#7A5A18] text-[9px] font-medium tracking-wider uppercase flex-shrink-0"
+      title="Réservation depuis la vitrine (à sortir du stock, pas à fabriquer)"
+    >
+      <i className="ti ti-building-store text-[10px]" aria-hidden="true"></i>
+      Vitrine
+    </span>
+  )
+}
+
 // Vue par client : ligne par ligne
 function ClientView({ lines, doneMap, onToggle }) {
   const sorted = [...lines].sort((a, b) => new Date(a.delivery_at) - new Date(b.delivery_at))
@@ -360,6 +379,7 @@ function ClientView({ lines, doneMap, onToggle }) {
             <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
             <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
             <span className="text-[12px] text-ink min-w-0 flex-1 truncate">{line.product_name}</span>
+            {isReservationVitrine(line) && <VitrinePill />}
           </button>
         )
       })}
@@ -390,6 +410,11 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKe
         const fusionKey = `${dateKey}|${g.name}`
         const isExpanded = expandedKey === fusionKey
 
+        // Compte les lignes "Reservation Vitrine" du groupe
+        const vitrineLines = g.lines.filter(isReservationVitrine)
+        const allVitrine = vitrineLines.length === g.lines.length && vitrineLines.length > 0
+        const someVitrine = vitrineLines.length > 0 && !allVitrine
+
         return (
           <div key={i} className={`rounded border ${
             allDone ? 'bg-success/5 border-success/20' : 'bg-cream-warm/50 border-line/60'
@@ -410,6 +435,16 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKe
               <span className={`text-[12px] flex-1 min-w-0 ${allDone ? 'line-through text-ink-mute' : 'text-ink'}`}>
                 {g.name}
               </span>
+              {allVitrine && <VitrinePill />}
+              {someVitrine && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#FDF4DE] text-[#7A5A18] text-[9px] font-medium tracking-wider uppercase flex-shrink-0"
+                  title={`${vitrineLines.length} ligne(s) en Réservation Vitrine sur ${g.lines.length}`}
+                >
+                  <i className="ti ti-building-store text-[10px]" aria-hidden="true"></i>
+                  Vitrine ×{vitrineLines.length}
+                </span>
+              )}
               <span className="text-[10px] text-ink-mute font-mono flex-shrink-0">
                 {g.lines.length} cmd
               </span>
@@ -447,6 +482,7 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, expandedKe
                       <span className="font-mono text-[9px] text-bordeaux">{line.order_num}</span>
                       <span className="truncate max-w-[120px]">— {line.client_name}</span>
                       <span className="font-bold text-bordeaux">×{line.quantity}</span>
+                      {isReservationVitrine(line) && <VitrinePill />}
                     </button>
                   )
                 })}

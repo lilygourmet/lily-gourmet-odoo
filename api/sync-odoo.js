@@ -171,7 +171,7 @@ async function fetchOdooOrders(uid) {
       ['commitment_date', '>=', dateStart],
       ['commitment_date', '<=', dateEnd],
     ],
-    ['id', 'name', 'partner_id', 'commitment_date', 'livraison_hour', 'state', 'note', 'order_line', 'user_id', 'create_uid'],
+    ['id', 'name', 'partner_id', 'commitment_date', 'livraison_hour', 'state', 'note', 'order_line', 'user_id', 'create_uid', 'warehouse_id'],
     { order: 'commitment_date asc', limit: 500 }
   )
 
@@ -352,6 +352,9 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
     const partnerId = Array.isArray(odooOrder.partner_id) ? odooOrder.partner_id[0] : null
     const clientPhone = partnerId ? (phoneByPartnerId.get(partnerId) || null) : null
 
+    // Entrepot (warehouse_id renvoye par Odoo sous forme [id, "Nom"])
+    const warehouse = Array.isArray(odooOrder.warehouse_id) ? odooOrder.warehouse_id[1] : null
+
     // Note : chercher uniquement les lignes display_type='line_note' qui sont
     // SOUS la ligne Livraison (pas les notes sous d'autres articles).
     // On trie par sequence, on trouve la ligne Livraison, puis on prend les line_note
@@ -446,6 +449,7 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
         client_name: clientName,
         client_phone: clientPhone,
         order_note: orderNote,
+        warehouse: warehouse,
         delivery_at: deliveryAt,
         order_num: orderNum,
       })
