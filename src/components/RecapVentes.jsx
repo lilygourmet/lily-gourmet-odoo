@@ -848,11 +848,11 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
 
       {/* Sous-header Recap : selecteur de date + boutons rapides + imprimer */}
       {fullscreen && (
-        <div className="bg-cream-warm/30 border-b border-line py-3 px-4 sticky top-[57px] z-20 backdrop-blur-sm">
+        <div className="bg-cream/60 border-b border-line py-3 px-4 sticky top-[57px] z-20 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-fraunces italic text-[18px] text-ink">📊 Récap</span>
-              <span className="capitalize font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux font-bold ml-1">
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <h1 className="font-fraunces italic text-[26px] font-normal text-ink leading-none">Récap</h1>
+              <span className="capitalize font-mono text-[11px] tracking-[0.12em] uppercase text-ink-mute">
                 {dateLabel}
               </span>
             </div>
@@ -872,9 +872,10 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
               />
               <button
                 onClick={handlePrintAll}
-                className="px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[10px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
               >
-                🖨 Tout imprimer
+                <i className="ti ti-printer text-[14px]" aria-hidden="true"></i>
+                Tout imprimer
               </button>
             </div>
           </div>
@@ -968,7 +969,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           </div>
 
           {/* Cases cliquables (8 categories) */}
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {loading ? (
               <div className="col-span-full text-center text-ink-mute italic py-12">Chargement...</div>
             ) : VENTE_CATEGORIES.map(cat => {
@@ -977,19 +978,28 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
               const total = sumQty(catLines)
               const totalFull = sumQty(catLinesFull)
               const showSlash = isFiltered && total !== totalFull
+              const isEmpty = total === 0 && !showSlash
 
               return (
                 <button key={cat.id}
                         onClick={() => setPopupCat(cat)}
-                        className="bg-white border border-line rounded-xl p-4 shadow-sm hover:shadow-md hover:border-bordeaux transition-all text-left cursor-pointer">
-                  <div className="flex items-center justify-between border-b border-line pb-2 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[18px]">{cat.emoji}</span>
-                      <span className="font-mono text-[10px] tracking-[0.15em] uppercase font-bold text-bordeaux">
+                        className={`rounded-xl p-4 transition-all text-left cursor-pointer ${
+                          isEmpty
+                            ? 'bg-transparent border border-dashed border-line/60 hover:border-bordeaux/40'
+                            : 'bg-white border border-line hover:border-bordeaux shadow-sm hover:shadow-md'
+                        }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[16px] opacity-70">{cat.emoji}</span>
+                      <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-mute truncate">
                         {cat.label}
                       </span>
                     </div>
-                    <span className="font-fraunces italic text-[22px] font-semibold text-ink">
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`font-fraunces italic font-medium leading-none ${
+                      isEmpty ? 'text-[26px] text-line' : 'text-[34px] text-bordeaux'
+                    }`}>
                       {total}
                       {showSlash && (
                         <span className="text-[14px] text-ink-mute font-normal ml-0.5">
@@ -997,15 +1007,12 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                         </span>
                       )}
                     </span>
+                    {!isEmpty && catLines.length > 0 && (
+                      <span className="text-[11px] text-ink-mute ml-auto">
+                        {catLines.length} ligne{catLines.length > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
-
-                  {catLines.length === 0 ? (
-                    <div className="text-[12px] text-ink-mute italic text-center py-3">Aucune vente</div>
-                  ) : (
-                    <div className="text-[11px] text-ink-soft text-center py-2">
-                      {catLines.length} ligne{catLines.length > 1 ? 's' : ''} · cliquez pour voir le détail
-                    </div>
-                  )}
                 </button>
               )
             })}

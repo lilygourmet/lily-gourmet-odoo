@@ -6,12 +6,12 @@ import AdminGmConfig from './AdminGmConfig'
 import LabelsButton from './LabelsButton'
 
 // ============================================================
-// AppHeader v2.1 : nav epuree, tout sur une ligne
+// AppHeader v2 : nav epuree avec soulignement bordeaux sur active
 // - Logo Lily Gourmet conserve (Logo_LG.jpg + texte LILY GOURMET / LAYLA)
 // - Nav : texte + icone Tabler outline, soulignement bordeaux si actif
-// - Nav scrollable horizontalement si manque de place (pas de wrap)
 // - Bouton SYNC en outline bordeaux (plus discret)
 // - Boutons d'action ronds 36px avec icones Tabler
+// - Tabler Icons charge automatiquement si absent
 // Props inchangees : user, activeView, onNavigate, onLogout, onSyncSuccess
 // ============================================================
 
@@ -119,7 +119,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return (
       <button
         onClick={() => onNavigate && onNavigate(view)}
-        className={`flex items-center gap-1.5 px-1 pb-1 text-[13px] font-normal transition-colors flex-shrink-0 whitespace-nowrap border-b-[1.5px] ${
+        className={`flex items-center gap-1.5 px-1 pb-1 text-[13px] font-normal transition-colors flex-shrink-0 border-b-[1.5px] ${
           isActive
             ? 'text-bordeaux border-bordeaux'
             : 'text-ink border-transparent hover:text-bordeaux'
@@ -151,7 +151,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   return (
     <>
-      <div className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-4">
+      <div className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-4 flex-wrap">
         {/* Logo cliquable -> calendrier */}
         <button
           onClick={() => canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
@@ -166,11 +166,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           </div>
         </button>
 
-        {/* Navigation : 1 seule ligne, scrollable horizontalement si manque de place */}
-        <nav
-          className="flex items-center gap-4 flex-1 min-w-0 overflow-x-auto"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
+        {/* Navigation : texte + icone Tabler, soulignement bordeaux si actif */}
+        <nav className="flex items-center gap-5 flex-wrap flex-1">
           {navBtn('calendar', 'ti-calendar', 'Calendrier', canSeeCalendar(user))}
           {navBtn('recap', 'ti-chart-bar', 'Récap', canRecaps(user))}
           {navBtn('prod', 'ti-bread', 'Prod', admin || (isProdUser && user.perm_prod))}
@@ -189,7 +186,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {/* Heure derniere sync */}
           {lastSyncAt && !syncing && (
             <span
-              className="font-mono text-[10px] text-ink-mute hidden lg:inline"
+              className="font-mono text-[10px] text-ink-mute hidden md:inline"
               title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}
             >
               sync {fmtRelative(lastSyncAt)}

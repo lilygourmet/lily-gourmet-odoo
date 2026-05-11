@@ -207,21 +207,25 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-5xl mx-auto p-4 pb-32">
-        <h1 className="font-fraunces italic text-[28px] text-ink mb-1">Sortie Congélateur</h1>
-        <p className="text-[12px] text-ink-mute mb-4">
-          Liste des composants cake design (15/20/25/30 cm) à sortir du congélateur.
+        <h1 className="font-fraunces italic text-[26px] text-ink leading-none mb-1">CD Négatif</h1>
+        <p className="text-[12px] text-ink-mute mb-4 max-w-2xl">
+          Sortie congélateur · composants Cake Design (15/20/25/30 cm) à sortir.
           Coche au fur et à mesure que tu sors les pièces.
         </p>
 
-        {/* Toggle groupBy */}
-        <div className="flex gap-2 mb-4">
+        {/* Toggle groupBy : segmented control léger */}
+        <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line mb-4">
           <button
             onClick={() => setGroupBy('client')}
-            className={`px-3 py-1.5 text-[11px] font-medium tracking-wider uppercase rounded-full transition-all ${groupBy === 'client' ? 'bg-bordeaux text-cream' : 'bg-cream-warm text-ink-soft border border-line hover:border-bordeaux'}`}
+            className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+              groupBy === 'client' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+            }`}
           >Par commande</button>
           <button
             onClick={() => setGroupBy('product')}
-            className={`px-3 py-1.5 text-[11px] font-medium tracking-wider uppercase rounded-full transition-all ${groupBy === 'product' ? 'bg-bordeaux text-cream' : 'bg-cream-warm text-ink-soft border border-line hover:border-bordeaux'}`}
+            className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+              groupBy === 'product' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+            }`}
           >Par produit</button>
         </div>
 

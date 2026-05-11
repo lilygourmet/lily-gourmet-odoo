@@ -394,21 +394,22 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
       <div className="max-w-6xl mx-auto px-4 py-4">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">💌</span>
-            <h1 className="font-mono text-[14px] tracking-[0.15em] uppercase text-bordeaux font-bold">
-              Messages — Aujourd'hui
-            </h1>
+        <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-fraunces italic text-[26px] font-normal text-ink leading-none">Messages</h1>
+            <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-mute">
+              Aujourd'hui
+            </span>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setShowPrinted(!showPrinted)}
-              className={`text-[11px] px-3 py-1.5 rounded-full border transition-colors ${
+              className={`flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full border transition-colors ${
                 showPrinted ? 'bg-bordeaux text-cream border-bordeaux' : 'border-line text-ink-soft hover:border-bordeaux'
               }`}
             >
-              {showPrinted ? '✓ Voir imprimés' : 'Voir imprimés'}
+              {showPrinted && <i className="ti ti-check text-[12px]" aria-hidden="true"></i>}
+              Voir imprimés
             </button>
             <button onClick={selectAllInTab} className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux">Tout cocher</button>
             <button onClick={clearAll} className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux">Tout décocher</button>
@@ -419,19 +420,21 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         <div className="flex gap-1 mb-4 border-b border-line">
           <button
             onClick={() => setActiveTab('cd')}
-            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-2 px-4 py-2 text-[12px] font-medium transition-colors border-b-2 -mb-px ${
               activeTab === 'cd' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
             }`}
           >
-            🎂 Gâteaux ({cdMessages.length})
+            <i className="ti ti-cake text-[14px]" aria-hidden="true"></i>
+            Gâteaux <span className="text-ink-mute font-normal">({cdMessages.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('prod')}
-            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-2 px-4 py-2 text-[12px] font-medium transition-colors border-b-2 -mb-px ${
               activeTab === 'prod' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
             }`}
           >
-            🥐 Production ({prodMessages.length})
+            <i className="ti ti-bread text-[14px]" aria-hidden="true"></i>
+            Production <span className="text-ink-mute font-normal">({prodMessages.length})</span>
           </button>
         </div>
 

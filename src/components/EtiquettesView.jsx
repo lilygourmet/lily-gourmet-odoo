@@ -144,16 +144,22 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
       <div className="max-w-6xl mx-auto px-4 pb-4">
       {/* Header sticky : reste visible quand on scrolle */}
       <div className="sticky top-[60px] z-20 bg-cream pt-4 pb-2 -mx-4 px-4 border-b border-line/40">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-fraunces italic text-[22px] text-ink">🏷 Étiquettes</h2>
+        <div className="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-fraunces italic text-[26px] font-normal text-ink leading-none">Étiquettes Café</h1>
+            <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-mute">
+              Entremets · Gâteaux secs · Surgelés
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="text-[10px] px-2.5 py-1.5 border border-line text-ink-soft hover:bg-cream-warm rounded-full font-medium tracking-wider"
+              className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full font-medium tracking-wider transition-colors disabled:opacity-60"
               title="Recharger les articles depuis Odoo"
             >
-              {syncing ? '⏳ Sync...' : '🔄 Sync articles'}
+              <i className={`ti ti-refresh text-[13px] ${syncing ? 'animate-spin' : ''}`} aria-hidden="true"></i>
+              {syncing ? 'Sync...' : 'Sync articles'}
             </button>
           </div>
         </div>
