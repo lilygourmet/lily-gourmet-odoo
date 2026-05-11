@@ -1,39 +1,28 @@
 import { useState, useEffect } from 'react'
 import { logout } from '../lib/auth'
 import AppHeader from './AppHeader'
+import { supabase } from '../lib/supabase'
 import { loadFreezerDoneIds, markFreezerDone, unmarkFreezerDone } from '../lib/freezerDone'
+import { useRefreshOnVisible } from '../lib/hooks'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
 const MONTH_NAMES = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
-
-// Cache localStorage : evite le rechargement Odoo lent a chaque visite
-const CACHE_KEY = 'lg_freezer_cache_v1'
-const CACHE_TTL_MS = 5 * 60 * 1000  // 5 minutes
-
-function readFreezerCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (!parsed || !parsed.ts || !parsed.items) return null
-    if (Date.now() - parsed.ts > CACHE_TTL_MS) return null
-    return parsed
-  } catch (e) {
-    return null
-  }
-}
-
-function writeFreezerCache(items) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items }))
-  } catch (e) { /* ignore */ }
-}
 
 function fmtLocalDate(d) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${dd}`
+}
+
+function formatTimeAgo(ts) {
+  const diffMs = Date.now() - ts
+  const min = Math.round(diffMs / 60000)
+  if (min < 1) return "moins d'1 min"
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h}h`
+  return `${Math.floor(h / 24)}j`
 }
 
 function fmtDayLabel(dateStr, today) {
@@ -56,51 +45,127 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   const [error, setError] = useState('')
   const [groupBy, setGroupBy] = useState('product')   // 'client' ou 'product' (defaut produit)
   const [showDone, setShowDone] = useState({})       // par date : true/false
-  const [cacheInfo, setCacheInfo] = useState(null)   // { ts } si on affiche du cache
+  const [lastSyncAt, setLastSyncAt] = useState(null) // timestamp de la derniere sync
+  const [forcingSync, setForcingSync] = useState(false)
 
   const today = new Date()
   const NB_DAYS = 14
 
-  function loadData(forceRefresh = false) {
+  // Charge depuis Supabase (instantane). Une sync Odoo->Supabase peut etre
+  // declenchee automatiquement en arriere-plan si les donnees sont trop anciennes.
+  async function loadData() {
     setError('')
-    const dates = []
-    for (let i = 0; i < NB_DAYS; i++) {
-      const d = new Date(today)
-      d.setDate(today.getDate() + i)
-      dates.push(fmtLocalDate(d))
-    }
+    setLoading(true)
+    try {
+      const dates = []
+      for (let i = 0; i < NB_DAYS; i++) {
+        const d = new Date(today)
+        d.setDate(today.getDate() + i)
+        dates.push(fmtLocalDate(d))
+      }
+      const dateFrom = dates[0]
+      const dateTo = dates[dates.length - 1]
 
-    // Etape 1 : si cache valide et pas de force refresh, on l'utilise tout de suite
-    if (!forceRefresh) {
-      const cached = readFreezerCache()
-      if (cached) {
-        setAllItems(cached.items || [])
-        setCacheInfo({ ts: cached.ts })
-        setLoading(false)
-        // On charge quand meme les "done" qui sont legers et viennent de Supabase
-        loadFreezerDoneIds().then(done => setDoneMap(done)).catch(() => {})
+      const [{ data: items, error: err }, done] = await Promise.all([
+        supabase
+          .from('freezer_mos')
+          .select('*')
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .order('hour', { ascending: true })
+          .order('minute', { ascending: true }),
+        loadFreezerDoneIds(),
+      ])
+
+      if (err) throw new Error(err.message)
+      setAllItems(items || [])
+      setDoneMap(done)
+      // Recupere le timestamp de la derniere sync
+      const maxSync = (items || []).reduce((max, it) => {
+        const t = it.synced_at ? new Date(it.synced_at).getTime() : 0
+        return t > max ? t : max
+      }, 0)
+      setLastSyncAt(maxSync || null)
+
+      // Auto-sync en arriere-plan si donnees trop anciennes (> 5 min ou aucune)
+      const SYNC_FRESHNESS_MS = 5 * 60 * 1000
+      const isStale = !maxSync || (Date.now() - maxSync) > SYNC_FRESHNESS_MS
+      if (isStale && !backgroundSyncing) {
+        triggerBackgroundSync()
+      }
+    } catch (e) {
+      setError(e.message || String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Sync en arriere-plan, declenchee automatiquement quand les donnees sont vieilles.
+  // L'utilisateur voit les anciennes donnees pendant le sync, puis ca se met a jour.
+  const [backgroundSyncing, setBackgroundSyncing] = useState(false)
+  async function triggerBackgroundSync() {
+    setBackgroundSyncing(true)
+    try {
+      // L'endpoint utilise le token via header X-Internal-Token (cote serveur, ce token
+      // est stocke en variable d'environnement INTERNAL_SYNC_TOKEN et compare au
+      // SYNC_SECRET_TOKEN). Cote client on n'expose rien : c'est juste un POST.
+      const r = await fetch('/api/sync-freezer', { method: 'POST' })
+      if (!r.ok) {
+        // Si l'auth echoue (401), on n'insiste pas : la sync reste manuelle
+        console.warn('[freezer] auto-sync echec', r.status)
         return
       }
-    }
-
-    // Etape 2 : pas de cache (ou refresh force) -> fetch normal
-    setLoading(true)
-    setCacheInfo(null)
-    Promise.all([
-      fetch(`/api/freezer-list?dates=${dates.join(',')}`).then(r => r.ok ? r.json() : Promise.reject(`Erreur ${r.status}`)),
-      loadFreezerDoneIds(),
-    ])
-      .then(([apiData, done]) => {
-        const items = apiData.items || []
+      // Recharger Supabase apres sync
+      const dates = []
+      for (let i = 0; i < NB_DAYS; i++) {
+        const d = new Date(today)
+        d.setDate(today.getDate() + i)
+        dates.push(fmtLocalDate(d))
+      }
+      const { data: items } = await supabase
+        .from('freezer_mos')
+        .select('*')
+        .gte('date', dates[0])
+        .lte('date', dates[dates.length - 1])
+        .order('date', { ascending: true })
+        .order('hour', { ascending: true })
+        .order('minute', { ascending: true })
+      if (items) {
         setAllItems(items)
-        setDoneMap(done)
-        writeFreezerCache(items)
-      })
-      .catch(e => setError(typeof e === 'string' ? e : e.message))
-      .finally(() => setLoading(false))
+        const maxSync = items.reduce((max, it) => {
+          const t = it.synced_at ? new Date(it.synced_at).getTime() : 0
+          return t > max ? t : max
+        }, 0)
+        setLastSyncAt(maxSync || null)
+      }
+    } catch (e) {
+      console.warn('[freezer] background sync error', e.message)
+    } finally {
+      setBackgroundSyncing(false)
+    }
+  }
+
+  // Force une sync Odoo->Supabase manuelle (bouton "Forcer sync", rare cas urgent)
+  async function forceOdooSync() {
+    setForcingSync(true)
+    setError('')
+    try {
+      const token = prompt('Token de sync :')
+      if (!token) { setForcingSync(false); return }
+      const r = await fetch(`/api/sync-freezer?token=${encodeURIComponent(token)}`, { method: 'POST' })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || `Erreur ${r.status}`)
+      await loadData()
+    } catch (e) {
+      setError('Sync : ' + (e.message || e))
+    } finally {
+      setForcingSync(false)
+    }
   }
 
   useEffect(() => { loadData() }, [])
+  useRefreshOnVisible(loadData)
 
   async function toggleDone(item) {
     try {
@@ -272,19 +337,19 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
             >Par produit</button>
           </div>
 
-          {/* Bouton Recharger + indicateur cache */}
+          {/* Bouton Forcer sync Odoo + indicateur derniere sync */}
           <button
-            onClick={() => loadData(true)}
-            disabled={loading}
+            onClick={forceOdooSync}
+            disabled={loading || forcingSync}
             className="flex items-center gap-1.5 px-3 py-1 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium transition-colors disabled:opacity-60"
-            title="Recharger depuis Odoo (peut prendre quelques secondes)"
+            title="Forcer une synchronisation manuelle depuis Odoo (sync auto toutes les 10 min)"
           >
-            <i className={`ti ti-refresh text-[13px] ${loading ? 'animate-spin' : ''}`} aria-hidden="true"></i>
-            {loading ? 'Chargement...' : 'Recharger'}
+            <i className={`ti ti-refresh text-[13px] ${(loading || forcingSync) ? 'animate-spin' : ''}`} aria-hidden="true"></i>
+            {forcingSync ? 'Sync...' : loading ? 'Chargement…' : 'Forcer sync'}
           </button>
-          {cacheInfo && !loading && (
+          {lastSyncAt && !loading && !forcingSync && (
             <span className="font-mono text-[10px] text-ink-mute italic">
-              cache · {Math.round((Date.now() - cacheInfo.ts) / 60000)}min
+              sync il y a {formatTimeAgo(lastSyncAt)}
             </span>
           )}
         </div>
