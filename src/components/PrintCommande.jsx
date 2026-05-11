@@ -16,6 +16,60 @@ function cleanParfums(parfumsArray) {
   })
 }
 
+// Extrait les notes/warnings (line_note Odoo) d'un item sous forme d'array de strings
+function extractItemWarnings(item) {
+  const w = item?.warnings
+  if (!w) return []
+  if (typeof w === 'string') return w.trim() ? [w.trim()] : []
+  if (Array.isArray(w)) {
+    return w
+      .map(x => typeof x === 'string' ? x : (x?.text || ''))
+      .map(s => String(s).trim())
+      .filter(Boolean)
+  }
+  if (typeof w === 'object' && w.text) {
+    const t = String(w.text).trim()
+    return t ? [t] : []
+  }
+  return []
+}
+
+// Bloc rose pale "Note" affiche sous un article (s'il a des notes)
+function ItemNote({ item }) {
+  const notes = extractItemWarnings(item)
+  if (notes.length === 0) return null
+  return (
+    <div style={{
+      marginTop: '6px',
+      padding: '6px 10px',
+      background: '#fce4ec',
+      borderLeft: '3px solid #c2185b',
+      borderRadius: '3px',
+    }}>
+      <div style={{
+        fontSize: '9.5px',
+        fontWeight: 'bold',
+        color: '#c2185b',
+        textTransform: 'uppercase',
+        letterSpacing: '0.8px',
+        marginBottom: '2px',
+      }}>
+        ⚠ Note
+      </div>
+      {notes.map((n, i) => (
+        <div key={i} style={{
+          fontSize: '11.5px',
+          color: '#333',
+          fontStyle: 'italic',
+          lineHeight: '1.4',
+        }}>
+          {n}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ============================================================
 // Composant : impression d'1 ou plusieurs commandes (A4 portrait)
 // Calque sur le style PDF Odoo de Lily Gourmet
@@ -91,20 +145,6 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
   const items = order.order_items || []
   const cdItems = items.filter(i => i.type === 'CD')
   const gmItems = items.filter(i => i.type === 'GM')
-
-  // Allergies / warnings
-  const warnings = []
-  for (const item of items) {
-    const w = item.warnings
-    if (!w) continue
-    if (typeof w === 'string') warnings.push(w)
-    else if (Array.isArray(w)) {
-      for (const x of w) {
-        if (typeof x === 'string') warnings.push(x)
-        else if (x?.text) warnings.push(x.text)
-      }
-    }
-  }
 
   // Toutes les photos
   const allPhotos = []
@@ -185,33 +225,6 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
           <div style={{ fontWeight: '600' }}>{order.seller_name || '—'}</div>
         </div>
       </div>
-
-      {/* WARNINGS / ALLERGIES */}
-      {warnings.length > 0 && (
-        <div className="print-no-break" style={{
-          border: '1px solid #c2185b',
-          background: '#fce4ec',
-          padding: '10px 14px',
-          marginBottom: '20px',
-          borderRadius: '4px',
-        }}>
-          <div style={{
-            fontSize: '10px',
-            fontWeight: 'bold',
-            color: '#c2185b',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            marginBottom: '4px',
-          }}>
-            ⚠️ Avertissement
-          </div>
-          {warnings.map((w, i) => (
-            <div key={i} style={{ fontSize: '12px', color: '#333' }}>
-              {w}
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* SECTION CD */}
       {cdItems.length > 0 && (
@@ -383,6 +396,7 @@ function CdItemPrint({ item, index, totalCdItems }) {
           </div>
         )}
       </div>
+      <ItemNote item={item} />
     </div>
   )
 }
@@ -499,6 +513,7 @@ function GmItemPrint({ item, fiche, palette, index, totalGmItems }) {
           <div>Deco : {decos.join(' · ')}</div>
         )}
       </div>
+      <ItemNote item={item} />
     </div>
   )
 }
