@@ -7,7 +7,7 @@ import ProdView from './components/ProdView'
 import FreezerView from './components/FreezerView'
 import MessagesView from './components/MessagesView'
 import EtiquettesView from './components/EtiquettesView'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly } from './lib/auth'
+import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, loadFreshUser } from './lib/auth'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -15,35 +15,69 @@ function App() {
   // Vue active : 'calendar' | 'recap' | 'patissier' | 'prod' | 'sales'
   const [activeView, setActiveView] = useState('calendar')
 
+  // Choisit la vue par defaut en fonction du user
+  function pickDefaultView(u) {
+    if (!u) return 'calendar'
+    if (u.role === 'recap') return 'recap'
+    if (u.role === 'admin') return 'calendar'
+    if (u.perm_calendar) return 'calendar'
+    if (isProdOnly(u)) {
+      if (u.perm_sales && !u.perm_prod) return 'sales'
+      return 'prod'
+    }
+    if (isPatissierOnly(u)) return 'patissier'
+    return 'calendar'
+  }
+
   useEffect(() => {
     const stored = getCurrentUser()
     setUser(stored)
     if (stored) {
-      // Vue par défaut selon le role/permissions (priorité : recap > calendrier > prod-only > patissier > calendar)
-      if (stored.role === 'recap') setActiveView('recap')
-      else if (stored.role === 'admin') setActiveView('calendar')
-      else if (stored.perm_calendar) setActiveView('calendar')
-      else if (isProdOnly(stored)) {
-        if (stored.perm_sales && !stored.perm_prod) setActiveView('sales')
-        else setActiveView('prod')
-      }
-      else if (isPatissierOnly(stored)) setActiveView('patissier')
-      else setActiveView('calendar')
+      setActiveView(pickDefaultView(stored))
+      // En arriere-plan : recharge les permissions a jour depuis Supabase
+      // (au cas ou l'admin aurait modifie les perms depuis la derniere connexion)
+      loadFreshUser(stored.id).then(fresh => {
+        if (fresh) {
+          setUser(fresh)
+        } else if (fresh === null) {
+          // User desactive ou supprime -> deconnexion forcee
+          logout()
+          setUser(null)
+        }
+      })
     }
     setLoading(false)
   }, [])
 
+  // Refresh periodique des permissions (toutes les 2 min) pour propager les
+  // changements d'admin sans que l'utilisateur ait besoin de se reconnecter
+  useEffect(() => {
+    if (!user) return
+    const interval = setInterval(() => {
+      loadFreshUser(user.id).then(fresh => {
+        if (fresh) setUser(fresh)
+      })
+    }, 2 * 60 * 1000)  // 2 minutes
+    return () => clearInterval(interval)
+  }, [user?.id])
+
+  // Refresh quand l'onglet redevient visible (changement de fenetre, retour de veille...)
+  useEffect(() => {
+    if (!user) return
+    function onVisibility() {
+      if (document.visibilityState === 'visible') {
+        loadFreshUser(user.id).then(fresh => {
+          if (fresh) setUser(fresh)
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [user?.id])
+
   function handleLoginSuccess(u) {
     setUser(u)
-    if (u.role === 'recap') setActiveView('recap')
-    else if (u.role === 'admin') setActiveView('calendar')
-    else if (u.perm_calendar) setActiveView('calendar')
-    else if (isProdOnly(u)) {
-      if (u.perm_sales && !u.perm_prod) setActiveView('sales')
-      else setActiveView('prod')
-    }
-    else if (isPatissierOnly(u)) setActiveView('patissier')
-    else setActiveView('calendar')
+    setActiveView(pickDefaultView(u))
   }
 
   function handleLogout() {

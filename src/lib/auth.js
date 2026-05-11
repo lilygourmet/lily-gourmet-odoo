@@ -38,6 +38,30 @@ export function getCurrentUser() {
   }
 }
 
+// Recharge le user depuis Supabase (permissions a jour si admin les a modifiees)
+// Retourne le user frais OU null si l'utilisateur a ete desactive/supprime
+export async function loadFreshUser(userId) {
+  if (!userId) return null
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes')
+      .eq('id', userId)
+      .maybeSingle()
+    if (error) {
+      console.warn('[loadFreshUser]', error.message)
+      return null
+    }
+    if (!data || !data.active) return null
+    // Met a jour le cache local pour les prochains chargements
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    return data
+  } catch (e) {
+    console.warn('[loadFreshUser]', e.message)
+    return null
+  }
+}
+
 export function isAdmin(user) {
   return user && user.role === 'admin'
 }
