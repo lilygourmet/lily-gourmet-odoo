@@ -49,6 +49,13 @@ export default async function handler(req, res) {
     const articles = await fetchEtiquettesArticles(uid)
     console.log(`[sync-etiquettes] ${articles.length} articles E-/GS-/SU- trouves`)
 
+    // === DEBUG TEMPORAIRE : afficher les 5 premiers articles avec leur prix ===
+    console.log('[sync-etiquettes][DEBUG] echantillon de 5 articles avec leur prix Odoo :')
+    for (const a of articles.slice(0, 5)) {
+      console.log(`  - [${a.category}] ${a.name} -> price: ${a.price} (type: ${typeof a.price})`)
+    }
+    // === FIN DEBUG ===
+
     console.log('[sync-etiquettes] Sync images vers Supabase Storage...')
     const imagesByTemplateId = await syncImages(supabase, uid, articles)
 
