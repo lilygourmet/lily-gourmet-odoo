@@ -22,10 +22,10 @@ export function makeQtyKey(templateId, size = null) {
   return size ? `${templateId}:${size}` : `${templateId}`
 }
 
-// Genere les lignes ZPL "nom + nb pers" pour les etiquettes selectionnees
+// Genere les lignes ZPL "nom + nb pers (+ prix)" pour les etiquettes selectionnees
 // items : [{ article, size, qty }]
 export function buildZplLabels(items) {
-  // Format etiquette Zebra 4x6 (largeur 800 dots @ 203dpi)
+  // Format etiquette Zebra 5cm x 2.5cm (203dpi -> 400 x 200 dots)
   // On genere une etiquette par occurrence (qty fois)
   const blocks = []
 
@@ -33,25 +33,52 @@ export function buildZplLabels(items) {
     const repeats = Math.max(0, qty)
     if (repeats === 0) continue
 
-    const nameClean = stripOdooPrefix(article.name)
+    // Retire le prefixe Odoo [123] ET les prefixes E-/GS-/SU-
+    const nameClean = stripAllPrefixes(article.name)
     const subtitle = size ? `${size} personnes` : ''
 
+    // Prix : uniquement pour GS et SU (jamais pour les entremets E-)
+    let priceLine = null
+    if ((article.category === 'gs' || article.category === 'su')
+        && article.price && article.price > 0) {
+      priceLine = formatPrice(article.price)
+    }
+
     for (let i = 0; i < repeats; i++) {
-      blocks.push(buildSingleZpl(nameClean, subtitle))
+      blocks.push(buildSingleZpl(nameClean, subtitle, priceLine))
     }
   }
 
   return blocks.join('\n')
 }
 
+function stripAllPrefixes(name) {
+  // Retire d'abord le code Odoo [123]
+  let s = String(name || '').replace(/^\[\d+\]\s*/, '').trim()
+  // Puis le prefixe E- / GS- / SU- (avec eventuels espaces)
+  s = s.replace(/^(E|GS|SU)\s*-\s*/i, '').trim()
+  return s
+}
+
+// Format prix : "350 DH" (sans centimes inutiles), "12,50 DH" si decimal
+function formatPrice(p) {
+  if (!p || isNaN(p)) return ''
+  const rounded = Math.round(p * 100) / 100
+  const isInt = Number.isInteger(rounded)
+  const txt = isInt
+    ? String(rounded)
+    : rounded.toFixed(2).replace('.', ',')
+  return `${txt} DH`
+}
+
 function stripOdooPrefix(name) {
-  // Retire le prefixe [123] si present
+  // Conserve pour compat externe : retire juste le [123]
   return String(name || '').replace(/^\[\d+\]\s*/, '').trim()
 }
 
-function buildSingleZpl(name, subtitle) {
+function buildSingleZpl(name, subtitle, priceLine) {
   // Format Zebra 5cm x 2.5cm (203dpi -> 400 x 200 dots)
-  // Texte centre, nom en gros, subtitle en plus petit
+  // Layout centre vertical : bloc nom + subtitle (+ prix) regroupe au milieu
   const lines = []
   lines.push('^XA')
   lines.push('^CI28')         // UTF-8
@@ -60,14 +87,24 @@ function buildSingleZpl(name, subtitle) {
   lines.push('^LL200')        // label length 2.5cm
   lines.push('^LS0')
 
-  // Nom : centre, 2 lignes max si long
-  // Si subtitle present : nom en haut (Y=20), subtitle en bas (Y=130)
-  // Si pas de subtitle : nom au milieu
-  if (subtitle) {
-    lines.push('^FT10,55^A0N,32,32^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
+  // 3 cas : nom seul / nom+pers / nom+pers+prix
+  // L'etiquette fait 200 dots de haut. On centre le bloc dans la zone Y=20..180.
+  if (priceLine && subtitle) {
+    // 3 lignes : nom (haut), pers (milieu), prix (bas)
+    // Nom : Y=20 (2 lignes possibles)
+    lines.push('^FT10,55^A0N,28,28^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
+    // Pers : Y=120
+    lines.push('^FT10,135^A0N,24,24^FB380,1,0,C,0^FD' + escapeZpl(subtitle) + '^FS')
+    // Prix : Y=170
+    lines.push('^FT10,185^A0N,28,28^FB380,1,0,C,0^FD' + escapeZpl(priceLine) + '^FS')
+  } else if (subtitle) {
+    // 2 lignes : nom (60% haut) + pers (40% bas), groupes au centre vertical
+    // Bloc total : nom de Y=45 a Y=110, pers a Y=150
+    lines.push('^FT10,75^A0N,32,32^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
     lines.push('^FT10,160^A0N,28,28^FB380,1,0,C,0^FD' + escapeZpl(subtitle) + '^FS')
   } else {
-    lines.push('^FT10,110^A0N,36,36^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
+    // 1 seule ligne : nom centre verticalement (Y=100)
+    lines.push('^FT10,115^A0N,36,36^FB380,2,0,C,0^FD' + escapeZpl(name) + '^FS')
   }
 
   lines.push('^PQ1,0,1,Y')

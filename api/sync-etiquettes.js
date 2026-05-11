@@ -133,7 +133,7 @@ async function fetchEtiquettesArticles(uid) {
       ['sale_ok', '=', true],
       ['active', '=', true],
     ],
-    ['id', 'name', 'sale_ok', 'image_1024', 'sequence'],
+    ['id', 'name', 'sale_ok', 'image_1024', 'sequence', 'list_price'],
     { limit: 5000 }
   )
 
@@ -154,6 +154,7 @@ async function fetchEtiquettesArticles(uid) {
       sale_ok: !!t.sale_ok,
       image_b64: t.image_1024 || null,
       sequence: t.sequence || 0,
+      price: parseFloat(t.list_price) || 0,
       sizes: null,   // sera rempli juste apres pour les entremets
     })
   }
@@ -314,6 +315,7 @@ async function upsertArticles(supabase, articles, imagesByTemplateId) {
     sale_ok: a.sale_ok,
     image_url: imagesByTemplateId.get(a.odoo_template_id) || null,
     sizes: a.sizes,
+    price: a.price || 0,
     display_order: a.sequence,
     synced_at: new Date().toISOString(),
   }))
