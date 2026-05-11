@@ -737,6 +737,61 @@ function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload
 }
 
 // ============================================================
+// ============================================================
+// RecapCard : une card pour une categorie (3 variantes : default, transverse, global)
+// ============================================================
+function RecapCard({ cat, linesForCategory, linesForCategoryFull, isFiltered, onClick, variant = 'default' }) {
+  const catLines = linesForCategory(cat.id)
+  const catLinesFull = linesForCategoryFull(cat.id)
+  const total = sumQty(catLines)
+  const totalFull = sumQty(catLinesFull)
+  const showSlash = isFiltered && total !== totalFull
+  const isEmpty = total === 0 && !showSlash
+
+  // Style de bordure selon la variante
+  const borderClass = isEmpty
+    ? 'bg-transparent border border-dashed border-line/60 hover:border-bordeaux/40'
+    : variant === 'global'
+      ? 'bg-cream border border-bordeaux/40 hover:border-bordeaux hover:bg-cream-warm/40'
+      : variant === 'transverse'
+        ? 'bg-cream-warm/30 border border-line hover:border-bordeaux'
+        : 'bg-white border border-line hover:border-bordeaux'
+
+  const numClass = isEmpty
+    ? 'text-[26px] text-line'
+    : variant === 'global'
+      ? 'text-[36px] text-bordeaux'
+      : 'text-[34px] text-bordeaux'
+
+  return (
+    <button onClick={onClick}
+            className={`rounded-xl p-4 transition-all text-left cursor-pointer ${borderClass}`}>
+      <div className="flex items-center gap-2 mb-2 min-w-0">
+        <span className="text-[15px] opacity-80">{cat.emoji}</span>
+        <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-mute truncate">
+          {cat.label.replace(/^Vente\s+/i, '')}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className={`font-fraunces italic font-medium leading-none ${numClass}`}>
+          {total}
+          {showSlash && (
+            <span className="text-[14px] text-ink-mute font-normal ml-0.5">
+              /{totalFull}
+            </span>
+          )}
+        </span>
+        {!isEmpty && catLines.length > 0 && (
+          <span className="text-[11px] text-ink-mute ml-auto">
+            {catLines.length} ligne{catLines.length > 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+    </button>
+  )
+}
+
+// ============================================================
 // Composant principal
 // Mode "popup" (par defaut) : ouvert depuis le calendrier admin, bouton ✕ pour fermer
 // Mode "fullscreen" : utilisateur avec role 'recap' qui n'a que cette page,
@@ -968,55 +1023,74 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
             </div>
           </div>
 
-          {/* Cases cliquables (8 categories) */}
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {loading ? (
-              <div className="col-span-full text-center text-ink-mute italic py-12">Chargement...</div>
-            ) : VENTE_CATEGORIES.map(cat => {
-              const catLines = linesForCategory(cat.id)
-              const catLinesFull = linesForCategoryFull(cat.id)
-              const total = sumQty(catLines)
-              const totalFull = sumQty(catLinesFull)
-              const showSlash = isFiltered && total !== totalFull
-              const isEmpty = total === 0 && !showSlash
-
-              return (
-                <button key={cat.id}
-                        onClick={() => setPopupCat(cat)}
-                        className={`rounded-xl p-4 transition-all text-left cursor-pointer ${
-                          isEmpty
-                            ? 'bg-transparent border border-dashed border-line/60 hover:border-bordeaux/40'
-                            : 'bg-white border border-line hover:border-bordeaux shadow-sm hover:shadow-md'
-                        }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[16px] opacity-70">{cat.emoji}</span>
-                      <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-mute truncate">
-                        {cat.label}
-                      </span>
+          {/* 3 sections : Ventes par categorie / Vues transverses / Recap globaux */}
+          {loading ? (
+            <div className="p-6 text-center text-ink-mute italic py-12">Chargement...</div>
+          ) : (
+            <div className="p-6 space-y-6">
+              {/* SECTION 1 : Ventes par categorie (4 cards compactes) */}
+              {(() => {
+                const sectionIds = ['CD', 'RAHN', 'SALES', 'VIENN']
+                const cats = sectionIds.map(id => VENTE_CATEGORIES.find(c => c.id === id)).filter(Boolean)
+                return (
+                  <div>
+                    <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-ink-mute mb-3">
+                      Ventes par catégorie
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {cats.map(cat => <RecapCard key={cat.id} cat={cat}
+                          linesForCategory={linesForCategory}
+                          linesForCategoryFull={linesForCategoryFull}
+                          isFiltered={isFiltered}
+                          onClick={() => setPopupCat(cat)} />)}
                     </div>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`font-fraunces italic font-medium leading-none ${
-                      isEmpty ? 'text-[26px] text-line' : 'text-[34px] text-bordeaux'
-                    }`}>
-                      {total}
-                      {showSlash && (
-                        <span className="text-[14px] text-ink-mute font-normal ml-0.5">
-                          /{totalFull}
-                        </span>
-                      )}
-                    </span>
-                    {!isEmpty && catLines.length > 0 && (
-                      <span className="text-[11px] text-ink-mute ml-auto">
-                        {catLines.length} ligne{catLines.length > 1 ? 's' : ''}
-                      </span>
-                    )}
+                )
+              })()}
+
+              {/* SECTION 2 : Vues transverses (3 cards moyennes) */}
+              {(() => {
+                const sectionIds = ['LIVR', 'PROD', 'CLT']
+                const cats = sectionIds.map(id => VENTE_CATEGORIES.find(c => c.id === id)).filter(Boolean)
+                return (
+                  <div>
+                    <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-ink-mute mb-3">
+                      Vues transverses
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {cats.map(cat => <RecapCard key={cat.id} cat={cat}
+                          linesForCategory={linesForCategory}
+                          linesForCategoryFull={linesForCategoryFull}
+                          isFiltered={isFiltered}
+                          onClick={() => setPopupCat(cat)}
+                          variant="transverse" />)}
+                    </div>
                   </div>
-                </button>
-              )
-            })}
-          </div>
+                )
+              })()}
+
+              {/* SECTION 3 : Recap globaux (2 cards encadrees) */}
+              {(() => {
+                const sectionIds = ['ALL', 'ODOO']
+                const cats = sectionIds.map(id => VENTE_CATEGORIES.find(c => c.id === id)).filter(Boolean)
+                return (
+                  <div>
+                    <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-ink-mute mb-3">
+                      Récap globaux
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {cats.map(cat => <RecapCard key={cat.id} cat={cat}
+                          linesForCategory={linesForCategory}
+                          linesForCategoryFull={linesForCategoryFull}
+                          isFiltered={isFiltered}
+                          onClick={() => setPopupCat(cat)}
+                          variant="global" />)}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
         </div>
       </div>
 
