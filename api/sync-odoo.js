@@ -87,9 +87,16 @@ export default async function handler(req, res) {
     })
   } catch (e) {
     console.error('[sync] ERREUR:', e)
+    console.error('[sync] Stack:', e.stack)
+    // Message plus parlant pour les erreurs de date Postgres
+    let userMessage = e.message
+    if (/string did not match|invalid input syntax|invalid date/i.test(e.message || '')) {
+      userMessage = `Format de date invalide reçu d'Odoo : ${e.message}. Voir les logs Vercel pour la commande concernee.`
+    }
     return res.status(500).json({
       success: false,
-      error: e.message,
+      error: userMessage,
+      original_error: e.message,
       stack: e.stack,
     })
   }
@@ -319,7 +326,23 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
 
     const commitmentDate = odooOrder.commitment_date
     if (!commitmentDate) continue
-    const deliveryAt = new Date(commitmentDate.replace(' ', 'T') + 'Z')
+
+    // Parsing date defensif : log la valeur en cas de format inattendu
+    let deliveryAt
+    try {
+      const dateStr = String(commitmentDate).trim()
+      if (!dateStr) continue
+      // Odoo renvoie "YYYY-MM-DD HH:MM:SS", on convertit en ISO UTC
+      const isoStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z'
+      deliveryAt = new Date(isoStr)
+      if (isNaN(deliveryAt.getTime())) {
+        console.warn(`[sync] commitment_date invalide pour ${orderNum}: "${commitmentDate}"`)
+        continue
+      }
+    } catch (e) {
+      console.warn(`[sync] erreur parsing commitment_date pour ${orderNum}: "${commitmentDate}" -> ${e.message}`)
+      continue
+    }
 
     const clientName = Array.isArray(odooOrder.partner_id)
       ? odooOrder.partner_id[1]
@@ -699,11 +722,16 @@ async function syncToSupabase(supabase, parsedOrders) {
 
   for (const po of parsedOrders) {
     try {
+      // Verifie que deliveryAt est une Date valide avant l'ISO
+      if (!po.deliveryAt || isNaN(new Date(po.deliveryAt).getTime())) {
+        console.warn(`[sync] deliveryAt invalide pour ${po.orderNum}, commande ignoree`)
+        continue
+      }
       const orderRow = {
         order_num: po.orderNum,
         client_name: po.clientName,
         seller_name: po.sellerName,
-        delivery_at: po.deliveryAt.toISOString(),
+        delivery_at: new Date(po.deliveryAt).toISOString(),
         delivery_slot: po.deliverySlot,
         odoo_id: po.odooId,
         odoo_state: po.odooState,

@@ -14,7 +14,23 @@ export function parseOdooOrder(odooOrder, odooLines) {
 
   const commitmentDate = odooOrder.commitment_date
   if (!commitmentDate) return null
-  const deliveryAt = new Date(commitmentDate.replace(' ', 'T') + 'Z')
+
+  // Parsing securise : Odoo renvoie "YYYY-MM-DD HH:MM:SS",
+  // mais parfois le format peut etre inattendu (string vide, deja en ISO, etc.)
+  let deliveryAt
+  try {
+    const dateStr = String(commitmentDate).trim()
+    if (!dateStr) return null
+    const isoStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z'
+    deliveryAt = new Date(isoStr)
+    if (isNaN(deliveryAt.getTime())) {
+      console.warn(`[odooParser] commitment_date invalide pour ${orderNum}: "${commitmentDate}"`)
+      return null
+    }
+  } catch (e) {
+    console.warn(`[odooParser] erreur parsing date pour ${orderNum}: "${commitmentDate}" -> ${e.message}`)
+    return null
+  }
 
   const deliverySlot = odooOrder.livraison_hour || null
 

@@ -616,19 +616,18 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
 
       {/* Ancienne barre semaine supprimee, integree au header ci-dessus */}
 
-      <div className="bg-cream border-b border-line px-4 py-2.5 flex flex-col items-center gap-2 flex-shrink-0">
-        <div className="flex items-center justify-center gap-2 flex-wrap">
+      <div className="bg-cream border-b border-line px-4 py-2.5 flex-shrink-0">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
           <FilterButton active={typeFilter === 'all'} onClick={() => setTypeFilter('all')} label="Tous" />
           <FilterButton active={typeFilter === 'cd'} onClick={() => setTypeFilter('cd')} label="Gâteaux" />
           <FilterButton active={typeFilter === 'gm'} onClick={() => setTypeFilter('gm')} label="Accessoires" />
-        </div>
-        <div className="flex items-center justify-center gap-2 flex-wrap">
+          <span className="w-px h-3.5 bg-line" aria-hidden="true" />
           <FilterButton active={statusFilter === 'active'} onClick={() => setStatusFilter('active')} label="En cours" small />
           <FilterButton active={statusFilter === 'couvrir'} onClick={() => setStatusFilter('couvrir')} label="À couvrir" small />
           <FilterButton active={statusFilter === 'faire'} onClick={() => setStatusFilter('faire')} label="À faire" small />
           <FilterButton active={statusFilter === 'ranger'} onClick={() => setStatusFilter('ranger')} label="À ranger" small />
           <FilterButton active={statusFilter === 'range'} onClick={() => setStatusFilter('range')} label="Rangé" small />
-          <span className="w-4" />
+          <span className="w-px h-3.5 bg-line" aria-hidden="true" />
           <FilterButton active={statusFilter === 'poly'} onClick={() => setStatusFilter('poly')} label="Poly" small />
         </div>
       </div>
@@ -838,11 +837,16 @@ function SearchResultRow({ order, stepsMap, onClick }) {
 }
 
 function FilterButton({ active, onClick, label, small }) {
-  const sizeClasses = small ? 'px-3 py-1 text-[10px]' : 'px-4 py-1.5 text-[11px]'
+  // Style epure : texte simple, soulignement bordeaux quand actif
+  const sizeClass = small ? 'text-[11px]' : 'text-[12px]'
   return (
     <button
       onClick={onClick}
-      className={`${sizeClasses} rounded-full font-medium tracking-wider uppercase transition-all ${active ? 'bg-bordeaux text-cream shadow-sm' : 'bg-cream text-ink-soft border border-line hover:border-bordeaux hover:text-bordeaux'}`}
+      className={`${sizeClass} px-1 pb-0.5 font-normal whitespace-nowrap transition-colors border-b-[1.5px] ${
+        active
+          ? 'text-bordeaux border-bordeaux'
+          : 'text-ink-soft border-transparent hover:text-bordeaux'
+      }`}
     >
       {label}
     </button>
@@ -863,19 +867,20 @@ function ProgressDotsItem({ item, stepsMap }) {
 
 function ProgressDotsRaw({ total, done }) {
   if (total === 0) return null
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  const isFull = done === total
   return (
-    <div className="flex items-center gap-1 flex-shrink-0" title={`${done}/${total} étapes complétées`}>
-      <div className="flex items-center gap-0.5">
-        {Array.from({ length: total }).map((_, i) => (
-          <span
-            key={i}
-            className={`w-2 h-2 rounded-full transition-all ${
-              i < done ? 'bg-ok shadow-sm' : 'bg-line/80 border border-line'
-            }`}
-          />
-        ))}
+    <div
+      className="flex items-center gap-1.5 flex-shrink-0"
+      title={`${done}/${total} étapes complétées`}
+    >
+      <div className="w-12 h-[3px] rounded-full bg-line/60 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${isFull ? 'bg-ok' : 'bg-bordeaux/70'}`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
-      <span className={`font-mono text-[9px] font-semibold ml-1 ${done === total ? 'text-ok' : 'text-ink-mute'}`}>
+      <span className={`font-mono text-[9px] font-medium ${isFull ? 'text-ok' : 'text-ink-mute'}`}>
         {done}/{total}
       </span>
     </div>
@@ -931,13 +936,13 @@ function CancelledBadge() {
 }
 
 function ModifiedBadge() {
+  // Point ambre discret au lieu d'un badge plein
   return (
     <span
-      className="font-sans text-[9px] font-bold text-cream bg-gold px-1.5 py-0.5 rounded tracking-wider uppercase flex-shrink-0"
+      className="inline-block w-[7px] h-[7px] rounded-full bg-gold flex-shrink-0"
       title="Commande modifiée"
-    >
-      Modifié
-    </span>
+      aria-label="Modifié"
+    />
   )
 }
 
