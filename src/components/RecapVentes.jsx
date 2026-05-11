@@ -970,57 +970,73 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
             </div>
           )}
 
-          {/* Barre de filtres */}
-          <div className="bg-cream/60 border-b border-line px-6 py-3 flex flex-col gap-2 text-[12px]">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[10px] tracking-[0.15em] uppercase font-bold text-bordeaux w-[60px]">Clients</span>
-              <select
-                value={clientsMode}
-                onChange={e => setClientsMode(e.target.value)}
-                className="px-2 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux text-[11px]"
-              >
-                <option value="contains">Contient</option>
-                <option value="not_contains">Ne contient pas</option>
-              </select>
+          {/* Barre de filtres : design epure */}
+          <div className="bg-cream/30 px-6 py-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
+            {/* Filtre Clients */}
+            <div className="relative flex items-center gap-2 bg-white border border-line rounded-full px-3 py-1.5 focus-within:border-bordeaux transition-colors">
+              <i className="ti ti-user text-[14px] text-ink-mute flex-shrink-0" aria-hidden="true"></i>
+              <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-mute flex-shrink-0">Clients</span>
               <input
                 type="text"
                 value={clientsTerms}
                 onChange={e => setClientsTerms(e.target.value)}
-                placeholder={clientsMode === 'contains' ? 'agdal, souissi...' : 'vitrine, magasin...'}
-                className="flex-1 min-w-[180px] px-2.5 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux"
+                placeholder={clientsMode === 'contains' ? 'agdal, souissi…' : 'vitrine, magasin…'}
+                className="flex-1 min-w-0 bg-transparent focus:outline-none text-[12px] placeholder:text-ink-mute/60"
               />
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[10px] tracking-[0.15em] uppercase font-bold text-bordeaux w-[60px]">Articles</span>
-              <select
-                value={articlesMode}
-                onChange={e => setArticlesMode(e.target.value)}
-                className="px-2 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux text-[11px]"
+              <button
+                type="button"
+                onClick={() => setClientsMode(clientsMode === 'contains' ? 'not_contains' : 'contains')}
+                title={clientsMode === 'contains' ? 'Inclure ces termes' : 'Exclure ces termes'}
+                className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[14px] font-medium transition-colors ${
+                  clientsMode === 'contains'
+                    ? 'bg-bordeaux/10 text-bordeaux hover:bg-bordeaux/20'
+                    : 'bg-line/40 text-ink-mute hover:bg-line/60'
+                }`}
               >
-                <option value="contains">Contient</option>
-                <option value="not_contains">Ne contient pas</option>
-              </select>
+                {clientsMode === 'contains' ? '+' : '−'}
+              </button>
+            </div>
+
+            {/* Filtre Articles */}
+            <div className="relative flex items-center gap-2 bg-white border border-line rounded-full px-3 py-1.5 focus-within:border-bordeaux transition-colors">
+              <i className="ti ti-box text-[14px] text-ink-mute flex-shrink-0" aria-hidden="true"></i>
+              <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-mute flex-shrink-0">Articles</span>
               <input
                 type="text"
                 value={articlesTerms}
                 onChange={e => setArticlesTerms(e.target.value)}
-                placeholder={articlesMode === 'contains' ? 'fraisier, framboisier...' : 'bougies, déco...'}
-                className="flex-1 min-w-[180px] px-2.5 py-1 border border-line rounded-full bg-cream/80 focus:outline-none focus:border-bordeaux"
+                placeholder={articlesMode === 'contains' ? 'fraisier, framboisier…' : 'bougies, déco…'}
+                className="flex-1 min-w-0 bg-transparent focus:outline-none text-[12px] placeholder:text-ink-mute/60"
               />
-              {isFiltered && (
-                <>
-                  <button
-                    onClick={() => { setClientsTerms(''); setArticlesTerms('') }}
-                    className="px-2.5 py-1 text-bordeaux hover:bg-bordeaux/10 rounded-full text-[11px] font-medium"
-                  >
-                    ✕ Réinitialiser
-                  </button>
-                  <span className="text-[11px] text-ink-mute italic">
-                    {filteredLines.length} / {lines.length} lignes
-                  </span>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => setArticlesMode(articlesMode === 'contains' ? 'not_contains' : 'contains')}
+                title={articlesMode === 'contains' ? 'Inclure ces termes' : 'Exclure ces termes'}
+                className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[14px] font-medium transition-colors ${
+                  articlesMode === 'contains'
+                    ? 'bg-bordeaux/10 text-bordeaux hover:bg-bordeaux/20'
+                    : 'bg-line/40 text-ink-mute hover:bg-line/60'
+                }`}
+              >
+                {articlesMode === 'contains' ? '+' : '−'}
+              </button>
             </div>
+
+            {/* Bouton reset + compteur, sur sa propre ligne si filtre actif */}
+            {isFiltered && (
+              <div className="md:col-span-2 flex items-center gap-3 justify-end text-[11px]">
+                <span className="text-ink-mute italic">
+                  {filteredLines.length} / {lines.length} lignes
+                </span>
+                <button
+                  onClick={() => { setClientsTerms(''); setArticlesTerms('') }}
+                  className="flex items-center gap-1 text-bordeaux hover:underline"
+                >
+                  <i className="ti ti-x text-[12px]" aria-hidden="true"></i>
+                  Réinitialiser
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 3 sections : Ventes par categorie / Vues transverses / Recap globaux */}
