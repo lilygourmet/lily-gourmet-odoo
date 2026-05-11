@@ -6,6 +6,29 @@ import { loadFreezerDoneIds, markFreezerDone, unmarkFreezerDone } from '../lib/f
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
 const MONTH_NAMES = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 
+// Cache localStorage : evite le rechargement Odoo lent a chaque visite
+const CACHE_KEY = 'lg_freezer_cache_v1'
+const CACHE_TTL_MS = 5 * 60 * 1000  // 5 minutes
+
+function readFreezerCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || !parsed.ts || !parsed.items) return null
+    if (Date.now() - parsed.ts > CACHE_TTL_MS) return null
+    return parsed
+  } catch (e) {
+    return null
+  }
+}
+
+function writeFreezerCache(items) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items }))
+  } catch (e) { /* ignore */ }
+}
+
 function fmtLocalDate(d) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -33,12 +56,12 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   const [error, setError] = useState('')
   const [groupBy, setGroupBy] = useState('product')   // 'client' ou 'product' (defaut produit)
   const [showDone, setShowDone] = useState({})       // par date : true/false
+  const [cacheInfo, setCacheInfo] = useState(null)   // { ts } si on affiche du cache
 
   const today = new Date()
   const NB_DAYS = 14
 
-  function loadData() {
-    setLoading(true)
+  function loadData(forceRefresh = false) {
     setError('')
     const dates = []
     for (let i = 0; i < NB_DAYS; i++) {
@@ -46,13 +69,32 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       d.setDate(today.getDate() + i)
       dates.push(fmtLocalDate(d))
     }
+
+    // Etape 1 : si cache valide et pas de force refresh, on l'utilise tout de suite
+    if (!forceRefresh) {
+      const cached = readFreezerCache()
+      if (cached) {
+        setAllItems(cached.items || [])
+        setCacheInfo({ ts: cached.ts })
+        setLoading(false)
+        // On charge quand meme les "done" qui sont legers et viennent de Supabase
+        loadFreezerDoneIds().then(done => setDoneMap(done)).catch(() => {})
+        return
+      }
+    }
+
+    // Etape 2 : pas de cache (ou refresh force) -> fetch normal
+    setLoading(true)
+    setCacheInfo(null)
     Promise.all([
       fetch(`/api/freezer-list?dates=${dates.join(',')}`).then(r => r.ok ? r.json() : Promise.reject(`Erreur ${r.status}`)),
       loadFreezerDoneIds(),
     ])
       .then(([apiData, done]) => {
-        setAllItems(apiData.items || [])
+        const items = apiData.items || []
+        setAllItems(items)
         setDoneMap(done)
+        writeFreezerCache(items)
       })
       .catch(e => setError(typeof e === 'string' ? e : e.message))
       .finally(() => setLoading(false))
@@ -213,20 +255,38 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
           Coche au fur et à mesure que tu sors les pièces.
         </p>
 
-        {/* Toggle groupBy : segmented control léger */}
-        <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line mb-4">
+        {/* Toggle groupBy : segmented control léger + bouton Recharger */}
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line">
+            <button
+              onClick={() => setGroupBy('client')}
+              className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                groupBy === 'client' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+              }`}
+            >Par commande</button>
+            <button
+              onClick={() => setGroupBy('product')}
+              className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                groupBy === 'product' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+              }`}
+            >Par produit</button>
+          </div>
+
+          {/* Bouton Recharger + indicateur cache */}
           <button
-            onClick={() => setGroupBy('client')}
-            className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-              groupBy === 'client' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
-            }`}
-          >Par commande</button>
-          <button
-            onClick={() => setGroupBy('product')}
-            className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-              groupBy === 'product' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
-            }`}
-          >Par produit</button>
+            onClick={() => loadData(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium transition-colors disabled:opacity-60"
+            title="Recharger depuis Odoo (peut prendre quelques secondes)"
+          >
+            <i className={`ti ti-refresh text-[13px] ${loading ? 'animate-spin' : ''}`} aria-hidden="true"></i>
+            {loading ? 'Chargement...' : 'Recharger'}
+          </button>
+          {cacheInfo && !loading && (
+            <span className="font-mono text-[10px] text-ink-mute italic">
+              cache · {Math.round((Date.now() - cacheInfo.ts) / 60000)}min
+            </span>
+          )}
         </div>
 
         {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
