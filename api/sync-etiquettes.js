@@ -140,9 +140,21 @@ async function fetchEtiquettesArticles(uid) {
       ['sale_ok', '=', true],
       ['active', '=', true],
     ],
-    ['id', 'name', 'sale_ok', 'image_1024', 'sequence', 'list_price'],
+    ['id', 'name', 'sale_ok', 'image_1024', 'sequence', 'list_price', 'lst_price', 'standard_price', 'taxes_id'],
     { limit: 5000 }
   )
+
+  // === DEBUG TEMPORAIRE : trouver le GS- Biscuit cafe et logger tous ses champs ===
+  const sample = all.find(t => /GS-\s*Biscuit\s*caf/i.test(t.name || ''))
+  if (sample) {
+    console.log('[sync-etiquettes][DEBUG] champs bruts pour "GS- Biscuit café" :')
+    console.log(JSON.stringify(sample, null, 2))
+  } else {
+    console.log('[sync-etiquettes][DEBUG] GS- Biscuit cafe NON trouve. Echantillon des 3 premiers GS- :')
+    const gsList = all.filter(t => /^(\[\d+\]\s*)?GS-/i.test(t.name || '')).slice(0, 3)
+    for (const t of gsList) console.log(JSON.stringify(t, null, 2))
+  }
+  // === FIN DEBUG ===
 
   const filtered = []
   for (const t of all) {
