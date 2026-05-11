@@ -140,7 +140,7 @@ async function fetchEtiquettesArticles(uid) {
       ['sale_ok', '=', true],
       ['active', '=', true],
     ],
-    ['id', 'name', 'sale_ok', 'image_1024', 'sequence', 'list_price', 'lst_price', 'standard_price', 'taxes_id'],
+    ['id', 'name', 'sale_ok', 'image_1024', 'sequence', 'list_price', 'standard_price', 'taxes_id'],
     { limit: 5000 }
   )
 
