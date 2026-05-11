@@ -300,9 +300,24 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
         </div>
       )}
 
-      {/* Footer logs */}
+      {/* Footer logs : filtre selon la categorie courante (Prod vs Sales) */}
       <ActivityLog
-        loadFn={() => loadProdLogs(7)}
+        loadFn={async () => {
+          const allLogs = await loadProdLogs(7)
+          if (!category) return allLogs
+          // On filtre les logs en utilisant la meme regle que les lignes affichees,
+          // pour qu'un user en mode Sales ne voie pas les logs de Prod (et vice-versa).
+          const fakeLines = allLogs
+            .filter(log => log.sales_lines)
+            .map(log => ({ ...log.sales_lines, _log: log }))
+          const filteredFakes = filterLinesForProdCategory(fakeLines, category)
+          const keptLogIds = new Set(filteredFakes.map(f => f._log.id))
+          return allLogs.filter(log => {
+            // Garder aussi les logs orphelins (ligne supprimee) pour ne pas tout cacher
+            if (!log.sales_lines) return false
+            return keptLogIds.has(log.id)
+          })
+        }}
         refreshKey={lines.length + doneMap.size}
         formatEntry={(log) => {
           const who = log.profiles?.full_name || log.profiles?.username || '?'
