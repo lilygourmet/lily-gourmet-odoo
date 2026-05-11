@@ -13,8 +13,16 @@ import {
 // MessagesView : impression d'etiquettes messages
 // Format : A4 portrait avec colonne centrale de 10,5cm (la feuille
 // est coupee en deux apres impression)
-// 5 zones de 5,94cm de haut, centrees verticalement
+// Zones de LABEL_HEIGHT_MM (4cm par defaut), centrees verticalement
 // ============================================================
+
+// ============================================================
+// Dimensions des etiquettes (modifier ici pour changer la taille)
+// ============================================================
+const LABEL_WIDTH_MM = 105     // 10,5 cm largeur
+const LABEL_HEIGHT_MM = 40     // 4 cm hauteur (au lieu de 5,94)
+const A4_HEIGHT_MM = 297       // hauteur d'une feuille A4
+const MAX_ZONES_PER_PAGE = Math.floor(A4_HEIGHT_MM / LABEL_HEIGHT_MM)  // 7 pour 4cm
 
 const FONT_OPTIONS = [
   { id: 'pacifico', label: 'Cursive (Pacifico)', css: "'Pacifico', cursive" },
@@ -151,7 +159,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     let currentZones = 0
     for (const msg of selectedMsgs) {
       const zones = doubleSize.has(msg.id) ? 2 : 1
-      if (currentZones + zones > 5) {
+      if (currentZones + zones > MAX_ZONES_PER_PAGE) {
         if (currentPage.length > 0) pages.push(currentPage)
         currentPage = []
         currentZones = 0
@@ -199,13 +207,15 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
   // ============================================================
   // Calcul auto-fit : taille de police pour remplir une zone
-  // Zone : 105mm large x 59,4mm haut (single) ou 118,8mm haut (double)
+  // Zone : LABEL_WIDTH_MM large x LABEL_HEIGHT_MM haut (single) ou 2x (double)
   // Surface utile : ~93mm x ~47mm avec marges
   // Le texte peut etre wrappe sur plusieurs lignes mais pas mid-word
   // ============================================================
   function computeFontSizes(text, zones, isLayout) {
-    const widthMm = 90   // 9cm max (zone 10,5cm avec marges)
-    const heightMm = (zones === 2 ? 105 : 46) * 0.80   // marge 20% pour eviter tout debordement
+    const widthMm = LABEL_WIDTH_MM - 15   // marges horizontales totales (~7.5mm de chaque cote)
+    // Hauteur utile (avec marge 20%) : double zone fait 2x la hauteur d'une seule
+    const totalHeightMm = (zones === 2 ? 2 * LABEL_HEIGHT_MM : LABEL_HEIGHT_MM) * 0.80
+    const heightMm = totalHeightMm
     const factor = sizeFactor / 100
 
     const ar = isArabic(text)
@@ -282,17 +292,22 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     }
 
     if (isLayout) {
-      const greetingMaxH = heightMm * 0.25
-      const nameMaxH = heightMm * 0.65
-
-      const greetingPt = fitSize('Joyeux Anniversaire', greetingMaxH, 8, 40) * factor
+      // Layout 2 lignes (formule + prenom) : meme taille pour les 2 lignes
+      // Chaque ligne a environ 45% de la hauteur dispo (avec un peu d'espace au milieu)
+      const lineMaxH = heightMm * 0.45
 
       const nameStr = text.replace(/^(Joyeux Anniversaire|Happy Birthday|عيد ميلاد سعيد)\s+/i, '')
-      const namePt = fitSize(nameStr, nameMaxH, 14, 150) * factor
+      const greetingStr = text.match(/^(Joyeux Anniversaire|Happy Birthday|عيد ميلاد سعيد)/i)?.[1] || 'Joyeux Anniversaire'
+
+      // On calcule la taille pour CHAQUE ligne, puis on prend la plus petite
+      // pour qu'elles tiennent toutes les deux sans depasser, et soient identiques
+      const greetingFits = fitSize(greetingStr, lineMaxH, 14, 90)
+      const nameFits = fitSize(nameStr, lineMaxH, 14, 90)
+      const sharedPt = Math.min(greetingFits, nameFits) * factor
 
       return {
-        greetingPt: Math.max(8, Math.min(greetingPt, 40)),
-        namePt: Math.max(14, Math.min(namePt, 150)),
+        greetingPt: Math.max(14, Math.min(sharedPt, 90)),
+        namePt: Math.max(14, Math.min(sharedPt, 90)),
       }
     } else {
       const textPt = fitSize(text, heightMm, 10, 130) * factor
@@ -306,14 +321,14 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       let topMm = 0
       const blocks = []
       for (const { msg, zones } of items) {
-        const heightMm = zones === 2 ? 116 : 58
+        const heightMm = zones === 2 ? 2 * LABEL_HEIGHT_MM : LABEL_HEIGHT_MM
         blocks.push({ msg, zones, topMm, heightMm })
         topMm += heightMm
       }
       const totalZones = items.reduce((s, { zones }) => s + zones, 0)
       const lastIdx = blocks.length - 1
       const html = blocks.map(({ msg, zones, topMm, heightMm }, idx) => {
-        const showCut = !(totalZones === 5 && idx === lastIdx)
+        const showCut = !(totalZones === MAX_ZONES_PER_PAGE && idx === lastIdx)
         return renderMsgAbsolute(msg, zones, topMm, heightMm, showCut)
       }).join('')
       const breakStyle = pageIdx > 0 ? ' style="page-break-before: always;"' : ''
@@ -394,22 +409,21 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
       <div className="max-w-6xl mx-auto px-4 py-4">
         {/* Header */}
-        <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
-          <div className="flex items-baseline gap-3">
-            <h1 className="font-fraunces italic text-[26px] font-normal text-ink leading-none">Messages</h1>
-            <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-mute">
-              Aujourd'hui
-            </span>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">💌</span>
+            <h1 className="font-mono text-[14px] tracking-[0.15em] uppercase text-bordeaux font-bold">
+              Messages — Aujourd'hui
+            </h1>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setShowPrinted(!showPrinted)}
-              className={`flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full border transition-colors ${
+              className={`text-[11px] px-3 py-1.5 rounded-full border transition-colors ${
                 showPrinted ? 'bg-bordeaux text-cream border-bordeaux' : 'border-line text-ink-soft hover:border-bordeaux'
               }`}
             >
-              {showPrinted && <i className="ti ti-check text-[12px]" aria-hidden="true"></i>}
-              Voir imprimés
+              {showPrinted ? '✓ Voir imprimés' : 'Voir imprimés'}
             </button>
             <button onClick={selectAllInTab} className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux">Tout cocher</button>
             <button onClick={clearAll} className="text-[11px] px-3 py-1.5 rounded-full border border-line text-ink-soft hover:border-bordeaux">Tout décocher</button>
@@ -420,21 +434,19 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         <div className="flex gap-1 mb-4 border-b border-line">
           <button
             onClick={() => setActiveTab('cd')}
-            className={`flex items-center gap-2 px-4 py-2 text-[12px] font-medium transition-colors border-b-2 -mb-px ${
+            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
               activeTab === 'cd' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
             }`}
           >
-            <i className="ti ti-cake text-[14px]" aria-hidden="true"></i>
-            Gâteaux <span className="text-ink-mute font-normal">({cdMessages.length})</span>
+            🎂 Gâteaux ({cdMessages.length})
           </button>
           <button
             onClick={() => setActiveTab('prod')}
-            className={`flex items-center gap-2 px-4 py-2 text-[12px] font-medium transition-colors border-b-2 -mb-px ${
+            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
               activeTab === 'prod' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
             }`}
           >
-            <i className="ti ti-bread text-[14px]" aria-hidden="true"></i>
-            Production <span className="text-ink-mute font-normal">({prodMessages.length})</span>
+            🥐 Production ({prodMessages.length})
           </button>
         </div>
 
@@ -670,7 +682,7 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
 // ============================================================
 function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText, computeSizes }) {
   const usedZones = pageItems.reduce((s, p) => s + p.zones, 0)
-  const emptyZones = 5 - usedZones
+  const emptyZones = MAX_ZONES_PER_PAGE - usedZones
   const emptyBottom = emptyZones   // toujours en bas
 
   // Echelle aperçu : la colonne fait 105mm => on l'affiche en ~85px
