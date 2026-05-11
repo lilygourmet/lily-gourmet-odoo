@@ -47,25 +47,48 @@ function resolveColors(ids, palette) {
   }).filter(Boolean)
 }
 
+// Extrait les avertissements (notes par article venant des line_note Odoo) sous forme
+// d'un tableau de strings non vides. Gere les 3 formats possibles vus dans la base :
+//   - string brute
+//   - array de strings
+//   - array d'objets { text: '...' }
+function extractItemWarnings(item) {
+  const w = item?.warnings
+  if (!w) return []
+  if (typeof w === 'string') {
+    return w.trim() ? [w.trim()] : []
+  }
+  if (Array.isArray(w)) {
+    return w
+      .map(x => typeof x === 'string' ? x : (x?.text || ''))
+      .map(s => String(s).trim())
+      .filter(Boolean)
+  }
+  if (typeof w === 'object' && w.text) {
+    const t = String(w.text).trim()
+    return t ? [t] : []
+  }
+  return []
+}
+
+// Genere un bloc HTML "Note" en italique rose pale, a placer sous un article.
+// Retourne '' si l'article n'a pas de note.
+function renderItemNoteBlock(item) {
+  const notes = extractItemWarnings(item)
+  if (notes.length === 0) return ''
+  return `
+    <div style="margin-top:6px;padding:6px 10px;background:#fce4ec;border-left:3px solid #c2185b;border-radius:3px;">
+      <div style="font-size:9.5px;font-weight:bold;color:#c2185b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:2px;">⚠ Note</div>
+      ${notes.map(n => `<div style="font-size:11.5px;color:#333;font-style:italic;line-height:1.4;">${escapeHtml(n)}</div>`).join('')}
+    </div>
+  `
+}
+
 // Generer le HTML d'une seule commande
 function renderOrderHtml(order, fichesByItemId, palette) {
   const items = order.order_items || []
   const cdItems = items.filter(i => i.type === 'CD')
   const gmItems = items.filter(i => i.type === 'GM')
-
-  // Allergies
-  const warnings = []
-  for (const item of items) {
-    const w = item.warnings
-    if (!w) continue
-    if (typeof w === 'string') warnings.push(w)
-    else if (Array.isArray(w)) {
-      for (const x of w) {
-        if (typeof x === 'string') warnings.push(x)
-        else if (x?.text) warnings.push(x.text)
-      }
-    }
-  }
 
   // Photos
   const allPhotos = []
@@ -118,6 +141,7 @@ function renderOrderHtml(order, fichesByItemId, palette) {
                 ${item.message ? `<div>Message : « ${escapeHtml(item.message)} »</div>` : ''}
                 ${polysList.length > 0 ? `<div>Polys : ${polysList.map(p => `Etage ${p.etage} = ${escapeHtml(p.value || '—')}`).join(' ')}</div>` : ''}
               </div>
+              ${renderItemNoteBlock(item)}
             </div>
           `
         }).join('')}
@@ -157,6 +181,7 @@ function renderOrderHtml(order, fichesByItemId, palette) {
                 ${fiche?.zigzag_mode === 'differente' && zigzagCouleurs.length > 0 ? `<div>Zigzag : ${zigzagCouleurs.map(c => escapeHtml(c.nom)).join(', ')}</div>` : ''}
                 ${decos.length > 0 ? `<div>Deco : ${decos.map(escapeHtml).join(' · ')}</div>` : ''}
               </div>
+              ${renderItemNoteBlock(item)}
             </div>
           `
         }).join('')}
@@ -210,14 +235,6 @@ function renderOrderHtml(order, fichesByItemId, palette) {
           <div style="font-weight:600;">${escapeHtml(order.seller_name || '—')}</div>
         </div>
       </div>
-
-      <!-- WARNINGS -->
-      ${warnings.length > 0 ? `
-        <div style="border:1px solid #c2185b;background:#fce4ec;padding:8px 12px;margin-bottom:14px;border-radius:4px;">
-          <div style="font-size:10px;font-weight:bold;color:#c2185b;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">⚠ AVERTISSEMENT</div>
-          ${warnings.map(w => `<div style="font-size:11.5px;color:#333;">${escapeHtml(w)}</div>`).join('')}
-        </div>
-      ` : ''}
 
       ${cdHtml}
       ${gmHtml}
