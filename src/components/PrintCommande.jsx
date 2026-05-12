@@ -142,7 +142,13 @@ export default function PrintCommande({ orders, fichesByItemId = {}, palette = [
 // ============================================================
 
 function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPages, printedAtStr, isLast }) {
-  const items = order.order_items || []
+  // Filtre les items a quantite zero (acompte, lignes ajoutees pour reference, etc.)
+  // On accepte les strings et les nombres pour la quantite.
+  const rawItems = order.order_items || []
+  const items = rawItems.filter(i => {
+    const q = parseFloat(i?.quantity)
+    return !isNaN(q) && q > 0
+  })
   const cdItems = items.filter(i => i.type === 'CD')
   const gmItems = items.filter(i => i.type === 'GM')
 

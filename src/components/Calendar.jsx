@@ -180,9 +180,18 @@ function normalizeForSearch(str) {
 
 
 function filterOrderItemsForView(order, isPatissierMode) {
-  if (!isPatissierMode) return order
-  // En mode patissier : on ne garde que les items GM
-  const filteredItems = (order.order_items || []).filter(i => i.type === 'GM')
+  // 1) On retire systematiquement les items a quantite zero (acompte, lignes
+  //    Odoo ajoutees pour reference, etc.) : ils n'ont pas a apparaitre nulle
+  //    part dans le calendrier ni dans les fiches/imprimes derives.
+  const rawItems = order.order_items || []
+  let filteredItems = rawItems.filter(i => {
+    const q = parseFloat(i?.quantity)
+    return !isNaN(q) && q > 0
+  })
+  // 2) En mode patissier on ne garde que les items GM
+  if (isPatissierMode) {
+    filteredItems = filteredItems.filter(i => i.type === 'GM')
+  }
   return { ...order, order_items: filteredItems }
 }
 

@@ -86,7 +86,12 @@ function renderItemNoteBlock(item) {
 
 // Generer le HTML d'une seule commande
 function renderOrderHtml(order, fichesByItemId, palette) {
-  const items = order.order_items || []
+  // Filtre les items a quantite zero (acompte, lignes ajoutees pour reference, etc.)
+  const rawItems = order.order_items || []
+  const items = rawItems.filter(i => {
+    const q = parseFloat(i?.quantity)
+    return !isNaN(q) && q > 0
+  })
   const cdItems = items.filter(i => i.type === 'CD')
   const gmItems = items.filter(i => i.type === 'GM')
 
