@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
+import { isLivreur } from '../lib/auth'
 import AppHeader from './AppHeader'
 
 // ============================================================
@@ -1141,7 +1142,8 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
             </div>
           )}
 
-          {/* Barre de filtres : design epure */}
+          {/* Barre de filtres : design epure - cachee pour livreur */}
+          {!isLivreur(user) && (
           <div className="bg-cream/30 px-6 py-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
             {/* Filtre Clients */}
             <div className="relative flex items-center gap-2 bg-white border border-line rounded-full px-3 py-1.5 focus-within:border-bordeaux transition-colors">
@@ -1209,10 +1211,34 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
               </div>
             )}
           </div>
+          )}
 
           {/* 3 sections : Ventes par categorie / Vues transverses / Recap globaux */}
           {loading ? (
             <div className="p-6 text-center text-ink-mute italic py-12">Chargement...</div>
+          ) : isLivreur(user) ? (
+            /* Vue restreinte LIVREUR : uniquement la card Livraisons en grand */
+            <div className="p-6">
+              {(() => {
+                const cat = VENTE_CATEGORIES.find(c => c.id === 'LIVR')
+                if (!cat) return <div className="text-ink-mute italic">Aucune livraison à afficher.</div>
+                return (
+                  <div className="max-w-2xl mx-auto">
+                    <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-ink-mute mb-3">
+                      Mes livraisons
+                    </p>
+                    <RecapCard
+                      cat={cat}
+                      linesForCategory={linesForCategory}
+                      linesForCategoryFull={linesForCategoryFull}
+                      isFiltered={isFiltered}
+                      onClick={() => setPopupCat(cat)}
+                      variant="global"
+                    />
+                  </div>
+                )
+              })()}
+            </div>
           ) : (
             <div className="p-6 space-y-6">
               {/* SECTION 1 : Ventes par categorie (4 cards compactes) */}

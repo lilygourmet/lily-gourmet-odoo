@@ -1,36 +1,17 @@
 import { useState, useEffect } from 'react'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, isLivreur } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
 import LabelsButton from './LabelsButton'
 
 // ============================================================
-// AppHeader v2 : nav epuree avec soulignement bordeaux sur active
-// - Logo Lily Gourmet conserve (Logo_LG.jpg + texte LILY GOURMET / LAYLA)
-// - Nav : texte + icone Tabler outline, soulignement bordeaux si actif
-// - Bouton SYNC en outline bordeaux (plus discret)
-// - Boutons d'action ronds 36px avec icones Tabler
-// - Tabler Icons charge automatiquement si absent
-// Props inchangees : user, activeView, onNavigate, onLogout, onSyncSuccess
+// AppHeader : header de navigation unifie
+// Props :
+//   user, activeView, onNavigate, onLogout
+//   onSyncSuccess : callback apres sync (pour refresh la vue active)
 // ============================================================
-
-const TABLER_CDN = 'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css'
-
-function useTablerIcons() {
-  useEffect(() => {
-    if (document.querySelector('link[data-tabler]')) return
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = TABLER_CDN
-    link.setAttribute('data-tabler', 'true')
-    document.head.appendChild(link)
-  }, [])
-}
-
 export default function AppHeader({ user, activeView, onNavigate, onLogout, onSyncSuccess }) {
-  useTablerIcons()
-
   const admin = isAdmin(user)
   const isProdUser = !admin && (user?.perm_prod || user?.perm_sales)
   const isPatissierUser = !admin && user?.perm_patissier
@@ -48,15 +29,17 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   })
   const [, setNow] = useState(0)
 
+  // Refresh affichage relatif chaque minute
   useEffect(() => {
     const t = setInterval(() => setNow(n => n + 1), 60000)
     return () => clearInterval(t)
   }, [])
 
+  // Auto-sync toutes les 5 min (si user a la perm + dernier sync > 4 min)
   useEffect(() => {
     if (!userCanSync) return
-    const CHECK_MS = 60 * 1000
-    const MIN_INTERVAL_MS = 5 * 60 * 1000
+    const CHECK_MS = 60 * 1000              // verifie chaque minute
+    const MIN_INTERVAL_MS = 5 * 60 * 1000   // sync si dernier > 5 min
 
     async function tryAutoSync() {
       if (syncing) return
@@ -69,6 +52,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       } catch (_) { /* handleSync gere deja l'erreur */ }
     }
 
+    // Tick imm\u00e9diat puis chaque minute
     tryAutoSync()
     const t = setInterval(tryAutoSync, CHECK_MS)
     return () => clearInterval(t)
@@ -112,125 +96,113 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
   }
 
-  // Nav button : texte + icone Tabler outline, soulignement bordeaux si actif
-  function navBtn(view, iconName, label, visible) {
+  function navBtn(view, emoji, label, visible) {
     if (!visible) return null
     const isActive = activeView === view
     return (
       <button
         onClick={() => onNavigate && onNavigate(view)}
-        className={`flex items-center gap-1.5 px-1 pb-1 text-[13px] font-normal transition-colors flex-shrink-0 border-b-[1.5px] ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
           isActive
-            ? 'text-bordeaux border-bordeaux'
-            : 'text-ink border-transparent hover:text-bordeaux'
+            ? 'bg-bordeaux text-cream border border-bordeaux'
+            : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
         }`}
       >
-        <i className={`ti ${iconName} text-[15px]`} aria-hidden="true"></i>
+        <span>{emoji}</span>
         <span>{label}</span>
-      </button>
-    )
-  }
-
-  // Bouton rond d'action a droite (36px, icone Tabler)
-  function actionBtn({ iconName, label, onClick, isActive = false }) {
-    return (
-      <button
-        onClick={onClick}
-        className={`w-9 h-9 rounded-full border flex items-center justify-center transition-all flex-shrink-0 ${
-          isActive
-            ? 'bg-bordeaux text-cream border-bordeaux'
-            : 'border-bordeaux/25 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
-        }`}
-        title={label}
-        aria-label={label}
-      >
-        <i className={`ti ${iconName} text-[15px]`} aria-hidden="true"></i>
       </button>
     )
   }
 
   return (
     <>
-      <div className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-4 flex-wrap">
+      <div className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
         {/* Logo cliquable -> calendrier */}
         <button
-          onClick={() => canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
-          className={`flex items-center gap-2.5 ${canSeeCalendar(user) ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} flex-shrink-0`}
+          onClick={() => !isLivreur(user) && canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
+          className={`flex items-center gap-2.5 ${!isLivreur(user) && canSeeCalendar(user) ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} flex-shrink-0`}
         >
-          <img src="/Logo_LG.jpg" alt="Lily Gourmet" className="w-9 h-9 object-contain" />
+          <img src="/Logo_LG.jpg" alt="Lily Gourmet" className="w-8 h-8 object-contain" />
           <div className="hidden sm:block text-left">
-            <div className="font-sans font-semibold text-[12px] tracking-[0.16em] text-ink leading-tight uppercase">Lily Gourmet</div>
+            <div className="font-sans font-semibold text-[12px] tracking-[0.12em] text-ink leading-tight">LILY GOURMET</div>
             {user?.full_name && (
-              <div className="font-sans text-[9px] tracking-[0.2em] uppercase text-ink-mute mt-0.5">{user.full_name}</div>
+              <div className="font-mono text-[8px] tracking-[0.2em] uppercase text-bordeaux mt-0.5">{user.full_name}</div>
             )}
           </div>
         </button>
 
-        {/* Navigation : texte + icone Tabler, soulignement bordeaux si actif */}
-        <nav className="flex items-center gap-5 flex-wrap flex-1">
-          {navBtn('calendar', 'ti-calendar', 'Calendrier', canSeeCalendar(user))}
-          {navBtn('recap', 'ti-chart-bar', 'Récap', canRecaps(user))}
-          {navBtn('prod', 'ti-bread', 'Prod', admin || (isProdUser && user.perm_prod))}
-          {navBtn('sales', 'ti-salad', 'Salés', admin || (isProdUser && user.perm_sales))}
-          {navBtn('patissier', 'ti-cupcake', 'Accessoires', admin || isPatissierUser)}
-          {navBtn('freezer', 'ti-snowflake', 'CD Négatif', canSeeFreezer(user))}
-          {navBtn('messages', 'ti-message', 'Messages', canSeeMessages(user))}
-          {navBtn('etiquettes', 'ti-tag', 'Étiquettes Café', canSeeEtiquettes(user))}
-        </nav>
+        {/* Navigation */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {navBtn('calendar', '📅', 'Calendrier', !isLivreur(user) && canSeeCalendar(user))}
+          {navBtn('recap', '📊', 'Récap', canRecaps(user) || isLivreur(user))}
+          {navBtn('prod', '🥐', 'Prod', !isLivreur(user) && (admin || (isProdUser && user.perm_prod)))}
+          {navBtn('sales', '🥪', 'Salés', !isLivreur(user) && (admin || (isProdUser && user.perm_sales)))}
+          {navBtn('patissier', '🧁', 'Accessoires', !isLivreur(user) && (admin || isPatissierUser))}
+          {navBtn('freezer', '❄️', 'CD Négatif', !isLivreur(user) && canSeeFreezer(user))}
+          {navBtn('messages', '', 'Messages', !isLivreur(user) && canSeeMessages(user))}
+          {navBtn('etiquettes', '🏷', 'Étiquettes Café', !isLivreur(user) && canSeeEtiquettes(user))}
+        </div>
 
-        {/* Actions : labels + sync + roue + logout */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Bouton Etiquettes CD (Zebra) */}
+        {/* Actions : sync + roue + logout */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Bouton Etiquettes Zebra (admin ou perm_labels) */}
           {canPrintLabels(user) && <LabelsButton />}
 
-          {/* Heure derniere sync */}
+          {/* Heure derniere sync : visible pour tous */}
           {lastSyncAt && !syncing && (
-            <span
-              className="font-mono text-[10px] text-ink-mute hidden md:inline"
-              title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}
-            >
+            <span className="font-mono text-[9px] text-ink-mute hidden md:inline" title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}>
               sync {fmtRelative(lastSyncAt)}
             </span>
           )}
 
-          {/* Sync : outline bordeaux (plus discret) */}
+          {/* Sync (bouton) seulement si user a la perm */}
           {userCanSync && (
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
               title={lastSyncAt ? `Dernière synchro : ${lastSyncAt.toLocaleString('fr-FR')}` : 'Synchroniser depuis Odoo'}
             >
-              <i className={`ti ti-refresh text-[14px] ${syncing ? 'animate-spin' : ''}`} aria-hidden="true"></i>
-              <span className="hidden sm:inline">{syncing ? (syncStatus || 'SYNC...') : 'SYNC'}</span>
+              {syncing ? (
+                <>
+                  <span>⏳</span>
+                  <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
+                </>
+              ) : (
+                <>
+                  <span>🔄</span>
+                  <span className="hidden sm:inline">SYNC</span>
+                </>
+              )}
             </button>
           )}
 
-          {/* Roue parametres (admin only) */}
+          {/* Roue (admin only) */}
           {admin && (
             <div className="relative">
-              {actionBtn({
-                iconName: 'ti-settings',
-                label: 'Paramètres',
-                onClick: () => setShowCog(!showCog),
-                isActive: showCog,
-              })}
+              <button
+                onClick={() => setShowCog(!showCog)}
+                className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+                title="Paramètres"
+              >
+                ⚙️
+              </button>
               {showCog && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowCog(false)} />
                   <div className="absolute right-0 mt-1 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
                     <CogItem
-                      iconName="ti-key"
+                      icon="🔑"
                       label="Mot de passe"
                       onClick={() => { setShowChangePwd(true); setShowCog(false) }}
                     />
                     <CogItem
-                      iconName="ti-users"
+                      icon="👥"
                       label="Utilisateurs"
                       onClick={() => { setShowAdminUsers(true); setShowCog(false) }}
                     />
                     <CogItem
-                      iconName="ti-palette"
+                      icon="🎨"
                       label="Palette couleurs"
                       onClick={() => { setShowPalette(true); setShowCog(false) }}
                     />
@@ -241,18 +213,26 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           )}
 
           {/* Mot de passe (non-admin : direct) */}
-          {!admin && actionBtn({
-            iconName: 'ti-key',
-            label: 'Changer mot de passe',
-            onClick: () => setShowChangePwd(true),
-          })}
+          {!admin && (
+            <button
+              onClick={() => setShowChangePwd(true)}
+              className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+              title="Changer mot de passe"
+            >
+              🔑
+            </button>
+          )}
 
           {/* Logout */}
-          {onLogout && actionBtn({
-            iconName: 'ti-logout',
-            label: 'Se déconnecter',
-            onClick: onLogout,
-          })}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+              title="Se déconnecter"
+            >
+              ↩
+            </button>
+          )}
         </div>
       </div>
 
@@ -276,13 +256,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   )
 }
 
-function CogItem({ iconName, label, onClick }) {
+function CogItem({ icon, label, onClick }) {
   return (
     <button
       onClick={onClick}
       className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-cream-warm text-[12px] text-ink"
     >
-      <i className={`ti ${iconName} text-[14px] text-bordeaux`} aria-hidden="true"></i>
+      <span className="text-[14px]">{icon}</span>
       <span>{label}</span>
     </button>
   )

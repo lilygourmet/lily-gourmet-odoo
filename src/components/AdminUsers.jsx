@@ -651,7 +651,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
         <label className="block text-[11px] font-medium text-ink-soft mb-1.5">
           Rôle
         </label>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <RoleButton
             label="Utilisateur"
             active={formData.role === 'user'}
@@ -666,6 +666,11 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="Récap"
             active={formData.role === 'recap'}
             onClick={() => update('role', 'recap')}
+          />
+          <RoleButton
+            label="Livreur"
+            active={formData.role === 'livreur'}
+            onClick={() => update('role', 'livreur')}
           />
         </div>
       </div>

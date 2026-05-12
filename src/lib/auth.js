@@ -66,6 +66,11 @@ export function isAdmin(user) {
   return user && user.role === 'admin'
 }
 
+// Livreur : role dédié, ne voit que Récap > card Livraisons
+export function isLivreur(user) {
+  return !!user && user.role === 'livreur'
+}
+
 // Permissions granulaires
 export function canSync(user) {
   if (!user) return false

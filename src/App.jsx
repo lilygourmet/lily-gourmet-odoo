@@ -7,7 +7,7 @@ import ProdView from './components/ProdView'
 import FreezerView from './components/FreezerView'
 import MessagesView from './components/MessagesView'
 import EtiquettesView from './components/EtiquettesView'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, loadFreshUser } from './lib/auth'
+import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser } from './lib/auth'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -18,6 +18,7 @@ function App() {
   // Choisit la vue par defaut en fonction du user
   function pickDefaultView(u) {
     if (!u) return 'calendar'
+    if (isLivreur(u)) return 'recap'
     if (u.role === 'recap') return 'recap'
     if (u.role === 'admin') return 'calendar'
     if (u.perm_calendar) return 'calendar'
