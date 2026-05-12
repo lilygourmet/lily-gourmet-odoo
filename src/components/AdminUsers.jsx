@@ -5,6 +5,7 @@ import {
   updateUser,
   resetUserPassword,
   deleteUser,
+  hardDeleteUser,
   loadTeams,
   createTeam,
   deleteTeam,
@@ -22,6 +23,7 @@ export default function AdminUsers({ currentUser, onClose }) {
   const [editingUser, setEditingUser] = useState(null)
   const [resetPasswordFor, setResetPasswordFor] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [confirmHardDelete, setConfirmHardDelete] = useState(null)
   const [collapsedTeams, setCollapsedTeams] = useState({})  // { teamId: true } = replie
   const [dragOverTeam, setDragOverTeam] = useState(null)
   const [draggedUser, setDraggedUser] = useState(null)
@@ -52,6 +54,16 @@ export default function AdminUsers({ currentUser, onClose }) {
       const [data, teamsData] = await Promise.all([loadUsers(), loadTeams()])
       setUsers(data || [])
       setTeams(teamsData || [])
+      // Au premier chargement seulement : fermer toutes les equipes par defaut.
+      // On garde les choix de l'utilisateur sur les refreshs suivants pour ne pas
+      // refermer une equipe qu'il vient d'ouvrir.
+      setCollapsedTeams(prev => {
+        if (Object.keys(prev).length > 0) return prev
+        const all = {}
+        for (const t of (teamsData || [])) all[t.id] = true
+        all['__none__'] = true   // section "sans equipe"
+        return all
+      })
     } catch (e) {
       console.error('loadUsers error:', e)
       alert(`Erreur de chargement : ${e.message}`)
@@ -164,6 +176,18 @@ export default function AdminUsers({ currentUser, onClose }) {
     } catch (e) {
       console.error('[handleDelete]', e)
       alert(`Erreur désactivation : ${e?.message || 'erreur inconnue'}`)
+    }
+  }
+
+  // Suppression definitive : reservee aux users deja desactives.
+  async function handleHardDelete(userId) {
+    try {
+      await hardDeleteUser(userId)
+      setConfirmHardDelete(null)
+      await refresh()
+    } catch (e) {
+      console.error('[handleHardDelete]', e)
+      alert(`Erreur suppression : ${e?.message || 'erreur inconnue'}\n\nL'utilisateur peut etre lie a des donnees historiques (commandes faites, logs...). Dans ce cas il faut garder son compte desactive.`)
     }
   }
 
@@ -314,6 +338,7 @@ export default function AdminUsers({ currentUser, onClose }) {
                                   onEdit={() => setEditingUser(u)}
                                   onResetPassword={() => setResetPasswordFor(u)}
                                   onDelete={() => setConfirmDelete(u)}
+                                  onHardDelete={() => setConfirmHardDelete(u)}
                                   onDuplicate={() => { setDuplicateFromUser(u); setShowNewForm(true) }}
                                 />
                               )}
@@ -356,6 +381,15 @@ export default function AdminUsers({ currentUser, onClose }) {
           user={confirmDelete}
           onClose={() => setConfirmDelete(null)}
           onConfirm={() => handleDelete(confirmDelete.id)}
+        />
+      )}
+
+      {/* Modal suppression définitive */}
+      {confirmHardDelete && (
+        <HardDeleteConfirmModal
+          user={confirmHardDelete}
+          onClose={() => setConfirmHardDelete(null)}
+          onConfirm={() => handleHardDelete(confirmHardDelete.id)}
         />
       )}
 
@@ -453,7 +487,7 @@ function TeamManagerModal({ teams, users, onClose, onCreate, onDelete }) {
 // CARTE UTILISATEUR
 // ==========================================
 
-function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onDuplicate }) {
+function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHardDelete, onDuplicate }) {
   const perms = []
   if (user.perm_sync) perms.push('Sync')
   if (user.perm_check) perms.push('Cocher')
@@ -532,10 +566,20 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onDu
           </button>
         )}
         {!isCurrentUser && user.active === false && (
-          <span className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-ink-mute border border-line rounded inline-flex items-center gap-1">
-            <i className="ti ti-user-off text-[12px]" aria-hidden="true"></i>
-            Désactivé
-          </span>
+          <>
+            <span className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-ink-mute border border-line rounded inline-flex items-center gap-1">
+              <i className="ti ti-user-off text-[12px]" aria-hidden="true"></i>
+              Désactivé
+            </span>
+            <button
+              onClick={onHardDelete}
+              className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-[#A03333] border border-[#A03333] rounded hover:bg-[#A03333] hover:text-cream transition-all inline-flex items-center gap-1"
+              title="Suppression définitive"
+            >
+              <i className="ti ti-trash text-[12px]" aria-hidden="true"></i>
+              Supprimer
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -975,6 +1019,52 @@ function DeleteConfirmModal({ user, onClose, onConfirm }) {
             className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all"
           >
             Désactiver
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ==========================================
+// Modal confirmation suppression DEFINITIVE
+// (utilisee pour un user deja desactive)
+// ==========================================
+function HardDeleteConfirmModal({ user, onClose, onConfirm }) {
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-cream rounded-2xl w-full max-w-sm shadow-2xl border border-[#A03333] p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="font-fraunces italic text-[18px] font-medium text-[#A03333] mb-2">
+          ⚠ Supprimer définitivement ?
+        </div>
+        <div className="text-[13px] text-ink-soft mb-4 leading-snug">
+          <span className="font-medium text-ink">{user.full_name || user.username}</span>
+          <br />
+          <span className="text-[11px] text-ink-mute italic">
+            Le compte sera supprimé de la base. Cette action est <strong>irréversible</strong>.
+            Si l'utilisateur a des données historiques liées (commandes, logs...), la
+            suppression peut échouer — dans ce cas, garde le compte désactivé.
+          </span>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded-lg hover:bg-cream-warm transition-all"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase bg-[#A03333] text-cream rounded-lg hover:bg-[#7a2525] transition-all"
+          >
+            Supprimer
           </button>
         </div>
       </div>
