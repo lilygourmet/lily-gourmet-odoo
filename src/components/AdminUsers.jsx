@@ -162,7 +162,8 @@ export default function AdminUsers({ currentUser, onClose }) {
       setConfirmDelete(null)
       await refresh()
     } catch (e) {
-      alert(`Erreur suppression : ${e.message}`)
+      console.error('[handleDelete]', e)
+      alert(`Erreur désactivation : ${e?.message || 'erreur inconnue'}`)
     }
   }
 
@@ -521,13 +522,20 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onDu
             ⎘ Dupliquer
           </button>
         )}
-        {!isCurrentUser && (
+        {!isCurrentUser && user.active !== false && (
           <button
             onClick={onDelete}
-            className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-bordeaux border border-bordeaux rounded hover:bg-bordeaux hover:text-cream transition-all"
+            className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-bordeaux border border-bordeaux rounded hover:bg-bordeaux hover:text-cream transition-all inline-flex items-center gap-1"
           >
-            ✕ Supprimer
+            <i className="ti ti-user-off text-[12px]" aria-hidden="true"></i>
+            Désactiver
           </button>
+        )}
+        {!isCurrentUser && user.active === false && (
+          <span className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-ink-mute border border-line rounded inline-flex items-center gap-1">
+            <i className="ti ti-user-off text-[12px]" aria-hidden="true"></i>
+            Désactivé
+          </span>
         )}
       </div>
     </div>
@@ -944,12 +952,15 @@ function DeleteConfirmModal({ user, onClose, onConfirm }) {
         onClick={e => e.stopPropagation()}
       >
         <div className="font-fraunces italic text-[18px] font-medium text-ink mb-2">
-          Supprimer cet utilisateur ?
+          Désactiver cet utilisateur ?
         </div>
         <div className="text-[13px] text-ink-soft mb-4 leading-snug">
           <span className="font-medium text-ink">{user.full_name || user.username}</span>
           <br />
-          <span className="text-[11px] text-ink-mute italic">Cette action est irréversible.</span>
+          <span className="text-[11px] text-ink-mute italic">
+            Le compte sera désactivé et ne pourra plus se connecter. Tu peux le réactiver
+            plus tard en éditant l'utilisateur (case « Compte actif »). L'historique est préservé.
+          </span>
         </div>
 
         <div className="flex gap-2">
@@ -963,7 +974,7 @@ function DeleteConfirmModal({ user, onClose, onConfirm }) {
             onClick={onConfirm}
             className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all"
           >
-            Supprimer
+            Désactiver
           </button>
         </div>
       </div>

@@ -165,7 +165,26 @@ export const adminResetPassword = resetUserPassword
 // Suppression
 // ============================================================
 
+// Suppression : on tente d'abord un soft-delete (active=false) qui marche toujours.
+// Ca empeche le user de se reconnecter, preserve l'historique (commandes faites,
+// prod_done, logs...), et evite les erreurs de contrainte FK.
+// Si tu veux vraiment supprimer la ligne, utilise hardDeleteUser ci-dessous.
 export async function deleteUser(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ active: false })
+    .eq('id', userId)
+    .select()
+    .single()
+
+  if (error) throw error
+  if (!data) throw new Error('Utilisateur introuvable ou non modifie (peut-etre une regle RLS ?)')
+  return true
+}
+
+// Suppression dure (peut echouer si FK references actives). Reservee aux cas
+// ou on veut vraiment vider la ligne.
+export async function hardDeleteUser(userId) {
   const { error } = await supabase
     .from('profiles')
     .delete()
