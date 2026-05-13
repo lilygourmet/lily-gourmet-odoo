@@ -17,9 +17,12 @@
 
 // URL du helper - modifie ici si l'IP du PC change.
 // Tu peux aussi la surcharger via la variable VITE_PRINTER_HELPER_URL au build.
+// HTTPS car helper utilise un certificat auto-signe. La premiere fois sur chaque
+// appareil, l'utilisateur doit visiter https://192.168.1.241:9999/health pour
+// accepter le certificat (alerte "connexion non securisee" -> Avancé -> Continuer).
 export const PRINTER_HELPER_URL =
   import.meta.env?.VITE_PRINTER_HELPER_URL ||
-  'http://192.168.1.241:9999'
+  'https://192.168.1.241:9999'
 
 // ----- Helpers de formatage du texte ticket -----
 
