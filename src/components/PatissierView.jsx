@@ -120,37 +120,31 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
       />
 
       {/* Sous-header : titre centré + toggle vue + impression */}
-      <div className="bg-cream/60 border-b border-line py-3 px-4">
+      <div className="bg-cream-warm/30 border-b border-line py-3 px-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 flex-wrap">
-          <h1 className="font-fraunces italic text-[26px] font-normal text-ink leading-none">Accessoires</h1>
+          <div className="flex items-center gap-2">
+            <span className="text-[20px]">🧁</span>
+            <span className="font-fraunces italic text-[18px] text-ink">Accessoires</span>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex bg-cream-warm rounded-full p-0.5 border border-line">
               <button
                 onClick={() => setViewMode('client')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                  viewMode === 'client' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+                className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                  viewMode === 'client' ? 'bg-bordeaux text-cream' : 'text-ink-mute'
                 }`}
-              >
-                <i className="ti ti-user text-[12px]" aria-hidden="true"></i>
-                Par client
-              </button>
+              >👤 Par client</button>
               <button
                 onClick={() => setViewMode('product')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                  viewMode === 'product' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+                className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                  viewMode === 'product' ? 'bg-bordeaux text-cream' : 'text-ink-mute'
                 }`}
-              >
-                <i className="ti ti-box text-[12px]" aria-hidden="true"></i>
-                Par produit
-              </button>
+              >📦 Par produit</button>
             </div>
             <button
               onClick={() => setPrintDate('__open__')}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[11px] hover:bg-bordeaux hover:text-cream transition-colors"
-            >
-              <i className="ti ti-printer text-[13px]" aria-hidden="true"></i>
-              Imprimer
-            </button>
+              className="px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[11px] hover:bg-bordeaux hover:text-cream transition-colors"
+            >🖨 Imprimer</button>
           </div>
         </div>
       </div>
@@ -298,6 +292,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
 
       {/* Footer logs */}
       <ActivityLog
+        storageKey="activity_log_open_patissier"
         loadFn={() => loadGmLogs(14)}
         refreshKey={data.length}
         formatEntry={(log) => {

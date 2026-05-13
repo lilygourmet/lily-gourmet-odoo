@@ -365,8 +365,11 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
         </div>
       )}
 
-      {/* Footer logs : 3 derniers jours, filtre par categorie, distingue fait/annule */}
+      {/* Footer logs : 3 derniers jours, filtre par categorie, distingue fait/annule
+          La storageKey distingue Prod et Sales pour que chaque onglet ait son
+          propre etat ouvert/ferme persiste. */}
       <ActivityLog
+        storageKey={`activity_log_open_${Array.isArray(category) ? 'mixed' : (category || 'default')}`}
         loadFn={async () => {
           const allLogs = await loadProdLogs(3)
           if (!category) return allLogs
