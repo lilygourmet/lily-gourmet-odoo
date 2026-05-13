@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
 import { isLivreur } from '../lib/auth'
+import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
 
 // ============================================================
@@ -304,6 +305,7 @@ function OdooTableView({ lines }) {
 function CategoryPopup({
   cat, lines, allLines, dateLabel, onClose,
   cart, onAddToCart, onRemoveFromCart, onClearCart, onDownloadCart, downloadingCart,
+  onAddToPrintCart, printCartCount,
 }) {
   const isProductMode = cat.viewMode === 'product'
   const isDeliveryMode = cat.viewMode === 'delivery'
@@ -313,31 +315,43 @@ function CategoryPopup({
   // Sous-popup pour choisir le nb d'etiquettes pour 1 article
   const [labelTask, setLabelTask] = useState(null)
 
+  // Helper : trouve la date de livraison la plus probable pour un orderNum
+  // (utile pour le ticket). On cherche dans les lignes affichees l'item correspondant.
+  function findDeliveryAt(orderNum) {
+    if (!orderNum) return null
+    const found = (lines || []).find(l => l.order_num === orderNum)
+    return found?.delivery_at || null
+  }
+
+  // Click sur un item : ouvre la popup "Combien de boites ?".
+  // Le user choisit N, et on cree 1 entree dans le panier avec boxCount=N.
+  // A l'impression, on demultipliera en N tickets numerotes 1/N, 2/N, ...
   function onPickItem(orderNum, clientName, item) {
     setLabelTask({
       mode: 'single',
       orderNum,
       clientName,
       productName: item.product_name,
+      deliveryAt: item.delivery_at || findDeliveryAt(orderNum),
+      quantity: item.quantity,
       defaultCount: 1,
     })
   }
 
+  // Click sur "Individuels" : 1 ticket par sous-item, automatique (sans popup).
   function onPickIndiv(orderNum, clientName, indivItems) {
-    // Ajout direct au panier (pas de popup)
-    const items = indivItems.map(it => ({
-      name: shortIndivName(it.product_name),
-      qty: Number(it.quantity) || 1,
-    }))
-    onAddToCart({
-      mode: 'indiv',
-      orderNum,
-      clientName,
-      items,
-      // Pour affichage panier
-      displayLabel: `${orderNum} ${clientName} · Individuels (${items.reduce((s, it) => s + it.qty, 0)})`,
-      labelCount: Math.ceil(items.length / 3),  // 3 indiv par etiquette
-    })
+    if (!onAddToPrintCart) return
+    const deliveryAt = findDeliveryAt(orderNum)
+    for (const it of indivItems) {
+      onAddToPrintCart({
+        deliveryAt: it.delivery_at || deliveryAt,
+        orderNum,
+        clientName,
+        productName: it.product_name,
+        quantity: it.quantity,
+        boxCount: 1,
+      })
+    }
   }
 
   // Total etiquettes dans le panier
@@ -425,6 +439,7 @@ function CategoryPopup({
                       showContact={isDeliveryMode}
                       onPickItem={onPickItem}
                       onPickIndiv={onPickIndiv}
+                      onAddToPrintCart={onAddToPrintCart}
                     />
                   ))}
                 </div>
@@ -440,16 +455,17 @@ function CategoryPopup({
           task={labelTask}
           onClose={() => setLabelTask(null)}
           onConfirm={(count) => {
-            const cleanProduct = String(labelTask.productName || '').replace(/^\[\d+\]\s*/, '')
-            onAddToCart({
-              mode: 'single',
-              orderNum: labelTask.orderNum,
-              clientName: labelTask.clientName,
-              productName: labelTask.productName,
-              count,
-              displayLabel: `${labelTask.orderNum} ${labelTask.clientName} · ${cleanProduct} ${count > 1 ? '×' + count : ''}`.trim(),
-              labelCount: count,
-            })
+            // count = nombre de boites = nombre de tickets a imprimer pour cet article
+            if (onAddToPrintCart) {
+              onAddToPrintCart({
+                deliveryAt: labelTask.deliveryAt,
+                orderNum: labelTask.orderNum,
+                clientName: labelTask.clientName,
+                productName: labelTask.productName,
+                quantity: labelTask.quantity,
+                boxCount: count,
+              })
+            }
             setLabelTask(null)
           }}
         />
@@ -473,7 +489,7 @@ function CategoryPopup({
 // ============================================================
 // Bloc client : entete + items (clickable ou non) + indiv groupes
 // ============================================================
-function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv }) {
+function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, onAddToPrintCart }) {
   const { normal, indiv } = splitItems(entry.items)
   const indivQty = sumIndivQty(indiv)
   const orderNum = entry.orderNum || ''
@@ -659,7 +675,7 @@ function LabelCountPopup({ task, onClose, onConfirm }) {
         className="bg-cream rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-line"
         onClick={e => e.stopPropagation()}
       >
-        <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Imprimer étiquettes</h3>
+        <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Imprimer tickets</h3>
         <div className="text-[11px] text-ink-mute mb-3 font-mono">
           {task.orderNum} · {task.clientName}
         </div>
@@ -668,7 +684,7 @@ function LabelCountPopup({ task, onClose, onConfirm }) {
           {cleanProduct}
         </div>
 
-        <div className="text-[11px] text-ink-soft mb-2">Combien d'étiquettes ?</div>
+        <div className="text-[11px] text-ink-soft mb-2">Combien de boîtes ?</div>
         <div className="flex items-center justify-between border border-bordeaux rounded-md mb-4">
           <button
             type="button"
@@ -703,7 +719,7 @@ function LabelCountPopup({ task, onClose, onConfirm }) {
           <button
             onClick={() => onConfirm(count)}
             className="flex-1 py-2 rounded-full text-[12px] font-medium bg-bordeaux text-cream hover:bg-bordeaux-deep"
-          >🖨 Imprimer</button>
+          >Ajouter au panier</button>
         </div>
       </div>
     </div>
@@ -930,6 +946,73 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
   })
   const [cartExpanded, setCartExpanded] = useState(false)
   const [downloadingCart, setDownloadingCart] = useState(false)
+
+  // ============================================================
+  // Panier d'IMPRESSION TICKETS Epson (separe du panier etiquettes Zebra)
+  // Chaque entree contient { id, deliveryAt, orderNum, clientName, productName, quantity }
+  // Chaque entree = 1 ticket imprime sur l'imprimante Epson TM-T88VII via helper PC
+  // ============================================================
+  const PRINT_CART_KEY = 'lg_print_cart_v1'
+  const [printCart, setPrintCart] = useState(() => {
+    try {
+      const raw = localStorage.getItem(PRINT_CART_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  })
+  const [printCartExpanded, setPrintCartExpanded] = useState(false)
+  const [printing, setPrinting] = useState(false)
+
+  // Sauvegarde automatique du panier d'impression
+  useEffect(() => {
+    try { localStorage.setItem(PRINT_CART_KEY, JSON.stringify(printCart)) } catch {}
+  }, [printCart])
+
+  function addToPrintCart(entry) {
+    setPrintCart(c => [...c, { ...entry, id: Date.now() + Math.random() }])
+  }
+
+  function removeFromPrintCart(id) {
+    setPrintCart(c => c.filter(e => e.id !== id))
+  }
+
+  function clearPrintCart(skipConfirm = false) {
+    if (printCart.length === 0) return
+    if (!skipConfirm && !window.confirm('Vider le panier d\'impression ?')) return
+    setPrintCart([])
+  }
+
+  async function printAllCart() {
+    if (printCart.length === 0 || printing) return
+    setPrinting(true)
+    try {
+      const result = await printArticleBatch(printCart)
+      if (result.errors.length === 0) {
+        // Tout est OK -> on vide le panier
+        setPrintCart([])
+        setPrintCartExpanded(false)
+      } else {
+        // Erreurs : on previent l'utilisateur, on garde le panier
+        alert(
+          `${result.ok} ticket(s) imprime(s) sur ${result.total}.\n\n` +
+          `${result.errors.length} erreur(s) :\n` +
+          result.errors.slice(0, 3).map(e => `- ${e.article.productName} : ${e.error}`).join('\n') +
+          (result.errors.length > 3 ? `\n... et ${result.errors.length - 3} autres.` : '') +
+          `\n\nVerifiez que le helper PC tourne (192.168.1.241:9999) et que l'imprimante est allumee.`
+        )
+      }
+    } catch (e) {
+      alert(
+        `Echec impression : ${e.message}\n\n` +
+        `Verifiez :\n` +
+        `1. Le PC Windows est allume et connecte au reseau\n` +
+        `2. Le helper print-server tourne sur le PC\n` +
+        `3. L'imprimante Epson est allumee\n` +
+        `4. Si vous etes sur HTTPS, autorisez le contenu non securise (cadenas dans la barre URL)`
+      )
+    } finally {
+      setPrinting(false)
+    }
+  }
 
   // Sauvegarde automatique du panier
   useEffect(() => {
@@ -1321,10 +1404,12 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           onClearCart={clearCart}
           onDownloadCart={downloadCart}
           downloadingCart={downloadingCart}
+          onAddToPrintCart={addToPrintCart}
+          printCartCount={printCart.length}
         />
       )}
 
-      {/* Panier flottant : visible quand le panier n'est pas vide ET aucune popup ouverte */}
+      {/* Panier flottant Etiquettes Zebra : visible quand le panier n'est pas vide ET aucune popup ouverte */}
       {cart.length > 0 && !popupCat && (
         <FloatingCart
           cart={cart}
@@ -1337,6 +1422,114 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           downloading={downloadingCart}
         />
       )}
+
+      {/* Panier flottant TICKETS Epson : visible meme quand la popup categorie
+          est ouverte, sinon on cliquerait sur 12 articles sans voir l'effet. */}
+      {printCart.length > 0 && (
+        <FloatingPrintCart
+          cart={printCart}
+          expanded={printCartExpanded}
+          onToggle={() => setPrintCartExpanded(v => !v)}
+          onRemove={removeFromPrintCart}
+          onClear={() => clearPrintCart()}
+          onPrint={printAllCart}
+          printing={printing}
+        />
+      )}
     </>
+  )
+}
+
+// ============================================================
+// FloatingPrintCart : panier flottant pour les tickets Epson
+// Visuellement distinct du panier Zebra (couleur bleue, icone imprimante).
+// Position : en bas-droite mais a gauche du panier Zebra (decale).
+// ============================================================
+function FloatingPrintCart({ cart, expanded, onToggle, onRemove, onClear, onPrint, printing }) {
+  // Nombre total de tickets a imprimer = somme des boxCount.
+  // Si une entree a boxCount=3, ca produira 3 tickets numerotes 1/3, 2/3, 3/3.
+  const totalTickets = cart.reduce(
+    (s, e) => s + Math.max(1, parseInt(e.boxCount) || 1),
+    0
+  )
+  return (
+    <div className="fixed bottom-6 left-6 z-[60] print-cart-floating">
+      {expanded ? (
+        <div className="bg-white rounded-xl shadow-2xl border border-line w-[320px] overflow-hidden animate-fadeIn">
+          <div className="px-4 py-2.5 bg-bordeaux text-cream flex items-center justify-between">
+            <span className="font-mono text-[11px] tracking-wider uppercase flex items-center gap-2">
+              <i className="ti ti-printer text-[14px]" aria-hidden="true"></i>
+              {totalTickets} ticket{totalTickets > 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={onToggle}
+              className="text-cream hover:opacity-70 text-[14px]"
+              aria-label="Replier"
+            >
+              <i className="ti ti-x" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div className="max-h-[280px] overflow-y-auto px-3 py-2 space-y-1">
+            {cart.map(entry => {
+              const nbBoites = Math.max(1, parseInt(entry.boxCount) || 1)
+              return (
+                <div key={entry.id} className="flex items-start gap-2 text-[11px] py-1 border-b border-line/40 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-[9px] text-bordeaux">{entry.orderNum}</div>
+                    <div className="text-ink-soft truncate">{entry.clientName}</div>
+                    <div className="text-ink-mute truncate">
+                      <span className="font-bold text-bordeaux">×{entry.quantity}</span> {entry.productName}
+                    </div>
+                    {nbBoites > 1 && (
+                      <div className="text-[10px] text-bordeaux font-medium">
+                        {nbBoites} boîtes — {nbBoites} tickets
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onRemove(entry.id)}
+                    className="text-ink-mute hover:text-bordeaux flex-shrink-0"
+                    title="Retirer"
+                  >
+                    <i className="ti ti-x text-[12px]" aria-hidden="true"></i>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          <div className="px-3 py-2 border-t border-line bg-cream-warm flex gap-2">
+            <button
+              onClick={onClear}
+              disabled={printing}
+              className="flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft border border-line rounded hover:bg-white transition-colors disabled:opacity-50"
+            >
+              Vider
+            </button>
+            <button
+              onClick={onPrint}
+              disabled={printing || cart.length === 0}
+              className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider rounded transition-colors flex items-center justify-center gap-1 ${
+                printing || cart.length === 0
+                  ? 'bg-ink-mute/30 text-ink-mute cursor-not-allowed'
+                  : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'
+              }`}
+            >
+              <i className={`ti ${printing ? 'ti-loader-2 animate-spin' : 'ti-printer'} text-[13px]`} aria-hidden="true"></i>
+              {printing ? 'Impression...' : 'Imprimer'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={onToggle}
+          className="bg-bordeaux text-cream rounded-full shadow-lg hover:shadow-xl px-4 py-2.5 flex items-center gap-2 transition-all"
+        >
+          <i className="ti ti-printer text-[16px]" aria-hidden="true"></i>
+          <span className="font-mono text-[11px] tracking-wider">
+            {totalTickets} ticket{totalTickets > 1 ? 's' : ''}
+          </span>
+        </button>
+      )}
+    </div>
   )
 }
