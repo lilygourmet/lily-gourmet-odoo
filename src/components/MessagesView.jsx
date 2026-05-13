@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import {
   loadMessagesToday,
@@ -56,6 +56,8 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   const [freeMessages, setFreeMessages] = useState([])
   const [showFreeForm, setShowFreeForm] = useState(false)
   const [freeText, setFreeText] = useState('')
+  const [showArabicKbFree, setShowArabicKbFree] = useState(false)
+  const freeTextareaRef = useRef(null)
 
   async function refresh() {
     setLoading(true)
@@ -465,20 +467,42 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
             {showFreeForm && (
               <div className="bg-cream-warm border border-bordeaux/30 rounded-lg p-3 mb-3">
                 <textarea
+                  ref={freeTextareaRef}
                   value={freeText}
                   onChange={e => setFreeText(e.target.value)}
                   placeholder="Tapez votre message... (Entrée = retour ligne)"
                   className="w-full text-[13px] p-2 border border-line rounded resize-y min-h-[60px] mb-2"
+                  style={isArabic(freeText) ? { direction: 'rtl', textAlign: 'right' } : {}}
                   autoFocus
                 />
-                <div className="flex flex-wrap gap-1 mb-2">
+                <div className="flex flex-wrap gap-1 mb-2 items-center">
                   {EMOJI_PICKER.map(e => (
-                    <button key={e} onClick={() => setFreeText(t => t + e)} className="text-[16px] px-1.5 py-0.5 hover:bg-cream rounded">{e}</button>
+                    <button key={e} type="button" onMouseDown={ev => ev.preventDefault()} onClick={() => setFreeText(t => t + e)} className="text-[16px] px-1.5 py-0.5 hover:bg-cream rounded">{e}</button>
                   ))}
+                  <button
+                    type="button"
+                    onMouseDown={ev => ev.preventDefault()}
+                    onClick={() => setShowArabicKbFree(v => !v)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-colors ml-1 ${
+                      showArabicKbFree
+                        ? 'bg-bordeaux text-cream border-bordeaux'
+                        : 'border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream'
+                    }`}
+                    title="Clavier arabe"
+                  >
+                    <span style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", sans-serif' }}>ع</span> AR
+                  </button>
                 </div>
-                <div className="flex gap-2">
+                {showArabicKbFree && (
+                  <ArabicKeyboard
+                    textareaRef={freeTextareaRef}
+                    onInsert={(newValue) => setFreeText(newValue)}
+                    onClose={() => setShowArabicKbFree(false)}
+                  />
+                )}
+                <div className="flex gap-2 mt-2">
                   <button onClick={addFreeMessage} className="text-[11px] px-3 py-1 bg-bordeaux text-cream rounded">Ajouter</button>
-                  <button onClick={() => { setShowFreeForm(false); setFreeText('') }} className="text-[11px] px-3 py-1 border border-line rounded text-ink-mute">Annuler</button>
+                  <button onClick={() => { setShowFreeForm(false); setFreeText(''); setShowArabicKbFree(false) }} className="text-[11px] px-3 py-1 border border-line rounded text-ink-mute">Annuler</button>
                 </div>
               </div>
             )}
@@ -601,6 +625,8 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 // ============================================================
 function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble, onTextChange, onRemove, onUnmarkPrinted }) {
   const [editing, setEditing] = useState(false)
+  const [showArabicKb, setShowArabicKb] = useState(false)
+  const textareaRef = useRef(null)
   const ar = isArabic(text)
   const time = msg.deliveryAt ? new Date(msg.deliveryAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null
 
@@ -634,15 +660,48 @@ function MessageItem({ msg, selected, doubleSize, text, onToggle, onToggleDouble
             {msg.type === 'free' && <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full">libre</span>}
           </div>
           {editing ? (
-            <textarea
-              value={text}
-              onChange={e => onTextChange(e.target.value)}
-              onBlur={() => setEditing(false)}
-              autoFocus
-              rows={Math.max(2, text.split('\n').length)}
-              className="w-full text-[13px] border border-bordeaux rounded px-1.5 py-1 resize-y"
-              style={ar ? { direction: 'rtl', textAlign: 'right' } : {}}
-            />
+            <>
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={e => onTextChange(e.target.value)}
+                onBlur={() => { if (!showArabicKb) setEditing(false) }}
+                autoFocus
+                rows={Math.max(2, text.split('\n').length)}
+                className="w-full text-[13px] border border-bordeaux rounded px-1.5 py-1 resize-y"
+                style={ar ? { direction: 'rtl', textAlign: 'right' } : {}}
+              />
+              <div className="mt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => setShowArabicKb(v => !v)}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                    showArabicKb
+                      ? 'bg-bordeaux text-cream border-bordeaux'
+                      : 'border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream'
+                  }`}
+                  title="Clavier arabe"
+                >
+                  <span style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", sans-serif' }}>ع</span> AR
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { setShowArabicKb(false); setEditing(false) }}
+                  className="text-[10px] px-2 py-0.5 rounded border border-line text-ink-mute hover:bg-cream-warm"
+                >
+                  Fermer
+                </button>
+              </div>
+              {showArabicKb && (
+                <ArabicKeyboard
+                  textareaRef={textareaRef}
+                  onInsert={(newValue) => onTextChange(newValue)}
+                  onClose={() => setShowArabicKb(false)}
+                />
+              )}
+            </>
           ) : (
             <div
               className="text-[13px] font-medium text-ink whitespace-pre-wrap"
@@ -740,6 +799,116 @@ function PagePreview({ pageItems, latinFont, arabicFont, sizeFactor, getText, co
           )
         })}
         {emptyBottom > 0 && <div style={{ flex: emptyBottom }} />}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// ArabicKeyboard : clavier arabe virtuel a cliquer
+// Utile sur PC sans clavier arabe physique. Insere le caractere
+// a la position du curseur dans le textarea, ou a la fin sinon.
+// ============================================================
+// Layout standard arabe (28 lettres + chiffres + ponctuation).
+// Disposition AZERTY-like arabe pour familiariser les utilisateurs.
+const ARABIC_KEYBOARD_LAYOUT = [
+  // Ligne 1 : chiffres arabes
+  ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'],
+  // Ligne 2 : lettres
+  ['ض','ص','ث','ق','ف','غ','ع','ه','خ','ح','ج'],
+  // Ligne 3
+  ['ش','س','ي','ب','ل','ا','ت','ن','م','ك','ط'],
+  // Ligne 4
+  ['ئ','ء','ؤ','ر','لا','ى','ة','و','ز','ظ','د','ذ'],
+  // Ligne 5 : ponctuation et lettres avec hamza
+  ['أ','إ','آ','،','؟','؛',':','"','!','-','.'],
+]
+
+function ArabicKeyboard({ onInsert, onClose, textareaRef }) {
+  // Insere a la position du curseur si textareaRef fourni, sinon ajoute a la fin
+  function handleClick(char) {
+    if (textareaRef?.current) {
+      const ta = textareaRef.current
+      const start = ta.selectionStart ?? ta.value.length
+      const end = ta.selectionEnd ?? ta.value.length
+      const newValue = ta.value.slice(0, start) + char + ta.value.slice(end)
+      onInsert(newValue, start + char.length)
+      // Re-place le curseur apres le caractere insere
+      setTimeout(() => {
+        ta.focus()
+        ta.setSelectionRange(start + char.length, start + char.length)
+      }, 0)
+    } else {
+      onInsert(char)
+    }
+  }
+
+  return (
+    <div className="bg-cream-warm border border-bordeaux/30 rounded-lg p-2 mt-2" dir="rtl">
+      <div className="flex items-center justify-between mb-2" dir="ltr">
+        <span className="font-mono text-[9px] tracking-[0.12em] uppercase text-bordeaux">
+          Clavier arabe
+        </span>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="text-[10px] text-ink-mute hover:text-bordeaux px-2"
+            title="Fermer"
+          >
+            <i className="ti ti-x text-[12px]" aria-hidden="true"></i>
+          </button>
+        )}
+      </div>
+      <div className="space-y-1">
+        {ARABIC_KEYBOARD_LAYOUT.map((row, ri) => (
+          <div key={ri} className="flex flex-wrap gap-1 justify-center">
+            {row.map((char, ci) => (
+              <button
+                key={ci}
+                type="button"
+                onMouseDown={e => e.preventDefault()}   // empeche perte de focus
+                onClick={() => handleClick(char)}
+                className="min-w-[28px] h-8 px-1.5 text-[16px] bg-white border border-line rounded hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-colors font-arabic"
+                style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", "Arial", sans-serif' }}
+              >
+                {char}
+              </button>
+            ))}
+          </div>
+        ))}
+        {/* Ligne d'actions : espace + retour ligne */}
+        <div className="flex gap-1 justify-center pt-1">
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => handleClick(' ')}
+            className="min-w-[120px] h-8 px-3 text-[11px] bg-white border border-line rounded hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-colors"
+          >Espace</button>
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => handleClick('\n')}
+            className="min-w-[60px] h-8 px-3 text-[11px] bg-white border border-line rounded hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-colors"
+          >↵</button>
+          <button
+            type="button"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => {
+              if (textareaRef?.current) {
+                const ta = textareaRef.current
+                const start = ta.selectionStart ?? ta.value.length
+                if (start === 0) return
+                const newValue = ta.value.slice(0, start - 1) + ta.value.slice(start)
+                onInsert(newValue, start - 1)
+                setTimeout(() => {
+                  ta.focus()
+                  ta.setSelectionRange(start - 1, start - 1)
+                }, 0)
+              }
+            }}
+            className="min-w-[40px] h-8 px-3 text-[11px] bg-white border border-line rounded hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-colors"
+          >⌫</button>
+        </div>
       </div>
     </div>
   )
