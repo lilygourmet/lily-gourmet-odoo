@@ -468,9 +468,7 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
               </span>
               <span className="font-mono text-[10px] text-ink-mute w-12 flex-shrink-0">{hour}</span>
               <span className="font-mono text-[10px] text-bordeaux flex-shrink-0">{line.order_num}</span>
-              {!hideClient && (
-                <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
-              )}
+              <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
               <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
               <span className="text-[12px] text-ink min-w-0 flex-1 truncate">{cleanProdProductName(line.product_name)}</span>
               {isReservationVitrine(line) && <VitrinePill />}
