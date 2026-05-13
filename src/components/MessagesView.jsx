@@ -92,6 +92,15 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   const cdMessages = useMemo(() => orderMessages.filter(m => m.source === 'cd'), [orderMessages])
   const prodMessages = useMemo(() => orderMessages.filter(m => m.source === 'prod'), [orderMessages])
 
+  // Filtre des messages libres selon l'onglet actif :
+  //   - "Aujourd'hui" : on cache ceux qui ont ete imprimes
+  //   - "Imprimes"    : on n'affiche que ceux qui ont ete imprimes
+  const visibleFreeMessages = useMemo(() => {
+    return showPrinted
+      ? freeMessages.filter(m => m.printedAt)
+      : freeMessages.filter(m => !m.printedAt)
+  }, [freeMessages, showPrinted])
+
   const allMessages = useMemo(() => {
     return [...freeMessages, ...orderMessages]
   }, [freeMessages, orderMessages])
@@ -145,6 +154,13 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   async function handleUnmarkPrinted(msg) {
     if (!msg.printedAt) return
     if (!confirm(`Marquer "${msg.text}" comme NON imprimé ?`)) return
+    // Messages libres : ils ne sont pas en base, donc on mute juste le state local
+    if (msg.type === 'free') {
+      setFreeMessages(prev => prev.map(m =>
+        m.id === msg.id ? { ...m, printedAt: null } : m
+      ))
+      return
+    }
     try {
       await unmarkMessagePrinted(msg.sourceKey)
       refresh()
@@ -186,6 +202,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     w.focus()
     setTimeout(() => { w.print() }, 700)
 
+    // 1) Marquer les messages de commande (type 'order') comme imprimes en base
     const toMark = allMessages.filter(m => selected.has(m.id) && m.type === 'order' && !m.printedAt)
     for (const msg of toMark) {
       try {
@@ -194,6 +211,21 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         console.error('[markMessagePrinted]', e)
       }
     }
+
+    // 2) Marquer les messages libres (state local) comme imprimes
+    //    -> ils basculeront vers l'onglet "imprimes" comme les autres
+    const printedAtNow = new Date().toISOString()
+    setFreeMessages(prev => prev.map(m => {
+      if (selected.has(m.id) && !m.printedAt) {
+        return { ...m, printedAt: printedAtNow }
+      }
+      return m
+    }))
+
+    // 3) Vider la selection : les messages imprimes ne sont plus dans le panier
+    setSelected(new Set())
+    setDoubleSize(new Set())
+
     refresh()
   }
 
@@ -507,12 +539,12 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
               </div>
             )}
 
-            {/* Messages libres */}
-            {freeMessages.length > 0 && (
+            {/* Messages libres (filtres selon l'onglet : non imprimes / imprimes) */}
+            {visibleFreeMessages.length > 0 && (
               <div className="mb-4">
                 <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux mb-2">Messages libres</div>
                 <div className="space-y-2">
-                  {freeMessages.map(msg => (
+                  {visibleFreeMessages.map(msg => (
                     <MessageItem
                       key={msg.id} msg={msg}
                       selected={selected.has(msg.id)} doubleSize={doubleSize.has(msg.id)}
