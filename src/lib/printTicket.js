@@ -56,18 +56,19 @@ function formatHour(date) {
 
 // ----- Format A : ticket minimaliste (choix de Layla) -----
 //
-// LILY GOURMET
+//    Lily Gourmet                    (petit, centre, en-tete discret)
 // -----------------
+// ZNATI MAHA                         (TRES GRAND + GRAS, le nom saute aux yeux)
+// -----------------
+// S48387
 // Mercredi 13 mai 2026
 // 13h00
-// S48387
-// Znati Maha
+//
 // x1 SA- Plateau Quiches (18)
 //
-// Le texte renvoye contient des sequences ESC/POS qui agrandissent le titre.
-// Le helper ajoute init + coupe automatique.
+//      1 / 2                         (TRES grand + gras, si boxTotal >= 2)
 //
-// Si boxTotal > 1, on ajoute "N / TOTAL" en TRES grand et gras en bas du ticket.
+// Le helper ajoute init + coupe automatique.
 export function buildTicketTextA({ deliveryAt, orderNum, clientName, productName, quantity, boxIndex, boxTotal }) {
   const dateStr = formatDateLong(deliveryAt)
   const hourStr = formatHour(deliveryAt)
@@ -80,29 +81,44 @@ export function buildTicketTextA({ deliveryAt, orderNum, clientName, productName
   //   \x1b!\x00  = reset normal
   //   \x1ba\x01  = align center
   //   \x1ba\x00  = align left
-  //   \x1dB\x01  = inverse video on (blanc sur noir)
-  //   \x1dB\x00  = inverse video off
-  //   \x1d!\xNN  = taille du texte (4 bits hauteur, 4 bits largeur).
+  //   \x1d!\xNN  = taille du texte (4 bits largeur, 4 bits hauteur)
+  //                \x22 = largeur x3 + hauteur x3 (gros mais qui rentre sur 1 ligne)
+  //                \x33 = largeur x4 + hauteur x4 (deja tres gros)
   //                \x77 = largeur x8 + hauteur x8 (TRES grand)
-  //                \x66 = largeur x7 + hauteur x7
-  //                \x33 = largeur x4 + hauteur x4 (deja gros)
   //   \x1bE\x01  = bold on
   //   \x1bE\x00  = bold off
   const lines = []
+
+  // --- En-tete Lily Gourmet (petit, centre) ---
   lines.push('\x1ba\x01')              // centrer
-  lines.push('\x1b!\x30LILY GOURMET\x1b!\x00')
+  lines.push('Lily Gourmet')
   lines.push('-----------------')
+
+  // --- Nom du client (TRES grand + gras + centre) ---
+  // Taille \x22 (4x large, 4x haut) + gras -> le nom saute aux yeux.
+  // On met en MAJUSCULES pour maximiser la lisibilite.
+  if (clientName) {
+    lines.push('')
+    lines.push('\x1bE\x01')             // gras ON
+    lines.push('\x1d!\x22')             // taille 4x4
+    lines.push(clientName.toUpperCase())
+    lines.push('\x1d!\x00')             // reset taille
+    lines.push('\x1bE\x00')             // gras OFF
+    lines.push('-----------------')
+  }
+
+  // --- Code commande + date + heure ---
   lines.push('\x1ba\x00')              // re-aligner a gauche
   lines.push('')
+  if (orderNum) lines.push(orderNum)
   if (dateStr) lines.push(dateStr.charAt(0).toUpperCase() + dateStr.slice(1))
   if (hourStr) lines.push(hourStr)
   lines.push('')
-  if (orderNum) lines.push(orderNum)
-  if (clientName) lines.push(clientName)
-  lines.push('')
+
+  // --- Article ---
   lines.push(`\x1b!\x10x${qty} ${product}\x1b!\x00`)   // article en moyen-large
 
-  // Numerotation des boites : uniquement si > 1 boite au total.
+  // --- Numerotation des boites (uniquement si > 1 boite au total) ---
   // Tres grand (taille 7x), en gras, centre.
   if (boxTotal && boxTotal > 1 && boxIndex) {
     lines.push('')
