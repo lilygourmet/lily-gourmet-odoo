@@ -10,7 +10,10 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
   const [doneMap, setDoneMap] = useState(new Map())
   const [loading, setLoading] = useState(true)
   const [tabsByDate, setTabsByDate] = useState({})
-  const [viewMode, setViewMode] = useState('client')  // 'client' | 'product'
+  // viewMode : 'client' = ligne par client, 'product' = agrege par produit.
+  // Par defaut on met 'product' (= vue agregee). Pour Sales on le bascule
+  // sur 'client' plus bas via un useEffect quand on sait qu'on est en mode Sales.
+  const [viewMode, setViewMode] = useState('product')  // 'client' | 'product'
   const [printDate, setPrintDate] = useState(null)
   const [expandedKey, setExpandedKey] = useState(null)  // pour vue par produit
 
@@ -27,6 +30,18 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     if (user?.prod_category) return user.prod_category
     return isAdmin(user) ? 'prod' : null
   }, [forcedCategory, user?.perm_prod, user?.perm_sales, user?.prod_category, user?.role])
+
+  // Quand category devient connue : par defaut Prod -> "Par produit", Sales -> "Par client".
+  // (L'utilisateur peut basculer manuellement ensuite, et son choix reste pour la session.)
+  // On ne change qu'au premier rendu (apres category resolu) pour ne pas casser
+  // le choix manuel de l'utilisateur.
+  const [viewModeInitialized, setViewModeInitialized] = useState(false)
+  useEffect(() => {
+    if (!category || viewModeInitialized) return
+    if (category === 'sales') setViewMode('client')
+    else setViewMode('product')
+    setViewModeInitialized(true)
+  }, [category, viewModeInitialized])
 
   // Date locale (pas UTC) pour eviter les decalages timezone
   const todayStr = (() => {
@@ -271,9 +286,9 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
                       {todo.length > 0 && (
                         <button
                           onClick={() => handlePrint(date)}
-                          className="w-7 h-7 flex items-center justify-center text-bordeaux border border-bordeaux/40 rounded-full hover:bg-bordeaux hover:text-cream transition-colors"
+                          className="w-7 h-7 flex items-center justify-center text-bordeaux border border-bordeaux/40 rounded-full hover:bg-bordeaux hover:text-cream transition-colors text-[14px]"
                           title="Imprimer ce jour"
-                        ><i className="ti ti-printer text-[13px]" aria-hidden="true"></i></button>
+                        >🖨</button>
                       )}
                     </div>
                   </div>
@@ -289,6 +304,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
                       onToggle={toggle}
                       onCancel={cancel}
                       supportsCancellation={supportsCancellation}
+                      hideClient={supportsCancellation}
                     />
                   ) : (
                     <ProductView
@@ -298,6 +314,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
                       onToggleSingle={toggle}
                       onCancelSingle={cancel}
                       supportsCancellation={supportsCancellation}
+                      hideClient={supportsCancellation}
                       expandedKey={expandedKey}
                       setExpandedKey={setExpandedKey}
                       dateKey={date}
@@ -398,8 +415,20 @@ function VitrinePill() {
   )
 }
 
+// Helper : nettoie un nom de produit pour l'affichage Prod.
+// - Retire les "Message:" suivis uniquement d'espaces ou rien (souvent les
+//   produits Odoo ont un champ Message vide qui s'affiche en bout de nom).
+// - Garde le contenu si la mention "Message:" est suivie d'un texte (anniv etc.).
+function cleanProdProductName(name) {
+  if (!name) return ''
+  let n = String(name)
+  // Retire un eventuel " Message:" en fin de chaine (avec espaces optionnels)
+  n = n.replace(/\s*Message\s*:\s*$/i, '')
+  return n.trim()
+}
+
 // Vue par client : ligne par ligne
-function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation }) {
+function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, hideClient }) {
   const sorted = [...lines].sort((a, b) => new Date(a.delivery_at) - new Date(b.delivery_at))
   return (
     <div className="space-y-1">
@@ -439,23 +468,25 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation }
               </span>
               <span className="font-mono text-[10px] text-ink-mute w-12 flex-shrink-0">{hour}</span>
               <span className="font-mono text-[10px] text-bordeaux flex-shrink-0">{line.order_num}</span>
-              <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
+              {!hideClient && (
+                <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
+              )}
               <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
-              <span className="text-[12px] text-ink min-w-0 flex-1 truncate">{line.product_name}</span>
+              <span className="text-[12px] text-ink min-w-0 flex-1 truncate">{cleanProdProductName(line.product_name)}</span>
               {isReservationVitrine(line) && <VitrinePill />}
             </button>
             {/* Bouton Annuler (croix rouge) - uniquement pour Prod */}
             {supportsCancellation && (
               <button
                 onClick={(e) => { e.stopPropagation(); onCancel(line) }}
-                className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors text-[14px] font-bold leading-none ${
                   isCancelled
                     ? 'bg-[#A03333] text-cream hover:bg-[#7a2525]'
                     : 'border border-[#A03333]/40 text-[#A03333] hover:bg-[#A03333] hover:text-cream'
                 }`}
                 title={isCancelled ? 'Retirer l\'annulation' : 'Marquer comme annulé'}
               >
-                <i className="ti ti-x text-[12px]" aria-hidden="true"></i>
+                ×
               </button>
             )}
           </div>
@@ -466,7 +497,7 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation }
 }
 
 // Vue par produit : agrégé, click pour expand
-function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSingle, supportsCancellation, expandedKey, setExpandedKey, dateKey }) {
+function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSingle, supportsCancellation, hideClient, expandedKey, setExpandedKey, dateKey }) {
   // Helper local : extrait le status d'une ligne
   function statusOf(odooLineId) {
     const e = doneMap.get(odooLineId)
@@ -542,7 +573,7 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
                   : allDone ? 'line-through text-ink-mute'
                   : 'text-ink'
               }`}>
-                {g.name}
+                {cleanProdProductName(g.name)}
               </span>
               {allVitrine && <VitrinePill />}
               {someVitrine && (
@@ -598,21 +629,23 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
                         </span>
                         <span className="font-mono text-[9px] text-ink-mute w-10">{hour}</span>
                         <span className="font-mono text-[9px] text-bordeaux">{line.order_num}</span>
-                        <span className="truncate max-w-[120px]">— {line.client_name}</span>
+                        {!hideClient && (
+                          <span className="truncate max-w-[120px]">— {line.client_name}</span>
+                        )}
                         <span className="font-bold text-bordeaux">×{line.quantity}</span>
                         {isReservationVitrine(line) && <VitrinePill />}
                       </button>
                       {supportsCancellation && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onCancelSingle(line) }}
-                          className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                          className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors text-[12px] font-bold leading-none ${
                             isCancelled
                               ? 'bg-[#A03333] text-cream hover:bg-[#7a2525]'
                               : 'border border-[#A03333]/40 text-[#A03333] hover:bg-[#A03333] hover:text-cream'
                           }`}
                           title={isCancelled ? 'Retirer l\'annulation' : 'Marquer comme annulé'}
                         >
-                          <i className="ti ti-x text-[10px]" aria-hidden="true"></i>
+                          ×
                         </button>
                       )}
                     </div>
