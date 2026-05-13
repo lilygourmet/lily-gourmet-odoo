@@ -379,6 +379,47 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
     let orderNote = null
     const sortedLines = [...odooLines].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
 
+    // Helper : nettoie une string de note (retire HTML basique)
+    const cleanNoteText = (s) => String(s || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .trim()
+
+    // === Parse 1 : notes PAR ARTICLE ===
+    // Pour chaque article (ligne avec produit), on collecte les line_note
+    // qui le suivent immediatement, jusqu'au prochain article/section/livraison.
+    // Exclut explicitement les notes qui suivent la ligne Livraison (= orderNote).
+    const notesByLineId = new Map()    // odoo_line_id -> string (notes jointes par \n)
+    for (let i = 0; i < sortedLines.length; i++) {
+      const ln = sortedLines[i]
+      if (ln.display_type) continue   // on cherche des articles, pas des sections/notes
+      // C'est un article. Est-ce la ligne Livraison ? Si oui, on l'ignore pour
+      // les notes par-article (ses notes vont dans orderNote, gere plus bas).
+      const isLivraison = /livraison/i.test(ln.name || '')
+      if (isLivraison) continue
+      // Collecte les line_note qui suivent immediatement
+      const accum = []
+      for (let j = i + 1; j < sortedLines.length; j++) {
+        const sub = sortedLines[j]
+        if (sub.display_type === 'line_note') {
+          const txt = cleanNoteText(sub.name)
+          if (txt) accum.push(txt)
+        } else {
+          break    // article suivant ou section -> stop
+        }
+      }
+      if (accum.length > 0) {
+        notesByLineId.set(ln.id, accum.join('\n'))
+      }
+    }
+
+    // === Parse 2 : orderNote (commande globale) ===
     // Trouve l'index de la ligne Livraison (produit dont le nom contient "Livraison")
     let livrIdx = -1
     for (let i = 0; i < sortedLines.length; i++) {
@@ -396,7 +437,7 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
       for (let i = livrIdx + 1; i < sortedLines.length; i++) {
         const ln = sortedLines[i]
         if (ln.display_type === 'line_note') {
-          const txt = String(ln.name || '').trim()
+          const txt = cleanNoteText(ln.name)
           if (txt) noteLines.push(txt)
         } else {
           // Lignes section ou produit -> on s'arrete
@@ -406,42 +447,47 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
     }
 
     if (noteLines.length > 0) {
-      orderNote = noteLines.join('\n')
-      // Retire balises HTML basiques au cas ou
-      orderNote = orderNote
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/p>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .trim() || null
+      orderNote = noteLines.join('\n') || null
     }
 
     // Fallback : si pas de note inline, prendre le champ note de la commande
     if (!orderNote) {
-      let cmdNote = String(odooOrder.note || '').trim()
-      if (cmdNote) {
-        cmdNote = cmdNote
-          .replace(/<br\s*\/?>/gi, '\n')
-          .replace(/<\/p>/gi, '\n')
-          .replace(/<[^>]+>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .trim()
-        if (cmdNote) orderNote = cmdNote
-      }
+      const cmdNote = cleanNoteText(odooOrder.note)
+      if (cmdNote) orderNote = cmdNote
     }
 
     const supabaseOrderId = orderIdMap.get(odooOrder.id) || null
 
+    // Detecte si un nom d'article catalogue Odoo est un "generique" : dans ce cas
+    // la vraie identite du produit est dans la Description (line.name), pas dans
+    // le nom du produit catalogue. On gere :
+    //   - "AUTRE" tout court (vendeuse met le prefixe XX- dans la description)
+    //   - "XX- Autre <quelque chose>" (ex: SA- Autre salé, CD- Autre cake, etc.)
+    function isGenericProduct(catalogName) {
+      const n = (catalogName || '').trim()
+      if (!n) return false
+      // Cas 1 : nom = "AUTRE" exact (case insensitive)
+      if (/^autre$/i.test(n)) return true
+      // Cas 2 : "XX- Autre ..." avec un prefixe categorie
+      if (/^(SA|CD|GM|VI|MI|RA|GS|SU|E)-\s*Autre\b/i.test(n)) return true
+      return false
+    }
+
     for (const line of odooLines) {
-      const productName = (line.name || '').trim()
+      // Nom de la Description (saisie vendeuse, peut etre precise ou egal au nom catalogue)
+      const descriptionName = (line.name || '').trim()
+      // Nom du produit dans le catalogue Odoo (stable, ID de produit)
+      const catalogName = Array.isArray(line.product_id) ? String(line.product_id[1] || '').trim() : ''
+
+      // Regle : si l'article catalogue est un "generique" (AUTRE / XX- Autre ...),
+      // alors on prend la Description comme vrai nom (parce que la description
+      // contient le nom precis saisi par la vendeuse). Sinon on prend le nom du
+      // catalogue, qui est stable et ne change pas si la vendeuse modifie la
+      // description ulterieurement.
+      const productName = isGenericProduct(catalogName)
+        ? descriptionName
+        : (catalogName || descriptionName)
+
       const qty = parseFloat(line.product_uom_qty) || 0
       const isAcompte = /^(Acompte|Down\s+Payment)/i.test(productName)
 
@@ -466,6 +512,7 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
         client_name: clientName,
         client_phone: clientPhone,
         order_note: orderNote,
+        product_note: notesByLineId.get(line.id) || null,
         warehouse: warehouse,
         order_total: orderTotal,
         order_acompte: orderAcompte,
@@ -763,13 +810,46 @@ async function syncToSupabase(supabase, parsedOrders) {
 
       const { data: existingOrder } = await supabase
         .from('orders')
-        .select('id, odoo_state')
+        .select('id, odoo_state, delivery_at, delivery_slot, client_name, seller_name')
         .eq('odoo_id', po.odooId)
         .maybeSingle()
 
       let orderId
       let isNewOrder = false
+      // orderChanges sera rempli ici par les modifs au niveau commande (date, client, etc.)
+      // puis enrichi plus bas par les modifs au niveau items. Initialise tot pour pouvoir
+      // pre-remplir avec les changements de l'entete avant le traitement items.
+      const orderChanges = {}
+      let orderHasChanges = false
+
       if (existingOrder) {
+        // Compare les champs principaux avant l'update pour detecter les modifs
+        // au niveau commande (date livraison, client, slot, etat). On compare en
+        // chaines normalisees pour eviter les faux positifs (ISO vs timestamp).
+        const oldDelivery = existingOrder.delivery_at
+          ? new Date(existingOrder.delivery_at).toISOString()
+          : null
+        if (oldDelivery !== orderRow.delivery_at) {
+          orderChanges['delivery_at'] = [oldDelivery, orderRow.delivery_at]
+          orderHasChanges = true
+        }
+        if ((existingOrder.delivery_slot || null) !== (orderRow.delivery_slot || null)) {
+          orderChanges['delivery_slot'] = [existingOrder.delivery_slot, orderRow.delivery_slot]
+          orderHasChanges = true
+        }
+        if ((existingOrder.client_name || '') !== (orderRow.client_name || '')) {
+          orderChanges['client_name'] = [existingOrder.client_name, orderRow.client_name]
+          orderHasChanges = true
+        }
+        if ((existingOrder.seller_name || '') !== (orderRow.seller_name || '')) {
+          orderChanges['seller_name'] = [existingOrder.seller_name, orderRow.seller_name]
+          orderHasChanges = true
+        }
+        if ((existingOrder.odoo_state || '') !== (orderRow.odoo_state || '')) {
+          orderChanges['odoo_state'] = [existingOrder.odoo_state, orderRow.odoo_state]
+          orderHasChanges = true
+        }
+
         const { error } = await supabase
           .from('orders').update(orderRow).eq('id', existingOrder.id)
         if (error) throw error
@@ -795,13 +875,33 @@ async function syncToSupabase(supabase, parsedOrders) {
         .from('order_items')
         .select('*')
         .eq('order_id', orderId)
+        .order('created_at', { ascending: true })
+
+      // Nettoyage preventif : si un item_idx apparait plusieurs fois (doublons historiques
+      // qui auraient echappe a la contrainte UNIQUE, ex. ajoutee apres coup), on garde
+      // uniquement le plus ancien et on supprime les autres. Sinon le diff par idx ferait
+      // un UPDATE sur 1 seul et laisserait les fantomes en base indefiniment.
+      const seenIdx = new Set()
+      const dupIdsToDelete = []
+      const dedupedExisting = []
+      for (const it of (existingItems || [])) {
+        if (seenIdx.has(it.item_idx)) {
+          dupIdsToDelete.push(it.id)
+        } else {
+          seenIdx.add(it.item_idx)
+          dedupedExisting.push(it)
+        }
+      }
+      if (dupIdsToDelete.length > 0) {
+        await supabase.from('order_items').delete().in('id', dupIdsToDelete)
+        console.log(`[sync-odoo] order ${po.odooId} : nettoyé ${dupIdsToDelete.length} doublon(s) item_idx`)
+      }
 
       const existingByIdx = new Map()
-      for (const it of (existingItems || [])) existingByIdx.set(it.item_idx, it)
+      for (const it of dedupedExisting) existingByIdx.set(it.item_idx, it)
 
       const newIdxSet = new Set()
-      const orderChanges = {}  // resume des changements au niveau commande
-      let orderHasChanges = false
+      // orderChanges et orderHasChanges sont deja declares plus haut (entete commande)
 
       for (let idx = 0; idx < po.items.length; idx++) {
         const item = po.items[idx]
