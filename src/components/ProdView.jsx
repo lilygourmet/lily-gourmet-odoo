@@ -416,13 +416,16 @@ function VitrinePill() {
 }
 
 // Helper : nettoie un nom de produit pour l'affichage Prod.
+// - Retire le code interne Odoo "[NNN] " en debut de nom (ex: "[192] E- ..." -> "E- ...")
 // - Retire TOUT a partir de "Message:" (que ce soit vide ou suivi de texte).
 //   La prod n'a pas besoin du message client (joyeux anniv, theme, etc.) -
 //   ces infos sont visibles dans le detail commande ailleurs.
 function cleanProdProductName(name) {
   if (!name) return ''
   let n = String(name)
-  // Coupe a la premiere occurrence de "Message:" + tout ce qui suit
+  // 1) Retire le code Odoo en debut "[NNN]" suivi d'espace(s)
+  n = n.replace(/^\s*\[\d+\]\s*/, '')
+  // 2) Coupe a la premiere occurrence de "Message:" + tout ce qui suit
   n = n.replace(/\s*Message\s*:.*$/is, '')
   return n.trim()
 }
