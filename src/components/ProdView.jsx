@@ -457,10 +457,10 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
             {/* Click sur la zone principale = toggle "Fait" */}
             <button
               onClick={() => onToggle(line)}
-              className="flex-1 min-w-0 flex items-center gap-2 text-left"
+              className="flex-1 min-w-0 flex items-start sm:items-center gap-2 text-left"
               title={isDone ? 'Cliquer pour annuler la coche' : 'Marquer comme fait'}
             >
-              <span className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] ${
+              <span className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] mt-0.5 sm:mt-0 ${
                 isDone
                   ? 'bg-success border-success text-cream'
                   : isCancelled
@@ -469,12 +469,21 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
               }`}>
                 {isDone ? '✓' : isCancelled ? '−' : ''}
               </span>
-              <span className="font-mono text-[10px] text-ink-mute w-12 flex-shrink-0">{hour}</span>
-              <span className="font-mono text-[10px] text-bordeaux flex-shrink-0">{line.order_num}</span>
-              <span className="text-[12px] text-ink-soft flex-shrink-0 truncate max-w-[100px]">— {line.client_name}</span>
-              <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
-              <span className="text-[12px] text-ink min-w-0 flex-1 truncate">{cleanProdProductName(line.product_name)}</span>
-              {isReservationVitrine(line) && <VitrinePill />}
+              {/* Bloc texte : 2 lignes sur mobile (flex-col), 1 ligne sur >= sm (flex-row) */}
+              <span className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                {/* Ligne 1 (mobile) / debut ligne unique (PC) : heure + code + client */}
+                <span className="flex items-center gap-2 min-w-0 sm:flex-shrink-0">
+                  <span className="font-mono text-[10px] text-ink-mute w-12 flex-shrink-0">{hour}</span>
+                  <span className="font-mono text-[10px] text-bordeaux flex-shrink-0">{line.order_num}</span>
+                  <span className="text-[12px] text-ink-soft min-w-0 truncate sm:max-w-[100px]">— {line.client_name}</span>
+                  {isReservationVitrine(line) && <VitrinePill />}
+                </span>
+                {/* Ligne 2 (mobile) / suite (PC) : quantite + nom produit */}
+                <span className="flex items-baseline gap-2 min-w-0 pl-[3.75rem] mt-0.5 sm:pl-0 sm:mt-0 sm:flex-1">
+                  <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
+                  <span className="text-[12px] text-ink min-w-0 break-words sm:truncate">{cleanProdProductName(line.product_name)}</span>
+                </span>
+              </span>
             </button>
             {/* Bouton Annuler (croix rouge) - uniquement pour Prod */}
             {supportsCancellation && (
