@@ -416,14 +416,14 @@ function VitrinePill() {
 }
 
 // Helper : nettoie un nom de produit pour l'affichage Prod.
-// - Retire les "Message:" suivis uniquement d'espaces ou rien (souvent les
-//   produits Odoo ont un champ Message vide qui s'affiche en bout de nom).
-// - Garde le contenu si la mention "Message:" est suivie d'un texte (anniv etc.).
+// - Retire TOUT a partir de "Message:" (que ce soit vide ou suivi de texte).
+//   La prod n'a pas besoin du message client (joyeux anniv, theme, etc.) -
+//   ces infos sont visibles dans le detail commande ailleurs.
 function cleanProdProductName(name) {
   if (!name) return ''
   let n = String(name)
-  // Retire un eventuel " Message:" en fin de chaine (avec espaces optionnels)
-  n = n.replace(/\s*Message\s*:\s*$/i, '')
+  // Coupe a la premiere occurrence de "Message:" + tout ce qui suit
+  n = n.replace(/\s*Message\s*:.*$/is, '')
   return n.trim()
 }
 
@@ -629,9 +629,9 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
                         </span>
                         <span className="font-mono text-[9px] text-ink-mute w-10">{hour}</span>
                         <span className="font-mono text-[9px] text-bordeaux">{line.order_num}</span>
-                        {!hideClient && (
-                          <span className="truncate max-w-[120px]">— {line.client_name}</span>
-                        )}
+                        {/* Nom client toujours affiche en vue "Par produit" : utile
+                            pour savoir a qui appartient chaque sous-ligne. */}
+                        <span className="truncate max-w-[120px]">— {line.client_name}</span>
                         <span className="font-bold text-bordeaux">×{line.quantity}</span>
                         {isReservationVitrine(line) && <VitrinePill />}
                       </button>
