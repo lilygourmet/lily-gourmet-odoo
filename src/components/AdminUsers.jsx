@@ -116,6 +116,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_freezer: formData.permFreezer,
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
+        perm_stock_patissier: formData.permStockPatissier,
+        perm_stock_cafe: formData.permStockCafe,
+        perm_stock_audit: formData.permStockAudit,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -150,6 +153,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_freezer: formData.permFreezer,
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
+        perm_stock_patissier: formData.permStockPatissier,
+        perm_stock_cafe: formData.permStockCafe,
+        perm_stock_audit: formData.permStockAudit,
       })
       setEditingUser(null)
       await refresh()
@@ -615,6 +621,9 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permFreezer: initialData?.perm_freezer !== undefined ? initialData.perm_freezer : false,
     permMessages: initialData?.perm_messages !== undefined ? initialData.perm_messages : false,
     permEtiquettes: initialData?.perm_etiquettes !== undefined ? initialData.perm_etiquettes : false,
+    permStockPatissier: initialData?.perm_stock_patissier !== undefined ? initialData.perm_stock_patissier : false,
+    permStockCafe: initialData?.perm_stock_cafe !== undefined ? initialData.perm_stock_cafe : false,
+    permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
   })
 
   function handleSubmit() {
@@ -824,6 +833,24 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="🏷 Voir l'onglet Étiquettes (Entremets/GS/Surgelés)"
             checked={isAdmin || formData.permEtiquettes}
             onChange={v => update('permEtiquettes', v)}
+          />
+          <PermCheckbox
+            id="perm-stock-patissier"
+            label="🥐 Voir l'onglet Vitrine (saisie pâtissier)"
+            checked={isAdmin || formData.permStockPatissier}
+            onChange={v => update('permStockPatissier', v)}
+          />
+          <PermCheckbox
+            id="perm-stock-cafe"
+            label="📦 Voir Réception Vitrine + Fin de journée (équipe café)"
+            checked={isAdmin || formData.permStockCafe}
+            onChange={v => update('permStockCafe', v)}
+          />
+          <PermCheckbox
+            id="perm-stock-audit"
+            label="📊 Voir l'onglet Stock (audit + historique)"
+            checked={isAdmin || formData.permStockAudit}
+            onChange={v => update('permStockAudit', v)}
           />
           <PermCheckbox
             id="perm-define-gm"
@@ -1071,3 +1098,4 @@ function HardDeleteConfirmModal({ user, onClose, onConfirm }) {
     </div>
   )
 }
+
