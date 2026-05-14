@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, isLivreur } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -141,6 +141,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {navBtn('freezer', '❄️', 'CD Négatif', !isLivreur(user) && canSeeFreezer(user))}
           {navBtn('messages', '', 'Messages', !isLivreur(user) && canSeeMessages(user))}
           {navBtn('etiquettes', '🏷', 'Étiquettes Café', !isLivreur(user) && canSeeEtiquettes(user))}
+          {navBtn('vitrine', '🥐', 'Vitrine', !isLivreur(user) && canStockPatissier(user))}
+          {navBtn('reception-vitrine', '📦', 'Réception Vitrine', !isLivreur(user) && canStockCafe(user))}
+          {navBtn('fin-journee', '🌙', 'Fin de journée', !isLivreur(user) && canStockCafe(user))}
+          {navBtn('stock', '📊', 'Stock', !isLivreur(user) && canStockAudit(user))}
         </div>
 
         {/* Actions : sync + roue + logout */}
@@ -267,3 +271,4 @@ function CogItem({ icon, label, onClick }) {
     </button>
   )
 }
+

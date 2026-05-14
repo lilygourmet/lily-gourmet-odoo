@@ -1,0 +1,533 @@
+// src/lib/stockBoutique.js
+// CRUD + Realtime Supabase + sync Odoo pour le module Stock Boutique v2.1
+//
+// Workflow : matin (Hamza) -> midi (café reçoit) -> soir (café compte aveugle)
+//            -> submit (snapshot initial Odoo) -> audit valide -> audited
+// L'audit peut rafraîchir le snapshot Odoo à tout moment (même après audited).
+// =============================================================
+
+import { supabase } from './supabase'
+
+// =============================================================
+// HELPERS DATE
+// =============================================================
+
+export function todayISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function yesterdayISO() {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// =============================================================
+// STOCK_DAY
+// =============================================================
+
+export async function getOrCreateStockDay(day = todayISO()) {
+  const { data: existing, error: e1 } = await supabase
+    .from('stock_day')
+    .select('*')
+    .eq('day', day)
+    .maybeSingle()
+
+  if (e1) {
+    console.error('[stockBoutique] getOrCreateStockDay read:', e1)
+    throw e1
+  }
+  if (existing) return existing
+
+  const { data, error } = await supabase
+    .from('stock_day')
+    .insert({ day, status: 'open' })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[stockBoutique] getOrCreateStockDay insert:', error)
+    throw error
+  }
+  return data
+}
+
+export async function loadStockDay(day) {
+  const { data, error } = await supabase
+    .from('stock_day')
+    .select('*')
+    .eq('day', day)
+    .maybeSingle()
+  if (error) {
+    console.error('[stockBoutique] loadStockDay:', error)
+    return null
+  }
+  return data
+}
+
+// Café envoie le comptage du soir à l'équipe audit + déclenche snapshot Odoo initial
+export async function submitStockDay(stockDayId, userId) {
+  const { data, error } = await supabase
+    .from('stock_day')
+    .update({
+      status: 'submitted',
+      submitted_by: userId,
+      submitted_at: new Date().toISOString(),
+    })
+    .eq('id', stockDayId)
+    .select()
+    .single()
+  if (error) throw error
+  
+  // Déclenche immédiatement le snapshot Odoo initial (best effort, ne bloque pas)
+  try {
+    await triggerOdooSnapshot(stockDayId, userId, true)
+  } catch (e) {
+    console.warn('[stockBoutique] Snapshot Odoo initial échoué (non bloquant):', e.message)
+  }
+  
+  return data
+}
+
+// Café veut corriger : repasse en 'open' (uniquement si pas encore audité)
+export async function reopenStockDay(stockDayId) {
+  const { data, error } = await supabase
+    .from('stock_day')
+    .update({
+      status: 'open',
+      submitted_by: null,
+      submitted_at: null,
+    })
+    .eq('id', stockDayId)
+    .neq('status', 'audited')
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// Équipe audit valide définitivement
+export async function auditStockDay(stockDayId, userId, notes = null) {
+  const { data, error } = await supabase
+    .from('stock_day')
+    .update({
+      status: 'audited',
+      audited_by: userId,
+      audited_at: new Date().toISOString(),
+      audit_notes: notes,
+    })
+    .eq('id', stockDayId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// =============================================================
+// SNAPSHOT ODOO (refresh manuel ou auto au submit)
+// =============================================================
+
+/**
+ * Déclenche le snapshot Odoo pour un stock_day.
+ * @param {string} stockDayId
+ * @param {string} userId
+ * @param {boolean} initial - si true, écrit aussi qty_odoo_initial (jamais écrasé)
+ *                            normalement appelé uniquement au submit.
+ */
+export async function triggerOdooSnapshot(stockDayId, userId, initial = false) {
+  const res = await fetch('/api/stock-odoo-snapshot', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      stock_day_id: stockDayId,
+      initial,
+    }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`)
+  }
+  return data
+}
+
+// =============================================================
+// STOCK_DAY_ITEMS
+// =============================================================
+
+export async function loadDayItems(stockDayId) {
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .select('*')
+    .eq('stock_day_id', stockDayId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('[stockBoutique] loadDayItems:', error)
+    return []
+  }
+  return data || []
+}
+
+export async function loadYesterdayLeftovers() {
+  const yDay = yesterdayISO()
+  const yStockDay = await loadStockDay(yDay)
+  if (!yStockDay) return []
+
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .select('*')
+    .eq('stock_day_id', yStockDay.id)
+    .eq('source', 'evening')
+    .in('freshness', ['fresh', 'yesterday'])
+    .gt('qty_counted', 0)
+    .order('product_name', { ascending: true })
+
+  if (error) {
+    console.error('[stockBoutique] loadYesterdayLeftovers:', error)
+    return []
+  }
+  return data || []
+}
+
+export async function upsertItem(itemData) {
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .upsert(itemData, { onConflict: 'stock_day_id,product_name,freshness,source' })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[stockBoutique] upsertItem:', error)
+    throw error
+  }
+  return data
+}
+
+export async function updateItem(itemId, patch) {
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .update(patch)
+    .eq('id', itemId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[stockBoutique] updateItem:', error)
+    throw error
+  }
+  return data
+}
+
+export async function deleteItem(itemId) {
+  const { error } = await supabase
+    .from('stock_day_items')
+    .delete()
+    .eq('id', itemId)
+  if (error) throw error
+  return true
+}
+
+// =============================================================
+// FLUX MATIN (PÂTISSIER)
+// =============================================================
+
+export function advanceFreshness(current) {
+  if (current === 'fresh') return 'yesterday'
+  if (current === 'yesterday') return 'twodays'
+  if (current === 'twodays') return 'loss'
+  return current
+}
+
+export async function applyLeftoverDecisions(todayStockDayId, decisions, userId) {
+  for (const d of decisions) {
+    const { leftoverItem, decision, lossReason } = d
+    const qty = leftoverItem.qty_counted || 0
+    if (qty <= 0) continue
+
+    const newFreshness = decision === 'loss' ? 'loss' : advanceFreshness(leftoverItem.freshness)
+
+    await upsertItem({
+      stock_day_id: todayStockDayId,
+      product_name: leftoverItem.product_name,
+      product_code: leftoverItem.product_code,
+      category: leftoverItem.category || 'E',
+      freshness: newFreshness,
+      source: 'leftover',
+      qty_announced: qty,
+      qty_received: qty,
+      decision,
+      loss_reason: decision === 'loss' ? (lossReason || 'Casse matin pâtissier') : null,
+      reception_status: 'confirmed',
+      announced_by: userId,
+      announced_at: new Date().toISOString(),
+      received_by: userId,
+      received_at: new Date().toISOString(),
+    })
+  }
+}
+
+export async function sendMorningItem(stockDayId, productName, productCode, qty, userId) {
+  return upsertItem({
+    stock_day_id: stockDayId,
+    product_name: productName,
+    product_code: productCode || null,
+    category: 'E',
+    freshness: 'fresh',
+    source: 'morning',
+    qty_announced: qty,
+    qty_received: null,
+    reception_status: 'pending',
+    announced_by: userId,
+    announced_at: new Date().toISOString(),
+  })
+}
+
+// =============================================================
+// FLUX RÉCEPTION (CAFÉ MIDI)
+// =============================================================
+
+export async function confirmReception(itemId, qtyReceived, userId) {
+  return updateItem(itemId, {
+    qty_received: qtyReceived,
+    reception_status: 'confirmed',
+    received_by: userId,
+    received_at: new Date().toISOString(),
+  })
+}
+
+export async function noteDiscrepancy(itemId, qtyReceived, note, userId) {
+  return updateItem(itemId, {
+    qty_received: qtyReceived,
+    reception_status: 'discrepancy',
+    reception_note: note,
+    received_by: userId,
+    received_at: new Date().toISOString(),
+  })
+}
+
+export async function addSurpriseReceptionItem(stockDayId, productName, productCode, qty, userId) {
+  return upsertItem({
+    stock_day_id: stockDayId,
+    product_name: productName,
+    product_code: productCode || null,
+    category: 'E',
+    freshness: 'fresh',
+    source: 'morning',
+    qty_announced: 0,
+    qty_received: qty,
+    reception_status: 'discrepancy',
+    reception_note: 'Reçu non annoncé par Hamza',
+    received_by: userId,
+    received_at: new Date().toISOString(),
+  })
+}
+
+// =============================================================
+// FLUX SOIR (CAFÉ — COMPTAGE AVEUGLE)
+// =============================================================
+
+export async function addEveningCount(stockDayId, productName, productCode, qty, freshness, userId) {
+  return upsertItem({
+    stock_day_id: stockDayId,
+    product_name: productName,
+    product_code: productCode || null,
+    category: 'E',
+    freshness: freshness || 'fresh',
+    source: 'evening',
+    qty_counted: qty,
+    counted_by: userId,
+    counted_at: new Date().toISOString(),
+  })
+}
+
+export async function updateEveningCount(itemId, qty, userId) {
+  return updateItem(itemId, {
+    qty_counted: qty,
+    counted_by: userId,
+    counted_at: new Date().toISOString(),
+  })
+}
+
+export async function loadEveningCounts(stockDayId) {
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .select('*')
+    .eq('stock_day_id', stockDayId)
+    .eq('source', 'evening')
+    .order('product_name', { ascending: true })
+
+  if (error) {
+    console.error('[stockBoutique] loadEveningCounts:', error)
+    return []
+  }
+  return data || []
+}
+
+// =============================================================
+// FLUX AUDIT (rapport écarts + comparaison Odoo)
+// =============================================================
+
+/**
+ * Construit le rapport d'écarts pour un jour.
+ *
+ * Pour chaque article (toutes fraîcheurs confondues) :
+ *   - counted        = somme qty_counted (lignes evening)
+ *   - odoo_initial   = somme qty_odoo_initial (snapshot au submit, figé)
+ *   - odoo_current   = somme qty_odoo_snapshot (dernier rafraîchissement)
+ *   - morning        = somme qty_received (lignes morning aujourd'hui)
+ *   - leftover       = somme qty_received (lignes leftover, hors loss)
+ *   - gap_initial    = odoo_initial - counted   (figé au submit)
+ *   - gap_current    = odoo_current - counted   (à l'instant)
+ *
+ * Tri : articles avec écart courant non nul en premier.
+ */
+export async function buildAuditReport(stockDayId) {
+  const items = await loadDayItems(stockDayId)
+  
+  const eveningItems = items.filter(it => it.source === 'evening')
+  const morningItems = items.filter(it => it.source === 'morning')
+  const leftoverItems = items.filter(it => it.source === 'leftover' && it.freshness !== 'loss')
+
+  const allProductNames = new Set()
+  eveningItems.forEach(i => allProductNames.add(i.product_name))
+  morningItems.forEach(i => allProductNames.add(i.product_name))
+  leftoverItems.forEach(i => allProductNames.add(i.product_name))
+
+  const rows = []
+  for (const productName of allProductNames) {
+    const evList = eveningItems.filter(i => i.product_name === productName)
+    const counted = evList.reduce((s, i) => s + (i.qty_counted || 0), 0)
+    
+    // Odoo snapshots : on prend la somme si non null
+    const odooInitialList = evList.filter(i => i.qty_odoo_initial !== null && i.qty_odoo_initial !== undefined)
+    const odooInitial = odooInitialList.length > 0
+      ? odooInitialList.reduce((s, i) => s + i.qty_odoo_initial, 0)
+      : null
+    
+    const odooCurrentList = evList.filter(i => i.qty_odoo_snapshot !== null && i.qty_odoo_snapshot !== undefined)
+    const odooCurrent = odooCurrentList.length > 0
+      ? odooCurrentList.reduce((s, i) => s + i.qty_odoo_snapshot, 0)
+      : null
+
+    const morning = morningItems
+      .filter(i => i.product_name === productName)
+      .reduce((s, i) => s + (i.qty_received || i.qty_announced || 0), 0)
+    const leftover = leftoverItems
+      .filter(i => i.product_name === productName)
+      .reduce((s, i) => s + (i.qty_received || 0), 0)
+
+    const gapInitial = odooInitial !== null ? odooInitial - counted : null
+    const gapCurrent = odooCurrent !== null ? odooCurrent - counted : null
+
+    rows.push({
+      product_name: productName,
+      qty_counted: counted,
+      qty_odoo_initial: odooInitial,
+      qty_odoo_current: odooCurrent,
+      qty_morning: morning,
+      qty_leftover: leftover,
+      qty_expected_local: morning + leftover,
+      gap_initial: gapInitial,
+      gap_current: gapCurrent,
+      gap_vs_local: (morning + leftover) - counted,
+    })
+  }
+
+  // Tri par importance d'écart courant
+  rows.sort((a, b) => {
+    const aGap = Math.abs(a.gap_current ?? a.gap_initial ?? a.gap_vs_local ?? 0)
+    const bGap = Math.abs(b.gap_current ?? b.gap_initial ?? b.gap_vs_local ?? 0)
+    if (aGap !== bGap) return bGap - aGap
+    return a.product_name.localeCompare(b.product_name)
+  })
+
+  return rows
+}
+
+// =============================================================
+// REALTIME
+// =============================================================
+
+export function subscribeToDayItems(stockDayId, callbacks = {}) {
+  const channel = supabase
+    .channel(`stock_items_${stockDayId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'stock_day_items',
+      filter: `stock_day_id=eq.${stockDayId}`,
+    }, (payload) => {
+      if (payload.eventType === 'INSERT' && callbacks.onInsert) {
+        callbacks.onInsert(payload.new)
+      } else if (payload.eventType === 'UPDATE' && callbacks.onUpdate) {
+        callbacks.onUpdate(payload.new, payload.old)
+      } else if (payload.eventType === 'DELETE' && callbacks.onDelete) {
+        callbacks.onDelete(payload.old)
+      }
+    })
+    .subscribe()
+  return channel
+}
+
+export function subscribeToStockDay(stockDayId, callback) {
+  const channel = supabase
+    .channel(`stock_day_${stockDayId}`)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'stock_day',
+      filter: `id=eq.${stockDayId}`,
+    }, (payload) => {
+      if (callback) callback(payload.new, payload.old)
+    })
+    .subscribe()
+  return channel
+}
+
+// =============================================================
+// HISTORIQUE
+// =============================================================
+
+export async function loadDaySummary(daysBack = 30) {
+  const dateStart = new Date()
+  dateStart.setDate(dateStart.getDate() - daysBack)
+  const fromISO = `${dateStart.getFullYear()}-${String(dateStart.getMonth() + 1).padStart(2, '0')}-${String(dateStart.getDate()).padStart(2, '0')}`
+
+  const { data, error } = await supabase
+    .from('stock_day_summary')
+    .select('*')
+    .gte('day', fromISO)
+    .order('day', { ascending: false })
+
+  if (error) {
+    console.error('[stockBoutique] loadDaySummary:', error)
+    return []
+  }
+  return data || []
+}
+
+// =============================================================
+// PERMS
+// =============================================================
+
+export function canStockPatissier(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_patissier === true
+}
+
+export function canStockCafe(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_cafe === true
+}
+
+export function canStockAudit(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_audit === true
+}
+
+export function canSeeStock(user) {
+  return canStockPatissier(user) || canStockCafe(user) || canStockAudit(user)
+}
+

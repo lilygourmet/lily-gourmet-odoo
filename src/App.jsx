@@ -7,12 +7,16 @@ import ProdView from './components/ProdView'
 import FreezerView from './components/FreezerView'
 import MessagesView from './components/MessagesView'
 import EtiquettesView from './components/EtiquettesView'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser } from './lib/auth'
+import StockMorning from './components/StockBoutique/StockMorning'
+import StockReception from './components/StockBoutique/StockReception'
+import StockEvening from './components/StockBoutique/StockEvening'
+import StockAudit from './components/StockBoutique/StockAudit'
+import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar } from './lib/auth'
 
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  // Vue active : 'calendar' | 'recap' | 'patissier' | 'prod' | 'sales'
+  // Vue active : 'calendar' | 'recap' | 'patissier' | 'prod' | 'sales' | 'stock' | ...
   const [activeView, setActiveView] = useState('calendar')
 
   // Choisit la vue par defaut en fonction du user
@@ -21,6 +25,20 @@ function App() {
     if (isLivreur(u)) return 'recap'
     if (u.role === 'recap') return 'recap'
     if (u.role === 'admin') return 'calendar'
+    // Stock granulaire : si user a UNIQUEMENT une perm stock, on l'oriente sur SON onglet
+    const hasStockPatissier = canStockPatissier(u)
+    const hasStockCafe = canStockCafe(u)
+    const hasStockAudit = canStockAudit(u)
+    const hasOtherMain = u.perm_calendar || isProdOnly(u) || isPatissierOnly(u)
+    if (!hasOtherMain) {
+      if (hasStockPatissier && !hasStockCafe && !hasStockAudit) return 'vitrine'
+      if (hasStockCafe && !hasStockPatissier && !hasStockAudit) {
+        const hour = new Date().getHours()
+        if (hour >= 17) return 'fin-journee'
+        return 'reception-vitrine'
+      }
+      if (hasStockAudit && !hasStockPatissier && !hasStockCafe) return 'stock'
+    }
     if (u.perm_calendar) return 'calendar'
     if (isProdOnly(u)) {
       if (u.perm_sales && !u.perm_prod) return 'sales'
@@ -111,8 +129,13 @@ function App() {
   if (activeView === 'freezer') return <FreezerView {...navProps} />
   if (activeView === 'messages') return <MessagesView {...navProps} />
   if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
+  if (activeView === 'vitrine') return <StockMorning {...navProps} />
+  if (activeView === 'reception-vitrine') return <StockReception {...navProps} />
+  if (activeView === 'fin-journee') return <StockEvening {...navProps} />
+  if (activeView === 'stock') return <StockAudit {...navProps} />
   // Default = Calendar
   return <Calendar {...navProps} />
 }
 
 export default App
+

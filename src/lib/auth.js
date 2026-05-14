@@ -45,7 +45,7 @@ export async function loadFreshUser(userId) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes')
+      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_stock_patissier, perm_stock_cafe, perm_stock_audit')
       .eq('id', userId)
       .maybeSingle()
     if (error) {
@@ -224,4 +224,30 @@ export function getProdCategory(user) {
   return user.prod_category || null
 }
 
-// User est en mode "prod-only" : voir au-dessus
+// =====================================================================
+// STOCK BOUTIQUE — nouvelles permissions
+// =====================================================================
+
+// Pâtissier (Hamza) : peut faire l'écran matin (envoyer prod au café)
+export function canStockPatissier(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_patissier === true
+}
+
+// Café : peut faire réception + soir (clôture)
+export function canStockCafe(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_cafe === true
+}
+
+// Équipe audit : reçoit le rapport, valide définitivement la journée
+export function canStockAudit(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_audit === true
+}
+
+// User peut voir l'onglet Stock du tout
+export function canSeeStock(user) {
+  return canStockPatissier(user) || canStockCafe(user) || canStockAudit(user)
+}
+
