@@ -38,6 +38,34 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
   const [cart, setCart] = useState({}) // { [productName]: { qty, code } }
   const [sending, setSending] = useState(false)
 
+  // Clé localStorage scopée à la journée + user → panier "à envoyer" persisté
+  const cartKey = stockDay ? `stock_morning_cart_${stockDay.day}_${user.id}` : null
+
+  // Au démarrage : récupérer le panier sauvegardé pour cette journée
+  useEffect(() => {
+    if (!cartKey) return
+    try {
+      const saved = localStorage.getItem(cartKey)
+      if (saved) setCart(JSON.parse(saved))
+    } catch {
+      // ignore
+    }
+  }, [cartKey])
+
+  // À chaque modif : persister
+  useEffect(() => {
+    if (!cartKey) return
+    try {
+      if (Object.keys(cart).length > 0) {
+        localStorage.setItem(cartKey, JSON.stringify(cart))
+      } else {
+        localStorage.removeItem(cartKey)
+      }
+    } catch {
+      // ignore
+    }
+  }, [cart, cartKey])
+
   // Chargement initial
   useEffect(() => {
     let mounted = true

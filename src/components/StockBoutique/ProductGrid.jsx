@@ -191,10 +191,20 @@ export default function ProductGrid({
                     qty > 0 ? `border-bordeaux ${st.bg}` : 'border-line bg-white hover:bg-cream-warm'
                   } ${isActive ? 'ring-2 ring-bordeaux' : ''}`}
                 >
-                  <div className={`aspect-square rounded-md flex items-center justify-center text-2xl ${
+                  <div className={`aspect-square rounded-md flex items-center justify-center text-2xl overflow-hidden ${
                     qty > 0 ? `${st.tile} text-bordeaux-deep` : 'bg-cream-warm text-ink-mute'
                   }`}>
-                    🍰
+                    {p.image_url ? (
+                      <img
+                        src={p.image_url}
+                        alt={p.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
+                    ) : (
+                      <span>🍰</span>
+                    )}
                   </div>
                   {qty > 0 && (
                     <div className={`absolute top-1 right-1 ${st.badge} text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-[10px] font-semibold px-1.5`}>

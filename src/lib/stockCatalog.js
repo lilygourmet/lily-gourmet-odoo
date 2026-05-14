@@ -82,7 +82,7 @@ export async function fetchEntremetsCatalog() {
 
   const { data, error } = await supabase
     .from('etiquettes_articles')
-    .select('odoo_template_id, name, sizes, display_order')
+    .select('odoo_template_id, name, sizes, display_order, image_url')
     .eq('category', 'cd')
     .eq('sale_ok', true)
     .ilike('name', 'E-%')
@@ -113,6 +113,7 @@ export async function fetchEntremetsCatalog() {
         size: '1',
         odoo_template_id: row.odoo_template_id,
         display_order: order,
+        image_url: row.image_url || null,
       })
     }
 
@@ -134,6 +135,7 @@ export async function fetchEntremetsCatalog() {
           size: normSize,
           odoo_template_id: row.odoo_template_id,
           display_order: order,
+          image_url: row.image_url || null,
         })
       }
     }

@@ -330,10 +330,20 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                               'border-line bg-white hover:bg-cream-warm'
                             }`}
                           >
-                            <div className={`aspect-square rounded-md flex items-center justify-center text-xl ${
+                            <div className={`aspect-square rounded-md flex items-center justify-center text-xl overflow-hidden ${
                               hasInCurrentFreshness ? 'bg-bordeaux/20 text-bordeaux-deep' : 'bg-cream-warm text-ink-mute'
                             }`}>
-                              🍰
+                              {p.image_url ? (
+                                <img
+                                  src={p.image_url}
+                                  alt={p.name}
+                                  loading="lazy"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                />
+                              ) : (
+                                <span>🍰</span>
+                              )}
                             </div>
                             {totalForProduct > 0 && (
                               <div className="absolute top-1 right-1 bg-bordeaux text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-[10px] font-semibold px-1.5">
