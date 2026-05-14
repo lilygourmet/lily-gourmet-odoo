@@ -280,9 +280,10 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                 {/* Onglets taille */}
                 <div className="flex gap-0.5 px-3 pt-2 border-b border-line">
                   {[
-                    { id: '1', label: 'Individuel (1)' },
-                    { id: '5', label: 'Partage (5)' },
-                    { id: '10', label: 'Famille (10)' },
+                    { id: '1', label: '1 pers' },
+                    { id: '5', label: '5 pers' },
+                    { id: '10', label: '10 pers' },
+                    { id: '15', label: '15 pers' },
                   ].map(tab => {
                     const active = currentSize === tab.id
                     return (
@@ -306,7 +307,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                 <div className="p-3 max-h-[480px] overflow-y-auto">
                   {products.length === 0 ? (
                     <div className="p-8 text-center text-ink-mute text-[11px]">
-                      Aucun article {currentSize === '1' ? 'individuel' : currentSize === '5' ? 'partage' : 'famille'} dans le catalogue.
+                      Aucun article {currentSize} pers dans le catalogue.
                     </div>
                   ) : (
                     <div className="grid grid-cols-4 gap-2">

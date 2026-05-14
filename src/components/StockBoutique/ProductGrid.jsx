@@ -147,9 +147,10 @@ export default function ProductGrid({
         {/* Onglets taille */}
         <div className="flex gap-0.5 mb-2 border-b border-line">
           {[
-            { id: '1', label: 'Individuel (1)' },
-            { id: '5', label: 'Partage (5)' },
-            { id: '10', label: 'Famille (10)' },
+            { id: '1', label: '1 pers' },
+            { id: '5', label: '5 pers' },
+            { id: '10', label: '10 pers' },
+            { id: '15', label: '15 pers' },
           ].map(tab => {
             const active = currentSize === tab.id
             const count = catalog.sizes?.[tab.id]?.length || 0
@@ -174,7 +175,7 @@ export default function ProductGrid({
           <div className="p-8 text-center text-ink-mute text-[11px]">Chargement du catalogue...</div>
         ) : products.length === 0 ? (
           <div className="p-8 text-center text-ink-mute text-[11px]">
-            Aucun article {currentSize === '1' ? 'individuel' : currentSize === '5' ? 'partage' : 'famille'} trouvé.
+            Aucun article {currentSize} pers trouvé.
           </div>
         ) : (
           <div className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-4'} gap-2`}>
