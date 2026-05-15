@@ -42,6 +42,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   // Init + realtime
   useEffect(() => {
     let mounted = true
+    let pollingInterval = null
 
     async function init() {
       try {
@@ -53,7 +54,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
         if (!mounted) return
         setItems(its)
 
-        // Branche realtime
+        // Branche realtime (instantané)
         subscriptionRef.current = subscribeToDayItems(sd.id, {
           onInsert: (newItem) => {
             setItems(prev => {
@@ -72,6 +73,31 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
             setItems(prev => prev.filter(i => i.id !== oldItem.id))
           },
         })
+
+        // Polling 1 min en sécurité (au cas où realtime décroche)
+        pollingInterval = setInterval(async () => {
+          if (!mounted) return
+          try {
+            const fresh = await loadDayItems(sd.id)
+            if (!mounted) return
+            // Détecter les nouveaux items (notif + son)
+            setItems(prev => {
+              const prevIds = new Set(prev.map(i => i.id))
+              const newOnes = fresh.filter(i =>
+                !prevIds.has(i.id) &&
+                i.source === 'morning' &&
+                i.reception_status === 'pending'
+              )
+              if (newOnes.length > 0) {
+                playDing()
+                flashDot()
+              }
+              return fresh
+            })
+          } catch (e) {
+            console.warn('[polling reception] échec:', e?.message || e)
+          }
+        }, 60_000) // 1 minute
       } finally {
         if (mounted) setLoading(false)
       }
@@ -82,6 +108,9 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
       mounted = false
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe()
+      }
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,7 +142,19 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   }
 
   // Filtre : on n'affiche pas les lignes 'leftover' / 'evening' ni 'loss' dans la réception
-  const visibleItems = items.filter(it => it.source === 'morning' && it.freshness !== 'loss')
+  const visibleItems = items
+    .filter(it => it.source === 'morning' && it.freshness !== 'loss')
+    .slice()
+    .sort((a, b) => {
+      // 1. Pending en haut (réception en attente)
+      const aPending = a.reception_status === 'pending' ? 0 : 1
+      const bPending = b.reception_status === 'pending' ? 0 : 1
+      if (aPending !== bPending) return aPending - bPending
+      // 2. Plus récent envoi en haut
+      const aTime = new Date(a.announced_at || 0).getTime()
+      const bTime = new Date(b.announced_at || 0).getTime()
+      return bTime - aTime
+    })
 
   // Stats
   const stats = {
