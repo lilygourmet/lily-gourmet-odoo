@@ -125,7 +125,9 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     try {
       const qty = qtyOverride !== null ? qtyOverride : (item._localQty !== undefined ? item._localQty : item.qty_announced)
       if (qty === item.qty_announced) {
-        await confirmReception(item.id, qty, user.id)
+        const updated = await confirmReception(item.id, qty, user.id)
+        // Optimistic update : forcer le rafraîchissement même si realtime tarde
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...updated, _localQty: undefined } : i))
       } else {
         // Écart : ouvrir la modale
         setDiscrepancyModal({ item: { ...item, qty_received: qty }, note: '', customNote: '' })
@@ -146,7 +148,9 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     if (!m) return
     const finalNote = m.customNote.trim() || m.note || 'Écart non précisé'
     try {
-      await noteDiscrepancy(m.item.id, m.item.qty_received, finalNote, user.id)
+      const updated = await noteDiscrepancy(m.item.id, m.item.qty_received, finalNote, user.id)
+      // Optimistic update
+      setItems(prev => prev.map(i => i.id === m.item.id ? { ...i, ...updated, _localQty: undefined } : i))
       setDiscrepancyModal(null)
     } catch (e) {
       console.error(e)

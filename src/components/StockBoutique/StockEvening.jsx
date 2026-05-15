@@ -317,6 +317,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                           .filter(c => c.product_name === p.name)
                           .reduce((s, c) => s + (c.qty_counted || 0), 0)
                         const hasInCurrentFreshness = counts.find(c => c.product_name === p.name && c.freshness === draftFreshness)
+                        const isCounted = totalForProduct > 0
                         return (
                           <button
                             key={p.name}
@@ -325,13 +326,12 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                             disabled={!isOpen}
                             className={`relative border rounded-md p-1.5 transition-all ${
                               !isOpen ? 'opacity-50 cursor-not-allowed border-line bg-cream-warm' :
-                              hasInCurrentFreshness ? 'border-bordeaux bg-bordeaux/10' :
-                              totalForProduct > 0 ? 'border-line bg-cream-warm hover:bg-bordeaux/5' :
+                              isCounted ? 'border-bordeaux bg-bordeaux/10' :
                               'border-line bg-white hover:bg-cream-warm'
-                            }`}
+                            } ${hasInCurrentFreshness ? 'ring-2 ring-bordeaux' : ''}`}
                           >
                             <div className={`aspect-square rounded-md flex items-center justify-center text-xl overflow-hidden ${
-                              hasInCurrentFreshness ? 'bg-bordeaux/20 text-bordeaux-deep' : 'bg-cream-warm text-ink-mute'
+                              isCounted ? 'bg-bordeaux/20 text-bordeaux-deep' : 'bg-cream-warm text-ink-mute'
                             }`}>
                               {p.image_url ? (
                                 <img
@@ -345,7 +345,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                                 <span>🍰</span>
                               )}
                             </div>
-                            {totalForProduct > 0 && (
+                            {isCounted && (
                               <div className="absolute top-1 right-1 bg-bordeaux text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-[10px] font-semibold px-1.5">
                                 {totalForProduct}
                               </div>

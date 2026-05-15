@@ -4,7 +4,7 @@
 // 2. Envoie sa production fraîche au café (validation incrémentale par article)
 // =============================================================
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from '../AppHeader'
 import ProductGrid from './ProductGrid'
 import {
@@ -13,6 +13,8 @@ import {
   loadYesterdayLeftovers,
   applyLeftoverDecisions,
   sendMorningItem,
+  subscribeToDayItems,
+  updateItem,
   todayISO,
 } from '../../lib/stockBoutique'
 
@@ -66,9 +68,10 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
     }
   }, [cart, cartKey])
 
-  // Chargement initial
+  // Chargement initial + realtime
   useEffect(() => {
     let mounted = true
+    let sub = null
     async function init() {
       try {
         const sd = await getOrCreateStockDay(todayISO())
@@ -85,13 +88,45 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
         setLeftovers(leftov)
         // Détection : si on a déjà des lignes source='leftover' aujourd'hui, c'est déjà appliqué
         setLeftoversApplied(items.some(it => it.source === 'leftover'))
+
+        // Realtime : reception confirme ou note un écart → on le voit en direct
+        sub = subscribeToDayItems(sd.id, {
+          onInsert: (item) => setTodayItems(prev => prev.some(i => i.id === item.id) ? prev : [...prev, item]),
+          onUpdate: (item) => setTodayItems(prev => prev.map(i => i.id === item.id ? item : i)),
+          onDelete: (item) => setTodayItems(prev => prev.filter(i => i.id !== item.id)),
+        })
       } finally {
         if (mounted) setLoading(false)
       }
     }
     init()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+      if (sub) sub.unsubscribe()
+    }
   }, [])
+
+  // Items avec écart non encore acquittés par le pâtissier
+  const discrepancyItems = useMemo(() => {
+    return todayItems.filter(it =>
+      it.source === 'morning' &&
+      it.reception_status === 'discrepancy' &&
+      !it.discrepancy_ack_at
+    )
+  }, [todayItems])
+
+  async function acknowledgeDiscrepancy(itemId) {
+    try {
+      const updated = await updateItem(itemId, {
+        discrepancy_ack_at: new Date().toISOString(),
+        discrepancy_ack_by: user.id,
+      })
+      setTodayItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
+    } catch (e) {
+      console.error(e)
+      alert('Erreur acquittement : ' + (e.message || e))
+    }
+  }
 
   // Articles déjà envoyés (visibles dans la zone "Envoyés ce matin")
   const sentItems = useMemo(() => {
@@ -173,6 +208,43 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
           </div>
         ) : (
           <>
+            {/* BANNIÈRE ÉCARTS — visible tant que pas acquitté */}
+            {discrepancyItems.length > 0 && (
+              <div className="bg-red-50 border-2 border-red-400 rounded-lg p-4 space-y-3 animate-pulse-slow">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">⚠️</div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-[14px] text-red-900">
+                      Le café a noté un écart sur {discrepancyItems.length} article{discrepancyItems.length > 1 ? 's' : ''}
+                    </div>
+                    <div className="text-[12px] text-red-800 mt-0.5">
+                      Va vérifier physiquement en vitrine, puis clique "Vérifié" pour acquitter.
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {discrepancyItems.map(it => (
+                    <div key={it.id} className="bg-white rounded-md p-3 border border-red-200 flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-[13px] truncate">{it.product_name}</div>
+                        <div className="text-[11px] text-ink-mute mt-0.5">
+                          Envoyé : <span className="font-semibold">{it.qty_announced}</span> · Reçu : <span className="font-semibold text-red-700">{it.qty_received ?? '?'}</span>
+                          {it.reception_note && <span className="ml-2">— "{it.reception_note}"</span>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => acknowledgeDiscrepancy(it.id)}
+                        className="px-3 py-1.5 text-[11px] bg-red-600 hover:bg-red-700 text-white rounded-md font-medium whitespace-nowrap"
+                      >
+                        ✓ Vérifié
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* SECTION 1 — RESTES D'HIER */}
             {leftovers.length > 0 && !leftoversApplied && (
               <div className="bg-white border border-line rounded-lg overflow-hidden">
