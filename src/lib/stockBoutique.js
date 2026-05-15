@@ -248,40 +248,59 @@ export async function applyLeftoverDecisions(todayStockDayId, decisions, userId)
 
     const newFreshness = decision === 'loss' ? 'loss' : advanceFreshness(leftoverItem.freshness)
 
-    await upsertItem({
-      stock_day_id: todayStockDayId,
-      product_name: leftoverItem.product_name,
-      product_code: leftoverItem.product_code,
-      category: leftoverItem.category || 'E',
-      freshness: newFreshness,
-      source: 'leftover',
-      qty_announced: qty,
-      qty_received: qty,
-      decision,
-      loss_reason: decision === 'loss' ? (lossReason || 'Casse matin pâtissier') : null,
-      reception_status: 'confirmed',
-      announced_by: userId,
-      announced_at: new Date().toISOString(),
-      received_by: userId,
-      received_at: new Date().toISOString(),
-    })
+    const { error: insertErr } = await supabase
+      .from('stock_day_items')
+      .insert({
+        stock_day_id: todayStockDayId,
+        product_name: leftoverItem.product_name,
+        product_code: leftoverItem.product_code,
+        category: leftoverItem.category || 'E',
+        freshness: newFreshness,
+        source: 'leftover',
+        qty_announced: qty,
+        qty_received: qty,
+        decision,
+        loss_reason: decision === 'loss' ? (lossReason || 'Casse matin pâtissier') : null,
+        reception_status: 'confirmed',
+        announced_by: userId,
+        announced_at: new Date().toISOString(),
+        received_by: userId,
+        received_at: new Date().toISOString(),
+      })
+    if (insertErr) {
+      console.error('[stockBoutique] applyLeftoverDecisions insert:', insertErr)
+      throw insertErr
+    }
   }
 }
 
 export async function sendMorningItem(stockDayId, productName, productCode, qty, userId) {
-  return upsertItem({
-    stock_day_id: stockDayId,
-    product_name: productName,
-    product_code: productCode || null,
-    category: 'E',
-    freshness: 'fresh',
-    source: 'morning',
-    qty_announced: qty,
-    qty_received: null,
-    reception_status: 'pending',
-    announced_by: userId,
-    announced_at: new Date().toISOString(),
-  })
+  // INSERT direct (pas upsert) car la contrainte unique est partielle (sans evening)
+  // et PostgREST ne sait pas l'utiliser dans ON CONFLICT.
+  // Si Hamza envoie 2x dans la journée, ça créera 2 lignes (qui s'additionneront à la réception).
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .insert({
+      stock_day_id: stockDayId,
+      product_name: productName,
+      product_code: productCode || null,
+      category: 'E',
+      freshness: 'fresh',
+      source: 'morning',
+      qty_announced: qty,
+      qty_received: null,
+      reception_status: 'pending',
+      announced_by: userId,
+      announced_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[stockBoutique] sendMorningItem:', error)
+    throw error
+  }
+  return data
 }
 
 // =============================================================
@@ -349,20 +368,31 @@ export async function cafeMaintainCount(itemId, userId) {
 }
 
 export async function addSurpriseReceptionItem(stockDayId, productName, productCode, qty, userId) {
-  return upsertItem({
-    stock_day_id: stockDayId,
-    product_name: productName,
-    product_code: productCode || null,
-    category: 'E',
-    freshness: 'fresh',
-    source: 'morning',
-    qty_announced: 0,
-    qty_received: qty,
-    reception_status: 'discrepancy',
-    reception_note: 'Reçu non annoncé par Hamza',
-    received_by: userId,
-    received_at: new Date().toISOString(),
-  })
+  // INSERT direct (pas upsert) — voir explication dans sendMorningItem
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .insert({
+      stock_day_id: stockDayId,
+      product_name: productName,
+      product_code: productCode || null,
+      category: 'E',
+      freshness: 'fresh',
+      source: 'morning',
+      qty_announced: 0,
+      qty_received: qty,
+      reception_status: 'discrepancy',
+      reception_note: 'Reçu non annoncé par Hamza',
+      received_by: userId,
+      received_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[stockBoutique] addSurpriseReceptionItem:', error)
+    throw error
+  }
+  return data
 }
 
 // =============================================================
