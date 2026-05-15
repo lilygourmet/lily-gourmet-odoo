@@ -329,17 +329,28 @@ export async function addSurpriseReceptionItem(stockDayId, productName, productC
 // =============================================================
 
 export async function addEveningCount(stockDayId, productName, productCode, qty, freshness, userId) {
-  return upsertItem({
-    stock_day_id: stockDayId,
-    product_name: productName,
-    product_code: productCode || null,
-    category: 'E',
-    freshness: freshness || 'fresh',
-    source: 'evening',
-    qty_counted: qty,
-    counted_by: userId,
-    counted_at: new Date().toISOString(),
-  })
+  // INSERT direct (pas upsert) pour permettre plusieurs lignes même article/fraîcheur
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .insert({
+      stock_day_id: stockDayId,
+      product_name: productName,
+      product_code: productCode || null,
+      category: 'E',
+      freshness: freshness || 'fresh',
+      source: 'evening',
+      qty_counted: qty,
+      counted_by: userId,
+      counted_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[stockBoutique] addEveningCount:', error)
+    throw error
+  }
+  return data
 }
 
 export async function updateEveningCount(itemId, qty, userId) {

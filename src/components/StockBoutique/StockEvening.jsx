@@ -1,19 +1,18 @@
 // src/components/StockBoutique/StockEvening.jsx
 // Écran SOIR — Café (COMPTAGE AVEUGLE)
-// Pas d'info sur l'attendu. Le café ouvre un catalogue vierge,
-// ajoute chaque article qu'elle voit en vitrine + qty + fraîcheur,
-// puis "Envoie à l'équipe audit".
+// UX identique à Vitrine : panier à gauche avec calculette, tuiles à droite
+// Clic tuile = nouvelle ligne (Frais 1). Sélectionne ligne → calculette modifie qty.
 // =============================================================
 
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
-import NumpadInline from './NumpadInline'
 import { fetchEntremetsCatalog } from '../../lib/stockCatalog'
 import {
   getOrCreateStockDay,
   loadEveningCounts,
   addEveningCount,
   updateEveningCount,
+  updateItem,
   deleteItem,
   submitStockDay,
   reopenStockDay,
@@ -21,21 +20,25 @@ import {
 } from '../../lib/stockBoutique'
 
 const FRESHNESS_OPTIONS = [
-  { id: 'fresh', label: 'Frais (aujourd\'hui)', color: 'green', short: 'D' },
-  { id: 'yesterday', label: 'Hier (J+1)', color: 'orange', short: 'J+1' },
-  { id: 'twodays', label: '2 jours (J+2)', color: 'red', short: 'J+2' },
+  { id: 'fresh', label: 'Frais' },
+  { id: 'yesterday', label: 'J+1' },
+  { id: 'twodays', label: 'J+2' },
+]
+
+const SIZE_TABS = [
+  { id: '1', label: '1' },
+  { id: '5', label: '5' },
+  { id: '10', label: '10' },
+  { id: '15', label: '15' },
 ]
 
 export default function StockEvening({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [stockDay, setStockDay] = useState(null)
   const [counts, setCounts] = useState([])
-  const [catalog, setCatalog] = useState({ sizes: { '1': [], '5': [], '10': [] } })
+  const [catalog, setCatalog] = useState({ sizes: { '1': [], '5': [], '10': [], '15': [] } })
   const [currentSize, setCurrentSize] = useState('1')
-  const [editingId, setEditingId] = useState(null)
-  const [draftQty, setDraftQty] = useState(1)
-  const [draftFreshness, setDraftFreshness] = useState('fresh')
-  const [draftProduct, setDraftProduct] = useState(null)
+  const [selectedId, setSelectedId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -61,64 +64,89 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
   }, [])
 
   const products = catalog.sizes?.[currentSize] || []
-  const totalCounted = counts.reduce((s, c) => s + (c.qty_counted || 0), 0)
+  const totalCount = counts.reduce((s, c) => s + (c.qty_counted || 0), 0)
 
   const isOpen = stockDay?.status === 'open'
   const isSubmitted = stockDay?.status === 'submitted'
   const isAudited = stockDay?.status === 'audited'
 
-  function openProduct(p) {
-    if (!isOpen) return
-    // Si déjà compté, on ouvre en édition
-    const existing = counts.find(c => c.product_name === p.name && c.freshness === draftFreshness)
-    if (existing) {
-      setEditingId(existing.id)
-      setDraftQty(existing.qty_counted)
-      setDraftProduct(p)
-    } else {
-      setEditingId(null)
-      setDraftProduct(p)
-      setDraftQty(1)
-    }
-  }
+  const selectedItem = useMemo(
+    () => counts.find(c => c.id === selectedId) || null,
+    [counts, selectedId]
+  )
 
-  async function handleSaveDraft() {
-    if (!draftProduct || !stockDay) return
+  // ================================================================
+  // Actions
+  // ================================================================
+
+  // Clic tuile : crée TOUJOURS une nouvelle ligne (Frais, qty=1)
+  async function handleTileClick(p) {
+    if (!isOpen || !stockDay) return
     try {
-      if (editingId) {
-        await updateEveningCount(editingId, draftQty, user.id)
-      } else {
-        await addEveningCount(stockDay.id, draftProduct.name, draftProduct.code, draftQty, draftFreshness, user.id)
-      }
-      const its = await loadEveningCounts(stockDay.id)
-      setCounts(its)
-      setDraftProduct(null)
-      setEditingId(null)
-      setDraftQty(1)
+      const created = await addEveningCount(stockDay.id, p.name, p.code, 1, 'fresh', user.id)
+      setCounts(prev => [...prev, created])
+      setSelectedId(created.id) // sélectionne automatiquement la nouvelle ligne
     } catch (e) {
       console.error(e)
       alert('Erreur : ' + (e.message || e))
     }
   }
 
-  async function handleDelete(id) {
-    if (!confirm('Supprimer cette ligne de comptage ?')) return
-    try {
-      await deleteItem(id)
-      const its = await loadEveningCounts(stockDay.id)
-      setCounts(its)
-      if (editingId === id) {
-        setDraftProduct(null)
-        setEditingId(null)
+  // Numpad : modifie la qty de l'item sélectionné
+  async function handleNumpad(digit) {
+    if (!isOpen || !selectedItem) return
+    const current = String(selectedItem.qty_counted || 0)
+    let newQty
+    if (digit === 'C') {
+      newQty = 0
+    } else if (digit === 'BACK') {
+      newQty = parseInt(current.slice(0, -1) || '0', 10)
+    } else {
+      // Ajouter le chiffre. Si qty actuelle = 1 (valeur par défaut au clic tuile),
+      // on remplace au lieu de concaténer pour éviter "11", "12" non voulus.
+      if (current === '1' || current === '0') {
+        newQty = parseInt(digit, 10)
+      } else {
+        newQty = parseInt(current + digit, 10)
       }
+    }
+    if (isNaN(newQty) || newQty < 0) newQty = 0
+    try {
+      const updated = await updateEveningCount(selectedItem.id, newQty, user.id)
+      setCounts(prev => prev.map(c => c.id === selectedItem.id ? { ...c, ...updated } : c))
     } catch (e) {
       alert('Erreur : ' + (e.message || e))
     }
   }
 
+  async function handleFreshnessChange(item, newFreshness) {
+    if (!isOpen) return
+    try {
+      const updated = await updateItem(item.id, { freshness: newFreshness })
+      setCounts(prev => prev.map(c => c.id === item.id ? { ...c, ...updated } : c))
+    } catch (e) {
+      alert('Erreur : ' + (e.message || e))
+    }
+  }
+
+  async function handleRemove(item) {
+    if (!isOpen) return
+    try {
+      await deleteItem(item.id)
+      setCounts(prev => prev.filter(c => c.id !== item.id))
+      if (selectedId === item.id) setSelectedId(null)
+    } catch (e) {
+      alert('Erreur : ' + (e.message || e))
+    }
+  }
+
+  // ================================================================
+  // Submission / réouverture
+  // ================================================================
+
   async function handleSubmit() {
     if (!stockDay || counts.length === 0) return
-    if (!confirm(`Envoyer le comptage à l'équipe audit ?\n\n${counts.length} ligne${counts.length > 1 ? 's' : ''} · ${totalCounted} article${totalCounted > 1 ? 's' : ''} compté${totalCounted > 1 ? 's' : ''}.\n\nTu pourras toujours corriger tant que l'audit n'a pas validé.`)) return
+    if (!confirm(`Envoyer le comptage à l'équipe audit ?\n\n${counts.length} ligne${counts.length > 1 ? 's' : ''} · ${totalCount} article${totalCount > 1 ? 's' : ''} compté${totalCount > 1 ? 's' : ''}.\n\nTu pourras toujours corriger tant que l'audit n'a pas validé.`)) return
     try {
       setSubmitting(true)
       await submitStockDay(stockDay.id, user.id)
@@ -143,25 +171,13 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
     }
   }
 
-  // Compteur par fraîcheur (pour les chips)
-  const countsByFreshness = useMemo(() => {
-    const map = { fresh: 0, yesterday: 0, twodays: 0 }
-    counts.forEach(c => {
-      if (map[c.freshness] !== undefined) map[c.freshness] += (c.qty_counted || 0)
-    })
-    return map
-  }, [counts])
-
-  // Lignes triées (fraîcheur puis nom)
-  const sortedCounts = useMemo(() => {
-    const order = { fresh: 1, yesterday: 2, twodays: 3, loss: 4 }
-    return [...counts].sort((a, b) => {
-      const oa = order[a.freshness] || 9
-      const ob = order[b.freshness] || 9
-      if (oa !== ob) return oa - ob
-      return a.product_name.localeCompare(b.product_name)
-    })
-  }, [counts])
+  // Liste : on garde l'ordre d'insertion (plus récent en bas)
+  // Pour les tuiles : total qty par article (toutes lignes/fraîcheurs cumulées)
+  function tileQty(productName) {
+    return counts
+      .filter(c => c.product_name === productName)
+      .reduce((s, c) => s + (c.qty_counted || 0), 0)
+  }
 
   return (
     <div className="min-h-screen bg-cream">
@@ -228,83 +244,103 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
             {/* INSTRUCTIONS */}
             {isOpen && counts.length === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
-                💡 <strong>Mode aveugle activé.</strong> Compte ce que tu vois en vitrine, article par article.
-                On ne te montre rien de ce qui a été apporté pour ne pas t'influencer.
-                Tu choisis la fraîcheur (Frais / Hier / 2 jours) puis tu cliques l'article.
+                💡 <strong>Mode aveugle activé.</strong> Compte ce que tu vois en vitrine.
+                Clique l'article → ajoute une ligne (Frais, 1). Clique la ligne pour la sélectionner, puis tape la qty sur la calculette.
               </div>
             )}
 
-            <div className="grid grid-cols-[1fr_280px] gap-3">
-              {/* PANNEAU GAUCHE : CATALOGUE */}
-              <div className="bg-white border border-line rounded-lg overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-line bg-cream-warm">
-                  <div className="text-[12px] font-semibold">Catalogue des entremets</div>
-                  <div className="text-[10px] text-ink-mute mt-0.5">
-                    Clique un article pour le compter
-                  </div>
+            {/* GRILLE PRINCIPALE */}
+            <div className="grid grid-cols-[280px_1fr] gap-3">
+
+              {/* ============= PANNEAU GAUCHE : PANIER + CALCULETTE ============= */}
+              <div className="border border-line rounded-lg overflow-hidden flex flex-col bg-white">
+                <div className="px-3 py-2 bg-bordeaux/10 text-bordeaux-deep font-mono text-[10px] tracking-[0.2em] uppercase font-semibold">
+                  Restes comptés
                 </div>
 
-                {/* Sélecteur fraîcheur */}
+                {/* Liste */}
+                <div className="min-h-[180px] max-h-[280px] overflow-y-auto">
+                  {counts.length === 0 ? (
+                    <div className="p-6 text-center text-ink-mute text-[11px] italic">
+                      Aucun article compté.<br />Clique une tuile à droite.
+                    </div>
+                  ) : (
+                    counts.map(c => (
+                      <CountRow
+                        key={c.id}
+                        item={c}
+                        selected={c.id === selectedId}
+                        disabled={!isOpen}
+                        onSelect={() => setSelectedId(c.id)}
+                        onFreshnessChange={(fr) => handleFreshnessChange(c, fr)}
+                        onRemove={() => handleRemove(c)}
+                      />
+                    ))
+                  )}
+                </div>
+
+                {/* Total */}
+                <div className="px-3 py-2 border-t border-line bg-bordeaux/5 flex items-center justify-between">
+                  <span className="text-[11px] text-bordeaux-deep font-medium">Total</span>
+                  <span className="text-[14px] font-semibold">{totalCount} article{totalCount > 1 ? 's' : ''}</span>
+                </div>
+
+                {/* Calculette */}
                 {isOpen && (
-                  <div className="px-3 py-2 border-b border-line bg-cream/50">
-                    <div className="text-[10px] font-mono uppercase tracking-wider text-ink-mute mb-1.5">
-                      Fraîcheur de l'article à compter
+                  <div className="p-2 border-t border-line">
+                    <div className="grid grid-cols-3 gap-1">
+                      {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
+                        <NumpadBtn key={d} label={d} onClick={() => handleNumpad(d)} disabled={!selectedItem} />
+                      ))}
+                      <NumpadBtn label="C" onClick={() => handleNumpad('C')} disabled={!selectedItem} />
+                      <NumpadBtn label="0" onClick={() => handleNumpad('0')} disabled={!selectedItem} />
+                      <NumpadBtn label="⌫" onClick={() => handleNumpad('BACK')} disabled={!selectedItem} />
                     </div>
-                    <div className="flex gap-1">
-                      {FRESHNESS_OPTIONS.map(f => {
-                        const active = draftFreshness === f.id
-                        const styles = active ? {
-                          green: 'bg-green-600 border-green-600 text-white',
-                          orange: 'bg-orange-600 border-orange-600 text-white',
-                          red: 'bg-red-700 border-red-700 text-white',
-                        }[f.color] : {
-                          green: 'border-green-500 text-green-800 hover:bg-green-50',
-                          orange: 'border-orange-500 text-orange-800 hover:bg-orange-50',
-                          red: 'border-red-500 text-red-800 hover:bg-red-50',
-                        }[f.color]
-                        return (
-                          <button
-                            key={f.id}
-                            type="button"
-                            onClick={() => setDraftFreshness(f.id)}
-                            className={`flex-1 px-2 py-1.5 text-[11px] rounded-md border-2 transition-colors ${styles}`}
-                          >
-                            {f.label}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {!selectedItem && counts.length > 0 && (
+                      <div className="text-[9px] text-ink-mute mt-1 text-center italic">
+                        Sélectionne une ligne pour modifier sa quantité
+                      </div>
+                    )}
                   </div>
                 )}
 
+                {/* Bouton clôturer */}
+                {isOpen && (
+                  <div className="p-2 border-t border-line">
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={counts.length === 0 || submitting}
+                      className="w-full px-3 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-md text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? 'Envoi...' : 'Clôturer la journée'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ============= PANNEAU DROITE : TUILES ============= */}
+              <div className="bg-white border border-line rounded-lg overflow-hidden">
                 {/* Onglets taille */}
-                <div className="flex gap-0.5 px-3 pt-2 border-b border-line">
-                  {[
-                    { id: '1', label: '1 pers' },
-                    { id: '5', label: '5 pers' },
-                    { id: '10', label: '10 pers' },
-                    { id: '15', label: '15 pers' },
-                  ].map(tab => {
-                    const active = currentSize === tab.id
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setCurrentSize(tab.id)}
-                        className={`px-3 py-1.5 text-[11px] font-medium tracking-wider transition-colors ${
-                          active
-                            ? 'border-b-2 border-bordeaux text-bordeaux'
-                            : 'border-b-2 border-transparent text-ink-mute hover:text-ink'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    )
-                  })}
+                <div className="flex border-b border-line bg-cream-warm">
+                  {SIZE_TABS.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setCurrentSize(s.id)}
+                      className={`flex-1 px-3 py-2 text-[11px] transition-colors ${
+                        currentSize === s.id
+                          ? 'bg-bordeaux text-cream font-semibold'
+                          : 'text-ink-mute hover:bg-cream'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Grille */}
-                <div className="p-3 max-h-[480px] overflow-y-auto">
+                {/* Grille produits */}
+                <div className="p-2.5">
                   {products.length === 0 ? (
                     <div className="p-8 text-center text-ink-mute text-[11px]">
                       Aucun article {currentSize} pers dans le catalogue.
@@ -312,26 +348,21 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   ) : (
                     <div className="grid grid-cols-4 gap-2">
                       {products.map(p => {
-                        // Combien d'unités déjà comptées (toutes fraîcheurs confondues) pour cet article
-                        const totalForProduct = counts
-                          .filter(c => c.product_name === p.name)
-                          .reduce((s, c) => s + (c.qty_counted || 0), 0)
-                        const hasInCurrentFreshness = counts.find(c => c.product_name === p.name && c.freshness === draftFreshness)
-                        const isCounted = totalForProduct > 0
+                        const qty = tileQty(p.name)
                         return (
                           <button
                             key={p.name}
                             type="button"
-                            onClick={() => openProduct(p)}
+                            onClick={() => handleTileClick(p)}
                             disabled={!isOpen}
                             className={`relative border rounded-md p-1.5 transition-all ${
                               !isOpen ? 'opacity-50 cursor-not-allowed border-line bg-cream-warm' :
-                              isCounted ? 'border-bordeaux bg-bordeaux/10' :
+                              qty > 0 ? 'border-bordeaux bg-bordeaux/10' :
                               'border-line bg-white hover:bg-cream-warm'
-                            } ${hasInCurrentFreshness ? 'ring-2 ring-bordeaux' : ''}`}
+                            }`}
                           >
-                            <div className={`aspect-square rounded-md flex items-center justify-center text-xl overflow-hidden ${
-                              isCounted ? 'bg-bordeaux/20 text-bordeaux-deep' : 'bg-cream-warm text-ink-mute'
+                            <div className={`aspect-square rounded-md flex items-center justify-center text-2xl overflow-hidden ${
+                              qty > 0 ? 'bg-bordeaux/20 text-bordeaux-deep' : 'bg-cream-warm text-ink-mute'
                             }`}>
                               {p.image_url ? (
                                 <img
@@ -345,9 +376,9 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                                 <span>🍰</span>
                               )}
                             </div>
-                            {isCounted && (
+                            {qty > 0 && (
                               <div className="absolute top-1 right-1 bg-bordeaux text-white rounded-full min-w-[20px] h-5 flex items-center justify-center text-[10px] font-semibold px-1.5">
-                                {totalForProduct}
+                                {qty}
                               </div>
                             )}
                             <div className="text-[10px] mt-1 text-center leading-tight line-clamp-2">
@@ -360,135 +391,79 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   )}
                 </div>
               </div>
-
-              {/* PANNEAU DROIT : LISTE COMPTÉE */}
-              <div className="bg-white border border-line rounded-lg overflow-hidden flex flex-col h-fit max-h-[640px]">
-                <div className="px-3 py-2.5 border-b border-line bg-cream-warm">
-                  <div className="text-[12px] font-semibold">Comptage</div>
-                  <div className="text-[10px] text-ink-mute mt-0.5">
-                    {counts.length} ligne{counts.length > 1 ? 's' : ''} · {totalCounted} article{totalCounted > 1 ? 's' : ''}
-                  </div>
-                </div>
-
-                {/* Compteurs par fraîcheur */}
-                <div className="grid grid-cols-3 gap-1 p-2 border-b border-line">
-                  {FRESHNESS_OPTIONS.map(f => (
-                    <div
-                      key={f.id}
-                      className={`text-center p-1.5 rounded-md ${
-                        f.color === 'green' ? 'bg-green-50 text-green-900' :
-                        f.color === 'orange' ? 'bg-orange-50 text-orange-900' :
-                        'bg-red-50 text-red-900'
-                      }`}
-                    >
-                      <div className="text-[8px] font-mono uppercase tracking-wider opacity-70">
-                        {f.short}
-                      </div>
-                      <div className="text-[14px] font-semibold">{countsByFreshness[f.id]}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* DRAFT : article en cours de saisie */}
-                {draftProduct && isOpen && (
-                  <div className="p-3 border-b border-line bg-bordeaux/5">
-                    <div className="text-[10px] font-mono uppercase tracking-wider text-bordeaux mb-1">
-                      {editingId ? 'Modification' : 'Nouvelle saisie'}
-                    </div>
-                    <div className="text-[12px] font-semibold mb-1">{draftProduct.name}</div>
-                    <div className="text-[10px] text-ink-mute mb-2">
-                      Fraîcheur : <strong className={
-                        draftFreshness === 'fresh' ? 'text-green-700' :
-                        draftFreshness === 'yesterday' ? 'text-orange-700' :
-                        'text-red-700'
-                      }>{FRESHNESS_OPTIONS.find(f => f.id === draftFreshness)?.label}</strong>
-                    </div>
-                    <div className="flex justify-center mb-2">
-                      <NumpadInline value={draftQty} onChange={setDraftQty} compact />
-                    </div>
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={handleSaveDraft}
-                        disabled={draftQty === 0}
-                        className="flex-1 px-2 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-md text-[11px] font-medium disabled:opacity-50"
-                      >
-                        ✓ Enregistrer
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setDraftProduct(null); setEditingId(null) }}
-                        className="px-2 py-1.5 border border-line rounded-md text-[11px] text-ink-mute hover:text-ink"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* LISTE */}
-                <div className="flex-1 overflow-y-auto">
-                  {sortedCounts.length === 0 ? (
-                    <div className="p-6 text-center text-ink-mute text-[11px] italic">
-                      Aucun article compté.<br />Clique une tuile à gauche.
-                    </div>
-                  ) : (
-                    sortedCounts.map(c => {
-                      const f = FRESHNESS_OPTIONS.find(x => x.id === c.freshness)
-                      return (
-                        <div
-                          key={c.id}
-                          className={`px-3 py-2 border-b border-line flex items-center gap-2 group ${
-                            editingId === c.id ? 'bg-bordeaux/5' : ''
-                          }`}
-                        >
-                          <span className={`text-[8px] px-1.5 py-0.5 rounded font-mono uppercase ${
-                            c.freshness === 'fresh' ? 'bg-green-100 text-green-800' :
-                            c.freshness === 'yesterday' ? 'bg-orange-100 text-orange-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {f?.short || c.freshness}
-                          </span>
-                          <div className="flex-1 min-w-0 text-[11px] truncate">{c.product_name}</div>
-                          <div className="text-[13px] font-semibold tabular-nums">{c.qty_counted}</div>
-                          {isOpen && (
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(c.id)}
-                              className="text-ink-mute hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Supprimer"
-                            >
-                              🗑
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-
-                {/* FOOTER : envoyer */}
-                {isOpen && (
-                  <div className="p-3 border-t border-line bg-cream-warm">
-                    <button
-                      type="button"
-                      onClick={handleSubmit}
-                      disabled={counts.length === 0 || submitting}
-                      className="w-full px-3 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-md text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? 'Envoi...' : '📤 Envoyer à l\'équipe audit'}
-                    </button>
-                    <div className="text-[9px] text-ink-mute mt-1 text-center">
-                      Tu pourras toujours corriger après envoi
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </>
         )}
       </div>
     </div>
+  )
+}
+
+// =============================================================
+// LIGNE DU PANIER
+// =============================================================
+
+function CountRow({ item, selected, disabled, onSelect, onFreshnessChange, onRemove }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      className={`px-3 py-2 border-b border-line flex items-center gap-2 cursor-pointer transition-all ${
+        selected ? 'bg-bordeaux/10 border-l-[3px] border-l-bordeaux' : 'hover:bg-cream-warm'
+      } last:border-b-0`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className={`text-[12px] font-medium truncate ${selected ? 'text-bordeaux-deep' : ''}`}>
+          {item.product_name}
+        </div>
+        <select
+          value={item.freshness || 'fresh'}
+          onChange={(e) => onFreshnessChange(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          disabled={disabled}
+          className="text-[10px] mt-1 px-1 py-0.5 border border-line rounded text-ink-mute bg-white disabled:opacity-50"
+        >
+          {FRESHNESS_OPTIONS.map(f => (
+            <option key={f.id} value={f.id}>{f.label}</option>
+          ))}
+        </select>
+      </div>
+      <div className={`text-[16px] font-semibold min-w-[30px] text-right tabular-nums ${
+        selected ? 'text-bordeaux' : ''
+      }`}>
+        {item.qty_counted}
+      </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }}
+        disabled={disabled}
+        title="Supprimer"
+        className="text-ink-mute hover:text-red-600 text-[14px] disabled:opacity-50 px-1"
+      >
+        🗑
+      </button>
+    </div>
+  )
+}
+
+// =============================================================
+// BOUTON CALCULETTE
+// =============================================================
+
+function NumpadBtn({ label, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="py-3 bg-white border border-line rounded-md text-[14px] font-medium hover:bg-cream-warm active:bg-bordeaux/10 disabled:opacity-30 disabled:cursor-not-allowed"
+    >
+      {label}
+    </button>
   )
 }
 
