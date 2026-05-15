@@ -304,6 +304,47 @@ export async function noteDiscrepancy(itemId, qtyReceived, note, userId) {
     reception_note: note,
     received_by: userId,
     received_at: new Date().toISOString(),
+    discrepancy_status: 'pending_patissier', // workflow : balle au pâtissier
+  })
+}
+
+// Pâtissier répond : "effectivement 7" (= il accepte la qty du café)
+export async function patissierAcceptCafeQty(itemId, userId) {
+  return updateItem(itemId, {
+    discrepancy_status: 'resolved',
+    discrepancy_ack_at: new Date().toISOString(),
+    discrepancy_ack_by: userId,
+    // discrepancy_final_qty est qty_received (la valeur du café)
+  })
+}
+
+// Pâtissier répond : "effectivement 8 - recompte stp" (= il maintient sa qty)
+export async function patissierRequestRecount(itemId, patissierMessage, userId) {
+  return updateItem(itemId, {
+    discrepancy_status: 'pending_cafe',
+    discrepancy_patissier_message: patissierMessage || null,
+    discrepancy_patissier_responded_at: new Date().toISOString(),
+    discrepancy_patissier_responded_by: userId,
+  })
+}
+
+// Café répond après recompte : "effectivement 8" (accepte qty pâtissier)
+export async function cafeAcceptPatissierQty(itemId, userId) {
+  return updateItem(itemId, {
+    discrepancy_status: 'resolved',
+    qty_received: null, // sera remplacé par qty_announced à la lecture
+    discrepancy_ack_at: new Date().toISOString(),
+    discrepancy_ack_by: userId,
+    discrepancy_resolved_in_favor_of: 'patissier',
+  })
+}
+
+// Café répond après recompte : "toujours 7" (désaccord final → audit tranche)
+export async function cafeMaintainCount(itemId, userId) {
+  return updateItem(itemId, {
+    discrepancy_status: 'unresolved',
+    discrepancy_ack_at: new Date().toISOString(),
+    discrepancy_ack_by: userId,
   })
 }
 

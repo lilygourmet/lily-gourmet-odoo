@@ -15,6 +15,8 @@ import {
   noteDiscrepancy,
   addSurpriseReceptionItem,
   subscribeToDayItems,
+  cafeAcceptPatissierQty,
+  cafeMaintainCount,
   todayISO,
 } from '../../lib/stockBoutique'
 
@@ -173,9 +175,41 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     }
   }
 
+  // Items en attente du café (Hamza a demandé un recompte)
+  const pendingCafe = items.filter(it =>
+    it.source === 'morning' && it.discrepancy_status === 'pending_cafe'
+  )
+
+  async function handleCafeAccept(itemId) {
+    try {
+      const updated = await cafeAcceptPatissierQty(itemId, user.id)
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
+    } catch (e) {
+      alert('Erreur : ' + (e.message || e))
+    }
+  }
+
+  async function handleCafeMaintain(itemId) {
+    try {
+      const updated = await cafeMaintainCount(itemId, user.id)
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
+    } catch (e) {
+      alert('Erreur : ' + (e.message || e))
+    }
+  }
+
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+
+      {/* MODAL BLOQUANT — Café répond après recompte Hamza */}
+      {pendingCafe.length > 0 && (
+        <DiscrepancyModalCafe
+          items={pendingCafe}
+          onAccept={handleCafeAccept}
+          onMaintain={handleCafeMaintain}
+        />
+      )}
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
         {/* HEADER */}
@@ -491,6 +525,67 @@ function SurpriseModal({ cart, onChange, onConfirm, onCancel }) {
               Ajouter à la réception
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================
+// MODAL BLOQUANT — Café répond après recompte du pâtissier
+// =============================================================
+
+function DiscrepancyModalCafe({ items, onAccept, onMaintain }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="bg-red-700 text-white px-4 py-3 flex-shrink-0">
+          <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">
+            ⚠️ Hamza a recompté
+          </div>
+          <div className="font-semibold text-[13px] mt-0.5">
+            {items.length} article{items.length > 1 ? 's' : ''} à recompter physiquement
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {items.map(it => (
+            <div key={it.id} className="px-4 py-4 border-b border-line last:border-b-0">
+              <div className="text-[13px] font-medium mb-1">{it.product_name}</div>
+              <div className="text-[11px] text-ink-mute mb-3">
+                Hamza dit avoir envoyé <strong className="text-ink">{it.qty_announced}</strong>,
+                tu avais compté <strong className="text-red-700">{it.qty_received}</strong>.
+                <br />Va recompter en cuisine maintenant.
+              </div>
+
+              {it.discrepancy_patissier_message && (
+                <div className="bg-bordeaux/5 border-l-[3px] border-bordeaux px-3 py-2 mb-3 text-[11px] italic">
+                  💬 Hamza : "{it.discrepancy_patissier_message}"
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onAccept(it.id)}
+                  className="flex-1 px-3 py-2.5 bg-white border border-line rounded-md text-[12px] font-medium hover:bg-cream-warm"
+                >
+                  Effectivement {it.qty_announced} ✓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMaintain(it.id)}
+                  className="flex-1 px-3 py-2.5 bg-red-600 text-white border border-red-600 rounded-md text-[12px] font-medium hover:bg-red-700"
+                >
+                  Toujours {it.qty_received} — audit
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-4 py-3 bg-cream-warm border-t border-line text-center text-[10px] text-ink-mute flex-shrink-0">
+          Réponds aux {items.length} écart{items.length > 1 ? 's' : ''} pour fermer
         </div>
       </div>
     </div>

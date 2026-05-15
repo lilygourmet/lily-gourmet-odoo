@@ -15,6 +15,8 @@ import {
   sendMorningItem,
   subscribeToDayItems,
   updateItem,
+  patissierAcceptCafeQty,
+  patissierRequestRecount,
   todayISO,
 } from '../../lib/stockBoutique'
 
@@ -106,25 +108,42 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
     }
   }, [])
 
-  // Items avec écart non encore acquittés par le pâtissier
-  const discrepancyItems = useMemo(() => {
+  // Items en attente d'une décision DU PÂTISSIER (workflow étape 3)
+  const pendingPatissier = useMemo(() => {
     return todayItems.filter(it =>
       it.source === 'morning' &&
-      it.reception_status === 'discrepancy' &&
-      !it.discrepancy_ack_at
+      it.discrepancy_status === 'pending_patissier'
     )
   }, [todayItems])
 
-  async function acknowledgeDiscrepancy(itemId) {
+  // Items déjà résolus (pour affichage barré "✓ Résolu")
+  const recentlyResolved = useMemo(() => {
+    return todayItems.filter(it =>
+      it.source === 'morning' &&
+      (it.discrepancy_status === 'resolved' || it.discrepancy_status === 'pending_cafe' || it.discrepancy_status === 'unresolved') &&
+      it.received_at // a bien eu un écart à un moment
+    )
+  }, [todayItems])
+
+  // Hamza accepte la qty du café
+  async function handleAcceptCafe(itemId) {
     try {
-      const updated = await updateItem(itemId, {
-        discrepancy_ack_at: new Date().toISOString(),
-        discrepancy_ack_by: user.id,
-      })
+      const updated = await patissierAcceptCafeQty(itemId, user.id)
       setTodayItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
     } catch (e) {
       console.error(e)
-      alert('Erreur acquittement : ' + (e.message || e))
+      alert('Erreur : ' + (e.message || e))
+    }
+  }
+
+  // Hamza demande recompte
+  async function handleRequestRecount(itemId, message) {
+    try {
+      const updated = await patissierRequestRecount(itemId, message, user.id)
+      setTodayItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
+    } catch (e) {
+      console.error(e)
+      alert('Erreur : ' + (e.message || e))
     }
   }
 
@@ -208,41 +227,14 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
           </div>
         ) : (
           <>
-            {/* BANNIÈRE ÉCARTS — visible tant que pas acquitté */}
-            {discrepancyItems.length > 0 && (
-              <div className="bg-red-50 border-2 border-red-400 rounded-lg p-4 space-y-3 animate-pulse-slow">
-                <div className="flex items-start gap-3">
-                  <div className="text-2xl">⚠️</div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-[14px] text-red-900">
-                      Le café a noté un écart sur {discrepancyItems.length} article{discrepancyItems.length > 1 ? 's' : ''}
-                    </div>
-                    <div className="text-[12px] text-red-800 mt-0.5">
-                      Va vérifier physiquement en vitrine, puis clique "Vérifié" pour acquitter.
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {discrepancyItems.map(it => (
-                    <div key={it.id} className="bg-white rounded-md p-3 border border-red-200 flex items-center justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-[13px] truncate">{it.product_name}</div>
-                        <div className="text-[11px] text-ink-mute mt-0.5">
-                          Envoyé : <span className="font-semibold">{it.qty_announced}</span> · Reçu : <span className="font-semibold text-red-700">{it.qty_received ?? '?'}</span>
-                          {it.reception_note && <span className="ml-2">— "{it.reception_note}"</span>}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => acknowledgeDiscrepancy(it.id)}
-                        className="px-3 py-1.5 text-[11px] bg-red-600 hover:bg-red-700 text-white rounded-md font-medium whitespace-nowrap"
-                      >
-                        ✓ Vérifié
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            {/* MODAL BLOQUANT ÉCARTS — overlay couvre toute la page Vitrine */}
+            {pendingPatissier.length > 0 && (
+              <DiscrepancyModalPatissier
+                items={pendingPatissier}
+                resolvedItems={recentlyResolved}
+                onAccept={handleAcceptCafe}
+                onRequestRecount={handleRequestRecount}
+              />
             )}
 
             {/* SECTION 1 — RESTES D'HIER */}
@@ -406,6 +398,92 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
             )}
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// =============================================================
+// MODAL BLOQUANT — Pâtissier répond aux écarts notés par le café
+// =============================================================
+
+function DiscrepancyModalPatissier({ items, resolvedItems, onAccept, onRequestRecount }) {
+  // Map: itemId -> message texte saisi pour "recompte stp"
+  const [messages, setMessages] = useState({})
+  const setMessage = (id, val) => setMessages(m => ({ ...m, [id]: val }))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="bg-red-700 text-white px-4 py-3 flex-shrink-0">
+          <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">
+            ⚠️ Écarts à traiter
+          </div>
+          <div className="font-semibold text-[13px] mt-0.5">
+            {items.length} article{items.length > 1 ? 's' : ''} avec écart — résous chacun avant de continuer
+          </div>
+        </div>
+
+        {/* Liste */}
+        <div className="flex-1 overflow-y-auto">
+          {items.map(it => (
+            <div key={it.id} className="px-4 py-3 border-b border-line">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="text-[12px] font-medium">{it.product_name}</div>
+                {it.reception_note && (
+                  <div className="text-[10px] text-ink-mute italic">
+                    Note café : "{it.reception_note}"
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-ink-mute mb-2">
+                <span>Envoyé : <strong className="text-ink">{it.qty_announced}</strong></span>
+                <span>·</span>
+                <span>Reçu : <strong className="text-red-700">{it.qty_received ?? '?'}</strong></span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onAccept(it.id)}
+                  className="flex-1 px-3 py-2 bg-white border border-line rounded-md text-[11px] font-medium hover:bg-cream-warm"
+                >
+                  Effectivement {it.qty_received} ✓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRequestRecount(it.id, messages[it.id] || `J'ai recompté, c'est bien ${it.qty_announced}.`)}
+                  className="flex-1 px-3 py-2 bg-white border border-bordeaux text-bordeaux rounded-md text-[11px] font-medium hover:bg-bordeaux/5"
+                >
+                  Effectivement {it.qty_announced} — recompte stp
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Items déjà résolus (visuel feedback) */}
+          {resolvedItems.length > 0 && (
+            <div className="bg-green-50/50 border-t border-green-200">
+              <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-green-800 font-semibold">
+                ✓ Résolus aujourd'hui
+              </div>
+              {resolvedItems.map(it => (
+                <div key={it.id} className="px-4 py-2 text-[11px] text-ink-mute line-through">
+                  {it.product_name} · {it.discrepancy_status === 'unresolved' ? '⚠️ désaccord — audit' :
+                                       it.discrepancy_status === 'pending_cafe' ? '⏳ balle au café' :
+                                       'résolu'}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 bg-cream-warm border-t border-line text-center text-[10px] text-ink-mute flex-shrink-0">
+          {items.length === 1
+            ? 'Réponds à cet écart pour fermer'
+            : `Réponds aux ${items.length} écarts restants pour fermer`}
+        </div>
       </div>
     </div>
   )
