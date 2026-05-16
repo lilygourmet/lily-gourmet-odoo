@@ -349,72 +349,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           </div>
         ) : (
           <>
-            {/* ============================================ */}
-            {/* NOUVEAU : SECTION CONFLITS À ARBITRER */}
-            {/* ============================================ */}
-            {hasConflicts && (
-              <div className="bg-white border-2 border-bordeaux rounded-lg overflow-hidden">
-                <div className="bg-bordeaux text-cream px-4 py-2.5">
-                  <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-90">
-                    ⚖ Conflits à arbitrer
-                  </div>
-                  <div className="font-semibold text-[13px] mt-0.5">
-                    {discrepancyItems.length} écart{discrepancyItems.length > 1 ? 's' : ''} en attente de ton arbitrage
-                  </div>
-                </div>
-                <div className="divide-y divide-line">
-                  {discrepancyItems.map(it => {
-                    const badge = DISCREPANCY_BADGE[it.discrepancy_status] || DISCREPANCY_BADGE.unresolved
-                    return (
-                      <div key={it.id} className="px-4 py-3 hover:bg-cream-warm/30">
-                        <div className="flex items-start justify-between gap-3 flex-wrap">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[12px] font-medium mb-1">{it.product_name}</div>
-                            <div className="flex items-center gap-3 text-[11px] text-ink-mute mb-1">
-                              <span>Envoyé : <strong className="text-ink">{it.qty_announced ?? '—'}</strong></span>
-                              <span>·</span>
-                              <span>Compté : <strong className="text-red-700">{it.qty_received ?? '—'}</strong></span>
-                              {it.qty_announced != null && it.qty_received != null && (
-                                <>
-                                  <span>·</span>
-                                  <span>
-                                    Diff : <strong className={(it.qty_announced - it.qty_received) > 0 ? 'text-red-700' : 'text-blue-700'}>
-                                      {(it.qty_announced - it.qty_received) > 0 ? '+' : ''}
-                                      {it.qty_announced - it.qty_received}
-                                    </strong>
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                            {it.reception_note && (
-                              <div className="text-[10px] text-amber-800 italic mb-1">
-                                💬 Café : "{it.reception_note}"
-                              </div>
-                            )}
-                            {it.discrepancy_patissier_message && (
-                              <div className="text-[10px] text-red-800 italic mb-1">
-                                💬 Hamza : "{it.discrepancy_patissier_message}"
-                              </div>
-                            )}
-                            <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full border ${badge.color} font-medium mt-1`}>
-                              {badge.label}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setResolveModalItem(it)}
-                            className="px-3 py-1.5 bg-bordeaux text-cream rounded-md text-[11px] font-medium hover:bg-bordeaux-deep flex-shrink-0"
-                          >
-                            ⚖ Trancher
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* STATS */}
             <div className="grid grid-cols-3 gap-2">
               <StatCard label="Compté (café)" value={stats.totalCounted} color="green" />
@@ -539,6 +473,72 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                 <span className="text-ink-mute ml-2">Stock Odoo &lt; compté — ventes non syncées, ou erreur</span>
               </div>
             </div>
+
+            {/* ============================================ */}
+            {/* NOUVEAU : SECTION CONFLITS À ARBITRER */}
+            {/* ============================================ */}
+            {hasConflicts && (
+              <div className="bg-white border-2 border-bordeaux rounded-lg overflow-hidden">
+                <div className="bg-bordeaux text-cream px-4 py-2.5">
+                  <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-90">
+                    ⚖ Conflits à arbitrer
+                  </div>
+                  <div className="font-semibold text-[13px] mt-0.5">
+                    {discrepancyItems.length} écart{discrepancyItems.length > 1 ? 's' : ''} en attente de ton arbitrage
+                  </div>
+                </div>
+                <div className="divide-y divide-line">
+                  {discrepancyItems.map(it => {
+                    const badge = DISCREPANCY_BADGE[it.discrepancy_status] || DISCREPANCY_BADGE.unresolved
+                    return (
+                      <div key={it.id} className="px-4 py-3 hover:bg-cream-warm/30">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-medium mb-1">{it.product_name}</div>
+                            <div className="flex items-center gap-3 text-[11px] text-ink-mute mb-1">
+                              <span>Envoyé : <strong className="text-ink">{it.qty_announced ?? '—'}</strong></span>
+                              <span>·</span>
+                              <span>Compté : <strong className="text-red-700">{it.qty_received ?? '—'}</strong></span>
+                              {it.qty_announced != null && it.qty_received != null && (
+                                <>
+                                  <span>·</span>
+                                  <span>
+                                    Diff : <strong className={(it.qty_announced - it.qty_received) > 0 ? 'text-red-700' : 'text-blue-700'}>
+                                      {(it.qty_announced - it.qty_received) > 0 ? '+' : ''}
+                                      {it.qty_announced - it.qty_received}
+                                    </strong>
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            {it.reception_note && (
+                              <div className="text-[10px] text-amber-800 italic mb-1">
+                                💬 Café : "{it.reception_note}"
+                              </div>
+                            )}
+                            {it.discrepancy_patissier_message && (
+                              <div className="text-[10px] text-red-800 italic mb-1">
+                                💬 Hamza : "{it.discrepancy_patissier_message}"
+                              </div>
+                            )}
+                            <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full border ${badge.color} font-medium mt-1`}>
+                              {badge.label}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setResolveModalItem(it)}
+                            className="px-3 py-1.5 bg-bordeaux text-cream rounded-md text-[11px] font-medium hover:bg-bordeaux-deep flex-shrink-0"
+                          >
+                            ⚖ Trancher
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {isSubmitted && (
               <div className="bg-white border border-line rounded-lg p-4">
