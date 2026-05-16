@@ -133,15 +133,25 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Erreur lecture lignes' })
     }
 
-    // Index : par product_code pour les lignes 'evening' uniquement
+    // Fonction de normalisation : tout en minuscule, espaces simples, retire les [xxx]
+    function normName(s) {
+      if (!s) return ''
+      return s
+        .replace(/^\[\d+\]\s*/, '')   // retire le préfixe [123]
+        .replace(/\s+/g, ' ')         // espaces multiples → un seul
+        .trim()
+        .toLowerCase()
+    }
+
+    // Index : par NOM normalisé pour les lignes 'evening' (matching robuste)
     // (les éventuelles lignes 'odoo_only' déjà créées seront écrasées plus bas)
-    const eveningByCode = new Map()
+    const eveningByName = new Map()
     const oldOdooOnlyIds = []
     for (const it of (items || [])) {
-      if (it.source === 'evening' && it.product_code) {
-        // Si plusieurs lignes evening pour le même code (multi-fraîcheur), on prend la première
-        if (!eveningByCode.has(it.product_code)) {
-          eveningByCode.set(it.product_code, it)
+      if (it.source === 'evening') {
+        const key = normName(it.product_name)
+        if (key && !eveningByName.has(key)) {
+          eveningByName.set(key, it)
         }
       } else if (it.source === 'odoo_only') {
         oldOdooOnlyIds.push(it.id)
@@ -236,14 +246,30 @@ export default async function handler(req, res) {
 
     console.log('[stock-odoo-snapshot] Stock found for', odooArticles.size, 'articles (filtered by prefix)')
 
+    // Construire un index secondaire : odoo articles par nom normalisé
+    // (pour matcher les lignes 'evening' par nom plutôt que par template_id,
+    // car etiquettes_articles a parfois un odoo_template_id imprécis pour les tailles "(1)")
+    const odooByName = new Map()
+    for (const [code, entry] of odooArticles.entries()) {
+      const key = normName(entry.productName)
+      if (!key) continue
+      if (odooByName.has(key)) {
+        // Si plusieurs templates Odoo correspondent au même nom normalisé : on additionne
+        odooByName.get(key).qty += entry.qty
+        odooByName.get(key).matchedCodes.push(code)
+      } else {
+        odooByName.set(key, { ...entry, matchedCodes: [code] })
+      }
+    }
+
     // 5) Mettre à jour les lignes 'evening' existantes + créer des 'odoo_only' pour les nouveaux
     const nowISO = new Date().toISOString()
     let updatedEvening = 0
     let insertedOdooOnly = 0
 
-    // 5a) Update lignes evening (avec qty_odoo_snapshot)
-    for (const [code, eveningItem] of eveningByCode.entries()) {
-      const odooEntry = odooArticles.get(code)
+    // 5a) Update lignes evening (matching par nom)
+    for (const [nameKey, eveningItem] of eveningByName.entries()) {
+      const odooEntry = odooByName.get(nameKey)
       const qty = odooEntry ? Math.round(odooEntry.qty) : null
 
       const patch = {
@@ -265,8 +291,12 @@ export default async function handler(req, res) {
       }
       updatedEvening++
 
-      // Marquer comme traité (pour ne pas le recréer en odoo_only)
-      odooArticles.delete(code)
+      // Marquer comme traité (pour ne pas le recréer en odoo_only) : supprime tous les codes matchés
+      if (odooEntry) {
+        for (const c of odooEntry.matchedCodes) {
+          odooArticles.delete(c)
+        }
+      }
     }
 
     // 5b) Supprimer les anciennes lignes 'odoo_only' (on les recrée à chaque refresh)
