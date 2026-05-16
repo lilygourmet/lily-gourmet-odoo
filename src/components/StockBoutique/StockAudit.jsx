@@ -411,7 +411,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           const effGapCurr = hasCurrent ? (r.qty_odoo_current - effQty) : null
                           const productDiscItems = discByProduct.get(r.product_name) || []
                           const hasConflict = productDiscItems.length > 0
-                          return rendered.push(
+                          rendered.push(
                             <tr key={r.product_name} className={`border-b border-line ${
                               hasConflict ? 'bg-red-50/50' :
                               notCounted ? 'bg-amber-50/20' :
