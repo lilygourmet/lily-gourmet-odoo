@@ -32,6 +32,7 @@ const DISCREPANCY_BADGE = {
   pending_patissier: { label: '⏳ Hamza n\'a pas répondu', color: 'bg-amber-100 text-amber-900 border-amber-300' },
   pending_cafe: { label: '⏳ Hamza dit "recompte"', color: 'bg-blue-100 text-blue-900 border-blue-300' },
   unresolved: { label: '⚠ Désaccord total', color: 'bg-red-100 text-red-900 border-red-300' },
+  audit_resolved: { label: '✓ Tranché par audit', color: 'bg-green-100 text-green-900 border-green-300' },
 }
 
 export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
@@ -221,6 +222,18 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   const canRefresh = stockDay && (isSubmitted || isAudited)
   const hasConflicts = discrepancyItems.length > 0
 
+  // Séparation : en attente d'arbitrage vs déjà tranchés
+  const pendingItems = useMemo(
+    () => discrepancyItems.filter(it => it.discrepancy_status !== 'audit_resolved'),
+    [discrepancyItems]
+  )
+  const resolvedItems = useMemo(
+    () => discrepancyItems.filter(it => it.discrepancy_status === 'audit_resolved'),
+    [discrepancyItems]
+  )
+  const hasPending = pendingItems.length > 0
+  const hasResolved = resolvedItems.length > 0
+
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
@@ -409,44 +422,46 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           const notCounted = !r.is_counted
                           const effQty = notCounted ? 0 : r.qty_counted
                           const effGapCurr = hasCurrent ? (r.qty_odoo_current - effQty) : null
-                          const productDiscItems = discByProduct.get(r.product_name) || []
-                          const hasConflict = productDiscItems.length > 0
+                          const isConflictRow = r.is_conflict_row
+                          const conflictItems = r.conflict_items || []
+                          const rowKey = `${r.product_name}-${isConflictRow ? 'conflict' : 'ok'}`
                           rendered.push(
-                            <tr key={r.product_name} className={`border-b border-line ${
-                              hasConflict ? 'bg-red-50/50' :
+                            <tr key={rowKey} className={`border-b border-line ${
+                              isConflictRow ? 'bg-red-50/60' :
                               notCounted ? 'bg-amber-50/20' :
                               (effGapCurr !== null && effGapCurr !== 0 ? 'bg-orange-50/30' : '')
                             }`}>
                               <td className="px-3 py-2 font-medium">
                                 {r.product_name}
-                                {notCounted && (
-                                  <span className="ml-2 inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
-                                    non compté
+                                {isConflictRow && (
+                                  <span className="ml-2 inline-block bg-red-100 text-red-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
+                                    ⚖ {conflictItems.length} conflit{conflictItems.length > 1 ? 's' : ''}
                                   </span>
                                 )}
-                                {hasConflict && (
-                                  <span className="ml-2 inline-block bg-red-100 text-red-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
-                                    {productDiscItems.length} conflit{productDiscItems.length > 1 ? 's' : ''}
+                                {!isConflictRow && notCounted && (
+                                  <span className="ml-2 inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
+                                    non compté
                                   </span>
                                 )}
                               </td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning || '—'}</td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_leftover || '—'}</td>
                               <td className={`px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
-                                {effQty}
+                                {isConflictRow ? <span className="text-red-700 italic">—</span> : effQty}
                               </td>
                               <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50`}>
                                 {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
                               </td>
                               <td className="px-2 py-2 text-right">
-                                <GapBadge value={effGapCurr} bold />
+                                {isConflictRow ? <span className="text-ink-mute italic text-[10px]">à arbitrer</span> : <GapBadge value={effGapCurr} bold />}
                               </td>
                               <td className="px-2 py-2 text-center">
-                                {hasConflict && productDiscItems.length === 1 ? (
+                                {isConflictRow && conflictItems.length === 1 ? (
                                   <button
                                     type="button"
-                                    onClick={() => setResolveModalItem(productDiscItems[0])}
+                                    onClick={() => setResolveModalItem(conflictItems[0])}
                                     className="px-2 py-1 bg-bordeaux text-cream rounded text-[10px] font-medium hover:bg-bordeaux-deep"
+                                    title="Trancher"
                                   >
                                     ⚖
                                   </button>
@@ -475,68 +490,121 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             </div>
 
             {/* ============================================ */}
-            {/* NOUVEAU : SECTION CONFLITS À ARBITRER */}
+            {/* SECTION CONFLITS À ARBITRER */}
             {/* ============================================ */}
             {hasConflicts && (
               <div className="bg-white border-2 border-bordeaux rounded-lg overflow-hidden">
                 <div className="bg-bordeaux text-cream px-4 py-2.5">
                   <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-90">
-                    ⚖ Conflits à arbitrer
+                    ⚖ Conflits
                   </div>
                   <div className="font-semibold text-[13px] mt-0.5">
-                    {discrepancyItems.length} écart{discrepancyItems.length > 1 ? 's' : ''} en attente de ton arbitrage
+                    {hasPending
+                      ? `${pendingItems.length} écart${pendingItems.length > 1 ? 's' : ''} en attente de ton arbitrage`
+                      : `${resolvedItems.length} écart${resolvedItems.length > 1 ? 's' : ''} tranché${resolvedItems.length > 1 ? 's' : ''}`}
+                    {hasPending && hasResolved && (
+                      <span className="opacity-80 font-normal ml-2">
+                        · {resolvedItems.length} déjà tranché{resolvedItems.length > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="divide-y divide-line">
-                  {discrepancyItems.map(it => {
-                    const badge = DISCREPANCY_BADGE[it.discrepancy_status] || DISCREPANCY_BADGE.unresolved
-                    return (
-                      <div key={it.id} className="px-4 py-3 hover:bg-cream-warm/30">
-                        <div className="flex items-start justify-between gap-3 flex-wrap">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[12px] font-medium mb-1">{it.product_name}</div>
-                            <div className="flex items-center gap-3 text-[11px] text-ink-mute mb-1">
-                              <span>Envoyé : <strong className="text-ink">{it.qty_announced ?? '—'}</strong></span>
-                              <span>·</span>
-                              <span>Compté : <strong className="text-red-700">{it.qty_received ?? '—'}</strong></span>
-                              {it.qty_announced != null && it.qty_received != null && (
-                                <>
-                                  <span>·</span>
-                                  <span>
-                                    Diff : <strong className={(it.qty_announced - it.qty_received) > 0 ? 'text-red-700' : 'text-blue-700'}>
-                                      {(it.qty_announced - it.qty_received) > 0 ? '+' : ''}
-                                      {it.qty_announced - it.qty_received}
-                                    </strong>
-                                  </span>
-                                </>
+
+                {/* SOUS-SECTION : EN ATTENTE */}
+                {hasPending && (
+                  <div className="divide-y divide-line">
+                    {pendingItems.map(it => {
+                      const badge = DISCREPANCY_BADGE[it.discrepancy_status] || DISCREPANCY_BADGE.unresolved
+                      return (
+                        <div key={it.id} className="px-4 py-3 hover:bg-cream-warm/30">
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[12px] font-medium mb-1">{it.product_name}</div>
+                              <div className="flex items-center gap-3 text-[11px] text-ink-mute mb-1">
+                                <span>Envoyé : <strong className="text-ink">{it.qty_announced ?? '—'}</strong></span>
+                                <span>·</span>
+                                <span>Compté : <strong className="text-red-700">{it.qty_received ?? '—'}</strong></span>
+                                {it.qty_announced != null && it.qty_received != null && (
+                                  <>
+                                    <span>·</span>
+                                    <span>
+                                      Diff : <strong className={(it.qty_announced - it.qty_received) > 0 ? 'text-red-700' : 'text-blue-700'}>
+                                        {(it.qty_announced - it.qty_received) > 0 ? '+' : ''}
+                                        {it.qty_announced - it.qty_received}
+                                      </strong>
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              {it.reception_note && (
+                                <div className="text-[10px] text-amber-800 italic mb-1">
+                                  💬 Café : "{it.reception_note}"
+                                </div>
                               )}
+                              {it.discrepancy_patissier_message && (
+                                <div className="text-[10px] text-red-800 italic mb-1">
+                                  💬 Vitrine : "{it.discrepancy_patissier_message}"
+                                </div>
+                              )}
+                              <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full border ${badge.color} font-medium mt-1`}>
+                                {badge.label}
+                              </span>
                             </div>
-                            {it.reception_note && (
-                              <div className="text-[10px] text-amber-800 italic mb-1">
-                                💬 Café : "{it.reception_note}"
-                              </div>
-                            )}
-                            {it.discrepancy_patissier_message && (
-                              <div className="text-[10px] text-red-800 italic mb-1">
-                                💬 Hamza : "{it.discrepancy_patissier_message}"
-                              </div>
-                            )}
-                            <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full border ${badge.color} font-medium mt-1`}>
-                              {badge.label}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setResolveModalItem(it)}
+                              className="px-3 py-1.5 bg-bordeaux text-cream rounded-md text-[11px] font-medium hover:bg-bordeaux-deep flex-shrink-0"
+                            >
+                              ⚖ Trancher
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setResolveModalItem(it)}
-                            className="px-3 py-1.5 bg-bordeaux text-cream rounded-md text-[11px] font-medium hover:bg-bordeaux-deep flex-shrink-0"
-                          >
-                            ⚖ Trancher
-                          </button>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* SOUS-SECTION : DÉJÀ TRANCHÉS (lecture seule, repliable) */}
+                {hasResolved && (
+                  <details className="border-t border-line bg-green-50/30" open={!hasPending}>
+                    <summary className="px-4 py-2 cursor-pointer text-[11px] font-mono uppercase tracking-wider text-green-900 hover:bg-green-50">
+                      ✓ {resolvedItems.length} écart{resolvedItems.length > 1 ? 's' : ''} déjà tranché{resolvedItems.length > 1 ? 's' : ''}
+                    </summary>
+                    <div className="divide-y divide-line">
+                      {resolvedItems.map(it => {
+                        const inFavor = it.discrepancy_resolved_in_favor_of
+                        const finalQty = it.qty_announced ?? '—'
+                        return (
+                          <div key={it.id} className="px-4 py-2 text-[11px]">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium">{it.product_name}</span>
+                                <span className="text-ink-mute ml-2">→ apporté final : <strong className="text-ink">{finalQty}</strong></span>
+                                {inFavor === 'patissier' && (
+                                  <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-900">Vitrine a raison</span>
+                                )}
+                                {inFavor === 'cafe' && (
+                                  <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-900">Café a raison</span>
+                                )}
+                                {!inFavor && (
+                                  <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-900">Corrigé par audit</span>
+                                )}
+                              </div>
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-green-100 text-green-900 border border-green-300 font-medium">
+                                ✓ Tranché
+                              </span>
+                            </div>
+                            {it.audit_note && (
+                              <div className="text-[10px] text-ink-mute italic mt-1 ml-2">
+                                Note : "{it.audit_note}"
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </details>
+                )}
               </div>
             )}
 
