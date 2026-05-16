@@ -1,5 +1,6 @@
 // src/components/StockBoutique/NumpadInline.jsx
 // Pavé numérique inline réutilisable
+// V2 : reset typing quand value change de l'extérieur (sélection nouvelle ligne)
 // =============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -10,10 +11,16 @@ import { useState, useEffect, useRef } from 'react'
  *   onChange: (newValue: number) => void
  *   onClose: () => void  (optionnel, pour fermer au click outside)
  *   compact: boolean  (taille réduite si true)
+ *   resetKey: any  (optionnel, change pour reset l'état "typing" - utile quand on change de ligne)
  */
-export default function NumpadInline({ value = 0, onChange, onClose, compact = false }) {
+export default function NumpadInline({ value = 0, onChange, onClose, compact = false, resetKey = null }) {
   const [typing, setTyping] = useState(false)
   const containerRef = useRef(null)
+
+  // Reset typing quand resetKey change (ex: nouvelle ligne sélectionnée)
+  useEffect(() => {
+    setTyping(false)
+  }, [resetKey])
 
   useEffect(() => {
     if (!onClose) return
@@ -58,7 +65,7 @@ export default function NumpadInline({ value = 0, onChange, onClose, compact = f
   return (
     <div
       ref={containerRef}
-      className={`grid grid-cols-3 gap-1 p-2 bg-cream border border-line rounded-md shadow-sm ${compact ? 'w-[180px]' : 'w-[200px]'}`}
+      className={`grid grid-cols-3 gap-1 p-2 bg-cream border border-line rounded-md shadow-sm ${compact ? 'w-full' : 'w-full'}`}
     >
       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
         <button key={n} type="button" onClick={() => pressKey(String(n))} className={btnClass}>

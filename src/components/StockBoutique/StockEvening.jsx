@@ -6,6 +6,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
 import PrintButton from './PrintButton'
+import NumpadInline from './NumpadInline'
 import { fetchEntremetsCatalog } from '../../lib/stockCatalog'
 import {
   getOrCreateStockDay,
@@ -127,21 +128,9 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
     }
   }
 
-  async function handleNumpad(digit) {
+  // Callback du NumpadInline : reçoit déjà la nouvelle valeur calculée
+  async function handleQtyChange(newQty) {
     if (!isOpen || !selectedItem) return
-    const current = String(selectedItem.qty_counted || 0)
-    let newQty
-    if (digit === 'C') {
-      newQty = 0
-    } else if (digit === 'BACK') {
-      newQty = parseInt(current.slice(0, -1) || '0', 10)
-    } else {
-      if (current === '1' || current === '0') {
-        newQty = parseInt(digit, 10)
-      } else {
-        newQty = parseInt(current + digit, 10)
-      }
-    }
     if (isNaN(newQty) || newQty < 0) newQty = 0
     try {
       const updated = await updateEveningCount(selectedItem.id, newQty, user.id)
@@ -280,29 +269,69 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
             {/* GRILLE PRINCIPALE */}
             <div className="grid grid-cols-[280px_1fr] gap-3">
 
-              {/* ============= PANNEAU GAUCHE : PANIER + CALCULETTE ============= */}
+              {/* ============= PANNEAU GAUCHE : CALCULETTE EN HAUT + LISTE EN BAS ============= */}
               <div className="border border-line rounded-lg overflow-hidden flex flex-col bg-white">
+
+                {/* HEADER CALCULETTE */}
                 <div className="px-3 py-2 bg-bordeaux/10 text-bordeaux-deep font-mono text-[10px] tracking-[0.2em] uppercase font-semibold">
-                  Restes comptés
+                  Calculette
                 </div>
 
-                <div className="min-h-[180px] max-h-[280px] overflow-y-auto">
+                {/* CALCULETTE */}
+                {isOpen ? (
+                  <div className="p-2 border-b border-line">
+                    {selectedItem ? (
+                      <NumpadInline
+                        value={selectedItem.qty_counted || 0}
+                        onChange={handleQtyChange}
+                        resetKey={selectedId}
+                        compact
+                      />
+                    ) : (
+                      <div className="text-[10px] text-ink-mute text-center italic py-6 px-2">
+                        {counts.length === 0
+                          ? 'Clique une tuile à droite pour commencer'
+                          : 'Sélectionne une ligne en bas pour modifier sa quantité'}
+                      </div>
+                    )}
+                    {selectedItem && (
+                      <div className="text-[9px] text-ink-mute mt-1.5 text-center italic truncate">
+                        {selectedItem.product_name}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* HEADER LISTE */}
+                <div className="px-3 py-2 bg-bordeaux/10 text-bordeaux-deep font-mono text-[10px] tracking-[0.2em] uppercase font-semibold border-t border-line">
+                  Restes comptés
+                  {counts.length > 0 && (
+                    <span className="ml-2 opacity-60 normal-case tracking-normal">
+                      ({counts.length} · dernier en haut)
+                    </span>
+                  )}
+                </div>
+
+                {/* LISTE TRIÉE DESC */}
+                <div className="flex-1 min-h-[120px] max-h-[300px] overflow-y-auto">
                   {counts.length === 0 ? (
                     <div className="p-6 text-center text-ink-mute text-[11px] italic">
                       Aucun article compté.<br />Clique une tuile à droite.
                     </div>
                   ) : (
-                    counts.map(c => (
-                      <CountRow
-                        key={c.id}
-                        item={c}
-                        selected={c.id === selectedId}
-                        disabled={!isOpen}
-                        onSelect={() => setSelectedId(c.id)}
-                        onFreshnessChange={(fr) => handleFreshnessChange(c, fr)}
-                        onRemove={() => handleRemove(c)}
-                      />
-                    ))
+                    [...counts]
+                      .sort((a, b) => new Date(b.counted_at || b.created_at || 0) - new Date(a.counted_at || a.created_at || 0))
+                      .map(c => (
+                        <CountRow
+                          key={c.id}
+                          item={c}
+                          selected={c.id === selectedId}
+                          disabled={!isOpen}
+                          onSelect={() => setSelectedId(c.id)}
+                          onFreshnessChange={(fr) => handleFreshnessChange(c, fr)}
+                          onRemove={() => handleRemove(c)}
+                        />
+                      ))
                   )}
                 </div>
 
@@ -310,24 +339,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   <span className="text-[11px] text-bordeaux-deep font-medium">Total</span>
                   <span className="text-[14px] font-semibold">{totalCount} article{totalCount > 1 ? 's' : ''}</span>
                 </div>
-
-                {isOpen && (
-                  <div className="p-2 border-t border-line">
-                    <div className="grid grid-cols-3 gap-1">
-                      {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
-                        <NumpadBtn key={d} label={d} onClick={() => handleNumpad(d)} disabled={!selectedItem} />
-                      ))}
-                      <NumpadBtn label="C" onClick={() => handleNumpad('C')} disabled={!selectedItem} />
-                      <NumpadBtn label="0" onClick={() => handleNumpad('0')} disabled={!selectedItem} />
-                      <NumpadBtn label="⌫" onClick={() => handleNumpad('BACK')} disabled={!selectedItem} />
-                    </div>
-                    {!selectedItem && counts.length > 0 && (
-                      <div className="text-[9px] text-ink-mute mt-1 text-center italic">
-                        Sélectionne une ligne pour modifier sa quantité
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {isOpen && (
                   <div className="p-2 border-t border-line">

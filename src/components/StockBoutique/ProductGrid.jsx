@@ -85,6 +85,8 @@ export default function ProductGrid({
       [p.name]: { qty: current + 1, code: p.code },
     })
     setActiveProductName(p.name)
+    // Met à jour orderAdded : retire si présent (pour rebumper en fin)
+    setOrderAdded(prev => [...prev.filter(n => n !== p.name), p.name])
   }
 
   function selectRow(name) {
@@ -113,20 +115,65 @@ export default function ProductGrid({
   }
   const st = basketStyles[basketColor] || basketStyles.green
 
+  // Track l'ordre d'ajout pour pouvoir trier DESC (dernier en premier)
+  const [orderAdded, setOrderAdded] = useState([])  // tableau de noms dans l'ordre où ils ont été ajoutés
+
   const total = Object.values(cart).reduce((s, v) => s + (v?.qty || 0), 0)
-  const cartEntries = Object.entries(cart).filter(([, v]) => (v?.qty || 0) > 0)
+  // Trier les entries : par dernier ajout DESC, puis par nom alpha
+  const cartEntries = Object.entries(cart)
+    .filter(([, v]) => (v?.qty || 0) > 0)
+    .sort(([nameA], [nameB]) => {
+      const idxA = orderAdded.indexOf(nameA)
+      const idxB = orderAdded.indexOf(nameB)
+      // Si pas dans orderAdded (ex: cart initial), va en bas
+      if (idxA === -1 && idxB === -1) return nameA.localeCompare(nameB, 'fr')
+      if (idxA === -1) return 1
+      if (idxB === -1) return -1
+      return idxB - idxA  // DESC : indice plus grand en premier
+    })
 
   return (
     <div className={`grid ${compact ? 'grid-cols-[240px_1fr]' : 'grid-cols-[280px_1fr]'} gap-3`}>
-      {/* ============= PANIER (GAUCHE) ============= */}
+      {/* ============= PANIER (GAUCHE) : CALCULETTE EN HAUT, LISTE EN BAS ============= */}
       <div className="border border-line rounded-lg overflow-hidden flex flex-col bg-white">
+
+        {/* HEADER */}
         <div className={`px-3 py-2 ${st.bg} ${st.text} font-mono text-[10px] tracking-[0.2em] uppercase font-semibold`}>
           {basketLabel}
         </div>
 
-        <div className="flex-1 min-h-[180px] max-h-[280px] overflow-y-auto">
+        {/* CALCULETTE EN HAUT */}
+        <div className="p-2 border-b border-line bg-cream">
+          {activeProductName && cart[activeProductName] ? (
+            <>
+              <NumpadInline
+                value={cart[activeProductName].qty}
+                onChange={(v) => onQtyChange(activeProductName, v)}
+                resetKey={activeProductName}
+                compact
+              />
+              <div className="text-[9px] text-ink-mute mt-1.5 text-center italic truncate">
+                {activeProductName}
+              </div>
+            </>
+          ) : (
+            <div className="text-[10px] text-ink-mute text-center italic py-6 px-2">
+              {cartEntries.length === 0
+                ? 'Clique une tuile à droite pour commencer'
+                : 'Sélectionne une ligne en bas pour modifier sa quantité'}
+            </div>
+          )}
+        </div>
+
+        {/* LISTE PANIER EN BAS (tri : dernier ajouté en premier) */}
+        <div className="px-3 py-1.5 bg-cream-warm border-b border-line">
+          <div className="text-[9px] uppercase tracking-[0.15em] text-ink-mute font-mono">
+            Articles{cartEntries.length > 0 && <span className="ml-2 opacity-60 normal-case tracking-normal">({cartEntries.length} · dernier en haut)</span>}
+          </div>
+        </div>
+        <div className="flex-1 min-h-[120px] max-h-[280px] overflow-y-auto">
           {cartEntries.length === 0 ? (
-            <div className="p-8 text-center text-ink-mute text-[11px] italic">
+            <div className="p-6 text-center text-ink-mute text-[11px] italic">
               Aucun article.<br />Clique une tuile à droite.
             </div>
           ) : (
@@ -165,16 +212,6 @@ export default function ProductGrid({
           <span className="text-ink-mute">Total</span>
           <span className="font-semibold">{total} article{total > 1 ? 's' : ''}</span>
         </div>
-
-        {activeProductName && cart[activeProductName] && (
-          <div className="p-2 border-t border-line bg-cream">
-            <NumpadInline
-              value={cart[activeProductName].qty}
-              onChange={(v) => onQtyChange(activeProductName, v)}
-              compact
-            />
-          </div>
-        )}
       </div>
 
       {/* ============= GRILLE PRODUITS (DROITE) ============= */}
