@@ -9,7 +9,6 @@ import { useState } from 'react'
 export default function AuditResolveModal({ item, onClose, onResolve, onOverrideQty }) {
   const [choice, setChoice] = useState(null) // 'patissier' | 'cafe' | 'modify'
   const [newAnnounced, setNewAnnounced] = useState(item.qty_announced ?? item.qty_morning ?? 0)
-  const [newCounted, setNewCounted] = useState(item.qty_received ?? item.qty_counted ?? 0)
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -31,7 +30,6 @@ export default function AuditResolveModal({ item, onClose, onResolve, onOverride
       if (choice === 'modify') {
         await onOverrideQty(item.id, {
           qty_announced: parseInt(newAnnounced, 10),
-          qty_received: parseInt(newCounted, 10),
         }, note.trim() || null)
       } else {
         await onResolve(item.id, choice, note.trim() || null)
@@ -111,7 +109,7 @@ export default function AuditResolveModal({ item, onClose, onResolve, onOverride
             >
               <div className="font-semibold">✓ Patissier a raison</div>
               <div className="text-[10px] text-ink-mute mt-0.5">
-                Chiffres gardés, marqué "erreur café"
+                Apporté reste {qtyAnnounced}, marqué "erreur café"
               </div>
             </button>
 
@@ -126,7 +124,7 @@ export default function AuditResolveModal({ item, onClose, onResolve, onOverride
             >
               <div className="font-semibold">✓ Café a raison</div>
               <div className="text-[10px] text-ink-mute mt-0.5">
-                Chiffres gardés, marqué "erreur patissier"
+                Apporté devient {qtyReceived} (la valeur reçue par café)
               </div>
             </button>
 
@@ -139,36 +137,22 @@ export default function AuditResolveModal({ item, onClose, onResolve, onOverride
                   : 'bg-white border-line hover:bg-cream-warm'
               }`}
             >
-              <div className="font-semibold">✏️ Corriger les quantités</div>
+              <div className="font-semibold">✏️ Corriger l'apporté</div>
               <div className="text-[10px] text-ink-mute mt-0.5 mb-2">
-                Modifie les chiffres directement (sans appel)
+                Saisis la vraie quantité apportée
               </div>
               {choice === 'modify' && (
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div>
-                    <label className="block text-[9px] uppercase tracking-wider text-ink-mute mb-1">
-                      Apporté
-                    </label>
-                    <input
-                      type="number"
-                      value={newAnnounced}
-                      onChange={(e) => setNewAnnounced(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-full px-2 py-1.5 border border-line rounded text-center text-[13px] tabular-nums"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] uppercase tracking-wider text-ink-mute mb-1">
-                      Compté
-                    </label>
-                    <input
-                      type="number"
-                      value={newCounted}
-                      onChange={(e) => setNewCounted(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-full px-2 py-1.5 border border-line rounded text-center text-[13px] tabular-nums"
-                    />
-                  </div>
+                <div className="mt-2 max-w-[120px]">
+                  <label className="block text-[9px] uppercase tracking-wider text-ink-mute mb-1">
+                    Nouvelle qty apportée
+                  </label>
+                  <input
+                    type="number"
+                    value={newAnnounced}
+                    onChange={(e) => setNewAnnounced(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full px-2 py-1.5 border border-line rounded text-center text-[13px] tabular-nums"
+                  />
                 </div>
               )}
             </button>

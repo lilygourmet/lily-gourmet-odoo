@@ -379,48 +379,83 @@ export async function cafeMaintainCount(itemId, userId) {
  * Sert quand l'audit a vérifié physiquement et corrige les chiffres.
  * Marque automatiquement le discrepancy comme résolu par audit.
  */
-export async function auditOverrideQty(itemId, { qty_announced, qty_received }, note, userId) {
-  const patch = {
-    discrepancy_status: 'audit_resolved',
-    discrepancy_ack_at: new Date().toISOString(),
-    discrepancy_ack_by: userId,
-    discrepancy_resolved_in_favor_of: null, // ni patissier ni café, juste corrigé
-  }
-  if (qty_announced !== undefined && qty_announced !== null) {
-    patch.qty_announced = qty_announced
-  }
-  if (qty_received !== undefined && qty_received !== null) {
-    patch.qty_received = qty_received
-  }
-  if (note) {
-    patch.audit_note = note
-  }
-  return updateItem(itemId, patch)
-}
 
 /**
  * Audit tranche en faveur du patissier ou du café (sans modifier les chiffres).
  * inFavorOf = 'patissier' | 'cafe'
  */
+
+/**
+ * Charge les items source='morning' avec écart en conflit (pour le bouton "Trancher").
+ * Retourne les items eux-mêmes (pas le report agrégé), avec leurs colonnes discrepancy_*.
+ */
+
+
+// ============================================================
+// AUDIT — Arbitrage final des écarts (V3)
+// ============================================================
+//
+// L'arbitrage modifie qty_announced (colonne "Apporté") du morning item :
+// - "Patissier a raison" : aucun changement sur les qty, juste statut
+// - "Café a raison"      : qty_announced = qty_received (la valeur du café devient l'apporté)
+// - "Corriger qty"       : qty_announced = nouvelle valeur saisie
+//
+// L'arbitrage NE TOUCHE PAS aux items evening (le comptage du soir reste indépendant).
+
+/**
+ * Audit modifie directement la qty annoncée (sans choisir de camp).
+ * Cas d'usage : "vérifié, c'est en fait 7 qu'il avait apporté".
+ */
+export async function auditOverrideQty(itemId, { qty_announced }, note, userId) {
+  const patch = {
+    discrepancy_status: 'audit_resolved',
+    discrepancy_ack_at: new Date().toISOString(),
+    discrepancy_ack_by: userId,
+    discrepancy_resolved_in_favor_of: null,
+  }
+  if (qty_announced !== undefined && qty_announced !== null) {
+    patch.qty_announced = qty_announced
+  }
+  if (note) patch.audit_note = note
+  return updateItem(itemId, patch)
+}
+
+/**
+ * Audit tranche en faveur d'un camp.
+ * - 'patissier' : qty_announced reste tel quel (le patissier avait raison)
+ * - 'cafe'      : qty_announced = qty_received (le café avait raison, sa valeur devient la vérité)
+ */
 export async function auditResolveInFavorOf(itemId, inFavorOf, note, userId) {
   if (inFavorOf !== 'patissier' && inFavorOf !== 'cafe') {
     throw new Error("inFavorOf doit être 'patissier' ou 'cafe'")
   }
+
+  // Charger l'item pour récupérer qty_received si tranche en faveur du café
+  const { data: morningItem, error: eGet } = await supabase
+    .from('stock_day_items')
+    .select('*')
+    .eq('id', itemId)
+    .single()
+  if (eGet) throw eGet
+
   const patch = {
     discrepancy_status: 'audit_resolved',
     discrepancy_ack_at: new Date().toISOString(),
     discrepancy_ack_by: userId,
     discrepancy_resolved_in_favor_of: inFavorOf,
   }
-  if (note) {
-    patch.audit_note = note
+  if (note) patch.audit_note = note
+
+  // Si café a raison → la qty annoncée devient ce que le café a reçu
+  if (inFavorOf === 'cafe' && morningItem.qty_received !== null && morningItem.qty_received !== undefined) {
+    patch.qty_announced = morningItem.qty_received
   }
+
   return updateItem(itemId, patch)
 }
 
 /**
- * Charge les items source='morning' avec écart en conflit (pour le bouton "Trancher").
- * Retourne les items eux-mêmes (pas le report agrégé), avec leurs colonnes discrepancy_*.
+ * Charge les items source='morning' avec écart (en attente ou tranché par audit).
  */
 export async function loadDiscrepancyItems(stockDayId) {
   const { data, error } = await supabase
@@ -428,7 +463,8 @@ export async function loadDiscrepancyItems(stockDayId) {
     .select('*')
     .eq('stock_day_id', stockDayId)
     .eq('source', 'morning')
-    .in('discrepancy_status', ['pending_patissier', 'pending_cafe', 'unresolved'])
+    .in('discrepancy_status', ['pending_patissier', 'pending_cafe', 'unresolved', 'audit_resolved'])
+    .order('discrepancy_status', { ascending: true })
   if (error) throw error
   return data || []
 }
