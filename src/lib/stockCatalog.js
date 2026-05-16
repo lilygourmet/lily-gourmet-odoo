@@ -6,12 +6,12 @@
 // Filtre : category='cd' AND name ILIKE 'E-%' AND sale_ok=true
 //
 // Règles métier Stock Boutique :
-//   - Pour CHAQUE article E-, on ajoute systématiquement une tuile "taille 1"
-//     (les versions individuelles ne sont pas dans le catalogue Odoo mais
-//     existent en vitrine).
-//   - On garde aussi les tailles présentes dans le catalogue sizes (5/10/15).
-//   - Les tailles "exotiques" (6, 8, 20...) sont normalisées vers la plus
-//     proche (6→5, 8→10, 20→15).
+//   - Articles AVEC tailles (sizes non vide dans la DB) :
+//     * Une tuile (1) systématique pour la vitrine
+//     * Une tuile par taille présente (normalisées : 6→5, 8→10, 20→15)
+//   - Articles SANS tailles (sizes=[] dans la DB, ex: Miss Pistache, Tatin) :
+//     * 1 seule tuile dans l'onglet "1" avec le NOM NU (sans suffixe (1))
+//     * Pour matcher exactement le nom Odoo et éviter le doublon dans l'audit
 //   - 4 onglets fixes toujours visibles : 1 / 5 / 10 / 15.
 
 import { supabase } from './supabase.js'
@@ -65,14 +65,23 @@ function normalizeSize(raw) {
 }
 
 /**
+ * Détermine si un article est à taille unique (sizes vide dans la DB)
+ */
+function isSingleSize(sizes) {
+  if (!sizes) return true
+  if (Array.isArray(sizes) && sizes.length === 0) return true
+  return false
+}
+
+/**
  * Récupère le catalogue des entremets pour Stock Boutique.
  *
  * Retourne { sizes: { '1': [...], '5': [...], '10': [...], '15': [...] }, all: [...] }
- * Chaque entrée tuile : { name, code, size, odoo_template_id, display_order }
- *   - name : "E- Black Forest (5)" (taille suffixée pour l'affichage et le tracking)
+ * Chaque entrée tuile : { name, code, size, odoo_template_id, display_order, image_url }
+ *   - name : "E- Black Forest (5)" pour articles avec tailles
+ *            "E- Miss Pistache" (sans suffixe) pour articles à taille unique
  *   - code : odoo_template_id sous forme de string
  *   - size : "1" / "5" / "10" / "15"
- *   - display_order : ordre d'affichage (1 par défaut)
  */
 export async function fetchEntremetsCatalog() {
   // Cache hit
@@ -95,13 +104,38 @@ export async function fetchEntremetsCatalog() {
   }
 
   const articles = []
-  // Set des (cleanName + size) déjà ajoutés, pour éviter doublons après normalisation
+  // Set des clés déjà ajoutées, pour éviter doublons après normalisation
   const seen = new Set()
 
   for (const row of data || []) {
     const cleanName = cleanProductName(row.name)
     const code = row.odoo_template_id ? String(row.odoo_template_id) : null
     const order = row.display_order || 99
+
+    // Parser sizes (peut être JSON string, array PG, ou null)
+    let sizes = row.sizes
+    if (typeof sizes === 'string') {
+      try { sizes = JSON.parse(sizes) } catch { sizes = null }
+    }
+
+    // CAS A : article à taille unique (Miss Pistache, Tatin, Paris Brest)
+    //   → 1 seule tuile dans onglet "1", nom NU sans suffixe (1)
+    if (isSingleSize(sizes)) {
+      const key = `${cleanName}|single`
+      if (seen.has(key)) continue
+      seen.add(key)
+      articles.push({
+        name: cleanName, // nom NU, pas de "(1)"
+        code,
+        size: '1',
+        odoo_template_id: row.odoo_template_id,
+        display_order: order,
+        image_url: row.image_url || null,
+      })
+      continue
+    }
+
+    // CAS B : article avec tailles → comportement classique
 
     // 1) Tuile taille 1 systématique (vitrine = unité)
     const key1 = `${cleanName}|1`
@@ -118,14 +152,10 @@ export async function fetchEntremetsCatalog() {
     }
 
     // 2) Tuiles depuis le catalogue sizes (normalisées 5/10/15)
-    let sizes = row.sizes
-    if (typeof sizes === 'string') {
-      try { sizes = JSON.parse(sizes) } catch { sizes = null }
-    }
     if (Array.isArray(sizes) && sizes.length > 0) {
       for (const rawSize of sizes) {
         const normSize = normalizeSize(rawSize)
-        if (!normSize || normSize === '1') continue // la taille 1 est déjà ajoutée plus haut
+        if (!normSize || normSize === '1') continue // taille 1 déjà ajoutée
         const key = `${cleanName}|${normSize}`
         if (seen.has(key)) continue
         seen.add(key)
