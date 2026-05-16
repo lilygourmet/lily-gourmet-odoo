@@ -1,13 +1,14 @@
 // src/components/StockBoutique/PrintButton.jsx
 // Bouton "Imprimer" partagé pour les modules Stock Boutique.
 //
-// - Icône imprimante en haut à droite
+// - Icône imprimante 🖨 seule (compact) en haut à droite du header bordeaux
 // - Au clic : modal avec dropdown des 4 dernières dates qui ont des données
 // - Sélection d'une date → ouvre une fenêtre imprimable (window.open + window.print)
 //
 // Usage :
 //   <PrintButton mode="vitrine" />
 //   <PrintButton mode="reception" />
+//   <PrintButton mode="evening" />
 //   <PrintButton mode="audit" />
 
 import { useState } from 'react'
@@ -16,6 +17,7 @@ import { loadDaySummary, loadStockDay, loadDayItems, buildAuditReport } from '..
 const MODE_TITLES = {
   vitrine: 'Vitrine — Envoyé au café',
   reception: 'Réception — Reçu en cuisine café',
+  evening: 'Fin de journée — Comptage aveugle',
   audit: 'Audit — Rapport complet',
 }
 
@@ -75,6 +77,9 @@ export default function PrintButton({ mode = 'vitrine' }) {
       } else if (mode === 'reception') {
         const items = await loadDayItems(sd.id)
         html = renderReceptionHtml(selectedDay, items)
+      } else if (mode === 'evening') {
+        const items = await loadDayItems(sd.id)
+        html = renderEveningHtml(selectedDay, items)
       } else if (mode === 'audit') {
         const report = await buildAuditReport(sd.id)
         html = renderAuditHtml(selectedDay, report, sd)
@@ -111,11 +116,10 @@ export default function PrintButton({ mode = 'vitrine' }) {
         type="button"
         onClick={handleOpen}
         title="Imprimer l'historique"
-        className="px-2.5 py-1.5 bg-white border border-line rounded-md text-[12px] hover:bg-cream-warm flex items-center gap-1.5"
         aria-label="Imprimer"
+        className="w-8 h-8 flex items-center justify-center rounded-md bg-cream/10 hover:bg-cream/25 border border-cream/30 hover:border-cream/60 transition-colors text-cream text-[15px]"
       >
-        <span style={{ fontSize: '14px' }}>🖨</span>
-        <span>Imprimer</span>
+        🖨
       </button>
 
       {open && (
@@ -364,6 +368,81 @@ function renderReceptionHtml(day, items) {
     <body>
       <h1>Lily Gourmet — Réception</h1>
       <h2>${fmtFrenchDate(day)} · Articles reçus en cuisine café</h2>
+      ${body}
+      <div class="footer">Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
+    </body></html>
+  `
+}
+
+// ---- FIN DE JOURNÉE : comptage aveugle, par article et par fraîcheur
+function renderEveningHtml(day, items) {
+  // Filtrer 'evening' uniquement (comptage du soir) - exclure morning/leftover/odoo_only
+  const eveningItems = (items || []).filter(i => i.source === 'evening')
+
+  // Grouper par article + fraîcheur (Frais/J+1/J+2 peuvent coexister)
+  const byArticle = new Map() // name -> { name, fresh, yesterday, twodays, total }
+  for (const it of eveningItems) {
+    const key = it.product_name
+    if (!byArticle.has(key)) {
+      byArticle.set(key, { name: key, fresh: 0, yesterday: 0, twodays: 0, total: 0 })
+    }
+    const entry = byArticle.get(key)
+    const qty = it.qty_counted || 0
+    if (it.freshness === 'fresh') entry.fresh += qty
+    else if (it.freshness === 'yesterday') entry.yesterday += qty
+    else if (it.freshness === 'twodays') entry.twodays += qty
+    entry.total += qty
+  }
+
+  const rows = [...byArticle.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0)
+  const totalFresh = rows.reduce((s, r) => s + r.fresh, 0)
+  const totalYesterday = rows.reduce((s, r) => s + r.yesterday, 0)
+  const totalTwodays = rows.reduce((s, r) => s + r.twodays, 0)
+
+  let body = ''
+  if (rows.length === 0) {
+    body = `<p style="color:#999; font-style:italic; margin-top:24px;">Aucun comptage enregistré ce jour-là.</p>`
+  } else {
+    body = `
+      <table>
+        <thead>
+          <tr>
+            <th>Article</th>
+            <th class="num" style="width:70px;">Frais</th>
+            <th class="num" style="width:70px;">J+1</th>
+            <th class="num" style="width:70px;">J+2</th>
+            <th class="num" style="width:80px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td>${escapeHtml(r.name)}</td>
+              <td class="num" style="color:${r.fresh > 0 ? '#1b5e20' : '#bbb'};">${r.fresh || '—'}</td>
+              <td class="num" style="color:${r.yesterday > 0 ? '#ef6c00' : '#bbb'};">${r.yesterday || '—'}</td>
+              <td class="num" style="color:${r.twodays > 0 ? '#b71c1c' : '#bbb'};">${r.twodays || '—'}</td>
+              <td class="num"><strong>${r.total}</strong></td>
+            </tr>
+          `).join('')}
+          <tr style="border-top: 2px solid #993556;">
+            <td style="font-weight:600;">TOTAL</td>
+            <td class="num" style="font-weight:600;">${totalFresh}</td>
+            <td class="num" style="font-weight:600;">${totalYesterday}</td>
+            <td class="num" style="font-weight:600;">${totalTwodays}</td>
+            <td class="num" style="font-weight:600; font-size:14px;">${grandTotal}</td>
+          </tr>
+        </tbody>
+      </table>
+    `
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html><head><meta charset="utf-8"><title>Fin de journée ${day}</title>${PRINT_HEAD}</head>
+    <body>
+      <h1>Lily Gourmet — Fin de journée</h1>
+      <h2>${fmtFrenchDate(day)} · Comptage aveugle du soir</h2>
       ${body}
       <div class="footer">Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
     </body></html>

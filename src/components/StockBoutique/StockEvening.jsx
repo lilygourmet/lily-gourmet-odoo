@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
+import PrintButton from './PrintButton'
 import { fetchEntremetsCatalog } from '../../lib/stockCatalog'
 import {
   getOrCreateStockDay,
@@ -194,12 +195,12 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
               {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
           </div>
-          <div className="text-right text-[11px] opacity-80">
+          <div className="flex items-center gap-2"><PrintButton mode="evening" /><div className="text-right text-[11px] opacity-80">
             <div>🌙 Équipe café</div>
             <div className="text-[9px] opacity-70 font-mono uppercase tracking-wider mt-0.5">
               Comptage à l'aveugle
             </div>
-          </div>
+          </div></div>
         </div>
 
         {/* BANDEAU STATUT */}
