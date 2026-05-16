@@ -27,6 +27,49 @@ const FRESHNESS_LABELS = {
   twodays: '2 jours (J+2)',
 }
 
+// ============================================================
+// Filtre "Restes d'hier" : on n'affiche QUE certaines catégories
+// - E-       : tous
+// - V- Cake  : seulement les viennoiseries dont le nom contient "Cake"
+// - MI-      : tous
+// - GS-      : seulement "Cookies" ou "Plateau"
+// Le reste (RA-, H-, N-, SU-, autres V-, autres GS-) est masqué.
+// ============================================================
+function shouldShowInLeftovers(productName) {
+  if (!productName) return false
+  // Retire un code Odoo [123] éventuel en tête
+  const n = String(productName).replace(/^\[\d+\]\s*/, '').trim()
+
+  if (/^E-/i.test(n)) return true
+  if (/^MI-/i.test(n)) return true
+  if (/^V-\s*Cake\b/i.test(n)) return true
+  if (/^GS-\s*(Cookies?|Plateau)\b/i.test(n)) return true
+  return false
+}
+
+// Combine plusieurs leftovers identiques (même nom + même fraîcheur) en une
+// seule ligne affichée, en gardant la liste des IDs Supabase pour pouvoir
+// appliquer la décision aux items originaux.
+function groupLeftovers(leftovers) {
+  const groups = new Map()
+  for (const l of leftovers) {
+    const key = `${(l.product_name || '').trim()}|${l.freshness || ''}`
+    if (!groups.has(key)) {
+      groups.set(key, {
+        id: key, // clé utilisée pour `decisions` (au lieu d'un UUID Supabase)
+        product_name: l.product_name,
+        freshness: l.freshness,
+        qty_counted: 0,
+        items: [], // leftovers Supabase originaux
+      })
+    }
+    const g = groups.get(key)
+    g.qty_counted += Number(l.qty_counted) || 0
+    g.items.push(l)
+  }
+  return Array.from(groups.values())
+}
+
 const NEXT_FRESHNESS_LABEL = {
   fresh: 'devient Hier',
   yesterday: 'devient 2 jours',
@@ -88,7 +131,10 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
         if (!mounted) return
 
         setTodayItems(items)
-        setLeftovers(leftov)
+        // Filtre : ne garder que E-, V- Cake, MI-, GS- Cookies/Plateau
+        // Puis regroupe les doublons (même nom + même fraîcheur)
+        const filtered = (leftov || []).filter(l => shouldShowInLeftovers(l.product_name))
+        setLeftovers(groupLeftovers(filtered))
         // Détection : si on a déjà des lignes source='leftover' aujourd'hui, c'est déjà appliqué
         setLeftoversApplied(items.some(it => it.source === 'leftover'))
 
@@ -165,10 +211,16 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
 
   async function handleApplyLeftovers() {
     if (!stockDay) return
-    const list = leftovers.map(l => ({
-      leftoverItem: l,
-      decision: decisions[l.id] || 'keep',
-    }))
+    // Chaque "leftover" affiché est en fait un GROUPE (même nom + même fraîcheur)
+    // qui peut contenir 1..N items Supabase. On déplie pour appliquer la
+    // décision (keep/loss) à chacun des items originaux.
+    const list = []
+    for (const group of leftovers) {
+      const decision = decisions[group.id] || 'keep'
+      for (const originalItem of (group.items || [])) {
+        list.push({ leftoverItem: originalItem, decision })
+      }
+    }
     try {
       setSending(true)
       await applyLeftoverDecisions(stockDay.id, list, user.id)
