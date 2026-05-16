@@ -467,28 +467,54 @@ export async function loadEveningCounts(stockDayId) {
  */
 export async function buildAuditReport(stockDayId) {
   const items = await loadDayItems(stockDayId)
-  
+
   const eveningItems = items.filter(it => it.source === 'evening')
   const morningItems = items.filter(it => it.source === 'morning')
   const leftoverItems = items.filter(it => it.source === 'leftover' && it.freshness !== 'loss')
+  const odooOnlyItems = items.filter(it => it.source === 'odoo_only')
 
+  // Tous les noms de produits qu'on doit afficher
   const allProductNames = new Set()
   eveningItems.forEach(i => allProductNames.add(i.product_name))
   morningItems.forEach(i => allProductNames.add(i.product_name))
   leftoverItems.forEach(i => allProductNames.add(i.product_name))
+  odooOnlyItems.forEach(i => allProductNames.add(i.product_name))
+
+  // Mapping préfixe → ordre catégorie
+  const PREFIX_ORDER = { 'E-': 1, 'GS-': 2, 'MI-': 3, 'V-': 4, 'RA-': 5, 'H-': 6, 'N-': 7 }
+  const PREFIX_LABEL = {
+    'E-': 'E- Entremets',
+    'GS-': 'GS- Gâteaux secs',
+    'MI-': 'MI- Mignardises',
+    'V-': 'V- Viennoiseries',
+    'RA-': 'RA- Rahn',
+    'H-': 'H-',
+    'N-': 'N-',
+  }
+
+  function detectPrefix(name) {
+    if (!name) return null
+    const cleaned = name.replace(/^\[\d+\]\s*/, '').trim().toUpperCase()
+    for (const p of Object.keys(PREFIX_ORDER)) {
+      if (cleaned.startsWith(p)) return p
+    }
+    return null
+  }
 
   const rows = []
   for (const productName of allProductNames) {
     const evList = eveningItems.filter(i => i.product_name === productName)
+    const isCounted = evList.length > 0
     const counted = evList.reduce((s, i) => s + (i.qty_counted || 0), 0)
-    
-    // Odoo snapshots : on prend la somme si non null
-    const odooInitialList = evList.filter(i => i.qty_odoo_initial !== null && i.qty_odoo_initial !== undefined)
+
+    // Odoo snapshots : soit sur lignes 'evening', soit sur 'odoo_only'
+    const odooSources = [...evList, ...odooOnlyItems.filter(i => i.product_name === productName)]
+    const odooInitialList = odooSources.filter(i => i.qty_odoo_initial !== null && i.qty_odoo_initial !== undefined)
     const odooInitial = odooInitialList.length > 0
       ? odooInitialList.reduce((s, i) => s + i.qty_odoo_initial, 0)
       : null
-    
-    const odooCurrentList = evList.filter(i => i.qty_odoo_snapshot !== null && i.qty_odoo_snapshot !== undefined)
+
+    const odooCurrentList = odooSources.filter(i => i.qty_odoo_snapshot !== null && i.qty_odoo_snapshot !== undefined)
     const odooCurrent = odooCurrentList.length > 0
       ? odooCurrentList.reduce((s, i) => s + i.qty_odoo_snapshot, 0)
       : null
@@ -500,12 +526,16 @@ export async function buildAuditReport(stockDayId) {
       .filter(i => i.product_name === productName)
       .reduce((s, i) => s + (i.qty_received || 0), 0)
 
-    const gapInitial = odooInitial !== null ? odooInitial - counted : null
-    const gapCurrent = odooCurrent !== null ? odooCurrent - counted : null
+    const gapInitial = (isCounted && odooInitial !== null) ? odooInitial - counted : null
+    const gapCurrent = (isCounted && odooCurrent !== null) ? odooCurrent - counted : null
 
+    const prefix = detectPrefix(productName)
     rows.push({
       product_name: productName,
-      qty_counted: counted,
+      prefix,
+      category_label: prefix ? PREFIX_LABEL[prefix] : 'Autres',
+      is_counted: isCounted,
+      qty_counted: isCounted ? counted : null,
       qty_odoo_initial: odooInitial,
       qty_odoo_current: odooCurrent,
       qty_morning: morning,
@@ -513,16 +543,16 @@ export async function buildAuditReport(stockDayId) {
       qty_expected_local: morning + leftover,
       gap_initial: gapInitial,
       gap_current: gapCurrent,
-      gap_vs_local: (morning + leftover) - counted,
+      gap_vs_local: isCounted ? (morning + leftover) - counted : null,
     })
   }
 
-  // Tri par importance d'écart courant
+  // Tri : par catégorie (E→GS→MI→V→RA→H→N), puis alphabétique
   rows.sort((a, b) => {
-    const aGap = Math.abs(a.gap_current ?? a.gap_initial ?? a.gap_vs_local ?? 0)
-    const bGap = Math.abs(b.gap_current ?? b.gap_initial ?? b.gap_vs_local ?? 0)
-    if (aGap !== bGap) return bGap - aGap
-    return a.product_name.localeCompare(b.product_name)
+    const oa = PREFIX_ORDER[a.prefix] || 99
+    const ob = PREFIX_ORDER[b.prefix] || 99
+    if (oa !== ob) return oa - ob
+    return a.product_name.localeCompare(b.product_name, 'fr')
   })
 
   return rows

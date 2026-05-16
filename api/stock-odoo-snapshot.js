@@ -122,37 +122,30 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Permission refusée (perm_stock_audit requis pour rafraîchir)' })
     }
 
-    // 2) Charge les lignes 'evening' du stock_day
+    // 2) Charge les lignes 'evening' du stock_day (= ce que le café a compté)
     const { data: items, error: itemsErr } = await supabase
       .from('stock_day_items')
-      .select('id, product_name, product_code, qty_odoo_initial')
+      .select('id, product_name, product_code, qty_odoo_initial, source')
       .eq('stock_day_id', stock_day_id)
-      .eq('source', 'evening')
 
     if (itemsErr) {
       console.error('[stock-odoo-snapshot] load items error:', itemsErr)
       return res.status(500).json({ error: 'Erreur lecture lignes' })
     }
-    if (!items || items.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: 'Aucune ligne evening à snapshoter',
-        items_updated: 0,
-      })
-    }
 
-    // Codes produits distincts (filtre Odoo)
-    const productCodes = [...new Set(items
-      .map(i => i.product_code)
-      .filter(c => c && c.trim()))]
-
-    if (productCodes.length === 0) {
-      console.warn('[stock-odoo-snapshot] Aucun product_code disponible — impossible de filtrer Odoo')
-      return res.status(200).json({
-        success: true,
-        message: 'Aucun product_code sur les lignes — snapshot impossible',
-        items_updated: 0,
-      })
+    // Index : par product_code pour les lignes 'evening' uniquement
+    // (les éventuelles lignes 'odoo_only' déjà créées seront écrasées plus bas)
+    const eveningByCode = new Map()
+    const oldOdooOnlyIds = []
+    for (const it of (items || [])) {
+      if (it.source === 'evening' && it.product_code) {
+        // Si plusieurs lignes evening pour le même code (multi-fraîcheur), on prend la première
+        if (!eveningByCode.has(it.product_code)) {
+          eveningByCode.set(it.product_code, it)
+        }
+      } else if (it.source === 'odoo_only') {
+        oldOdooOnlyIds.push(it.id)
+      }
     }
 
     // 3) Auth Odoo + récupération stock.quant
@@ -161,60 +154,103 @@ export default async function handler(req, res) {
 
     // Filtre location : on prend tous les emplacements 'internal' dont le nom
     // contient "Vente" (à ajuster selon ton arbo Odoo réelle).
-    // Si tu veux un location plus précis, change le domaine ici.
+    // IMPORTANT : utiliser '=' (égalité stricte) sur complete_name pour ne PAS
+    // additionner les sous-emplacements (genre /Stock/Stock Vente + /Stock/Stock Prod).
     const stockLocationDomain = process.env.ODOO_STOCK_LOCATION_NAME
-      ? [['location_id.complete_name', 'ilike', process.env.ODOO_STOCK_LOCATION_NAME]]
+      ? [['location_id.complete_name', '=', process.env.ODOO_STOCK_LOCATION_NAME]]
       : [['location_id.usage', '=', 'internal'], ['location_id.name', 'ilike', 'Vente']]
 
-    // productCodes contient des odoo_template_id (= product.template id) en string.
-    // On les convertit en int pour le filtre Odoo.
-    const templateIds = productCodes.map(c => parseInt(c, 10)).filter(n => !isNaN(n))
-
-    console.log('[stock-odoo-snapshot] Odoo search stock.quant for', templateIds.length, 'template ids...')
+    console.log('[stock-odoo-snapshot] Odoo search ALL stock.quant in location...')
+    // On récupère TOUT le stock du lieu (pas de filtre product_tmpl_id)
+    // Puis on filtrera par préfixe ensuite côté JS
     const quants = await odooSearchRead(
       uid,
       'stock.quant',
-      [
-        ...stockLocationDomain,
-        ['product_id.product_tmpl_id', 'in', templateIds],
-      ],
+      stockLocationDomain,
       ['product_id', 'product_tmpl_id', 'quantity', 'location_id'],
-      { limit: 1000 }
+      { limit: 2000 }
     )
 
-    // 4) Construire un mapping templateId -> quantité totale (sommer si plusieurs variants/locations matchent)
-    // product_tmpl_id est un champ Many2one renvoyant [id, "Nom"]
-    const stockByCode = {}
-    for (const q of quants) {
-      let tmplId = null
-      if (Array.isArray(q.product_tmpl_id)) {
-        tmplId = q.product_tmpl_id[0]
-      } else if (typeof q.product_tmpl_id === 'number') {
-        tmplId = q.product_tmpl_id
-      }
-      if (!tmplId) continue
-      const code = String(tmplId)
-      const qty = parseFloat(q.quantity) || 0
-      stockByCode[code] = (stockByCode[code] || 0) + qty
+    // Préfixes vitrine à conserver (case insensitive)
+    const ALLOWED_PREFIXES = ['E-', 'GS-', 'MI-', 'V-', 'RA-', 'H-', 'N-']
+    const PREFIX_CATEGORY = {
+      'E-': 'E',
+      'GS-': 'GS',
+      'MI-': 'MI',
+      'V-': 'V',
+      'RA-': 'RA',
+      'H-': 'H',
+      'N-': 'N',
     }
 
-    console.log('[stock-odoo-snapshot] Stock found for', Object.keys(stockByCode).length, 'codes')
+    function detectPrefix(name) {
+      if (!name) return null
+      // Retirer le code Odoo [123] devant si présent
+      const cleaned = name.replace(/^\[\d+\]\s*/, '').trim()
+      for (const p of ALLOWED_PREFIXES) {
+        if (cleaned.toUpperCase().startsWith(p.toUpperCase())) {
+          return p
+        }
+      }
+      return null
+    }
 
-    // 5) Update chaque ligne
+    function cleanName(name) {
+      if (!name) return ''
+      return name.replace(/^\[\d+\]\s*/, '').trim()
+    }
+
+    // 4) Pour chaque quant : agréger par product_tmpl_id et filtrer par préfixe
+    // odooArticles : { templateId: { templateId, productName, prefix, qty } }
+    const odooArticles = new Map()
+    for (const q of quants) {
+      let tmplId = null
+      let displayName = null
+      if (Array.isArray(q.product_tmpl_id)) {
+        tmplId = q.product_tmpl_id[0]
+        displayName = q.product_tmpl_id[1] // utile fallback
+      }
+      // Fallback : récupérer le nom depuis product_id
+      if (!displayName && Array.isArray(q.product_id)) {
+        displayName = q.product_id[1]
+      }
+      if (!tmplId) continue
+      const prefix = detectPrefix(displayName)
+      if (!prefix) continue // pas un préfixe vitrine → on ignore
+
+      const code = String(tmplId)
+      const qty = parseFloat(q.quantity) || 0
+
+      if (odooArticles.has(code)) {
+        // Somme (au cas où plusieurs variants/locations pour le même tmpl_id)
+        odooArticles.get(code).qty += qty
+      } else {
+        odooArticles.set(code, {
+          templateId: code,
+          productName: cleanName(displayName),
+          prefix,
+          qty,
+        })
+      }
+    }
+
+    console.log('[stock-odoo-snapshot] Stock found for', odooArticles.size, 'articles (filtered by prefix)')
+
+    // 5) Mettre à jour les lignes 'evening' existantes + créer des 'odoo_only' pour les nouveaux
     const nowISO = new Date().toISOString()
-    let updated = 0
-    for (const it of items) {
-      const code = it.product_code
-      const qty = code ? Math.round(stockByCode[code] || 0) : null
-      // qty peut être null si le code n'a pas été trouvé dans Odoo
-      // (article fictif ou pas dans le bon location) — on garde null pour distinction
+    let updatedEvening = 0
+    let insertedOdooOnly = 0
+
+    // 5a) Update lignes evening (avec qty_odoo_snapshot)
+    for (const [code, eveningItem] of eveningByCode.entries()) {
+      const odooEntry = odooArticles.get(code)
+      const qty = odooEntry ? Math.round(odooEntry.qty) : null
 
       const patch = {
         qty_odoo_snapshot: qty,
         qty_odoo_snapshot_at: nowISO,
       }
-      // Si initial=true ET qty_odoo_initial pas encore défini, on le pose
-      if (initial && (it.qty_odoo_initial === null || it.qty_odoo_initial === undefined)) {
+      if (initial && (eveningItem.qty_odoo_initial === null || eveningItem.qty_odoo_initial === undefined)) {
         patch.qty_odoo_initial = qty
         patch.qty_odoo_initial_at = nowISO
       }
@@ -222,13 +258,56 @@ export default async function handler(req, res) {
       const { error: upErr } = await supabase
         .from('stock_day_items')
         .update(patch)
-        .eq('id', it.id)
+        .eq('id', eveningItem.id)
       if (upErr) {
-        console.error('[stock-odoo-snapshot] update item error:', upErr, 'item=', it.id)
+        console.error('[stock-odoo-snapshot] update evening item error:', upErr, 'item=', eveningItem.id)
         continue
       }
-      updated++
+      updatedEvening++
+
+      // Marquer comme traité (pour ne pas le recréer en odoo_only)
+      odooArticles.delete(code)
     }
+
+    // 5b) Supprimer les anciennes lignes 'odoo_only' (on les recrée à chaque refresh)
+    if (oldOdooOnlyIds.length > 0) {
+      const { error: delErr } = await supabase
+        .from('stock_day_items')
+        .delete()
+        .in('id', oldOdooOnlyIds)
+      if (delErr) {
+        console.error('[stock-odoo-snapshot] delete old odoo_only error:', delErr)
+      }
+    }
+
+    // 5c) Créer les lignes 'odoo_only' pour articles Odoo non comptés
+    if (odooArticles.size > 0) {
+      const newRows = []
+      for (const [code, entry] of odooArticles.entries()) {
+        newRows.push({
+          stock_day_id,
+          product_name: entry.productName,
+          product_code: code,
+          category: PREFIX_CATEGORY[entry.prefix] || 'AUTRE',
+          freshness: 'fresh',
+          source: 'odoo_only',
+          qty_counted: null,
+          qty_odoo_snapshot: Math.round(entry.qty),
+          qty_odoo_snapshot_at: nowISO,
+          ...(initial ? { qty_odoo_initial: Math.round(entry.qty), qty_odoo_initial_at: nowISO } : {}),
+        })
+      }
+      const { error: insErr } = await supabase
+        .from('stock_day_items')
+        .insert(newRows)
+      if (insErr) {
+        console.error('[stock-odoo-snapshot] insert odoo_only error:', insErr)
+      } else {
+        insertedOdooOnly = newRows.length
+      }
+    }
+
+    console.log('[stock-odoo-snapshot] Done.', updatedEvening, 'evening updated,', insertedOdooOnly, 'odoo_only inserted')
 
     // 6) Update stock_day.last_odoo_refresh_at
     const { error: dayErr } = await supabase
@@ -243,10 +322,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       triggered_by: profile.username,
-      items_updated: updated,
-      items_total: items.length,
-      products_in_odoo: Object.keys(stockByCode).length,
-      products_requested: productCodes.length,
+      evening_updated: updatedEvening,
+      odoo_only_inserted: insertedOdooOnly,
       timestamp: nowISO,
       is_initial: initial,
     })

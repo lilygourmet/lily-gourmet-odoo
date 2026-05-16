@@ -370,35 +370,60 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {report.map(r => {
-                        const hasInitial = r.qty_odoo_initial !== null && r.qty_odoo_initial !== undefined
-                        const hasCurrent = r.qty_odoo_current !== null && r.qty_odoo_current !== undefined
-                        const gapInit = r.gap_initial
-                        const gapCurr = r.gap_current
-                        const gapChanged = hasInitial && hasCurrent && gapInit !== gapCurr
-                        return (
-                          <tr key={r.product_name} className={`border-b border-line ${
-                            gapCurr !== null && gapCurr !== 0 ? 'bg-orange-50/30' : ''
-                          }`}>
-                            <td className="px-3 py-2 font-medium">{r.product_name}</td>
-                            <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning || '—'}</td>
-                            <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_leftover || '—'}</td>
-                            <td className="px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5">{r.qty_counted}</td>
-                            <td className="px-2 py-2 text-right tabular-nums bg-amber-50/50">
-                              {hasInitial ? r.qty_odoo_initial : <span className="text-ink-mute italic">—</span>}
-                            </td>
-                            <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50 ${gapChanged ? 'font-semibold' : ''}`}>
-                              {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
-                            </td>
-                            <td className="px-2 py-2 text-right">
-                              <GapBadge value={gapInit} />
-                            </td>
-                            <td className="px-2 py-2 text-right">
-                              <GapBadge value={gapCurr} bold />
-                            </td>
-                          </tr>
-                        )
-                      })}
+                      {(() => {
+                        const rendered = []
+                        let lastCategory = null
+                        for (const r of report) {
+                          const cat = r.category_label || 'Autres'
+                          if (cat !== lastCategory) {
+                            rendered.push(
+                              <tr key={`cat-${cat}`} className="bg-cream-warm/60">
+                                <td colSpan={8} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
+                                  {cat}
+                                </td>
+                              </tr>
+                            )
+                            lastCategory = cat
+                          }
+                          const hasInitial = r.qty_odoo_initial !== null && r.qty_odoo_initial !== undefined
+                          const hasCurrent = r.qty_odoo_current !== null && r.qty_odoo_current !== undefined
+                          const gapInit = r.gap_initial
+                          const gapCurr = r.gap_current
+                          const gapChanged = hasInitial && hasCurrent && gapInit !== gapCurr
+                          const notCounted = !r.is_counted
+                          rendered.push(
+                            <tr key={r.product_name} className={`border-b border-line ${
+                              notCounted ? 'bg-amber-50/20' : (gapCurr !== null && gapCurr !== 0 ? 'bg-orange-50/30' : '')
+                            }`}>
+                              <td className="px-3 py-2 font-medium">{r.product_name}</td>
+                              <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning || '—'}</td>
+                              <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_leftover || '—'}</td>
+                              <td className="px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5">
+                                {notCounted ? (
+                                  <span className="inline-block bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                                    Non compté
+                                  </span>
+                                ) : (
+                                  r.qty_counted
+                                )}
+                              </td>
+                              <td className="px-2 py-2 text-right tabular-nums bg-amber-50/50">
+                                {hasInitial ? r.qty_odoo_initial : <span className="text-ink-mute italic">—</span>}
+                              </td>
+                              <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50 ${gapChanged ? 'font-semibold' : ''}`}>
+                                {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
+                              </td>
+                              <td className="px-2 py-2 text-right">
+                                {notCounted ? <span className="text-ink-mute">—</span> : <GapBadge value={gapInit} />}
+                              </td>
+                              <td className="px-2 py-2 text-right">
+                                {notCounted ? <span className="text-ink-mute">—</span> : <GapBadge value={gapCurr} bold />}
+                              </td>
+                            </tr>
+                          )
+                        }
+                        return rendered
+                      })()}
                     </tbody>
                   </table>
                 </div>
