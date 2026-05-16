@@ -334,7 +334,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
               <div className="px-4 py-3 border-b border-line">
                 <div className="text-[14px] font-semibold">➕ Nouvelle production du jour</div>
                 <div className="text-[11px] text-ink-mute mt-0.5">
-                  Combien d'articles frais tu apportes en vitrine ? Tu peux envoyer plusieurs fois dans la matinée.
+                  Sélectionne les articles à envoyer en vitrine.
                 </div>
               </div>
 
@@ -489,4 +489,5 @@ function DiscrepancyModalPatissier({ items, resolvedItems, onAccept, onRequestRe
     </div>
   )
 }
+
 

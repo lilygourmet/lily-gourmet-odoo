@@ -22,7 +22,7 @@ import {
 } from '../../lib/stockBoutique'
 
 const DISCREPANCY_REASONS = [
-  "Hamza s'est trompé",
+  "La vitrine s'est trompée",
   'Casse en transport',
   'Manque en cuisine',
   'Reste à venir',
@@ -217,7 +217,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     }
   }
 
-  // Items en attente du café (Hamza a demandé un recompte)
+  // Items en attente du café (la vitrine a demandé un recompte)
   const pendingCafe = items.filter(it =>
     it.source === 'morning' && it.discrepancy_status === 'pending_cafe'
   )
@@ -244,7 +244,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      {/* MODAL BLOQUANT — Café répond après recompte Hamza */}
+      {/* MODAL BLOQUANT — Café répond après recompte vitrine */}
       {pendingCafe.length > 0 && (
         <DiscrepancyModalCafe
           items={pendingCafe}
@@ -269,7 +269,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
               <span
                 className={`w-2 h-2 rounded-full transition-colors ${dotFlash ? 'bg-red-500' : 'bg-green-400'}`}
               />
-              <span className="opacity-80">En ligne avec Hamza</span>
+              <span className="opacity-80">En ligne</span>
             </span>
             <span className="opacity-50">|</span>
             <PrintButton mode="reception" />
@@ -306,7 +306,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
               <div className="text-3xl mb-2">📭</div>
               <div className="text-[13px]">En attente d'envois de la pâtisserie</div>
               <div className="text-[11px] mt-1 opacity-70">
-                Les articles arriveront automatiquement quand Hamza les envoie
+                Les articles arriveront automatiquement quand la vitrine les envoie
               </div>
             </div>
           ) : (
@@ -397,7 +397,7 @@ function ReceptionRow({ item, isEditing, onEdit, onLocalQtyChange, onConfirm }) 
         <div className="text-[13px] font-medium">{item.product_name}</div>
         <div className="text-[11px] text-ink-mute mt-0.5">
           {isSurprise
-            ? <span className="text-ink-mute italic">Non annoncé par Hamza</span>
+            ? <span className="text-ink-mute italic">Non annoncé</span>
             : <>Annoncé : <strong className="text-ink">{item.qty_announced}</strong></>
           }
         </div>
@@ -476,7 +476,7 @@ function DiscrepancyModal({ state, onChange, onSave, onCancel }) {
       <div className="bg-white rounded-lg p-4 max-w-md w-full">
         <div className="text-[14px] font-semibold mb-1">{item.product_name}</div>
         <div className="text-[12px] text-ink-mute mb-3">
-          Hamza annonçait <strong>{item.qty_announced}</strong>, tu reçois <strong>{item.qty_received}</strong>. Pourquoi ?
+          Vitrine annonçait <strong>{item.qty_announced}</strong>, tu reçois <strong>{item.qty_received}</strong>. Pourquoi ?
         </div>
 
         <div className="flex gap-1 flex-wrap mb-2">
@@ -585,7 +585,7 @@ function DiscrepancyModalCafe({ items, onAccept, onMaintain }) {
       <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="bg-red-700 text-white px-4 py-3 flex-shrink-0">
           <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">
-            ⚠️ Hamza a recompté
+            ⚠️ Vitrine a recompté
           </div>
           <div className="font-semibold text-[13px] mt-0.5">
             {items.length} article{items.length > 1 ? 's' : ''} à recompter physiquement
@@ -597,14 +597,14 @@ function DiscrepancyModalCafe({ items, onAccept, onMaintain }) {
             <div key={it.id} className="px-4 py-4 border-b border-line last:border-b-0">
               <div className="text-[13px] font-medium mb-1">{it.product_name}</div>
               <div className="text-[11px] text-ink-mute mb-3">
-                Hamza dit avoir envoyé <strong className="text-ink">{it.qty_announced}</strong>,
+                La vitrine dit avoir envoyé <strong className="text-ink">{it.qty_announced}</strong>,
                 tu avais compté <strong className="text-red-700">{it.qty_received}</strong>.
                 <br />Va recompter en cuisine maintenant.
               </div>
 
               {it.discrepancy_patissier_message && (
                 <div className="bg-bordeaux/5 border-l-[3px] border-bordeaux px-3 py-2 mb-3 text-[11px] italic">
-                  💬 Hamza : "{it.discrepancy_patissier_message}"
+                  💬 Vitrine : "{it.discrepancy_patissier_message}"
                 </div>
               )}
 
@@ -635,4 +635,5 @@ function DiscrepancyModalCafe({ items, onAccept, onMaintain }) {
     </div>
   )
 }
+
 

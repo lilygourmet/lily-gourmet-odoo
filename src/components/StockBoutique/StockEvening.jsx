@@ -213,9 +213,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
             <PrintButton mode="evening" />
             <div className="text-right text-[11px] opacity-80">
               <div>🌙 Équipe café</div>
-              <div className="text-[9px] opacity-70 font-mono uppercase tracking-wider mt-0.5">
-                Comptage à l'aveugle
-              </div>
             </div>
           </div>
         </div>
@@ -261,8 +258,8 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
           <>
             {isOpen && counts.length === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
-                💡 <strong>Mode aveugle activé.</strong> Compte ce que tu vois en vitrine.
-                Clique l'article → ajoute une ligne (Frais, 1). Clique la ligne pour la sélectionner, puis tape la qty sur la calculette.
+                💡 Clique l'article que tu vois en vitrine → ajoute une ligne (Frais, 1).
+                Clique la ligne pour la sélectionner, puis tape la qty sur la calculette.
               </div>
             )}
 
@@ -277,39 +274,34 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   Calculette
                 </div>
 
-                {/* CALCULETTE — toujours visible (grisée si pas de ligne sélectionnée) */}
-                {isOpen && (
-                  <div className="p-2 border-b border-line">
-                    <div className={selectedItem ? '' : 'opacity-40 pointer-events-none'}>
-                      <NumpadInline
-                        value={selectedItem?.qty_counted || 0}
-                        onChange={handleQtyChange}
-                        resetKey={selectedId}
-                        compact
-                      />
+                {/* CALCULETTE — toujours visible (grisée si fermé ou pas de ligne sélectionnée) */}
+                <div className="p-2 border-b border-line">
+                  <div className={isOpen && selectedItem ? '' : 'opacity-40 pointer-events-none'}>
+                    <NumpadInline
+                      value={selectedItem?.qty_counted || 0}
+                      onChange={handleQtyChange}
+                      resetKey={selectedId}
+                      compact
+                    />
+                  </div>
+                  {isOpen && selectedItem ? (
+                    <div className="text-[10px] text-bordeaux-deep mt-1.5 text-center font-medium truncate">
+                      ✏️ {selectedItem.product_name}
                     </div>
-                    {selectedItem ? (
-                      <div className="text-[10px] text-bordeaux-deep mt-1.5 text-center font-medium truncate">
-                        ✏️ {selectedItem.product_name}
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-ink-mute mt-1.5 text-center italic">
-                        {counts.length === 0
+                  ) : (
+                    <div className="text-[10px] text-ink-mute mt-1.5 text-center italic">
+                      {!isOpen
+                        ? 'Journée clôturée'
+                        : counts.length === 0
                           ? '↓ Clique une tuile à droite'
                           : '↓ Clique une ligne ci-dessous'}
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
 
                 {/* HEADER LISTE */}
                 <div className="px-3 py-2 bg-bordeaux/10 text-bordeaux-deep font-mono text-[10px] tracking-[0.2em] uppercase font-semibold border-t border-line">
                   Restes comptés
-                  {counts.length > 0 && (
-                    <span className="ml-2 opacity-60 normal-case tracking-normal">
-                      ({counts.length} · dernier en haut)
-                    </span>
-                  )}
                 </div>
 
                 {/* LISTE TRIÉE DESC */}

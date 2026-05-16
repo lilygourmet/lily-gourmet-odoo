@@ -168,7 +168,7 @@ export default function ProductGrid({
         {/* LISTE PANIER EN BAS (tri : dernier ajouté en premier) */}
         <div className="px-3 py-1.5 bg-cream-warm border-b border-line">
           <div className="text-[9px] uppercase tracking-[0.15em] text-ink-mute font-mono">
-            Articles{cartEntries.length > 0 && <span className="ml-2 opacity-60 normal-case tracking-normal">({cartEntries.length} · dernier en haut)</span>}
+            Articles
           </div>
         </div>
         <div className="flex-1 min-h-[120px] max-h-[280px] overflow-y-auto">
