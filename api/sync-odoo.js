@@ -484,9 +484,41 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
       // contient le nom precis saisi par la vendeuse). Sinon on prend le nom du
       // catalogue, qui est stable et ne change pas si la vendeuse modifie la
       // description ulterieurement.
-      const productName = isGenericProduct(catalogName)
-        ? descriptionName
-        : (catalogName || descriptionName)
+      //
+      // IMPORTANT : pour les commandes CD- personnalisees, la Description Odoo
+      // contient en plus du nom catalogue des lignes "Theme:", "Age:", "Message:"
+      // saisies par la vendeuse. On extrait ces lignes et on les colle apres le
+      // catalogName, pour que le module Messages puisse retrouver le "Message: ..."
+      // tout en gardant un nom catalogue stable pour le matching produit.
+      function extractCustomDetails(descName, catName) {
+        if (!descName) return ''
+        // Si la description est identique au nom catalogue, rien a extraire
+        if (descName === catName) return ''
+        // On cherche dans la description toutes les lignes du type "Theme:", "Age:", "Message:"
+        // (avec ou sans accent, peu importe l'indentation)
+        const lines = descName.split(/\r?\n/)
+        const extras = []
+        for (const ln of lines) {
+          const trimmed = ln.trim()
+          if (!trimmed) continue
+          // Match les champs custom connus (case insensitive, accents optionnels)
+          if (/^(Th[èe]me|Age|Message|Inscription|D[ée]dicace|Texte|Couleur|Format|Saveur|Parfum|Garniture|Forme|Date)\s*:/i.test(trimmed)) {
+            extras.push('  ' + trimmed)
+          }
+        }
+        return extras.length > 0 ? '\n\n' + extras.join('\n') : ''
+      }
+
+      let productName
+      if (isGenericProduct(catalogName)) {
+        // Generique : on prend tout descriptionName
+        productName = descriptionName
+      } else {
+        // Article catalogue stable + on prefixe avec details custom si presents
+        const baseName = catalogName || descriptionName
+        const customDetails = extractCustomDetails(descriptionName, catalogName)
+        productName = baseName + customDetails
+      }
 
       const qty = parseFloat(line.product_uom_qty) || 0
       const isAcompte = /^(Acompte|Down\s+Payment)/i.test(productName)
