@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
+import PrintButton from './PrintButton'
 import {
   getOrCreateStockDay,
   loadStockDay,
@@ -234,6 +235,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             >
               Aujourd'hui
             </button>
+            <PrintButton mode=\"audit\" />
           </div>
         </div>
 

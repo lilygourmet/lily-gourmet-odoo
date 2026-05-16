@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react'
 import AppHeader from '../AppHeader'
 import ProductGrid from './ProductGrid'
 import NumpadInline from './NumpadInline'
+import PrintButton from './PrintButton'
 import {
   getOrCreateStockDay,
   loadDayItems,
@@ -270,6 +271,8 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
               />
               <span className="opacity-80">En ligne avec Hamza</span>
             </span>
+            <span className="opacity-50">|</span>
+            <PrintButton mode="reception" />
             <span className="opacity-50">|</span>
             <span className="opacity-80">📦 Équipe café</span>
           </div>

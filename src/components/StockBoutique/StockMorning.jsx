@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from '../AppHeader'
 import ProductGrid from './ProductGrid'
+import PrintButton from './PrintButton'
 import {
   getOrCreateStockDay,
   loadDayItems,
@@ -218,7 +219,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
               {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} — {user.full_name || user.username}
             </div>
           </div>
-          <div className="text-[11px] opacity-80">☀️ Pâtissier</div>
+          <div className="flex items-center gap-2"><PrintButton mode="vitrine" /><div className="text-[11px] opacity-80">☀️ Pâtissier</div></div>
         </div>
 
         {loading ? (
