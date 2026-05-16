@@ -201,38 +201,38 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
     })
   }, [todayItems])
 
-  const undecidedLeftovers = leftovers.filter(l => !decisions[l.id])
-  const allDecisionsMade = leftovers.length === 0 || undecidedLeftovers.length === 0
+  const undecidedLeftovers = leftovers
+  const allDecisionsMade = leftovers.length === 0
   const totalNewToSend = Object.values(cart).reduce((s, v) => s + (v?.qty || 0), 0)
 
-  function setDecision(leftoverId, decision) {
-    setDecisions(d => ({ ...d, [leftoverId]: decision }))
-  }
-
-  async function handleApplyLeftovers() {
-    if (!stockDay) return
-    // Chaque "leftover" affiché est en fait un GROUPE (même nom + même fraîcheur)
-    // qui peut contenir 1..N items Supabase. On déplie pour appliquer la
-    // décision (keep/loss) à chacun des items originaux.
-    const list = []
-    for (const group of leftovers) {
-      const decision = decisions[group.id] || 'keep'
-      for (const originalItem of (group.items || [])) {
-        list.push({ leftoverItem: originalItem, decision })
-      }
-    }
+  // Décision immédiate : envoie keep/loss à Supabase pour TOUS les items
+  // Supabase du groupe (mêmes nom + fraîcheur), puis retire le groupe de la liste.
+  async function handleDecideLeftover(group, decision) {
+    if (!stockDay || !group) return
+    // Marquer "en cours" pour empêcher double-clic (via decisions transient)
+    if (decisions[group.id]) return
+    setDecisions(d => ({ ...d, [group.id]: decision }))
     try {
-      setSending(true)
+      const list = (group.items || []).map(originalItem => ({
+        leftoverItem: originalItem,
+        decision,
+      }))
       await applyLeftoverDecisions(stockDay.id, list, user.id)
-      // Reload
+      // Retire le groupe de l'affichage
+      setLeftovers(prev => prev.filter(g => g.id !== group.id))
+      // Reload todayItems pour récupérer les lignes 'leftover' créées
       const items = await loadDayItems(stockDay.id)
       setTodayItems(items)
       setLeftoversApplied(true)
     } catch (e) {
-      console.error(e)
+      console.error('[handleDecideLeftover]', e)
       alert('Erreur : ' + (e.message || e))
-    } finally {
-      setSending(false)
+      // Rollback du flag transient pour réessayer
+      setDecisions(d => {
+        const next = { ...d }
+        delete next[group.id]
+        return next
+      })
     }
   }
 
@@ -301,22 +301,18 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
                     </div>
                   </div>
                   <div className="text-[11px] text-ink-mute font-mono tracking-wider uppercase">
-                    {allDecisionsMade ? '✓ Tout décidé' : `${undecidedLeftovers.length} à décider`}
+                    {leftovers.length} à décider
                   </div>
                 </div>
 
                 <div className="p-3 space-y-2">
                   {leftovers.map(l => {
-                    const dec = decisions[l.id]
+                    const inFlight = !!decisions[l.id]
                     const nextLabel = NEXT_FRESHNESS_LABEL[l.freshness]
                     return (
                       <div
                         key={l.id}
-                        className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center p-2.5 border rounded-md ${
-                          dec === 'keep' ? 'bg-green-50 border-green-500' :
-                          dec === 'loss' ? 'bg-red-50 border-red-500' :
-                          'bg-white border-line'
-                        }`}
+                        className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center p-2.5 border rounded-md bg-white border-line ${inFlight ? 'opacity-60' : ''}`}
                       >
                         <div>
                           <div className="text-[13px] font-medium">{l.product_name}</div>
@@ -331,40 +327,23 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
                         </span>
                         <button
                           type="button"
-                          onClick={() => setDecision(l.id, 'keep')}
-                          className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
-                            dec === 'keep'
-                              ? 'bg-green-600 text-white border-green-600'
-                              : 'bg-white border-line hover:bg-green-50 hover:border-green-500'
-                          }`}
+                          onClick={() => handleDecideLeftover(l, 'keep')}
+                          disabled={inFlight}
+                          className="px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 bg-white border-line hover:bg-green-50 hover:border-green-500 disabled:opacity-50 disabled:cursor-wait"
                         >
                           ↓ Garde ({nextLabel})
                         </button>
                         <button
                           type="button"
-                          onClick={() => setDecision(l.id, 'loss')}
-                          className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
-                            dec === 'loss'
-                              ? 'bg-red-700 text-white border-red-700'
-                              : 'bg-white border-line hover:bg-red-50 hover:border-red-500'
-                          }`}
+                          onClick={() => handleDecideLeftover(l, 'loss')}
+                          disabled={inFlight}
+                          className="px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 bg-white border-line hover:bg-red-50 hover:border-red-500 disabled:opacity-50 disabled:cursor-wait"
                         >
                           🗑 Casse
                         </button>
                       </div>
                     )
                   })}
-                </div>
-
-                <div className="px-4 py-3 bg-cream-warm border-t border-line flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleApplyLeftovers}
-                    disabled={!allDecisionsMade || sending}
-                    className="px-4 py-2 bg-bordeaux text-cream rounded-md text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bordeaux-deep"
-                  >
-                    {sending ? 'Application...' : `Appliquer décisions (${leftovers.length})`}
-                  </button>
                 </div>
               </div>
             )}
