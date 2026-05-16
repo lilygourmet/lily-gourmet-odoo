@@ -142,25 +142,25 @@ export default function ProductGrid({
           {basketLabel}
         </div>
 
-        {/* CALCULETTE EN HAUT */}
+        {/* CALCULETTE EN HAUT — toujours visible (grisée si pas de ligne sélectionnée) */}
         <div className="p-2 border-b border-line bg-cream">
+          <div className={activeProductName && cart[activeProductName] ? '' : 'opacity-40 pointer-events-none'}>
+            <NumpadInline
+              value={(activeProductName && cart[activeProductName]?.qty) || 0}
+              onChange={(v) => activeProductName && onQtyChange(activeProductName, v)}
+              resetKey={activeProductName}
+              compact
+            />
+          </div>
           {activeProductName && cart[activeProductName] ? (
-            <>
-              <NumpadInline
-                value={cart[activeProductName].qty}
-                onChange={(v) => onQtyChange(activeProductName, v)}
-                resetKey={activeProductName}
-                compact
-              />
-              <div className="text-[9px] text-ink-mute mt-1.5 text-center italic truncate">
-                {activeProductName}
-              </div>
-            </>
+            <div className="text-[10px] text-bordeaux-deep mt-1.5 text-center font-medium truncate">
+              ✏️ {activeProductName}
+            </div>
           ) : (
-            <div className="text-[10px] text-ink-mute text-center italic py-6 px-2">
+            <div className="text-[10px] text-ink-mute mt-1.5 text-center italic">
               {cartEntries.length === 0
-                ? 'Clique une tuile à droite pour commencer'
-                : 'Sélectionne une ligne en bas pour modifier sa quantité'}
+                ? '↓ Clique une tuile à droite'
+                : '↓ Clique une ligne ci-dessous'}
             </div>
           )}
         </div>

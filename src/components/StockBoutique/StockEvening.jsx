@@ -277,30 +277,30 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   Calculette
                 </div>
 
-                {/* CALCULETTE */}
-                {isOpen ? (
+                {/* CALCULETTE — toujours visible (grisée si pas de ligne sélectionnée) */}
+                {isOpen && (
                   <div className="p-2 border-b border-line">
-                    {selectedItem ? (
+                    <div className={selectedItem ? '' : 'opacity-40 pointer-events-none'}>
                       <NumpadInline
-                        value={selectedItem.qty_counted || 0}
+                        value={selectedItem?.qty_counted || 0}
                         onChange={handleQtyChange}
                         resetKey={selectedId}
                         compact
                       />
-                    ) : (
-                      <div className="text-[10px] text-ink-mute text-center italic py-6 px-2">
-                        {counts.length === 0
-                          ? 'Clique une tuile à droite pour commencer'
-                          : 'Sélectionne une ligne en bas pour modifier sa quantité'}
+                    </div>
+                    {selectedItem ? (
+                      <div className="text-[10px] text-bordeaux-deep mt-1.5 text-center font-medium truncate">
+                        ✏️ {selectedItem.product_name}
                       </div>
-                    )}
-                    {selectedItem && (
-                      <div className="text-[9px] text-ink-mute mt-1.5 text-center italic truncate">
-                        {selectedItem.product_name}
+                    ) : (
+                      <div className="text-[10px] text-ink-mute mt-1.5 text-center italic">
+                        {counts.length === 0
+                          ? '↓ Clique une tuile à droite'
+                          : '↓ Clique une ligne ci-dessous'}
                       </div>
                     )}
                   </div>
-                ) : null}
+                )}
 
                 {/* HEADER LISTE */}
                 <div className="px-3 py-2 bg-bordeaux/10 text-bordeaux-deep font-mono text-[10px] tracking-[0.2em] uppercase font-semibold border-t border-line">
