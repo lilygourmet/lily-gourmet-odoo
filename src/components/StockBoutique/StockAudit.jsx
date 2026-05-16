@@ -235,7 +235,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             >
               Aujourd'hui
             </button>
-            <PrintButton mode=\"audit\" />
+            <PrintButton mode="audit" />
           </div>
         </div>
 
