@@ -1,11 +1,12 @@
 // src/components/StockBoutique/StockAudit.jsx
 // Écran AUDIT — Équipe dédiée (perm_stock_audit)
-// v2.1 : bouton rafraîchir Odoo + colonnes Initial vs Actuel
+// v3 : section "Conflits à arbitrer" + modal Trancher
 // =============================================================
 
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
 import PrintButton from './PrintButton'
+import AuditResolveModal from './AuditResolveModal'
 import {
   getOrCreateStockDay,
   loadStockDay,
@@ -15,6 +16,9 @@ import {
   subscribeToDayItems,
   subscribeToStockDay,
   loadDaySummary,
+  loadDiscrepancyItems,
+  auditOverrideQty,
+  auditResolveInFavorOf,
   todayISO,
 } from '../../lib/stockBoutique'
 
@@ -24,10 +28,17 @@ const STATUS_LABELS = {
   audited: { label: '✓ Audité', color: 'bg-green-100 text-green-900' },
 }
 
+const DISCREPANCY_BADGE = {
+  pending_patissier: { label: '⏳ Hamza n\'a pas répondu', color: 'bg-amber-100 text-amber-900 border-amber-300' },
+  pending_cafe: { label: '⏳ Hamza dit "recompte"', color: 'bg-blue-100 text-blue-900 border-blue-300' },
+  unresolved: { label: '⚠ Désaccord total', color: 'bg-red-100 text-red-900 border-red-300' },
+}
+
 export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [stockDay, setStockDay] = useState(null)
   const [report, setReport] = useState([])
+  const [discrepancyItems, setDiscrepancyItems] = useState([])
   const [auditNotes, setAuditNotes] = useState('')
   const [auditing, setAuditing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -36,15 +47,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   const [day, setDay] = useState(todayISO())
   const [historyDays, setHistoryDays] = useState([])
   const [historyDaysBack, setHistoryDaysBack] = useState(30)
-  const [, setTick] = useState(0) // pour rafraîchir l'affichage relatif
+  const [resolveModalItem, setResolveModalItem] = useState(null)
+  const [, setTick] = useState(0)
 
-  // Tick chaque minute pour mettre à jour le "il y a X min"
   useEffect(() => {
     const t = setInterval(() => setTick(n => n + 1), 60000)
     return () => clearInterval(t)
   }, [])
 
-  // Charger l'historique
   useEffect(() => {
     let mounted = true
     loadDaySummary(historyDaysBack).then(d => {
@@ -58,6 +68,17 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     let itemsSub = null
     let daySub = null
 
+    async function reloadAll(sd) {
+      const [r, disc] = await Promise.all([
+        buildAuditReport(sd.id),
+        loadDiscrepancyItems(sd.id),
+      ])
+      if (mounted) {
+        setReport(r)
+        setDiscrepancyItems(disc)
+      }
+    }
+
     async function init() {
       try {
         setLoading(true)
@@ -66,29 +87,19 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
         setStockDay(sd)
         if (sd) {
           setAuditNotes(sd.audit_notes || '')
-          const r = await buildAuditReport(sd.id)
-          if (!mounted) return
-          setReport(r)
+          await reloadAll(sd)
 
           itemsSub = subscribeToDayItems(sd.id, {
-            onInsert: async () => {
-              const r = await buildAuditReport(sd.id)
-              if (mounted) setReport(r)
-            },
-            onUpdate: async () => {
-              const r = await buildAuditReport(sd.id)
-              if (mounted) setReport(r)
-            },
-            onDelete: async () => {
-              const r = await buildAuditReport(sd.id)
-              if (mounted) setReport(r)
-            },
+            onInsert: () => reloadAll(sd),
+            onUpdate: () => reloadAll(sd),
+            onDelete: () => reloadAll(sd),
           })
           daySub = subscribeToStockDay(sd.id, async (newDay) => {
             if (mounted) setStockDay(newDay)
           })
         } else {
           setReport([])
+          setDiscrepancyItems([])
         }
       } finally {
         if (mounted) setLoading(false)
@@ -107,7 +118,16 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   const isSubmitted = stockDay?.status === 'submitted'
   const isAudited = stockDay?.status === 'audited'
 
-  // Stats du rapport
+  // Items associés à chaque produit du rapport (pour permettre de cliquer "Trancher" depuis la ligne)
+  const discByProduct = useMemo(() => {
+    const map = new Map()
+    for (const it of discrepancyItems) {
+      if (!map.has(it.product_name)) map.set(it.product_name, [])
+      map.get(it.product_name).push(it)
+    }
+    return map
+  }, [discrepancyItems])
+
   const stats = useMemo(() => {
     let totalCounted = 0
     let totalOdooInitial = 0
@@ -118,13 +138,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
       totalCounted += r.qty_counted || 0
       totalOdooInitial += r.qty_odoo_initial || 0
       totalOdooCurrent += r.qty_odoo_current || 0
-      // "Non compté" est traité comme Compté = 0, l'écart est calculé contre Odoo actuel
       const effQty = r.is_counted ? (r.qty_counted || 0) : 0
       const effGapCurrent = (r.qty_odoo_current !== null && r.qty_odoo_current !== undefined)
         ? r.qty_odoo_current - effQty
         : null
       if (effGapCurrent !== null && effGapCurrent !== 0) articlesWithGapCurrent++
-      // Article dont l'écart a changé entre initial et current (uniquement si compté)
       if (r.is_counted && r.gap_initial !== null && r.gap_current !== null && r.gap_initial !== r.gap_current) {
         articlesGapChanged++
       }
@@ -160,7 +178,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     setRefreshSuccess('')
     try {
       const res = await triggerOdooSnapshot(stockDay.id, user.id, false)
-      // Recharge rapport + stockDay
       const r = await buildAuditReport(stockDay.id)
       const sd = await loadStockDay(day)
       setReport(r)
@@ -174,6 +191,15 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     } finally {
       setRefreshing(false)
     }
+  }
+
+  // Callbacks de la modal AuditResolveModal
+  async function handleResolveInFavorOf(itemId, inFavorOf, note) {
+    await auditResolveInFavorOf(itemId, inFavorOf, note, user.id)
+  }
+
+  async function handleOverrideQty(itemId, qtyPatch, note) {
+    await auditOverrideQty(itemId, qtyPatch, note, user.id)
   }
 
   function changeDay(delta) {
@@ -192,8 +218,8 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
   }
 
-  // Le bouton refresh est dispo si : submitted OU audited (jamais si open)
   const canRefresh = stockDay && (isSubmitted || isAudited)
+  const hasConflicts = discrepancyItems.length > 0
 
   return (
     <div className="min-h-screen bg-cream">
@@ -277,7 +303,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               )}
             </div>
 
-            {/* REFRESH SECTION */}
             {canRefresh && (
               <div className="flex items-center gap-2">
                 {stockDay.last_odoo_refresh_at && (
@@ -303,7 +328,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           </div>
         )}
 
-        {/* MESSAGES REFRESH */}
         {refreshSuccess && (
           <div className="bg-green-100 border border-green-400 rounded-md px-3 py-2 text-[12px] text-green-900">
             {refreshSuccess}
@@ -325,6 +349,72 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           </div>
         ) : (
           <>
+            {/* ============================================ */}
+            {/* NOUVEAU : SECTION CONFLITS À ARBITRER */}
+            {/* ============================================ */}
+            {hasConflicts && (
+              <div className="bg-white border-2 border-bordeaux rounded-lg overflow-hidden">
+                <div className="bg-bordeaux text-cream px-4 py-2.5">
+                  <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-90">
+                    ⚖ Conflits à arbitrer
+                  </div>
+                  <div className="font-semibold text-[13px] mt-0.5">
+                    {discrepancyItems.length} écart{discrepancyItems.length > 1 ? 's' : ''} en attente de ton arbitrage
+                  </div>
+                </div>
+                <div className="divide-y divide-line">
+                  {discrepancyItems.map(it => {
+                    const badge = DISCREPANCY_BADGE[it.discrepancy_status] || DISCREPANCY_BADGE.unresolved
+                    return (
+                      <div key={it.id} className="px-4 py-3 hover:bg-cream-warm/30">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-medium mb-1">{it.product_name}</div>
+                            <div className="flex items-center gap-3 text-[11px] text-ink-mute mb-1">
+                              <span>Envoyé : <strong className="text-ink">{it.qty_announced ?? '—'}</strong></span>
+                              <span>·</span>
+                              <span>Compté : <strong className="text-red-700">{it.qty_received ?? '—'}</strong></span>
+                              {it.qty_announced != null && it.qty_received != null && (
+                                <>
+                                  <span>·</span>
+                                  <span>
+                                    Diff : <strong className={(it.qty_announced - it.qty_received) > 0 ? 'text-red-700' : 'text-blue-700'}>
+                                      {(it.qty_announced - it.qty_received) > 0 ? '+' : ''}
+                                      {it.qty_announced - it.qty_received}
+                                    </strong>
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            {it.reception_note && (
+                              <div className="text-[10px] text-amber-800 italic mb-1">
+                                💬 Café : "{it.reception_note}"
+                              </div>
+                            )}
+                            {it.discrepancy_patissier_message && (
+                              <div className="text-[10px] text-red-800 italic mb-1">
+                                💬 Hamza : "{it.discrepancy_patissier_message}"
+                              </div>
+                            )}
+                            <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full border ${badge.color} font-medium mt-1`}>
+                              {badge.label}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setResolveModalItem(it)}
+                            className="px-3 py-1.5 bg-bordeaux text-cream rounded-md text-[11px] font-medium hover:bg-bordeaux-deep flex-shrink-0"
+                          >
+                            ⚖ Trancher
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* STATS */}
             <div className="grid grid-cols-3 gap-2">
               <StatCard label="Compté (café)" value={stats.totalCounted} color="green" />
@@ -332,14 +422,9 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               <StatCard label="Articles avec écart" value={stats.articlesWithGapCurrent} color="red" />
             </div>
 
-
-
-            {/* Avertissement si pas de snapshot Odoo */}
             {(isSubmitted || isAudited) && report.length > 0 && stats.totalOdooCurrent === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
                 ⚠️ <strong>Snapshot Odoo non disponible.</strong> Clique "Rafraîchir Odoo" pour récupérer le stock actuel.
-                Vérifie aussi que les variables d'environnement Odoo sont configurées dans Vercel
-                (<code>ODOO_URL</code>, <code>ODOO_DB</code>, <code>ODOO_USERNAME</code>, <code>ODOO_PASSWORD</code>).
               </div>
             )}
 
@@ -348,7 +433,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               <div className="px-4 py-2.5 border-b border-line bg-cream-warm">
                 <div className="text-[12px] font-semibold">Rapport d'écarts par article</div>
                 <div className="text-[10px] text-ink-mute mt-0.5">
-                  {report.length} article{report.length > 1 ? 's' : ''} · tri par importance d'écart courant
+                  {report.length} article{report.length > 1 ? 's' : ''} · tri par catégorie
                 </div>
               </div>
 
@@ -367,6 +452,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">Compté</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo actuel</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Écart actuel : Odoo actuel - Compté">Écart actuel</th>
+                        <th className="text-center px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -378,25 +464,24 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           if (cat !== lastCategory) {
                             rendered.push(
                               <tr key={`cat-${cat}`} className="bg-cream-warm/60">
-                                <td colSpan={6} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
+                                <td colSpan={7} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
                                   {cat}
                                 </td>
                               </tr>
                             )
                             lastCategory = cat
                           }
-                          const hasInitial = r.qty_odoo_initial !== null && r.qty_odoo_initial !== undefined
                           const hasCurrent = r.qty_odoo_current !== null && r.qty_odoo_current !== undefined
-                          const gapInit = r.gap_initial
-                          const gapCurr = r.gap_current
-                          const gapChanged = hasInitial && hasCurrent && gapInit !== gapCurr
                           const notCounted = !r.is_counted
-                          // "Non compté" = Compté 0 → on calcule l'écart contre Odoo
                           const effQty = notCounted ? 0 : r.qty_counted
                           const effGapCurr = hasCurrent ? (r.qty_odoo_current - effQty) : null
-                          rendered.push(
+                          const productDiscItems = discByProduct.get(r.product_name) || []
+                          const hasConflict = productDiscItems.length > 0
+                          return rendered.push(
                             <tr key={r.product_name} className={`border-b border-line ${
-                              notCounted ? 'bg-amber-50/20' : (effGapCurr !== null && effGapCurr !== 0 ? 'bg-orange-50/30' : '')
+                              hasConflict ? 'bg-red-50/50' :
+                              notCounted ? 'bg-amber-50/20' :
+                              (effGapCurr !== null && effGapCurr !== 0 ? 'bg-orange-50/30' : '')
                             }`}>
                               <td className="px-3 py-2 font-medium">
                                 {r.product_name}
@@ -405,23 +490,33 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                     non compté
                                   </span>
                                 )}
+                                {hasConflict && (
+                                  <span className="ml-2 inline-block bg-red-100 text-red-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
+                                    {productDiscItems.length} conflit{productDiscItems.length > 1 ? 's' : ''}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning || '—'}</td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_leftover || '—'}</td>
                               <td className={`px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
                                 {effQty}
                               </td>
-                              <td className="px-2 py-2 text-right tabular-nums bg-amber-50/50">
-                                {hasInitial ? r.qty_odoo_initial : <span className="text-ink-mute italic">—</span>}
-                              </td>
-                              <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50 ${gapChanged ? 'font-semibold' : ''}`}>
+                              <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50`}>
                                 {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
                               </td>
                               <td className="px-2 py-2 text-right">
-                                {notCounted ? <span className="text-ink-mute">—</span> : <GapBadge value={gapInit} />}
-                              </td>
-                              <td className="px-2 py-2 text-right">
                                 <GapBadge value={effGapCurr} bold />
+                              </td>
+                              <td className="px-2 py-2 text-center">
+                                {hasConflict && productDiscItems.length === 1 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setResolveModalItem(productDiscItems[0])}
+                                    className="px-2 py-1 bg-bordeaux text-cream rounded text-[10px] font-medium hover:bg-bordeaux-deep"
+                                  >
+                                    ⚖
+                                  </button>
+                                ) : null}
                               </td>
                             </tr>
                           )
@@ -434,7 +529,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               )}
             </div>
 
-            {/* LÉGENDE */}
             <div className="grid grid-cols-2 gap-2 text-[10px]">
               <div className="bg-white border border-line rounded-md p-2">
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-900 font-semibold">+ rouge</span>
@@ -444,10 +538,8 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-semibold">− bleu</span>
                 <span className="text-ink-mute ml-2">Stock Odoo &lt; compté — ventes non syncées, ou erreur</span>
               </div>
-
             </div>
 
-            {/* NOTES + VALIDATION */}
             {isSubmitted && (
               <div className="bg-white border border-line rounded-lg p-4">
                 <div className="text-[12px] font-semibold mb-2">Notes d'audit (optionnel)</div>
@@ -480,7 +572,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           </>
         )}
 
-        {/* ===== HISTORIQUE (intégré) ===== */}
+        {/* HISTORIQUE */}
         <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-lg flex items-center justify-between mt-8">
           <div>
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
@@ -559,6 +651,16 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           Clique une ligne pour afficher le rapport détaillé de cette journée ci-dessus.
         </div>
       </div>
+
+      {/* MODAL TRANCHER */}
+      {resolveModalItem && (
+        <AuditResolveModal
+          item={resolveModalItem}
+          onClose={() => setResolveModalItem(null)}
+          onResolve={handleResolveInFavorOf}
+          onOverrideQty={handleOverrideQty}
+        />
+      )}
     </div>
   )
 }
@@ -568,9 +670,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 // =============================================================
 
 function GapBadge({ value, bold = false }) {
-  if (value === null || value === undefined) {
-    return <span className="text-ink-mute">—</span>
-  }
+  if (value === null || value === undefined) return <span className="text-ink-mute">—</span>
   if (value === 0) {
     return (
       <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-900 font-medium">

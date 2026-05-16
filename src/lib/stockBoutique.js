@@ -367,6 +367,73 @@ export async function cafeMaintainCount(itemId, userId) {
   })
 }
 
+// Ces fonctions s'ajoutent à la suite de cafeMaintainCount (vers ligne 367)
+// dans src/lib/stockBoutique.js
+
+// ============================================================
+// AUDIT — Arbitrage final des écarts
+// ============================================================
+
+/**
+ * Audit modifie les quantités directement (sans trancher de "camp").
+ * Sert quand l'audit a vérifié physiquement et corrige les chiffres.
+ * Marque automatiquement le discrepancy comme résolu par audit.
+ */
+export async function auditOverrideQty(itemId, { qty_announced, qty_received }, note, userId) {
+  const patch = {
+    discrepancy_status: 'audit_resolved',
+    discrepancy_ack_at: new Date().toISOString(),
+    discrepancy_ack_by: userId,
+    discrepancy_resolved_in_favor_of: null, // ni patissier ni café, juste corrigé
+  }
+  if (qty_announced !== undefined && qty_announced !== null) {
+    patch.qty_announced = qty_announced
+  }
+  if (qty_received !== undefined && qty_received !== null) {
+    patch.qty_received = qty_received
+  }
+  if (note) {
+    patch.audit_note = note
+  }
+  return updateItem(itemId, patch)
+}
+
+/**
+ * Audit tranche en faveur du patissier ou du café (sans modifier les chiffres).
+ * inFavorOf = 'patissier' | 'cafe'
+ */
+export async function auditResolveInFavorOf(itemId, inFavorOf, note, userId) {
+  if (inFavorOf !== 'patissier' && inFavorOf !== 'cafe') {
+    throw new Error("inFavorOf doit être 'patissier' ou 'cafe'")
+  }
+  const patch = {
+    discrepancy_status: 'audit_resolved',
+    discrepancy_ack_at: new Date().toISOString(),
+    discrepancy_ack_by: userId,
+    discrepancy_resolved_in_favor_of: inFavorOf,
+  }
+  if (note) {
+    patch.audit_note = note
+  }
+  return updateItem(itemId, patch)
+}
+
+/**
+ * Charge les items source='morning' avec écart en conflit (pour le bouton "Trancher").
+ * Retourne les items eux-mêmes (pas le report agrégé), avec leurs colonnes discrepancy_*.
+ */
+export async function loadDiscrepancyItems(stockDayId) {
+  const { data, error } = await supabase
+    .from('stock_day_items')
+    .select('*')
+    .eq('stock_day_id', stockDayId)
+    .eq('source', 'morning')
+    .in('discrepancy_status', ['pending_patissier', 'pending_cafe', 'unresolved'])
+  if (error) throw error
+  return data || []
+}
+
+
 export async function addSurpriseReceptionItem(stockDayId, productName, productCode, qty, userId) {
   // INSERT direct (pas upsert) — voir explication dans sendMorningItem
   const { data, error } = await supabase
