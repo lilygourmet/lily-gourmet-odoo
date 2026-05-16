@@ -4,15 +4,15 @@ import { supabase } from './supabase'
 // CATEGORIES (dropdown Recap Ventes)
 // ============================================================
 export const VENTE_CATEGORIES = [
-  { id: 'CD',     label: 'Vente CD',          prefixes: ['CD-', 'GM-', 'GMD-'], emoji: '🎂', dbCategory: 'CD',    viewMode: 'hour-client' },
-  { id: 'LIVR',   label: 'Vente Livraisons',  prefixes: [],                      emoji: '🚚', dbCategory: 'LIVR',  viewMode: 'delivery' },
-  { id: 'PROD',   label: 'Vente Prod',        prefixes: ['E-', 'MI-', 'GS-'],   emoji: '🍰', dbCategory: 'PROD',  viewMode: 'product' },
-  { id: 'CLT',    label: 'Vente par client',  prefixes: ['E-', 'MI-', 'GS-'],   emoji: '👤', dbCategory: 'PROD',  viewMode: 'hour-client' },
-  { id: 'RAHN',   label: 'Vente RA H N',      prefixes: ['RA-', 'H-', 'N-'],     emoji: '🥐', dbCategory: 'RAHN',  viewMode: 'hour-client' },
-  { id: 'SALES',  label: 'Vente Salés',       prefixes: ['SA-', 'SAK-'],         emoji: '🥪', dbCategory: 'SALES', viewMode: 'hour-client' },
-  { id: 'VIENN',  label: 'Vente Vienn/Jus',   prefixes: ['V-', 'B-'],            emoji: '🥖', dbCategory: 'VIENN', viewMode: 'hour-client' },
-  { id: 'ALL',    label: 'Toutes commandes',  prefixes: [],                      emoji: '📋', dbCategory: null,    viewMode: 'delivery-all' },
-  { id: 'ODOO',   label: 'Récap 16h',         prefixes: [],                      emoji: '📊', dbCategory: null,    viewMode: 'odoo-table' },
+  { id: 'CD',     label: 'Vente CD',          prefixes: ['CD-', 'GM-', 'GMD-'],          emoji: '🎂', dbCategory: 'CD',    viewMode: 'hour-client' },
+  { id: 'LIVR',   label: 'Vente Livraisons',  prefixes: [],                               emoji: '🚚', dbCategory: 'LIVR',  viewMode: 'delivery' },
+  { id: 'PROD',   label: 'Vente Prod',        prefixes: ['E-', 'MI-', 'GS-'],            emoji: '🍰', dbCategory: 'PROD',  viewMode: 'product' },
+  { id: 'CLT',    label: 'Vente par client',  prefixes: ['E-', 'MI-', 'GS-'],            emoji: '👤', dbCategory: 'PROD',  viewMode: 'hour-client' },
+  { id: 'RAHN',   label: 'Vente RA H N',      prefixes: ['RA-', 'H-', 'N-'],             emoji: '🥐', dbCategory: 'RAHN',  viewMode: 'hour-client' },
+  { id: 'SALES',  label: 'Vente Salés',       prefixes: ['SA-', 'SAK-', 'SU-'],          emoji: '🥪', dbCategory: 'SALES', viewMode: 'hour-client' },
+  { id: 'VIENN',  label: 'Vente Vienn/Jus',   prefixes: ['V-', 'B-'],                    emoji: '🥖', dbCategory: 'VIENN', viewMode: 'hour-client' },
+  { id: 'ALL',    label: 'Toutes commandes',  prefixes: [],                               emoji: '📋', dbCategory: null,    viewMode: 'delivery-all' },
+  { id: 'ODOO',   label: 'Récap 16h',         prefixes: [],                               emoji: '📊', dbCategory: null,    viewMode: 'odoo-table' },
 ]
 
 // ============================================================
@@ -62,6 +62,7 @@ export async function loadSalesLinesForRange(fromDate, daysCount) {
 
 // Definition des prefixes par categorie de vue
 // SA- et SAK- = Salés stricts
+// SU- = Surgelés, integres dans Sales (preparations salees + surgelees)
 // GS- = peut être Prod OU Sales selon le pattern (voir GS_PROD_PATTERNS)
 export const PROD_VIEW_CATEGORIES = {
   prod:  {
@@ -72,7 +73,7 @@ export const PROD_VIEW_CATEGORIES = {
   sales: {
     label: 'Salés',
     emoji: '🥪',
-    prefixes: ['SA-', 'SAK-', 'GS-'],
+    prefixes: ['SA-', 'SAK-', 'SU-', 'GS-'],
   },
 }
 
@@ -133,8 +134,8 @@ export function filterLinesForProdCategory(lines, category) {
 
     // Cas C : on veut SALES seulement
     if (wantsSales) {
-      // Inclure SA-, SAK-
-      if (matchesAnyPrefix(name, ['SA-', 'SAK-'])) return true
+      // Inclure SA-, SAK-, SU- (surgeles)
+      if (matchesAnyPrefix(name, ['SA-', 'SAK-', 'SU-'])) return true
       // Inclure GS- SI ce n'est PAS un pattern prod
       if (isGs && !isGsProdPattern) return true
       return false
