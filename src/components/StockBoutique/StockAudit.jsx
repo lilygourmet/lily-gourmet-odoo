@@ -326,21 +326,16 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
         ) : (
           <>
             {/* STATS */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <StatCard label="Compté (café)" value={stats.totalCounted} color="green" />
-              <StatCard label="Stock Odoo initial" value={stats.totalOdooInitial || '—'} color="amber" />
               <StatCard label="Stock Odoo actuel" value={stats.totalOdooCurrent || '—'} color="blue" />
               <StatCard label="Articles avec écart" value={stats.articlesWithGapCurrent} color="red" />
             </div>
 
-            {stats.articlesGapChanged > 0 && (
-              <div className="bg-blue-50 border border-blue-300 rounded-md px-3 py-2 text-[12px] text-blue-900">
-                ℹ️ <strong>{stats.articlesGapChanged} article{stats.articlesGapChanged > 1 ? 's ont' : ' a'} évolué</strong> depuis le snapshot initial (ajustements Odoo entre temps).
-              </div>
-            )}
+
 
             {/* Avertissement si pas de snapshot Odoo */}
-            {(isSubmitted || isAudited) && report.length > 0 && stats.totalOdooInitial === 0 && stats.totalOdooCurrent === 0 && (
+            {(isSubmitted || isAudited) && report.length > 0 && stats.totalOdooCurrent === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
                 ⚠️ <strong>Snapshot Odoo non disponible.</strong> Clique "Rafraîchir Odoo" pour récupérer le stock actuel.
                 Vérifie aussi que les variables d'environnement Odoo sont configurées dans Vercel
@@ -370,9 +365,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Hamza a apporté">Apporté</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Restes d'hier propagés">Reste hier</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">Compté</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-amber-800 bg-amber-50" title="Stock Odoo au moment du submit">Odoo init.</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo actuel</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Écart initial : Odoo init. - Compté">Écart init.</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Écart actuel : Odoo actuel - Compté">Écart actuel</th>
                       </tr>
                     </thead>
@@ -385,7 +378,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           if (cat !== lastCategory) {
                             rendered.push(
                               <tr key={`cat-${cat}`} className="bg-cream-warm/60">
-                                <td colSpan={8} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
+                                <td colSpan={6} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
                                   {cat}
                                 </td>
                               </tr>
@@ -451,11 +444,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-semibold">− bleu</span>
                 <span className="text-ink-mute ml-2">Stock Odoo &lt; compté — ventes non syncées, ou erreur</span>
               </div>
-              <div className="bg-amber-50 border border-amber-300 rounded-md p-2 col-span-2">
-                <strong className="text-amber-900">Odoo init.</strong>
-                <span className="text-amber-800"> = snapshot pris au moment où le café a envoyé son comptage (figé).
-                <strong> Odoo actuel</strong> = stock Odoo après dernier "Rafraîchir Odoo". Si différent, c'est qu'un ajustement Odoo a eu lieu entre temps.</span>
-              </div>
+
             </div>
 
             {/* NOTES + VALIDATION */}
