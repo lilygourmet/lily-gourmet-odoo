@@ -118,9 +118,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
       totalCounted += r.qty_counted || 0
       totalOdooInitial += r.qty_odoo_initial || 0
       totalOdooCurrent += r.qty_odoo_current || 0
-      if (r.gap_current !== null && r.gap_current !== 0) articlesWithGapCurrent++
-      // Article dont l'écart a changé entre initial et current
-      if (r.gap_initial !== null && r.gap_current !== null && r.gap_initial !== r.gap_current) {
+      // "Non compté" est traité comme Compté = 0, l'écart est calculé contre Odoo actuel
+      const effQty = r.is_counted ? (r.qty_counted || 0) : 0
+      const effGapCurrent = (r.qty_odoo_current !== null && r.qty_odoo_current !== undefined)
+        ? r.qty_odoo_current - effQty
+        : null
+      if (effGapCurrent !== null && effGapCurrent !== 0) articlesWithGapCurrent++
+      // Article dont l'écart a changé entre initial et current (uniquement si compté)
+      if (r.is_counted && r.gap_initial !== null && r.gap_current !== null && r.gap_initial !== r.gap_current) {
         articlesGapChanged++
       }
     }
@@ -393,21 +398,25 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           const gapCurr = r.gap_current
                           const gapChanged = hasInitial && hasCurrent && gapInit !== gapCurr
                           const notCounted = !r.is_counted
+                          // "Non compté" = Compté 0 → on calcule l'écart contre Odoo
+                          const effQty = notCounted ? 0 : r.qty_counted
+                          const effGapCurr = hasCurrent ? (r.qty_odoo_current - effQty) : null
                           rendered.push(
                             <tr key={r.product_name} className={`border-b border-line ${
-                              notCounted ? 'bg-amber-50/20' : (gapCurr !== null && gapCurr !== 0 ? 'bg-orange-50/30' : '')
+                              notCounted ? 'bg-amber-50/20' : (effGapCurr !== null && effGapCurr !== 0 ? 'bg-orange-50/30' : '')
                             }`}>
-                              <td className="px-3 py-2 font-medium">{r.product_name}</td>
+                              <td className="px-3 py-2 font-medium">
+                                {r.product_name}
+                                {notCounted && (
+                                  <span className="ml-2 inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
+                                    non compté
+                                  </span>
+                                )}
+                              </td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning || '—'}</td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_leftover || '—'}</td>
-                              <td className="px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5">
-                                {notCounted ? (
-                                  <span className="inline-block bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[10px] font-medium">
-                                    Non compté
-                                  </span>
-                                ) : (
-                                  r.qty_counted
-                                )}
+                              <td className={`px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
+                                {effQty}
                               </td>
                               <td className="px-2 py-2 text-right tabular-nums bg-amber-50/50">
                                 {hasInitial ? r.qty_odoo_initial : <span className="text-ink-mute italic">—</span>}
@@ -419,7 +428,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                 {notCounted ? <span className="text-ink-mute">—</span> : <GapBadge value={gapInit} />}
                               </td>
                               <td className="px-2 py-2 text-right">
-                                {notCounted ? <span className="text-ink-mute">—</span> : <GapBadge value={gapCurr} bold />}
+                                <GapBadge value={effGapCurr} bold />
                               </td>
                             </tr>
                           )

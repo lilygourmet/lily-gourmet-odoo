@@ -452,11 +452,19 @@ function renderEveningHtml(day, items) {
 // ---- AUDIT : rapport des ÉCARTS UNIQUEMENT (gap_current ≠ 0 OU non compté)
 function renderAuditHtml(day, report, stockDay) {
   // Filtrer : on garde seulement les articles avec écart actuel ≠ 0,
-  //          ou les articles non comptés (Hamza envoyé mais café a oublié)
+  //          + les articles "non comptés" (qty effective = 0) qui ont un Odoo > 0
+  // Note : on traite "non compté" comme "compté = 0" pour calculer l'écart
+  function effectiveQty(r) {
+    return r.is_counted ? (r.qty_counted || 0) : 0
+  }
+  function effectiveGapCurrent(r) {
+    if (r.qty_odoo_current === null || r.qty_odoo_current === undefined) return null
+    return r.qty_odoo_current - effectiveQty(r)
+  }
   const filtered = (report || []).filter(r => {
-    if (!r.is_counted) return true              // non compté → toujours inclure
-    if (r.gap_current === null || r.gap_current === undefined) return false
-    return r.gap_current !== 0                   // écart actuel non nul
+    const gap = effectiveGapCurrent(r)
+    if (gap === null) return false
+    return gap !== 0
   })
 
   if (!report || report.length === 0 || filtered.length === 0) {
@@ -495,17 +503,19 @@ function renderAuditHtml(day, report, stockDay) {
       lastCat = cat
     }
     const hasCurr = r.qty_odoo_current !== null && r.qty_odoo_current !== undefined
+    const effQty = effectiveQty(r)
+    const effGap = effectiveGapCurrent(r)
     if (!r.is_counted) nbNotCounted++
-    else if (r.gap_current > 0) nbGapPlus++
-    else if (r.gap_current < 0) nbGapMinus++
+    else if (effGap > 0) nbGapPlus++
+    else if (effGap < 0) nbGapMinus++
     rendered.push(`
       <tr>
-        <td>${escapeHtml(r.product_name)}</td>
+        <td>${escapeHtml(r.product_name)}${!r.is_counted ? ' <span style="color:#ef6c00; font-size:10px;">(non compté)</span>' : ''}</td>
         <td class="num" style="color:#888;">${r.qty_morning || '—'}</td>
         <td class="num" style="color:#888;">${r.qty_leftover || '—'}</td>
-        <td class="num"><strong>${r.is_counted ? r.qty_counted : '<span class="not-counted">Non compté</span>'}</strong></td>
+        <td class="num"><strong>${effQty}</strong></td>
         <td class="num">${hasCurr ? r.qty_odoo_current : '<span style="color:#bbb;">—</span>'}</td>
-        <td class="num">${r.is_counted ? gapCell(r.gap_current) : '—'}</td>
+        <td class="num">${gapCell(effGap)}</td>
       </tr>
     `)
   }
