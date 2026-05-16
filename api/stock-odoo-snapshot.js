@@ -166,26 +166,34 @@ export default async function handler(req, res) {
       ? [['location_id.complete_name', 'ilike', process.env.ODOO_STOCK_LOCATION_NAME]]
       : [['location_id.usage', '=', 'internal'], ['location_id.name', 'ilike', 'Vente']]
 
-    console.log('[stock-odoo-snapshot] Odoo search stock.quant for', productCodes.length, 'products...')
+    // productCodes contient des odoo_template_id (= product.template id) en string.
+    // On les convertit en int pour le filtre Odoo.
+    const templateIds = productCodes.map(c => parseInt(c, 10)).filter(n => !isNaN(n))
+
+    console.log('[stock-odoo-snapshot] Odoo search stock.quant for', templateIds.length, 'template ids...')
     const quants = await odooSearchRead(
       uid,
       'stock.quant',
       [
         ...stockLocationDomain,
-        ['product_id.default_code', 'in', productCodes],
+        ['product_id.product_tmpl_id', 'in', templateIds],
       ],
-      ['product_id', 'quantity', 'location_id'],
+      ['product_id', 'product_tmpl_id', 'quantity', 'location_id'],
       { limit: 1000 }
     )
 
-    // 4) Construire un mapping code -> quantité totale (sommer si plusieurs locations matchent)
-    // product_id renvoie [id, "[CODE] Nom complet"]
+    // 4) Construire un mapping templateId -> quantité totale (sommer si plusieurs variants/locations matchent)
+    // product_tmpl_id est un champ Many2one renvoyant [id, "Nom"]
     const stockByCode = {}
     for (const q of quants) {
-      const displayName = Array.isArray(q.product_id) ? q.product_id[1] : q.product_id
-      const match = displayName?.match?.(/^\[(\d+)\]/)
-      const code = match ? match[1] : null
-      if (!code) continue
+      let tmplId = null
+      if (Array.isArray(q.product_tmpl_id)) {
+        tmplId = q.product_tmpl_id[0]
+      } else if (typeof q.product_tmpl_id === 'number') {
+        tmplId = q.product_tmpl_id
+      }
+      if (!tmplId) continue
+      const code = String(tmplId)
       const qty = parseFloat(q.quantity) || 0
       stockByCode[code] = (stockByCode[code] || 0) + qty
     }
