@@ -1,7 +1,6 @@
 // src/components/StockBoutique/StockEvening.jsx
 // Écran SOIR — Café (COMPTAGE AVEUGLE)
-// UX identique à Vitrine : panier à gauche avec calculette, tuiles à droite
-// Clic tuile = nouvelle ligne (Frais 1). Sélectionne ligne → calculette modifie qty.
+// V3 : 8 catégories E-/GS-/V-/MI-/SU-/RA-/H-/N- + tailles dynamiques
 // =============================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -26,19 +25,13 @@ const FRESHNESS_OPTIONS = [
   { id: 'twodays', label: 'J+2' },
 ]
 
-const SIZE_TABS = [
-  { id: '1', label: '1' },
-  { id: '5', label: '5' },
-  { id: '10', label: '10' },
-  { id: '15', label: '15' },
-]
-
 export default function StockEvening({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [stockDay, setStockDay] = useState(null)
   const [counts, setCounts] = useState([])
-  const [catalog, setCatalog] = useState({ sizes: { '1': [], '5': [], '10': [], '15': [] } })
-  const [currentSize, setCurrentSize] = useState('1')
+  const [catalog, setCatalog] = useState({ categories: [] })
+  const [currentCategory, setCurrentCategory] = useState('E-')
+  const [currentSize, setCurrentSize] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -56,6 +49,14 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
         if (!mounted) return
         setCounts(its)
         setCatalog(cat)
+        // Initialiser la sélection sur la 1ère catégorie disponible
+        const firstCat = (cat.categories || []).find(c => c.id === 'E-') || (cat.categories || [])[0]
+        if (firstCat) {
+          setCurrentCategory(firstCat.id)
+          if (firstCat.has_size_tabs && firstCat.sizes.length > 0) {
+            setCurrentSize(firstCat.sizes[0])
+          }
+        }
       } finally {
         if (mounted) setLoading(false)
       }
@@ -64,7 +65,41 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
     return () => { mounted = false }
   }, [])
 
-  const products = catalog.sizes?.[currentSize] || []
+  // Catégorie active
+  const activeCat = useMemo(() => {
+    return (catalog.categories || []).find(c => c.id === currentCategory) || null
+  }, [catalog, currentCategory])
+
+  // Ajuster currentSize quand on change de catégorie
+  useEffect(() => {
+    if (!activeCat) return
+    if (activeCat.has_size_tabs && activeCat.sizes.length > 0) {
+      if (!activeCat.sizes.includes(currentSize)) {
+        setCurrentSize(activeCat.sizes[0])
+      }
+    } else {
+      setCurrentSize(null)
+    }
+  }, [activeCat])
+
+  // Articles à afficher selon catégorie + taille
+  const products = useMemo(() => {
+    if (!activeCat) return []
+    if (!activeCat.has_size_tabs) {
+      return [
+        ...(activeCat.articlesBySize?._none || []),
+        ...(activeCat.articles || []).filter(a => a.size !== null),
+      ]
+    }
+    if (!currentSize) return []
+    const sizeArticles = activeCat.articlesBySize?.[currentSize] || []
+    const isFirstSize = activeCat.sizes[0] === currentSize
+    if (isFirstSize) {
+      return [...sizeArticles, ...(activeCat.articlesBySize?._none || [])]
+    }
+    return sizeArticles
+  }, [activeCat, currentSize])
+
   const totalCount = counts.reduce((s, c) => s + (c.qty_counted || 0), 0)
 
   const isOpen = stockDay?.status === 'open'
@@ -80,20 +115,18 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
   // Actions
   // ================================================================
 
-  // Clic tuile : crée TOUJOURS une nouvelle ligne (Frais, qty=1)
   async function handleTileClick(p) {
     if (!isOpen || !stockDay) return
     try {
       const created = await addEveningCount(stockDay.id, p.name, p.code, 1, 'fresh', user.id)
       setCounts(prev => [...prev, created])
-      setSelectedId(created.id) // sélectionne automatiquement la nouvelle ligne
+      setSelectedId(created.id)
     } catch (e) {
       console.error(e)
       alert('Erreur : ' + (e.message || e))
     }
   }
 
-  // Numpad : modifie la qty de l'item sélectionné
   async function handleNumpad(digit) {
     if (!isOpen || !selectedItem) return
     const current = String(selectedItem.qty_counted || 0)
@@ -103,8 +136,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
     } else if (digit === 'BACK') {
       newQty = parseInt(current.slice(0, -1) || '0', 10)
     } else {
-      // Ajouter le chiffre. Si qty actuelle = 1 (valeur par défaut au clic tuile),
-      // on remplace au lieu de concaténer pour éviter "11", "12" non voulus.
       if (current === '1' || current === '0') {
         newQty = parseInt(digit, 10)
       } else {
@@ -141,10 +172,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
     }
   }
 
-  // ================================================================
-  // Submission / réouverture
-  // ================================================================
-
   async function handleSubmit() {
     if (!stockDay || counts.length === 0) return
     if (!confirm(`Envoyer le comptage à l'équipe audit ?\n\n${counts.length} ligne${counts.length > 1 ? 's' : ''} · ${totalCount} article${totalCount > 1 ? 's' : ''} compté${totalCount > 1 ? 's' : ''}.\n\nTu pourras toujours corriger tant que l'audit n'a pas validé.`)) return
@@ -172,8 +199,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
     }
   }
 
-  // Liste : on garde l'ordre d'insertion (plus récent en bas)
-  // Pour les tuiles : total qty par article (toutes lignes/fraîcheurs cumulées)
   function tileQty(productName) {
     return counts
       .filter(c => c.product_name === productName)
@@ -195,12 +220,15 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
               {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
           </div>
-          <div className="flex items-center gap-2"><PrintButton mode="evening" /><div className="text-right text-[11px] opacity-80">
-            <div>🌙 Équipe café</div>
-            <div className="text-[9px] opacity-70 font-mono uppercase tracking-wider mt-0.5">
-              Comptage à l'aveugle
+          <div className="flex items-center gap-2">
+            <PrintButton mode="evening" />
+            <div className="text-right text-[11px] opacity-80">
+              <div>🌙 Équipe café</div>
+              <div className="text-[9px] opacity-70 font-mono uppercase tracking-wider mt-0.5">
+                Comptage à l'aveugle
+              </div>
             </div>
-          </div></div>
+          </div>
         </div>
 
         {/* BANDEAU STATUT */}
@@ -242,7 +270,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
           </div>
         ) : (
           <>
-            {/* INSTRUCTIONS */}
             {isOpen && counts.length === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
                 💡 <strong>Mode aveugle activé.</strong> Compte ce que tu vois en vitrine.
@@ -259,7 +286,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   Restes comptés
                 </div>
 
-                {/* Liste */}
                 <div className="min-h-[180px] max-h-[280px] overflow-y-auto">
                   {counts.length === 0 ? (
                     <div className="p-6 text-center text-ink-mute text-[11px] italic">
@@ -280,13 +306,11 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   )}
                 </div>
 
-                {/* Total */}
                 <div className="px-3 py-2 border-t border-line bg-bordeaux/5 flex items-center justify-between">
                   <span className="text-[11px] text-bordeaux-deep font-medium">Total</span>
                   <span className="text-[14px] font-semibold">{totalCount} article{totalCount > 1 ? 's' : ''}</span>
                 </div>
 
-                {/* Calculette */}
                 {isOpen && (
                   <div className="p-2 border-t border-line">
                     <div className="grid grid-cols-3 gap-1">
@@ -305,7 +329,6 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   </div>
                 )}
 
-                {/* Bouton clôturer */}
                 {isOpen && (
                   <div className="p-2 border-t border-line">
                     <button
@@ -320,31 +343,59 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                 )}
               </div>
 
-              {/* ============= PANNEAU DROITE : TUILES ============= */}
+              {/* ============= PANNEAU DROITE : ONGLETS + TUILES ============= */}
               <div className="bg-white border border-line rounded-lg overflow-hidden">
-                {/* Onglets taille */}
-                <div className="flex border-b border-line bg-cream-warm">
-                  {SIZE_TABS.map(s => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setCurrentSize(s.id)}
-                      className={`flex-1 px-3 py-2 text-[11px] transition-colors ${
-                        currentSize === s.id
-                          ? 'bg-bordeaux text-cream font-semibold'
-                          : 'text-ink-mute hover:bg-cream'
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
+
+                {/* NIVEAU 1 : Onglets catégories */}
+                <div className="flex border-b border-line bg-cream-warm overflow-x-auto">
+                  {(catalog.categories || []).map(cat => {
+                    const active = currentCategory === cat.id
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setCurrentCategory(cat.id)}
+                        className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2.5 py-2 min-w-[56px] transition-colors ${
+                          active ? 'bg-bordeaux text-cream font-medium' : 'text-ink-mute hover:bg-cream'
+                        }`}
+                        title={`${cat.label} (${cat.nb_articles} articles)`}
+                      >
+                        <span className="text-[16px] leading-none">{cat.emoji}</span>
+                        <span className="text-[9px] leading-tight">{cat.label}</span>
+                      </button>
+                    )
+                  })}
                 </div>
 
-                {/* Grille produits */}
+                {/* NIVEAU 2 : Onglets taille (si applicable) */}
+                {activeCat && activeCat.has_size_tabs && activeCat.sizes.length > 0 && (
+                  <div className="flex border-b border-line">
+                    {activeCat.sizes.map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setCurrentSize(s)}
+                        className={`flex-1 px-3 py-2 text-[11px] transition-colors ${
+                          currentSize === s
+                            ? 'bg-bordeaux/10 text-bordeaux font-semibold'
+                            : 'text-ink-mute hover:bg-cream-warm'
+                        }`}
+                      >
+                        {s} pers
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* GRILLE PRODUITS */}
                 <div className="p-2.5">
-                  {products.length === 0 ? (
+                  {!activeCat ? (
                     <div className="p-8 text-center text-ink-mute text-[11px]">
-                      Aucun article {currentSize} pers dans le catalogue.
+                      Aucune catégorie disponible.
+                    </div>
+                  ) : products.length === 0 ? (
+                    <div className="p-8 text-center text-ink-mute text-[11px]">
+                      Aucun article dans cette {activeCat.has_size_tabs ? 'taille' : 'catégorie'}.
                     </div>
                   ) : (
                     <div className="grid grid-cols-4 gap-2">
@@ -374,7 +425,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                                   onError={(e) => { e.currentTarget.style.display = 'none' }}
                                 />
                               ) : (
-                                <span>🍰</span>
+                                <span>{activeCat.emoji}</span>
                               )}
                             </div>
                             {qty > 0 && (
@@ -450,10 +501,6 @@ function CountRow({ item, selected, disabled, onSelect, onFreshnessChange, onRem
     </div>
   )
 }
-
-// =============================================================
-// BOUTON CALCULETTE
-// =============================================================
 
 function NumpadBtn({ label, onClick, disabled }) {
   return (
