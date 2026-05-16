@@ -18,7 +18,7 @@ const MODE_TITLES = {
   vitrine: 'Vitrine — Envoyé au café',
   reception: 'Réception — Reçu en cuisine café',
   evening: 'Fin de journée — Comptage aveugle',
-  audit: 'Audit — Rapport complet',
+  audit: 'Audit — Écarts uniquement',
 }
 
 export default function PrintButton({ mode = 'vitrine' }) {
@@ -449,16 +449,28 @@ function renderEveningHtml(day, items) {
   `
 }
 
-// ---- AUDIT : rapport complet (compté / Odoo init / Odoo actuel / écart)
+// ---- AUDIT : rapport des ÉCARTS UNIQUEMENT (gap_current ≠ 0 OU non compté)
 function renderAuditHtml(day, report, stockDay) {
-  if (!report || report.length === 0) {
+  // Filtrer : on garde seulement les articles avec écart actuel ≠ 0,
+  //          ou les articles non comptés (Hamza envoyé mais café a oublié)
+  const filtered = (report || []).filter(r => {
+    if (!r.is_counted) return true              // non compté → toujours inclure
+    if (r.gap_current === null || r.gap_current === undefined) return false
+    return r.gap_current !== 0                   // écart actuel non nul
+  })
+
+  if (!report || report.length === 0 || filtered.length === 0) {
+    const msg = (!report || report.length === 0)
+      ? 'Aucun rapport pour cette date.'
+      : '✓ Aucun écart à signaler — tous les articles comptés correspondent au stock Odoo actuel.'
     return `
       <!DOCTYPE html>
       <html><head><meta charset="utf-8"><title>Stock ${day}</title>${PRINT_HEAD}</head>
       <body>
-        <h1>Lily Gourmet — Stock Boutique</h1>
+        <h1>Lily Gourmet — Stock Boutique (Écarts)</h1>
         <h2>${fmtFrenchDate(day)}</h2>
-        <p style="color:#999; font-style:italic;">Aucun rapport pour cette date.</p>
+        <p style="color:${filtered.length === 0 && report && report.length > 0 ? '#1b5e20' : '#999'}; font-style:italic; font-size:13px;">${msg}</p>
+        <div class="footer">Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
       </body></html>
     `
   }
@@ -470,26 +482,29 @@ function renderAuditHtml(day, report, stockDay) {
     return `<span class="gap-neg">${value}</span>`
   }
 
-  // Regrouper par catégorie
+  // Regrouper par catégorie (filtered, pas report)
   const rendered = []
   let lastCat = null
-  for (const r of report) {
+  let nbNotCounted = 0
+  let nbGapPlus = 0
+  let nbGapMinus = 0
+  for (const r of filtered) {
     const cat = r.category_label || 'Autres'
     if (cat !== lastCat) {
-      rendered.push(`<tr class="cat-row"><td colspan="8">${escapeHtml(cat)}</td></tr>`)
+      rendered.push(`<tr class="cat-row"><td colspan="6">${escapeHtml(cat)}</td></tr>`)
       lastCat = cat
     }
-    const hasInit = r.qty_odoo_initial !== null && r.qty_odoo_initial !== undefined
     const hasCurr = r.qty_odoo_current !== null && r.qty_odoo_current !== undefined
+    if (!r.is_counted) nbNotCounted++
+    else if (r.gap_current > 0) nbGapPlus++
+    else if (r.gap_current < 0) nbGapMinus++
     rendered.push(`
       <tr>
         <td>${escapeHtml(r.product_name)}</td>
         <td class="num" style="color:#888;">${r.qty_morning || '—'}</td>
         <td class="num" style="color:#888;">${r.qty_leftover || '—'}</td>
         <td class="num"><strong>${r.is_counted ? r.qty_counted : '<span class="not-counted">Non compté</span>'}</strong></td>
-        <td class="num">${hasInit ? r.qty_odoo_initial : '<span style="color:#bbb;">—</span>'}</td>
         <td class="num">${hasCurr ? r.qty_odoo_current : '<span style="color:#bbb;">—</span>'}</td>
-        <td class="num">${r.is_counted ? gapCell(r.gap_initial) : '—'}</td>
         <td class="num">${r.is_counted ? gapCell(r.gap_current) : '—'}</td>
       </tr>
     `)
@@ -501,12 +516,23 @@ function renderAuditHtml(day, report, stockDay) {
     audited: 'Audité ✓',
   }[stockDay.status] || stockDay.status
 
+  // Bandeau résumé des écarts
+  const summary = `
+    <div style="margin: 12px 0 20px; padding: 10px 14px; background: #fff3e0; border-left: 3px solid #ef6c00; font-size: 12px;">
+      <strong>${filtered.length} ligne${filtered.length > 1 ? 's' : ''} avec anomalie</strong> sur ${report.length} article${report.length > 1 ? 's' : ''} total
+      ${nbGapPlus > 0 ? `· <span class="gap-pos">${nbGapPlus} surplus Odoo</span>` : ''}
+      ${nbGapMinus > 0 ? `· <span class="gap-neg">${nbGapMinus} manque Odoo</span>` : ''}
+      ${nbNotCounted > 0 ? `· <span style="color:#ef6c00;">${nbNotCounted} non compté${nbNotCounted > 1 ? 's' : ''}</span>` : ''}
+    </div>
+  `
+
   return `
     <!DOCTYPE html>
-    <html><head><meta charset="utf-8"><title>Stock ${day}</title>${PRINT_HEAD}</head>
+    <html><head><meta charset="utf-8"><title>Stock ${day} - Écarts</title>${PRINT_HEAD}</head>
     <body>
-      <h1>Lily Gourmet — Stock Boutique (Audit)</h1>
+      <h1>Lily Gourmet — Écarts Stock Boutique</h1>
       <h2>${fmtFrenchDate(day)} · Statut : ${statusLabel}</h2>
+      ${summary}
       <table>
         <thead>
           <tr>
@@ -514,9 +540,7 @@ function renderAuditHtml(day, report, stockDay) {
             <th class="num">Apporté</th>
             <th class="num">Reste hier</th>
             <th class="num">Compté</th>
-            <th class="num">Odoo init.</th>
             <th class="num">Odoo actuel</th>
-            <th class="num">Écart init.</th>
             <th class="num">Écart actuel</th>
           </tr>
         </thead>
