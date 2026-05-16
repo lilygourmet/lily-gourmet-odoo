@@ -210,56 +210,89 @@ export default async function handler(req, res) {
       return name.replace(/^\[\d+\]\s*/, '').trim()
     }
 
-    // 4) Pour chaque quant : agréger par product_tmpl_id et filtrer par préfixe
-    // odooArticles : { templateId: { templateId, productName, prefix, qty } }
-    const odooArticles = new Map()
+    // 4) Pour chaque quant : indexer par VARIANT (product_id), pas par template.
+    //    Chaque variant = une taille distincte dans Odoo (ex: "E- Black Forest (1)" id=3126).
+    //    On garde aussi un index par template pour les fallbacks (cas Miss Pistache sans tailles).
+    //
+    // odooVariants : Map<nameKey, { variantName, variantId, tmplId, prefix, qty }>
+    //   où nameKey = nom normalisé de la VARIANTE (display_name sans [123])
+    // odooTemplates : Map<tmplBaseNameKey, { tmplId, tmplName, prefix, totalQty }>
+    //   où tmplBaseNameKey = nom normalisé du TEMPLATE (le "parent" générique)
+    const odooVariants = new Map()
+    const odooTemplates = new Map()
+
     for (const q of quants) {
       let tmplId = null
-      let displayName = null
+      let tmplName = null
+      let variantId = null
+      let variantName = null
+
       if (Array.isArray(q.product_tmpl_id)) {
         tmplId = q.product_tmpl_id[0]
-        displayName = q.product_tmpl_id[1] // utile fallback
+        tmplName = q.product_tmpl_id[1]
       }
-      // Fallback : récupérer le nom depuis product_id
-      if (!displayName && Array.isArray(q.product_id)) {
-        displayName = q.product_id[1]
+      if (Array.isArray(q.product_id)) {
+        variantId = q.product_id[0]
+        variantName = q.product_id[1]
       }
-      if (!tmplId) continue
-      const prefix = detectPrefix(displayName)
-      if (!prefix) continue // pas un préfixe vitrine → on ignore
+      // Fallback si tmplName vide : on déduit du variant
+      if (!tmplName && variantName) tmplName = variantName
+      if (!tmplId || !variantName) continue
 
-      const code = String(tmplId)
+      const prefix = detectPrefix(variantName)
+      if (!prefix) continue // pas un préfixe vitrine → ignore
+
       const qty = parseFloat(q.quantity) || 0
+      const variantKey = normName(variantName)        // ex: "e- black forest (1)"
+      const tmplKey = normName(tmplName)              // ex: "e- black forest"
 
-      if (odooArticles.has(code)) {
-        // Somme (au cas où plusieurs variants/locations pour le même tmpl_id)
-        odooArticles.get(code).qty += qty
+      // Index VARIANT (somme si plusieurs quants pour le même variant)
+      if (odooVariants.has(variantKey)) {
+        odooVariants.get(variantKey).qty += qty
       } else {
-        odooArticles.set(code, {
-          templateId: code,
-          productName: cleanName(displayName),
+        odooVariants.set(variantKey, {
+          variantName: cleanName(variantName),
+          variantId,
+          tmplId: String(tmplId),
+          tmplName: cleanName(tmplName),
           prefix,
           qty,
         })
       }
+
+      // Index TEMPLATE (somme TOUTES variantes confondues, pour fallback Miss Pistache)
+      if (odooTemplates.has(tmplKey)) {
+        odooTemplates.get(tmplKey).totalQty += qty
+      } else {
+        odooTemplates.set(tmplKey, {
+          tmplId: String(tmplId),
+          tmplName: cleanName(tmplName),
+          prefix,
+          totalQty: qty,
+        })
+      }
     }
 
-    console.log('[stock-odoo-snapshot] Stock found for', odooArticles.size, 'articles (filtered by prefix)')
+    console.log('[stock-odoo-snapshot]', odooVariants.size, 'variants and', odooTemplates.size, 'templates indexed')
 
-    // Construire un index secondaire : odoo articles par nom normalisé
-    // (pour matcher les lignes 'evening' par nom plutôt que par template_id,
-    // car etiquettes_articles a parfois un odoo_template_id imprécis pour les tailles "(1)")
-    const odooByName = new Map()
-    for (const [code, entry] of odooArticles.entries()) {
-      const key = normName(entry.productName)
-      if (!key) continue
-      if (odooByName.has(key)) {
-        // Si plusieurs templates Odoo correspondent au même nom normalisé : on additionne
-        odooByName.get(key).qty += entry.qty
-        odooByName.get(key).matchedCodes.push(code)
-      } else {
-        odooByName.set(key, { ...entry, matchedCodes: [code] })
+    // Helpers : utilitaires pour identifier les variantes par suffixe (1)/(5)/(10)/(15)/(20)
+    function hasVariantSuffix(name) {
+      return /\(\d+\)\s*$/.test(name)
+    }
+    function extractBaseName(name) {
+      return name.replace(/\s*\(\d+\)\s*$/, '').trim()
+    }
+
+    // Pour chaque template ayant des VARIANTES par taille dans Odoo, on liste son nameKey
+    // afin de savoir s'il faut afficher les variantes (et pas le template seul).
+    const templateHasSizeVariants = new Map() // tmplKey -> Set<variantKey>
+    for (const [variantKey, v] of odooVariants.entries()) {
+      if (!hasVariantSuffix(variantKey)) continue
+      const baseKey = extractBaseName(variantKey)
+      if (!templateHasSizeVariants.has(baseKey)) {
+        templateHasSizeVariants.set(baseKey, new Set())
       }
+      templateHasSizeVariants.get(baseKey).add(variantKey)
     }
 
     // 5) Mettre à jour les lignes 'evening' existantes + créer des 'odoo_only' pour les nouveaux
@@ -267,17 +300,54 @@ export default async function handler(req, res) {
     let updatedEvening = 0
     let insertedOdooOnly = 0
 
-    // 5a) Update lignes evening (matching par nom)
+    // Helper : résoudre la qty Odoo d'une ligne envoyée par Hamza.
+    //   1. Match VARIANT exact par nom normalisé → qty du variant
+    //   2. Sinon, si le template existe mais SANS aucune variante de taille
+    //      (cas Miss Pistache : template "E- Miss Pistache" avec 1 seule variante sans suffixe)
+    //      → fallback sur totalQty du template (du même nom de base)
+    //   3. Sinon null
+    // Retourne : { qty: number|null, matchedVariantKey: string|null, matchedTmplKey: string|null }
+    function resolveOdooQty(eveningName) {
+      const variantKey = normName(eveningName)
+      // 1) Match variant exact
+      if (odooVariants.has(variantKey)) {
+        return {
+          qty: odooVariants.get(variantKey).qty,
+          matchedVariantKey: variantKey,
+          matchedTmplKey: null,
+        }
+      }
+      // 2) Fallback template : on cherche le template du même nom de base
+      //    SEULEMENT si ce template n'a PAS de variantes par taille (sinon = erreur de matching)
+      const baseKey = extractBaseName(variantKey)
+      if (odooTemplates.has(baseKey)) {
+        const hasSizeVariants = templateHasSizeVariants.has(baseKey)
+        if (!hasSizeVariants) {
+          // Template sans variantes par taille (ex: Miss Pistache) → on prend le total
+          return {
+            qty: odooTemplates.get(baseKey).totalQty,
+            matchedVariantKey: null,
+            matchedTmplKey: baseKey,
+          }
+        }
+      }
+      // 3) Pas de match
+      return { qty: null, matchedVariantKey: null, matchedTmplKey: null }
+    }
+
+    // 5a) Update lignes evening (matching par nom de variant, fallback template)
+    const usedVariantKeys = new Set()
+    const usedTmplKeys = new Set()
     for (const [nameKey, eveningItem] of eveningByName.entries()) {
-      const odooEntry = odooByName.get(nameKey)
-      const qty = odooEntry ? Math.round(odooEntry.qty) : null
+      const { qty, matchedVariantKey, matchedTmplKey } = resolveOdooQty(eveningItem.product_name)
+      const qtyRounded = qty !== null ? Math.round(qty) : null
 
       const patch = {
-        qty_odoo_snapshot: qty,
+        qty_odoo_snapshot: qtyRounded,
         qty_odoo_snapshot_at: nowISO,
       }
       if (initial && (eveningItem.qty_odoo_initial === null || eveningItem.qty_odoo_initial === undefined)) {
-        patch.qty_odoo_initial = qty
+        patch.qty_odoo_initial = qtyRounded
         patch.qty_odoo_initial_at = nowISO
       }
 
@@ -291,12 +361,9 @@ export default async function handler(req, res) {
       }
       updatedEvening++
 
-      // Marquer comme traité (pour ne pas le recréer en odoo_only) : supprime tous les codes matchés
-      if (odooEntry) {
-        for (const c of odooEntry.matchedCodes) {
-          odooArticles.delete(c)
-        }
-      }
+      // Marquer comme matché (pour ne pas recréer en odoo_only)
+      if (matchedVariantKey) usedVariantKeys.add(matchedVariantKey)
+      if (matchedTmplKey) usedTmplKeys.add(matchedTmplKey)
     }
 
     // 5b) Supprimer les anciennes lignes 'odoo_only' (on les recrée à chaque refresh)
@@ -310,23 +377,67 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5c) Créer les lignes 'odoo_only' pour articles Odoo non comptés
-    if (odooArticles.size > 0) {
-      const newRows = []
-      for (const [code, entry] of odooArticles.entries()) {
-        newRows.push({
-          stock_day_id,
-          product_name: entry.productName,
-          product_code: code,
-          category: PREFIX_CATEGORY[entry.prefix] || 'AUTRE',
-          freshness: 'fresh',
-          source: 'odoo_only',
-          qty_counted: null,
-          qty_odoo_snapshot: Math.round(entry.qty),
-          qty_odoo_snapshot_at: nowISO,
-          ...(initial ? { qty_odoo_initial: Math.round(entry.qty), qty_odoo_initial_at: nowISO } : {}),
-        })
+    // 5c) Créer les lignes 'odoo_only' pour articles Odoo NON comptés par le café
+    //
+    // Règle d'affichage :
+    //   - Pour les templates AVEC variantes par taille : afficher chaque variante non matchée
+    //     (ex: si Hamza n'a pas envoyé "E- Black Forest (15)", on crée une ligne odoo_only pour elle)
+    //   - Pour les templates SANS variantes (Miss Pistache, Tatin) : afficher le template seul s'il
+    //     n'a pas déjà été matché
+    const newRows = []
+
+    // Cas A : variantes par taille (suffixe (1)/(5)/(10)/...)
+    for (const [variantKey, v] of odooVariants.entries()) {
+      if (usedVariantKeys.has(variantKey)) continue // déjà matché à une ligne evening
+      if (!hasVariantSuffix(variantKey)) continue   // pas une variante taille (sera traité cas B)
+
+      newRows.push({
+        stock_day_id,
+        product_name: v.variantName,
+        product_code: v.tmplId,
+        category: PREFIX_CATEGORY[v.prefix] || 'AUTRE',
+        freshness: 'fresh',
+        source: 'odoo_only',
+        qty_counted: null,
+        qty_odoo_snapshot: Math.round(v.qty),
+        qty_odoo_snapshot_at: nowISO,
+        ...(initial ? { qty_odoo_initial: Math.round(v.qty), qty_odoo_initial_at: nowISO } : {}),
+      })
+    }
+
+    // Cas B : templates SANS variantes par taille (Miss Pistache, Tatin, etc.)
+    //   → on affiche un total template (sauf si déjà matché via fallback template OU
+    //     via un variant sans suffixe du même template)
+    for (const [tmplKey, t] of odooTemplates.entries()) {
+      if (usedTmplKeys.has(tmplKey)) continue
+      if (templateHasSizeVariants.has(tmplKey)) continue // le cas A s'en occupe
+
+      // On vérifie aussi qu'aucun variant sans suffixe de ce template n'a déjà été matché
+      // (cas où le variant Odoo s'appelle "E- Miss Pistache" sans suffixe et a été matché)
+      let alreadyMatchedAsVariant = false
+      for (const [vKey, v] of odooVariants.entries()) {
+        if (v.tmplId === t.tmplId && usedVariantKeys.has(vKey)) {
+          alreadyMatchedAsVariant = true
+          break
+        }
       }
+      if (alreadyMatchedAsVariant) continue
+
+      newRows.push({
+        stock_day_id,
+        product_name: t.tmplName,
+        product_code: t.tmplId,
+        category: PREFIX_CATEGORY[t.prefix] || 'AUTRE',
+        freshness: 'fresh',
+        source: 'odoo_only',
+        qty_counted: null,
+        qty_odoo_snapshot: Math.round(t.totalQty),
+        qty_odoo_snapshot_at: nowISO,
+        ...(initial ? { qty_odoo_initial: Math.round(t.totalQty), qty_odoo_initial_at: nowISO } : {}),
+      })
+    }
+
+    if (newRows.length > 0) {
       const { error: insErr } = await supabase
         .from('stock_day_items')
         .insert(newRows)
