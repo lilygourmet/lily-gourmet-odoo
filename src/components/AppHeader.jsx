@@ -149,6 +149,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux"
               title="Ouvre la Galerie CD dans un nouvel onglet"
             >
+              <span>📸</span>
               <span>Galerie CD</span>
             </a>
           )}
