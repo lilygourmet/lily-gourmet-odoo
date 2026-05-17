@@ -872,6 +872,14 @@ function RecapCard({ cat, linesForCategory, linesForCategoryFull, isFiltered, on
   const showSlash = isFiltered && total !== totalFull
   const isEmpty = total === 0 && !showSlash
 
+  // Nombre de commandes distinctes (order_num unique) pour les categories
+  // ou ca a du sens : ventes par client, livraisons, toutes commandes, etc.
+  // Pour Prod (vue par produit) et Recap 16h (table Odoo) on garde l'ancien
+  // affichage en "lignes".
+  const orderCount = cat.showOrders
+    ? new Set(catLines.map(l => l.order_num).filter(Boolean)).size
+    : null
+
   // Style de bordure selon la variante
   const borderClass = isEmpty
     ? 'bg-transparent border border-dashed border-line/60 hover:border-bordeaux/40'
@@ -896,16 +904,38 @@ function RecapCard({ cat, linesForCategory, linesForCategoryFull, isFiltered, on
           {cat.label.replace(/^Vente\s+/i, '')}
         </span>
       </div>
-      <div className="flex items-baseline gap-2">
-        <span className={`font-fraunces italic font-medium leading-none ${numClass}`}>
-          {total}
-          {showSlash && (
-            <span className="text-[14px] text-ink-mute font-normal ml-0.5">
-              /{totalFull}
-            </span>
+      <div className="flex items-baseline gap-3">
+        {/* Bloc principal : nombre d'articles */}
+        <div className="flex items-baseline gap-1.5">
+          <span className={`font-fraunces italic font-medium leading-none ${numClass}`}>
+            {total}
+            {showSlash && (
+              <span className="text-[14px] text-ink-mute font-normal ml-0.5">
+                /{totalFull}
+              </span>
+            )}
+          </span>
+          {!isEmpty && (
+            <span className="text-[10px] text-ink-mute leading-none">articles</span>
           )}
-        </span>
-        {!isEmpty && catLines.length > 0 && (
+        </div>
+
+        {/* Bloc secondaire : nombre de commandes (si showOrders) */}
+        {!isEmpty && orderCount !== null && orderCount > 0 && (
+          <div className="flex items-baseline gap-1.5 pl-3 ml-auto border-l border-line/60">
+            <span className={`font-fraunces italic font-medium leading-none ${
+              variant === 'global' ? 'text-[24px] text-bordeaux' : 'text-[22px] text-bordeaux'
+            }`}>
+              {orderCount}
+            </span>
+            <span className="text-[10px] text-ink-mute leading-none">
+              commande{orderCount > 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
+
+        {/* Fallback "X lignes" pour les cards sans showOrders (Prod, Recap 16h) */}
+        {!isEmpty && orderCount === null && catLines.length > 0 && (
           <span className="text-[11px] text-ink-mute ml-auto">
             {catLines.length} ligne{catLines.length > 1 ? 's' : ''}
           </span>

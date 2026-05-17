@@ -4,15 +4,15 @@ import { supabase } from './supabase'
 // CATEGORIES (dropdown Recap Ventes)
 // ============================================================
 export const VENTE_CATEGORIES = [
-  { id: 'CD',     label: 'Vente CD',          prefixes: ['CD-', 'GM-', 'GMD-'],          emoji: '🎂', dbCategory: 'CD',    viewMode: 'hour-client' },
-  { id: 'LIVR',   label: 'Vente Livraisons',  prefixes: [],                               emoji: '🚚', dbCategory: 'LIVR',  viewMode: 'delivery' },
-  { id: 'PROD',   label: 'Vente Prod',        prefixes: ['E-', 'MI-', 'GS-'],            emoji: '🍰', dbCategory: 'PROD',  viewMode: 'product' },
-  { id: 'CLT',    label: 'Vente par client',  prefixes: ['E-', 'MI-', 'GS-'],            emoji: '👤', dbCategory: 'PROD',  viewMode: 'hour-client' },
-  { id: 'RAHN',   label: 'Vente RA H N',      prefixes: ['RA-', 'H-', 'N-'],             emoji: '🥐', dbCategory: 'RAHN',  viewMode: 'hour-client' },
-  { id: 'SALES',  label: 'Vente Salés',       prefixes: ['SA-', 'SAK-', 'SU-'],          emoji: '🥪', dbCategory: 'SALES', viewMode: 'hour-client' },
-  { id: 'VIENN',  label: 'Vente Vienn/Jus',   prefixes: ['V-', 'B-'],                    emoji: '🥖', dbCategory: 'VIENN', viewMode: 'hour-client' },
-  { id: 'ALL',    label: 'Toutes commandes',  prefixes: [],                               emoji: '📋', dbCategory: null,    viewMode: 'delivery-all' },
-  { id: 'ODOO',   label: 'Récap 16h',         prefixes: [],                               emoji: '📊', dbCategory: null,    viewMode: 'odoo-table' },
+  { id: 'CD',     label: 'Vente CD',          prefixes: ['CD-', 'GM-', 'GMD-'],          emoji: '🎂', dbCategory: 'CD',    viewMode: 'hour-client',  showOrders: true  },
+  { id: 'LIVR',   label: 'Vente Livraisons',  prefixes: [],                               emoji: '🚚', dbCategory: 'LIVR',  viewMode: 'delivery',     showOrders: true  },
+  { id: 'PROD',   label: 'Vente Prod',        prefixes: ['E-', 'MI-', 'GS-'],            emoji: '🍰', dbCategory: 'PROD',  viewMode: 'product',      showOrders: false },
+  { id: 'CLT',    label: 'Vente par client',  prefixes: ['E-', 'MI-', 'GS-'],            emoji: '👤', dbCategory: 'PROD',  viewMode: 'hour-client',  showOrders: true  },
+  { id: 'RAHN',   label: 'Vente RA H N',      prefixes: ['RA-', 'H-', 'N-'],             emoji: '🥐', dbCategory: 'RAHN',  viewMode: 'hour-client',  showOrders: true  },
+  { id: 'SALES',  label: 'Vente Salés',       prefixes: ['SA-', 'SAK-', 'SU-'],          emoji: '🥪', dbCategory: 'SALES', viewMode: 'hour-client',  showOrders: true  },
+  { id: 'VIENN',  label: 'Vente Vienn/Jus',   prefixes: ['V-', 'B-'],                    emoji: '🥖', dbCategory: 'VIENN', viewMode: 'hour-client',  showOrders: true  },
+  { id: 'ALL',    label: 'Toutes commandes',  prefixes: [],                               emoji: '📋', dbCategory: null,    viewMode: 'delivery-all', showOrders: true  },
+  { id: 'ODOO',   label: 'Récap 16h',         prefixes: [],                               emoji: '📊', dbCategory: null,    viewMode: 'odoo-table',   showOrders: false },
 ]
 
 // ============================================================
