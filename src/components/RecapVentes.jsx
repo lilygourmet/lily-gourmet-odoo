@@ -864,11 +864,31 @@ function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload
 // ============================================================
 // RecapCard : une card pour une categorie (3 variantes : default, transverse, global)
 // ============================================================
-function RecapCard({ cat, linesForCategory, linesForCategoryFull, isFiltered, onClick, variant = 'default' }) {
+function RecapCard({ cat, linesForCategory, linesForCategoryFull, allLines = [], isFiltered, onClick, variant = 'default' }) {
   const catLines = linesForCategory(cat.id)
   const catLinesFull = linesForCategoryFull(cat.id)
-  const total = sumQty(catLines)
-  const totalFull = sumQty(catLinesFull)
+
+  // Cas special LIVR : les lignes 'LIVR' ne contiennent qu'une seule entree
+  // (la ligne de frais de livraison) par commande. Pour avoir le vrai nombre
+  // d'articles livres, on additionne TOUTES les autres lignes (non-LIVR) de
+  // la meme order_num.
+  const isLivr = cat.id === 'LIVR'
+  let total, totalFull
+  if (isLivr) {
+    const orderNums = new Set(catLines.map(l => l.order_num).filter(Boolean))
+    const orderNumsFull = new Set(catLinesFull.map(l => l.order_num).filter(Boolean))
+    // Compte toutes les lignes (non-LIVR) qui partagent une order_num de livraison.
+    total = sumQty((allLines || []).filter(l =>
+      l.category !== 'LIVR' && orderNums.has(l.order_num)
+    ))
+    totalFull = sumQty((allLines || []).filter(l =>
+      l.category !== 'LIVR' && orderNumsFull.has(l.order_num)
+    ))
+  } else {
+    total = sumQty(catLines)
+    totalFull = sumQty(catLinesFull)
+  }
+
   const showSlash = isFiltered && total !== totalFull
   const isEmpty = total === 0 && !showSlash
 
@@ -1344,6 +1364,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                       cat={cat}
                       linesForCategory={linesForCategory}
                       linesForCategoryFull={linesForCategoryFull}
+                      allLines={lines}
                       isFiltered={isFiltered}
                       onClick={() => setPopupCat(cat)}
                       variant="global"
@@ -1367,6 +1388,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                       {cats.map(cat => <RecapCard key={cat.id} cat={cat}
                           linesForCategory={linesForCategory}
                           linesForCategoryFull={linesForCategoryFull}
+                          allLines={lines}
                           isFiltered={isFiltered}
                           onClick={() => setPopupCat(cat)} />)}
                     </div>
@@ -1387,6 +1409,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                       {cats.map(cat => <RecapCard key={cat.id} cat={cat}
                           linesForCategory={linesForCategory}
                           linesForCategoryFull={linesForCategoryFull}
+                          allLines={lines}
                           isFiltered={isFiltered}
                           onClick={() => setPopupCat(cat)}
                           variant="transverse" />)}
@@ -1408,6 +1431,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                       {cats.map(cat => <RecapCard key={cat.id} cat={cat}
                           linesForCategory={linesForCategory}
                           linesForCategoryFull={linesForCategoryFull}
+                          allLines={lines}
                           isFiltered={isFiltered}
                           onClick={() => setPopupCat(cat)}
                           variant="global" />)}
