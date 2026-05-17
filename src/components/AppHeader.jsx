@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -141,6 +141,17 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {navBtn('freezer', '❄️', 'CD Négatif', !isLivreur(user) && canSeeFreezer(user))}
           {navBtn('messages', '', 'Messages', !isLivreur(user) && canSeeMessages(user))}
           {navBtn('etiquettes', '🏷', 'Étiquettes Café', !isLivreur(user) && canSeeEtiquettes(user))}
+          {!isLivreur(user) && canSeeCakeVision(user) && (
+            <a
+              href="https://cake-vision-app.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux"
+              title="Ouvre la Galerie CD dans un nouvel onglet"
+            >
+              <span>Galerie CD</span>
+            </a>
+          )}
           {navBtn('vitrine', '🥐', 'Vitrine', !isLivreur(user) && canStockPatissier(user))}
           {navBtn('reception-vitrine', '📦', 'Réception Vitrine', !isLivreur(user) && canStockCafe(user))}
           {navBtn('fin-journee', '🌙', 'Fin de journée', !isLivreur(user) && canStockCafe(user))}
