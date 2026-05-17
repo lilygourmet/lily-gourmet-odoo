@@ -116,6 +116,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_freezer: formData.permFreezer,
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
+        perm_cake_vision: formData.permCakeVision,
         perm_stock_patissier: formData.permStockPatissier,
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
@@ -153,6 +154,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_freezer: formData.permFreezer,
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
+        perm_cake_vision: formData.permCakeVision,
         perm_stock_patissier: formData.permStockPatissier,
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
@@ -621,6 +623,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permFreezer: initialData?.perm_freezer !== undefined ? initialData.perm_freezer : false,
     permMessages: initialData?.perm_messages !== undefined ? initialData.perm_messages : false,
     permEtiquettes: initialData?.perm_etiquettes !== undefined ? initialData.perm_etiquettes : false,
+    permCakeVision: initialData?.perm_cake_vision !== undefined ? initialData.perm_cake_vision : false,
     permStockPatissier: initialData?.perm_stock_patissier !== undefined ? initialData.perm_stock_patissier : false,
     permStockCafe: initialData?.perm_stock_cafe !== undefined ? initialData.perm_stock_cafe : false,
     permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
@@ -833,6 +836,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="🏷 Voir l'onglet Étiquettes (Entremets/GS/Surgelés)"
             checked={isAdmin || formData.permEtiquettes}
             onChange={v => update('permEtiquettes', v)}
+          />
+          <PermCheckbox
+            id="perm-cake-vision"
+            label="📸 Voir le bouton Galerie CD (Cake Vision)"
+            checked={isAdmin || formData.permCakeVision}
+            onChange={v => update('permCakeVision', v)}
           />
           <PermCheckbox
             id="perm-stock-patissier"
