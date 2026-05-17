@@ -973,7 +973,15 @@ function RecapCard({ cat, linesForCategory, linesForCategoryFull, allLines = [],
 // ============================================================
 export default function RecapVentes({ onClose, user = null, onLogout = null, fullscreen = false, activeView, onNavigate }) {
   const todayStr = new Date().toISOString().slice(0, 10)
-  const [date, setDate] = useState(todayStr)
+  // Restaure la derniere date selectionnee si l'utilisateur recharge la page,
+  // mais seulement si elle est aujourd'hui ou dans le futur (sinon retour a today)
+  const [date, setDate] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lily_recap_date')
+      if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) && saved >= todayStr) return saved
+    } catch (_) {}
+    return todayStr
+  })
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
   const [popupCat, setPopupCat] = useState(null)
@@ -1016,6 +1024,11 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
   useEffect(() => {
     try { localStorage.setItem(PRINT_CART_KEY, JSON.stringify(printCart)) } catch {}
   }, [printCart])
+
+  // Sauvegarde de la date selectionnee pour la restaurer au refresh
+  useEffect(() => {
+    try { localStorage.setItem('lily_recap_date', date) } catch {}
+  }, [date])
 
   function addToPrintCart(entry) {
     setPrintCart(c => [...c, { ...entry, id: Date.now() + Math.random() }])

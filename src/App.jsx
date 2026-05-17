@@ -52,7 +52,14 @@ function App() {
     const stored = getCurrentUser()
     setUser(stored)
     if (stored) {
-      setActiveView(pickDefaultView(stored))
+      // Restaure la derniere vue ouverte si elle existe (sauf livreur, qui
+      // est toujours redirige vers recap), sinon vue par defaut.
+      const saved = localStorage.getItem('lily_active_view')
+      if (saved && !isLivreur(stored)) {
+        setActiveView(saved)
+      } else {
+        setActiveView(pickDefaultView(stored))
+      }
       // En arriere-plan : recharge les permissions a jour depuis Supabase
       // (au cas ou l'admin aurait modifie les perms depuis la derniere connexion)
       loadFreshUser(stored.id).then(fresh => {
@@ -101,12 +108,14 @@ function App() {
 
   function handleLogout() {
     logout()
+    localStorage.removeItem('lily_active_view')
     setUser(null)
     setActiveView('calendar')
   }
 
   function handleNavigate(view) {
     setActiveView(view)
+    localStorage.setItem('lily_active_view', view)
   }
 
   if (loading) {
