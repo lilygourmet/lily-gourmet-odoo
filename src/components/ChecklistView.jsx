@@ -36,7 +36,20 @@ const DAYS_AFTER = 3
 
 function startsWithAny(name, prefixes) {
   if (!name) return false
-  return prefixes.some(p => name.startsWith(p))
+  // Retire le code Odoo entre crochets en tete : "[447] E- Gianduja" -> "E- Gianduja"
+  const cleaned = String(name).replace(/^\[\d+\]\s*/, '').trim()
+  return prefixes.some(p => cleaned.startsWith(p))
+}
+
+// Nettoie le nom de produit pour l'affichage :
+// - retire le code Odoo [447] en tete
+// - garde uniquement la 1ere ligne (coupe les "Message: ...")
+function cleanProductName(name) {
+  if (!name) return ''
+  let s = String(name).replace(/^\[\d+\]\s*/, '').trim()
+  const nl = s.indexOf('\n')
+  if (nl !== -1) s = s.substring(0, nl).trim()
+  return s
 }
 
 // Verifie si une ligne/item provient d'un client exclu (ex : 'Vitrine')
@@ -249,7 +262,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           doneProdItems.push({
             kind: 'prod',
             key: `prod-${r.odoo_line_id}`,
-            title: line.product_name,
+            title: cleanProductName(line.product_name),
             subtitle: buildSalesLineSubtitle(line),
             quantity: line.quantity,
             received_at: recvByLine.get(r.odoo_line_id),
@@ -486,7 +499,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVit
             vitrineItems.map(item => (
               <ItemCard
                 key={`vit-${item.id}`}
-                title={item.product_name}
+                title={cleanProductName(item.product_name)}
                 subtitle={null}
                 quantity={item.qty_announced}
                 onClick={() => onVitrineDone(item)}
@@ -503,7 +516,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVit
             prodLines.map(line => (
               <ItemCard
                 key={`prod-${line.odoo_line_id}`}
-                title={line.product_name}
+                title={cleanProductName(line.product_name)}
                 subtitle={buildSalesLineSubtitle(line)}
                 quantity={line.quantity}
                 onClick={() => onProdDone(line)}
