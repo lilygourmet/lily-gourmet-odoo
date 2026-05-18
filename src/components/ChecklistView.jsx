@@ -105,6 +105,15 @@ function lineDay(line) {
   return deliveryDayStr(line?.delivery_at)
 }
 
+// Formatte l'heure depuis un timestamp : "14h00"
+function formatHour(isoStr) {
+  if (!isoStr) return ''
+  const d = new Date(isoStr)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}h${mm}`
+}
+
 // Charge les orders avec leurs items sur la fenetre [todayStr, todayStr+DAYS_AFTER]
 async function loadOrdersForRange(fromStr, toStr) {
   // toStr exclus (passe fromDate + DAYS_AFTER + 1)
@@ -152,8 +161,15 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // Section COMMANDES (order_items CD/GM/GMD via item_steps)
   const [commandeItems, setCommandeItems] = useState([])
 
-  // Onglet RANGE : items deja ranges par le cafe (toutes sources)
-  const [doneItems, setDoneItems] = useState([])
+  // Onglet RANGE : items deja ranges (separes par source pour 3 colonnes)
+  const [doneVitrine, setDoneVitrine] = useState([])
+  const [doneProd, setDoneProd] = useState([])
+  const [doneCommandes, setDoneCommandes] = useState([])
+
+  // Recherche partout (filtre les 3 colonnes)
+  const [searchQuery, setSearchQuery] = useState('')
+  // Bouton refresh manuel
+  const [refreshing, setRefreshing] = useState(false)
 
   const todayStr = todayISO()
 
@@ -234,8 +250,31 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap))
       setCommandeItems(todoCommandes)
 
-      // -------- 4) ONGLET "RANGE" : combine prod + commandes --------
-      // 4a) Prod ranges : cafe_received avec sales_line correspondante, du jour J ou futur
+      // -------- 4) ONGLET "RANGE" : 3 sources separees pour 3 colonnes --------
+
+      // 4a) Vitrine rangee : stock_day_items du jour avec reception_status != 'pending'
+      let vitDoneItems = []
+      if (sd?.id) {
+        const { data: itemsDone } = await supabase
+          .from('stock_day_items')
+          .select('id, product_name, qty_announced, reception_status, received_at')
+          .eq('stock_day_id', sd.id)
+          .eq('source', 'morning')
+          .neq('reception_status', 'pending')
+          .order('received_at', { ascending: false })
+        vitDoneItems = (itemsDone || []).map(it => ({
+          kind: 'vitrine',
+          key: `vit-${it.id}`,
+          title: cleanProductName(it.product_name),
+          subtitle: formatHour(it.received_at) || '',
+          quantity: it.qty_announced,
+          received_at: it.received_at,
+          item_id: it.id,
+        }))
+      }
+      setDoneVitrine(vitDoneItems)
+
+      // 4b) Prod rangee : cafe_received avec sales_line correspondante, du jour J ou futur
       const { data: allReceived } = await supabase
         .from('cafe_received')
         .select('odoo_line_id, received_at')
@@ -247,7 +286,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       if (allReceivedIds.length > 0) {
         const { data: linesDone } = await supabase
           .from('sales_lines')
-          .select('odoo_line_id, product_name, quantity, client_name, order_num, day')
+          .select('odoo_line_id, product_name, quantity, client_name, order_num, delivery_at')
           .in('odoo_line_id', allReceivedIds)
         const linesDoneMap = new Map((linesDone || []).map(l => [l.odoo_line_id, l]))
         const recvByLine = new Map((allReceived || []).map(r => [r.odoo_line_id, r.received_at]))
@@ -266,13 +305,13 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
             subtitle: buildSalesLineSubtitle(line),
             quantity: line.quantity,
             received_at: recvByLine.get(r.odoo_line_id),
-            // pour l'action undo
             odoo_line_id: r.odoo_line_id,
           })
         }
       }
+      setDoneProd(doneProdItems)
 
-      // 4b) Commandes rangees : items dont 'range' est coche, commande aujourd'hui ou futur
+      // 4c) Commandes rangees : items dont 'range' est coche, commande aujourd'hui ou futur
       const doneCommandeItems = []
       for (const item of allOrderItems) {
         if (!isItemRanged(item, stepsMap)) continue
@@ -285,16 +324,11 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           subtitle: buildOrderItemSubtitle(item),
           quantity: item.quantity || 1,
           received_at: rangeStep?.done_at || null,
-          // pour l'action undo
           item_id: item.id,
         })
       }
-
-      // Combine et trie par received_at desc
-      const allDone = [...doneProdItems, ...doneCommandeItems]
-        .filter(x => x.received_at)
-        .sort((a, b) => new Date(b.received_at) - new Date(a.received_at))
-      setDoneItems(allDone)
+      doneCommandeItems.sort((a, b) => new Date(b.received_at || 0) - new Date(a.received_at || 0))
+      setDoneCommandes(doneCommandeItems)
     } catch (e) {
       console.error('[ChecklistView] refresh', e)
     } finally {
@@ -323,8 +357,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         .subscribe(),
     ]
 
-    // Refresh toutes les 30 sec en backup
-    const interval = setInterval(refresh, 30000)
+    // Refresh toutes les 5 min en backup (realtime gere les changements instantanes)
+    const interval = setInterval(refresh, 5 * 60 * 1000)
 
     return () => {
       channels.forEach(c => supabase.removeChannel(c))
@@ -372,23 +406,63 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     try {
       if (doneItem.kind === 'prod') {
         await unmarkCafeReceived(doneItem.odoo_line_id)
+        setDoneProd(prev => prev.filter(d => d.key !== doneItem.key))
       } else if (doneItem.kind === 'commande') {
         const ok = await uncheckItemStep(doneItem.item_id, 'range')
         if (!ok) throw new Error("La requete a echoue")
+        setDoneCommandes(prev => prev.filter(d => d.key !== doneItem.key))
+      } else if (doneItem.kind === 'vitrine') {
+        // Pour la vitrine : on remet le stock_day_item en 'pending'
+        await supabase
+          .from('stock_day_items')
+          .update({ reception_status: 'pending', received_at: null, received_by: null })
+          .eq('id', doneItem.item_id)
+        setDoneVitrine(prev => prev.filter(d => d.key !== doneItem.key))
       }
-      setDoneItems(prev => prev.filter(d => d.key !== doneItem.key))
     } catch (e) {
       console.error('[handleUndo]', e)
       alert('Erreur : ' + (e.message || e))
     }
   }
 
+  // Fonction declenchee au clic sur le bouton refresh
+  async function handleManualRefresh() {
+    setRefreshing(true)
+    await refresh()
+    setRefreshing(false)
+  }
+
   // ============================================================
   // Compteurs
   // ============================================================
   const totalTodo = vitrineItems.length + prodLines.length + commandeItems.length
-  const totalDone = doneItems.length
+  const totalDone = doneVitrine.length + doneProd.length + doneCommandes.length
   const allDone = totalTodo === 0
+
+  // ============================================================
+  // Filtre de recherche : cherche dans title + subtitle + client + order_num
+  // ============================================================
+  const q = searchQuery.trim().toLowerCase()
+  function matchesSearch(haystacks) {
+    if (!q) return true
+    return haystacks.some(h => h && String(h).toLowerCase().includes(q))
+  }
+
+  // Filtre les listes "A ranger"
+  const filteredVitrineItems = vitrineItems.filter(i =>
+    matchesSearch([i.product_name])
+  )
+  const filteredProdLines = prodLines.filter(l =>
+    matchesSearch([l.product_name, l.client_name, l.order_num])
+  )
+  const filteredCommandeItems = commandeItems.filter(i =>
+    matchesSearch([i.title, i.client_name, i.order_num])
+  )
+
+  // Filtre les listes "Range"
+  const filteredDoneVitrine = doneVitrine.filter(d => matchesSearch([d.title]))
+  const filteredDoneProd = doneProd.filter(d => matchesSearch([d.title, d.subtitle]))
+  const filteredDoneCommandes = doneCommandes.filter(d => matchesSearch([d.title, d.subtitle]))
 
   // ============================================================
   // Render
@@ -407,8 +481,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-5">
+        {/* Tabs + recherche + refresh */}
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
           <button
             onClick={() => setTab('todo')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
@@ -443,6 +517,37 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
               </span>
             )}
           </button>
+
+          {/* Spacer + recherche + refresh */}
+          <div className="flex-1 flex items-center gap-2 justify-end min-w-0">
+            <div className="relative flex-1 max-w-xs">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="🔍 Rechercher..."
+                className="w-full px-3 py-2 pr-8 text-[13px] bg-white border border-line rounded-full focus:outline-none focus:border-bordeaux/60 placeholder:text-ink-mute"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-line hover:bg-bordeaux hover:text-cream text-ink-mute flex items-center justify-center text-[11px] transition-all"
+                  title="Effacer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              className="px-3 py-2 rounded-full bg-white border border-line text-ink hover:border-bordeaux hover:bg-bordeaux hover:text-cream text-[13px] transition-all disabled:opacity-50 flex items-center gap-1.5"
+              title="Rafraîchir maintenant"
+            >
+              <span className={refreshing ? 'inline-block animate-spin' : ''}>🔄</span>
+              <span className="hidden sm:inline">{refreshing ? 'Rafraîchissement...' : 'Rafraîchir'}</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -451,17 +556,22 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           </div>
         ) : tab === 'todo' ? (
           <TodoTab
-            allDone={allDone}
+            allDone={allDone && !q}
             total={totalTodo}
-            vitrineItems={vitrineItems}
-            prodLines={prodLines}
-            commandeItems={commandeItems}
+            vitrineItems={filteredVitrineItems}
+            prodLines={filteredProdLines}
+            commandeItems={filteredCommandeItems}
             onVitrineDone={handleVitrineDone}
             onProdDone={handleProdDone}
             onCommandeDone={handleCommandeDone}
           />
         ) : (
-          <DoneTab items={doneItems} onUndo={handleUndo} />
+          <DoneTab
+            vitrineItems={filteredDoneVitrine}
+            prodItems={filteredDoneProd}
+            commandeItems={filteredDoneCommandes}
+            onUndo={handleUndo}
+          />
         )}
       </div>
     </div>
@@ -574,8 +684,9 @@ function EmptyHint({ children }) {
 // ============================================================
 // Onglet "Range"
 // ============================================================
-function DoneTab({ items, onUndo }) {
-  if (items.length === 0) {
+function DoneTab({ vitrineItems, prodItems, commandeItems, onUndo }) {
+  const total = vitrineItems.length + prodItems.length + commandeItems.length
+  if (total === 0) {
     return (
       <div className="bg-white rounded-xl border border-line p-8 text-center">
         <div className="text-[40px] mb-2">📭</div>
@@ -586,17 +697,60 @@ function DoneTab({ items, onUndo }) {
   }
 
   return (
-    <div className="space-y-2">
-      {items.map(d => (
-        <ItemCard
-          key={d.key}
-          title={d.title}
-          subtitle={`${d.subtitle ? d.subtitle + ' · ' : ''}rangé ${formatRelativeTime(d.received_at)}`}
-          quantity={d.quantity}
-          done={true}
-          onClick={() => onUndo(d)}
-        />
-      ))}
+    <div className="grid grid-cols-3 gap-3">
+      <ColumnSection title="VITRINE" count={vitrineItems.length} subtitle="rangés du jour">
+        {vitrineItems.length === 0 ? (
+          <EmptyHint>Rien rangé</EmptyHint>
+        ) : (
+          vitrineItems.map(d => (
+            <ItemCard
+              key={d.key}
+              title={d.title}
+              subtitle={`rangé ${formatRelativeTime(d.received_at)}`}
+              quantity={d.quantity}
+              done={true}
+              onClick={() => onUndo(d)}
+              compact
+            />
+          ))
+        )}
+      </ColumnSection>
+
+      <ColumnSection title="PROD" count={prodItems.length} subtitle="rangés du jour J+">
+        {prodItems.length === 0 ? (
+          <EmptyHint>Rien rangé</EmptyHint>
+        ) : (
+          prodItems.map(d => (
+            <ItemCard
+              key={d.key}
+              title={d.title}
+              subtitle={`${d.subtitle ? d.subtitle + ' · ' : ''}rangé ${formatRelativeTime(d.received_at)}`}
+              quantity={d.quantity}
+              done={true}
+              onClick={() => onUndo(d)}
+              compact
+            />
+          ))
+        )}
+      </ColumnSection>
+
+      <ColumnSection title="COMMANDES" count={commandeItems.length} subtitle="CD / GM / GMD">
+        {commandeItems.length === 0 ? (
+          <EmptyHint>Rien rangé</EmptyHint>
+        ) : (
+          commandeItems.map(d => (
+            <ItemCard
+              key={d.key}
+              title={d.title}
+              subtitle={`${d.subtitle ? d.subtitle + ' · ' : ''}rangé ${formatRelativeTime(d.received_at)}`}
+              quantity={d.quantity}
+              done={true}
+              onClick={() => onUndo(d)}
+              compact
+            />
+          ))
+        )}
+      </ColumnSection>
     </div>
   )
 }
@@ -612,17 +766,23 @@ function extractItemTitle(item) {
 function buildSalesLineSubtitle(line) {
   const who = line.client_name || line.order_num || ''
   const when = formatDayLabel(lineDay(line))
-  if (who && when) return `${who} · ${when}`
-  return who || when || ''
+  const hour = formatHour(line.delivery_at)
+  const parts = []
+  if (when) parts.push(when)
+  if (hour) parts.push(hour)
+  if (who) parts.push(who)
+  return parts.join(' · ')
 }
 
 function buildOrderItemSubtitle(item) {
   const who = item.client_name || item.order_num || ''
   const when = formatDayLabel(item.day)
+  const hour = formatHour(item.delivery_at)
   const tag = item.type === 'CD' ? 'CD' : (item.type === 'GM' ? 'GM' : 'GMD')
   const parts = []
-  if (who) parts.push(`commande ${who}`)
   if (when) parts.push(when)
+  if (hour) parts.push(hour)
+  if (who) parts.push(who)
   parts.push(tag)
   return parts.join(' · ')
 }
