@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
@@ -28,12 +29,68 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return v ? new Date(v) : null
   })
   const [, setNow] = useState(0)
+  // Badge "articles non termines" sur le bouton Reception Vitrine
+  const [receptionBadge, setReceptionBadge] = useState(0)
+  const showReceptionBtn = !isLivreur(user) && canStockCafe(user)
 
   // Refresh affichage relatif chaque minute
   useEffect(() => {
     const t = setInterval(() => setNow(n => n + 1), 60000)
     return () => clearInterval(t)
   }, [])
+
+  // Badge Reception Vitrine : compte les articles non termines du jour
+  // (en attente reception + ecarts en cours d'arbitrage). Seulement si l'user
+  // a la perm cafe. Realtime pour mise a jour instantanee.
+  useEffect(() => {
+    if (!showReceptionBtn) return
+    let cancelled = false
+    let channel = null
+
+    const today = new Date().toISOString().slice(0, 10)
+
+    async function refreshBadge() {
+      try {
+        // 1) Trouve l'id du stock_day d'aujourd'hui
+        const { data: sd, error: e1 } = await supabase
+          .from('stock_day')
+          .select('id')
+          .eq('day', today)
+          .maybeSingle()
+        if (e1 || !sd) { if (!cancelled) setReceptionBadge(0); return }
+
+        // 2) Compte les items 'morning' encore non termines :
+        //    - reception_status = 'pending' (pas encore confirmé/écart)
+        //    - OU discrepancy_status en cours ('pending_patissier', 'pending_cafe')
+        const { count, error: e2 } = await supabase
+          .from('stock_day_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('stock_day_id', sd.id)
+          .eq('source', 'morning')
+          .or('reception_status.eq.pending,discrepancy_status.in.(pending_patissier,pending_cafe)')
+        if (!e2 && !cancelled) setReceptionBadge(count || 0)
+      } catch (e) {
+        console.warn('[receptionBadge]', e?.message || e)
+      }
+    }
+
+    refreshBadge()
+
+    // Realtime sur stock_day_items : on rafraichit le compteur a chaque
+    // insert/update/delete (sans filtre par stock_day_id pour rester simple).
+    channel = supabase
+      .channel('reception-badge')
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'stock_day_items' },
+          () => { refreshBadge() })
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showReceptionBtn, user?.id])
 
   // Auto-sync toutes les 5 min (si user a la perm + dernier sync > 4 min)
   useEffect(() => {
@@ -96,13 +153,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
   }
 
-  function navBtn(view, emoji, label, visible) {
+  function navBtn(view, emoji, label, visible, badgeCount = 0) {
     if (!visible) return null
     const isActive = activeView === view
     return (
       <button
         onClick={() => onNavigate && onNavigate(view)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
+        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
           isActive
             ? 'bg-bordeaux text-cream border border-bordeaux'
             : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
@@ -110,6 +167,11 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       >
         <span>{emoji}</span>
         <span>{label}</span>
+        {badgeCount > 0 && (
+          <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center text-[12px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
       </button>
     )
   }
@@ -154,7 +216,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </a>
           )}
           {navBtn('vitrine', '🥐', 'Vitrine', !isLivreur(user) && canStockPatissier(user))}
-          {navBtn('reception-vitrine', '📦', 'Réception Vitrine', !isLivreur(user) && canStockCafe(user))}
+          {navBtn('reception-vitrine', '📦', 'Réception Vitrine', showReceptionBtn, receptionBadge)}
           {navBtn('fin-journee', '🌙', 'Fin de journée', !isLivreur(user) && canStockCafe(user))}
           {navBtn('stock', '📊', 'Stock', !isLivreur(user) && canStockAudit(user))}
         </div>
