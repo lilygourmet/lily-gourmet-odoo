@@ -37,8 +37,11 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   const [surpriseModalOpen, setSurpriseModalOpen] = useState(false)
   const [surpriseCart, setSurpriseCart] = useState({})
   const [dotFlash, setDotFlash] = useState(false)
+  // Bulle de notification persistante : compte les envois vitrine non encore "vus"
+  const [pendingNotif, setPendingNotif] = useState(0)
   const subscriptionRef = useRef(null)
   const audioCtxRef = useRef(null)
+  const dingRepeatTimerRef = useRef(null)
 
   // Init + realtime
   useEffect(() => {
@@ -65,6 +68,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
             if (newItem.source === 'morning' && newItem.reception_status === 'pending') {
               playDing()
               flashDot()
+              setPendingNotif(n => n + 1)
             }
           },
           onUpdate: (newItem) => {
@@ -92,6 +96,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
               if (newOnes.length > 0) {
                 playDing()
                 flashDot()
+                setPendingNotif(n => n + newOnes.length)
               }
               return fresh
             })
@@ -116,6 +121,23 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Si la bulle reste non lue, on repete le ding toutes les 5 minutes pour
+  // attirer l'attention (au cas ou le cafe etait sorti / pas devant l'ecran).
+  useEffect(() => {
+    if (pendingNotif > 0) {
+      dingRepeatTimerRef.current = setInterval(() => {
+        playDing()
+      }, 5 * 60 * 1000) // 5 minutes
+    }
+    return () => {
+      if (dingRepeatTimerRef.current) {
+        clearInterval(dingRepeatTimerRef.current)
+        dingRepeatTimerRef.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingNotif > 0])
 
   function playDing() {
     try {
@@ -243,6 +265,28 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+
+      {/* Bulle de notification persistante : visible en haut au centre tant
+          que le cafe n'a pas cliqué "J'ai vu". Compte le nombre d'articles
+          envoyes par la vitrine non encore "accuses reception". */}
+      {pendingNotif > 0 && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-bordeaux text-cream px-5 py-3 rounded-full shadow-2xl border-2 border-cream animate-bounce-soft"
+          style={{ top: '70px' }}
+        >
+          <span className="text-[20px]">🔔</span>
+          <span className="text-[14px] font-semibold">
+            La vitrine a envoyé {pendingNotif} article{pendingNotif > 1 ? 's' : ''}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPendingNotif(0)}
+            className="ml-2 px-3 py-1 bg-cream text-bordeaux rounded-full text-[12px] font-bold hover:bg-cream-warm transition-colors"
+          >
+            ✓ J'ai vu
+          </button>
+        </div>
+      )}
 
       {/* MODAL BLOQUANT — Café répond après recompte vitrine */}
       {pendingCafe.length > 0 && (
