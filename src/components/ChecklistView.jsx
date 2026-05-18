@@ -1,17 +1,19 @@
 // src/components/ChecklistView.jsx
 // Page Checklist Cafe : 2 onglets - "A ranger" et "Range".
 //
-// ONGLET "A RANGER" :
+// ONGLET "A RANGER" - 3 sources distinctes :
 //   - VITRINE : items envoyes par la vitrine (stock_day_items) du JOUR non confirmes
-//   - PROD : sales_lines aujourd'hui + 3 jours futurs, cochees "Fait" par Prod,
-//            prefixes E-/V-/GS-/MI-, non recues par cafe
-//   - ACCESSOIRES : pareil mais prefixes GM-/GMD-
+//   - PROD : sales_lines aujourd'hui + 3 jours futurs, cochees "Fait" par Prod
+//            (prod_done.status='done'), prefixes E-/V-/GS-/MI-, non recues par cafe
+//   - COMMANDES : order_items de aujourd'hui + 3 jours futurs, dont l'etape
+//                 "fait" (GM/GMD) ou "fini" (CD) est cochee dans item_steps,
+//                 mais dont l'etape "range" n'est PAS encore cochee.
 //
 // ONGLET "RANGE" :
-//   - Items rangés par le cafe pour des commandes du JOUR J ou FUTURES uniquement
-//     (les rangés des dates passées disparaissent automatiquement le lendemain)
+//   - Sources combinees : cafe_received (pour Prod) + item_steps step=range (pour Commandes)
+//   - Seulement les items dont la commande/sales_line est aujourd'hui ou futur
 //   - Tries par heure de rangement (recent en haut), limite a 500 derniers
-//   - Click sur un item range = annule le rangement (revient dans "A ranger")
+//   - Click sur un range = annule le rangement (revient dans "A ranger")
 // =============================================================
 
 import { useEffect, useMemo, useState } from 'react'
@@ -21,11 +23,12 @@ import { loadSalesLinesForRange } from '../lib/salesLines'
 import { loadProdDoneForLines } from '../lib/prodDone'
 import { loadCafeReceivedForLines, markCafeReceived, unmarkCafeReceived } from '../lib/cafeReceived'
 import { confirmReception, todayISO } from '../lib/stockBoutique'
+import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
 
-// Prefixes pour repartir entre les sections PROD et ACCESSOIRES
+// Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
 const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-']
-const ACCESSOIRES_PREFIXES = ['GM-', 'GMD-']
-// Fenetre pour Prod/Accessoires : aujourd'hui + 3 jours apres (pas de jours passes)
+const ACCESSOIRES_PREFIXES = ['GM-', 'GMD-']  // (commentaire historique, non utilise ici)
+// Fenetre : aujourd'hui + 3 jours apres
 const DAYS_BEFORE = 0
 const DAYS_AFTER = 3
 
@@ -34,7 +37,7 @@ function startsWithAny(name, prefixes) {
   return prefixes.some(p => name.startsWith(p))
 }
 
-// Formatte une date 'YYYY-MM-DD' en libelle relatif court ("hier", "aujourd'hui", "demain", "lun 19/05")
+// Formatte une date 'YYYY-MM-DD' en libelle relatif court
 function formatDayLabel(dayStr) {
   if (!dayStr) return ''
   const today = new Date()
@@ -46,9 +49,18 @@ function formatDayLabel(dayStr) {
   if (diffDays === -1) return 'hier'
   if (diffDays === 1) return 'demain'
   if (diffDays === 2) return 'après-demain'
-  // Sinon format court "lun 19/05"
   const days = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam']
   return `${days[date.getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`
+}
+
+// Format relatif court ("il y a 5 min", "il y a 2h")
+function formatRelativeTime(isoStr) {
+  if (!isoStr) return ''
+  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000)
+  if (diff < 60) return "à l'instant"
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`
+  return `il y a ${Math.floor(diff / 86400)} j`
 }
 
 // Decale une date ISO de N jours
@@ -59,13 +71,63 @@ function shiftISO(isoStr, deltaDays) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }
 
+// Extrait juste la date YYYY-MM-DD d'un timestamp delivery_at
+function deliveryDayStr(deliveryAt) {
+  if (!deliveryAt) return null
+  const d = new Date(deliveryAt)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Charge les orders avec leurs items sur la fenetre [todayStr, todayStr+DAYS_AFTER]
+async function loadOrdersForRange(fromStr, toStr) {
+  // toStr exclus (passe fromDate + DAYS_AFTER + 1)
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      id, order_num, client_name, delivery_at,
+      order_items ( id, item_idx, type, title, quantity )
+    `)
+    .gte('delivery_at', `${fromStr}T00:00:00`)
+    .lt('delivery_at', `${toStr}T00:00:00`)
+    .order('delivery_at', { ascending: true })
+  if (error) {
+    console.warn('[ChecklistView loadOrders]', error)
+    return []
+  }
+  return data || []
+}
+
+// Pour chaque item d'une commande, on determine si l'item est "a ranger" :
+// - Type GM/GMD : etape 'fait' cochee mais 'range' pas cochee
+// - Type CD     : etape 'fini' cochee mais 'range' pas cochee
+function isItemToRange(item, steps) {
+  const fini = !!steps[`${item.id}_fini`]
+  const fait = !!steps[`${item.id}_fait`]
+  const range = !!steps[`${item.id}_range`]
+  if (range) return false
+  if (item.type === 'CD') return fini
+  return fait // GM, GMD, autres
+}
+function isItemRanged(item, steps) {
+  return !!steps[`${item.id}_range`]
+}
+
 export default function ChecklistView({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('todo') // 'todo' | 'done'
-  const [vitrineItems, setVitrineItems] = useState([])  // items vitrine du jour pending
-  const [prodLines, setProdLines] = useState([])         // sales_lines done par Prod, non recues
-  const [accLines, setAccLines] = useState([])          // pareil mais accessoires
-  const [doneItems, setDoneItems] = useState([])         // items deja recus par cafe (toutes sources confondues)
+
+  // Section VITRINE
+  const [vitrineItems, setVitrineItems] = useState([])
+
+  // Section PROD (sales_lines E-/V-/GS-/MI- via prod_done)
+  const [prodLines, setProdLines] = useState([])
+
+  // Section COMMANDES (order_items CD/GM/GMD via item_steps)
+  const [commandeItems, setCommandeItems] = useState([])
+
+  // Onglet RANGE : items deja ranges par le cafe (toutes sources)
+  const [doneItems, setDoneItems] = useState([])
+
   const todayStr = todayISO()
 
   // ============================================================
@@ -75,6 +137,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     setLoading(true)
     try {
       const fromStr = shiftISO(todayStr, -DAYS_BEFORE)
+      const toStr = shiftISO(todayStr, DAYS_AFTER + 1)
+      const totalDays = DAYS_BEFORE + 1 + DAYS_AFTER
 
       // -------- 1) VITRINE (jour seulement) --------
       const { data: sd } = await supabase
@@ -96,44 +160,59 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       }
       setVitrineItems(vitItems)
 
-      // -------- 2) PROD + ACCESSOIRES (fenetre elargie) --------
-      // Charge les sales_lines sur la fenetre 3j avant -> 3j apres
-      const totalDays = DAYS_BEFORE + 1 + DAYS_AFTER  // 4 jours
+      // -------- 2) PROD : sales_lines avec prod_done.status='done' --------
       const allLines = await loadSalesLinesForRange(fromStr, totalDays)
       const lineIds = allLines.map(l => l.odoo_line_id).filter(Boolean)
 
-      // Charge prod_done pour toutes ces lignes
       const dones = await loadProdDoneForLines(lineIds)
-      const doneSet = new Set(
-        dones.filter(d => d.status === 'done').map(d => d.odoo_line_id)
-      )
-
-      // Charge cafe_received pour toutes ces lignes
+      const doneSet = new Set(dones.filter(d => d.status === 'done').map(d => d.odoo_line_id))
       const receiveds = await loadCafeReceivedForLines(lineIds)
       const receivedMap = new Map(receiveds.map(r => [r.odoo_line_id, r]))
 
-      // A RANGER : faites par Prod ET pas encore recues par cafe
+      // A RANGER prod : faites par Prod ET pas encore recues par cafe, prefixe Prod
       const todoLines = allLines.filter(l =>
-        doneSet.has(l.odoo_line_id) && !receivedMap.has(l.odoo_line_id)
+        doneSet.has(l.odoo_line_id) &&
+        !receivedMap.has(l.odoo_line_id) &&
+        startsWithAny(l.product_name, PROD_PREFIXES)
       )
-      const prodOnes = todoLines.filter(l => startsWithAny(l.product_name, PROD_PREFIXES))
-      const accOnes = todoLines.filter(l => startsWithAny(l.product_name, ACCESSOIRES_PREFIXES))
-      setProdLines(prodOnes)
-      setAccLines(accOnes)
+      setProdLines(todoLines)
 
-      // RANGE : tous les rangés (sans limite de date) du cafe.
-      // On charge directement toute la table cafe_received, puis on enrichit
-      // avec les sales_lines correspondantes pour avoir le nom/client/quantite.
-      // On filtre cote affichage : on ne garde que les commandes du jour J et futures
-      // (les rangés des dates passées disparaissent automatiquement le lendemain).
+      // -------- 3) COMMANDES : order_items via item_steps --------
+      const orders = await loadOrdersForRange(fromStr, toStr)
+      // Pour chaque order, on garde les items GM/GMD/CD
+      const allOrderItems = []
+      for (const order of orders) {
+        const dayStr = deliveryDayStr(order.delivery_at)
+        for (const item of order.order_items || []) {
+          if (item.type === 'CD' || item.type === 'GM' || item.type === 'GMD') {
+            allOrderItems.push({
+              ...item,
+              order_id: order.id,
+              order_num: order.order_num,
+              client_name: order.client_name,
+              delivery_at: order.delivery_at,
+              day: dayStr,
+            })
+          }
+        }
+      }
+      const itemIds = allOrderItems.map(i => i.id)
+      const stepsMap = itemIds.length > 0 ? await loadItemSteps(itemIds) : {}
+
+      // A RANGER commandes : fait/fini coche mais range pas coche
+      const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap))
+      setCommandeItems(todoCommandes)
+
+      // -------- 4) ONGLET "RANGE" : combine prod + commandes --------
+      // 4a) Prod ranges : cafe_received avec sales_line correspondante, du jour J ou futur
       const { data: allReceived } = await supabase
         .from('cafe_received')
         .select('odoo_line_id, received_at')
         .order('received_at', { ascending: false })
-        .limit(500) // garde-fou : 500 derniers max pour ne pas exploser
+        .limit(500)
       const allReceivedIds = (allReceived || []).map(r => r.odoo_line_id)
 
-      let done = []
+      const doneProdItems = []
       if (allReceivedIds.length > 0) {
         const { data: linesDone } = await supabase
           .from('sales_lines')
@@ -142,23 +221,47 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         const linesDoneMap = new Map((linesDone || []).map(l => [l.odoo_line_id, l]))
         const recvByLine = new Map((allReceived || []).map(r => [r.odoo_line_id, r.received_at]))
 
-        done = (allReceived || [])
-          .map(r => {
-            const line = linesDoneMap.get(r.odoo_line_id)
-            if (!line) return null
-            if (!startsWithAny(line.product_name, [...PROD_PREFIXES, ...ACCESSOIRES_PREFIXES])) return null
-            // Filtre date : seulement aujourd'hui et futures
-            if (!line.day || line.day < todayStr) return null
-            return {
-              ...line,
-              received_at: recvByLine.get(r.odoo_line_id),
-              section: startsWithAny(line.product_name, PROD_PREFIXES) ? 'PROD' : 'ACCESSOIRES',
-            }
+        for (const r of (allReceived || [])) {
+          const line = linesDoneMap.get(r.odoo_line_id)
+          if (!line) continue
+          if (!startsWithAny(line.product_name, PROD_PREFIXES)) continue
+          if (!line.day || line.day < todayStr) continue
+          doneProdItems.push({
+            kind: 'prod',
+            key: `prod-${r.odoo_line_id}`,
+            title: line.product_name,
+            subtitle: buildSalesLineSubtitle(line),
+            quantity: line.quantity,
+            received_at: recvByLine.get(r.odoo_line_id),
+            // pour l'action undo
+            odoo_line_id: r.odoo_line_id,
           })
-          .filter(Boolean)
-        // Deja trie par received_at desc grace au order de la requete
+        }
       }
-      setDoneItems(done)
+
+      // 4b) Commandes rangees : items dont 'range' est coche, commande aujourd'hui ou futur
+      const doneCommandeItems = []
+      for (const item of allOrderItems) {
+        if (!isItemRanged(item, stepsMap)) continue
+        if (!item.day || item.day < todayStr) continue
+        const rangeStep = stepsMap[`${item.id}_range`]
+        doneCommandeItems.push({
+          kind: 'commande',
+          key: `cmd-${item.id}`,
+          title: extractItemTitle(item),
+          subtitle: buildOrderItemSubtitle(item),
+          quantity: item.quantity || 1,
+          received_at: rangeStep?.done_at || null,
+          // pour l'action undo
+          item_id: item.id,
+        })
+      }
+
+      // Combine et trie par received_at desc
+      const allDone = [...doneProdItems, ...doneCommandeItems]
+        .filter(x => x.received_at)
+        .sort((a, b) => new Date(b.received_at) - new Date(a.received_at))
+      setDoneItems(allDone)
     } catch (e) {
       console.error('[ChecklistView] refresh', e)
     } finally {
@@ -167,7 +270,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   }
 
   // ============================================================
-  // Realtime : s'abonne aux 3 tables pour rafraichir auto
+  // Realtime : s'abonne aux tables qui influent
   // ============================================================
   useEffect(() => {
     refresh()
@@ -182,6 +285,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       supabase.channel('checklist-cafe-received')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'cafe_received' }, refresh)
         .subscribe(),
+      supabase.channel('checklist-item-steps')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'item_steps' }, refresh)
+        .subscribe(),
     ]
 
     // Refresh toutes les 30 sec en backup
@@ -195,7 +301,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   }, [])
 
   // ============================================================
-  // Actions
+  // Actions de click
   // ============================================================
   async function handleVitrineDone(item) {
     try {
@@ -211,20 +317,35 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     try {
       await markCafeReceived(line.odoo_line_id, user.id)
       setProdLines(prev => prev.filter(l => l.odoo_line_id !== line.odoo_line_id))
-      setAccLines(prev => prev.filter(l => l.odoo_line_id !== line.odoo_line_id))
     } catch (e) {
       console.error('[handleProdDone]', e)
       alert('Erreur : ' + (e.message || e))
     }
   }
 
-  async function handleUndoReceived(line) {
+  async function handleCommandeDone(item) {
     try {
-      await unmarkCafeReceived(line.odoo_line_id)
-      // Le realtime va rafraichir, mais on enleve visuellement tout de suite
-      setDoneItems(prev => prev.filter(l => l.odoo_line_id !== line.odoo_line_id))
+      const ok = await checkItemStep(item.id, 'range', user.id)
+      if (!ok) throw new Error("La requete a echoue")
+      setCommandeItems(prev => prev.filter(i => i.id !== item.id))
     } catch (e) {
-      console.error('[handleUndoReceived]', e)
+      console.error('[handleCommandeDone]', e)
+      alert('Erreur : ' + (e.message || e))
+    }
+  }
+
+  // Undo dans l'onglet Range
+  async function handleUndo(doneItem) {
+    try {
+      if (doneItem.kind === 'prod') {
+        await unmarkCafeReceived(doneItem.odoo_line_id)
+      } else if (doneItem.kind === 'commande') {
+        const ok = await uncheckItemStep(doneItem.item_id, 'range')
+        if (!ok) throw new Error("La requete a echoue")
+      }
+      setDoneItems(prev => prev.filter(d => d.key !== doneItem.key))
+    } catch (e) {
+      console.error('[handleUndo]', e)
       alert('Erreur : ' + (e.message || e))
     }
   }
@@ -232,7 +353,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // ============================================================
   // Compteurs
   // ============================================================
-  const totalTodo = vitrineItems.length + prodLines.length + accLines.length
+  const totalTodo = vitrineItems.length + prodLines.length + commandeItems.length
   const totalDone = doneItems.length
   const allDone = totalTodo === 0
 
@@ -244,7 +365,6 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-3xl mx-auto px-4 py-6">
-        {/* Header de page */}
         <div className="mb-5">
           <h1 className="text-[24px] font-semibold text-ink tracking-tight">📋 Checklist</h1>
           <p className="text-[13px] text-ink-mute mt-1">
@@ -292,7 +412,6 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           </button>
         </div>
 
-        {/* Contenu */}
         {loading ? (
           <div className="bg-white rounded-xl border border-line p-6 text-center text-[13px] text-ink-mute">
             Chargement...
@@ -303,15 +422,13 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
             total={totalTodo}
             vitrineItems={vitrineItems}
             prodLines={prodLines}
-            accLines={accLines}
+            commandeItems={commandeItems}
             onVitrineDone={handleVitrineDone}
             onProdDone={handleProdDone}
+            onCommandeDone={handleCommandeDone}
           />
         ) : (
-          <DoneTab
-            items={doneItems}
-            onUndo={handleUndoReceived}
-          />
+          <DoneTab items={doneItems} onUndo={handleUndo} />
         )}
       </div>
     </div>
@@ -321,7 +438,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 // ============================================================
 // Onglet "A ranger"
 // ============================================================
-function TodoTab({ allDone, total, vitrineItems, prodLines, accLines, onVitrineDone, onProdDone }) {
+function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVitrineDone, onProdDone, onCommandeDone }) {
   if (allDone) {
     return (
       <div className="bg-white rounded-xl border border-line p-8 text-center">
@@ -360,7 +477,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, accLines, onVitrineD
             <ItemCard
               key={`prod-${line.odoo_line_id}`}
               title={line.product_name}
-              subtitle={buildSubtitle(line)}
+              subtitle={buildSalesLineSubtitle(line)}
               quantity={line.quantity}
               onClick={() => onProdDone(line)}
             />
@@ -368,15 +485,15 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, accLines, onVitrineD
         </Section>
       )}
 
-      {accLines.length > 0 && (
-        <Section title="ACCESSOIRES" count={accLines.length} subtitle="GM et GMD">
-          {accLines.map(line => (
+      {commandeItems.length > 0 && (
+        <Section title="COMMANDES" count={commandeItems.length} subtitle="gâteaux clients (CD / GM / GMD)">
+          {commandeItems.map(item => (
             <ItemCard
-              key={`acc-${line.odoo_line_id}`}
-              title={line.product_name}
-              subtitle={buildSubtitle(line)}
-              quantity={line.quantity}
-              onClick={() => onProdDone(line)}
+              key={`cmd-${item.id}`}
+              title={extractItemTitle(item)}
+              subtitle={buildOrderItemSubtitle(item)}
+              quantity={item.quantity || 1}
+              onClick={() => onCommandeDone(item)}
             />
           ))}
         </Section>
@@ -401,14 +518,14 @@ function DoneTab({ items, onUndo }) {
 
   return (
     <div className="space-y-2">
-      {items.map(line => (
+      {items.map(d => (
         <ItemCard
-          key={`done-${line.odoo_line_id}`}
-          title={line.product_name}
-          subtitle={`${line.section} · ${buildSubtitle(line)} · rangé ${formatRelativeTime(line.received_at)}`}
-          quantity={line.quantity}
+          key={d.key}
+          title={d.title}
+          subtitle={`${d.subtitle ? d.subtitle + ' · ' : ''}rangé ${formatRelativeTime(d.received_at)}`}
+          quantity={d.quantity}
           done={true}
-          onClick={() => onUndo(line)}
+          onClick={() => onUndo(d)}
         />
       ))}
     </div>
@@ -416,27 +533,33 @@ function DoneTab({ items, onUndo }) {
 }
 
 // ============================================================
-// Helper : construit le sous-titre d'une ligne (client + date)
+// Helpers de presentation
 // ============================================================
-function buildSubtitle(line) {
+function extractItemTitle(item) {
+  // Item d'une commande : on prefere le title net, sinon type generique
+  return item.title || `Item ${item.type || ''}`
+}
+
+function buildSalesLineSubtitle(line) {
   const who = line.client_name || line.order_num || ''
   const when = formatDayLabel(line.day)
   if (who && when) return `${who} · ${when}`
   return who || when || ''
 }
 
-// Format relatif court ("il y a 5 min", "il y a 2h")
-function formatRelativeTime(isoStr) {
-  if (!isoStr) return ''
-  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000)
-  if (diff < 60) return "à l'instant"
-  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`
-  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`
-  return `il y a ${Math.floor(diff / 86400)} j`
+function buildOrderItemSubtitle(item) {
+  const who = item.client_name || item.order_num || ''
+  const when = formatDayLabel(item.day)
+  const tag = item.type === 'CD' ? 'CD' : (item.type === 'GM' ? 'GM' : 'GMD')
+  const parts = []
+  if (who) parts.push(`commande ${who}`)
+  if (when) parts.push(when)
+  parts.push(tag)
+  return parts.join(' · ')
 }
 
 // ============================================================
-// Composants helper
+// Composants UI
 // ============================================================
 function Section({ title, count, subtitle, children }) {
   return (

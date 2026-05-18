@@ -97,7 +97,11 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     let channels = []
 
     const today = new Date().toISOString().slice(0, 10)
-    const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-', 'GM-', 'GMD-']
+    const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-']
+    // Fenetre commandes : aujourd'hui + 3 jours futurs
+    const dt = new Date(today)
+    dt.setDate(dt.getDate() + 4) // +4 = exclusif
+    const toStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 
     async function refreshChecklistBadge() {
       try {
@@ -115,8 +119,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           vitCount = count || 0
         }
 
-        // 2) Lignes Prod faites aujourd'hui non recues par cafe
-        //    Charge les sales_lines du jour avec prefixe Prod+Accessoires
+        // 2) Lignes Prod : faites par Prod, non recues, prefixes E-/V-/GS-/MI-
         const { data: lines } = await supabase
           .from('sales_lines')
           .select('odoo_line_id, product_name')
@@ -127,15 +130,12 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         let prodCount = 0
         if (candidateIds.length > 0) {
-          // Lignes coches "Fait" par Prod
           const { data: dones } = await supabase
             .from('prod_done')
             .select('odoo_line_id, status')
             .in('odoo_line_id', candidateIds)
           const doneIds = (dones || []).filter(d => d.status === 'done').map(d => d.odoo_line_id)
-
           if (doneIds.length > 0) {
-            // Parmi celles-la, on retire celles deja recues par cafe
             const { data: receiveds } = await supabase
               .from('cafe_received')
               .select('odoo_line_id')
@@ -145,7 +145,45 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           }
         }
 
-        if (!cancelled) setChecklistBadge(vitCount + prodCount)
+        // 3) Commandes CD/GM/GMD : items dont fait/fini coche mais pas range
+        let cmdCount = 0
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('order_items(id, type)')
+          .gte('delivery_at', `${today}T00:00:00`)
+          .lt('delivery_at', `${toStr}T00:00:00`)
+        const cmdItemIds = []
+        const cmdItemType = new Map()
+        for (const order of (orders || [])) {
+          for (const it of (order.order_items || [])) {
+            if (it.type === 'CD' || it.type === 'GM' || it.type === 'GMD') {
+              cmdItemIds.push(it.id)
+              cmdItemType.set(it.id, it.type)
+            }
+          }
+        }
+        if (cmdItemIds.length > 0) {
+          const { data: steps } = await supabase
+            .from('item_steps')
+            .select('item_id, step_key')
+            .in('item_id', cmdItemIds)
+            .eq('done', true)
+          // Pour chaque item : verifie si fait/fini coche mais pas range
+          const stepsByItem = new Map()
+          for (const s of (steps || [])) {
+            if (!stepsByItem.has(s.item_id)) stepsByItem.set(s.item_id, new Set())
+            stepsByItem.get(s.item_id).add(s.step_key)
+          }
+          for (const itemId of cmdItemIds) {
+            const set = stepsByItem.get(itemId) || new Set()
+            if (set.has('range')) continue
+            const type = cmdItemType.get(itemId)
+            if (type === 'CD' && set.has('fini')) cmdCount++
+            else if ((type === 'GM' || type === 'GMD') && set.has('fait')) cmdCount++
+          }
+        }
+
+        if (!cancelled) setChecklistBadge(vitCount + prodCount + cmdCount)
       } catch (e) {
         console.warn('[checklistBadge]', e?.message || e)
       }
@@ -153,7 +191,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
     refreshChecklistBadge()
 
-    // Realtime sur les 3 tables qui influent sur le badge
+    // Realtime sur 4 tables qui influent sur le badge
     channels = [
       supabase.channel('checklist-badge-stock')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_day_items' }, refreshChecklistBadge)
@@ -163,6 +201,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         .subscribe(),
       supabase.channel('checklist-badge-cafe')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'cafe_received' }, refreshChecklistBadge)
+        .subscribe(),
+      supabase.channel('checklist-badge-steps')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'item_steps' }, refreshChecklistBadge)
         .subscribe(),
     ]
 
