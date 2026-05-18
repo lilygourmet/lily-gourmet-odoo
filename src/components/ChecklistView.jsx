@@ -8,8 +8,9 @@
 //   - ACCESSOIRES : pareil mais prefixes GM-/GMD-
 //
 // ONGLET "RANGE" :
-//   - Tous les items deja recus par le cafe (sans limite de date),
-//     tries par heure de rangement (recent en haut), limite a 500 derniers
+//   - Items rangés par le cafe pour des commandes du JOUR J ou FUTURES uniquement
+//     (les rangés des dates passées disparaissent automatiquement le lendemain)
+//   - Tries par heure de rangement (recent en haut), limite a 500 derniers
 //   - Click sur un item range = annule le rangement (revient dans "A ranger")
 // =============================================================
 
@@ -123,6 +124,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       // RANGE : tous les rangés (sans limite de date) du cafe.
       // On charge directement toute la table cafe_received, puis on enrichit
       // avec les sales_lines correspondantes pour avoir le nom/client/quantite.
+      // On filtre cote affichage : on ne garde que les commandes du jour J et futures
+      // (les rangés des dates passées disparaissent automatiquement le lendemain).
       const { data: allReceived } = await supabase
         .from('cafe_received')
         .select('odoo_line_id, received_at')
@@ -144,6 +147,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
             const line = linesDoneMap.get(r.odoo_line_id)
             if (!line) return null
             if (!startsWithAny(line.product_name, [...PROD_PREFIXES, ...ACCESSOIRES_PREFIXES])) return null
+            // Filtre date : seulement aujourd'hui et futures
+            if (!line.day || line.day < todayStr) return null
             return {
               ...line,
               received_at: recvByLine.get(r.odoo_line_id),
