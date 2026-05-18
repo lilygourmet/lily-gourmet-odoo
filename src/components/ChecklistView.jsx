@@ -28,6 +28,8 @@ import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
 const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-']
 const ACCESSOIRES_PREFIXES = ['GM-', 'GMD-']  // (commentaire historique, non utilise ici)
+// Clients a exclure de la checklist (commandes internes, type vitrine boutique)
+const EXCLUDED_CLIENTS = ['Vitrine']
 // Fenetre : aujourd'hui + 3 jours apres
 const DAYS_BEFORE = 0
 const DAYS_AFTER = 3
@@ -35,6 +37,12 @@ const DAYS_AFTER = 3
 function startsWithAny(name, prefixes) {
   if (!name) return false
   return prefixes.some(p => name.startsWith(p))
+}
+
+// Verifie si une ligne/item provient d'un client exclu (ex : 'Vitrine')
+function isExcludedClient(clientName) {
+  if (!clientName) return false
+  return EXCLUDED_CLIENTS.includes(String(clientName).trim())
 }
 
 // Formatte une date 'YYYY-MM-DD' en libelle relatif court
@@ -76,6 +84,12 @@ function deliveryDayStr(deliveryAt) {
   if (!deliveryAt) return null
   const d = new Date(deliveryAt)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Pour une sales_line : recupere YYYY-MM-DD depuis le timestamp delivery_at
+// (la table sales_lines n'a pas de colonne 'day' separee)
+function lineDay(line) {
+  return deliveryDayStr(line?.delivery_at)
 }
 
 // Charge les orders avec leurs items sur la fenetre [todayStr, todayStr+DAYS_AFTER]
@@ -170,18 +184,22 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       const receivedMap = new Map(receiveds.map(r => [r.odoo_line_id, r]))
 
       // A RANGER prod : faites par Prod ET pas encore recues par cafe, prefixe Prod
+      // ET pas un client exclu (ex: Vitrine)
       const todoLines = allLines.filter(l =>
         doneSet.has(l.odoo_line_id) &&
         !receivedMap.has(l.odoo_line_id) &&
-        startsWithAny(l.product_name, PROD_PREFIXES)
+        startsWithAny(l.product_name, PROD_PREFIXES) &&
+        !isExcludedClient(l.client_name)
       )
       setProdLines(todoLines)
 
       // -------- 3) COMMANDES : order_items via item_steps --------
       const orders = await loadOrdersForRange(fromStr, toStr)
       // Pour chaque order, on garde les items GM/GMD/CD
+      // On exclut les commandes des clients exclus (ex: Vitrine)
       const allOrderItems = []
       for (const order of orders) {
+        if (isExcludedClient(order.client_name)) continue
         const dayStr = deliveryDayStr(order.delivery_at)
         for (const item of order.order_items || []) {
           if (item.type === 'CD' || item.type === 'GM' || item.type === 'GMD') {
@@ -225,7 +243,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           const line = linesDoneMap.get(r.odoo_line_id)
           if (!line) continue
           if (!startsWithAny(line.product_name, PROD_PREFIXES)) continue
-          if (!line.day || line.day < todayStr) continue
+          if (isExcludedClient(line.client_name)) continue
+          const day = lineDay(line)
+          if (!day || day < todayStr) continue
           doneProdItems.push({
             kind: 'prod',
             key: `prod-${r.odoo_line_id}`,
@@ -364,7 +384,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-5">
           <h1 className="text-[24px] font-semibold text-ink tracking-tight">📋 Checklist</h1>
           <p className="text-[13px] text-ink-mute mt-1">
@@ -457,48 +477,84 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVit
         </p>
       </div>
 
-      {vitrineItems.length > 0 && (
-        <Section title="VITRINE" count={vitrineItems.length} subtitle="envoyés par la vitrine">
-          {vitrineItems.map(item => (
-            <ItemCard
-              key={`vit-${item.id}`}
-              title={item.product_name}
-              subtitle="de la vitrine"
-              quantity={item.qty_announced}
-              onClick={() => onVitrineDone(item)}
-            />
-          ))}
-        </Section>
-      )}
+      {/* 3 colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
+      <div className="grid grid-cols-3 gap-3">
+        <ColumnSection title="VITRINE" count={vitrineItems.length} subtitle="envoyés par la vitrine">
+          {vitrineItems.length === 0 ? (
+            <EmptyHint>Aucun envoi</EmptyHint>
+          ) : (
+            vitrineItems.map(item => (
+              <ItemCard
+                key={`vit-${item.id}`}
+                title={item.product_name}
+                subtitle={null}
+                quantity={item.qty_announced}
+                onClick={() => onVitrineDone(item)}
+                compact
+              />
+            ))
+          )}
+        </ColumnSection>
 
-      {prodLines.length > 0 && (
-        <Section title="PROD" count={prodLines.length} subtitle="préparés par la production">
-          {prodLines.map(line => (
-            <ItemCard
-              key={`prod-${line.odoo_line_id}`}
-              title={line.product_name}
-              subtitle={buildSalesLineSubtitle(line)}
-              quantity={line.quantity}
-              onClick={() => onProdDone(line)}
-            />
-          ))}
-        </Section>
-      )}
+        <ColumnSection title="PROD" count={prodLines.length} subtitle="préparés par la prod">
+          {prodLines.length === 0 ? (
+            <EmptyHint>Rien à ranger</EmptyHint>
+          ) : (
+            prodLines.map(line => (
+              <ItemCard
+                key={`prod-${line.odoo_line_id}`}
+                title={line.product_name}
+                subtitle={buildSalesLineSubtitle(line)}
+                quantity={line.quantity}
+                onClick={() => onProdDone(line)}
+                compact
+              />
+            ))
+          )}
+        </ColumnSection>
 
-      {commandeItems.length > 0 && (
-        <Section title="COMMANDES" count={commandeItems.length} subtitle="gâteaux clients (CD / GM / GMD)">
-          {commandeItems.map(item => (
-            <ItemCard
-              key={`cmd-${item.id}`}
-              title={extractItemTitle(item)}
-              subtitle={buildOrderItemSubtitle(item)}
-              quantity={item.quantity || 1}
-              onClick={() => onCommandeDone(item)}
-            />
-          ))}
-        </Section>
-      )}
+        <ColumnSection title="COMMANDES" count={commandeItems.length} subtitle="CD / GM / GMD">
+          {commandeItems.length === 0 ? (
+            <EmptyHint>Rien à ranger</EmptyHint>
+          ) : (
+            commandeItems.map(item => (
+              <ItemCard
+                key={`cmd-${item.id}`}
+                title={extractItemTitle(item)}
+                subtitle={buildOrderItemSubtitle(item)}
+                quantity={item.quantity || 1}
+                onClick={() => onCommandeDone(item)}
+                compact
+              />
+            ))
+          )}
+        </ColumnSection>
+      </div>
     </>
+  )
+}
+
+// Section pour une colonne (header + contenu)
+function ColumnSection({ title, count, subtitle, children }) {
+  return (
+    <div className="flex flex-col">
+      <div className="mb-2 px-1">
+        <div className="flex items-baseline justify-between gap-1">
+          <h2 className="text-[10px] font-bold tracking-[0.12em] text-bordeaux truncate">{title}</h2>
+          <span className="text-[10px] text-ink-mute flex-shrink-0">{count}</span>
+        </div>
+        {subtitle && <p className="text-[9px] text-ink-mute mt-0.5 truncate">{subtitle}</p>}
+      </div>
+      <div className="space-y-1.5 flex-1">{children}</div>
+    </div>
+  )
+}
+
+function EmptyHint({ children }) {
+  return (
+    <div className="text-center text-[10px] italic text-ink-mute py-4 px-2 border border-dashed border-line rounded-lg">
+      {children}
+    </div>
   )
 }
 
@@ -542,7 +598,7 @@ function extractItemTitle(item) {
 
 function buildSalesLineSubtitle(line) {
   const who = line.client_name || line.order_num || ''
-  const when = formatDayLabel(line.day)
+  const when = formatDayLabel(lineDay(line))
   if (who && when) return `${who} · ${when}`
   return who || when || ''
 }
@@ -576,31 +632,35 @@ function Section({ title, count, subtitle, children }) {
   )
 }
 
-function ItemCard({ title, subtitle, quantity, onClick, done = false }) {
+function ItemCard({ title, subtitle, quantity, onClick, done = false, compact = false }) {
   const baseColor = done
     ? 'border-emerald-300 hover:border-emerald-600 hover:bg-emerald-50'
     : 'border-bordeaux/30 hover:border-bordeaux hover:bg-bordeaux hover:text-cream'
   const qtyColor = done
     ? 'bg-emerald-600 text-white group-hover:bg-white group-hover:text-emerald-600'
     : 'bg-bordeaux text-cream group-hover:bg-cream group-hover:text-bordeaux'
+  const padding = compact ? 'px-2.5 py-2' : 'px-4 py-3'
+  const titleSize = compact ? 'text-[12px]' : 'text-[14px]'
+  const subtitleSize = compact ? 'text-[10px]' : 'text-[11px]'
+  const qtySize = compact ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-[12px]'
   return (
     <button
       onClick={onClick}
-      className={`w-full bg-white border rounded-xl px-4 py-3 text-left transition-all flex items-center justify-between gap-3 group ${baseColor}`}
+      className={`w-full bg-white border rounded-lg ${padding} text-left transition-all flex items-center justify-between gap-2 group ${baseColor}`}
     >
       <div className="flex-1 min-w-0">
-        <div className={`text-[14px] font-medium truncate ${done ? 'line-through text-ink-mute' : ''}`}>
-          {done && <span className="mr-1.5">✓</span>}
+        <div className={`${titleSize} font-medium truncate ${done ? 'line-through text-ink-mute' : ''}`}>
+          {done && <span className="mr-1">✓</span>}
           {title}
         </div>
         {subtitle && (
-          <div className="text-[11px] text-ink-mute group-hover:text-cream/80 mt-0.5 truncate">
+          <div className={`${subtitleSize} text-ink-mute group-hover:text-cream/80 mt-0.5 truncate`}>
             {subtitle}
           </div>
         )}
       </div>
       {quantity !== undefined && quantity !== null && (
-        <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[12px] font-bold transition-colors ${qtyColor}`}>
+        <span className={`flex-shrink-0 rounded-full font-bold transition-colors ${qtySize} ${qtyColor}`}>
           × {quantity}
         </span>
       )}
