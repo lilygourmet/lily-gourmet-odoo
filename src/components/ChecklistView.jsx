@@ -1,15 +1,19 @@
 // src/components/ChecklistView.jsx
-// Page Checklist Cafe : liste de tout ce que le cafe doit ranger aujourd'hui.
-// 3 sections :
-//   - VITRINE : articles envoyes par la vitrine (stock_day_items) non confirmes
-//   - PROD : articles Prod coches "Fait" avec prefixe E-/V-/GS-/MI- non encore recus par cafe
-//   - ACCESSOIRES : pareil mais prefixe GM-/GMD-
+// Page Checklist Cafe : 2 onglets - "A ranger" et "Range".
 //
-// Le cafe clique sur une carte => l'article disparait de la liste.
-// La liste se rafraichit en realtime quand quelque chose change.
+// ONGLET "A RANGER" :
+//   - VITRINE : items envoyes par la vitrine (stock_day_items) du JOUR non confirmes
+//   - PROD : sales_lines aujourd'hui + 3 jours futurs, cochees "Fait" par Prod,
+//            prefixes E-/V-/GS-/MI-, non recues par cafe
+//   - ACCESSOIRES : pareil mais prefixes GM-/GMD-
+//
+// ONGLET "RANGE" :
+//   - Tous les items deja recus par le cafe (sans limite de date),
+//     tries par heure de rangement (recent en haut), limite a 500 derniers
+//   - Click sur un item range = annule le rangement (revient dans "A ranger")
 // =============================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AppHeader from './AppHeader'
 import { supabase } from '../lib/supabase'
 import { loadSalesLinesForRange } from '../lib/salesLines'
@@ -20,18 +24,47 @@ import { confirmReception, todayISO } from '../lib/stockBoutique'
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES
 const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-']
 const ACCESSOIRES_PREFIXES = ['GM-', 'GMD-']
+// Fenetre pour Prod/Accessoires : aujourd'hui + 3 jours apres (pas de jours passes)
+const DAYS_BEFORE = 0
+const DAYS_AFTER = 3
 
 function startsWithAny(name, prefixes) {
   if (!name) return false
   return prefixes.some(p => name.startsWith(p))
 }
 
+// Formatte une date 'YYYY-MM-DD' en libelle relatif court ("hier", "aujourd'hui", "demain", "lun 19/05")
+function formatDayLabel(dayStr) {
+  if (!dayStr) return ''
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const [y, m, d] = dayStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const diffDays = Math.round((date - today) / (24 * 60 * 60 * 1000))
+  if (diffDays === 0) return "aujourd'hui"
+  if (diffDays === -1) return 'hier'
+  if (diffDays === 1) return 'demain'
+  if (diffDays === 2) return 'après-demain'
+  // Sinon format court "lun 19/05"
+  const days = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam']
+  return `${days[date.getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`
+}
+
+// Decale une date ISO de N jours
+function shiftISO(isoStr, deltaDays) {
+  const [y, m, d] = isoStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + deltaDays)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
 export default function ChecklistView({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
-  const [stockDayId, setStockDayId] = useState(null)
-  const [vitrineItems, setVitrineItems] = useState([])  // items stock_day_items source=morning pending
-  const [prodLines, setProdLines] = useState([])         // sales_lines avec status done et prefixe PROD
-  const [accLines, setAccLines] = useState([])          // sales_lines avec status done et prefixe ACCESSOIRES
+  const [tab, setTab] = useState('todo') // 'todo' | 'done'
+  const [vitrineItems, setVitrineItems] = useState([])  // items vitrine du jour pending
+  const [prodLines, setProdLines] = useState([])         // sales_lines done par Prod, non recues
+  const [accLines, setAccLines] = useState([])          // pareil mais accessoires
+  const [doneItems, setDoneItems] = useState([])         // items deja recus par cafe (toutes sources confondues)
   const todayStr = todayISO()
 
   // ============================================================
@@ -40,21 +73,21 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   async function refresh() {
     setLoading(true)
     try {
-      // 1) VITRINE : items envoyes ce jour non confirmes
+      const fromStr = shiftISO(todayStr, -DAYS_BEFORE)
+
+      // -------- 1) VITRINE (jour seulement) --------
       const { data: sd } = await supabase
         .from('stock_day')
         .select('id')
         .eq('day', todayStr)
         .maybeSingle()
-      const sdId = sd?.id || null
-      setStockDayId(sdId)
 
       let vitItems = []
-      if (sdId) {
+      if (sd?.id) {
         const { data: items } = await supabase
           .from('stock_day_items')
           .select('id, product_name, product_code, qty_announced, reception_status, discrepancy_status')
-          .eq('stock_day_id', sdId)
+          .eq('stock_day_id', sd.id)
           .eq('source', 'morning')
           .eq('reception_status', 'pending')
           .order('product_name')
@@ -62,35 +95,65 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       }
       setVitrineItems(vitItems)
 
-      // 2) PROD + ACCESSOIRES : sales_lines avec entree prod_done.status='done'
-      //    et sans entree cafe_received (sinon deja range)
-      const DAYS = 7  // marge pour voir les commandes recentes
-      const allLines = await loadSalesLinesForRange(todayStr, DAYS)
-      // On garde uniquement les lignes du JOUR (le cafe range ce qui sort aujourd'hui)
-      const todayLines = allLines.filter(l => l.day === todayStr)
-      const lineIds = todayLines.map(l => l.odoo_line_id).filter(Boolean)
+      // -------- 2) PROD + ACCESSOIRES (fenetre elargie) --------
+      // Charge les sales_lines sur la fenetre 3j avant -> 3j apres
+      const totalDays = DAYS_BEFORE + 1 + DAYS_AFTER  // 4 jours
+      const allLines = await loadSalesLinesForRange(fromStr, totalDays)
+      const lineIds = allLines.map(l => l.odoo_line_id).filter(Boolean)
 
-      // Charge le status "fait" de Prod
+      // Charge prod_done pour toutes ces lignes
       const dones = await loadProdDoneForLines(lineIds)
       const doneSet = new Set(
         dones.filter(d => d.status === 'done').map(d => d.odoo_line_id)
       )
 
-      // Charge le status "recu" du cafe
+      // Charge cafe_received pour toutes ces lignes
       const receiveds = await loadCafeReceivedForLines(lineIds)
-      const receivedSet = new Set(receiveds.map(r => r.odoo_line_id))
+      const receivedMap = new Map(receiveds.map(r => [r.odoo_line_id, r]))
 
-      // Filtre : faites par Prod ET pas encore recues par cafe
-      const todoLines = todayLines.filter(l =>
-        doneSet.has(l.odoo_line_id) && !receivedSet.has(l.odoo_line_id)
+      // A RANGER : faites par Prod ET pas encore recues par cafe
+      const todoLines = allLines.filter(l =>
+        doneSet.has(l.odoo_line_id) && !receivedMap.has(l.odoo_line_id)
       )
-
-      // Repartit dans PROD ou ACCESSOIRES selon le prefixe du product_name
       const prodOnes = todoLines.filter(l => startsWithAny(l.product_name, PROD_PREFIXES))
       const accOnes = todoLines.filter(l => startsWithAny(l.product_name, ACCESSOIRES_PREFIXES))
-
       setProdLines(prodOnes)
       setAccLines(accOnes)
+
+      // RANGE : tous les rangés (sans limite de date) du cafe.
+      // On charge directement toute la table cafe_received, puis on enrichit
+      // avec les sales_lines correspondantes pour avoir le nom/client/quantite.
+      const { data: allReceived } = await supabase
+        .from('cafe_received')
+        .select('odoo_line_id, received_at')
+        .order('received_at', { ascending: false })
+        .limit(500) // garde-fou : 500 derniers max pour ne pas exploser
+      const allReceivedIds = (allReceived || []).map(r => r.odoo_line_id)
+
+      let done = []
+      if (allReceivedIds.length > 0) {
+        const { data: linesDone } = await supabase
+          .from('sales_lines')
+          .select('odoo_line_id, product_name, quantity, client_name, order_num, day')
+          .in('odoo_line_id', allReceivedIds)
+        const linesDoneMap = new Map((linesDone || []).map(l => [l.odoo_line_id, l]))
+        const recvByLine = new Map((allReceived || []).map(r => [r.odoo_line_id, r.received_at]))
+
+        done = (allReceived || [])
+          .map(r => {
+            const line = linesDoneMap.get(r.odoo_line_id)
+            if (!line) return null
+            if (!startsWithAny(line.product_name, [...PROD_PREFIXES, ...ACCESSOIRES_PREFIXES])) return null
+            return {
+              ...line,
+              received_at: recvByLine.get(r.odoo_line_id),
+              section: startsWithAny(line.product_name, PROD_PREFIXES) ? 'PROD' : 'ACCESSOIRES',
+            }
+          })
+          .filter(Boolean)
+        // Deja trie par received_at desc grace au order de la requete
+      }
+      setDoneItems(done)
     } catch (e) {
       console.error('[ChecklistView] refresh', e)
     } finally {
@@ -127,12 +190,11 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   }, [])
 
   // ============================================================
-  // Actions de click "Fait / Recu"
+  // Actions
   // ============================================================
   async function handleVitrineDone(item) {
     try {
       await confirmReception(item.id, item.qty_announced, user.id)
-      // refresh viendra via realtime, mais on retire visuellement tout de suite
       setVitrineItems(prev => prev.filter(i => i.id !== item.id))
     } catch (e) {
       console.error('[handleVitrineDone]', e)
@@ -151,11 +213,23 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     }
   }
 
+  async function handleUndoReceived(line) {
+    try {
+      await unmarkCafeReceived(line.odoo_line_id)
+      // Le realtime va rafraichir, mais on enleve visuellement tout de suite
+      setDoneItems(prev => prev.filter(l => l.odoo_line_id !== line.odoo_line_id))
+    } catch (e) {
+      console.error('[handleUndoReceived]', e)
+      alert('Erreur : ' + (e.message || e))
+    }
+  }
+
   // ============================================================
-  // Compteurs pour la barre de progression
+  // Compteurs
   // ============================================================
-  const total = vitrineItems.length + prodLines.length + accLines.length
-  const allDone = total === 0
+  const totalTodo = vitrineItems.length + prodLines.length + accLines.length
+  const totalDone = doneItems.length
+  const allDone = totalTodo === 0
 
   // ============================================================
   // Render
@@ -165,76 +239,195 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-3xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-[24px] font-semibold text-ink tracking-tight">📋 À ranger aujourd'hui</h1>
-          <p className="text-[13px] text-ink-mute mt-1">Clique sur une carte pour la confirmer comme rangée</p>
+        {/* Header de page */}
+        <div className="mb-5">
+          <h1 className="text-[24px] font-semibold text-ink tracking-tight">📋 Checklist</h1>
+          <p className="text-[13px] text-ink-mute mt-1">
+            {tab === 'todo'
+              ? 'Clique sur une carte pour la confirmer comme rangée'
+              : 'Historique de ce qui a été rangé. Click pour annuler.'}
+          </p>
         </div>
 
-        {/* Barre de progression / statut global */}
-        <div className="mb-6 bg-white rounded-xl border border-line p-4">
-          {loading ? (
-            <p className="text-[13px] text-ink-mute">Chargement...</p>
-          ) : allDone ? (
-            <div className="text-center py-3">
-              <div className="text-[40px] mb-2">🎉</div>
-              <p className="text-[15px] font-semibold text-emerald-600">Tout est rangé !</p>
-              <p className="text-[12px] text-ink-mute mt-1">Rien n'attend de t'être rangé pour l'instant.</p>
-            </div>
-          ) : (
-            <p className="text-[14px] font-medium text-bordeaux">
-              {total} article{total > 1 ? 's' : ''} à ranger
-            </p>
-          )}
+        {/* Tabs */}
+        <div className="flex gap-2 mb-5">
+          <button
+            onClick={() => setTab('todo')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
+              tab === 'todo'
+                ? 'bg-bordeaux text-cream border border-bordeaux'
+                : 'bg-white border border-line text-ink hover:border-bordeaux/40'
+            }`}
+          >
+            <span>⏳ À ranger</span>
+            {totalTodo > 0 && (
+              <span className={`min-w-[20px] h-5 px-1.5 flex items-center justify-center text-[11px] font-bold rounded-full ${
+                tab === 'todo' ? 'bg-cream text-bordeaux' : 'bg-red-600 text-white'
+              }`}>
+                {totalTodo}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setTab('done')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
+              tab === 'done'
+                ? 'bg-bordeaux text-cream border border-bordeaux'
+                : 'bg-white border border-line text-ink hover:border-bordeaux/40'
+            }`}
+          >
+            <span>✓ Rangé</span>
+            {totalDone > 0 && (
+              <span className={`min-w-[20px] h-5 px-1.5 flex items-center justify-center text-[11px] font-bold rounded-full ${
+                tab === 'done' ? 'bg-cream text-bordeaux' : 'bg-emerald-600 text-white'
+              }`}>
+                {totalDone}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* SECTION VITRINE */}
-        {vitrineItems.length > 0 && (
-          <Section title="VITRINE" count={vitrineItems.length} subtitle="envoyés par la vitrine">
-            {vitrineItems.map(item => (
-              <ItemCard
-                key={`vit-${item.id}`}
-                title={item.product_name}
-                subtitle="de la vitrine"
-                quantity={item.qty_announced}
-                onClick={() => handleVitrineDone(item)}
-              />
-            ))}
-          </Section>
-        )}
-
-        {/* SECTION PROD */}
-        {prodLines.length > 0 && (
-          <Section title="PROD" count={prodLines.length} subtitle="préparés par la production">
-            {prodLines.map(line => (
-              <ItemCard
-                key={`prod-${line.odoo_line_id}`}
-                title={line.product_name}
-                subtitle={line.client_name ? `commande ${line.client_name}` : (line.order_num || '')}
-                quantity={line.quantity}
-                onClick={() => handleProdDone(line)}
-              />
-            ))}
-          </Section>
-        )}
-
-        {/* SECTION ACCESSOIRES */}
-        {accLines.length > 0 && (
-          <Section title="ACCESSOIRES" count={accLines.length} subtitle="GM et GMD">
-            {accLines.map(line => (
-              <ItemCard
-                key={`acc-${line.odoo_line_id}`}
-                title={line.product_name}
-                subtitle={line.client_name ? `commande ${line.client_name}` : (line.order_num || '')}
-                quantity={line.quantity}
-                onClick={() => handleProdDone(line)}
-              />
-            ))}
-          </Section>
+        {/* Contenu */}
+        {loading ? (
+          <div className="bg-white rounded-xl border border-line p-6 text-center text-[13px] text-ink-mute">
+            Chargement...
+          </div>
+        ) : tab === 'todo' ? (
+          <TodoTab
+            allDone={allDone}
+            total={totalTodo}
+            vitrineItems={vitrineItems}
+            prodLines={prodLines}
+            accLines={accLines}
+            onVitrineDone={handleVitrineDone}
+            onProdDone={handleProdDone}
+          />
+        ) : (
+          <DoneTab
+            items={doneItems}
+            onUndo={handleUndoReceived}
+          />
         )}
       </div>
     </div>
   )
+}
+
+// ============================================================
+// Onglet "A ranger"
+// ============================================================
+function TodoTab({ allDone, total, vitrineItems, prodLines, accLines, onVitrineDone, onProdDone }) {
+  if (allDone) {
+    return (
+      <div className="bg-white rounded-xl border border-line p-8 text-center">
+        <div className="text-[40px] mb-2">🎉</div>
+        <p className="text-[15px] font-semibold text-emerald-600">Tout est rangé !</p>
+        <p className="text-[12px] text-ink-mute mt-1">Rien n'attend de t'être rangé pour l'instant.</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-line p-4 mb-6">
+        <p className="text-[14px] font-medium text-bordeaux">
+          {total} article{total > 1 ? 's' : ''} à ranger
+        </p>
+      </div>
+
+      {vitrineItems.length > 0 && (
+        <Section title="VITRINE" count={vitrineItems.length} subtitle="envoyés par la vitrine">
+          {vitrineItems.map(item => (
+            <ItemCard
+              key={`vit-${item.id}`}
+              title={item.product_name}
+              subtitle="de la vitrine"
+              quantity={item.qty_announced}
+              onClick={() => onVitrineDone(item)}
+            />
+          ))}
+        </Section>
+      )}
+
+      {prodLines.length > 0 && (
+        <Section title="PROD" count={prodLines.length} subtitle="préparés par la production">
+          {prodLines.map(line => (
+            <ItemCard
+              key={`prod-${line.odoo_line_id}`}
+              title={line.product_name}
+              subtitle={buildSubtitle(line)}
+              quantity={line.quantity}
+              onClick={() => onProdDone(line)}
+            />
+          ))}
+        </Section>
+      )}
+
+      {accLines.length > 0 && (
+        <Section title="ACCESSOIRES" count={accLines.length} subtitle="GM et GMD">
+          {accLines.map(line => (
+            <ItemCard
+              key={`acc-${line.odoo_line_id}`}
+              title={line.product_name}
+              subtitle={buildSubtitle(line)}
+              quantity={line.quantity}
+              onClick={() => onProdDone(line)}
+            />
+          ))}
+        </Section>
+      )}
+    </>
+  )
+}
+
+// ============================================================
+// Onglet "Range"
+// ============================================================
+function DoneTab({ items, onUndo }) {
+  if (items.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-line p-8 text-center">
+        <div className="text-[40px] mb-2">📭</div>
+        <p className="text-[15px] font-semibold text-ink">Rien rangé pour le moment</p>
+        <p className="text-[12px] text-ink-mute mt-1">Les items que tu rangeras apparaîtront ici.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {items.map(line => (
+        <ItemCard
+          key={`done-${line.odoo_line_id}`}
+          title={line.product_name}
+          subtitle={`${line.section} · ${buildSubtitle(line)} · rangé ${formatRelativeTime(line.received_at)}`}
+          quantity={line.quantity}
+          done={true}
+          onClick={() => onUndo(line)}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ============================================================
+// Helper : construit le sous-titre d'une ligne (client + date)
+// ============================================================
+function buildSubtitle(line) {
+  const who = line.client_name || line.order_num || ''
+  const when = formatDayLabel(line.day)
+  if (who && when) return `${who} · ${when}`
+  return who || when || ''
+}
+
+// Format relatif court ("il y a 5 min", "il y a 2h")
+function formatRelativeTime(isoStr) {
+  if (!isoStr) return ''
+  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000)
+  if (diff < 60) return "à l'instant"
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`
+  return `il y a ${Math.floor(diff / 86400)} j`
 }
 
 // ============================================================
@@ -255,14 +448,23 @@ function Section({ title, count, subtitle, children }) {
   )
 }
 
-function ItemCard({ title, subtitle, quantity, onClick }) {
+function ItemCard({ title, subtitle, quantity, onClick, done = false }) {
+  const baseColor = done
+    ? 'border-emerald-300 hover:border-emerald-600 hover:bg-emerald-50'
+    : 'border-bordeaux/30 hover:border-bordeaux hover:bg-bordeaux hover:text-cream'
+  const qtyColor = done
+    ? 'bg-emerald-600 text-white group-hover:bg-white group-hover:text-emerald-600'
+    : 'bg-bordeaux text-cream group-hover:bg-cream group-hover:text-bordeaux'
   return (
     <button
       onClick={onClick}
-      className="w-full bg-white border border-bordeaux/30 hover:border-bordeaux hover:bg-bordeaux hover:text-cream rounded-xl px-4 py-3 text-left transition-all flex items-center justify-between gap-3 group"
+      className={`w-full bg-white border rounded-xl px-4 py-3 text-left transition-all flex items-center justify-between gap-3 group ${baseColor}`}
     >
       <div className="flex-1 min-w-0">
-        <div className="text-[14px] font-medium truncate">{title}</div>
+        <div className={`text-[14px] font-medium truncate ${done ? 'line-through text-ink-mute' : ''}`}>
+          {done && <span className="mr-1.5">✓</span>}
+          {title}
+        </div>
         {subtitle && (
           <div className="text-[11px] text-ink-mute group-hover:text-cream/80 mt-0.5 truncate">
             {subtitle}
@@ -270,7 +472,7 @@ function ItemCard({ title, subtitle, quantity, onClick }) {
         )}
       </div>
       {quantity !== undefined && quantity !== null && (
-        <span className="flex-shrink-0 px-2.5 py-1 bg-bordeaux text-cream group-hover:bg-cream group-hover:text-bordeaux rounded-full text-[12px] font-bold transition-colors">
+        <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[12px] font-bold transition-colors ${qtyColor}`}>
           × {quantity}
         </span>
       )}
