@@ -242,6 +242,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
     try {
       setSending(true)
       const entries = Object.entries(cart).filter(([, v]) => (v?.qty || 0) > 0)
+      const totalQtySent = entries.reduce((s, [, v]) => s + (v?.qty || 0), 0)
       for (const [productName, v] of entries) {
         await sendMorningItem(stockDay.id, productName, v.code || null, v.qty, user.id)
       }
@@ -249,6 +250,19 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
       const items = await loadDayItems(stockDay.id)
       setTodayItems(items)
       setCart({})
+
+      // Notifie le cafe via push (best-effort, on n'attend pas si erreur)
+      fetch('/api/push-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'cafe',
+          title: '📦 Envoi vitrine',
+          body: `La vitrine a envoyé ${totalQtySent} article${totalQtySent > 1 ? 's' : ''}`,
+          url: '/',
+          tag: 'lily-vitrine',
+        }),
+      }).catch(e => console.warn('[push] send error:', e))
     } catch (e) {
       console.error(e)
       alert('Erreur envoi : ' + (e.message || e))

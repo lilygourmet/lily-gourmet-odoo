@@ -9,6 +9,7 @@ import AppHeader from '../AppHeader'
 import ProductGrid from './ProductGrid'
 import NumpadInline from './NumpadInline'
 import PrintButton from './PrintButton'
+import { isPushSupported, getPushPermission, subscribeToPush, registerServiceWorker } from '../../lib/pushNotif'
 import {
   getOrCreateStockDay,
   loadDayItems,
@@ -39,6 +40,9 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   const [dotFlash, setDotFlash] = useState(false)
   // Bulle de notification persistante : compte les envois vitrine non encore "vus"
   const [pendingNotif, setPendingNotif] = useState(0)
+  // Banniere "Activer notifs push" affichee si permission == 'default'
+  const [pushPermission, setPushPermission] = useState('default')
+  const [pushLoading, setPushLoading] = useState(false)
   const subscriptionRef = useRef(null)
   const audioCtxRef = useRef(null)
   const dingRepeatTimerRef = useRef(null)
@@ -138,6 +142,29 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingNotif > 0])
+
+  // Enregistre le service worker au mount et lit l'etat de la permission push
+  // Si la permission est 'default' on affichera une banniere pour la demander
+  useEffect(() => {
+    if (!isPushSupported()) return
+    registerServiceWorker()
+    setPushPermission(getPushPermission())
+  }, [])
+
+  // Quand le cafe accepte les notifs push : abonne le navigateur + envoie au backend
+  async function handleEnablePush() {
+    if (!user?.id) return
+    setPushLoading(true)
+    try {
+      const ok = await subscribeToPush(user.id, 'cafe')
+      setPushPermission(getPushPermission())
+      if (!ok && getPushPermission() === 'denied') {
+        alert("Notifications bloquées. Va dans les réglages du navigateur pour les autoriser.")
+      }
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   function playDing() {
     try {
@@ -284,6 +311,32 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
             className="ml-2 px-3 py-1 bg-cream text-bordeaux rounded-full text-[12px] font-bold hover:bg-cream-warm transition-colors"
           >
             ✓ J'ai vu
+          </button>
+        </div>
+      )}
+
+      {/* Banniere "Activer les notifs push" : visible une fois si pas encore decide */}
+      {isPushSupported() && pushPermission === 'default' && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-bordeaux/95 text-cream px-5 py-3 rounded-xl shadow-2xl border-2 border-cream">
+          <span className="text-[20px]">🔔</span>
+          <span className="text-[13px]">
+            Active les notifications pour être prévenu même si l'app est fermée
+          </span>
+          <button
+            type="button"
+            onClick={handleEnablePush}
+            disabled={pushLoading}
+            className="ml-2 px-3 py-1.5 bg-cream text-bordeaux rounded-full text-[12px] font-bold hover:bg-cream-warm transition-colors disabled:opacity-60"
+          >
+            {pushLoading ? '...' : 'Activer'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPushPermission('dismissed')}
+            className="text-cream/70 hover:text-cream text-[16px] leading-none px-1"
+            title="Plus tard"
+          >
+            ✕
           </button>
         </div>
       )}
