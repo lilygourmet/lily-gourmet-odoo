@@ -117,6 +117,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
         perm_cake_vision: formData.permCakeVision,
+        perm_checklist: formData.permChecklist,
         perm_stock_patissier: formData.permStockPatissier,
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
@@ -155,6 +156,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
         perm_cake_vision: formData.permCakeVision,
+        perm_checklist: formData.permChecklist,
         perm_stock_patissier: formData.permStockPatissier,
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
@@ -624,6 +626,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permMessages: initialData?.perm_messages !== undefined ? initialData.perm_messages : false,
     permEtiquettes: initialData?.perm_etiquettes !== undefined ? initialData.perm_etiquettes : false,
     permCakeVision: initialData?.perm_cake_vision !== undefined ? initialData.perm_cake_vision : false,
+    permChecklist: initialData?.perm_checklist !== undefined ? initialData.perm_checklist : false,
     permStockPatissier: initialData?.perm_stock_patissier !== undefined ? initialData.perm_stock_patissier : false,
     permStockCafe: initialData?.perm_stock_cafe !== undefined ? initialData.perm_stock_cafe : false,
     permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
@@ -842,6 +845,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="📸 Voir le bouton Galerie CD (Cake Vision)"
             checked={isAdmin || formData.permCakeVision}
             onChange={v => update('permCakeVision', v)}
+          />
+          <PermCheckbox
+            id="perm-checklist"
+            label="📋 Voir la Checklist (articles à ranger pour le café)"
+            checked={isAdmin || formData.permChecklist}
+            onChange={v => update('permChecklist', v)}
           />
           <PermCheckbox
             id="perm-stock-patissier"

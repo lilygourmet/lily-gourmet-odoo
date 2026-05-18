@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -30,10 +30,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [, setNow] = useState(0)
   // Badge "articles non termines" sur le bouton Reception Vitrine
   const [receptionBadge, setReceptionBadge] = useState(0)
+  // Badge "articles a ranger" sur le bouton Checklist
+  const [checklistBadge, setChecklistBadge] = useState(0)
   // Menus deroulants ouverts (un seul a la fois)
   const [openMenu, setOpenMenu] = useState(null) // 'prod' | 'vitrine' | 'outils' | null
 
   const showReceptionBtn = !isLivreur(user) && canStockCafe(user)
+  const showChecklistBtn = !isLivreur(user) && canSeeChecklist(user)
 
   // Refresh affichage relatif chaque minute
   useEffect(() => {
@@ -85,6 +88,90 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showReceptionBtn, user?.id])
+
+  // Badge Checklist : compte les articles a ranger (toutes sections confondues)
+  // Vitrine pending + lignes Prod 'done' non encore 'cafe_received'
+  useEffect(() => {
+    if (!showChecklistBtn) return
+    let cancelled = false
+    let channels = []
+
+    const today = new Date().toISOString().slice(0, 10)
+    const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-', 'GM-', 'GMD-']
+
+    async function refreshChecklistBadge() {
+      try {
+        // 1) Vitrine pending
+        const { data: sd } = await supabase
+          .from('stock_day').select('id').eq('day', today).maybeSingle()
+        let vitCount = 0
+        if (sd?.id) {
+          const { count } = await supabase
+            .from('stock_day_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('stock_day_id', sd.id)
+            .eq('source', 'morning')
+            .eq('reception_status', 'pending')
+          vitCount = count || 0
+        }
+
+        // 2) Lignes Prod faites aujourd'hui non recues par cafe
+        //    Charge les sales_lines du jour avec prefixe Prod+Accessoires
+        const { data: lines } = await supabase
+          .from('sales_lines')
+          .select('odoo_line_id, product_name')
+          .eq('day', today)
+        const candidateIds = (lines || [])
+          .filter(l => l.product_name && PROD_PREFIXES.some(p => l.product_name.startsWith(p)))
+          .map(l => l.odoo_line_id).filter(Boolean)
+
+        let prodCount = 0
+        if (candidateIds.length > 0) {
+          // Lignes coches "Fait" par Prod
+          const { data: dones } = await supabase
+            .from('prod_done')
+            .select('odoo_line_id, status')
+            .in('odoo_line_id', candidateIds)
+          const doneIds = (dones || []).filter(d => d.status === 'done').map(d => d.odoo_line_id)
+
+          if (doneIds.length > 0) {
+            // Parmi celles-la, on retire celles deja recues par cafe
+            const { data: receiveds } = await supabase
+              .from('cafe_received')
+              .select('odoo_line_id')
+              .in('odoo_line_id', doneIds)
+            const receivedSet = new Set((receiveds || []).map(r => r.odoo_line_id))
+            prodCount = doneIds.filter(id => !receivedSet.has(id)).length
+          }
+        }
+
+        if (!cancelled) setChecklistBadge(vitCount + prodCount)
+      } catch (e) {
+        console.warn('[checklistBadge]', e?.message || e)
+      }
+    }
+
+    refreshChecklistBadge()
+
+    // Realtime sur les 3 tables qui influent sur le badge
+    channels = [
+      supabase.channel('checklist-badge-stock')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_day_items' }, refreshChecklistBadge)
+        .subscribe(),
+      supabase.channel('checklist-badge-prod')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'prod_done' }, refreshChecklistBadge)
+        .subscribe(),
+      supabase.channel('checklist-badge-cafe')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cafe_received' }, refreshChecklistBadge)
+        .subscribe(),
+    ]
+
+    return () => {
+      cancelled = true
+      channels.forEach(c => supabase.removeChannel(c))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showChecklistBtn, user?.id])
 
   // Auto-sync toutes les 5 min
   useEffect(() => {
@@ -309,6 +396,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               isActive={activeView === primary.view}
               badgeCount={primary.badge}
               onClick={() => onNavigate(primary.view)}
+            />
+          )}
+          {showChecklistBtn && (
+            <NavButton
+              emoji="📋"
+              label="Checklist"
+              isActive={activeView === 'checklist'}
+              badgeCount={checklistBadge}
+              onClick={() => onNavigate('checklist')}
             />
           )}
 
