@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
@@ -7,10 +7,9 @@ import AdminGmConfig from './AdminGmConfig'
 import LabelsButton from './LabelsButton'
 
 // ============================================================
-// AppHeader : header de navigation unifie
-// Props :
-//   user, activeView, onNavigate, onLogout
-//   onSyncSuccess : callback apres sync (pour refresh la vue active)
+// AppHeader : header de navigation unifie (Option B)
+// 3 boutons fixes en 1 clic : Calendrier + Recap + onglet principal du role
+// 3 menus deroulants : Production / Vitrine / Outils
 // ============================================================
 export default function AppHeader({ user, activeView, onNavigate, onLogout, onSyncSuccess }) {
   const admin = isAdmin(user)
@@ -31,6 +30,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [, setNow] = useState(0)
   // Badge "articles non termines" sur le bouton Reception Vitrine
   const [receptionBadge, setReceptionBadge] = useState(0)
+  // Menus deroulants ouverts (un seul a la fois)
+  const [openMenu, setOpenMenu] = useState(null) // 'prod' | 'vitrine' | 'outils' | null
+
   const showReceptionBtn = !isLivreur(user) && canStockCafe(user)
 
   // Refresh affichage relatif chaque minute
@@ -40,8 +42,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   }, [])
 
   // Badge Reception Vitrine : compte les articles non termines du jour
-  // (en attente reception + ecarts en cours d'arbitrage). Seulement si l'user
-  // a la perm cafe. Realtime pour mise a jour instantanee.
   useEffect(() => {
     if (!showReceptionBtn) return
     let cancelled = false
@@ -51,7 +51,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
     async function refreshBadge() {
       try {
-        // 1) Trouve l'id du stock_day d'aujourd'hui
         const { data: sd, error: e1 } = await supabase
           .from('stock_day')
           .select('id')
@@ -59,9 +58,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           .maybeSingle()
         if (e1 || !sd) { if (!cancelled) setReceptionBadge(0); return }
 
-        // 2) Compte les items 'morning' encore non termines :
-        //    - reception_status = 'pending' (pas encore confirmé/écart)
-        //    - OU discrepancy_status en cours ('pending_patissier', 'pending_cafe')
         const { count, error: e2 } = await supabase
           .from('stock_day_items')
           .select('id', { count: 'exact', head: true })
@@ -76,8 +72,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
     refreshBadge()
 
-    // Realtime sur stock_day_items : on rafraichit le compteur a chaque
-    // insert/update/delete (sans filtre par stock_day_id pour rester simple).
     channel = supabase
       .channel('reception-badge')
       .on('postgres_changes',
@@ -92,11 +86,11 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showReceptionBtn, user?.id])
 
-  // Auto-sync toutes les 5 min (si user a la perm + dernier sync > 4 min)
+  // Auto-sync toutes les 5 min
   useEffect(() => {
     if (!userCanSync) return
-    const CHECK_MS = 60 * 1000              // verifie chaque minute
-    const MIN_INTERVAL_MS = 5 * 60 * 1000   // sync si dernier > 5 min
+    const CHECK_MS = 60 * 1000
+    const MIN_INTERVAL_MS = 5 * 60 * 1000
 
     async function tryAutoSync() {
       if (syncing) return
@@ -109,7 +103,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       } catch (_) { /* handleSync gere deja l'erreur */ }
     }
 
-    // Tick imm\u00e9diat puis chaque minute
     tryAutoSync()
     const t = setInterval(tryAutoSync, CHECK_MS)
     return () => clearInterval(t)
@@ -153,12 +146,53 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
   }
 
-  function navBtn(view, emoji, label, visible, badgeCount = 0) {
-    if (!visible) return null
-    const isActive = activeView === view
+  // ============================================================
+  // Determine l'onglet "principal" du role (3eme bouton fixe)
+  // Priorite : cafe > patissier > prod > patisserie-accessoires
+  // ============================================================
+  function pickPrimaryNav() {
+    if (isLivreur(user)) return null
+    if (canStockCafe(user)) return { view: 'reception-vitrine', emoji: '📦', label: 'Réception', badge: receptionBadge }
+    if (canStockPatissier(user)) return { view: 'vitrine', emoji: '🥐', label: 'Vitrine', badge: 0 }
+    if (admin || isProdUser) {
+      if (user?.perm_sales && !user?.perm_prod) return { view: 'sales', emoji: '🥪', label: 'Salés', badge: 0 }
+      return { view: 'prod', emoji: '🥐', label: 'Prod', badge: 0 }
+    }
+    if (isPatissierUser) return { view: 'patissier', emoji: '🧁', label: 'Accessoires', badge: 0 }
+    return null
+  }
+  const primary = pickPrimaryNav()
+
+  // ============================================================
+  // Definition des menus deroulants
+  // ============================================================
+  const menuProduction = [
+    { view: 'prod',       emoji: '🥐', label: 'Prod',        visible: !isLivreur(user) && (admin || (isProdUser && user.perm_prod)) },
+    { view: 'sales',      emoji: '🥪', label: 'Salés',       visible: !isLivreur(user) && (admin || (isProdUser && user.perm_sales)) },
+    { view: 'patissier',  emoji: '🧁', label: 'Accessoires', visible: !isLivreur(user) && (admin || isPatissierUser) },
+  ].filter(i => i.visible)
+
+  const menuVitrine = [
+    { view: 'vitrine',           emoji: '🥐', label: 'Vitrine',           visible: !isLivreur(user) && canStockPatissier(user), badge: 0 },
+    { view: 'reception-vitrine', emoji: '📦', label: 'Réception Vitrine', visible: !isLivreur(user) && canStockCafe(user),     badge: receptionBadge },
+    { view: 'fin-journee',       emoji: '🌙', label: 'Fin de journée',    visible: !isLivreur(user) && canStockCafe(user),     badge: 0 },
+    { view: 'stock',             emoji: '📊', label: 'Stock',             visible: !isLivreur(user) && canStockAudit(user),    badge: 0 },
+  ].filter(i => i.visible)
+
+  const menuOutils = [
+    { view: 'etiquettes',       emoji: '🏷',  label: 'Étiquettes Café', visible: !isLivreur(user) && canSeeEtiquettes(user) },
+    { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
+    { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
+    { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
+  ].filter(i => i.visible)
+
+  // ============================================================
+  // Composants helper
+  // ============================================================
+  function NavButton({ emoji, label, isActive, badgeCount = 0, onClick }) {
     return (
       <button
-        onClick={() => onNavigate && onNavigate(view)}
+        onClick={onClick}
         className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
           isActive
             ? 'bg-bordeaux text-cream border border-bordeaux'
@@ -173,6 +207,73 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           </span>
         )}
       </button>
+    )
+  }
+
+  function DropdownMenu({ id, emoji, label, items }) {
+    const open = openMenu === id
+    const hasActive = items.some(it => it.view === activeView)
+    const totalBadge = items.reduce((s, it) => s + (it.badge || 0), 0)
+
+    if (items.length === 0) return null
+
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setOpenMenu(open ? null : id)}
+          className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
+            hasActive
+              ? 'bg-bordeaux text-cream border border-bordeaux'
+              : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
+          }`}
+        >
+          <span>{emoji}</span>
+          <span>{label}</span>
+          <span className="text-[9px] opacity-70">▾</span>
+          {totalBadge > 0 && !hasActive && (
+            <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
+              {totalBadge > 99 ? '99+' : totalBadge}
+            </span>
+          )}
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setOpenMenu(null)} />
+            <div className="absolute left-0 top-full mt-1 z-[70] bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
+              {items.map(item => {
+                const isActive = item.view === activeView
+                const handleClick = () => {
+                  setOpenMenu(null)
+                  if (item.externalUrl) {
+                    window.open(item.externalUrl, '_blank', 'noopener,noreferrer')
+                  } else {
+                    onNavigate(item.view)
+                  }
+                }
+                return (
+                  <button
+                    key={item.view}
+                    onClick={handleClick}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-[12px] transition-colors ${
+                      isActive ? 'bg-bordeaux text-cream' : 'hover:bg-cream-warm text-ink'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-[14px]">{item.emoji}</span>
+                      <span>{item.label}</span>
+                    </span>
+                    {item.badge > 0 && (
+                      <span className="min-w-[20px] h-[20px] px-1.5 flex items-center justify-center text-[11px] font-bold bg-red-600 text-white rounded-full">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
     )
   }
 
@@ -193,47 +294,45 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           </div>
         </button>
 
-        {/* Navigation */}
+        {/* Navigation : 3 boutons fixes + 3 menus deroulants */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {navBtn('calendar', '📅', 'Calendrier', !isLivreur(user) && canSeeCalendar(user))}
-          {navBtn('recap', '📊', 'Récap', canRecaps(user) || isLivreur(user))}
-          {navBtn('prod', '🥐', 'Prod', !isLivreur(user) && (admin || (isProdUser && user.perm_prod)))}
-          {navBtn('sales', '🥪', 'Salés', !isLivreur(user) && (admin || (isProdUser && user.perm_sales)))}
-          {navBtn('patissier', '🧁', 'Accessoires', !isLivreur(user) && (admin || isPatissierUser))}
-          {navBtn('freezer', '❄️', 'CD Négatif', !isLivreur(user) && canSeeFreezer(user))}
-          {navBtn('messages', '', 'Messages', !isLivreur(user) && canSeeMessages(user))}
-          {navBtn('etiquettes', '🏷', 'Étiquettes Café', !isLivreur(user) && canSeeEtiquettes(user))}
-          {!isLivreur(user) && canSeeCakeVision(user) && (
-            <a
-              href="https://cake-vision-app.vercel.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux"
-              title="Ouvre la Galerie CD dans un nouvel onglet"
-            >
-              <span>📸</span>
-              <span>Galerie CD</span>
-            </a>
+          {!isLivreur(user) && canSeeCalendar(user) && (
+            <NavButton emoji="📅" label="Calendrier" isActive={activeView === 'calendar'} onClick={() => onNavigate('calendar')} />
           )}
-          {navBtn('vitrine', '🥐', 'Vitrine', !isLivreur(user) && canStockPatissier(user))}
-          {navBtn('reception-vitrine', '📦', 'Réception Vitrine', showReceptionBtn, receptionBadge)}
-          {navBtn('fin-journee', '🌙', 'Fin de journée', !isLivreur(user) && canStockCafe(user))}
-          {navBtn('stock', '📊', 'Stock', !isLivreur(user) && canStockAudit(user))}
+          {(canRecaps(user) || isLivreur(user)) && (
+            <NavButton emoji="📊" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
+          )}
+          {primary && (
+            <NavButton
+              emoji={primary.emoji}
+              label={primary.label}
+              isActive={activeView === primary.view}
+              badgeCount={primary.badge}
+              onClick={() => onNavigate(primary.view)}
+            />
+          )}
+
+          {/* Separateur visuel */}
+          {(menuProduction.length > 0 || menuVitrine.length > 0 || menuOutils.length > 0) && (
+            <div className="w-px h-5 bg-line/60 mx-1" />
+          )}
+
+          {/* Menus deroulants */}
+          <DropdownMenu id="prod" emoji="🥐" label="Production" items={menuProduction} />
+          <DropdownMenu id="vitrine" emoji="🥐" label="Vitrine" items={menuVitrine} />
+          <DropdownMenu id="outils" emoji="🛠" label="Outils" items={menuOutils} />
         </div>
 
         {/* Actions : sync + roue + logout */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* Bouton Etiquettes Zebra (admin ou perm_labels) */}
           {canPrintLabels(user) && <LabelsButton />}
 
-          {/* Heure derniere sync : visible pour tous */}
           {lastSyncAt && !syncing && (
             <span className="font-mono text-[9px] text-ink-mute hidden md:inline" title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}>
               sync {fmtRelative(lastSyncAt)}
             </span>
           )}
 
-          {/* Sync (bouton) seulement si user a la perm */}
           {userCanSync && (
             <button
               onClick={handleSync}
@@ -255,7 +354,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </button>
           )}
 
-          {/* Roue (admin only) */}
           {admin && (
             <div className="relative">
               <button
@@ -269,28 +367,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowCog(false)} />
                   <div className="absolute right-0 mt-1 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
-                    <CogItem
-                      icon="🔑"
-                      label="Mot de passe"
-                      onClick={() => { setShowChangePwd(true); setShowCog(false) }}
-                    />
-                    <CogItem
-                      icon="👥"
-                      label="Utilisateurs"
-                      onClick={() => { setShowAdminUsers(true); setShowCog(false) }}
-                    />
-                    <CogItem
-                      icon="🎨"
-                      label="Palette couleurs"
-                      onClick={() => { setShowPalette(true); setShowCog(false) }}
-                    />
+                    <CogItem icon="🔑" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
+                    <CogItem icon="👥" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
+                    <CogItem icon="🎨" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />
                   </div>
                 </>
               )}
             </div>
           )}
 
-          {/* Mot de passe (non-admin : direct) */}
           {!admin && (
             <button
               onClick={() => setShowChangePwd(true)}
@@ -301,7 +386,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </button>
           )}
 
-          {/* Logout */}
           {onLogout && (
             <button
               onClick={onLogout}
@@ -315,21 +399,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       </div>
 
       {/* Modals */}
-      {showChangePwd && (
-        <ChangePasswordModal
-          user={user}
-          onClose={() => setShowChangePwd(false)}
-        />
-      )}
-      {showAdminUsers && (
-        <AdminUsers
-          currentUser={user}
-          onClose={() => setShowAdminUsers(false)}
-        />
-      )}
-      {showPalette && (
-        <AdminGmConfig onClose={() => setShowPalette(false)} />
-      )}
+      {showChangePwd && <ChangePasswordModal user={user} onClose={() => setShowChangePwd(false)} />}
+      {showAdminUsers && <AdminUsers currentUser={user} onClose={() => setShowAdminUsers(false)} />}
+      {showPalette && <AdminGmConfig onClose={() => setShowPalette(false)} />}
     </>
   )
 }
@@ -345,4 +417,3 @@ function CogItem({ icon, label, onClick }) {
     </button>
   )
 }
-
