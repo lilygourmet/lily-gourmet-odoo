@@ -59,7 +59,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   const [cacheInfo, setCacheInfo] = useState(null)   // { ts } si on affiche du cache
 
   const today = new Date()
-  const NB_DAYS = 14
+  const NB_DAYS = 7
 
   function loadData(forceRefresh = false) {
     setError('')
