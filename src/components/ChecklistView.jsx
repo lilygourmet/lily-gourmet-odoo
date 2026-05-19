@@ -183,49 +183,30 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       const toStr = shiftISO(todayStr, DAYS_AFTER + 1)
       const totalDays = DAYS_BEFORE + 1 + DAYS_AFTER
 
-      // -------- 1) VITRINE (jour seulement) --------
-      const { data: sd } = await supabase
-        .from('stock_day')
-        .select('id')
-        .eq('day', todayStr)
-        .maybeSingle()
+      // ============================================================
+      // PHASE 1 : 4 requetes independantes en parallele
+      // ============================================================
+      const [sdResult, allLines, orders, allReceivedResult] = await Promise.all([
+        // 1a) stock_day du jour (pour vitrine)
+        supabase.from('stock_day').select('id').eq('day', todayStr).maybeSingle(),
+        // 1b) toutes les sales_lines sur la fenetre (pour PROD)
+        loadSalesLinesForRange(fromStr, totalDays),
+        // 1c) toutes les orders sur la fenetre (pour COMMANDES)
+        loadOrdersForRange(fromStr, toStr),
+        // 1d) tous les cafe_received recents (pour onglet RANGE prod)
+        supabase
+          .from('cafe_received')
+          .select('odoo_line_id, received_at')
+          .order('received_at', { ascending: false })
+          .limit(500),
+      ])
 
-      let vitItems = []
-      if (sd?.id) {
-        const { data: items } = await supabase
-          .from('stock_day_items')
-          .select('id, product_name, product_code, qty_announced, reception_status, discrepancy_status')
-          .eq('stock_day_id', sd.id)
-          .eq('source', 'morning')
-          .eq('reception_status', 'pending')
-          .order('product_name')
-        vitItems = items || []
-      }
-      setVitrineItems(vitItems)
-
-      // -------- 2) PROD : sales_lines avec prod_done.status='done' --------
-      const allLines = await loadSalesLinesForRange(fromStr, totalDays)
+      const sd = sdResult?.data
       const lineIds = allLines.map(l => l.odoo_line_id).filter(Boolean)
+      const allReceived = allReceivedResult?.data || []
+      const allReceivedIds = allReceived.map(r => r.odoo_line_id)
 
-      const dones = await loadProdDoneForLines(lineIds)
-      const doneSet = new Set(dones.filter(d => d.status === 'done').map(d => d.odoo_line_id))
-      const receiveds = await loadCafeReceivedForLines(lineIds)
-      const receivedMap = new Map(receiveds.map(r => [r.odoo_line_id, r]))
-
-      // A RANGER prod : faites par Prod ET pas encore recues par cafe, prefixe Prod
-      // ET pas un client exclu (ex: Vitrine)
-      const todoLines = allLines.filter(l =>
-        doneSet.has(l.odoo_line_id) &&
-        !receivedMap.has(l.odoo_line_id) &&
-        startsWithAny(l.product_name, PROD_PREFIXES) &&
-        !isExcludedClient(l.client_name)
-      )
-      setProdLines(todoLines)
-
-      // -------- 3) COMMANDES : order_items via item_steps --------
-      const orders = await loadOrdersForRange(fromStr, toStr)
-      // Pour chaque order, on garde les items GM/GMD/CD
-      // On exclut les commandes des clients exclus (ex: Vitrine)
+      // Pre-traitement des order_items pour avoir itemIds (utilise en phase 2)
       const allOrderItems = []
       for (const order of orders) {
         if (isExcludedClient(order.client_name)) continue
@@ -244,54 +225,95 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         }
       }
       const itemIds = allOrderItems.map(i => i.id)
-      const stepsMap = itemIds.length > 0 ? await loadItemSteps(itemIds) : {}
 
-      // A RANGER commandes : fait/fini coche mais range pas coche
+      // ============================================================
+      // PHASE 2 : 5 requetes qui dependent de phase 1, en parallele
+      // ============================================================
+      const [
+        vitItemsResult,
+        vitDoneResult,
+        dones,
+        receiveds,
+        stepsMap,
+        linesDoneResult,
+      ] = await Promise.all([
+        // 2a) Vitrine "A ranger" : items pending
+        sd?.id
+          ? supabase
+              .from('stock_day_items')
+              .select('id, product_name, product_code, qty_announced, reception_status, discrepancy_status')
+              .eq('stock_day_id', sd.id)
+              .eq('source', 'morning')
+              .eq('reception_status', 'pending')
+              .order('product_name')
+          : Promise.resolve({ data: [] }),
+        // 2b) Vitrine "Range" : items deja recus
+        sd?.id
+          ? supabase
+              .from('stock_day_items')
+              .select('id, product_name, qty_announced, reception_status, received_at')
+              .eq('stock_day_id', sd.id)
+              .eq('source', 'morning')
+              .neq('reception_status', 'pending')
+              .order('received_at', { ascending: false })
+          : Promise.resolve({ data: [] }),
+        // 2c) Prod done pour les sales_lines
+        loadProdDoneForLines(lineIds),
+        // 2d) Cafe received pour les sales_lines (utilise pour PROD a ranger)
+        loadCafeReceivedForLines(lineIds),
+        // 2e) Item steps pour les order_items
+        itemIds.length > 0 ? loadItemSteps(itemIds) : Promise.resolve({}),
+        // 2f) Sales_lines correspondant aux cafe_received recents (onglet Range)
+        allReceivedIds.length > 0
+          ? supabase
+              .from('sales_lines')
+              .select('odoo_line_id, product_name, quantity, client_name, order_num, delivery_at')
+              .in('odoo_line_id', allReceivedIds)
+          : Promise.resolve({ data: [] }),
+      ])
+
+      // ============================================================
+      // PHASE 3 : assemblage et calculs (synchrone, rapide)
+      // ============================================================
+
+      // 3a) VITRINE a ranger
+      setVitrineItems(vitItemsResult?.data || [])
+
+      // 3b) PROD a ranger
+      const doneSet = new Set(dones.filter(d => d.status === 'done').map(d => d.odoo_line_id))
+      const receivedMap = new Map(receiveds.map(r => [r.odoo_line_id, r]))
+      const todoLines = allLines.filter(l =>
+        doneSet.has(l.odoo_line_id) &&
+        !receivedMap.has(l.odoo_line_id) &&
+        startsWithAny(l.product_name, PROD_PREFIXES) &&
+        !isExcludedClient(l.client_name)
+      )
+      setProdLines(todoLines)
+
+      // 3c) COMMANDES a ranger
       const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap))
       setCommandeItems(todoCommandes)
 
-      // -------- 4) ONGLET "RANGE" : 3 sources separees pour 3 colonnes --------
-
-      // 4a) Vitrine rangee : stock_day_items du jour avec reception_status != 'pending'
-      let vitDoneItems = []
-      if (sd?.id) {
-        const { data: itemsDone } = await supabase
-          .from('stock_day_items')
-          .select('id, product_name, qty_announced, reception_status, received_at')
-          .eq('stock_day_id', sd.id)
-          .eq('source', 'morning')
-          .neq('reception_status', 'pending')
-          .order('received_at', { ascending: false })
-        vitDoneItems = (itemsDone || []).map(it => ({
-          kind: 'vitrine',
-          key: `vit-${it.id}`,
-          title: cleanProductName(it.product_name),
-          subtitle: formatHour(it.received_at) || '',
-          quantity: it.qty_announced,
-          received_at: it.received_at,
-          item_id: it.id,
-        }))
-      }
+      // 3d) VITRINE rangee
+      const vitDoneItems = (vitDoneResult?.data || []).map(it => ({
+        kind: 'vitrine',
+        key: `vit-${it.id}`,
+        title: cleanProductName(it.product_name),
+        subtitle: formatHour(it.received_at) || '',
+        quantity: it.qty_announced,
+        received_at: it.received_at,
+        item_id: it.id,
+      }))
       setDoneVitrine(vitDoneItems)
 
-      // 4b) Prod rangee : cafe_received avec sales_line correspondante, du jour J ou futur
-      const { data: allReceived } = await supabase
-        .from('cafe_received')
-        .select('odoo_line_id, received_at')
-        .order('received_at', { ascending: false })
-        .limit(500)
-      const allReceivedIds = (allReceived || []).map(r => r.odoo_line_id)
-
+      // 3e) PROD rangee
       const doneProdItems = []
       if (allReceivedIds.length > 0) {
-        const { data: linesDone } = await supabase
-          .from('sales_lines')
-          .select('odoo_line_id, product_name, quantity, client_name, order_num, delivery_at')
-          .in('odoo_line_id', allReceivedIds)
-        const linesDoneMap = new Map((linesDone || []).map(l => [l.odoo_line_id, l]))
-        const recvByLine = new Map((allReceived || []).map(r => [r.odoo_line_id, r.received_at]))
+        const linesDone = linesDoneResult?.data || []
+        const linesDoneMap = new Map(linesDone.map(l => [l.odoo_line_id, l]))
+        const recvByLine = new Map(allReceived.map(r => [r.odoo_line_id, r.received_at]))
 
-        for (const r of (allReceived || [])) {
+        for (const r of allReceived) {
           const line = linesDoneMap.get(r.odoo_line_id)
           if (!line) continue
           if (!startsWithAny(line.product_name, PROD_PREFIXES)) continue
