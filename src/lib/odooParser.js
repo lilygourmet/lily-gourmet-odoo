@@ -82,7 +82,7 @@ export function parseOdooOrders(odooOrders, linesByOrderId) {
 // HELPERS
 // ==========================================
 
-const KNOWN_PREFIXES = /^(CD-|GM-|GM\s*-|GMD-|SA-|SAK-|E-|MI-|RA-|GS-|V-|B-|H-|N-|Acompte|Bougies|Down\s+Payment)/i
+const KNOWN_PREFIXES = /^(CD-|GM-|GM\s*-|GMD-|SA-|SAK-|E-|MI-|RA-|GS-|V-|B-|H-|N-|Acompte|Bougies|Down\s+Payment|Livraison)/i
 
 // Detecte les lignes 'warning' : pas de prefixe connu, pas un montant, contiennent du texte utile
 function isPotentialWarningLine(productName) {
@@ -111,13 +111,14 @@ function isCdGmProduct(productName) {
 
 // Detecte les lignes Odoo a IGNORER completement (pas warning, pas produit)
 // E-, MI-, RA-, GS-, V-, B-, H-, N- = produits qu'on ne veut ni en commande ni en warning
+// Livraison = ligne de livraison Odoo (frais de port), pas un warning
 // [XXX] devant un de ces prefixes aussi
 function isIgnoredProduct(productName) {
   if (!productName) return false
   const trimmed = productName.trim()
   // Retirer le [XXX] eventuel au debut
   const noRef = trimmed.replace(/^\[\s*\d+\s*\]\s*/, '')
-  return /^(E-|MI-|RA-|GS-|V-|B-|H-|N-|SA-|SAK-|Acompte|Down\s+Payment)/i.test(noRef)
+  return /^(E-|MI-|RA-|GS-|V-|B-|H-|N-|SA-|SAK-|Acompte|Down\s+Payment|Livraison)/i.test(noRef)
 }
 
 function parseItems(odooLines) {
@@ -164,7 +165,7 @@ function parseItems(odooLines) {
       continue
     }
 
-    // CAS 2 : Lignes a ignorer completement (E-, MI-, RA-, [474] E-, etc.)
+    // CAS 2 : Lignes a ignorer completement (E-, MI-, RA-, [474] E-, Livraison, etc.)
     // Important : ce check vient AVANT le check warning pour eviter de les traiter en warning
     if (isIgnoredProduct(productName)) {
       lastItemRef = null  // coupe le rattachement warning
