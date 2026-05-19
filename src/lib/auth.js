@@ -193,6 +193,18 @@ export function canSeeEtiquettes(user) {
   return user.role === 'admin' || user.perm_etiquettes === true
 }
 
+// User peut voir le bouton Galerie CD (Cake Vision) - lien externe
+export function canSeeCakeVision(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_cake_vision === true
+}
+
+// User peut voir l'onglet Checklist (articles a ranger pour le cafe)
+export function canSeeChecklist(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_checklist === true
+}
+
 // Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false
