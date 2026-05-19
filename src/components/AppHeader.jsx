@@ -120,10 +120,16 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         }
 
         // 2) Lignes Prod : faites par Prod, non recues, prefixes E-/V-/GS-/MI-
+        // Filtre par delivery_at (la table sales_lines n'a pas de colonne 'day')
+        const todayDate = new Date(today)
+        const nextDay = new Date(todayDate)
+        nextDay.setDate(nextDay.getDate() + 1)
+        const nextDayStr = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`
         const { data: lines } = await supabase
           .from('sales_lines')
           .select('odoo_line_id, product_name')
-          .eq('day', today)
+          .gte('delivery_at', `${today}T00:00:00`)
+          .lt('delivery_at', `${nextDayStr}T00:00:00`)
         const candidateIds = (lines || [])
           .filter(l => l.product_name && PROD_PREFIXES.some(p => l.product_name.startsWith(p)))
           .map(l => l.odoo_line_id).filter(Boolean)
