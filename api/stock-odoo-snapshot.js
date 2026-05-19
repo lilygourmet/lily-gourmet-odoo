@@ -11,14 +11,6 @@
 //
 // Auth : vérifie que le user est admin ou a perm_stock_audit (ou perm_stock_cafe
 //        pour l'auto-snapshot au submit).
-//
-// Logique :
-//   1. Vérifie auth + perm
-//   2. Charge les lignes 'evening' du stock_day (product_code distinct)
-//   3. Appelle Odoo authenticate + stock.quant search_read filtré sur le location
-//      "Stock Vente" (à confirmer)
-//   4. Pour chaque ligne, met à jour qty_odoo_snapshot (+ qty_odoo_initial si initial=true)
-//   5. Met à jour last_odoo_refresh_at sur stock_day
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -137,14 +129,12 @@ export default async function handler(req, res) {
     function normName(s) {
       if (!s) return ''
       return s
-        .replace(/^\[\d+\]\s*/, '')   // retire le préfixe [123]
-        .replace(/\s+/g, ' ')         // espaces multiples → un seul
+        .replace(/^\[\d+\]\s*/, '')
+        .replace(/\s+/g, ' ')
         .trim()
         .toLowerCase()
     }
 
-    // Index : par NOM normalisé pour les lignes 'evening' (matching robuste)
-    // (les éventuelles lignes 'odoo_only' déjà créées seront écrasées plus bas)
     const eveningByName = new Map()
     const oldOdooOnlyIds = []
     for (const it of (items || [])) {
@@ -162,17 +152,11 @@ export default async function handler(req, res) {
     console.log('[stock-odoo-snapshot] Odoo authentication...')
     const uid = await odooAuthenticate()
 
-    // Filtre location : on prend tous les emplacements 'internal' dont le nom
-    // contient "Vente" (à ajuster selon ton arbo Odoo réelle).
-    // IMPORTANT : utiliser '=' (égalité stricte) sur complete_name pour ne PAS
-    // additionner les sous-emplacements (genre /Stock/Stock Vente + /Stock/Stock Prod).
     const stockLocationDomain = process.env.ODOO_STOCK_LOCATION_NAME
       ? [['location_id.complete_name', '=', process.env.ODOO_STOCK_LOCATION_NAME]]
       : [['location_id.usage', '=', 'internal'], ['location_id.name', 'ilike', 'Vente']]
 
     console.log('[stock-odoo-snapshot] Odoo search ALL stock.quant in location...')
-    // On récupère TOUT le stock du lieu (pas de filtre product_tmpl_id)
-    // Puis on filtrera par préfixe ensuite côté JS
     const quants = await odooSearchRead(
       uid,
       'stock.quant',
@@ -181,8 +165,25 @@ export default async function handler(req, res) {
       { limit: 2000 }
     )
 
-    // Préfixes vitrine à conserver (case insensitive)
+    // NOUVEAU : on récupère aussi TOUS les product.product actifs avec un préfixe vitrine,
+    // pour pouvoir afficher les produits dont le stock Odoo est à 0 (et donc absents de stock.quant).
     const ALLOWED_PREFIXES = ['E-', 'GS-', 'MI-', 'V-', 'RA-', 'H-', 'N-']
+    const prefixOrDomain = ALLOWED_PREFIXES.map(p => ['name', '=ilike', p + '%'])
+    // domaine OR pour 7 prefixes : enchaîner '|' n-1 fois en tête + 7 conditions
+    const orChain = []
+    for (let i = 0; i < prefixOrDomain.length - 1; i++) orChain.push('|')
+    const productsDomain = ['&', ['active', '=', true], ...orChain, ...prefixOrDomain]
+
+    console.log('[stock-odoo-snapshot] Odoo search product.product (actifs, prefixes vitrine)...')
+    const allProducts = await odooSearchRead(
+      uid,
+      'product.product',
+      productsDomain,
+      ['name', 'display_name', 'product_tmpl_id'],
+      { limit: 5000 }
+    )
+    console.log('[stock-odoo-snapshot]', allProducts.length, 'product.product actifs trouves')
+
     const PREFIX_CATEGORY = {
       'E-': 'E',
       'GS-': 'GS',
@@ -195,7 +196,6 @@ export default async function handler(req, res) {
 
     function detectPrefix(name) {
       if (!name) return null
-      // Retirer le code Odoo [123] devant si présent
       const cleaned = name.replace(/^\[\d+\]\s*/, '').trim()
       for (const p of ALLOWED_PREFIXES) {
         if (cleaned.toUpperCase().startsWith(p.toUpperCase())) {
@@ -210,17 +210,50 @@ export default async function handler(req, res) {
       return name.replace(/^\[\d+\]\s*/, '').trim()
     }
 
-    // 4) Pour chaque quant : indexer par VARIANT (product_id), pas par template.
-    //    Chaque variant = une taille distincte dans Odoo (ex: "E- Black Forest (1)" id=3126).
-    //    On garde aussi un index par template pour les fallbacks (cas Miss Pistache sans tailles).
-    //
-    // odooVariants : Map<nameKey, { variantName, variantId, tmplId, prefix, qty }>
-    //   où nameKey = nom normalisé de la VARIANTE (display_name sans [123])
-    // odooTemplates : Map<tmplBaseNameKey, { tmplId, tmplName, prefix, totalQty }>
-    //   où tmplBaseNameKey = nom normalisé du TEMPLATE (le "parent" générique)
+    // 4) Indexer les VARIANTES et TEMPLATES.
+    //    On part de allProducts (tous les actifs) pour avoir aussi les qty=0,
+    //    puis on additionne les quants par variant.
     const odooVariants = new Map()
     const odooTemplates = new Map()
 
+    // 4a) Initialiser à 0 pour tous les variants actifs
+    for (const p of allProducts) {
+      const variantName = p.display_name || p.name
+      if (!variantName) continue
+      const prefix = detectPrefix(variantName)
+      if (!prefix) continue
+      let tmplId = null
+      let tmplName = null
+      if (Array.isArray(p.product_tmpl_id)) {
+        tmplId = p.product_tmpl_id[0]
+        tmplName = p.product_tmpl_id[1]
+      }
+      if (!tmplName) tmplName = variantName
+
+      const variantKey = normName(variantName)
+      const tmplKey = normName(tmplName)
+
+      if (!odooVariants.has(variantKey)) {
+        odooVariants.set(variantKey, {
+          variantName: cleanName(variantName),
+          variantId: p.id,
+          tmplId: tmplId ? String(tmplId) : null,
+          tmplName: cleanName(tmplName),
+          prefix,
+          qty: 0, // sera incremente par les quants
+        })
+      }
+      if (!odooTemplates.has(tmplKey)) {
+        odooTemplates.set(tmplKey, {
+          tmplId: tmplId ? String(tmplId) : null,
+          tmplName: cleanName(tmplName),
+          prefix,
+          totalQty: 0,
+        })
+      }
+    }
+
+    // 4b) Ajouter les quantites depuis les quants (un quant = un variant dans un location)
     for (const q of quants) {
       let tmplId = null
       let tmplName = null
@@ -235,21 +268,21 @@ export default async function handler(req, res) {
         variantId = q.product_id[0]
         variantName = q.product_id[1]
       }
-      // Fallback si tmplName vide : on déduit du variant
       if (!tmplName && variantName) tmplName = variantName
       if (!tmplId || !variantName) continue
 
       const prefix = detectPrefix(variantName)
-      if (!prefix) continue // pas un préfixe vitrine → ignore
+      if (!prefix) continue
 
       const qty = parseFloat(q.quantity) || 0
-      const variantKey = normName(variantName)        // ex: "e- black forest (1)"
-      const tmplKey = normName(tmplName)              // ex: "e- black forest"
+      const variantKey = normName(variantName)
+      const tmplKey = normName(tmplName)
 
-      // Index VARIANT (somme si plusieurs quants pour le même variant)
+      // VARIANT
       if (odooVariants.has(variantKey)) {
         odooVariants.get(variantKey).qty += qty
       } else {
+        // Variant pas trouvé dans allProducts (peut-être archivé) : on le crée quand même
         odooVariants.set(variantKey, {
           variantName: cleanName(variantName),
           variantId,
@@ -260,7 +293,7 @@ export default async function handler(req, res) {
         })
       }
 
-      // Index TEMPLATE (somme TOUTES variantes confondues, pour fallback Miss Pistache)
+      // TEMPLATE
       if (odooTemplates.has(tmplKey)) {
         odooTemplates.get(tmplKey).totalQty += qty
       } else {
@@ -275,7 +308,6 @@ export default async function handler(req, res) {
 
     console.log('[stock-odoo-snapshot]', odooVariants.size, 'variants and', odooTemplates.size, 'templates indexed')
 
-    // Helpers : utilitaires pour identifier les variantes par suffixe (1)/(5)/(10)/(15)/(20)
     function hasVariantSuffix(name) {
       return /\(\d+\)\s*$/.test(name)
     }
@@ -283,9 +315,7 @@ export default async function handler(req, res) {
       return name.replace(/\s*\(\d+\)\s*$/, '').trim()
     }
 
-    // Pour chaque template ayant des VARIANTES par taille dans Odoo, on liste son nameKey
-    // afin de savoir s'il faut afficher les variantes (et pas le template seul).
-    const templateHasSizeVariants = new Map() // tmplKey -> Set<variantKey>
+    const templateHasSizeVariants = new Map()
     for (const [variantKey, v] of odooVariants.entries()) {
       if (!hasVariantSuffix(variantKey)) continue
       const baseKey = extractBaseName(variantKey)
@@ -300,16 +330,8 @@ export default async function handler(req, res) {
     let updatedEvening = 0
     let insertedOdooOnly = 0
 
-    // Helper : résoudre la qty Odoo d'une ligne envoyée par Hamza.
-    //   1. Match VARIANT exact par nom normalisé → qty du variant
-    //   2. Sinon, si le template existe mais SANS aucune variante de taille
-    //      (cas Miss Pistache : template "E- Miss Pistache" avec 1 seule variante sans suffixe)
-    //      → fallback sur totalQty du template (du même nom de base)
-    //   3. Sinon null
-    // Retourne : { qty: number|null, matchedVariantKey: string|null, matchedTmplKey: string|null }
     function resolveOdooQty(eveningName) {
       const variantKey = normName(eveningName)
-      // 1) Match variant exact
       if (odooVariants.has(variantKey)) {
         return {
           qty: odooVariants.get(variantKey).qty,
@@ -317,13 +339,10 @@ export default async function handler(req, res) {
           matchedTmplKey: null,
         }
       }
-      // 2) Fallback template : on cherche le template du même nom de base
-      //    SEULEMENT si ce template n'a PAS de variantes par taille (sinon = erreur de matching)
       const baseKey = extractBaseName(variantKey)
       if (odooTemplates.has(baseKey)) {
         const hasSizeVariants = templateHasSizeVariants.has(baseKey)
         if (!hasSizeVariants) {
-          // Template sans variantes par taille (ex: Miss Pistache) → on prend le total
           return {
             qty: odooTemplates.get(baseKey).totalQty,
             matchedVariantKey: null,
@@ -331,11 +350,9 @@ export default async function handler(req, res) {
           }
         }
       }
-      // 3) Pas de match
       return { qty: null, matchedVariantKey: null, matchedTmplKey: null }
     }
 
-    // 5a) Update lignes evening (matching par nom de variant, fallback template)
     const usedVariantKeys = new Set()
     const usedTmplKeys = new Set()
     for (const [nameKey, eveningItem] of eveningByName.entries()) {
@@ -361,12 +378,10 @@ export default async function handler(req, res) {
       }
       updatedEvening++
 
-      // Marquer comme matché (pour ne pas recréer en odoo_only)
       if (matchedVariantKey) usedVariantKeys.add(matchedVariantKey)
       if (matchedTmplKey) usedTmplKeys.add(matchedTmplKey)
     }
 
-    // 5b) Supprimer les anciennes lignes 'odoo_only' (on les recrée à chaque refresh)
     if (oldOdooOnlyIds.length > 0) {
       const { error: delErr } = await supabase
         .from('stock_day_items')
@@ -377,19 +392,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5c) Créer les lignes 'odoo_only' pour articles Odoo NON comptés par le café
-    //
-    // Règle d'affichage :
-    //   - Pour les templates AVEC variantes par taille : afficher chaque variante non matchée
-    //     (ex: si Hamza n'a pas envoyé "E- Black Forest (15)", on crée une ligne odoo_only pour elle)
-    //   - Pour les templates SANS variantes (Miss Pistache, Tatin) : afficher le template seul s'il
-    //     n'a pas déjà été matché
     const newRows = []
 
-    // Cas A : variantes par taille (suffixe (1)/(5)/(10)/...)
+    // Cas A : variantes par taille (suffixe)
     for (const [variantKey, v] of odooVariants.entries()) {
-      if (usedVariantKeys.has(variantKey)) continue // déjà matché à une ligne evening
-      if (!hasVariantSuffix(variantKey)) continue   // pas une variante taille (sera traité cas B)
+      if (usedVariantKeys.has(variantKey)) continue
+      if (!hasVariantSuffix(variantKey)) continue
 
       newRows.push({
         stock_day_id,
@@ -405,15 +413,11 @@ export default async function handler(req, res) {
       })
     }
 
-    // Cas B : templates SANS variantes par taille (Miss Pistache, Tatin, etc.)
-    //   → on affiche un total template (sauf si déjà matché via fallback template OU
-    //     via un variant sans suffixe du même template)
+    // Cas B : templates sans variantes
     for (const [tmplKey, t] of odooTemplates.entries()) {
       if (usedTmplKeys.has(tmplKey)) continue
-      if (templateHasSizeVariants.has(tmplKey)) continue // le cas A s'en occupe
+      if (templateHasSizeVariants.has(tmplKey)) continue
 
-      // On vérifie aussi qu'aucun variant sans suffixe de ce template n'a déjà été matché
-      // (cas où le variant Odoo s'appelle "E- Miss Pistache" sans suffixe et a été matché)
       let alreadyMatchedAsVariant = false
       for (const [vKey, v] of odooVariants.entries()) {
         if (v.tmplId === t.tmplId && usedVariantKeys.has(vKey)) {
@@ -450,7 +454,6 @@ export default async function handler(req, res) {
 
     console.log('[stock-odoo-snapshot] Done.', updatedEvening, 'evening updated,', insertedOdooOnly, 'odoo_only inserted')
 
-    // 6) Update stock_day.last_odoo_refresh_at
     const { error: dayErr } = await supabase
       .from('stock_day')
       .update({
@@ -473,4 +476,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message || 'Erreur serveur' })
   }
 }
-
