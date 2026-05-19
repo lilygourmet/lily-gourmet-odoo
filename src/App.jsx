@@ -19,7 +19,25 @@ function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   // Vue active : 'calendar' | 'recap' | 'patissier' | 'prod' | 'sales' | 'stock' | ...
-  const [activeView, setActiveView] = useState('calendar')
+  const [activeView, setActiveViewRaw] = useState('calendar')
+
+  // Wrapper pour setActiveView : persiste dans localStorage pour que Cmd+R
+  // ramene l'utilisateur sur la meme page
+  function setActiveView(view) {
+    setActiveViewRaw(view)
+    try {
+      if (view) localStorage.setItem('lily.activeView', view)
+    } catch (e) { /* ignore */ }
+  }
+
+  // Recupere la derniere vue sauvegardee (ou null)
+  function getStoredActiveView() {
+    try {
+      return localStorage.getItem('lily.activeView') || null
+    } catch (e) {
+      return null
+    }
+  }
 
   // Choisit la vue par defaut en fonction du user
   function pickDefaultView(u) {
@@ -57,30 +75,36 @@ function App() {
       return
     }
     setUser(stored)
-    setActiveView(pickDefaultView(stored))
-    // Recharge les permissions a jour depuis Supabase (l'admin a pu modifier
-    // les perms depuis la derniere connexion). Quand le fresh user arrive, on
-    // re-evalue la vue par defaut au cas ou de nouvelles perms changent
-    // l'onglet d'entree (ex: nouveau perm_stock_gs).
+    // Priorite : on essaie de restaurer la derniere vue depuis localStorage.
+    // Sinon fallback sur la vue par defaut du user.
+    const persisted = getStoredActiveView()
+    if (persisted) {
+      setActiveView(persisted)
+    } else {
+      setActiveView(pickDefaultView(stored))
+    }
+    // Recharge les permissions a jour depuis Supabase
     loadFreshUser(stored.id).then(fresh => {
       if (fresh) {
         setUser(fresh)
-        // Compare perms entre stored et fresh : si une perm cle a change,
-        // on recalcule la vue par defaut pour eviter d'arriver sur un onglet
-        // qui n'existe plus pour ce user
-        const permsChanged = (
-          stored.role !== fresh.role ||
-          stored.perm_calendar !== fresh.perm_calendar ||
-          stored.perm_prod !== fresh.perm_prod ||
-          stored.perm_sales !== fresh.perm_sales ||
-          stored.perm_patissier !== fresh.perm_patissier ||
-          stored.perm_stock_patissier !== fresh.perm_stock_patissier ||
-          stored.perm_stock_cafe !== fresh.perm_stock_cafe ||
-          stored.perm_stock_audit !== fresh.perm_stock_audit ||
-          stored.perm_stock_gs !== fresh.perm_stock_gs
-        )
-        if (permsChanged) {
-          setActiveView(pickDefaultView(fresh))
+        // Seul cas ou on recalcule la vue : si l'utilisateur n'avait pas de vue
+        // persistee et que ses perms ont change (impossible en pratique vu qu'on
+        // vient juste de lire stored, mais par securite).
+        if (!persisted) {
+          const permsChanged = (
+            stored.role !== fresh.role ||
+            stored.perm_calendar !== fresh.perm_calendar ||
+            stored.perm_prod !== fresh.perm_prod ||
+            stored.perm_sales !== fresh.perm_sales ||
+            stored.perm_patissier !== fresh.perm_patissier ||
+            stored.perm_stock_patissier !== fresh.perm_stock_patissier ||
+            stored.perm_stock_cafe !== fresh.perm_stock_cafe ||
+            stored.perm_stock_audit !== fresh.perm_stock_audit ||
+            stored.perm_stock_gs !== fresh.perm_stock_gs
+          )
+          if (permsChanged) {
+            setActiveView(pickDefaultView(fresh))
+          }
         }
       } else if (fresh === null) {
         // User desactive ou supprime -> deconnexion forcee
@@ -140,6 +164,9 @@ function App() {
     logout()
     setUser(null)
     setActiveView('calendar')
+    // Nettoie la vue persistee pour eviter qu'un autre user qui se reconnecte
+    // tombe sur l'onglet d'un autre.
+    try { localStorage.removeItem('lily.activeView') } catch (e) { /* ignore */ }
   }
 
   function handleNavigate(view) {
