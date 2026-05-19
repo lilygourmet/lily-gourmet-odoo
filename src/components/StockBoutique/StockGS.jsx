@@ -20,11 +20,11 @@ import {
 } from '../../lib/stockBoutique'
 
 // Patterns qui doivent etre exclus de la vue Stock GS- car ce sont
-// des produits "Prod" deguises avec un prefixe GS-. Source : salesLines.js.
+// soit des produits "Prod" deguises avec un prefixe GS-, soit des plateaux
+// (qui sont des composes/regroupements, pas des articles vendus a l'unite).
 const GS_PROD_PATTERNS = [
-  /^GS-\s*plateau\s*gateau\s*sec/i,
-  /^GS-\s*cookies?\b/i,
-  /^GS-\s*plateau\s*mini\s*cakes?\s*sucr/i,
+  /^GS-\s*plateau/i,                              // tous les plateaux (gateau sec, mini cakes, etc.)
+  /^GS-\s*cookies?\b/i,                           // cookies (sont en Prod sucree)
 ]
 
 // Nettoie le nom : retire le code Odoo [123] en tete
@@ -139,7 +139,12 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
         clean_name: cleanName(r.product_name),
         stock: currentStock(r),
       }))
-      .sort((a, b) => a.clean_name.localeCompare(b.clean_name, 'fr'))
+      .sort((a, b) => {
+        // 1) Stock croissant : les bas stocks et ruptures en haut (urgent a produire)
+        if (a.stock !== b.stock) return a.stock - b.stock
+        // 2) En cas d'egalite, ordre alphabetique
+        return a.clean_name.localeCompare(b.clean_name, 'fr')
+      })
   }, [report])
 
   // Filtre de recherche
