@@ -51,22 +51,45 @@ function App() {
 
   useEffect(() => {
     const stored = getCurrentUser()
-    setUser(stored)
-    if (stored) {
-      setActiveView(pickDefaultView(stored))
-      // En arriere-plan : recharge les permissions a jour depuis Supabase
-      // (au cas ou l'admin aurait modifie les perms depuis la derniere connexion)
-      loadFreshUser(stored.id).then(fresh => {
-        if (fresh) {
-          setUser(fresh)
-        } else if (fresh === null) {
-          // User desactive ou supprime -> deconnexion forcee
-          logout()
-          setUser(null)
-        }
-      })
+    if (!stored) {
+      setLoading(false)
+      return
     }
-    setLoading(false)
+    setUser(stored)
+    setActiveView(pickDefaultView(stored))
+    // Recharge les permissions a jour depuis Supabase (l'admin a pu modifier
+    // les perms depuis la derniere connexion). Quand le fresh user arrive, on
+    // re-evalue la vue par defaut au cas ou de nouvelles perms changent
+    // l'onglet d'entree (ex: nouveau perm_stock_gs).
+    loadFreshUser(stored.id).then(fresh => {
+      if (fresh) {
+        setUser(fresh)
+        // Compare perms entre stored et fresh : si une perm cle a change,
+        // on recalcule la vue par defaut pour eviter d'arriver sur un onglet
+        // qui n'existe plus pour ce user
+        const permsChanged = (
+          stored.role !== fresh.role ||
+          stored.perm_calendar !== fresh.perm_calendar ||
+          stored.perm_prod !== fresh.perm_prod ||
+          stored.perm_sales !== fresh.perm_sales ||
+          stored.perm_patissier !== fresh.perm_patissier ||
+          stored.perm_stock_patissier !== fresh.perm_stock_patissier ||
+          stored.perm_stock_cafe !== fresh.perm_stock_cafe ||
+          stored.perm_stock_audit !== fresh.perm_stock_audit ||
+          stored.perm_stock_gs !== fresh.perm_stock_gs
+        )
+        if (permsChanged) {
+          setActiveView(pickDefaultView(fresh))
+        }
+      } else if (fresh === null) {
+        // User desactive ou supprime -> deconnexion forcee
+        logout()
+        setUser(null)
+      }
+      setLoading(false)
+    }).catch(() => {
+      setLoading(false)
+    })
   }, [])
 
   // Refresh periodique des permissions (toutes les 2 min) pour propager les
@@ -98,6 +121,18 @@ function App() {
   function handleLoginSuccess(u) {
     setUser(u)
     setActiveView(pickDefaultView(u))
+    // Recharge les perms fresh juste apres login pour s'assurer d'avoir
+    // toutes les colonnes (le login peut ne pas renvoyer toutes les perms)
+    if (u?.id) {
+      loadFreshUser(u.id).then(fresh => {
+        if (fresh) {
+          setUser(fresh)
+          // Recalcule la vue si les perms diffèrent (cas typique : nouvel onglet
+          // ajoute apres le dernier login)
+          setActiveView(pickDefaultView(fresh))
+        }
+      }).catch(() => {})
+    }
   }
 
   function handleLogout() {
