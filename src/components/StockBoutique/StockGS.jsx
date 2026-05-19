@@ -15,6 +15,7 @@ import {
   loadStockDay,
   buildAuditReport,
   subscribeToDayItems,
+  triggerOdooSnapshot,
   todayISO,
 } from '../../lib/stockBoutique'
 
@@ -40,11 +41,12 @@ function isGSSale(productName) {
 }
 
 // Determine le "stock actuel" d'une ligne du rapport.
-// - qty_morning : envoye par la vitrine ce matin
-// - qty_leftover : restes d'hier
-// - qty_received : compte de fin de journee si deja fait
-// On prefere qty_received (le compte le plus a jour), sinon qty_morning + qty_leftover.
+// Priorite :
+//   1. qty_odoo_current : snapshot Odoo actuel (le plus fiable car saisi cote Odoo)
+//   2. qty_received : compte de fin de journee
+//   3. qty_morning + qty_leftover : envoye matin + restes hier
 function currentStock(line) {
+  if (line.qty_odoo_current != null) return line.qty_odoo_current
   if (line.qty_received != null) return line.qty_received
   const morning = parseFloat(line.qty_morning) || 0
   const leftover = parseFloat(line.qty_leftover) || 0
@@ -57,6 +59,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
   const [stockDay, setStockDay] = useState(null)
   const [report, setReport] = useState([])
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshingOdoo, setRefreshingOdoo] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [day] = useState(todayISO())
 
@@ -108,6 +111,22 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
       console.error('[StockGS] refresh', e)
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  // Rafraichit le snapshot Odoo : declenche un snapshot puis recharge le rapport
+  async function handleRefreshOdoo() {
+    if (!stockDay || !user?.id) return
+    setRefreshingOdoo(true)
+    try {
+      await triggerOdooSnapshot(stockDay.id, user.id, false)
+      const r = await buildAuditReport(stockDay.id)
+      setReport(r)
+    } catch (e) {
+      console.error('[StockGS] refreshOdoo', e)
+      alert('Erreur lors du refresh Odoo : ' + (e?.message || e))
+    } finally {
+      setRefreshingOdoo(false)
     }
   }
 
@@ -164,12 +183,21 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
               )}
             </div>
             <button
+              onClick={handleRefreshOdoo}
+              disabled={refreshingOdoo || !stockDay}
+              className="px-3 py-2 rounded-full bg-bordeaux text-cream text-[13px] transition-all disabled:opacity-50 flex items-center gap-1.5 hover:bg-bordeaux-deep"
+              title="Synchroniser le stock depuis Odoo"
+            >
+              <span className={refreshingOdoo ? 'inline-block animate-spin' : ''}>🔄</span>
+              <span className="hidden sm:inline">{refreshingOdoo ? 'Sync Odoo…' : 'Sync Odoo'}</span>
+            </button>
+            <button
               onClick={handleRefresh}
               disabled={refreshing}
               className="px-3 py-2 rounded-full bg-white border border-line text-ink hover:border-bordeaux hover:bg-bordeaux hover:text-cream text-[13px] transition-all disabled:opacity-50 flex items-center gap-1.5"
-              title="Rafraîchir"
+              title="Rafraîchir l'affichage"
             >
-              <span className={refreshing ? 'inline-block animate-spin' : ''}>🔄</span>
+              <span className={refreshing ? 'inline-block animate-spin' : ''}>↻</span>
             </button>
           </div>
         </div>
@@ -257,14 +285,15 @@ function StockGSCard({ line }) {
           <span className="truncate">{line.clean_name}</span>
           {badge}
         </div>
-        {line.qty_morning != null && (
-          <div className="text-[11px] text-ink-mute mt-0.5">
-            Envoyé ce matin : {line.qty_morning}
-            {line.qty_leftover != null && line.qty_leftover > 0 && (
-              <span> · Restes d'hier : {line.qty_leftover}</span>
-            )}
-          </div>
-        )}
+        <div className="text-[11px] text-ink-mute mt-0.5">
+          {line.qty_odoo_current != null ? (
+            <>Stock Odoo : {line.qty_odoo_current}</>
+          ) : line.qty_morning != null ? (
+            <>Envoyé ce matin : {line.qty_morning}{line.qty_leftover > 0 && <span> · Restes : {line.qty_leftover}</span>}</>
+          ) : (
+            <span className="italic">Pas encore synchronisé avec Odoo</span>
+          )}
+        </div>
       </div>
       <div className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[15px] font-bold tabular-nums ${qtyCls}`}>
         {qtyLabel}
