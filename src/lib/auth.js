@@ -45,7 +45,7 @@ export async function loadFreshUser(userId) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_cake_vision, perm_checklist')
+      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs')
       .eq('id', userId)
       .maybeSingle()
     if (error) {
@@ -193,18 +193,6 @@ export function canSeeEtiquettes(user) {
   return user.role === 'admin' || user.perm_etiquettes === true
 }
 
-// User peut voir le bouton Galerie CD (lien externe vers cake-vision-app)
-export function canSeeCakeVision(user) {
-  if (!user) return false
-  return user.role === 'admin' || user.perm_cake_vision === true
-}
-
-// Page Checklist : pour le cafe qui range les articles arrives
-export function canSeeChecklist(user) {
-  if (!user) return false
-  return user.role === 'admin' || user.perm_checklist === true
-}
-
 // Vue Prod : user a perm_prod ou perm_sales OU est admin
 export function canProd(user) {
   if (!user) return false
@@ -258,8 +246,14 @@ export function canStockAudit(user) {
   return user.role === 'admin' || user.perm_stock_audit === true
 }
 
+// Stock GS- : sous-vue stock dediee aux salues (limitee aux produits GS- non-prod)
+export function canStockGS(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_gs === true
+}
+
 // User peut voir l'onglet Stock du tout
 export function canSeeStock(user) {
-  return canStockPatissier(user) || canStockCafe(user) || canStockAudit(user)
+  return canStockPatissier(user) || canStockCafe(user) || canStockAudit(user) || canStockGS(user)
 }
 

@@ -11,7 +11,7 @@ import StockMorning from './components/StockBoutique/StockMorning'
 import StockReception from './components/StockBoutique/StockReception'
 import StockEvening from './components/StockBoutique/StockEvening'
 import StockAudit from './components/StockBoutique/StockAudit'
-import ChecklistView from './components/ChecklistView'
+import StockGS from './components/StockBoutique/StockGS'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar } from './lib/auth'
 
 function App() {
@@ -53,14 +53,7 @@ function App() {
     const stored = getCurrentUser()
     setUser(stored)
     if (stored) {
-      // Restaure la derniere vue ouverte si elle existe (sauf livreur, qui
-      // est toujours redirige vers recap), sinon vue par defaut.
-      const saved = localStorage.getItem('lily_active_view')
-      if (saved && !isLivreur(stored)) {
-        setActiveView(saved)
-      } else {
-        setActiveView(pickDefaultView(stored))
-      }
+      setActiveView(pickDefaultView(stored))
       // En arriere-plan : recharge les permissions a jour depuis Supabase
       // (au cas ou l'admin aurait modifie les perms depuis la derniere connexion)
       loadFreshUser(stored.id).then(fresh => {
@@ -109,14 +102,12 @@ function App() {
 
   function handleLogout() {
     logout()
-    localStorage.removeItem('lily_active_view')
     setUser(null)
     setActiveView('calendar')
   }
 
   function handleNavigate(view) {
     setActiveView(view)
-    localStorage.setItem('lily_active_view', view)
   }
 
   if (loading) {
@@ -141,9 +132,9 @@ function App() {
   if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
   if (activeView === 'vitrine') return <StockMorning {...navProps} />
   if (activeView === 'reception-vitrine') return <StockReception {...navProps} />
-  if (activeView === 'checklist') return <ChecklistView {...navProps} />
   if (activeView === 'fin-journee') return <StockEvening {...navProps} />
   if (activeView === 'stock') return <StockAudit {...navProps} />
+  if (activeView === 'stock-gs') return <StockGS {...navProps} />
   // Default = Calendar
   return <Calendar {...navProps} />
 }

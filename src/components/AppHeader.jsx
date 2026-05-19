@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit } from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -297,6 +297,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const menuProduction = [
     { view: 'prod',       emoji: '🥐', label: 'Prod',        visible: !isLivreur(user) && (admin || (isProdUser && user.perm_prod)) },
     { view: 'sales',      emoji: '🥪', label: 'Salés',       visible: !isLivreur(user) && (admin || (isProdUser && user.perm_sales)) },
+    { view: 'stock-gs',   emoji: '🥪', label: 'Stock GS-',   visible: !isLivreur(user) && canStockGS(user) },
     { view: 'patissier',  emoji: '🧁', label: 'Accessoires', visible: !isLivreur(user) && (admin || isPatissierUser) },
   ].filter(i => i.visible)
 
