@@ -165,24 +165,31 @@ export default async function handler(req, res) {
       { limit: 2000 }
     )
 
-    // NOUVEAU : on récupère aussi TOUS les product.product actifs avec un préfixe vitrine,
-    // pour pouvoir afficher les produits dont le stock Odoo est à 0 (et donc absents de stock.quant).
+    // NOUVEAU : on récupère aussi TOUS les product.product actifs ET VENDABLES
+    // (sale_ok=true) avec un préfixe vitrine, pour pouvoir afficher les produits
+    // dont le stock Odoo est à 0 (absents de stock.quant). Les non-vendables
+    // (ingredients, composants...) sont ecartes pour ne pas polluer la vue.
     const ALLOWED_PREFIXES = ['E-', 'GS-', 'MI-', 'V-', 'RA-', 'H-', 'N-']
     const prefixOrDomain = ALLOWED_PREFIXES.map(p => ['name', '=ilike', p + '%'])
     // domaine OR pour 7 prefixes : enchaîner '|' n-1 fois en tête + 7 conditions
     const orChain = []
     for (let i = 0; i < prefixOrDomain.length - 1; i++) orChain.push('|')
-    const productsDomain = ['&', ['active', '=', true], ...orChain, ...prefixOrDomain]
+    const productsDomain = [
+      '&', '&',
+      ['active', '=', true],
+      ['sale_ok', '=', true],
+      ...orChain, ...prefixOrDomain,
+    ]
 
-    console.log('[stock-odoo-snapshot] Odoo search product.product (actifs, prefixes vitrine)...')
+    console.log('[stock-odoo-snapshot] Odoo search product.product (actifs+vendables, prefixes vitrine)...')
     const allProducts = await odooSearchRead(
       uid,
       'product.product',
       productsDomain,
-      ['name', 'display_name', 'product_tmpl_id'],
+      ['name', 'display_name', 'product_tmpl_id', 'sale_ok'],
       { limit: 5000 }
     )
-    console.log('[stock-odoo-snapshot]', allProducts.length, 'product.product actifs trouves')
+    console.log('[stock-odoo-snapshot]', allProducts.length, 'product.product actifs+vendables trouves')
 
     const PREFIX_CATEGORY = {
       'E-': 'E',
