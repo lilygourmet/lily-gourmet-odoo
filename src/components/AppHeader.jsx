@@ -449,15 +449,42 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             />
           )}
 
-          {/* Separateur visuel */}
-          {(menuProduction.length > 0 || menuVitrine.length > 0 || menuOutils.length > 0) && (
+          {/* Separateur visuel (admin uniquement, separe les boutons fixes des menus) */}
+          {admin && (menuProduction.length > 0 || menuVitrine.length > 0 || menuOutils.length > 0) && (
             <div className="w-px h-5 bg-line/60 mx-1" />
           )}
 
-          {/* Menus deroulants */}
-          <DropdownMenu id="prod" emoji="🥐" label="Production" items={menuProduction} />
-          <DropdownMenu id="vitrine" emoji="🥐" label="Vitrine" items={menuVitrine} />
-          <DropdownMenu id="outils" emoji="🛠" label="Outils" items={menuOutils} />
+          {admin ? (
+            <>
+              {/* Mode admin : 3 menus deroulants */}
+              <DropdownMenu id="prod" emoji="🥐" label="Production" items={menuProduction} />
+              <DropdownMenu id="vitrine" emoji="🥐" label="Vitrine" items={menuVitrine} />
+              <DropdownMenu id="outils" emoji="🛠" label="Outils" items={menuOutils} />
+            </>
+          ) : (
+            <>
+              {/* Mode user non-admin : boutons à plat. On exclut l'item "primary"
+                  qui est déjà affiché en NavButton fixe au-dessus. */}
+              {[...menuProduction, ...menuVitrine, ...menuOutils]
+                .filter(item => !primary || item.view !== primary.view)
+                .map(item => (
+                  <NavButton
+                    key={item.view}
+                    emoji={item.emoji}
+                    label={item.label}
+                    isActive={activeView === item.view}
+                    badgeCount={item.badge || 0}
+                    onClick={() => {
+                      if (item.externalUrl) {
+                        window.open(item.externalUrl, '_blank', 'noopener,noreferrer')
+                      } else {
+                        onNavigate(item.view)
+                      }
+                    }}
+                  />
+                ))}
+            </>
+          )}
         </div>
 
         {/* Actions : sync + roue + logout */}
