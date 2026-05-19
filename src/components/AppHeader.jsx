@@ -282,10 +282,20 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   // ============================================================
   // Determine l'onglet "principal" du role (3eme bouton fixe)
-  // Priorite : cafe > patissier > prod > patisserie-accessoires
+  // Admin : Galerie CD (lien externe Cake Vision)
+  // Cafe : Reception
+  // Patissier : Vitrine
+  // Prod : Prod ou Sales
+  // Patisserie-accessoires : Accessoires
   // ============================================================
   function pickPrimaryNav() {
     if (isLivreur(user)) return null
+    if (admin) {
+      // Admin : on met Galerie CD comme bouton principal (lien externe)
+      if (canSeeCakeVision(user)) {
+        return { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD', badge: 0, externalUrl: 'https://cake-vision-app.vercel.app' }
+      }
+    }
     if (canStockCafe(user)) return { view: 'reception-vitrine', emoji: '📦', label: 'Réception', badge: receptionBadge }
     if (canStockPatissier(user)) return { view: 'vitrine', emoji: '🥐', label: 'Vitrine', badge: 0 }
     if (admin || isProdUser) {
@@ -316,7 +326,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   const menuOutils = [
     { view: 'etiquettes',       emoji: '🏷',  label: 'Étiquettes Café', visible: !isLivreur(user) && canSeeEtiquettes(user) },
-    { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
+    // Galerie CD : pour les admins, c'est le bouton principal donc on l'enleve d'ici.
+    // Pour les non-admins qui ont la perm, on la garde dans Outils.
+    { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && !admin && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
   ].filter(i => i.visible)
@@ -443,7 +455,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               label={primary.label}
               isActive={activeView === primary.view}
               badgeCount={primary.badge}
-              onClick={() => onNavigate(primary.view)}
+              onClick={() => {
+                if (primary.externalUrl) {
+                  window.open(primary.externalUrl, '_blank', 'noopener,noreferrer')
+                } else {
+                  onNavigate(primary.view)
+                }
+              }}
             />
           )}
           {showChecklistBtn && (
