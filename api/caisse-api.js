@@ -50,13 +50,13 @@ function valueToXml(v) {
 async function odooExec(uid, model, method, args = [], kwargs = {}) {
   const body = `<?xml version="1.0"?>
 <methodCall><methodName>execute_kw</methodName><params>
-  <param><value><string>${ODOO_DB}</string></value></param>
-  <param><value><int>${uid}</int></value></param>
-  <param><value><string>${ODOO_PASSWORD}</string></value></param>
-  <param><value><string>${model}</string></value></param>
-  <param><value><string>${method}</string></value></param>
-  ${valueToXml(args).replace('<value>', '<param><value>').replace('</value>', '</value></param>')}
-  ${valueToXml(kwargs).replace('<value>', '<param><value>').replace('</value>', '</value></param>')}
+<param><value><string>${ODOO_DB}</string></value></param>
+<param><value><int>${uid}</int></value></param>
+<param><value><string>${ODOO_PASSWORD}</string></value></param>
+<param><value><string>${model}</string></value></param>
+<param><value><string>${method}</string></value></param>
+<param>${valueToXml(args)}</param>
+<param>${valueToXml(kwargs)}</param>
 </params></methodCall>`
   const res = await fetch(`${ODOO_URL}/xmlrpc/2/object`, { method: 'POST', headers: { 'Content-Type': 'text/xml' }, body })
   const text = await res.text()
