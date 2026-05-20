@@ -319,6 +319,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   const menuVitrine = [
     { view: 'vitrine',           emoji: '🥐', label: 'Vitrine',           visible: !isLivreur(user) && canStockPatissier(user), badge: 0 },
+    { view: 'vitrine-sale',      emoji: '🥟', label: 'Vitrine Salé',      visible: !isLivreur(user) && canSeeVitrineSale(user), badge: 0 },
     { view: 'reception-vitrine', emoji: '📦', label: 'Réception Vitrine', visible: !isLivreur(user) && canStockCafe(user),     badge: receptionBadge },
     { view: 'fin-journee',       emoji: '🌙', label: 'Fin de journée',    visible: !isLivreur(user) && canStockCafe(user),     badge: 0 },
     { view: 'stock',             emoji: '📊', label: 'Stock',             visible: !isLivreur(user) && canStockAudit(user),    badge: 0 },
