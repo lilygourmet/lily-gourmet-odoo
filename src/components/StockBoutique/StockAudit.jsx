@@ -262,7 +262,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               type="date"
               value={day}
               onChange={(e) => setDay(e.target.value)}
-              className="px-2 py-1 bg-bordeaux-deep text-cream rounded-md text-[11px] border border-cream/30"
+              className="px-2 py-1 bg-white text-ink rounded-md text-[11px] border border-cream/30"
             />
             <button
               type="button"
