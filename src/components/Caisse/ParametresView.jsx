@@ -1,0 +1,246 @@
+import { useState, useEffect } from 'react'
+import { loadDestinataires, createDestinataire, updateDestinataire, deleteDestinataire,
+         loadCategories, createCategorie, updateCategorie,
+         loadSalairesDefaut, setSalaireDefaut,
+         loadPosConfigs, togglePosConfig } from '../../lib/caisse'
+import { COLOR_PALETTE, COLORS_BY_TYPE } from './_helpers'
+
+export default function ParametresView({ user }) {
+  return (
+    <div>
+      <DestinatairesSection />
+      <CategoriesSection />
+      <SalairesDefautSection />
+      <PosSessionsSection />
+    </div>
+  )
+}
+
+function Section({ title, icon, desc, children }) {
+  return (
+    <div style={{ background: 'white', border: '0.5px solid #E8E2D8', borderRadius: 12, padding: 24, marginBottom: 20 }}>
+      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>{icon} {title}</div>
+      <div style={{ fontSize: 12, color: '#6F6A60', marginBottom: 20 }}>{desc}</div>
+      {children}
+    </div>
+  )
+}
+
+// ---- Destinataires ----
+function DestinatairesSection() {
+  const [list, setList] = useState([])
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState({ name: '', type: 'caisse_geree', color_key: 'vert_clair' })
+
+  useEffect(() => { reload() }, [])
+  async function reload() { setList(await loadDestinataires({ activeOnly: false })) }
+
+  async function handleAdd() {
+    if (!form.name) return
+    await createDestinataire(form)
+    setAdding(false); setForm({ name: '', type: 'caisse_geree', color_key: 'vert_clair' }); reload()
+  }
+  async function handleDelete(id) {
+    if (!confirm('Désactiver ce destinataire ?')) return
+    await deleteDestinataire(id); reload()
+  }
+  async function handleToggleActive(d) {
+    await updateDestinataire(d.id, { active: !d.active }); reload()
+  }
+
+  return (
+    <Section title="Destinataires des enveloppes" icon="🎨"
+      desc="Chaque destinataire a sa propre couleur. Si déjà utilisé, il sera désactivé au lieu d'être supprimé.">
+      {list.map(d => {
+        const c = COLOR_PALETTE[d.color_key] || COLOR_PALETTE.gris
+        return (
+          <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 140px 32px 32px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: d.active ? '#F4F0EA' : '#F9F6F1', opacity: d.active ? 1 : 0.55 }}>
+            <div style={{ width: 22, height: 22, borderRadius: 6, background: c.bg, border: `1px solid ${c.border}` }} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{d.name}</div>
+              <div style={{ fontSize: 11, color: '#6F6A60' }}>{d.type === 'caisse_geree' ? 'caisse-gérée' : d.type}</div>
+            </div>
+            <div><span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: 'white', color: '#6F6A60' }}>{c.emoji} {c.label}</span></div>
+            <button onClick={() => handleToggleActive(d)} style={iconBtn} title={d.active ? 'Désactiver' : 'Réactiver'}>{d.active ? '👁' : '👁‍🗨'}</button>
+            <button onClick={() => handleDelete(d.id)} style={iconBtn}>🗑</button>
+          </div>
+        )
+      })}
+
+      {!adding && <button onClick={() => setAdding(true)} style={addBtn}>+ Ajouter un destinataire</button>}
+      {adding && (
+        <div style={{ marginTop: 12, padding: 14, background: '#F9F6F1', borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4 }}>Nom</div>
+          <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+          <div style={{ fontSize: 11, color: '#6F6A60', margin: '10px 0 4px' }}>Type</div>
+          <select value={form.type} onChange={e => {
+            const newType = e.target.value
+            const firstColor = COLORS_BY_TYPE[newType][0]
+            setForm({ ...form, type: newType, color_key: firstColor })
+          }} style={inputStyle}>
+            <option value="caisse_geree">caisse-gérée</option>
+            <option value="perso">perso</option>
+            <option value="banque">banque</option>
+          </select>
+          <div style={{ fontSize: 11, color: '#6F6A60', margin: '10px 0 4px' }}>Couleur</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {COLORS_BY_TYPE[form.type].map(ck => {
+              const c = COLOR_PALETTE[ck]
+              const sel = form.color_key === ck
+              return (
+                <button key={ck} onClick={() => setForm({ ...form, color_key: ck })} style={{
+                  width: 32, height: 32, borderRadius: 8, background: c.bg, border: `2px solid ${sel ? c.border : 'transparent'}`, cursor: 'pointer',
+                }} title={c.label} />
+              )
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+            <button onClick={() => setAdding(false)} style={btnSlim}>Annuler</button>
+            <button onClick={handleAdd} style={btnPrimary}>Créer</button>
+          </div>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+// ---- Catégories ----
+function CategoriesSection() {
+  return (
+    <Section title="Catégories de sortie · par caisse" icon="🏷️"
+      desc="Chaque caisse a ses propres catégories. Ajouter / renommer / désactiver.">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <CategoryColumn caisseOwner="meriem"   label="Caisse Meriem"   color={{ bg: '#EAF3DE', text: '#27500A' }} />
+        <CategoryColumn caisseOwner="layla_lg" label="Caisse Layla LG" color={{ bg: '#E1F5EE', text: '#085041' }} />
+      </div>
+    </Section>
+  )
+}
+
+function CategoryColumn({ caisseOwner, label, color }) {
+  const [cats, setCats] = useState([])
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newEmoji, setNewEmoji] = useState('❓')
+
+  useEffect(() => { reload() }, [])
+  async function reload() { setCats(await loadCategories(caisseOwner)) }
+
+  async function handleAdd() {
+    if (!newName) return
+    await createCategorie({ caisseOwner, name: newName, emoji: newEmoji })
+    setAdding(false); setNewName(''); setNewEmoji('❓'); reload()
+  }
+  async function handleDeactivate(id) {
+    await updateCategorie(id, { active: false }); reload()
+  }
+
+  return (
+    <div>
+      <div style={{ background: color.bg, color: color.text, padding: '8px 12px', borderRadius: 8, marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{label}</div>
+      {cats.map(c => (
+        <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1fr 32px', gap: 8, alignItems: 'center', padding: '8px 12px', borderRadius: 8, marginBottom: 4, background: '#F4F0EA' }}>
+          <div style={{ fontSize: 13 }}>{c.emoji} {c.name}</div>
+          <button onClick={() => handleDeactivate(c.id)} style={iconBtn}>🗑</button>
+        </div>
+      ))}
+      {!adding && <button onClick={() => setAdding(true)} style={{ ...addBtn, marginTop: 6 }}>+ Ajouter</button>}
+      {adding && (
+        <div style={{ marginTop: 8, padding: 10, background: '#F9F6F1', borderRadius: 8 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="text" placeholder="emoji" value={newEmoji} onChange={e => setNewEmoji(e.target.value)} style={{ ...inputStyle, width: 60 }} />
+            <input type="text" placeholder="Nom de la catégorie" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <button onClick={() => setAdding(false)} style={btnSlim}>Annuler</button>
+            <button onClick={handleAdd} style={btnPrimary}>Créer</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Salaires défaut ----
+function SalairesDefautSection() {
+  const [defaults, setDefaults] = useState({})
+  const [editing, setEditing] = useState({})
+
+  useEffect(() => { reload() }, [])
+  async function reload() { setDefaults(await loadSalairesDefaut()) }
+
+  async function handleSave(ben, val) {
+    await setSalaireDefaut(ben, Number(val))
+    setEditing({ ...editing, [ben]: false }); reload()
+  }
+
+  return (
+    <Section title="Salaires par défaut" icon="💰"
+      desc="Montant pré-rempli quand tu crées un nouveau salaire. Éditable au cas par cas.">
+      {['nezha', 'layla'].map(ben => (
+        <div key={ben} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 200px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: '#F4F0EA' }}>
+          <span style={{ fontSize: 18 }}>{ben === 'nezha' ? '🧡' : '🤎'}</span>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>{ben === 'nezha' ? 'Nezha' : 'Layla'}</div>
+          <input type="number" defaultValue={defaults[ben] || 0} onBlur={(e) => handleSave(ben, e.target.value)} style={inputStyle} />
+        </div>
+      ))}
+    </Section>
+  )
+}
+
+// ---- Sessions POS ----
+function PosSessionsSection() {
+  const [list, setList] = useState([])
+  const [syncing, setSyncing] = useState(false)
+
+  useEffect(() => { reload() }, [])
+  async function reload() { setList(await loadPosConfigs()) }
+
+  async function handleDetect() {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/caisse-pos-list', { method: 'POST' })
+      const json = await res.json()
+      if (json.error) alert('Erreur : ' + json.error)
+      else reload()
+    } catch (e) { alert(e.message) }
+    setSyncing(false)
+  }
+
+  async function handleToggle(id, active) {
+    await togglePosConfig(id, active); reload()
+  }
+
+  return (
+    <Section title="Sessions POS détectées (Odoo)" icon="🏪"
+      desc="Sessions Odoo auto-détectées. Désactivée = aucune enveloppe ne sera créée pour cette session.">
+      <button onClick={handleDetect} disabled={syncing} style={{ ...btnNormal, marginBottom: 14 }}>
+        {syncing ? '⏳ Détection…' : '🔍 Détecter les sessions Odoo'}
+      </button>
+      {list.length === 0 && <div style={{ fontSize: 12, color: '#9B968D', padding: 10 }}>Aucune session détectée pour l'instant. Cliquez ci-dessus.</div>}
+      {list.map(p => (
+        <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 80px 100px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: '#F4F0EA' }}>
+          <span style={{ fontSize: 18 }}>🏪</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+            <div style={{ fontSize: 11, color: '#9B968D' }}>détecté · dernière sync : {p.last_synced_at ? new Date(p.last_synced_at).toLocaleString('fr-FR') : 'jamais'}</div>
+          </div>
+          <button onClick={() => handleToggle(p.id, !p.active)} style={{
+            width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: p.active ? '#1D9E75' : '#C4BFB6', position: 'relative',
+          }}>
+            <span style={{ position: 'absolute', top: 2, [p.active ? 'right' : 'left']: 2, width: 16, height: 16, background: 'white', borderRadius: '50%' }} />
+          </button>
+          <div style={{ fontSize: 11, color: p.active ? '#1D7A5C' : '#9B968D' }}>{p.active ? 'Actif' : 'Inactif'}</div>
+        </div>
+      ))}
+    </Section>
+  )
+}
+
+const iconBtn = { background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: '#9B968D', fontSize: 14 }
+const addBtn  = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', marginTop: 10 }
+const btnSlim    = { fontSize: 13, padding: '6px 12px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnNormal  = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnPrimary = { fontSize: 13, padding: '6px 12px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
+const inputStyle = { padding: '8px 10px', border: '0.5px solid #C4BFB6', borderRadius: 8, fontSize: 13, width: '100%', boxSizing: 'border-box' }

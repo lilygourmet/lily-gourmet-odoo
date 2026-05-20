@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -31,6 +31,7 @@ export async function createUser({
   perm_cake_vision = false, perm_checklist = false,
   perm_stock_patissier = false, perm_stock_cafe = false, perm_stock_audit = false,
   perm_stock_gs = false,
+  perm_caisse = false, perm_caisse_admin = false,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
@@ -59,6 +60,8 @@ export async function createUser({
           perm_stock_cafe,
           perm_stock_audit,
           perm_stock_gs,
+          perm_caisse,
+          perm_caisse_admin,
         })
         .eq('id', data.id)
     } catch (e) {
@@ -86,6 +89,7 @@ export async function updateUser(userId, {
   perm_cake_vision, perm_checklist,
   perm_stock_patissier, perm_stock_cafe, perm_stock_audit,
   perm_stock_gs,
+  perm_caisse, perm_caisse_admin,
 }) {
   const updates = {}
   if (username !== undefined) updates.username = username
@@ -116,6 +120,8 @@ export async function updateUser(userId, {
   if (perm_stock_cafe !== undefined) updates.perm_stock_cafe = perm_stock_cafe
   if (perm_stock_audit !== undefined) updates.perm_stock_audit = perm_stock_audit
   if (perm_stock_gs !== undefined) updates.perm_stock_gs = perm_stock_gs
+  if (perm_caisse !== undefined) updates.perm_caisse = perm_caisse
+  if (perm_caisse_admin !== undefined) updates.perm_caisse_admin = perm_caisse_admin
 
   const { data, error } = await supabase
     .from('profiles')

@@ -121,6 +121,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
         perm_vitrine_sale: formData.permVitrineSale,
+        perm_caisse: formData.permCaisse,
+        perm_caisse_admin: formData.permCaisseAdmin,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -160,6 +162,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
         perm_vitrine_sale: formData.permVitrineSale,
+        perm_caisse: formData.permCaisse,
+        perm_caisse_admin: formData.permCaisseAdmin,
       })
       setEditingUser(null)
       await refresh()
@@ -630,6 +634,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
     permStockGS: initialData?.perm_stock_gs !== undefined ? initialData.perm_stock_gs : false,
     permVitrineSale: initialData?.perm_vitrine_sale !== undefined ? initialData.perm_vitrine_sale : false,
+    permCaisse: initialData?.perm_caisse !== undefined ? initialData.perm_caisse : false,
+    permCaisseAdmin: initialData?.perm_caisse_admin !== undefined ? initialData.perm_caisse_admin : false,
   })
 
   function handleSubmit() {
@@ -869,6 +875,16 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="🥪 Voir l'onglet Stock GS- (sous-vue salés)"
             checked={isAdmin || formData.permStockGS}
             onChange={v => update('permStockGS', v)}
+          />
+          <PermCheck
+            label="💰 Caisse (vue limitée — pour Meriem)"
+            checked={isAdmin || formData.permCaisse}
+            onChange={v => update('permCaisse', v)}
+          />
+          <PermCheck
+            label="💰 Caisse · Admin (accès complet au module)"
+            checked={isAdmin || formData.permCaisseAdmin}
+            onChange={v => update('permCaisseAdmin', v)}
           />
           <PermCheckbox
             id="perm-define-gm"
