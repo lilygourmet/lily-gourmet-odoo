@@ -34,6 +34,8 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
   const [currentCategory, setCurrentCategory] = useState('E-')
   const [currentSize, setCurrentSize] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
+  // Mobile : onglet actif (articles ou panier+calculette)
+  const [mobileTab, setMobileTab] = useState('articles')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -264,10 +266,10 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
             )}
 
             {/* GRILLE PRINCIPALE */}
-            <div className="grid grid-cols-[280px_1fr] gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-3 pb-16 md:pb-0">
 
-              {/* ============= PANNEAU GAUCHE : CALCULETTE EN HAUT + LISTE EN BAS ============= */}
-              <div className="border border-line rounded-lg overflow-hidden flex flex-col bg-white">
+              {/* ============= PANNEAU GAUCHE : CALCULETTE + LISTE (mobile: visible si tab=panier) ============= */}
+              <div className={`${mobileTab === 'panier' ? 'block' : 'hidden'} md:block border border-line rounded-lg overflow-hidden flex flex-col bg-white`}>
 
                 {/* HEADER CALCULETTE */}
                 <div className="px-3 py-2 bg-bordeaux/10 text-bordeaux-deep font-mono text-[10px] tracking-[0.2em] uppercase font-semibold">
@@ -346,8 +348,8 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                 )}
               </div>
 
-              {/* ============= PANNEAU DROITE : ONGLETS + TUILES ============= */}
-              <div className="bg-white border border-line rounded-lg overflow-hidden">
+              {/* ============= PANNEAU DROITE : ONGLETS + TUILES (mobile: visible si tab=articles) ============= */}
+              <div className={`${mobileTab === 'articles' ? 'block' : 'hidden'} md:block bg-white border border-line rounded-lg overflow-hidden`}>
 
                 {/* NIVEAU 1 : Onglets catégories */}
                 <div className="flex border-b border-line bg-cream-warm overflow-x-auto">
@@ -401,7 +403,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                       Aucun article dans cette {activeCat.has_size_tabs ? 'taille' : 'catégorie'}.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {products.map(p => {
                         const qty = tileQty(p.name)
                         return (
@@ -450,13 +452,41 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
           </>
         )}
       </div>
+      {/* ============= BOTTOM BAR MOBILE : onglets Articles / Comptés ============= */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-line flex md:hidden shadow-lg">
+        <button
+          type="button"
+          onClick={() => setMobileTab('articles')}
+          className={`flex-1 py-3 text-[12px] font-medium text-center transition-colors ${
+            mobileTab === 'articles'
+              ? 'bg-bordeaux text-cream'
+              : 'text-ink-mute hover:bg-cream-warm'
+          }`}
+        >
+          🍰 Articles
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('panier')}
+          className={`flex-1 py-3 text-[12px] font-medium text-center transition-colors flex items-center justify-center gap-2 ${
+            mobileTab === 'panier'
+              ? 'bg-bordeaux text-cream'
+              : 'text-ink-mute hover:bg-cream-warm'
+          }`}
+        >
+          🌙 Comptés
+          {totalCount > 0 && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+              mobileTab === 'panier' ? 'bg-cream text-bordeaux' : 'bg-bordeaux text-cream'
+            }`}>
+              {totalCount}
+            </span>
+          )}
+        </button>
+      </div>
     </div>
   )
 }
-
-// =============================================================
-// LIGNE DU PANIER
-// =============================================================
 
 function CountRow({ item, selected, disabled, onSelect, onFreshnessChange, onRemove }) {
   return (

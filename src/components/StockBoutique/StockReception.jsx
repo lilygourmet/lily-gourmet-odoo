@@ -9,7 +9,6 @@ import AppHeader from '../AppHeader'
 import ProductGrid from './ProductGrid'
 import NumpadInline from './NumpadInline'
 import PrintButton from './PrintButton'
-import { isPushSupported, getPushPermission, subscribeToPush, registerServiceWorker } from '../../lib/pushNotif'
 import {
   getOrCreateStockDay,
   loadDayItems,
@@ -38,14 +37,8 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   const [surpriseModalOpen, setSurpriseModalOpen] = useState(false)
   const [surpriseCart, setSurpriseCart] = useState({})
   const [dotFlash, setDotFlash] = useState(false)
-  // Bulle de notification persistante : compte les envois vitrine non encore "vus"
-  const [pendingNotif, setPendingNotif] = useState(0)
-  // Banniere "Activer notifs push" affichee si permission == 'default'
-  const [pushPermission, setPushPermission] = useState('default')
-  const [pushLoading, setPushLoading] = useState(false)
   const subscriptionRef = useRef(null)
   const audioCtxRef = useRef(null)
-  const dingRepeatTimerRef = useRef(null)
 
   // Init + realtime
   useEffect(() => {
@@ -72,7 +65,6 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
             if (newItem.source === 'morning' && newItem.reception_status === 'pending') {
               playDing()
               flashDot()
-              setPendingNotif(n => n + 1)
             }
           },
           onUpdate: (newItem) => {
@@ -100,7 +92,6 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
               if (newOnes.length > 0) {
                 playDing()
                 flashDot()
-                setPendingNotif(n => n + newOnes.length)
               }
               return fresh
             })
@@ -125,46 +116,6 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Si la bulle reste non lue, on repete le ding toutes les 5 minutes pour
-  // attirer l'attention (au cas ou le cafe etait sorti / pas devant l'ecran).
-  useEffect(() => {
-    if (pendingNotif > 0) {
-      dingRepeatTimerRef.current = setInterval(() => {
-        playDing()
-      }, 5 * 60 * 1000) // 5 minutes
-    }
-    return () => {
-      if (dingRepeatTimerRef.current) {
-        clearInterval(dingRepeatTimerRef.current)
-        dingRepeatTimerRef.current = null
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingNotif > 0])
-
-  // Enregistre le service worker au mount et lit l'etat de la permission push
-  // Si la permission est 'default' on affichera une banniere pour la demander
-  useEffect(() => {
-    if (!isPushSupported()) return
-    registerServiceWorker()
-    setPushPermission(getPushPermission())
-  }, [])
-
-  // Quand le cafe accepte les notifs push : abonne le navigateur + envoie au backend
-  async function handleEnablePush() {
-    if (!user?.id) return
-    setPushLoading(true)
-    try {
-      const ok = await subscribeToPush(user.id, 'cafe')
-      setPushPermission(getPushPermission())
-      if (!ok && getPushPermission() === 'denied') {
-        alert("Notifications bloquées. Va dans les réglages du navigateur pour les autoriser.")
-      }
-    } finally {
-      setPushLoading(false)
-    }
-  }
 
   function playDing() {
     try {
@@ -293,54 +244,6 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      {/* Bulle de notification persistante : visible en haut au centre tant
-          que le cafe n'a pas cliqué "J'ai vu". Compte le nombre d'articles
-          envoyes par la vitrine non encore "accuses reception". */}
-      {pendingNotif > 0 && (
-        <div
-          className="fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-bordeaux text-cream px-5 py-3 rounded-full shadow-2xl border-2 border-cream animate-bounce-soft"
-          style={{ top: '70px' }}
-        >
-          <span className="text-[20px]">🔔</span>
-          <span className="text-[14px] font-semibold">
-            La vitrine a envoyé {pendingNotif} article{pendingNotif > 1 ? 's' : ''}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPendingNotif(0)}
-            className="ml-2 px-3 py-1 bg-cream text-bordeaux rounded-full text-[12px] font-bold hover:bg-cream-warm transition-colors"
-          >
-            ✓ J'ai vu
-          </button>
-        </div>
-      )}
-
-      {/* Banniere "Activer les notifs push" : visible une fois si pas encore decide */}
-      {isPushSupported() && pushPermission === 'default' && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-bordeaux/95 text-cream px-5 py-3 rounded-xl shadow-2xl border-2 border-cream">
-          <span className="text-[20px]">🔔</span>
-          <span className="text-[13px]">
-            Active les notifications pour être prévenu même si l'app est fermée
-          </span>
-          <button
-            type="button"
-            onClick={handleEnablePush}
-            disabled={pushLoading}
-            className="ml-2 px-3 py-1.5 bg-cream text-bordeaux rounded-full text-[12px] font-bold hover:bg-cream-warm transition-colors disabled:opacity-60"
-          >
-            {pushLoading ? '...' : 'Activer'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setPushPermission('dismissed')}
-            className="text-cream/70 hover:text-cream text-[16px] leading-none px-1"
-            title="Plus tard"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       {/* MODAL BLOQUANT — Café répond après recompte vitrine */}
       {pendingCafe.length > 0 && (
         <DiscrepancyModalCafe
@@ -388,7 +291,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-4 gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
             <StatCard label="À recevoir" value={stats.pending} color="bordeaux" />
             <StatCard label="Reçu OK" value={stats.confirmed} color="green" />
             <StatCard label="Écart noté" value={stats.discrepancy} color="orange" />

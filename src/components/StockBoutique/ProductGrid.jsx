@@ -36,6 +36,8 @@ export default function ProductGrid({
   const [currentSize, setCurrentSize] = useState(null)
   const [activeProductName, setActiveProductName] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Mobile : onglet actif entre Articles (tuiles) et Panier
+  const [mobileTab, setMobileTab] = useState('articles')
 
   useEffect(() => {
     let mounted = true
@@ -215,9 +217,9 @@ export default function ProductGrid({
     })
 
   return (
-    <div className={`grid ${compact ? 'grid-cols-[240px_1fr]' : 'grid-cols-[280px_1fr]'} gap-3`}>
-      {/* ============= PANIER (GAUCHE) : CALCULETTE EN HAUT, LISTE EN BAS ============= */}
-      <div className="border border-line rounded-lg overflow-hidden flex flex-col bg-white">
+    <div className={`grid grid-cols-1 ${compact ? 'md:grid-cols-[240px_1fr]' : 'md:grid-cols-[280px_1fr]'} gap-3 pb-16 md:pb-0`}>
+      {/* ============= PANIER (mobile: visible si tab=panier, desktop: toujours visible à gauche) ============= */}
+      <div className={`${mobileTab === 'panier' ? 'block' : 'hidden'} md:block border border-line rounded-lg overflow-hidden flex flex-col bg-white`}>
 
         {/* HEADER */}
         <div className={`px-3 py-2 ${st.bg} ${st.text} font-mono text-[10px] tracking-[0.2em] uppercase font-semibold`}>
@@ -296,8 +298,8 @@ export default function ProductGrid({
         </div>
       </div>
 
-      {/* ============= GRILLE PRODUITS (DROITE) ============= */}
-      <div>
+      {/* ============= GRILLE PRODUITS (mobile: visible si tab=articles, desktop: toujours visible à droite) ============= */}
+      <div className={`${mobileTab === 'articles' ? 'block' : 'hidden'} md:block`}>
         {/* NIVEAU 1 : Onglets catégorie (scroll horizontal sur mobile) */}
         <div className="flex gap-1 mb-2 border-b border-line overflow-x-auto pb-0.5">
           {(filteredCatalog.categories || []).map(cat => {
@@ -357,7 +359,7 @@ export default function ProductGrid({
             Aucun article dans cette {activeCat.has_size_tabs ? 'taille' : 'catégorie'}.
           </div>
         ) : (
-          <div className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-4'} gap-2`}>
+          <div className={`grid grid-cols-2 ${compact ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-2`}>
             {products.map(p => {
               const qty = cart[p.name]?.qty || 0
               const isActive = activeProductName === p.name
@@ -398,6 +400,39 @@ export default function ProductGrid({
             })}
           </div>
         )}
+      </div>
+
+      {/* ============= BOTTOM BAR MOBILE : onglets Articles / Panier ============= */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-line flex md:hidden shadow-lg">
+        <button
+          type="button"
+          onClick={() => setMobileTab('articles')}
+          className={`flex-1 py-3 text-[12px] font-medium text-center transition-colors ${
+            mobileTab === 'articles'
+              ? 'bg-bordeaux text-cream'
+              : 'text-ink-mute hover:bg-cream-warm'
+          }`}
+        >
+          🍰 Articles
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('panier')}
+          className={`flex-1 py-3 text-[12px] font-medium text-center transition-colors flex items-center justify-center gap-2 ${
+            mobileTab === 'panier'
+              ? 'bg-bordeaux text-cream'
+              : 'text-ink-mute hover:bg-cream-warm'
+          }`}
+        >
+          🛒 Panier
+          {total > 0 && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+              mobileTab === 'panier' ? 'bg-cream text-bordeaux' : 'bg-bordeaux text-cream'
+            }`}>
+              {total}
+            </span>
+          )}
+        </button>
       </div>
     </div>
   )
