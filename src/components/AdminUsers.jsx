@@ -120,6 +120,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
+        perm_vitrine_sale: formData.permVitrineSale,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -158,6 +159,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
+        perm_vitrine_sale: formData.permVitrineSale,
       })
       setEditingUser(null)
       await refresh()
@@ -627,6 +629,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permStockCafe: initialData?.perm_stock_cafe !== undefined ? initialData.perm_stock_cafe : false,
     permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
     permStockGS: initialData?.perm_stock_gs !== undefined ? initialData.perm_stock_gs : false,
+    permVitrineSale: initialData?.perm_vitrine_sale !== undefined ? initialData.perm_vitrine_sale : false,
   })
 
   function handleSubmit() {
@@ -842,6 +845,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="🥐 Voir l'onglet Vitrine (saisie pâtissier)"
             checked={isAdmin || formData.permStockPatissier}
             onChange={v => update('permStockPatissier', v)}
+          />
+          <PermCheckbox
+            id="perm-vitrine-sale"
+            label="🥟 Voir l'onglet Vitrine Salé"
+            checked={isAdmin || formData.permVitrineSale}
+            onChange={v => update('permVitrineSale', v)}
           />
           <PermCheckbox
             id="perm-stock-cafe"
