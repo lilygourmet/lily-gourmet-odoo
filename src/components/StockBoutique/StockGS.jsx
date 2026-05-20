@@ -79,17 +79,10 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
         if (!mounted) return
         setStockDay(sd)
         if (sd) {
-          // Sync auto avec debounce 60s : evite de spammer Odoo si l user
-          // ouvre/ferme rapidement la page. Pas d alerte en cas d echec (silencieux).
-          const lastRefresh = sd.last_odoo_refresh_at ? new Date(sd.last_odoo_refresh_at).getTime() : 0
-          const ageSeconds = (Date.now() - lastRefresh) / 1000
-          if (user?.id && (ageSeconds > 60 || !lastRefresh)) {
-            try {
-              await triggerOdooSnapshot(sd.id, user.id, false)
-            } catch (e) {
-              console.warn('[StockGS] sync auto Odoo failed (non bloquant)', e?.message || e)
-            }
-          }
+          // OPTIMISATION CPU : pas de sync auto Odoo a l'ouverture (le sync auto
+          // toutes les minutes par user consommait beaucoup de CPU Vercel).
+          // Le bouton "🔄 Sync Odoo" reste disponible pour forcer une synchro
+          // manuelle quand l'utilisateur en a besoin.
           await reload(sd)
           itemsSub = subscribeToDayItems(sd.id, {
             onInsert: () => reload(sd),
