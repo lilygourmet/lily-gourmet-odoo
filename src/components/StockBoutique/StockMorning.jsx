@@ -27,56 +27,13 @@ const FRESHNESS_LABELS = {
   twodays: '2 jours (J+2)',
 }
 
-// ============================================================
-// Filtre "Restes d'hier" : on n'affiche QUE certaines catégories
-// - E-       : tous
-// - V- Cake  : seulement les viennoiseries dont le nom contient "Cake"
-// - MI-      : tous
-// - GS-      : seulement "Cookies" ou "Plateau"
-// Le reste (RA-, H-, N-, SU-, autres V-, autres GS-) est masqué.
-// ============================================================
-function shouldShowInLeftovers(productName) {
-  if (!productName) return false
-  // Retire un code Odoo [123] éventuel en tête
-  const n = String(productName).replace(/^\[\d+\]\s*/, '').trim()
-
-  if (/^E-/i.test(n)) return true
-  if (/^MI-/i.test(n)) return true
-  if (/^V-\s*Cake\b/i.test(n)) return true
-  if (/^GS-\s*(Cookies?|Plateau)\b/i.test(n)) return true
-  return false
-}
-
-// Combine plusieurs leftovers identiques (même nom + même fraîcheur) en une
-// seule ligne affichée, en gardant la liste des IDs Supabase pour pouvoir
-// appliquer la décision aux items originaux.
-function groupLeftovers(leftovers) {
-  const groups = new Map()
-  for (const l of leftovers) {
-    const key = `${(l.product_name || '').trim()}|${l.freshness || ''}`
-    if (!groups.has(key)) {
-      groups.set(key, {
-        id: key, // clé utilisée pour `decisions` (au lieu d'un UUID Supabase)
-        product_name: l.product_name,
-        freshness: l.freshness,
-        qty_counted: 0,
-        items: [], // leftovers Supabase originaux
-      })
-    }
-    const g = groups.get(key)
-    g.qty_counted += Number(l.qty_counted) || 0
-    g.items.push(l)
-  }
-  return Array.from(groups.values())
-}
-
 const NEXT_FRESHNESS_LABEL = {
   fresh: 'devient Hier',
   yesterday: 'devient 2 jours',
   twodays: 'devient Casse',
 }
 
-export default function StockMorning({ user, activeView, onNavigate, onLogout }) {
+export default function StockMorning({ user, activeView, onNavigate, onLogout, mode = null }) {
   const [loading, setLoading] = useState(true)
   const [stockDay, setStockDay] = useState(null)
   const [leftovers, setLeftovers] = useState([])
@@ -131,10 +88,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
         if (!mounted) return
 
         setTodayItems(items)
-        // Filtre : ne garder que E-, V- Cake, MI-, GS- Cookies/Plateau
-        // Puis regroupe les doublons (même nom + même fraîcheur)
-        const filtered = (leftov || []).filter(l => shouldShowInLeftovers(l.product_name))
-        setLeftovers(groupLeftovers(filtered))
+        setLeftovers(leftov)
         // Détection : si on a déjà des lignes source='leftover' aujourd'hui, c'est déjà appliqué
         setLeftoversApplied(items.some(it => it.source === 'leftover'))
 
@@ -201,38 +155,32 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
     })
   }, [todayItems])
 
-  const undecidedLeftovers = leftovers
-  const allDecisionsMade = leftovers.length === 0
+  const undecidedLeftovers = leftovers.filter(l => !decisions[l.id])
+  const allDecisionsMade = leftovers.length === 0 || undecidedLeftovers.length === 0
   const totalNewToSend = Object.values(cart).reduce((s, v) => s + (v?.qty || 0), 0)
 
-  // Décision immédiate : envoie keep/loss à Supabase pour TOUS les items
-  // Supabase du groupe (mêmes nom + fraîcheur), puis retire le groupe de la liste.
-  async function handleDecideLeftover(group, decision) {
-    if (!stockDay || !group) return
-    // Marquer "en cours" pour empêcher double-clic (via decisions transient)
-    if (decisions[group.id]) return
-    setDecisions(d => ({ ...d, [group.id]: decision }))
+  function setDecision(leftoverId, decision) {
+    setDecisions(d => ({ ...d, [leftoverId]: decision }))
+  }
+
+  async function handleApplyLeftovers() {
+    if (!stockDay) return
+    const list = leftovers.map(l => ({
+      leftoverItem: l,
+      decision: decisions[l.id] || 'keep',
+    }))
     try {
-      const list = (group.items || []).map(originalItem => ({
-        leftoverItem: originalItem,
-        decision,
-      }))
+      setSending(true)
       await applyLeftoverDecisions(stockDay.id, list, user.id)
-      // Retire le groupe de l'affichage
-      setLeftovers(prev => prev.filter(g => g.id !== group.id))
-      // Reload todayItems pour récupérer les lignes 'leftover' créées
+      // Reload
       const items = await loadDayItems(stockDay.id)
       setTodayItems(items)
       setLeftoversApplied(true)
     } catch (e) {
-      console.error('[handleDecideLeftover]', e)
+      console.error(e)
       alert('Erreur : ' + (e.message || e))
-      // Rollback du flag transient pour réessayer
-      setDecisions(d => {
-        const next = { ...d }
-        delete next[group.id]
-        return next
-      })
+    } finally {
+      setSending(false)
     }
   }
 
@@ -242,7 +190,6 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
     try {
       setSending(true)
       const entries = Object.entries(cart).filter(([, v]) => (v?.qty || 0) > 0)
-      const totalQtySent = entries.reduce((s, [, v]) => s + (v?.qty || 0), 0)
       for (const [productName, v] of entries) {
         await sendMorningItem(stockDay.id, productName, v.code || null, v.qty, user.id)
       }
@@ -250,19 +197,6 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
       const items = await loadDayItems(stockDay.id)
       setTodayItems(items)
       setCart({})
-
-      // Notifie le cafe via push (best-effort, on n'attend pas si erreur)
-      fetch('/api/push-send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role: 'cafe',
-          title: '📦 Envoi vitrine',
-          body: `La vitrine a envoyé ${totalQtySent} article${totalQtySent > 1 ? 's' : ''}`,
-          url: '/',
-          tag: 'lily-vitrine',
-        }),
-      }).catch(e => console.warn('[push] send error:', e))
     } catch (e) {
       console.error(e)
       alert('Erreur envoi : ' + (e.message || e))
@@ -279,7 +213,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
         <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-lg flex items-center justify-between">
           <div>
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
-              Livraison du matin
+              {mode === 'sale' ? 'Livraison du matin — Salé' : 'Livraison du matin'}
             </div>
             <div className="font-semibold text-[14px] italic">
               {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} — {user.full_name || user.username}
@@ -315,18 +249,22 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
                     </div>
                   </div>
                   <div className="text-[11px] text-ink-mute font-mono tracking-wider uppercase">
-                    {leftovers.length} à décider
+                    {allDecisionsMade ? '✓ Tout décidé' : `${undecidedLeftovers.length} à décider`}
                   </div>
                 </div>
 
                 <div className="p-3 space-y-2">
                   {leftovers.map(l => {
-                    const inFlight = !!decisions[l.id]
+                    const dec = decisions[l.id]
                     const nextLabel = NEXT_FRESHNESS_LABEL[l.freshness]
                     return (
                       <div
                         key={l.id}
-                        className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center p-2.5 border rounded-md bg-white border-line ${inFlight ? 'opacity-60' : ''}`}
+                        className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center p-2.5 border rounded-md ${
+                          dec === 'keep' ? 'bg-green-50 border-green-500' :
+                          dec === 'loss' ? 'bg-red-50 border-red-500' :
+                          'bg-white border-line'
+                        }`}
                       >
                         <div>
                           <div className="text-[13px] font-medium">{l.product_name}</div>
@@ -341,23 +279,40 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
                         </span>
                         <button
                           type="button"
-                          onClick={() => handleDecideLeftover(l, 'keep')}
-                          disabled={inFlight}
-                          className="px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 bg-white border-line hover:bg-green-50 hover:border-green-500 disabled:opacity-50 disabled:cursor-wait"
+                          onClick={() => setDecision(l.id, 'keep')}
+                          className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
+                            dec === 'keep'
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'bg-white border-line hover:bg-green-50 hover:border-green-500'
+                          }`}
                         >
                           ↓ Garde ({nextLabel})
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDecideLeftover(l, 'loss')}
-                          disabled={inFlight}
-                          className="px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 bg-white border-line hover:bg-red-50 hover:border-red-500 disabled:opacity-50 disabled:cursor-wait"
+                          onClick={() => setDecision(l.id, 'loss')}
+                          className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
+                            dec === 'loss'
+                              ? 'bg-red-700 text-white border-red-700'
+                              : 'bg-white border-line hover:bg-red-50 hover:border-red-500'
+                          }`}
                         >
                           🗑 Casse
                         </button>
                       </div>
                     )
                   })}
+                </div>
+
+                <div className="px-4 py-3 bg-cream-warm border-t border-line flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleApplyLeftovers}
+                    disabled={!allDecisionsMade || sending}
+                    className="px-4 py-2 bg-bordeaux text-cream rounded-md text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bordeaux-deep"
+                  >
+                    {sending ? 'Application...' : `Appliquer décisions (${leftovers.length})`}
+                  </button>
                 </div>
               </div>
             )}
@@ -379,7 +334,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
               <div className="px-4 py-3 border-b border-line">
                 <div className="text-[14px] font-semibold">➕ Nouvelle production du jour</div>
                 <div className="text-[11px] text-ink-mute mt-0.5">
-                  Sélectionne les articles à envoyer en vitrine.
+                  Combien d'articles frais tu apportes en vitrine ? Tu peux envoyer plusieurs fois dans la matinée.
                 </div>
               </div>
 
@@ -387,8 +342,9 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout })
                 <ProductGrid
                   cart={cart}
                   onChange={setCart}
-                  basketLabel="Panier livraison (frais)"
+                  basketLabel={mode === 'sale' ? 'Panier livraison salé' : 'Panier livraison (frais)'}
                   basketColor="green"
+                  mode={mode}
                 />
               </div>
 

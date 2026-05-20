@@ -193,7 +193,8 @@ function App() {
   if (activeView === 'freezer') return <FreezerView {...navProps} />
   if (activeView === 'messages') return <MessagesView {...navProps} />
   if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
-  if (activeView === 'vitrine') return <StockMorning {...navProps} />
+  if (activeView === 'vitrine') return <StockMorning {...navProps} mode="sucre" />
+  if (activeView === 'vitrine-sale') return <StockMorning {...navProps} mode="sale" />
   if (activeView === 'reception-vitrine') return <StockReception {...navProps} />
   if (activeView === 'fin-journee') return <StockEvening {...navProps} />
   if (activeView === 'stock') return <StockAudit {...navProps} />

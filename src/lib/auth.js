@@ -269,3 +269,8 @@ export function canSeeStock(user) {
   return canStockPatissier(user) || canStockCafe(user) || canStockAudit(user) || canStockGS(user)
 }
 
+// User peut voir l onglet Vitrine Sale (admin ou perm_vitrine_sale=true)
+export function canSeeVitrineSale(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_vitrine_sale === true
+}

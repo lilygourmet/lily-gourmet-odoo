@@ -7,12 +7,29 @@ import { useState, useEffect, useMemo } from 'react'
 import { fetchEntremetsCatalog } from '../../lib/stockCatalog'
 import NumpadInline from './NumpadInline'
 
+// Catégories sucrées (Vitrine sucrée)
+const SUCRE_CATEGORIES = new Set(['E-', 'MI-', 'V-', 'RA-', 'H-', 'N-'])
+// Catégories salées (Vitrine Salé)
+const SALE_CATEGORIES = new Set(['SU-'])
+// Patterns produits GS- qui sont SUCRES (plateaux, cookies) — exclus de Vitrine Salé
+const GS_SUCRE_PATTERNS = [
+  /^GS-\s*plateau/i,
+  /^GS-\s*cookies?\b/i,
+]
+
+function isGsSucre(productName) {
+  if (!productName) return false
+  const cleaned = String(productName).replace(/^\[\d+\]\s*/, '').trim()
+  return GS_SUCRE_PATTERNS.some(rx => rx.test(cleaned))
+}
+
 export default function ProductGrid({
   cart = {},
   onChange,
   basketLabel = 'Panier',
   basketColor = 'green',
   compact = false,
+  mode = null,  // null = pas de filtre | 'sucre' | 'sale'
 }) {
   const [catalog, setCatalog] = useState({ categories: [] })
   const [currentCategory, setCurrentCategory] = useState('E-')
@@ -26,8 +43,17 @@ export default function ProductGrid({
       if (mounted) {
         setCatalog(c)
         setLoading(false)
-        // Initialiser la taille par défaut sur la première catégorie qui a des tailles
-        const firstCat = (c.categories || []).find(cat => cat.id === 'E-') || (c.categories || [])[0]
+        // Initialiser la catégorie par défaut selon le mode
+        const allCats = c.categories || []
+        let defaultCatId
+        if (mode === 'sale') {
+          defaultCatId = 'SU-'  // démarrer sur SU- en mode salé
+        } else if (mode === 'sucre') {
+          defaultCatId = 'E-'   // démarrer sur E- en mode sucré
+        } else {
+          defaultCatId = 'E-'   // pas de mode = comportement actuel
+        }
+        const firstCat = allCats.find(cat => cat.id === defaultCatId) || allCats[0]
         if (firstCat) {
           setCurrentCategory(firstCat.id)
           if (firstCat.has_size_tabs && firstCat.sizes.length > 0) {
@@ -37,12 +63,47 @@ export default function ProductGrid({
       }
     })
     return () => { mounted = false }
-  }, [])
+  }, [mode])
 
-  // Catégorie active
+  // Catalogue filtré selon le mode (sucre/sale)
+  const filteredCatalog = useMemo(() => {
+    if (!mode) return catalog  // pas de filtre
+
+    const filteredCategories = []
+    for (const cat of (catalog.categories || [])) {
+      if (mode === 'sucre') {
+        if (SUCRE_CATEGORIES.has(cat.id)) {
+          // Catégorie 100% sucrée → garde telle quelle
+          filteredCategories.push(cat)
+        } else if (cat.id === 'GS-') {
+          // GS- : garder uniquement les produits sucrés (plateaux, cookies)
+          const filteredProducts = (cat.products || []).filter(p => isGsSucre(p.name))
+          if (filteredProducts.length > 0) {
+            filteredCategories.push({ ...cat, products: filteredProducts })
+          }
+        }
+        // sinon (SU-, autres) : exclus
+      } else if (mode === 'sale') {
+        if (SALE_CATEGORIES.has(cat.id)) {
+          // SU- → garde telle quelle
+          filteredCategories.push(cat)
+        } else if (cat.id === 'GS-') {
+          // GS- : garder uniquement les produits NON-sucrés (donc salés)
+          const filteredProducts = (cat.products || []).filter(p => !isGsSucre(p.name))
+          if (filteredProducts.length > 0) {
+            filteredCategories.push({ ...cat, products: filteredProducts })
+          }
+        }
+        // sinon (E-, MI-, V-, RA-, H-, N-) : exclus
+      }
+    }
+    return { ...catalog, categories: filteredCategories }
+  }, [catalog, mode])
+
+  // Catégorie active (sur le catalogue filtré)
   const activeCat = useMemo(() => {
-    return (catalog.categories || []).find(c => c.id === currentCategory) || null
-  }, [catalog, currentCategory])
+    return (filteredCatalog.categories || []).find(c => c.id === currentCategory) || null
+  }, [filteredCatalog, currentCategory])
 
   // Articles à afficher : selon la catégorie + taille active
   const products = useMemo(() => {
@@ -218,7 +279,7 @@ export default function ProductGrid({
       <div>
         {/* NIVEAU 1 : Onglets catégorie (scroll horizontal sur mobile) */}
         <div className="flex gap-1 mb-2 border-b border-line overflow-x-auto pb-0.5">
-          {(catalog.categories || []).map(cat => {
+          {(filteredCatalog.categories || []).map(cat => {
             const active = currentCategory === cat.id
             return (
               <button
