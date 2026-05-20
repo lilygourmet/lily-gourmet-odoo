@@ -30,6 +30,10 @@ export default function ProductGrid({
   basketColor = 'green',
   compact = false,
   mode = null,  // null = pas de filtre | 'sucre' | 'sale'
+  // Slot optionnel : contenu inseré à droite de la rangée des onglets catégories,
+  // visible uniquement en desktop (md:+). Typiquement un bouton d'action principal
+  // (ex: « Envoyer au café » dans StockMorning).
+  headerSlot = null,
 }) {
   const [catalog, setCatalog] = useState({ categories: [] })
   const [currentCategory, setCurrentCategory] = useState('E-')
@@ -300,27 +304,38 @@ export default function ProductGrid({
 
       {/* ============= GRILLE PRODUITS (mobile: visible si tab=articles, desktop: toujours visible à droite) ============= */}
       <div className={`${mobileTab === 'articles' ? 'block' : 'hidden'} md:block`}>
-        {/* NIVEAU 1 : Onglets catégorie (scroll horizontal sur mobile) */}
-        <div className="flex gap-1 mb-2 border-b border-line overflow-x-auto pb-0.5">
-          {(filteredCatalog.categories || []).map(cat => {
-            const active = currentCategory === cat.id
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setCurrentCategory(cat.id)}
-                className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 min-w-[52px] rounded-t-md transition-colors ${
-                  active
-                    ? 'bg-bordeaux text-cream font-medium'
-                    : 'text-ink-mute hover:bg-cream-warm'
-                }`}
-                title={`${cat.label} (${cat.nb_articles} articles)`}
-              >
-                <span className="text-[14px] leading-none">{cat.emoji}</span>
-                <span className="text-[9px] leading-tight">{cat.label}</span>
-              </button>
-            )
-          })}
+        {/* NIVEAU 1 : Onglets catégorie (scroll horizontal sur mobile)
+            + slot optionnel à droite (desktop only) pour bouton d'action principal */}
+        <div className="flex items-end gap-2 mb-2 border-b border-line">
+          <div className="flex gap-1 overflow-x-auto pb-0.5 flex-1 min-w-0">
+            {(filteredCatalog.categories || []).map(cat => {
+              const active = currentCategory === cat.id
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCurrentCategory(cat.id)}
+                  className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 min-w-[52px] rounded-t-md transition-colors ${
+                    active
+                      ? 'bg-bordeaux text-cream font-medium'
+                      : 'text-ink-mute hover:bg-cream-warm'
+                  }`}
+                  title={`${cat.label} (${cat.nb_articles} articles)`}
+                >
+                  <span className="text-[14px] leading-none">{cat.emoji}</span>
+                  <span className="text-[9px] leading-tight">{cat.label}</span>
+                </button>
+              )
+            })}
+          </div>
+          {/* Slot d'action (ex: bouton « Envoyer au café »).
+              Cache sur mobile : sur petit ecran on garde la barre du bas existante,
+              plus accessible que d'avoir le bouton noye dans le scroll horizontal des onglets. */}
+          {headerSlot && (
+            <div className="hidden md:flex flex-shrink-0 pb-1">
+              {headerSlot}
+            </div>
+          )}
         </div>
 
         {/* NIVEAU 2 : Onglets taille (uniquement si la catégorie a des tailles) */}

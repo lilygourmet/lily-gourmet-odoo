@@ -345,10 +345,23 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                   basketLabel={mode === 'sale' ? 'Panier livraison salé' : 'Panier livraison (frais)'}
                   basketColor="green"
                   mode={mode}
+                  headerSlot={
+                    <button
+                      type="button"
+                      onClick={handleSendAll}
+                      disabled={totalNewToSend === 0 || sending}
+                      className="px-4 py-2 bg-bordeaux text-cream rounded-full text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bordeaux-deep whitespace-nowrap shadow-sm"
+                      title={totalNewToSend === 0 ? "Ajoute des articles dans le panier" : `${totalNewToSend} article${totalNewToSend > 1 ? 's' : ''} à envoyer`}
+                    >
+                      {sending ? 'Envoi...' : '📦 Envoyer au café'}
+                    </button>
+                  }
                 />
               </div>
 
-              <div className="px-4 py-3 bg-cream-warm border-t border-line flex justify-between items-center">
+              {/* Bande du bas : visible uniquement sur mobile (sur desktop, le bouton est désormais
+                  dans la barre d'onglets catégories de ProductGrid via headerSlot). */}
+              <div className="px-4 py-3 bg-cream-warm border-t border-line flex justify-between items-center md:hidden">
                 <div className="text-[12px] text-ink-mute">
                   {totalNewToSend === 0 ? 'Ajoute des articles dans le panier' : `${totalNewToSend} article${totalNewToSend > 1 ? 's' : ''} prêt${totalNewToSend > 1 ? 's' : ''} à envoyer`}
                 </div>
