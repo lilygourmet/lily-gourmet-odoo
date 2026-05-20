@@ -101,18 +101,8 @@ export default async function handler(req, res) {
     if (!profile) return res.status(404).json({ error: 'Utilisateur introuvable' })
     if (!profile.active) return res.status(403).json({ error: 'Compte désactivé' })
 
-    const isAdmin = profile.role === 'admin'
-    const canAudit = isAdmin || profile.perm_stock_audit
-    const canCafe = isAdmin || profile.perm_stock_cafe
-
-    // Pour un refresh manuel : il faut audit ou admin
-    // Pour un initial=true (au submit) : café suffit
-    if (initial && !canCafe && !canAudit) {
-      return res.status(403).json({ error: 'Permission refusée (perm_stock_cafe ou perm_stock_audit requis)' })
-    }
-    if (!initial && !canAudit) {
-      return res.status(403).json({ error: 'Permission refusée (perm_stock_audit requis pour rafraîchir)' })
-    }
+    // Sync Odoo : ouvert a tout user actif (auth Supabase suffit)
+    // Le call Odoo est rate-limite par le debounce 60s cote frontend
 
     // 2) Charge les lignes 'evening' du stock_day (= ce que le café a compté)
     const { data: items, error: itemsErr } = await supabase
