@@ -199,7 +199,7 @@ function PosSessionsSection() {
   async function handleDetect() {
     setSyncing(true)
     try {
-      const res = await fetch('/api/caisse-pos-list', { method: 'POST' })
+      const res = await fetch('/api/caisse-api?action=list-pos', { method: 'POST' })
       const json = await res.json()
       if (json.error) alert('Erreur : ' + json.error)
       else reload()

@@ -34,7 +34,7 @@ export default function EnveloppesView({ user }) {
   async function handleSync() {
     setSyncing(true)
     try {
-      const res = await fetch('/api/caisse-sync-pos', { method: 'POST' })
+      const res = await fetch('/api/caisse-api?action=sync-pos', { method: 'POST' })
       const json = await res.json()
       setLastSync(new Date())
       if (json.error) console.error(json.error)
