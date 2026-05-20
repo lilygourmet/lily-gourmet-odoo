@@ -1,10 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>lily-gourmet-planning</title>
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- ============================================================
+         VIEWPORT — la ligne critique pour le responsive mobile.
+         Sans ça, Safari iOS rend la page en "mode desktop zoomé"
+         (largeur virtuelle ~980px) et tous les breakpoints Tailwind
+         md: lg: xl: se déclenchent comme si on était sur desktop.
+         RÉSULTAT : panier + grille côte à côte sur iPhone, bottom bar cachée.
+         ============================================================ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- Optimisations iOS Safari : empêche le zoom auto sur les inputs
+         et permet d'utiliser toute la hauteur d'écran -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- Couleur de la barre du navigateur (Chrome Android + Safari iOS récent)
+         On utilise le crème de l'app pour un rendu cohérent -->
+    <meta name="theme-color" content="#FAF6F0" />
+
+    <title>Lily Gourmet — Pâtisserie</title>
   </head>
   <body>
     <div id="root"></div>
