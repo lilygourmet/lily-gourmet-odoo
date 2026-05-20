@@ -69,6 +69,17 @@ export default function ProductGrid({
   const filteredCatalog = useMemo(() => {
     if (!mode) return catalog  // pas de filtre
 
+    // Helper : reconstruit articlesBySize à partir d'une liste d'articles filtrés
+    function rebuildBySize(articles) {
+      const bySize = { _none: [] }
+      for (const a of articles) {
+        const size = a.size || '_none'
+        if (!bySize[size]) bySize[size] = []
+        bySize[size].push(a)
+      }
+      return bySize
+    }
+
     const filteredCategories = []
     for (const cat of (catalog.categories || [])) {
       if (mode === 'sucre') {
@@ -77,9 +88,14 @@ export default function ProductGrid({
           filteredCategories.push(cat)
         } else if (cat.id === 'GS-') {
           // GS- : garder uniquement les produits sucrés (plateaux, cookies)
-          const filteredProducts = (cat.products || []).filter(p => isGsSucre(p.name))
-          if (filteredProducts.length > 0) {
-            filteredCategories.push({ ...cat, products: filteredProducts })
+          const filteredArticles = (cat.articles || []).filter(a => isGsSucre(a.name))
+          if (filteredArticles.length > 0) {
+            filteredCategories.push({
+              ...cat,
+              articles: filteredArticles,
+              articlesBySize: rebuildBySize(filteredArticles),
+              nb_articles: filteredArticles.length,
+            })
           }
         }
         // sinon (SU-, autres) : exclus
@@ -89,9 +105,14 @@ export default function ProductGrid({
           filteredCategories.push(cat)
         } else if (cat.id === 'GS-') {
           // GS- : garder uniquement les produits NON-sucrés (donc salés)
-          const filteredProducts = (cat.products || []).filter(p => !isGsSucre(p.name))
-          if (filteredProducts.length > 0) {
-            filteredCategories.push({ ...cat, products: filteredProducts })
+          const filteredArticles = (cat.articles || []).filter(a => !isGsSucre(a.name))
+          if (filteredArticles.length > 0) {
+            filteredCategories.push({
+              ...cat,
+              articles: filteredArticles,
+              articlesBySize: rebuildBySize(filteredArticles),
+              nb_articles: filteredArticles.length,
+            })
           }
         }
         // sinon (E-, MI-, V-, RA-, H-, N-) : exclus
