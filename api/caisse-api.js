@@ -11,6 +11,7 @@ const ODOO_PASSWORD = process.env.ODOO_PASSWORD
 const SUPA_URL      = process.env.VITE_SUPABASE_URL
 const SUPA_SR_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CASH_METHOD   = process.env.ODOO_POS_CASH_METHOD_NAME || 'Espèces'
+const CHEQUE_METHOD = process.env.ODOO_POS_CHEQUE_METHOD_NAME || 'Chèque'
 
 const sb = createClient(SUPA_URL, SUPA_SR_KEY)
 
@@ -143,33 +144,83 @@ async function actionSyncPos() {
 
   const sessions = await odooExec(uid, 'pos.session', 'read', [sessionIds, ['id', 'name', 'state', 'stop_at', 'config_id']])
 
+  // Récupère l'ID du destinataire "Banque" pour auto-affecter les chèques
+  const { data: banqueDest } = await sb
+    .from('caisse_destinataires')
+    .select('id, name')
+    .ilike('name', '%banque%')
+    .limit(1)
+    .maybeSingle()
+  const banqueId = banqueDest?.id || null
+
   let created = 0, skipped = 0
   for (const sess of sessions) {
-    const { data: existing } = await sb
-      .from('caisse_enveloppes').select('id').eq('odoo_session_id', sess.id).limit(1)
-    if (existing && existing.length > 0) { skipped++; continue }
+    // On charge les enveloppes existantes pour CETTE session (cash + cheque séparément)
+    const { data: existingRows } = await sb
+      .from('caisse_enveloppes')
+      .select('id, payment_method')
+      .eq('odoo_session_id', sess.id)
+    const existingMethods = new Set((existingRows || []).map(r => r.payment_method))
 
     const paymentIds = await odooExec(uid, 'pos.payment', 'search', [[['session_id', '=', sess.id]]])
     if (!paymentIds || paymentIds.length === 0) continue
 
     const payments = await odooExec(uid, 'pos.payment', 'read', [paymentIds, ['amount', 'payment_method_id']])
     let cashTotal = 0
+    let chequeTotal = 0
     for (const p of payments) {
       const pmName = Array.isArray(p.payment_method_id) ? p.payment_method_id[1] : ''
-      if (pmName && pmName.toLowerCase().includes(CASH_METHOD.toLowerCase().slice(0, 3))) {
+      if (!pmName) continue
+      const pmLower = pmName.toLowerCase()
+      const cashLower = CASH_METHOD.toLowerCase()
+      const chequeLower = CHEQUE_METHOD.toLowerCase()
+      // Match par début (3 lettres mini) — robuste aux variations Espèces/Especes/Cash/etc.
+      if (pmLower.includes(cashLower.slice(0, 3))) {
         cashTotal += Number(p.amount) || 0
+      } else if (pmLower.includes(chequeLower.slice(0, 3)) || pmLower.includes('check')) {
+        chequeTotal += Number(p.amount) || 0
       }
     }
-    if (cashTotal <= 0) continue
 
     const cfgId = Array.isArray(sess.config_id) ? sess.config_id[0] : null
     const source = cfgNameById[cfgId] || (Array.isArray(sess.config_id) ? sess.config_id[1] : 'POS')
     const sessionDate = (sess.stop_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
 
-    const { error: insErr } = await sb.from('caisse_enveloppes').insert({
-      odoo_session_id: sess.id, source, session_date: sessionDate, amount_cash: cashTotal,
-    })
-    if (!insErr) created++
+    // Créer l'enveloppe ESPÈCES si pas déjà créée et montant > 0
+    if (cashTotal > 0 && !existingMethods.has('cash')) {
+      const { error: insErr } = await sb.from('caisse_enveloppes').insert({
+        odoo_session_id: sess.id,
+        source,
+        session_date: sessionDate,
+        amount_cash: cashTotal,
+        payment_method: 'cash',
+      })
+      if (!insErr) created++
+      else console.error('[sync-pos] cash insert:', insErr.message)
+    } else if (cashTotal > 0 && existingMethods.has('cash')) {
+      skipped++
+    }
+
+    // Créer l'enveloppe CHÈQUE si pas déjà créée et montant > 0 (auto-affectée à Banque)
+    if (chequeTotal > 0 && !existingMethods.has('cheque')) {
+      const insertObj = {
+        odoo_session_id: sess.id,
+        source,
+        session_date: sessionDate,
+        amount_cash: chequeTotal,
+        payment_method: 'cheque',
+      }
+      // Auto-affectation à Banque si le destinataire existe
+      if (banqueId) {
+        insertObj.destinataire_id = banqueId
+        insertObj.assigned_at = new Date().toISOString()
+      }
+      const { error: insErr } = await sb.from('caisse_enveloppes').insert(insertObj)
+      if (!insErr) created++
+      else console.error('[sync-pos] cheque insert:', insErr.message)
+    } else if (chequeTotal > 0 && existingMethods.has('cheque')) {
+      skipped++
+    }
   }
 
   if (cfgRows && cfgRows.length > 0) {
