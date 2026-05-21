@@ -709,6 +709,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                   <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Statut</th>
                   <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Apporté</th>
                   <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Reçu</th>
+                  <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Écarts apporté vs reçu (matin)">Écart Réc.</th>
                   <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Compté</th>
                   <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Audit</th>
                 </tr>
@@ -736,6 +737,17 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{d.qty_announced_total || '—'}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{d.qty_received_total || '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[11px]">
+                        {(d.reception_gap_plus > 0 || d.reception_gap_minus > 0) ? (
+                          <span>
+                            {d.reception_gap_plus > 0 && <span className="text-green-700 font-medium">+{d.reception_gap_plus}</span>}
+                            {d.reception_gap_plus > 0 && d.reception_gap_minus > 0 && <span className="text-ink-mute"> / </span>}
+                            {d.reception_gap_minus > 0 && <span className="text-red-700 font-medium">-{d.reception_gap_minus}</span>}
+                          </span>
+                        ) : (
+                          <span className="text-green-700">✓</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium text-blue-900">{d.qty_counted_total || '—'}</td>
                       <td className="px-3 py-2 text-right text-[10px] text-ink-mute">
                         {d.audited_at ? new Date(d.audited_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
