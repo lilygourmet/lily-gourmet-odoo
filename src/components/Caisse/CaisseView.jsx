@@ -5,6 +5,7 @@ import CaissesGereesView from './CaissesGereesView'
 import SalairesView from './SalairesView'
 import ParametresView from './ParametresView'
 import MeriemUserView from './MeriemUserView'
+import AppHeader from '../AppHeader'
 
 const TABS = [
   { key: 'enveloppes', label: 'Enveloppes',  icon: '📊' },
@@ -16,12 +17,17 @@ const TABS = [
 
 const STORAGE_KEY = 'caisse_active_tab'
 
-export default function CaisseView({ user }) {
+export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
   const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
 
   // Si Meriem (perm_caisse seul) → vue ultra simplifiée
   if (!isAdmin && user?.perm_caisse) {
-    return <MeriemUserView user={user} />
+    return (
+      <>
+        <AppHeader user={user} activeView="caisse" onNavigate={onNavigate} onLogout={onLogout} />
+        <MeriemUserView user={user} />
+      </>
+    )
   }
 
   // Admin → vue avec onglets
@@ -33,7 +39,9 @@ export default function CaisseView({ user }) {
   }, [tab])
 
   return (
-    <div className="caisse-root" style={{ padding: '1rem 1.25rem' }}>
+    <>
+      <AppHeader user={user} activeView="caisse" onNavigate={onNavigate} onLogout={onLogout} />
+      <div className="caisse-root" style={{ padding: '1rem 1.25rem' }}>
       <div style={{
         display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap',
         borderBottom: '1px solid #E8E2D8', paddingBottom: 12,
@@ -61,6 +69,7 @@ export default function CaisseView({ user }) {
       {tab === 'caisses'    && <CaissesGereesView user={user} />}
       {tab === 'salaires'   && <SalairesView user={user} />}
       {tab === 'params'     && <ParametresView user={user} />}
-    </div>
+      </div>
+    </>
   )
 }

@@ -48,7 +48,7 @@ export async function loadEnveloppesByMonth(year, month) {
   const { start, end } = monthBounds(year, month)
   const { data, error } = await supabase
     .from('caisse_enveloppes')
-    .select('*, destinataire:caisse_destinataires(*)')
+    .select('*, destinataire:caisse_destinataires(*), assigner:profiles!caisse_enveloppes_assigned_by_fkey(username, full_name)')
     .gte('session_date', start)
     .lt('session_date', end)
     .order('session_date', { ascending: true })

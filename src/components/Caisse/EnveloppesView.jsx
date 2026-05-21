@@ -217,6 +217,11 @@ function EnveloppeCard({ env, onClick }) {
       <div style={{ fontSize: 11, opacity: 0.95 }}>
         {env.destinataire ? env.destinataire.name : '👆 À affecter'}
       </div>
+      {env.assigner && (
+        <div style={{ fontSize: 9, opacity: 0.65, marginTop: 2, fontStyle: 'italic' }}>
+          par {env.assigner.username || env.assigner.full_name || '?'}
+        </div>
+      )}
     </div>
   )
 }

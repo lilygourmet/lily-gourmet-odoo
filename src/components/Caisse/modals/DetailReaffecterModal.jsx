@@ -20,7 +20,14 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
             <div style={{ fontSize: 13 }}>Affecté à <strong>{env.destinataire?.name}</strong></div>
           </div>
           <div style={{ fontSize: 12, color: '#6F6A60', lineHeight: 1.7, marginBottom: 18 }}>
-            {env.assigned_at && <div>Affecté le {fmtDateLongue(env.assigned_at)}</div>}
+            {env.assigned_at && (
+              <div>
+                Affecté le {fmtDateLongue(env.assigned_at)}
+                {env.assigner && (
+                  <span> par <strong>{env.assigner.username || env.assigner.full_name || '?'}</strong></span>
+                )}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button onClick={() => setShowReassign(true)} style={btnNormal}>🔄 Réaffecter à un autre destinataire</button>
