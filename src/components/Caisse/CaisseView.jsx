@@ -5,12 +5,14 @@ import CaissesGereesView from './CaissesGereesView'
 import SalairesView from './SalairesView'
 import ParametresView from './ParametresView'
 import MeriemUserView from './MeriemUserView'
+import MeriemAvances from './subviews/MeriemAvances'
 import AppHeader from '../AppHeader'
 
 const TABS = [
   { key: 'enveloppes', label: 'Enveloppes',  icon: '📊' },
   { key: 'suivi',      label: 'Suivi versements & remboursements', icon: '🏦' },
   { key: 'caisses',    label: 'Caisses gérées', icon: '💼' },
+  { key: 'avances',    label: 'Avances Meriem', icon: '💸' },
   { key: 'salaires',   label: 'Salaires',    icon: '💵' },
   { key: 'params',     label: 'Paramètres',  icon: '⚙️' },
 ]
@@ -67,6 +69,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
       {tab === 'enveloppes' && <EnveloppesView user={user} />}
       {tab === 'suivi'      && <SuiviView user={user} />}
       {tab === 'caisses'    && <CaissesGereesView user={user} />}
+      {tab === 'avances'    && <MeriemAvances user={user} />}
       {tab === 'salaires'   && <SalairesView user={user} />}
       {tab === 'params'     && <ParametresView user={user} />}
       </div>

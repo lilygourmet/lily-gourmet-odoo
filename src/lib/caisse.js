@@ -659,12 +659,11 @@ export async function getPreuveSignedUrl(path) {
 
 // ============================================================
 // AVANCES (Meriem avance pour Layla/Nezha)
+// Connectées à la caisse Meriem : avance = sortie auto, remboursé = entrée auto
 // ============================================================
 
 /**
  * Liste les avances (avec join sur le bénéficiaire et le payeur)
- * @param {Object} opts - { beneficiaryId?, status? }
- *   - status : 'all' | 'pending' | 'refunded'
  */
 export async function loadAvances({ beneficiaryId, status = 'pending' } = {}) {
   let q = supabase
@@ -687,7 +686,6 @@ export async function loadAvances({ beneficiaryId, status = 'pending' } = {}) {
 
 /**
  * Récap par bénéficiaire : combien chacun doit (avances non remboursées)
- * Retourne [{ beneficiary_id, name, color_key, total_due, count }]
  */
 export async function loadAvancesSummary() {
   const { data, error } = await supabase
@@ -720,9 +718,28 @@ export async function loadAvancesSummary() {
 }
 
 /**
- * Crée une nouvelle avance
+ * Crée une nouvelle avance + un mouvement de SORTIE dans la caisse de Meriem
  */
-export async function createAvance({ payerId, beneficiaryId, amount, motif, avanceDate, userId }) {
+export async function createAvance({ payerId, beneficiaryId, beneficiaryName, amount, motif, avanceDate, userId }) {
+  // 1. Créer le mouvement de sortie dans la caisse Meriem
+  const labelSortie = motif
+    ? `💸 Avance pour ${beneficiaryName} — ${motif}`
+    : `💸 Avance pour ${beneficiaryName}`
+  const categoryName = `Prêt ${beneficiaryName}`
+
+  const mvt = await addMouvement({
+    caisseOwner: 'meriem',
+    type: 'sortie',
+    sourceType: 'manuelle',
+    amount: Number(amount),
+    category: categoryName,
+    label: labelSortie,
+    mvtDate: avanceDate || new Date().toISOString().slice(0, 10),
+    hasFacture: false,
+    userId,
+  })
+
+  // 2. Créer l'avance liée au mouvement
   const { data, error } = await supabase
     .from('caisse_avances')
     .insert({
@@ -732,48 +749,130 @@ export async function createAvance({ payerId, beneficiaryId, amount, motif, avan
       motif: motif || null,
       avance_date: avanceDate || new Date().toISOString().slice(0, 10),
       created_by: userId,
+      sortie_mouvement_id: mvt.id,
     })
     .select()
     .single()
-  if (error) throw error
+
+  if (error) {
+    // Si l'insert de l'avance échoue, on supprime le mouvement créé (rollback manuel)
+    try { await deleteMouvement(mvt.id) } catch (e) { console.error('rollback mouvement:', e) }
+    throw error
+  }
   return data
 }
 
 /**
- * Marque une avance comme remboursée
+ * Marque une avance comme remboursée + crée un mouvement d'ENTRÉE dans la caisse
  */
-export async function markAvanceRefunded(avanceId, note = null) {
+export async function markAvanceRefunded(avanceId, note = null, userId = null) {
+  // 1. Charger l'avance pour récupérer le montant + nom bénéficiaire
+  const { data: avance, error: errLoad } = await supabase
+    .from('caisse_avances')
+    .select(`
+      *,
+      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name)
+    `)
+    .eq('id', avanceId)
+    .single()
+  if (errLoad) throw errLoad
+  if (avance.refunded_at) throw new Error('Avance déjà remboursée')
+
+  // 2. Créer le mouvement d'entrée
+  const benefName = avance.beneficiaire?.name || '?'
+  const labelEntree = avance.motif
+    ? `💸 Remb. ${benefName} — ${avance.motif}`
+    : `💸 Remb. ${benefName}`
+  const categoryName = `Prêt ${benefName}`
+
+  const mvt = await addMouvement({
+    caisseOwner: 'meriem',
+    type: 'entree',
+    sourceType: 'manuelle',
+    amount: Number(avance.amount),
+    category: categoryName,
+    label: labelEntree,
+    mvtDate: new Date().toISOString().slice(0, 10),
+    hasFacture: false,
+    userId: userId || avance.created_by,
+  })
+
+  // 3. Marquer l'avance comme remboursée
   const { data, error } = await supabase
     .from('caisse_avances')
     .update({
       refunded_at: new Date().toISOString(),
       refunded_note: note,
+      entree_mouvement_id: mvt.id,
     })
     .eq('id', avanceId)
     .select()
     .single()
-  if (error) throw error
+
+  if (error) {
+    try { await deleteMouvement(mvt.id) } catch (e) { console.error('rollback mouvement:', e) }
+    throw error
+  }
   return data
 }
 
 /**
- * Annule un remboursement (au cas où erreur)
+ * Annule un remboursement : supprime le mouvement d'entrée et réinitialise
  */
 export async function unmarkAvanceRefunded(avanceId) {
+  // 1. Charger l'avance pour récupérer entree_mouvement_id
+  const { data: avance, error: errLoad } = await supabase
+    .from('caisse_avances')
+    .select('entree_mouvement_id')
+    .eq('id', avanceId)
+    .single()
+  if (errLoad) throw errLoad
+
+  // 2. Supprimer le mouvement d'entrée s'il existe
+  if (avance.entree_mouvement_id) {
+    try {
+      await deleteMouvement(avance.entree_mouvement_id)
+    } catch (e) {
+      console.warn('[unmarkAvanceRefunded] suppression mouvement entrée:', e.message)
+    }
+  }
+
+  // 3. Réinitialiser l'avance
   const { error } = await supabase
     .from('caisse_avances')
-    .update({ refunded_at: null, refunded_note: null })
+    .update({
+      refunded_at: null,
+      refunded_note: null,
+      entree_mouvement_id: null,
+    })
     .eq('id', avanceId)
   if (error) throw error
 }
 
 /**
- * Supprime une avance (erreur de saisie)
+ * Supprime une avance ET les mouvements caisse associés (erreur de saisie)
  */
 export async function deleteAvance(avanceId) {
+  // 1. Charger l'avance pour récupérer les IDs de mouvements liés
+  const { data: avance, error: errLoad } = await supabase
+    .from('caisse_avances')
+    .select('sortie_mouvement_id, entree_mouvement_id')
+    .eq('id', avanceId)
+    .single()
+  if (errLoad) throw errLoad
+
+  // 2. Supprimer l'avance d'abord (les FK avec ON DELETE SET NULL ne posent pas problème)
   const { error } = await supabase
     .from('caisse_avances')
     .delete()
     .eq('id', avanceId)
   if (error) throw error
+
+  // 3. Supprimer les mouvements caisse liés
+  if (avance.sortie_mouvement_id) {
+    try { await deleteMouvement(avance.sortie_mouvement_id) } catch (e) { console.warn('del sortie:', e.message) }
+  }
+  if (avance.entree_mouvement_id) {
+    try { await deleteMouvement(avance.entree_mouvement_id) } catch (e) { console.warn('del entree:', e.message) }
+  }
 }
