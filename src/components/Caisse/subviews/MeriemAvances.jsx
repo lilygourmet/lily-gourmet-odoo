@@ -14,14 +14,13 @@ export default function MeriemAvances({ user }) {
   const [list, setList]                 = useState([])
   const [summary, setSummary]           = useState([])
   const [persoDests, setPersoDests]     = useState([])
-  const [statusFilter, setStatusFilter] = useState('pending') // 'pending' | 'refunded' | 'all'
-  const [benefFilter, setBenefFilter]   = useState('all')     // 'all' | beneficiary_id
+  const [statusFilter, setStatusFilter] = useState('pending')
+  const [benefFilter, setBenefFilter]   = useState('all')
   const [showNew, setShowNew]           = useState(false)
   const [loading, setLoading]           = useState(false)
 
   useEffect(() => { (async () => {
     const all = await loadDestinataires()
-    // Filtre : on garde uniquement Layla et Nezha (perso)
     setPersoDests(all.filter(d => d.type === 'perso' && /layla|nezha/i.test(d.name)))
   })() }, [])
 
@@ -44,40 +43,32 @@ export default function MeriemAvances({ user }) {
   async function handleCreate(payload) {
     try {
       await createAvance({ ...payload, payerId: user.id, userId: user.id })
-      setShowNew(false)
-      reload()
+      setShowNew(false); reload()
     } catch (e) { alert('Erreur : ' + e.message) }
   }
 
   async function handleMarkRefunded(id) {
     const note = window.prompt('Note (optionnel) — cash, virement, etc.', '')
     try {
-      await markAvanceRefunded(id, note || null)
+      await markAvanceRefunded(id, note || null, user.id)
       reload()
     } catch (e) { alert('Erreur : ' + e.message) }
   }
 
   async function handleUnmark(id) {
     if (!window.confirm('Annuler ce remboursement ?')) return
-    try {
-      await unmarkAvanceRefunded(id)
-      reload()
-    } catch (e) { alert('Erreur : ' + e.message) }
+    try { await unmarkAvanceRefunded(id); reload() } catch (e) { alert('Erreur : ' + e.message) }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm('Supprimer cette avance (erreur de saisie) ?')) return
-    try {
-      await deleteAvance(id)
-      reload()
-    } catch (e) { alert('Erreur : ' + e.message) }
+    if (!window.confirm('Supprimer cette avance ?')) return
+    try { await deleteAvance(id); reload() } catch (e) { alert('Erreur : ' + e.message) }
   }
 
   const totalPending = useMemo(() => summary.reduce((s, x) => s + Number(x.total_due || 0), 0), [summary])
 
   return (
     <div>
-      {/* Récap par bénéficiaire */}
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(persoDests.length, 1)}, 1fr)`, gap: 12, marginBottom: 18 }}>
         {persoDests.map(d => {
           const s = summary.find(x => Number(x.beneficiary_id) === Number(d.id))
@@ -94,7 +85,6 @@ export default function MeriemAvances({ user }) {
         })}
       </div>
 
-      {/* Header + bouton nouvelle */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ fontSize: 13, color: '#6F6A60' }}>
           Total dû à Meriem : <strong style={{ color: '#3A3733' }}>{fmtMoney(totalPending)}</strong>
@@ -102,27 +92,23 @@ export default function MeriemAvances({ user }) {
         <button onClick={() => setShowNew(true)} style={btnPrimary}>+ Nouvelle avance</button>
       </div>
 
-      {/* Filtres */}
+      <div style={{ fontSize: 11, color: '#6F6A60', padding: '8px 12px', background: '#FAF6F0', borderRadius: 6, marginBottom: 12, border: '0.5px solid #E8E2D8' }}>
+        ℹ️ Chaque avance crée automatiquement une <strong>sortie</strong> dans la caisse Meriem. Au remboursement, une <strong>entrée</strong> est créée.
+      </div>
+
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
         <button onClick={() => setBenefFilter('all')} style={filterChip(benefFilter === 'all')}>Tout le monde</button>
         {persoDests.map(d => (
-          <button key={d.id} onClick={() => setBenefFilter(d.id)} style={filterChip(String(benefFilter) === String(d.id))}>
-            👤 {d.name}
-          </button>
+          <button key={d.id} onClick={() => setBenefFilter(d.id)} style={filterChip(String(benefFilter) === String(d.id))}>👤 {d.name}</button>
         ))}
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
-        {[
-          { v: 'pending',  l: 'En cours' },
-          { v: 'refunded', l: 'Remboursées' },
-          { v: 'all',      l: 'Toutes' },
-        ].map(s => (
+        {[{v:'pending',l:'En cours'},{v:'refunded',l:'Remboursées'},{v:'all',l:'Toutes'}].map(s => (
           <button key={s.v} onClick={() => setStatusFilter(s.v)} style={statusChip(statusFilter === s.v)}>{s.l}</button>
         ))}
       </div>
 
-      {/* Liste */}
       {loading && <div style={{ color: '#6F6A60', padding: 20 }}>Chargement…</div>}
 
       {!loading && list.length === 0 && (
@@ -143,9 +129,7 @@ export default function MeriemAvances({ user }) {
             </div>
             <div>
               <div style={{ fontSize: 11, color: '#6F6A60' }}>Pour</div>
-              <div style={{ display: 'inline-block', background: benefColor.bg, color: benefColor.text, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, marginTop: 2 }}>
-                👤 {benefName}
-              </div>
+              <div style={{ display: 'inline-block', background: benefColor.bg, color: benefColor.text, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, marginTop: 2 }}>👤 {benefName}</div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: '#6F6A60' }}>Montant</div>
@@ -164,29 +148,19 @@ export default function MeriemAvances({ user }) {
                     {a.refunded_note && <div style={{ fontStyle: 'italic' }}>{a.refunded_note}</div>}
                   </div>
                 </div>
-              ) : (
-                <span style={statusPending}>⏳ En attente</span>
-              )}
+              ) : (<span style={statusPending}>⏳ En attente</span>)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {isRefunded ? (
-                <button onClick={() => handleUnmark(a.id)} style={btnSlim}>↶ Annuler</button>
-              ) : (
-                <button onClick={() => handleMarkRefunded(a.id)} style={btnPrimarySmall}>✓ Remboursée</button>
-              )}
+              {isRefunded
+                ? <button onClick={() => handleUnmark(a.id)} style={btnSlim}>↶ Annuler</button>
+                : <button onClick={() => handleMarkRefunded(a.id)} style={btnPrimarySmall}>✓ Remboursée</button>}
               <button onClick={() => handleDelete(a.id)} style={btnDanger}>🗑</button>
             </div>
           </div>
         )
       })}
 
-      {showNew && (
-        <NewAvanceModal
-          persoDests={persoDests}
-          onClose={() => setShowNew(false)}
-          onCreate={handleCreate}
-        />
-      )}
+      {showNew && <NewAvanceModal persoDests={persoDests} onClose={() => setShowNew(false)} onCreate={handleCreate} />}
     </div>
   )
 }
@@ -203,7 +177,15 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) { alert('Montant invalide'); return }
     setSubmitting(true)
-    await onCreate({ beneficiaryId, amount: amt, motif: motif.trim() || null, avanceDate })
+    const benefDest = persoDests.find(d => String(d.id) === String(beneficiaryId))
+    const benefName = benefDest?.name || '?'
+    await onCreate({
+      beneficiaryId,
+      beneficiaryName: benefName,
+      amount: amt,
+      motif: motif.trim() || null,
+      avanceDate,
+    })
     setSubmitting(false)
   }
 
@@ -217,9 +199,7 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
 
         <label style={fieldLabel}>Pour qui ?</label>
         <select value={beneficiaryId} onChange={e => setBeneficiaryId(e.target.value)} style={fieldInput}>
-          {persoDests.map(d => (
-            <option key={d.id} value={d.id}>👤 {d.name}</option>
-          ))}
+          {persoDests.map(d => (<option key={d.id} value={d.id}>👤 {d.name}</option>))}
         </select>
 
         <label style={fieldLabel}>Montant (DH)</label>
@@ -242,9 +222,6 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
   )
 }
 
-// ============================================================
-// STYLES
-// ============================================================
 const btnSlim = { fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#993556', color: 'white', cursor: 'pointer', fontWeight: 500 }
 const btnPrimarySmall = { fontSize: 11, padding: '4px 10px', borderRadius: 6, border: 'none', background: '#085041', color: 'white', cursor: 'pointer', fontWeight: 500 }
