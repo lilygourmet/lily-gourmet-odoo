@@ -12,6 +12,7 @@ import {
   loadStockDay,
   buildAuditReport,
   auditStockDay,
+  submitStockDay,
   triggerOdooSnapshot,
   subscribeToDayItems,
   subscribeToStockDay,
@@ -115,6 +116,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     }
   }, [day])
 
+  const canForceClose = user?.role === 'admin' || user?.perm_stock_audit === true
   const isOpen = stockDay?.status === 'open'
   const isSubmitted = stockDay?.status === 'submitted'
   const isAudited = stockDay?.status === 'audited'
@@ -156,6 +158,23 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
       articlesGapChanged,
     }
   }, [report])
+
+  async function handleForceClose() {
+    if (!stockDay) return
+    if (!confirm("⚠️ Forcer la clôture sans que le café ait fini de compter ?\n\nLe rapport sera généré avec les données disponibles. Cette action est réservée aux admins.")) return
+    try {
+      setAuditing(true)
+      await submitStockDay(stockDay.id, user.id)
+      const sd = await loadStockDay(day)
+      setStockDay(sd)
+      const r = await buildAuditReport(sd.id)
+      setReport(r)
+    } catch (e) {
+      alert('Erreur forçage clôture : ' + (e.message || e))
+    } finally {
+      setAuditing(false)
+    }
+  }
 
   async function handleAudit() {
     if (!stockDay) return
@@ -312,7 +331,20 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                 </>
               )}
               {isOpen && (
-                <span className="font-semibold text-amber-900">⏳ Café est encore en train de compter — rapport non disponible</span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-semibold text-amber-900">⏳ Café est encore en train de compter — rapport non disponible</span>
+                  {canForceClose && (
+                    <button
+                      type="button"
+                      onClick={handleForceClose}
+                      disabled={auditing}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-[11px] font-medium transition-colors disabled:opacity-50"
+                      title="Réservé admins / audit"
+                    >
+                      ⚠️ Forcer la clôture
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
