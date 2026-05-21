@@ -142,13 +142,15 @@ export async function updateEnveloppeDate(envId, newDate) {
   if (error) throw error
 }
 
-export async function setEnveloppeProof(envId, proofUrl, proofDate) {
+export async function setEnveloppeProof(envId, proofUrl, proofDate, amountProof = null, noteProof = null) {
   const { error } = await supabase
     .from('caisse_enveloppes')
     .update({
       proof_url: proofUrl,
       proof_date: proofDate,
       proof_uploaded_at: new Date().toISOString(),
+      amount_proof: amountProof,
+      note_proof: noteProof,
     })
     .eq('id', envId)
   if (error) throw error

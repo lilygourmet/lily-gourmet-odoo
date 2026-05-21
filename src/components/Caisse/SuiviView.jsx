@@ -51,10 +51,10 @@ function BanqueSection({ user }) {
     reload()
   }
 
-  async function handleUpload(file, proofDate) {
+  async function handleUpload(file, proofDate, amountProof, noteProof) {
     if (!uploadEnv || !file) return
     const url = await uploadPreuve(file, uploadEnv.id)
-    await setEnveloppeProof(uploadEnv.id, url, proofDate)
+    await setEnveloppeProof(uploadEnv.id, url, proofDate, amountProof, noteProof)
     setUploadEnv(null)
     reload()
   }
@@ -162,10 +162,10 @@ function PersoSection({ user }) {
     await updateEnveloppeDate(envId, newDate); setEditDate(p => ({ ...p, [envId]: false })); reload()
   }
 
-  async function handleUpload(file, proofDate) {
+  async function handleUpload(file, proofDate, amountProof, noteProof) {
     if (!uploadEnv || !file) return
     const url = await uploadPreuve(file, uploadEnv.id)
-    await setEnveloppeProof(uploadEnv.id, url, proofDate)
+    await setEnveloppeProof(uploadEnv.id, url, proofDate, amountProof, noteProof)
     setUploadEnv(null); reload()
   }
 
