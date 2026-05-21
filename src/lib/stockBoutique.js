@@ -242,10 +242,54 @@ export function advanceFreshness(current) {
 
 export async function applyLeftoverDecisions(todayStockDayId, decisions, userId) {
   for (const d of decisions) {
-    const { leftoverItem, decision, lossReason } = d
+    const { leftoverItem, decision, lossReason, lossQty } = d
     const qty = leftoverItem.qty_counted || 0
     if (qty <= 0) continue
 
+    // 3 cas : 'keep' (tout garder), 'loss' (tout casser), 'partial' (X cassés, le reste gardé)
+    if (decision === 'partial') {
+      const lossQ = Math.max(0, Math.min(qty, Number(lossQty) || 0))
+      const keepQ = qty - lossQ
+      const nowISO = new Date().toISOString()
+      const commonBase = {
+        stock_day_id: todayStockDayId,
+        product_name: leftoverItem.product_name,
+        product_code: leftoverItem.product_code,
+        category: leftoverItem.category || 'E',
+        source: 'leftover',
+        reception_status: 'confirmed',
+        announced_by: userId,
+        announced_at: nowISO,
+        received_by: userId,
+        received_at: nowISO,
+      }
+      // Ligne KEEP (s'il reste qqch à garder)
+      if (keepQ > 0) {
+        const { error: e1 } = await supabase.from('stock_day_items').insert({
+          ...commonBase,
+          freshness: advanceFreshness(leftoverItem.freshness),
+          qty_announced: keepQ,
+          qty_received: keepQ,
+          decision: 'keep',
+        })
+        if (e1) { console.error('[applyLeftoverDecisions partial keep]', e1); throw e1 }
+      }
+      // Ligne LOSS (la part cassée)
+      if (lossQ > 0) {
+        const { error: e2 } = await supabase.from('stock_day_items').insert({
+          ...commonBase,
+          freshness: 'loss',
+          qty_announced: lossQ,
+          qty_received: lossQ,
+          decision: 'loss',
+          loss_reason: lossReason || 'Casse partielle matin',
+        })
+        if (e2) { console.error('[applyLeftoverDecisions partial loss]', e2); throw e2 }
+      }
+      continue
+    }
+
+    // Cas classiques (keep ou loss entiers)
     const newFreshness = decision === 'loss' ? 'loss' : advanceFreshness(leftoverItem.freshness)
 
     const { error: insertErr } = await supabase

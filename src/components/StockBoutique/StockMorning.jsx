@@ -38,7 +38,8 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
   const [stockDay, setStockDay] = useState(null)
   const [leftovers, setLeftovers] = useState([])
   const [todayItems, setTodayItems] = useState([])
-  const [decisions, setDecisions] = useState({}) // { leftoverId: 'keep'|'loss' }
+  const [decisions, setDecisions] = useState({}) // { leftoverId: 'keep'|'loss'|'partial' }
+  const [lossQtys, setLossQtys] = useState({}) // { leftoverId: nombre }
   const [leftoversApplied, setLeftoversApplied] = useState(false)
   const [cart, setCart] = useState({}) // { [productName]: { qty, code } }
   const [sending, setSending] = useState(false)
@@ -175,11 +176,16 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
     setDecisions(d => ({ ...d, [leftoverId]: decision }))
   }
 
+  function setLossQty(leftoverId, qty) {
+    setLossQtys(p => ({ ...p, [leftoverId]: qty }))
+  }
+
   async function handleApplyLeftovers() {
     if (!stockDay) return
     const list = filteredLeftovers.map(l => ({
       leftoverItem: l,
       decision: decisions[l.id] || 'keep',
+      lossQty: decisions[l.id] === 'partial' ? (Number(lossQtys[l.id]) || 0) : undefined,
     }))
     try {
       setSending(true)
@@ -269,48 +275,87 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                   {filteredLeftovers.map(l => {
                     const dec = decisions[l.id]
                     const nextLabel = NEXT_FRESHNESS_LABEL[l.freshness]
+                    const totalQty = l.qty_counted || 0
+                    const currentLossQty = Number(lossQtys[l.id]) || 0
                     return (
                       <div
                         key={l.id}
-                        className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center p-2.5 border rounded-md ${
+                        className={`p-2.5 border rounded-md ${
                           dec === 'keep' ? 'bg-green-50 border-green-500' :
                           dec === 'loss' ? 'bg-red-50 border-red-500' :
+                          dec === 'partial' ? 'bg-amber-50 border-amber-500' :
                           'bg-white border-line'
                         }`}
                       >
-                        <div>
-                          <div className="text-[13px] font-medium">{l.product_name}</div>
-                          <div className="text-[11px] text-ink-mute mt-0.5">
-                            Restant hier soir : <strong className="text-ink">{l.qty_counted}</strong>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex-1 min-w-[200px]">
+                            <div className="text-[13px] font-medium">{l.product_name}</div>
+                            <div className="text-[11px] text-ink-mute mt-0.5">
+                              Restant hier soir : <strong className="text-ink">{totalQty}</strong>
+                            </div>
                           </div>
+                          <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${
+                            l.freshness === 'fresh' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                          }`}>
+                            Hier en {FRESHNESS_LABELS[l.freshness]}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setDecision(l.id, 'keep')}
+                            className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
+                              dec === 'keep'
+                                ? 'bg-green-600 text-white border-green-600'
+                                : 'bg-white border-line hover:bg-green-50 hover:border-green-500'
+                            }`}
+                          >
+                            ↓ Garde ({nextLabel})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDecision(l.id, 'partial')}
+                            className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
+                              dec === 'partial'
+                                ? 'bg-amber-600 text-white border-amber-600'
+                                : 'bg-white border-line hover:bg-amber-50 hover:border-amber-500'
+                            }`}
+                          >
+                            ⚖ Partielle
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDecision(l.id, 'loss')}
+                            className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
+                              dec === 'loss'
+                                ? 'bg-red-700 text-white border-red-700'
+                                : 'bg-white border-line hover:bg-red-50 hover:border-red-500'
+                            }`}
+                          >
+                            🗑 Casse
+                          </button>
                         </div>
-                        <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${
-                          l.freshness === 'fresh' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                        }`}>
-                          Hier en {FRESHNESS_LABELS[l.freshness]}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setDecision(l.id, 'keep')}
-                          className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
-                            dec === 'keep'
-                              ? 'bg-green-600 text-white border-green-600'
-                              : 'bg-white border-line hover:bg-green-50 hover:border-green-500'
-                          }`}
-                        >
-                          ↓ Garde ({nextLabel})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDecision(l.id, 'loss')}
-                          className={`px-3 py-1.5 text-[11px] rounded-md border transition-colors flex items-center gap-1 ${
-                            dec === 'loss'
-                              ? 'bg-red-700 text-white border-red-700'
-                              : 'bg-white border-line hover:bg-red-50 hover:border-red-500'
-                          }`}
-                        >
-                          🗑 Casse
-                        </button>
+                        {dec === 'partial' && (
+                          <div className="mt-2 flex items-center gap-2 pl-1">
+                            <label className="text-[11px] text-ink-mute">Combien cassés ?</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={totalQty}
+                              value={currentLossQty || ''}
+                              onChange={(e) => setLossQty(l.id, e.target.value)}
+                              placeholder="0"
+                              className="w-20 px-2 py-1 text-[12px] border border-amber-300 rounded focus:outline-none focus:border-amber-600"
+                            />
+                            <span className="text-[11px] text-ink-mute">/ {totalQty} (le reste = gardés)</span>
+                            {currentLossQty > 0 && currentLossQty <= totalQty && (
+                              <span className="text-[11px] text-amber-800 font-medium">
+                                → 🗑 {currentLossQty} cassés + ↓ {totalQty - currentLossQty} gardés
+                              </span>
+                            )}
+                            {currentLossQty > totalQty && (
+                              <span className="text-[11px] text-red-700 font-medium">⚠ Trop !</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
