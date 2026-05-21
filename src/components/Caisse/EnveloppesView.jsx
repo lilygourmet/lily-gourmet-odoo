@@ -51,10 +51,12 @@ export default function EnveloppesView({ user }) {
 
   // Enveloppes filtrées
   const filteredEnveloppes = useMemo(() => {
-    if (filter === 'all') return enveloppes
-    if (filter === 'unassigned') return enveloppes.filter(e => !e.destinataire_id)
-    return enveloppes.filter(e => String(e.destinataire_id) === String(filter))
-  }, [enveloppes, filter])
+    // Filtre d'abord par méthode de paiement (cash par défaut, cheque optionnel)
+    const byMethod = enveloppes.filter(e => (e.payment_method || 'cash') === paymentMethodFilter)
+    if (filter === 'all') return byMethod
+    if (filter === 'unassigned') return byMethod.filter(e => !e.destinataire_id)
+    return byMethod.filter(e => String(e.destinataire_id) === String(filter))
+  }, [enveloppes, filter, paymentMethodFilter])
 
   // Groupé par source
   const bySource = useMemo(() => {
@@ -122,6 +124,46 @@ export default function EnveloppesView({ user }) {
               fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
             }}>{m.label}</button>
         ))}
+      </div>
+
+      {/* Toggle Espèces / Chèques */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setPaymentMethodFilter('cash')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: 8,
+            border: paymentMethodFilter === 'cash' ? '1.5px solid #993556' : '0.5px solid #C4BFB6',
+            background: paymentMethodFilter === 'cash' ? '#993556' : 'white',
+            color: paymentMethodFilter === 'cash' ? 'white' : '#3E3A33',
+            fontSize: 13,
+            fontWeight: paymentMethodFilter === 'cash' ? 500 : 400,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          💵 Espèces
+        </button>
+        <button
+          type="button"
+          onClick={() => setPaymentMethodFilter('cheque')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: 8,
+            border: paymentMethodFilter === 'cheque' ? '1.5px solid #993556' : '0.5px solid #C4BFB6',
+            background: paymentMethodFilter === 'cheque' ? '#993556' : 'white',
+            color: paymentMethodFilter === 'cheque' ? 'white' : '#3E3A33',
+            fontSize: 13,
+            fontWeight: paymentMethodFilter === 'cheque' ? 500 : 400,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          📑 Chèques
+        </button>
       </div>
 
       {/* Filtres rapides */}
