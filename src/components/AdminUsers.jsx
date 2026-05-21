@@ -876,12 +876,14 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             checked={isAdmin || formData.permStockGS}
             onChange={v => update('permStockGS', v)}
           />
-          <PermCheck
+          <PermCheckbox
+            id="perm-caisse"
             label="💰 Caisse (vue limitée — pour Meriem)"
             checked={isAdmin || formData.permCaisse}
             onChange={v => update('permCaisse', v)}
           />
-          <PermCheck
+          <PermCheckbox
+            id="perm-caisse-admin"
             label="💰 Caisse · Admin (accès complet au module)"
             checked={isAdmin || formData.permCaisseAdmin}
             onChange={v => update('permCaisseAdmin', v)}
