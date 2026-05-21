@@ -656,3 +656,124 @@ export async function getPreuveSignedUrl(path) {
   const { data } = await supabase.storage.from('caisse-preuves').createSignedUrl(path, 60 * 60)
   return data?.signedUrl
 }
+
+// ============================================================
+// AVANCES (Meriem avance pour Layla/Nezha)
+// ============================================================
+
+/**
+ * Liste les avances (avec join sur le bénéficiaire et le payeur)
+ * @param {Object} opts - { beneficiaryId?, status? }
+ *   - status : 'all' | 'pending' | 'refunded'
+ */
+export async function loadAvances({ beneficiaryId, status = 'pending' } = {}) {
+  let q = supabase
+    .from('caisse_avances')
+    .select(`
+      *,
+      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key),
+      payer:profiles!caisse_avances_payer_id_fkey(id, username, full_name)
+    `)
+    .order('avance_date', { ascending: false })
+
+  if (beneficiaryId) q = q.eq('beneficiary_id', beneficiaryId)
+  if (status === 'pending')  q = q.is('refunded_at', null)
+  if (status === 'refunded') q = q.not('refunded_at', 'is', null)
+
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Récap par bénéficiaire : combien chacun doit (avances non remboursées)
+ * Retourne [{ beneficiary_id, name, color_key, total_due, count }]
+ */
+export async function loadAvancesSummary() {
+  const { data, error } = await supabase
+    .from('caisse_avances')
+    .select(`
+      amount,
+      beneficiary_id,
+      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key)
+    `)
+    .is('refunded_at', null)
+
+  if (error) throw error
+
+  const map = {}
+  for (const a of (data || [])) {
+    const key = a.beneficiary_id
+    if (!map[key]) {
+      map[key] = {
+        beneficiary_id: key,
+        name: a.beneficiaire?.name || '?',
+        color_key: a.beneficiaire?.color_key,
+        total_due: 0,
+        count: 0,
+      }
+    }
+    map[key].total_due += Number(a.amount) || 0
+    map[key].count += 1
+  }
+  return Object.values(map)
+}
+
+/**
+ * Crée une nouvelle avance
+ */
+export async function createAvance({ payerId, beneficiaryId, amount, motif, avanceDate, userId }) {
+  const { data, error } = await supabase
+    .from('caisse_avances')
+    .insert({
+      payer_id: payerId,
+      beneficiary_id: beneficiaryId,
+      amount: Number(amount),
+      motif: motif || null,
+      avance_date: avanceDate || new Date().toISOString().slice(0, 10),
+      created_by: userId,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+/**
+ * Marque une avance comme remboursée
+ */
+export async function markAvanceRefunded(avanceId, note = null) {
+  const { data, error } = await supabase
+    .from('caisse_avances')
+    .update({
+      refunded_at: new Date().toISOString(),
+      refunded_note: note,
+    })
+    .eq('id', avanceId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+/**
+ * Annule un remboursement (au cas où erreur)
+ */
+export async function unmarkAvanceRefunded(avanceId) {
+  const { error } = await supabase
+    .from('caisse_avances')
+    .update({ refunded_at: null, refunded_note: null })
+    .eq('id', avanceId)
+  if (error) throw error
+}
+
+/**
+ * Supprime une avance (erreur de saisie)
+ */
+export async function deleteAvance(avanceId) {
+  const { error } = await supabase
+    .from('caisse_avances')
+    .delete()
+    .eq('id', avanceId)
+  if (error) throw error
+}

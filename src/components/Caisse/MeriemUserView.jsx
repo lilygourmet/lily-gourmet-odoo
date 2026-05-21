@@ -2,17 +2,21 @@ import { useState, useEffect } from 'react'
 import MeriemCaisse from './subviews/MeriemCaisse'
 import MeriemHamid from './subviews/MeriemHamid'
 import MeriemFactures from './subviews/MeriemFactures'
-import { loadHamidBalance, loadFacturesStats } from '../../lib/caisse'
+import MeriemAvances from './subviews/MeriemAvances'
+import { loadHamidBalance, loadFacturesStats, loadAvancesSummary } from '../../lib/caisse'
 import { fmtMoney, currentYear } from './_helpers'
 
 export default function MeriemUserView({ user }) {
   const [sub, setSub] = useState('caisse')
   const [hamidBal, setHamidBal] = useState(0)
   const [factStats, setFactStats] = useState({ countPending: 0 })
+  const [avancesTotal, setAvancesTotal] = useState(0)
 
   useEffect(() => { (async () => {
     setHamidBal(await loadHamidBalance())
     setFactStats(await loadFacturesStats(currentYear()))
+    const summary = await loadAvancesSummary()
+    setAvancesTotal(summary.reduce((s, x) => s + Number(x.total_due || 0), 0))
   })() }, [sub])
 
   return (
@@ -30,11 +34,15 @@ export default function MeriemUserView({ user }) {
         <PillTab active={sub === 'factures'} onClick={() => setSub('factures')}>
           📄 Factures {factStats.countPending > 0 && (<span style={{ fontSize: 10, background: '#FCE9E8', color: '#99201E', padding: '1px 6px', borderRadius: 999, marginLeft: 3 }}>{factStats.countPending}</span>)}
         </PillTab>
+        <PillTab active={sub === 'avances'} onClick={() => setSub('avances')}>
+          💸 Avances {avancesTotal > 0 && (<span style={{ fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '1px 6px', borderRadius: 999, marginLeft: 3 }}>{fmtMoney(avancesTotal).replace(' dh', '')}</span>)}
+        </PillTab>
       </div>
 
       {sub === 'caisse'   && <MeriemCaisse   user={user} />}
       {sub === 'hamid'    && <MeriemHamid    user={user} />}
       {sub === 'factures' && <MeriemFactures user={user} />}
+      {sub === 'avances'  && <MeriemAvances  user={user} />}
     </div>
   )
 }
