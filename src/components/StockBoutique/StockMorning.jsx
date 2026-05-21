@@ -155,8 +155,20 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
     })
   }, [todayItems])
 
-  const undecidedLeftovers = leftovers.filter(l => !decisions[l.id])
-  const allDecisionsMade = leftovers.length === 0 || undecidedLeftovers.length === 0
+  // Filtre les leftovers selon le mode (sucré / salé)
+  const filteredLeftovers = leftovers.filter(l => {
+    const name = (l.product_name || '').trim()
+    if (mode === 'sale') {
+      // Vitrine salé : aucun reste à propager
+      return false
+    }
+    // Vitrine sucré : E-, V-, MI-, et GS- avec "plateau" dans le nom
+    if (name.startsWith('E-') || name.startsWith('V-') || name.startsWith('MI-')) return true
+    if (name.startsWith('GS-') && name.toLowerCase().includes('plateau')) return true
+    return false
+  })
+  const undecidedLeftovers = filteredLeftovers.filter(l => !decisions[l.id])
+  const allDecisionsMade = filteredLeftovers.length === 0 || undecidedLeftovers.length === 0
   const totalNewToSend = Object.values(cart).reduce((s, v) => s + (v?.qty || 0), 0)
 
   function setDecision(leftoverId, decision) {
@@ -165,7 +177,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
 
   async function handleApplyLeftovers() {
     if (!stockDay) return
-    const list = leftovers.map(l => ({
+    const list = filteredLeftovers.map(l => ({
       leftoverItem: l,
       decision: decisions[l.id] || 'keep',
     }))
@@ -239,7 +251,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
             )}
 
             {/* SECTION 1 — RESTES D'HIER */}
-            {leftovers.length > 0 && !leftoversApplied && (
+            {filteredLeftovers.length > 0 && !leftoversApplied && (
               <div className="bg-white border border-line rounded-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-line flex items-center justify-between">
                   <div>
@@ -254,7 +266,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                 </div>
 
                 <div className="p-3 space-y-2">
-                  {leftovers.map(l => {
+                  {filteredLeftovers.map(l => {
                     const dec = decisions[l.id]
                     const nextLabel = NEXT_FRESHNESS_LABEL[l.freshness]
                     return (
@@ -311,7 +323,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                     disabled={!allDecisionsMade || sending}
                     className="px-4 py-2 bg-bordeaux text-cream rounded-md text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bordeaux-deep"
                   >
-                    {sending ? 'Application...' : `Appliquer décisions (${leftovers.length})`}
+                    {sending ? 'Application...' : `Appliquer décisions (${filteredLeftovers.length})`}
                   </button>
                 </div>
               </div>
