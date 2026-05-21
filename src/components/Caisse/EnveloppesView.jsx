@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe } from '../../lib/caisse'
+import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, envStyle, COLOR_PALETTE } from './_helpers'
 import AttributionModal from './modals/AttributionModal'
 import DetailReaffecterModal from './modals/DetailReaffecterModal'
+import AuditLogPanel from './AuditLogPanel'
 
 export default function EnveloppesView({ user }) {
   const [year, setYear]   = useState(currentYear())
@@ -88,6 +89,14 @@ export default function EnveloppesView({ user }) {
   async function handleReassign(envId, destId, assignedDate) {
     try {
       await reassignEnveloppe(envId, destId, user.id, assignedDate)
+      setDetailEnv(null)
+      await reload()
+    } catch (e) { alert(e.message) }
+  }
+
+  async function handleUpdateDate(envId, newDate) {
+    try {
+      await updateEnveloppeAssignedDate(envId, newDate, user.id)
       setDetailEnv(null)
       await reload()
     } catch (e) { alert(e.message) }
@@ -214,6 +223,10 @@ export default function EnveloppesView({ user }) {
         </div>
       </div>
 
+      <AuditLogPanel entityType="enveloppe" title="📜 Historique des affectations" />
+
+      <AuditLogPanel entityType="enveloppe" title="📜 Historique des affectations" />
+
       {attributionEnv && (
         <AttributionModal env={attributionEnv} destinataires={destinataires}
           onClose={() => setAttributionEnv(null)}
@@ -223,7 +236,8 @@ export default function EnveloppesView({ user }) {
         <DetailReaffecterModal env={detailEnv} destinataires={destinataires}
           onClose={() => setDetailEnv(null)}
           onReassign={(destId) => handleReassign(detailEnv.id, destId)}
-          onUnassign={() => handleUnassign(detailEnv.id)} />
+          onUnassign={() => handleUnassign(detailEnv.id)}
+          onUpdateDate={(newDate) => handleUpdateDate(detailEnv.id, newDate)} />
       )}
     </div>
   )

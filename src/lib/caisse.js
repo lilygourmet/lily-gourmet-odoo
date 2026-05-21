@@ -228,6 +228,46 @@ export async function updateEnveloppeDate(envId, newDate) {
   if (error) throw error
 }
 
+/**
+ * Met à jour la date d'affectation effective (= mois dans lequel l'enveloppe apparaît).
+ * Met aussi à jour le mvt_date du mouvement caisse lié (caisse-gérée) pour qu'il soit cohérent.
+ */
+export async function updateEnveloppeAssignedDate(envId, newAssignedDate, actorId = null) {
+  // 1. Récupérer l'état avant
+  const { data: before } = await supabase
+    .from('caisse_enveloppes')
+    .select('id, assigned_date, source, session_date, destinataire:caisse_destinataires(name, type, linked_caisse_owner)')
+    .eq('id', envId)
+    .single()
+
+  // 2. Mettre à jour assigned_date
+  const { error } = await supabase
+    .from('caisse_enveloppes')
+    .update({ assigned_date: newAssignedDate })
+    .eq('id', envId)
+  if (error) throw error
+
+  // 3. Si caisse-gérée, mettre à jour le mvt_date du mouvement caisse lié
+  if (before?.destinataire?.type === 'caisse_geree') {
+    await supabase
+      .from('caisse_mouvements')
+      .update({ mvt_date: newAssignedDate })
+      .eq('source_type', 'enveloppe')
+      .eq('source_ref', envId)
+  }
+
+  // 4. Log
+  await logAction({
+    entityType: 'enveloppe',
+    entityId: envId,
+    action: 'update_date',
+    description: `Date effective changée pour ${before?.source || ''} (${before?.session_date || ''}) → ${newAssignedDate}`,
+    before: { assigned_date: before?.assigned_date },
+    after: { assigned_date: newAssignedDate },
+    actorId,
+  })
+}
+
 export async function setEnveloppeProof(envId, proofUrl, proofDate, amountProof = null, noteProof = null, actorId = null) {
   const { error } = await supabase
     .from('caisse_enveloppes')

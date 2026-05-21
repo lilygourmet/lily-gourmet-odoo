@@ -4,12 +4,14 @@ import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO
 import AjoutSortieModal from '../modals/AjoutSortieModal'
 import AjoutEntreeModal from '../modals/AjoutEntreeModal'
 import ClotureMoisModal from '../modals/ClotureMoisModal'
+import AuditLogPanel from '../AuditLogPanel'
 
 export default function MeriemCaisse({ user }) {
   return <CaisseGenericView caisseOwner="meriem" user={user} accent={{ bg: '#EAF3DE', text: '#27500A', border: '#97C459' }} />
 }
 
 export function CaisseGenericView({ caisseOwner, user, accent }) {
+  const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
   const [year, setYear] = useState(currentYear())
   const [month, setMonth] = useState(currentMonth())
   const [mouvements, setMouvements] = useState([])
@@ -64,13 +66,13 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
     setShowCloture(false); reload()
   }
   async function handleDeleteMvt(id) {
-    if (!confirm('Supprimer ce mouvement ?')) return
-    await deleteMouvement(id); reload()
+    if (!confirm('Supprimer ce mouvement ? (l\'action sera enregistrée dans l\'historique)')) return
+    await deleteMouvement(id, user.id); reload()
   }
   async function handleEditAmount(mvt) {
     const nv = prompt('Nouveau montant :', mvt.amount)
     if (!nv || isNaN(Number(nv))) return
-    await updateMouvement(mvt.id, { amount: Number(nv) })
+    await updateMouvement(mvt.id, { amount: Number(nv) }, user.id)
     reload()
   }
 
@@ -146,17 +148,23 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           <div style={{ textAlign: 'right', fontWeight: 500, color: mvt.type === 'entree' ? '#1D7A5C' : '#99201E' }}>
             {mvt.type === 'entree' ? '+ ' : '− '}{fmtMoney(Math.abs(mvt.amount)).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span>
           </div>
-          <div>
-            {!mvt.month_locked && (
-              <button onClick={() => {
-                const action = prompt('Tape "m" pour modifier le montant, "s" pour supprimer :', '')
-                if (action === 'm') handleEditAmount(mvt)
-                else if (action === 's') handleDeleteMvt(mvt.id)
-              }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#9B968D' }}>⋮</button>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+            {!mvt.month_locked && isAdmin && (
+              <>
+                <button onClick={() => handleEditAmount(mvt)}
+                  title="Modifier le montant"
+                  style={{ background: 'transparent', border: '1px solid #E8E2D8', cursor: 'pointer', color: '#6F6A60', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>✎</button>
+                <button onClick={() => handleDeleteMvt(mvt.id)}
+                  title="Supprimer ce mouvement"
+                  style={{ background: 'transparent', border: '1px solid #F2D1D0', cursor: 'pointer', color: '#99201E', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>🗑</button>
+              </>
             )}
           </div>
         </div>
       ))}
+
+      {/* Log déroulable en bas */}
+      <AuditLogPanel entityType="mouvement" title="📜 Historique des mouvements caisse" />
 
       {showSortie && (
         <AjoutSortieModal categories={categories} onClose={() => setShowSortie(false)} onSubmit={handleAddSortie} caisseOwner={caisseOwner} />

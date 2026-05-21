@@ -8,6 +8,7 @@ import {
   unmarkAvanceRefunded,
   deleteAvance,
 } from '../../../lib/caisse'
+import AuditLogPanel from '../AuditLogPanel'
 import { fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
 
 export default function MeriemAvances({ user }) {
@@ -159,6 +160,10 @@ export default function MeriemAvances({ user }) {
           </div>
         )
       })}
+
+<AuditLogPanel entityType="avance" title="📜 Historique des avances" />
+
+<AuditLogPanel entityType="avance" title="📜 Historique des avances" />
 
       {showNew && <NewAvanceModal persoDests={persoDests} onClose={() => setShowNew(false)} onCreate={handleCreate} />}
     </div>

@@ -1,3 +1,4 @@
+import AuditLogPanel from './AuditLogPanel'
 import { useState, useEffect } from 'react'
 import { loadSalairesYear, loadSalaireMonth, createSalaire, markSalairePaye, loadSalairesDefaut, deleteSalaire, loadSalaireEnveloppes } from '../../lib/caisse'
 import { currentYear, currentMonth, fmtMoney, fmtMois, SALAIRE_STATUS_LABELS, SALAIRE_COLORS } from './_helpers'
