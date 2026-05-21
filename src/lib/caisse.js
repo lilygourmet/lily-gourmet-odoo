@@ -3,6 +3,41 @@ import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
 
 // ============================================================
+// AUDIT LOG (helper - silencieux, ne fait jamais planter l'appel parent)
+// ============================================================
+
+async function logAction({ entityType, entityId, action, description, amount = null, before = null, after = null, actorId = null }) {
+  try {
+    await supabase.from('caisse_audit_log').insert({
+      entity_type: entityType,
+      entity_id: entityId != null ? String(entityId) : null,
+      action,
+      description,
+      amount,
+      before_value: before,
+      after_value: after,
+      actor_id: actorId,
+    })
+  } catch (e) {
+    console.warn('[caisse_audit_log] log failed:', e?.message)
+  }
+}
+
+export async function loadAuditLog({ entityType = null, entityId = null, actorId = null, limit = 100, offset = 0 } = {}) {
+  let q = supabase
+    .from('caisse_audit_log')
+    .select('*, actor:profiles!caisse_audit_log_actor_id_fkey(id, username, full_name)')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+  if (entityType) q = q.eq('entity_type', entityType)
+  if (entityId)   q = q.eq('entity_id', String(entityId))
+  if (actorId)    q = q.eq('actor_id', actorId)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+// ============================================================
 // DESTINATAIRES
 // ============================================================
 
@@ -46,15 +81,35 @@ export async function deleteDestinataire(id) {
 
 export async function loadEnveloppesByMonth(year, month) {
   const { start, end } = monthBounds(year, month)
-  const { data, error } = await supabase
-    .from('caisse_enveloppes')
-    .select('*, destinataire:caisse_destinataires(*), assigner:profiles!caisse_enveloppes_assigned_by_fkey(username, full_name)')
-    .gte('session_date', start)
-    .lt('session_date', end)
-    .order('session_date', { ascending: true })
-    .order('source')
-  if (error) throw error
-  return data || []
+  const sel = '*, destinataire:caisse_destinataires(*), assigner:profiles!caisse_enveloppes_assigned_by_fkey(username, full_name)'
+
+  // On charge 2 ensembles : sessions du mois (sans assigned_date) + affectations du mois
+  const [r1, r2] = await Promise.all([
+    supabase.from('caisse_enveloppes').select(sel)
+      .gte('session_date', start).lt('session_date', end)
+      .order('session_date', { ascending: true }).order('source'),
+    supabase.from('caisse_enveloppes').select(sel)
+      .gte('assigned_date', start).lt('assigned_date', end)
+      .order('assigned_date', { ascending: true }).order('source'),
+  ])
+  if (r1.error) throw r1.error
+  if (r2.error) throw r2.error
+
+  // Fusion : une enveloppe avec assigned_date n'apparaît que dans son mois d'affectation
+  const map = new Map()
+  for (const e of (r1.data || [])) {
+    if (!e.assigned_date) map.set(e.id, e)
+  }
+  for (const e of (r2.data || [])) {
+    map.set(e.id, e)
+  }
+  const list = Array.from(map.values())
+  list.sort((a, b) => {
+    const da = a.assigned_date || a.session_date
+    const db = b.assigned_date || b.session_date
+    return da.localeCompare(db) || (a.source || '').localeCompare(b.source || '')
+  })
+  return list
 }
 
 export async function loadEnveloppesUnassigned() {
@@ -80,14 +135,16 @@ export async function loadEnveloppesByDestinataireMonth(destinataireId, year, mo
   return data || []
 }
 
-export async function assignEnveloppe(envId, destinataireId, userId) {
+export async function assignEnveloppe(envId, destinataireId, userId, assignedDate = null) {
+  const effectiveDate = assignedDate || todayISO()
   const { error } = await supabase
     .from('caisse_enveloppes')
     .update({
       destinataire_id: destinataireId,
       assigned_at: new Date().toISOString(),
       assigned_by: userId,
-      proof_date: todayISO(), // date par défaut = jour du clic
+      assigned_date: effectiveDate,
+      proof_date: effectiveDate, // date par défaut = date d'affectation
     })
     .eq('id', envId)
   if (error) throw error
@@ -106,13 +163,31 @@ export async function assignEnveloppe(envId, destinataireId, userId) {
       source_ref: env.id,
       amount: env.amount_cash,
       label: `Enveloppe ${env.source} · ${env.session_date}`,
-      mvt_date: env.session_date,
+      mvt_date: effectiveDate, // date d'effet = date d'affectation
       created_by: userId,
     })
   }
+
+  // Log
+  await logAction({
+    entityType: 'enveloppe',
+    entityId: envId,
+    action: 'assign',
+    description: `Enveloppe ${env?.source || ''} (${env?.session_date || ''}) → ${env?.destinataire?.name || '?'} le ${effectiveDate}`,
+    amount: env?.amount_cash,
+    after: { destinataire_id: destinataireId, assigned_date: effectiveDate },
+    actorId: userId,
+  })
 }
 
-export async function unassignEnveloppe(envId) {
+export async function unassignEnveloppe(envId, actorId = null) {
+  // Récupérer info avant pour le log
+  const { data: before } = await supabase
+    .from('caisse_enveloppes')
+    .select('*, destinataire:caisse_destinataires(name)')
+    .eq('id', envId)
+    .single()
+
   // Si une entrée caisse-gérée a été créée, on la supprime
   await supabase.from('caisse_mouvements').delete().eq('source_type', 'enveloppe').eq('source_ref', envId)
   const { error } = await supabase
@@ -121,17 +196,28 @@ export async function unassignEnveloppe(envId) {
       destinataire_id: null,
       assigned_at: null,
       assigned_by: null,
+      assigned_date: null,
       proof_url: null,
       proof_date: null,
       proof_uploaded_at: null,
     })
     .eq('id', envId)
   if (error) throw error
+
+  await logAction({
+    entityType: 'enveloppe',
+    entityId: envId,
+    action: 'unassign',
+    description: `Désaffectation enveloppe ${before?.source || ''} (${before?.session_date || ''}) — était sur ${before?.destinataire?.name || '?'}`,
+    amount: before?.amount_cash,
+    before: { destinataire_id: before?.destinataire_id, assigned_date: before?.assigned_date },
+    actorId,
+  })
 }
 
-export async function reassignEnveloppe(envId, newDestinataireId, userId) {
-  await unassignEnveloppe(envId)
-  await assignEnveloppe(envId, newDestinataireId, userId)
+export async function reassignEnveloppe(envId, newDestinataireId, userId, assignedDate = null) {
+  await unassignEnveloppe(envId, userId)
+  await assignEnveloppe(envId, newDestinataireId, userId, assignedDate)
 }
 
 export async function updateEnveloppeDate(envId, newDate) {
@@ -142,7 +228,7 @@ export async function updateEnveloppeDate(envId, newDate) {
   if (error) throw error
 }
 
-export async function setEnveloppeProof(envId, proofUrl, proofDate, amountProof = null, noteProof = null) {
+export async function setEnveloppeProof(envId, proofUrl, proofDate, amountProof = null, noteProof = null, actorId = null) {
   const { error } = await supabase
     .from('caisse_enveloppes')
     .update({
@@ -154,6 +240,21 @@ export async function setEnveloppeProof(envId, proofUrl, proofDate, amountProof 
     })
     .eq('id', envId)
   if (error) throw error
+
+  const { data: env } = await supabase
+    .from('caisse_enveloppes')
+    .select('source, session_date, destinataire:caisse_destinataires(name)')
+    .eq('id', envId)
+    .single()
+  await logAction({
+    entityType: 'enveloppe',
+    entityId: envId,
+    action: 'proof_upload',
+    description: `Preuve déposée pour ${env?.source || ''} (${env?.session_date || ''}) → ${env?.destinataire?.name || '?'} le ${proofDate}`,
+    amount: amountProof,
+    after: { proof_url: proofUrl, proof_date: proofDate, amount_proof: amountProof, note_proof: noteProof },
+    actorId,
+  })
 }
 
 // Pour le suivi banque/perso
@@ -241,17 +342,50 @@ export async function addMouvement({ caisseOwner, type, sourceType, amount, cate
     .select()
     .single()
   if (error) throw error
+
+  // Ne pas logger les mouvements auto liés à une enveloppe ou à une avance (déjà loggués par le parent)
+  if (sourceType !== 'enveloppe' && sourceType !== 'avance') {
+    await logAction({
+      entityType: 'mouvement',
+      entityId: data.id,
+      action: 'create',
+      description: `${type === 'entree' ? '↓ Entrée' : '↑ Sortie'} caisse ${caisseOwner} : ${label}${category ? ' · ' + category : ''}`,
+      amount: type === 'sortie' ? -Number(amount) : Number(amount),
+      after: { caisse_owner: caisseOwner, type, amount, category, label, mvt_date: mvtDate },
+      actorId: userId,
+    })
+  }
   return data
 }
 
-export async function updateMouvement(id, updates) {
+export async function updateMouvement(id, updates, actorId = null) {
+  const { data: before } = await supabase.from('caisse_mouvements').select('*').eq('id', id).single()
   const { error } = await supabase.from('caisse_mouvements').update(updates).eq('id', id)
   if (error) throw error
+  await logAction({
+    entityType: 'mouvement',
+    entityId: id,
+    action: 'update',
+    description: `Modification mouvement : ${before?.label || ''}`,
+    amount: updates?.amount != null ? Number(updates.amount) : before?.amount,
+    before, after: updates,
+    actorId,
+  })
 }
 
-export async function deleteMouvement(id) {
+export async function deleteMouvement(id, actorId = null) {
+  const { data: before } = await supabase.from('caisse_mouvements').select('*').eq('id', id).single()
   const { error } = await supabase.from('caisse_mouvements').delete().eq('id', id)
   if (error) throw error
+  await logAction({
+    entityType: 'mouvement',
+    entityId: id,
+    action: 'delete',
+    description: `Suppression mouvement caisse ${before?.caisse_owner || ''} : ${before?.label || ''}`,
+    amount: before?.amount,
+    before,
+    actorId,
+  })
 }
 
 // ============================================================
@@ -563,14 +697,32 @@ export async function markSalairePaye(salaireId, userId) {
         userId,
       })
     }
-    // Si c'est nezha_perso ou layla_perso, c'est juste un tracking → pas de caisse à créditer pour l'instant
   }
+  await logAction({
+    entityType: 'salaire',
+    entityId: salaireId,
+    action: 'pay',
+    description: `Salaire ${sal.beneficiaire} ${sal.month}/${sal.year} payé`,
+    amount: sal.target_amount,
+    after: { status: 'paye' },
+    actorId: userId,
+  })
 }
 
-export async function deleteSalaire(salaireId) {
+export async function deleteSalaire(salaireId, actorId = null) {
+  const { data: before } = await supabase.from('caisse_salaires').select('*').eq('id', salaireId).single()
   // Détache les enveloppes d'abord
   await supabase.from('caisse_enveloppes').update({ salaire_id: null }).eq('salaire_id', salaireId)
   await supabase.from('caisse_salaires').delete().eq('id', salaireId)
+  await logAction({
+    entityType: 'salaire',
+    entityId: salaireId,
+    action: 'delete',
+    description: `Suppression salaire ${before?.beneficiaire || ''} ${before?.month || ''}/${before?.year || ''}`,
+    amount: before?.target_amount,
+    before,
+    actorId,
+  })
 }
 
 // ============================================================
@@ -591,6 +743,15 @@ export async function cloturerMois({ caisseOwner, year, month, balance, userId }
     .eq('caisse_owner', caisseOwner)
     .gte('mvt_date', start)
     .lt('mvt_date', end)
+  await logAction({
+    entityType: 'cloture',
+    entityId: `${caisseOwner}-${year}-${month}`,
+    action: 'close_month',
+    description: `Clôture caisse ${caisseOwner} pour ${month}/${year} (solde ${balance})`,
+    amount: balance,
+    after: { caisse_owner: caisseOwner, year, month, balance },
+    actorId: userId,
+  })
 }
 
 export async function loadClotures(caisseOwner) {
@@ -730,7 +891,7 @@ export async function createAvance({ payerId, beneficiaryId, beneficiaryName, am
   const mvt = await addMouvement({
     caisseOwner: 'meriem',
     type: 'sortie',
-    sourceType: 'manuelle',
+    sourceType: 'avance',
     amount: Number(amount),
     category: categoryName,
     label: labelSortie,
@@ -755,10 +916,18 @@ export async function createAvance({ payerId, beneficiaryId, beneficiaryName, am
     .single()
 
   if (error) {
-    // Si l'insert de l'avance échoue, on supprime le mouvement créé (rollback manuel)
     try { await deleteMouvement(mvt.id) } catch (e) { console.error('rollback mouvement:', e) }
     throw error
   }
+  await logAction({
+    entityType: 'avance',
+    entityId: data.id,
+    action: 'create',
+    description: `💸 Avance pour ${beneficiaryName} : ${Number(amount)} dh${motif ? ' (' + motif + ')' : ''}`,
+    amount: Number(amount),
+    after: { beneficiary_id: beneficiaryId, amount, motif, avance_date: avanceDate },
+    actorId: userId,
+  })
   return data
 }
 
@@ -788,7 +957,7 @@ export async function markAvanceRefunded(avanceId, note = null, userId = null) {
   const mvt = await addMouvement({
     caisseOwner: 'meriem',
     type: 'entree',
-    sourceType: 'manuelle',
+    sourceType: 'avance',
     amount: Number(avance.amount),
     category: categoryName,
     label: labelEntree,
@@ -813,17 +982,26 @@ export async function markAvanceRefunded(avanceId, note = null, userId = null) {
     try { await deleteMouvement(mvt.id) } catch (e) { console.error('rollback mouvement:', e) }
     throw error
   }
+  await logAction({
+    entityType: 'avance',
+    entityId: avanceId,
+    action: 'refund',
+    description: `💸 Avance ${benefName} remboursée${note ? ' (' + note + ')' : ''}`,
+    amount: Number(avance.amount),
+    after: { refunded_at: data.refunded_at, refunded_note: note },
+    actorId: userId,
+  })
   return data
 }
 
 /**
  * Annule un remboursement : supprime le mouvement d'entrée et réinitialise
  */
-export async function unmarkAvanceRefunded(avanceId) {
+export async function unmarkAvanceRefunded(avanceId, actorId = null) {
   // 1. Charger l'avance pour récupérer entree_mouvement_id
   const { data: avance, error: errLoad } = await supabase
     .from('caisse_avances')
-    .select('entree_mouvement_id')
+    .select('entree_mouvement_id, amount, beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(name)')
     .eq('id', avanceId)
     .single()
   if (errLoad) throw errLoad
@@ -847,16 +1025,25 @@ export async function unmarkAvanceRefunded(avanceId) {
     })
     .eq('id', avanceId)
   if (error) throw error
+
+  await logAction({
+    entityType: 'avance',
+    entityId: avanceId,
+    action: 'unrefund',
+    description: `Remboursement annulé : ${avance.beneficiaire?.name || '?'} (${avance.amount} dh)`,
+    amount: avance?.amount,
+    actorId,
+  })
 }
 
 /**
  * Supprime une avance ET les mouvements caisse associés (erreur de saisie)
  */
-export async function deleteAvance(avanceId) {
-  // 1. Charger l'avance pour récupérer les IDs de mouvements liés
+export async function deleteAvance(avanceId, actorId = null) {
+  // 1. Charger l'avance pour récupérer les IDs de mouvements liés + info pour le log
   const { data: avance, error: errLoad } = await supabase
     .from('caisse_avances')
-    .select('sortie_mouvement_id, entree_mouvement_id')
+    .select('sortie_mouvement_id, entree_mouvement_id, amount, motif, beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(name)')
     .eq('id', avanceId)
     .single()
   if (errLoad) throw errLoad
@@ -875,4 +1062,14 @@ export async function deleteAvance(avanceId) {
   if (avance.entree_mouvement_id) {
     try { await deleteMouvement(avance.entree_mouvement_id) } catch (e) { console.warn('del entree:', e.message) }
   }
+
+  await logAction({
+    entityType: 'avance',
+    entityId: avanceId,
+    action: 'delete',
+    description: `Suppression avance : ${avance.beneficiaire?.name || '?'} (${avance.amount} dh)${avance.motif ? ' — ' + avance.motif : ''}`,
+    amount: avance?.amount,
+    before: avance,
+    actorId,
+  })
 }

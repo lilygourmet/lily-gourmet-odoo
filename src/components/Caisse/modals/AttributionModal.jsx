@@ -1,25 +1,51 @@
+import { useState } from 'react'
 import { fmtMoney, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
 
 export default function AttributionModal({ env, destinataires, onClose, onAssign }) {
+  const [assignedDate, setAssignedDate] = useState(new Date().toISOString().slice(0, 10))
+
   // Trier : caisse-gérée puis perso puis banque
   const sorted = [...destinataires].sort((a, b) => {
     const order = { caisse_geree: 1, perso: 2, banque: 3 }
     return (order[a.type] || 99) - (order[b.type] || 99) || a.position - b.position
   })
 
+  function handleAssign(destId) {
+    onAssign(destId, assignedDate)
+  }
+
   return (
     <Modal onClose={onClose} title="Affecter cette enveloppe">
-      <div style={{ background: '#F4F0EA', padding: '14px 16px', borderRadius: 8, marginBottom: 20 }}>
-        <div style={{ fontSize: 12, color: '#6F6A60' }}>{fmtDateLongue(env.session_date)} · {env.source}</div>
+      <div style={{ background: '#F4F0EA', padding: '14px 16px', borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: '#6F6A60' }}>Session POS : {fmtDateLongue(env.session_date)} · {env.source}</div>
         <div style={{ fontSize: 28, fontWeight: 500, lineHeight: 1, marginTop: 4 }}>{fmtMoney(env.amount_cash)}</div>
       </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', fontSize: 12, color: '#6F6A60', marginBottom: 6 }}>
+          📅 Date effective (mois où l'argent a été réellement pris/versé)
+        </label>
+        <input
+          type="date"
+          value={assignedDate}
+          onChange={(e) => setAssignedDate(e.target.value)}
+          style={{
+            width: '100%', padding: '8px 10px', fontSize: 13,
+            border: '1px solid #C4BFB6', borderRadius: 6, boxSizing: 'border-box',
+          }}
+        />
+        <div style={{ fontSize: 10, color: '#9B968D', marginTop: 4, fontStyle: 'italic' }}>
+          L'enveloppe apparaîtra dans le mois de cette date (pas dans le mois de la session POS)
+        </div>
+      </div>
+
       <div style={{ fontSize: 13, color: '#6F6A60', marginBottom: 10 }}>Choisir le destinataire :</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {sorted.map(d => {
           const c = COLOR_PALETTE[d.color_key] || COLOR_PALETTE.gris
           const fullWidth = d.type === 'banque' && sorted.filter(x => x.type === 'banque').length === 1
           return (
-            <button key={d.id} onClick={() => onAssign(d.id)} style={{
+            <button key={d.id} onClick={() => handleAssign(d.id)} style={{
               background: c.bg, color: c.text, border: `0.5px solid ${c.border}`,
               fontSize: 14, fontWeight: 500, padding: '16px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
               gridColumn: fullWidth ? 'span 2' : 'auto',

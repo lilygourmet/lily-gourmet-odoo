@@ -77,17 +77,17 @@ export default function EnveloppesView({ user }) {
     return map
   }, [filteredEnveloppes, sources])
 
-  async function handleAssign(envId, destId) {
+  async function handleAssign(envId, destId, assignedDate) {
     try {
-      await assignEnveloppe(envId, destId, user.id)
+      await assignEnveloppe(envId, destId, user.id, assignedDate)
       setAttributionEnv(null)
       await reload()
     } catch (e) { alert(e.message) }
   }
 
-  async function handleReassign(envId, destId) {
+  async function handleReassign(envId, destId, assignedDate) {
     try {
-      await reassignEnveloppe(envId, destId, user.id)
+      await reassignEnveloppe(envId, destId, user.id, assignedDate)
       setDetailEnv(null)
       await reload()
     } catch (e) { alert(e.message) }
@@ -217,7 +217,7 @@ export default function EnveloppesView({ user }) {
       {attributionEnv && (
         <AttributionModal env={attributionEnv} destinataires={destinataires}
           onClose={() => setAttributionEnv(null)}
-          onAssign={(destId) => handleAssign(attributionEnv.id, destId)} />
+          onAssign={(destId, date) => handleAssign(attributionEnv.id, destId, date)} />
       )}
       {detailEnv && (
         <DetailReaffecterModal env={detailEnv} destinataires={destinataires}
