@@ -192,9 +192,14 @@ function SalairesDefautSection() {
 function PosSessionsSection() {
   const [list, setList] = useState([])
   const [syncing, setSyncing] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  useEffect(() => { reload() }, [])
-  async function reload() { setList(await loadPosConfigs()) }
+  useEffect(() => { reload() }, [refreshKey])
+  async function reload() {
+    const data = await loadPosConfigs()
+    console.log('[PosSessionsSection] loaded', data?.length, 'configs')
+    setList(data || [])
+  }
 
   async function handleDetect() {
     setSyncing(true)
@@ -205,17 +210,19 @@ function PosSessionsSection() {
       if (json.error) {
         alert('Erreur : ' + json.error)
       } else {
-        await reload()
         if (json.configs && json.configs.length > 0) {
           alert(`✓ ${json.configs.length} session(s) POS détectée(s)`)
         }
+        // Force le reload via changement de key
+        setRefreshKey(k => k + 1)
       }
     } catch (e) { alert(e.message) }
     setSyncing(false)
   }
 
   async function handleToggle(id, active) {
-    await togglePosConfig(id, active); reload()
+    await togglePosConfig(id, active)
+    setRefreshKey(k => k + 1)
   }
 
   return (
