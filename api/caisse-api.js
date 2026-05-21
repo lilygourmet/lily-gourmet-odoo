@@ -131,10 +131,12 @@ async function actionSyncPos() {
   const cfgNameById = Object.fromEntries((cfgRows || []).map(c => [c.pos_config_id, c.name]))
   const useFilter = activeCfgIds.length > 0
 
+  // Filtre depuis janvier 2026 (date de mise en place de la caisse)
+  const baseDomain = [['state', '=', 'closed'], ['stop_at', '>=', '2026-01-01 00:00:00']]
   const sessionsDomain = useFilter
-    ? [['state', '=', 'closed'], ['config_id', 'in', activeCfgIds]]
-    : [['state', '=', 'closed']]
-  const sessionIds = await odooExec(uid, 'pos.session', 'search', [sessionsDomain], { limit: 200, order: 'stop_at desc' })
+    ? [...baseDomain, ['config_id', 'in', activeCfgIds]]
+    : baseDomain
+  const sessionIds = await odooExec(uid, 'pos.session', 'search', [sessionsDomain], { limit: 2000, order: 'stop_at asc' })
   if (!sessionIds || sessionIds.length === 0) {
     return { ok: true, created: 0, message: 'Aucune session fermée trouvée' }
   }
