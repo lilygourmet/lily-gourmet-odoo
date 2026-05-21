@@ -426,7 +426,8 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                     <thead>
                       <tr className="bg-cream-warm border-b border-line">
                         <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Article</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Hamza a apporté">Apporté</th>
+                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Hamza a annoncé envoyer">Apporté</th>
+                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Café dit avoir reçu">Reçu</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Restes d'hier propagés">Reste hier</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">Compté</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo actuel</th>
@@ -443,7 +444,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           if (cat !== lastCategory) {
                             rendered.push(
                               <tr key={`cat-${cat}`} className="bg-cream-warm/60">
-                                <td colSpan={7} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
+                                <td colSpan={8} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
                                   {cat}
                                 </td>
                               </tr>
@@ -476,7 +477,24 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning || '—'}</td>
+                              <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning_announced || '—'}</td>
+                              <td className="px-2 py-2 text-right tabular-nums">
+                                {(() => {
+                                  const recu = r.qty_morning_received || 0
+                                  const annonce = r.qty_morning_announced || 0
+                                  const diff = recu - annonce
+                                  if (recu === 0 && annonce === 0) return <span className="text-ink-mute">—</span>
+                                  if (diff === 0) return <span className="text-ink-mute">{recu}</span>
+                                  return (
+                                    <span>
+                                      <span className={diff > 0 ? 'text-green-700 font-medium' : 'text-red-700 font-medium'}>{recu}</span>
+                                      <span className={`ml-1 text-[9px] px-1 rounded ${diff > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        {diff > 0 ? '+' : ''}{diff}
+                                      </span>
+                                    </span>
+                                  )
+                                })()}
+                              </td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_leftover || '—'}</td>
                               <td className={`px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
                                 {isConflictRow ? <span className="text-red-700 italic">—</span> : effQty}

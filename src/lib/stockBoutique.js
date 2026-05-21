@@ -625,6 +625,12 @@ export async function buildAuditReport(stockDayId) {
     const morning = morningItems
       .filter(i => i.product_name === productName)
       .reduce((s, i) => s + (i.qty_received || i.qty_announced || 0), 0)
+    const morningAnnounced = morningItems
+      .filter(i => i.product_name === productName)
+      .reduce((s, i) => s + (i.qty_announced || 0), 0)
+    const morningReceived = morningItems
+      .filter(i => i.product_name === productName)
+      .reduce((s, i) => s + (i.qty_received || 0), 0)
     const leftover = leftoverItems
       .filter(i => i.product_name === productName)
       .reduce((s, i) => s + (i.qty_received || 0), 0)
@@ -642,6 +648,8 @@ export async function buildAuditReport(stockDayId) {
       qty_odoo_initial: odooInitial,
       qty_odoo_current: odooCurrent,
       qty_morning: morning,
+      qty_morning_announced: morningAnnounced,
+      qty_morning_received: morningReceived,
       qty_leftover: leftover,
       qty_expected_local: morning + leftover,
       gap_initial: gapInitial,
