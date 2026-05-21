@@ -122,6 +122,8 @@ function CategoryColumn({ caisseOwner, label, color }) {
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newEmoji, setNewEmoji] = useState('❓')
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({ emoji: '', name: '' })
 
   useEffect(() => { reload() }, [])
   async function reload() { setCats(await loadCategories(caisseOwner)) }
@@ -132,25 +134,54 @@ function CategoryColumn({ caisseOwner, label, color }) {
     setAdding(false); setNewName(''); setNewEmoji('❓'); reload()
   }
   async function handleDeactivate(id) {
+    if (!confirm('Désactiver cette catégorie ?')) return
     await updateCategorie(id, { active: false }); reload()
+  }
+  function startEdit(cat) {
+    setEditingId(cat.id)
+    setEditForm({ emoji: cat.emoji || '❓', name: cat.name })
+  }
+  async function saveEdit() {
+    if (!editForm.name) return
+    await updateCategorie(editingId, { emoji: editForm.emoji, name: editForm.name })
+    setEditingId(null); reload()
   }
 
   return (
     <div>
       <div style={{ background: color.bg, color: color.text, padding: '8px 12px', borderRadius: 8, marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{label}</div>
-      {cats.map(c => (
-        <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1fr 32px', gap: 8, alignItems: 'center', padding: '8px 12px', borderRadius: 8, marginBottom: 4, background: '#F4F0EA' }}>
-          <div style={{ fontSize: 13 }}>{c.emoji} {c.name}</div>
-          <button onClick={() => handleDeactivate(c.id)} style={iconBtn}>🗑</button>
-        </div>
-      ))}
+      {cats.map(c => {
+        if (editingId === c.id) {
+          return (
+            <div key={c.id} style={{ padding: 10, background: '#F9F6F1', borderRadius: 8, marginBottom: 4, border: '1px solid #993556' }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input type="text" value={editForm.emoji} onChange={e => setEditForm({ ...editForm, emoji: e.target.value })} style={{ ...inputStyle, width: 60, textAlign: 'center', fontSize: 16 }} />
+                <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={{ ...inputStyle, flex: 1 }} autoFocus />
+              </div>
+              <div style={{ fontSize: 10, color: '#9B968D', marginTop: 4 }}>💡 Astuce : Ctrl+Cmd+Espace pour le sélecteur d'emojis Mac</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <button onClick={() => setEditingId(null)} style={btnSlim}>Annuler</button>
+                <button onClick={saveEdit} style={btnPrimary}>Enregistrer</button>
+              </div>
+            </div>
+          )
+        }
+        return (
+          <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1fr 28px 28px', gap: 6, alignItems: 'center', padding: '8px 12px', borderRadius: 8, marginBottom: 4, background: '#F4F0EA' }}>
+            <div style={{ fontSize: 13 }}>{c.emoji} {c.name}</div>
+            <button onClick={() => startEdit(c)} style={iconBtn} title="Modifier">✎</button>
+            <button onClick={() => handleDeactivate(c.id)} style={iconBtn} title="Supprimer">🗑</button>
+          </div>
+        )
+      })}
       {!adding && <button onClick={() => setAdding(true)} style={{ ...addBtn, marginTop: 6 }}>+ Ajouter</button>}
       {adding && (
         <div style={{ marginTop: 8, padding: 10, background: '#F9F6F1', borderRadius: 8 }}>
           <div style={{ display: 'flex', gap: 6 }}>
-            <input type="text" placeholder="emoji" value={newEmoji} onChange={e => setNewEmoji(e.target.value)} style={{ ...inputStyle, width: 60 }} />
-            <input type="text" placeholder="Nom de la catégorie" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+            <input type="text" placeholder="emoji" value={newEmoji} onChange={e => setNewEmoji(e.target.value)} style={{ ...inputStyle, width: 60, textAlign: 'center', fontSize: 16 }} />
+            <input type="text" placeholder="Nom de la catégorie" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inputStyle, flex: 1 }} autoFocus />
           </div>
+          <div style={{ fontSize: 10, color: '#9B968D', marginTop: 4 }}>💡 Astuce : Ctrl+Cmd+Espace pour le sélecteur d'emojis Mac</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
             <button onClick={() => setAdding(false)} style={btnSlim}>Annuler</button>
             <button onClick={handleAdd} style={btnPrimary}>Créer</button>
