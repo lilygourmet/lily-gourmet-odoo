@@ -181,7 +181,7 @@ function SalairesDefautSection() {
         <div key={ben} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 200px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: '#F4F0EA' }}>
           <span style={{ fontSize: 18 }}>{ben === 'nezha' ? '🧡' : '🤎'}</span>
           <div style={{ fontSize: 13, fontWeight: 500 }}>{ben === 'nezha' ? 'Nezha' : 'Layla'}</div>
-          <input type="number" defaultValue={defaults[ben] || 0} onBlur={(e) => handleSave(ben, e.target.value)} style={inputStyle} />
+          <input key={defaults[ben]} type="number" defaultValue={defaults[ben] || 0} onBlur={(e) => handleSave(ben, e.target.value)} style={inputStyle} />
         </div>
       ))}
     </Section>
@@ -201,8 +201,15 @@ function PosSessionsSection() {
     try {
       const res = await fetch('/api/caisse-api?action=list-pos', { method: 'POST' })
       const json = await res.json()
-      if (json.error) alert('Erreur : ' + json.error)
-      else reload()
+      console.log('[detect-pos]', json)
+      if (json.error) {
+        alert('Erreur : ' + json.error)
+      } else {
+        await reload()
+        if (json.configs && json.configs.length > 0) {
+          alert(`✓ ${json.configs.length} session(s) POS détectée(s)`)
+        }
+      }
     } catch (e) { alert(e.message) }
     setSyncing(false)
   }
