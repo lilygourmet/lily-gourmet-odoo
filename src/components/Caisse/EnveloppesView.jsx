@@ -10,6 +10,7 @@ export default function EnveloppesView({ user }) {
   const [enveloppes, setEnveloppes] = useState([])
   const [destinataires, setDestinataires] = useState([])
   const [filter, setFilter] = useState('all') // 'all' | 'unassigned' | dest.id
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('cash') // 'cash' | 'cheque'
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [attributionEnv, setAttributionEnv] = useState(null)
@@ -43,18 +44,23 @@ export default function EnveloppesView({ user }) {
     setSyncing(false)
   }
 
-  // Sources distinctes du mois (Café, Boutique, etc.)
-  const sources = useMemo(() => {
-    const set = new Set(enveloppes.map(e => e.source))
-    return Array.from(set).sort()
-  }, [enveloppes])
+  // Enveloppes du mois filtrées par méthode de paiement (espèces ou chèques)
+  const envByMethod = useMemo(() => {
+    return enveloppes.filter(e => (e.payment_method || 'cash') === paymentMethodFilter)
+  }, [enveloppes, paymentMethodFilter])
 
-  // Enveloppes filtrées
+  // Sources distinctes du mois (Café, Boutique, etc.) sur les enveloppes filtrées par méthode
+  const sources = useMemo(() => {
+    const set = new Set(envByMethod.map(e => e.source))
+    return Array.from(set).sort()
+  }, [envByMethod])
+
+  // Enveloppes filtrées (méthode + destinataire)
   const filteredEnveloppes = useMemo(() => {
-    if (filter === 'all') return enveloppes
-    if (filter === 'unassigned') return enveloppes.filter(e => !e.destinataire_id)
-    return enveloppes.filter(e => String(e.destinataire_id) === String(filter))
-  }, [enveloppes, filter])
+    if (filter === 'all') return envByMethod
+    if (filter === 'unassigned') return envByMethod.filter(e => !e.destinataire_id)
+    return envByMethod.filter(e => String(e.destinataire_id) === String(filter))
+  }, [envByMethod, filter])
 
   // Groupé par source
   const bySource = useMemo(() => {
@@ -111,6 +117,24 @@ export default function EnveloppesView({ user }) {
         </button>
       </div>
 
+      {/* Toggle Espèces / Chèques */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setPaymentMethodFilter('cash')}
+          style={paymentMethodFilter === 'cash' ? toggleActiveStyle : toggleInactiveStyle}
+        >
+          💵 Espèces
+        </button>
+        <button
+          type="button"
+          onClick={() => setPaymentMethodFilter('cheque')}
+          style={paymentMethodFilter === 'cheque' ? toggleActiveStyle : toggleInactiveStyle}
+        >
+          📑 Chèques
+        </button>
+      </div>
+
       {/* Onglets mois */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
         {MOIS_TABS.map(m => (
@@ -139,7 +163,7 @@ export default function EnveloppesView({ user }) {
 
       {!loading && sources.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>
-          Aucune enveloppe pour {monthDisplay} {year}.<br />
+          Aucune enveloppe {paymentMethodFilter === 'cheque' ? 'chèque' : 'espèces'} pour {monthDisplay} {year}.<br />
           Cliquez sur <strong>Synchroniser</strong> pour récupérer les sessions POS fermées d'Odoo.
         </div>
       )}
@@ -238,3 +262,27 @@ function Chip({ active, onClick, children }) {
 
 const btnSlim   = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
 const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+
+const toggleActiveStyle = {
+  flex: 1,
+  padding: '10px 14px',
+  borderRadius: 8,
+  border: '1.5px solid #993556',
+  background: '#993556',
+  color: 'white',
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: 'pointer',
+}
+
+const toggleInactiveStyle = {
+  flex: 1,
+  padding: '10px 14px',
+  borderRadius: 8,
+  border: '0.5px solid #C4BFB6',
+  background: 'white',
+  color: '#3E3A33',
+  fontSize: 13,
+  fontWeight: 400,
+  cursor: 'pointer',
+}
