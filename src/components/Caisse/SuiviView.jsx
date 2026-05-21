@@ -28,10 +28,27 @@ function SubTabBtn({ active, onClick, children }) {
   )
 }
 
+// Pastille de méthode de paiement (cash ou cheque)
+function MethodPill({ method }) {
+  const isCheque = method === 'cheque'
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 10, padding: '3px 8px', borderRadius: 999, fontWeight: 500,
+      background: isCheque ? '#DCEBFB' : '#DCF0E2',
+      color:      isCheque ? '#0C447C' : '#085041',
+      border: isCheque ? '0.5px solid #B5D4F2' : '0.5px solid #B6E2C8',
+    }}>
+      {isCheque ? '📑 Chèque' : '💵 Espèces'}
+    </span>
+  )
+}
+
 function BanqueSection({ user }) {
   const [year, setYear]   = useState(currentYear())
   const [month, setMonth] = useState(currentMonth())
   const [statusFilter, setStatusFilter] = useState('pending')
+  const [methodFilter, setMethodFilter] = useState('all') // 'all' | 'cash' | 'cheque'
   const [list, setList] = useState([])
   const [uploadEnv, setUploadEnv] = useState(null)
   const [editDate, setEditDate] = useState({})
@@ -43,7 +60,17 @@ function BanqueSection({ user }) {
     setList(data)
   }
 
-  const total = useMemo(() => list.reduce((s, e) => s + Number(e.amount_cash), 0), [list])
+  // Filtrer par méthode de paiement côté client
+  const filteredList = useMemo(() => {
+    if (methodFilter === 'all') return list
+    return list.filter(e => (e.payment_method || 'cash') === methodFilter)
+  }, [list, methodFilter])
+
+  const total = useMemo(() => filteredList.reduce((s, e) => s + Number(e.amount_cash), 0), [filteredList])
+
+  // Comptage par méthode (pour afficher dans le filtre)
+  const countCash = useMemo(() => list.filter(e => (e.payment_method || 'cash') === 'cash').length, [list])
+  const countCheque = useMemo(() => list.filter(e => e.payment_method === 'cheque').length, [list])
 
   async function handleSaveDate(envId, newDate) {
     await updateEnveloppeDate(envId, newDate)
@@ -73,6 +100,20 @@ function BanqueSection({ user }) {
         ))}
       </div>
 
+      {/* Filtre méthode de paiement */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <button onClick={() => setMethodFilter('all')} style={methodFilterBtn(methodFilter === 'all')}>
+          Tout ({list.length})
+        </button>
+        <button onClick={() => setMethodFilter('cash')} style={methodFilterBtn(methodFilter === 'cash', 'cash')}>
+          💵 Espèces ({countCash})
+        </button>
+        <button onClick={() => setMethodFilter('cheque')} style={methodFilterBtn(methodFilter === 'cheque', 'cheque')}>
+          📑 Chèques ({countCheque})
+        </button>
+      </div>
+
+      {/* Filtre statut */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
         {['pending', 'done', 'all'].map(s => (
           <button key={s} onClick={() => setStatusFilter(s)} style={{
@@ -86,19 +127,21 @@ function BanqueSection({ user }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 16px', borderRadius: 8, marginBottom: 14, background: '#E6F1FB', color: '#0C447C' }}>
         <div style={{ fontSize: 15, fontWeight: 500 }}>🏦 Versements bancaires</div>
-        <div style={{ fontSize: 13 }}>{list.length} {statusFilter === 'pending' ? 'en attente' : ''} · {fmtMoney(total)}</div>
+        <div style={{ fontSize: 13 }}>{filteredList.length} {statusFilter === 'pending' ? 'en attente' : ''} · {fmtMoney(total)}</div>
       </div>
 
-      {list.length === 0 && (
+      {filteredList.length === 0 && (
         <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>
           Aucune enveloppe banque dans ce filtre.
         </div>
       )}
 
-      {list.map(env => (
+      {filteredList.map(env => (
         <div key={env.id} style={rowCard}>
           <div>
-            <div style={{ fontSize: 11, color: '#6F6A60' }}>Enveloppe</div>
+            <div style={{ fontSize: 11, color: '#6F6A60', display: 'flex', alignItems: 'center', gap: 6 }}>
+              Enveloppe <MethodPill method={env.payment_method || 'cash'} />
+            </div>
             <div style={{ fontSize: 16, fontWeight: 500 }}>{fmtMoney(env.amount_cash)}</div>
             <div style={{ fontSize: 11, color: '#6F6A60', marginTop: 2 }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
           </div>
@@ -169,14 +212,17 @@ function PersoSection({ user }) {
     setUploadEnv(null); reload()
   }
 
+  // Perso = espèces uniquement (les chèques vont tous à la Banque)
+  const cashOnly = useMemo(() => list.filter(e => (e.payment_method || 'cash') === 'cash'), [list])
+
   const byPerson = useMemo(() => {
     const map = {}
     persoDests.forEach(d => { map[d.id] = { dest: d, list: [] } })
-    list.forEach(e => {
+    cashOnly.forEach(e => {
       if (e.destinataire_id && map[e.destinataire_id]) map[e.destinataire_id].list.push(e)
     })
     return map
-  }, [list, persoDests])
+  }, [cashOnly, persoDests])
 
   return (
     <div>
@@ -267,5 +313,18 @@ function tabBtn(active, bg, txt, brd) {
     background: active ? bg    : '#F4F0EA',
     color:      active ? txt   : '#6F6A60',
     fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+  }
+}
+
+function methodFilterBtn(active, method) {
+  const cashActive = active && method === 'cash'
+  const chequeActive = active && method === 'cheque'
+  const allActive = active && !method
+  return {
+    fontSize: 12, padding: '6px 14px', borderRadius: 999, cursor: 'pointer', fontWeight: 500,
+    border: active ? '0.5px solid' : 'none',
+    borderColor: cashActive ? '#085041' : chequeActive ? '#0C447C' : '#3A3733',
+    background: cashActive ? '#DCF0E2' : chequeActive ? '#DCEBFB' : allActive ? '#3A3733' : '#F4F0EA',
+    color:      cashActive ? '#085041' : chequeActive ? '#0C447C' : allActive ? 'white' : '#6F6A60',
   }
 }
