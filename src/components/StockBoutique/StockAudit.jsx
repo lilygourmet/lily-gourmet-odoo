@@ -440,6 +440,15 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                         const rendered = []
                         let lastCategory = null
                         for (const r of report) {
+                          // Skip les lignes complètement vides (tout à 0 ou null)
+                          const allZero = (
+                            (!r.qty_morning_announced || r.qty_morning_announced === 0) &&
+                            (!r.qty_morning_received || r.qty_morning_received === 0) &&
+                            (!r.qty_leftover || r.qty_leftover === 0) &&
+                            (!r.qty_counted || r.qty_counted === 0) &&
+                            (!r.qty_odoo_current || r.qty_odoo_current === 0)
+                          )
+                          if (allZero) continue
                           const cat = r.category_label || 'Autres'
                           if (cat !== lastCategory) {
                             rendered.push(
