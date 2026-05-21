@@ -5,6 +5,20 @@ import { loadDestinataires, createDestinataire, updateDestinataire, deleteDestin
          loadPosConfigs, togglePosConfig } from '../../lib/caisse'
 import { COLOR_PALETTE, COLORS_BY_TYPE } from './_helpers'
 
+// Palette d'emojis pré-sélectionnés pour les catégories
+const EMOJI_PICKER = [
+  '🛒', '🍞', '🥐', '🥖', '🧀', '🥩', '🐟', '🥦',
+  '🚖', '🚗', '⛽', '📦', '🌍', '✈️',
+  '🔧', '🛠️', '⚙️', '🔌', '💡', '🪚',
+  '💼', '🧾', '💰', '💵', '💳', '🏦',
+  '💧', '🚿', '🔥', '❄️', '⚡',
+  '👤', '👥', '👶', '🧑‍🍳',
+  '🎁', '🎉', '☕', '🍰', '🧁',
+  '📱', '💻', '🖥️', '🖨️',
+  '🩹', '💊', '🏥',
+  '❓', '⚪', '🔴', '🟢', '🟡', '🔵',
+]
+
 export default function ParametresView({ user }) {
   return (
     <div>
@@ -117,6 +131,21 @@ function CategoriesSection() {
   )
 }
 
+function EmojiPicker({ selected, onSelect }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4, padding: 8, background: 'white', borderRadius: 8, border: '0.5px solid #E8E2D8', maxHeight: 140, overflowY: 'auto' }}>
+      {EMOJI_PICKER.map(em => (
+        <button key={em} type="button" onClick={() => onSelect(em)} style={{
+          padding: 6, fontSize: 18, lineHeight: 1, cursor: 'pointer',
+          background: selected === em ? '#FAEEDA' : 'transparent',
+          border: selected === em ? '2px solid #EF9F27' : '1px solid transparent',
+          borderRadius: 6,
+        }}>{em}</button>
+      ))}
+    </div>
+  )
+}
+
 function CategoryColumn({ caisseOwner, label, color }) {
   const [cats, setCats] = useState([])
   const [adding, setAdding] = useState(false)
@@ -154,11 +183,9 @@ function CategoryColumn({ caisseOwner, label, color }) {
         if (editingId === c.id) {
           return (
             <div key={c.id} style={{ padding: 10, background: '#F9F6F1', borderRadius: 8, marginBottom: 4, border: '1px solid #993556' }}>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input type="text" value={editForm.emoji} onChange={e => setEditForm({ ...editForm, emoji: e.target.value })} style={{ ...inputStyle, width: 60, textAlign: 'center', fontSize: 16 }} />
-                <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={{ ...inputStyle, flex: 1 }} autoFocus />
-              </div>
-              <div style={{ fontSize: 10, color: '#9B968D', marginTop: 4 }}>💡 Astuce : Ctrl+Cmd+Espace pour le sélecteur d'emojis Mac</div>
+              <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={{ ...inputStyle, marginBottom: 8 }} placeholder="Nom" autoFocus />
+              <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4 }}>Emoji : <span style={{ fontSize: 18 }}>{editForm.emoji}</span></div>
+              <EmojiPicker selected={editForm.emoji} onSelect={(em) => setEditForm({ ...editForm, emoji: em })} />
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <button onClick={() => setEditingId(null)} style={btnSlim}>Annuler</button>
                 <button onClick={saveEdit} style={btnPrimary}>Enregistrer</button>
@@ -177,11 +204,9 @@ function CategoryColumn({ caisseOwner, label, color }) {
       {!adding && <button onClick={() => setAdding(true)} style={{ ...addBtn, marginTop: 6 }}>+ Ajouter</button>}
       {adding && (
         <div style={{ marginTop: 8, padding: 10, background: '#F9F6F1', borderRadius: 8 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input type="text" placeholder="emoji" value={newEmoji} onChange={e => setNewEmoji(e.target.value)} style={{ ...inputStyle, width: 60, textAlign: 'center', fontSize: 16 }} />
-            <input type="text" placeholder="Nom de la catégorie" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inputStyle, flex: 1 }} autoFocus />
-          </div>
-          <div style={{ fontSize: 10, color: '#9B968D', marginTop: 4 }}>💡 Astuce : Ctrl+Cmd+Espace pour le sélecteur d'emojis Mac</div>
+          <input type="text" placeholder="Nom de la catégorie" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} autoFocus />
+          <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4 }}>Emoji : <span style={{ fontSize: 18 }}>{newEmoji}</span></div>
+          <EmojiPicker selected={newEmoji} onSelect={setNewEmoji} />
           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
             <button onClick={() => setAdding(false)} style={btnSlim}>Annuler</button>
             <button onClick={handleAdd} style={btnPrimary}>Créer</button>
