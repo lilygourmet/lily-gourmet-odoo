@@ -1113,3 +1113,249 @@ export async function deleteAvance(avanceId, actorId = null) {
     actorId,
   })
 }
+// ============================================================
+// RECHERCHE TRANSVERSALE
+// ============================================================
+
+/**
+ * Recherche libre dans toutes les caisses :
+ * - mouvements (Meriem / Layla LG / Hamid)
+ * - enveloppes (sessions Odoo)
+ * - avances (Meriem → Layla / Nezha)
+ * - salaires (Nezha / Layla)
+ *
+ * Détecte automatiquement si la query est :
+ * - un montant (ex "250") → match exact ±0
+ * - une date (ex "2026-05-22", "22/05", "22/05/2026") → filtre sur la date de l'item
+ * - du texte → ilike %query% sur labels / catégories / motifs / noms
+ *
+ * Retourne une liste unifiée de résultats au format :
+ * {
+ *   kind: 'mouvement' | 'enveloppe' | 'avance' | 'salaire',
+ *   id: string,
+ *   date: 'YYYY-MM-DD',          // pour tri
+ *   amount: number,
+ *   type: 'entree' | 'sortie' | null, // pour signe
+ *   label: string,                // ligne principale
+ *   sublabel: string,             // info secondaire
+ *   colorKey: string,             // clé COLOR_PALETTE pour badge
+ *   raw: any,                     // objet brut
+ * }
+ */
+export async function searchCaisse(query) {
+  const q = (query || '').trim()
+  if (!q) return []
+
+  // --- 1. Détection du type de query --------------------------------
+  // Montant : nombre pur (avec virgule ou point)
+  const numNormalized = q.replace(',', '.').replace(/\s/g, '')
+  const isAmount = /^-?\d+(\.\d+)?$/.test(numNormalized)
+  const amount = isAmount ? Number(numNormalized) : null
+
+  // Date ISO complète (YYYY-MM-DD)
+  const isoMatch = q.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  // Date FR (DD/MM/YYYY ou DD/MM)
+  const frMatch  = q.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/)
+  let dateISO = null
+  if (isoMatch) {
+    dateISO = q
+  } else if (frMatch) {
+    const dd = frMatch[1].padStart(2, '0')
+    const mm = frMatch[2].padStart(2, '0')
+    let yyyy = frMatch[3]
+    if (!yyyy) yyyy = String(new Date().getFullYear())
+    else if (yyyy.length === 2) yyyy = '20' + yyyy
+    dateISO = `${yyyy}-${mm}-${dd}`
+  }
+  const isDate = !!dateISO
+
+  const isText = !isAmount && !isDate
+
+  // --- 2. Helpers ---------------------------------------------------
+  const escapeIlike = s => String(s).replace(/[%_]/g, ch => '\\' + ch)
+  const ilikePattern = `%${escapeIlike(q)}%`
+
+  // Pour chaque source on retourne [] si la query n'a pas de sens pour cette source.
+
+  // --- 3. Recherche MOUVEMENTS -------------------------------------
+  async function searchMouvements() {
+    let req = supabase.from('caisse_mouvements')
+      .select('*')
+      .order('mvt_date', { ascending: false })
+      .limit(200)
+
+    if (isAmount)      req = req.eq('amount', amount)
+    else if (isDate)   req = req.eq('mvt_date', dateISO)
+    else if (isText)   req = req.or(`label.ilike.${ilikePattern},category.ilike.${ilikePattern}`)
+
+    const { data, error } = await req
+    if (error) { console.warn('search mvt:', error.message); return [] }
+
+    const ownerColor = {
+      meriem:   'vert_clair',
+      layla_lg: 'vert_teal',
+      hamid:    'jaune',
+    }
+    const ownerName = {
+      meriem:   'Meriem',
+      layla_lg: 'Layla LG',
+      hamid:    'Hamid',
+    }
+
+    return (data || []).map(m => ({
+      kind: 'mouvement',
+      id: 'mvt-' + m.id,
+      date: m.mvt_date,
+      amount: Number(m.amount),
+      type: m.type,
+      label: m.label || (m.category || 'Mouvement'),
+      sublabel: `${m.type === 'entree' ? '↓ Entrée' : '↑ Sortie'} · Caisse ${ownerName[m.caisse_owner] || m.caisse_owner}${m.category ? ' · ' + m.category : ''}`,
+      colorKey: ownerColor[m.caisse_owner] || 'gris',
+      raw: m,
+    }))
+  }
+
+  // --- 4. Recherche ENVELOPPES -------------------------------------
+  async function searchEnveloppes() {
+    const sel = '*, destinataire:caisse_destinataires(*)'
+    let req = supabase.from('caisse_enveloppes').select(sel)
+      .order('session_date', { ascending: false })
+      .limit(200)
+
+    if (isAmount) {
+      // Match sur amount_cash OU amount_proof
+      req = req.or(`amount_cash.eq.${amount},amount_proof.eq.${amount}`)
+    } else if (isDate) {
+      req = req.or(`session_date.eq.${dateISO},assigned_date.eq.${dateISO},proof_date.eq.${dateISO}`)
+    } else if (isText) {
+      // Texte : on filtre côté client après requête générale (limite 200 récentes)
+      // car il n'y a pas de champ texte direct sur les enveloppes.
+      req = req.limit(500)
+    }
+
+    const { data, error } = await req
+    if (error) { console.warn('search env:', error.message); return [] }
+
+    let list = data || []
+    if (isText) {
+      const lc = q.toLowerCase()
+      list = list.filter(e => {
+        const src = (e.source || '').toLowerCase()
+        const dest = (e.destinataire?.name || '').toLowerCase()
+        const pm = (e.payment_method || '').toLowerCase()
+        const note = (e.note_proof || '').toLowerCase()
+        return src.includes(lc) || dest.includes(lc) || pm.includes(lc) || note.includes(lc)
+      }).slice(0, 200)
+    }
+
+    return list.map(e => ({
+      kind: 'enveloppe',
+      id: 'env-' + e.id,
+      date: e.assigned_date || e.session_date,
+      amount: Number(e.amount_cash || 0),
+      type: null,
+      label: `Enveloppe ${e.source || ''} · ${e.payment_method === 'cheque' ? 'Chèque' : 'Espèces'}`,
+      sublabel: e.destinataire?.name ? `→ ${e.destinataire.name}` : '⏳ À affecter',
+      colorKey: e.destinataire?.color_key || 'gris',
+      raw: e,
+    }))
+  }
+
+  // --- 5. Recherche AVANCES ----------------------------------------
+  async function searchAvances() {
+    const sel = `
+      *,
+      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key)
+    `
+    let req = supabase.from('caisse_avances').select(sel)
+      .order('avance_date', { ascending: false })
+      .limit(200)
+
+    if (isAmount)      req = req.eq('amount', amount)
+    else if (isDate)   req = req.or(`avance_date.eq.${dateISO},refunded_at.gte.${dateISO}T00:00:00,refunded_at.lt.${dateISO}T23:59:59`)
+    else if (isText)   req = req.ilike('motif', ilikePattern)
+
+    const { data, error } = await req
+    if (error) { console.warn('search avance:', error.message); return [] }
+
+    let list = data || []
+    // Pour le texte, on ajoute aussi un match sur le nom du bénéficiaire (côté client)
+    if (isText) {
+      const lc = q.toLowerCase()
+      // On refait une 2ème requête plus large pour matcher sur le nom bénéficiaire
+      const { data: extra } = await supabase.from('caisse_avances').select(sel)
+        .order('avance_date', { ascending: false }).limit(500)
+      const byName = (extra || []).filter(a => (a.beneficiaire?.name || '').toLowerCase().includes(lc))
+      const seen = new Set(list.map(a => a.id))
+      for (const a of byName) if (!seen.has(a.id)) list.push(a)
+      list = list.slice(0, 200)
+    }
+
+    return list.map(a => ({
+      kind: 'avance',
+      id: 'av-' + a.id,
+      date: a.avance_date,
+      amount: Number(a.amount),
+      type: null,
+      label: `Avance → ${a.beneficiaire?.name || '?'}`,
+      sublabel: `${a.motif || 'Sans motif'}${a.refunded_at ? ' · ✓ Remboursée' : ' · ⏳ En attente'}`,
+      colorKey: a.beneficiaire?.color_key || 'violet',
+      raw: a,
+    }))
+  }
+
+  // --- 6. Recherche SALAIRES ---------------------------------------
+  async function searchSalaires() {
+    let req = supabase.from('caisse_salaires').select('*')
+      .order('year', { ascending: false }).order('month', { ascending: false })
+      .limit(200)
+
+    if (isAmount) {
+      req = req.or(`target_amount.eq.${amount},reliquat_amount.eq.${amount}`)
+    } else if (isDate) {
+      // Une date isolée → match sur paid_at (le seul timestamp précis)
+      req = req.gte('paid_at', `${dateISO}T00:00:00`).lt('paid_at', `${dateISO}T23:59:59`)
+    } else if (isText) {
+      // Texte : match sur beneficiaire (nezha / layla) ou status
+      req = req.or(`beneficiaire.ilike.${ilikePattern},status.ilike.${ilikePattern},reliquat_destination.ilike.${ilikePattern}`)
+    }
+
+    const { data, error } = await req
+    if (error) { console.warn('search salaire:', error.message); return [] }
+
+    return (data || []).map(s => ({
+      kind: 'salaire',
+      id: 'sal-' + s.id,
+      date: s.paid_at ? s.paid_at.slice(0, 10) : `${s.year}-${String(s.month).padStart(2, '0')}-01`,
+      amount: Number(s.target_amount || 0),
+      type: null,
+      label: `Salaire ${s.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'}`,
+      sublabel: `${String(s.month).padStart(2, '0')}/${s.year} · ${s.status}${s.reliquat_amount ? ' · reliquat ' + s.reliquat_amount + ' dh' : ''}`,
+      colorKey: s.beneficiaire === 'nezha' ? 'orange' : 'corail',
+      raw: s,
+    }))
+  }
+
+  // --- 7. Lancement en parallèle + fusion --------------------------
+  const [mvts, envs, avs, sals] = await Promise.all([
+    searchMouvements(),
+    searchEnveloppes(),
+    searchAvances(),
+    searchSalaires(),
+  ])
+
+  const all = [...mvts, ...envs, ...avs, ...sals]
+  all.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+
+  return {
+    results: all.slice(0, 300),
+    counts: {
+      total: all.length,
+      mouvement: mvts.length,
+      enveloppe: envs.length,
+      avance:    avs.length,
+      salaire:   sals.length,
+    },
+    queryType: isAmount ? 'amount' : isDate ? 'date' : 'text',
+  }
+}

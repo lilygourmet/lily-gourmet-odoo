@@ -22,6 +22,7 @@ const STORAGE_KEY = 'caisse_active_tab'
 export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
   const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
 
+  // Si Meriem (perm_caisse seul) → vue ultra simplifiée
   if (!isAdmin && user?.perm_caisse) {
     return (
       <>
@@ -31,6 +32,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
     )
   }
 
+  // Admin → vue avec onglets
   const [tab, setTab] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEY) || 'enveloppes' } catch { return 'enveloppes' }
   })
