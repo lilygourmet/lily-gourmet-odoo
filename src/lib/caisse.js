@@ -339,7 +339,7 @@ export async function loadCaisseBalance(caisseOwner) {
   // Pour v1 : on prend tout depuis le début
   const { data: entrees } = await supabase
     .from('caisse_mouvements')
-    .select('amount')
+    .select('amount, reception_status')
     .eq('caisse_owner', caisseOwner)
     .eq('type', 'entree')
   const { data: sorties } = await supabase
@@ -347,14 +347,18 @@ export async function loadCaisseBalance(caisseOwner) {
     .select('amount')
     .eq('caisse_owner', caisseOwner)
     .eq('type', 'sortie')
-  const totalIn  = (entrees || []).reduce((s, m) => s + Number(m.amount), 0)
+  // Exclure les entrées en attente de validation
+  const totalIn  = (entrees || [])
+    .filter(m => m.reception_status !== 'pending')
+    .reduce((s, m) => s + Number(m.amount), 0)
   const totalOut = (sorties || []).reduce((s, m) => s + Number(m.amount), 0)
   return totalIn - totalOut
 }
 
 export async function loadMonthStats(caisseOwner, year, month) {
   const mvts = await loadMouvementsMonth(caisseOwner, year, month)
-  const entrees = mvts.filter(m => m.type === 'entree').reduce((s, m) => s + Number(m.amount), 0)
+  // Exclure les entrées 'pending' (en attente de validation)
+  const entrees = mvts.filter(m => m.type === 'entree' && m.reception_status !== 'pending').reduce((s, m) => s + Number(m.amount), 0)
   const sorties = mvts.filter(m => m.type === 'sortie').reduce((s, m) => s + Number(m.amount), 0)
   // Sorties par catégorie
   const byCat = {}
@@ -424,6 +428,60 @@ export async function deleteMouvement(id, actorId = null) {
     description: `Suppression mouvement caisse ${before?.caisse_owner || ''} : ${before?.label || ''}`,
     amount: before?.amount,
     before,
+    actorId,
+  })
+}
+
+// ============================================================
+// VALIDATION DE RÉCEPTION (entrées automatiques)
+// ============================================================
+
+/**
+ * Charger les entrées en attente de validation pour une caisse donnée.
+ */
+export async function loadPendingReceptions(caisseOwner) {
+  const { data, error } = await supabase
+    .from('caisse_mouvements')
+    .select('*')
+    .eq('caisse_owner', caisseOwner)
+    .eq('type', 'entree')
+    .eq('reception_status', 'pending')
+    .order('mvt_date', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Valider la réception d'un mouvement d'entrée.
+ * @param {number} mouvementId
+ * @param {string|null} actorId
+ */
+export async function validateReception(mouvementId, actorId = null) {
+  const { data: before } = await supabase
+    .from('caisse_mouvements')
+    .select('*')
+    .eq('id', mouvementId)
+    .single()
+
+  const updates = {
+    reception_status: 'received',
+    received_at: new Date().toISOString(),
+    received_by: actorId,
+  }
+  const { error } = await supabase
+    .from('caisse_mouvements')
+    .update(updates)
+    .eq('id', mouvementId)
+  if (error) throw error
+
+  await logAction({
+    entityType: 'mouvement',
+    entityId: mouvementId,
+    action: 'reception_validated',
+    description: `Réception validée : ${before?.label || ''}`,
+    amount: before?.amount,
+    before: { reception_status: before?.reception_status },
+    after: updates,
     actorId,
   })
 }
