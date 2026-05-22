@@ -1,14 +1,23 @@
 import { useState } from 'react'
 
 /**
- * Modal pour modifier l'intitulé et la date d'un mouvement.
+ * Modal pour modifier l'intitulé, la catégorie et la date d'un mouvement.
  * Le montant n'est PAS modifiable depuis ce modal (réservé à l'admin via le bouton 💰).
+ *
+ * Props :
+ *  - mvt : le mouvement
+ *  - categories : array des catégories actives (depuis loadCategories)
+ *  - onClose() : fermer le modal
+ *  - onSubmit({ label, mvt_date, category }) : sauver les modifications
  */
-export default function EditMouvementModal({ mvt, onClose, onSubmit }) {
+export default function EditMouvementModal({ mvt, categories = [], onClose, onSubmit }) {
   const [label, setLabel] = useState(mvt?.label || '')
   const [mvtDate, setMvtDate] = useState(mvt?.mvt_date || '')
+  const [category, setCategory] = useState(mvt?.category || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  const isSortie = mvt?.type === 'sortie'
 
   async function handleSubmit(e) {
     e?.preventDefault?.()
@@ -17,7 +26,12 @@ export default function EditMouvementModal({ mvt, onClose, onSubmit }) {
 
     setSaving(true); setError(null)
     try {
-      await onSubmit({ label: label.trim(), mvt_date: mvtDate })
+      const updates = { label: label.trim(), mvt_date: mvtDate }
+      // Seules les sorties ont une catégorie
+      if (isSortie) {
+        updates.category = category || null
+      }
+      await onSubmit(updates)
     } catch (e) {
       setError(e?.message || 'Erreur lors de la sauvegarde')
       setSaving(false)
@@ -43,7 +57,7 @@ export default function EditMouvementModal({ mvt, onClose, onSubmit }) {
 
         <form onSubmit={handleSubmit}>
           <label style={lblStyle}>
-            Intitulé
+            Intitulé (description)
             <input
               type="text"
               value={label}
@@ -53,6 +67,28 @@ export default function EditMouvementModal({ mvt, onClose, onSubmit }) {
               placeholder="Description du mouvement"
             />
           </label>
+
+          {isSortie && (
+            <label style={lblStyle}>
+              Catégorie
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">— Aucune —</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.name}>
+                    {c.emoji ? `${c.emoji} ` : ''}{c.name}
+                  </option>
+                ))}
+                {/* Si la catégorie actuelle n'est pas dans la liste active (ex : ancienne catégorie supprimée), on la garde quand même */}
+                {mvt?.category && !categories.find(c => c.name === mvt.category) && (
+                  <option value={mvt.category}>{mvt.category} (inactive)</option>
+                )}
+              </select>
+            </label>
+          )}
 
           <label style={lblStyle}>
             Date du mouvement

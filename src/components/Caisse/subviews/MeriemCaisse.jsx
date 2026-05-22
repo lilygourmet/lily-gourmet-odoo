@@ -109,9 +109,9 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
     await updateMouvement(mvt.id, { amount: Number(nv) }, user.id)
     reload()
   }
-  async function handleSaveEdit({ label, mvt_date }) {
+  async function handleSaveEdit(updates) {
     if (!editingMvt) return
-    await updateMouvement(editingMvt.id, { label, mvt_date }, user.id)
+    await updateMouvement(editingMvt.id, updates, user.id)
     setEditingMvt(null); reload()
   }
   async function handleUploadProof(file) {
@@ -267,6 +267,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
       {editingMvt && (
         <EditMouvementModal
           mvt={editingMvt}
+          categories={categories}
           onClose={() => setEditingMvt(null)}
           onSubmit={handleSaveEdit}
         />
