@@ -368,12 +368,12 @@ export async function loadMonthStats(caisseOwner, year, month) {
   return { entrees, sorties, byCat }
 }
 
-// Détecte si un libellé indique un transfert vers la caisse Meriem
-// (insensible à la casse, espaces et accents)
-function isTransfertVersMeriem(label) {
-  if (!label) return false
-  const normalized = String(label).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  return normalized.includes('caisse meriem')
+// Détecte si une catégorie indique un transfert vers la caisse Meriem
+// (insensible à la casse et aux accents)
+function isTransfertVersMeriem(category) {
+  if (!category) return false
+  const normalized = String(category).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  return normalized === 'caisse meriem'
 }
 
 export async function addMouvement({ caisseOwner, type, sourceType, amount, category, label, mvtDate, hasFacture = false, userId }) {
@@ -402,7 +402,7 @@ export async function addMouvement({ caisseOwner, type, sourceType, amount, cate
     caisseOwner === 'layla_lg' &&
     type === 'sortie' &&
     sourceType === 'manuelle' &&
-    isTransfertVersMeriem(label)
+    isTransfertVersMeriem(category)
   ) {
     try {
       await supabase.from('caisse_mouvements').insert({
