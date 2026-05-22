@@ -6,6 +6,7 @@ import SalairesView from './SalairesView'
 import ParametresView from './ParametresView'
 import MeriemUserView from './MeriemUserView'
 import MeriemAvances from './subviews/MeriemAvances'
+import RechercheView from './RechercheView'
 import AppHeader from '../AppHeader'
 
 const TABS = [
@@ -14,6 +15,7 @@ const TABS = [
   { key: 'caisses',    label: 'Caisses gérées', icon: '💼' },
   { key: 'avances',    label: 'Avances Meriem', icon: '💸' },
   { key: 'salaires',   label: 'Salaires',    icon: '💵' },
+  { key: 'recherche',  label: 'Recherche',   icon: '🔍' },
   { key: 'params',     label: 'Paramètres',  icon: '⚙️' },
 ]
 
@@ -22,7 +24,6 @@ const STORAGE_KEY = 'caisse_active_tab'
 export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
   const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
 
-  // Si Meriem (perm_caisse seul) → vue ultra simplifiée
   if (!isAdmin && user?.perm_caisse) {
     return (
       <>
@@ -32,7 +33,6 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
     )
   }
 
-  // Admin → vue avec onglets
   const [tab, setTab] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEY) || 'enveloppes' } catch { return 'enveloppes' }
   })
@@ -71,6 +71,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
       {tab === 'caisses'    && <CaissesGereesView user={user} />}
       {tab === 'avances'    && <MeriemAvances user={user} />}
       {tab === 'salaires'   && <SalairesView user={user} />}
+      {tab === 'recherche'  && <RechercheView user={user} />}
       {tab === 'params'     && <ParametresView user={user} />}
       </div>
     </>

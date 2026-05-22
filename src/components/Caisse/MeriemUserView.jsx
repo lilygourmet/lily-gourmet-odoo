@@ -3,6 +3,7 @@ import MeriemCaisse from './subviews/MeriemCaisse'
 import MeriemHamid from './subviews/MeriemHamid'
 import MeriemFactures from './subviews/MeriemFactures'
 import MeriemAvances from './subviews/MeriemAvances'
+import RechercheView from './RechercheView'
 import { loadHamidBalance, loadFacturesStats, loadAvancesSummary } from '../../lib/caisse'
 import { fmtMoney, currentYear } from './_helpers'
 
@@ -26,7 +27,7 @@ export default function MeriemUserView({ user }) {
         <div style={{ fontSize: 18, fontWeight: 500, marginTop: 2 }}>👤 {user?.username || 'Meriem'}</div>
       </div>
 
-      <div style={{ display: 'inline-flex', gap: 6, padding: 4, background: '#F4F0EA', borderRadius: 8, marginBottom: 20 }}>
+      <div style={{ display: 'inline-flex', gap: 6, padding: 4, background: '#F4F0EA', borderRadius: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         <PillTab active={sub === 'caisse'}   onClick={() => setSub('caisse')}>💰 Caisse</PillTab>
         <PillTab active={sub === 'hamid'}    onClick={() => setSub('hamid')}>
           🚖 Hamid {hamidBal !== 0 && (<span style={{ fontSize: 10, background: hamidBal >= 0 ? '#FAEEDA' : '#FCE9E8', color: hamidBal >= 0 ? '#633806' : '#99201E', padding: '1px 6px', borderRadius: 999, marginLeft: 3 }}>{hamidBal >= 0 ? '+' : ''}{fmtMoney(hamidBal).replace(' dh', '')}</span>)}
@@ -37,12 +38,14 @@ export default function MeriemUserView({ user }) {
         <PillTab active={sub === 'avances'} onClick={() => setSub('avances')}>
           💸 Avances {avancesTotal > 0 && (<span style={{ fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '1px 6px', borderRadius: 999, marginLeft: 3 }}>{fmtMoney(avancesTotal).replace(' dh', '')}</span>)}
         </PillTab>
+        <PillTab active={sub === 'recherche'} onClick={() => setSub('recherche')}>🔍 Recherche</PillTab>
       </div>
 
-      {sub === 'caisse'   && <MeriemCaisse   user={user} />}
-      {sub === 'hamid'    && <MeriemHamid    user={user} />}
-      {sub === 'factures' && <MeriemFactures user={user} />}
-      {sub === 'avances'  && <MeriemAvances  user={user} />}
+      {sub === 'caisse'    && <MeriemCaisse   user={user} />}
+      {sub === 'hamid'     && <MeriemHamid    user={user} />}
+      {sub === 'factures'  && <MeriemFactures user={user} />}
+      {sub === 'avances'   && <MeriemAvances  user={user} />}
+      {sub === 'recherche' && <RechercheView  user={user} />}
     </div>
   )
 }
