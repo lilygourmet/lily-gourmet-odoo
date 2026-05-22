@@ -368,6 +368,14 @@ export async function loadMonthStats(caisseOwner, year, month) {
   return { entrees, sorties, byCat }
 }
 
+// Détecte si un libellé indique un transfert vers la caisse Meriem
+// (insensible à la casse, espaces et accents)
+function isTransfertVersMeriem(label) {
+  if (!label) return false
+  const normalized = String(label).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  return normalized.includes('caisse meriem')
+}
+
 export async function addMouvement({ caisseOwner, type, sourceType, amount, category, label, mvtDate, hasFacture = false, userId }) {
   const { data, error } = await supabase
     .from('caisse_mouvements')
@@ -386,6 +394,41 @@ export async function addMouvement({ caisseOwner, type, sourceType, amount, cate
     .select()
     .single()
   if (error) throw error
+
+  // TRANSFERT AUTO : Layla LG → Meriem
+  // Si Layla LG fait une sortie avec un libellé contenant "caisse meriem",
+  // on crée automatiquement une entrée chez Meriem en attente de validation.
+  if (
+    caisseOwner === 'layla_lg' &&
+    type === 'sortie' &&
+    sourceType === 'manuelle' &&
+    isTransfertVersMeriem(label)
+  ) {
+    try {
+      await supabase.from('caisse_mouvements').insert({
+        caisse_owner: 'meriem',
+        type: 'entree',
+        source_type: 'transfert_caisse',
+        source_ref: data.id,
+        amount,
+        label: 'Transfert depuis Layla LG',
+        mvt_date: mvtDate,
+        created_by: userId,
+        reception_status: 'pending',
+      })
+      await logAction({
+        entityType: 'mouvement',
+        entityId: data.id,
+        action: 'transfert_auto',
+        description: `Transfert auto Layla LG → Meriem (${amount} dh, en attente de validation)`,
+        amount: Number(amount),
+        actorId: userId,
+      })
+    } catch (e) {
+      console.error('Transfert auto Layla LG → Meriem échec:', e?.message)
+      // Ne pas faire échouer la sortie de Layla LG si le transfert échoue
+    }
+  }
 
   // Ne pas logger les mouvements auto liés à une enveloppe ou à une avance (déjà loggués par le parent)
   if (sourceType !== 'enveloppe' && sourceType !== 'avance') {
@@ -419,6 +462,23 @@ export async function updateMouvement(id, updates, actorId = null) {
 
 export async function deleteMouvement(id, actorId = null) {
   const { data: before } = await supabase.from('caisse_mouvements').select('*').eq('id', id).single()
+
+  // Si on supprime une sortie Layla LG qui a généré un transfert vers Meriem,
+  // supprimer aussi le mouvement miroir SI Meriem ne l'a pas encore validé
+  if (before?.caisse_owner === 'layla_lg' && before?.type === 'sortie') {
+    const { data: mirror } = await supabase
+      .from('caisse_mouvements')
+      .select('id, reception_status')
+      .eq('source_type', 'transfert_caisse')
+      .eq('source_ref', id)
+      .maybeSingle()
+    if (mirror && mirror.reception_status === 'pending') {
+      await supabase.from('caisse_mouvements').delete().eq('id', mirror.id)
+    }
+    // Si Meriem a déjà validé (status 'received'), on laisse intact côté Meriem
+    // (sécurité : éviter de modifier l'historique de Meriem)
+  }
+
   const { error } = await supabase.from('caisse_mouvements').delete().eq('id', id)
   if (error) throw error
   await logAction({
