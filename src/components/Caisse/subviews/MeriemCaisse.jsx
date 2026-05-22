@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof } from '../../../lib/caisse'
+import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof, loadPendingReceptions, validateReception } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 import AjoutSortieModal from '../modals/AjoutSortieModal'
 import AjoutEntreeModal from '../modals/AjoutEntreeModal'
 import ClotureMoisModal from '../modals/ClotureMoisModal'
 import EditMouvementModal from '../modals/EditMouvementModal'
 import PreuveMouvementModal from '../modals/PreuveMouvementModal'
+import ValiderReceptionsModal from '../modals/ValiderReceptionsModal'
 import AuditLogPanel from '../AuditLogPanel'
 
 export default function MeriemCaisse({ user }) {
@@ -27,12 +28,30 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
   const [editingMvt, setEditingMvt] = useState(null)
   const [proofingMvt, setProofingMvt] = useState(null)
   const [closed, setClosed] = useState(false)
+  const [pendingReceptions, setPendingReceptions] = useState([])
+  const [showReceptionsModal, setShowReceptionsModal] = useState(false)
+  const [hasAutoShownReceptions, setHasAutoShownReceptions] = useState(false)
 
   useEffect(() => { (async () => {
     setCategories(await loadCategories(caisseOwner))
   })() }, [caisseOwner])
 
   useEffect(() => { reload() }, [caisseOwner, year, month])
+
+  // Charger les réceptions en attente à chaque chargement de la caisse
+  useEffect(() => { (async () => {
+    try {
+      const r = await loadPendingReceptions(caisseOwner)
+      setPendingReceptions(r)
+      // Ouvrir le popup automatiquement la PREMIÈRE fois s'il y a des pending
+      if (r.length > 0 && !hasAutoShownReceptions) {
+        setShowReceptionsModal(true)
+        setHasAutoShownReceptions(true)
+      }
+    } catch (e) {
+      console.warn('loadPendingReceptions:', e?.message)
+    }
+  })() }, [caisseOwner])
 
   async function reload() {
     const [mvts, bal, st, cls] = await Promise.all([
@@ -42,6 +61,12 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
       isMonthClosed(caisseOwner, year, month),
     ])
     setMouvements(mvts); setBalance(bal); setStats(st); setClosed(cls)
+  }
+
+  async function reloadPendingReceptions() {
+    const r = await loadPendingReceptions(caisseOwner)
+    setPendingReceptions(r)
+    return r
   }
 
   const filtered = useMemo(() => {
@@ -102,6 +127,14 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
     if (!confirm('Réinitialiser le statut de preuve pour ce mouvement ?')) return
     await resetMouvementProof(mvt.id, user.id); reload()
   }
+  async function handleValidateReception(mvtId) {
+    await validateReception(mvtId, user.id)
+    // Refresh : liste pending + données du mois (le solde change si validé sur le mois affiché)
+    const remaining = await reloadPendingReceptions()
+    await reload()
+    // Si plus rien à valider, fermer le modal
+    if (remaining.length === 0) setShowReceptionsModal(false)
+  }
 
   const palette = ['#993556', '#C77B9F', '#EF9F27', '#378ADD', '#7F77DD', '#1D9E75', '#D85A30', '#9B968D']
 
@@ -146,6 +179,27 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           ))}
         </div>
       </div>
+
+      {pendingReceptions.length > 0 && (
+        <div style={{
+          padding: '10px 14px', background: '#FCEEE8', border: '1px solid #E5C0B6',
+          borderRadius: 8, marginBottom: 14, fontSize: 13, color: '#993556',
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: 16 }}>⏳</span>
+          <span>
+            <strong>{pendingReceptions.length}</strong> réception{pendingReceptions.length > 1 ? 's' : ''} en attente de validation
+            <span style={{ color: '#6F6A60', marginLeft: 6 }}>
+              ({fmtMoney(pendingReceptions.reduce((s, r) => s + Number(r.amount), 0))})
+            </span>
+          </span>
+          <button onClick={() => setShowReceptionsModal(true)} style={{
+            marginLeft: 'auto', fontSize: 12, padding: '6px 12px',
+            background: '#993556', border: '1px solid #993556', color: 'white',
+            borderRadius: 6, cursor: 'pointer', fontWeight: 500
+          }}>Valider maintenant</button>
+        </div>
+      )}
 
       {pendingProofCount > 0 && (
         <div style={{
@@ -226,6 +280,13 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           onReset={() => { handleResetProof(proofingMvt); setProofingMvt(null) }}
         />
       )}
+      {showReceptionsModal && pendingReceptions.length > 0 && (
+        <ValiderReceptionsModal
+          receptions={pendingReceptions}
+          onValidate={handleValidateReception}
+          onClose={() => setShowReceptionsModal(false)}
+        />
+      )}
     </div>
   )
 }
@@ -235,22 +296,33 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
 // ============================================================
 function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof, onViewProof, onNoProof, onResetProof }) {
   const isSortie = mvt.type === 'sortie'
+  const isEntree = mvt.type === 'entree'
   const status = mvt.proof_status || 'legacy'
   const canEdit = !mvt.month_locked
+  const isPendingReception = isEntree && mvt.reception_status === 'pending'
 
   return (
     <div style={{
       display: 'grid',
       gridTemplateColumns: 'minmax(80px, 90px) 1fr 140px 110px auto',
       gap: 12, alignItems: 'center',
-      padding: '10px 14px', borderRadius: 8, marginBottom: 4, background: 'white',
+      padding: '10px 14px', borderRadius: 8, marginBottom: 4,
+      background: isPendingReception ? '#FAFAF8' : 'white',
       border: '0.5px solid #E8E2D8',
       borderLeft: `3px solid ${mvt.type === 'entree' ? '#97C459' : '#E5C0B6'}`,
+      opacity: isPendingReception ? 0.55 : 1,
+      borderStyle: isPendingReception ? 'dashed' : 'solid',
     }}>
       <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(mvt.mvt_date)}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13 }}>{mvt.label}</span>
         {isSortie && <ProofBadge status={status} />}
+        {isPendingReception && (
+          <span style={{
+            fontSize: 10, padding: '2px 7px', borderRadius: 999,
+            background: '#FCEEE8', color: '#993556', fontWeight: 500
+          }}>⏳ À valider</span>
+        )}
       </div>
       <div>{mvt.category && <span style={catTag}>{mvt.category}</span>}</div>
       <div style={{ textAlign: 'right', fontWeight: 500, color: mvt.type === 'entree' ? '#1D7A5C' : '#99201E' }}>
