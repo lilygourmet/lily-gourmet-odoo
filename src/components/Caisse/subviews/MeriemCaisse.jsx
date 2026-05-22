@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois } from '../../../lib/caisse'
+import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 import AjoutSortieModal from '../modals/AjoutSortieModal'
 import AjoutEntreeModal from '../modals/AjoutEntreeModal'
 import ClotureMoisModal from '../modals/ClotureMoisModal'
+import EditMouvementModal from '../modals/EditMouvementModal'
+import PreuveMouvementModal from '../modals/PreuveMouvementModal'
 import AuditLogPanel from '../AuditLogPanel'
 
 export default function MeriemCaisse({ user }) {
@@ -22,6 +24,8 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
   const [showSortie, setShowSortie] = useState(false)
   const [showEntree, setShowEntree] = useState(false)
   const [showCloture, setShowCloture] = useState(false)
+  const [editingMvt, setEditingMvt] = useState(null)
+  const [proofingMvt, setProofingMvt] = useState(null)
   const [closed, setClosed] = useState(false)
 
   useEffect(() => { (async () => {
@@ -44,8 +48,13 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
     if (filter === 'all') return mouvements
     if (filter === 'entree') return mouvements.filter(m => m.type === 'entree')
     if (filter === 'sortie') return mouvements.filter(m => m.type === 'sortie')
+    if (filter === 'pending_proof') return mouvements.filter(m => m.type === 'sortie' && m.proof_status === 'pending')
     return mouvements.filter(m => m.category === filter)
   }, [mouvements, filter])
+
+  const pendingProofCount = useMemo(() => {
+    return mouvements.filter(m => m.type === 'sortie' && m.proof_status === 'pending').length
+  }, [mouvements])
 
   const rankedCats = useMemo(() => {
     return Object.entries(stats.byCat)
@@ -74,6 +83,24 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
     if (!nv || isNaN(Number(nv))) return
     await updateMouvement(mvt.id, { amount: Number(nv) }, user.id)
     reload()
+  }
+  async function handleSaveEdit({ label, mvt_date }) {
+    if (!editingMvt) return
+    await updateMouvement(editingMvt.id, { label, mvt_date }, user.id)
+    setEditingMvt(null); reload()
+  }
+  async function handleUploadProof(file) {
+    if (!proofingMvt) return
+    await uploadMouvementProof(proofingMvt.id, file, user.id)
+    setProofingMvt(null); reload()
+  }
+  async function handleDeclareNoProof(mvt) {
+    if (!confirm(`Confirmer "Pas de preuve" pour : ${mvt.label} ?`)) return
+    await declareMouvementNoProof(mvt.id, user.id); reload()
+  }
+  async function handleResetProof(mvt) {
+    if (!confirm('Réinitialiser le statut de preuve pour ce mouvement ?')) return
+    await resetMouvementProof(mvt.id, user.id); reload()
   }
 
   const palette = ['#993556', '#C77B9F', '#EF9F27', '#378ADD', '#7F77DD', '#1D9E75', '#D85A30', '#9B968D']
@@ -120,6 +147,22 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
         </div>
       </div>
 
+      {pendingProofCount > 0 && (
+        <div style={{
+          padding: '10px 14px', background: '#FFF6E5', border: '1px solid #F5C46B',
+          borderRadius: 8, marginBottom: 14, fontSize: 13, color: '#7A5510',
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: 16 }}>⏳</span>
+          <span><strong>{pendingProofCount}</strong> sortie{pendingProofCount > 1 ? 's' : ''} sans état de preuve ce mois.</span>
+          <button onClick={() => setFilter('pending_proof')} style={{
+            marginLeft: 'auto', fontSize: 11, padding: '4px 10px',
+            background: 'white', border: '1px solid #F5C46B', color: '#7A5510',
+            borderRadius: 6, cursor: 'pointer'
+          }}>Filtrer ces sorties</button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
         <button disabled={closed} onClick={() => setShowSortie(true)} style={{ ...btnPrimary, opacity: closed ? 0.4 : 1 }}>↑ Ajouter sortie</button>
         <button disabled={closed} onClick={() => setShowEntree(true)} style={{ ...btnNormal, opacity: closed ? 0.4 : 1 }}>↓ Ajouter entrée manuelle</button>
@@ -130,6 +173,9 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
         <Chip active={filter === 'all'}    onClick={() => setFilter('all')}>Tout</Chip>
         <Chip active={filter === 'entree'} onClick={() => setFilter('entree')}>Entrées</Chip>
         <Chip active={filter === 'sortie'} onClick={() => setFilter('sortie')}>Sorties</Chip>
+        {pendingProofCount > 0 && (
+          <Chip active={filter === 'pending_proof'} onClick={() => setFilter('pending_proof')}>⏳ Sans preuve décidée</Chip>
+        )}
         {categories.map(c => (
           <Chip key={c.id} active={filter === c.name} onClick={() => setFilter(c.name)}>{c.emoji} {c.name}</Chip>
         ))}
@@ -137,30 +183,18 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
 
       {filtered.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>Aucun mouvement.</div>}
       {filtered.map(mvt => (
-        <div key={mvt.id} style={{
-          display: 'grid', gridTemplateColumns: '90px 1fr 150px 110px 32px', gap: 12, alignItems: 'center',
-          padding: '10px 14px', borderRadius: 8, marginBottom: 4, background: 'white',
-          border: '0.5px solid #E8E2D8', borderLeft: `3px solid ${mvt.type === 'entree' ? '#97C459' : '#E5C0B6'}`,
-        }}>
-          <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(mvt.mvt_date)}</div>
-          <div style={{ fontSize: 13 }}>{mvt.label}</div>
-          <div>{mvt.category && <span style={catTag}>{mvt.category}</span>}</div>
-          <div style={{ textAlign: 'right', fontWeight: 500, color: mvt.type === 'entree' ? '#1D7A5C' : '#99201E' }}>
-            {mvt.type === 'entree' ? '+ ' : '− '}{fmtMoney(Math.abs(mvt.amount)).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span>
-          </div>
-          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-            {!mvt.month_locked && isAdmin && (
-              <>
-                <button onClick={() => handleEditAmount(mvt)}
-                  title="Modifier le montant"
-                  style={{ background: 'transparent', border: '1px solid #E8E2D8', cursor: 'pointer', color: '#6F6A60', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>✎</button>
-                <button onClick={() => handleDeleteMvt(mvt.id)}
-                  title="Supprimer ce mouvement"
-                  style={{ background: 'transparent', border: '1px solid #F2D1D0', cursor: 'pointer', color: '#99201E', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>🗑</button>
-              </>
-            )}
-          </div>
-        </div>
+        <MouvementRow
+          key={mvt.id}
+          mvt={mvt}
+          isAdmin={isAdmin}
+          onEdit={() => setEditingMvt(mvt)}
+          onEditAmount={() => handleEditAmount(mvt)}
+          onDelete={() => handleDeleteMvt(mvt.id)}
+          onAddProof={() => setProofingMvt(mvt)}
+          onViewProof={() => setProofingMvt(mvt)}
+          onNoProof={() => handleDeclareNoProof(mvt)}
+          onResetProof={() => handleResetProof(mvt)}
+        />
       ))}
 
       {/* Log déroulable en bas */}
@@ -176,13 +210,107 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
         <ClotureMoisModal balance={balance} year={year} month={month} caisseOwner={caisseOwner}
           onClose={() => setShowCloture(false)} onConfirm={handleCloture} />
       )}
+      {editingMvt && (
+        <EditMouvementModal
+          mvt={editingMvt}
+          onClose={() => setEditingMvt(null)}
+          onSubmit={handleSaveEdit}
+        />
+      )}
+      {proofingMvt && (
+        <PreuveMouvementModal
+          mvt={proofingMvt}
+          onClose={() => setProofingMvt(null)}
+          onUpload={handleUploadProof}
+          onDeclareNoProof={() => { handleDeclareNoProof(proofingMvt); setProofingMvt(null) }}
+          onReset={() => { handleResetProof(proofingMvt); setProofingMvt(null) }}
+        />
+      )}
     </div>
   )
+}
+
+// ============================================================
+// Ligne d'un mouvement (avec badge preuve + boutons)
+// ============================================================
+function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof, onViewProof, onNoProof, onResetProof }) {
+  const isSortie = mvt.type === 'sortie'
+  const status = mvt.proof_status || 'legacy'
+  const canEdit = !mvt.month_locked
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'minmax(80px, 90px) 1fr 140px 110px auto',
+      gap: 12, alignItems: 'center',
+      padding: '10px 14px', borderRadius: 8, marginBottom: 4, background: 'white',
+      border: '0.5px solid #E8E2D8',
+      borderLeft: `3px solid ${mvt.type === 'entree' ? '#97C459' : '#E5C0B6'}`,
+    }}>
+      <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(mvt.mvt_date)}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13 }}>{mvt.label}</span>
+        {isSortie && <ProofBadge status={status} />}
+      </div>
+      <div>{mvt.category && <span style={catTag}>{mvt.category}</span>}</div>
+      <div style={{ textAlign: 'right', fontWeight: 500, color: mvt.type === 'entree' ? '#1D7A5C' : '#99201E' }}>
+        {mvt.type === 'entree' ? '+ ' : '− '}{fmtMoney(Math.abs(mvt.amount)).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span>
+      </div>
+      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        {/* Boutons preuve (sorties uniquement, mois non clôturé) */}
+        {isSortie && canEdit && (status === 'pending' || status === 'legacy') && (
+          <>
+            <button onClick={onAddProof} title="Ajouter une preuve" style={btnIconGreen}>📎</button>
+            {status === 'pending' && (
+              <button onClick={onNoProof} title="Déclarer : pas de preuve" style={btnIconGray}>❌</button>
+            )}
+          </>
+        )}
+        {isSortie && canEdit && status === 'with_proof' && (
+          <button onClick={onViewProof} title="Voir / changer la preuve" style={btnIconGreen}>🖼️</button>
+        )}
+        {isSortie && canEdit && status === 'no_proof_declared' && (
+          <button onClick={onAddProof} title="Changer d'avis : ajouter une preuve" style={btnIconGray}>📎</button>
+        )}
+
+        {/* Modifier intitulé + date (tout le monde, sortie ou entrée) */}
+        {canEdit && (
+          <button onClick={onEdit} title="Modifier intitulé et date" style={btnIcon}>✏️</button>
+        )}
+
+        {/* Modifier montant + supprimer : admin seulement */}
+        {canEdit && isAdmin && (
+          <>
+            <button onClick={onEditAmount} title="Modifier le montant" style={btnIcon}>💰</button>
+            <button onClick={onDelete} title="Supprimer ce mouvement" style={btnIconRed}>🗑</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProofBadge({ status }) {
+  if (status === 'legacy') return null
+  const cfg = {
+    pending:           { bg: '#FFF6E5', col: '#7A5510', txt: '⏳ En attente' },
+    with_proof:        { bg: '#E6F4E6', col: '#27500A', txt: '✅ Preuve' },
+    no_proof_declared: { bg: '#F0EEEA', col: '#6F6A60', txt: '⚠️ Sans preuve' },
+  }[status]
+  if (!cfg) return null
+  return <span style={{
+    fontSize: 10, padding: '2px 7px', borderRadius: 999,
+    background: cfg.bg, color: cfg.col, fontWeight: 500, whiteSpace: 'nowrap'
+  }}>{cfg.txt}</span>
 }
 
 const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
 const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
+const btnIcon = { background: 'transparent', border: '1px solid #E8E2D8', cursor: 'pointer', color: '#6F6A60', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
+const btnIconGreen = { background: 'transparent', border: '1px solid #C8E0AC', cursor: 'pointer', color: '#27500A', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
+const btnIconGray = { background: 'transparent', border: '1px solid #E0DDD5', cursor: 'pointer', color: '#6F6A60', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
+const btnIconRed = { background: 'transparent', border: '1px solid #F2D1D0', cursor: 'pointer', color: '#99201E', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
 const catTag = { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#F4F0EA', color: '#6F6A60' }
 
 function Chip({ active, onClick, children }) {

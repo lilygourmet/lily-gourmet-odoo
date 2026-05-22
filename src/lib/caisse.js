@@ -428,6 +428,140 @@ export async function deleteMouvement(id, actorId = null) {
   })
 }
 
+const PROOF_BUCKET = 'caisse-preuves'
+
+/**
+ * Upload une preuve photo/PDF pour un mouvement sortie.
+ * @param {number} mouvementId
+ * @param {File} file - le fichier (PNG, JPG, PDF, etc.)
+ * @param {string|null} actorId - user.id pour l'audit log
+ * @returns {Promise<{url: string}>}
+ */
+export async function uploadMouvementProof(mouvementId, file, actorId = null) {
+  if (!file) throw new Error('Aucun fichier fourni')
+
+  // 1) Charger le mouvement avant (pour audit)
+  const { data: before, error: errBefore } = await supabase
+    .from('caisse_mouvements')
+    .select('*')
+    .eq('id', mouvementId)
+    .single()
+  if (errBefore) throw errBefore
+
+  // 2) Upload vers Storage : mouvements/mvt_<id>/<timestamp>.<ext>
+  const ext = (file.name?.split('.').pop() || 'bin').toLowerCase()
+  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+  const path = `mouvements/mvt_${mouvementId}/${ts}.${ext}`
+
+  const { error: errUp } = await supabase.storage
+    .from(PROOF_BUCKET)
+    .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+  if (errUp) throw errUp
+
+  // 3) URL signée 1 an
+  const { data: signed, error: errSign } = await supabase.storage
+    .from(PROOF_BUCKET)
+    .createSignedUrl(path, 60 * 60 * 24 * 365)
+  if (errSign) throw errSign
+  const url = signed.signedUrl
+
+  // 4) UPDATE caisse_mouvements
+  const updates = {
+    proof_url: url,
+    proof_uploaded_at: new Date().toISOString(),
+    proof_status: 'with_proof',
+  }
+  const { error: errUpd } = await supabase
+    .from('caisse_mouvements')
+    .update(updates)
+    .eq('id', mouvementId)
+  if (errUpd) throw errUpd
+
+  // 5) Audit log
+  await logAction({
+    entityType: 'mouvement',
+    entityId: mouvementId,
+    action: 'proof_upload',
+    description: `Preuve ajoutée : ${before?.label || ''}`,
+    amount: before?.amount,
+    before: { proof_status: before?.proof_status, proof_url: before?.proof_url },
+    after: updates,
+    actorId,
+  })
+
+  return { url }
+}
+
+/**
+ * Déclare qu'il n'y a pas de preuve disponible pour ce mouvement.
+ * @param {number} mouvementId
+ * @param {string|null} actorId
+ */
+export async function declareMouvementNoProof(mouvementId, actorId = null) {
+  const { data: before } = await supabase
+    .from('caisse_mouvements')
+    .select('*')
+    .eq('id', mouvementId)
+    .single()
+
+  const updates = {
+    proof_status: 'no_proof_declared',
+    proof_url: null,
+    proof_uploaded_at: new Date().toISOString(),
+  }
+  const { error } = await supabase
+    .from('caisse_mouvements')
+    .update(updates)
+    .eq('id', mouvementId)
+  if (error) throw error
+
+  await logAction({
+    entityType: 'mouvement',
+    entityId: mouvementId,
+    action: 'proof_no_proof',
+    description: `Pas de preuve déclaré : ${before?.label || ''}`,
+    amount: before?.amount,
+    before: { proof_status: before?.proof_status },
+    after: updates,
+    actorId,
+  })
+}
+
+/**
+ * Permet de revenir en arrière sur "Pas de preuve" pour repasser en pending
+ * (utilisé quand Meriem veut finalement uploader une preuve)
+ */
+export async function resetMouvementProof(mouvementId, actorId = null) {
+  const { data: before } = await supabase
+    .from('caisse_mouvements')
+    .select('*')
+    .eq('id', mouvementId)
+    .single()
+
+  const updates = {
+    proof_status: 'pending',
+    proof_url: null,
+    proof_uploaded_at: null,
+  }
+  const { error } = await supabase
+    .from('caisse_mouvements')
+    .update(updates)
+    .eq('id', mouvementId)
+  if (error) throw error
+
+  await logAction({
+    entityType: 'mouvement',
+    entityId: mouvementId,
+    action: 'proof_reset',
+    description: `Statut preuve réinitialisé : ${before?.label || ''}`,
+    amount: before?.amount,
+    before: { proof_status: before?.proof_status, proof_url: before?.proof_url },
+    after: updates,
+    actorId,
+  })
+}
+
+
 // ============================================================
 // CATÉGORIES
 // ============================================================
