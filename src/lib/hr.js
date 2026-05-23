@@ -262,7 +262,10 @@ export async function generateAttestation(type, data) {
 function formatSalaire(s) {
   const num = Number(String(s).replace(/[^\d.]/g, ''))
   if (isNaN(num)) return String(s)
-  return num.toLocaleString('fr-FR').replace(/\u202F/g, ' ')
+  // Pas d'espace de séparation des milliers : les espaces cassent la
+  // lecture LTR des nombres dans un texte arabe RTL.
+  // Le nombre reste lisible : 8000 plutôt que 8 000.
+  return String(num)
 }
 
 /**

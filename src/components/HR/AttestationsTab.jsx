@@ -236,7 +236,7 @@ export default function AttestationsTab({ user }) {
             </Row>
           )}
 
-          {currentTemplate?.required.includes('salaire') && (
+          {currentTemplate?.required.includes('salaire') && currentTemplate?.category !== 'contrat' && (
             <Row>
               <Field label="Salaire net (DH) *"
                 value={form.salaire} onChange={v => handleChange('salaire', v)}
