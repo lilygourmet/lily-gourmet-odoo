@@ -19,7 +19,7 @@ const COULEUR_STATUT = {
   absent:           { bg: '#FCEBEB', text: '#A32D2D' },
 }
 
-export default function PointageTab({ user }) {
+export default function PointageTab({ user, isAdmin }) {
   const today = new Date()
   const [mois, setMois] = useState(today.getMonth() + 1)
   const [annee, setAnnee] = useState(today.getFullYear())
@@ -29,7 +29,7 @@ export default function PointageTab({ user }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [selectedEmpId, setSelectedEmpId] = useState(null)
-  const [vue, setVue] = useState('single')  // 'single' | 'all' | 'recup'
+  const [vue, setVue] = useState(isAdmin ? 'single' : 'recup')  // 'single' | 'all' | 'recup' | 'absences'
   const [editingTranches, setEditingTranches] = useState(null)  // { date, sessions } | null
 
   // Charger les données du mois
@@ -120,6 +120,7 @@ export default function PointageTab({ user }) {
 
   // Édition d'une cellule (heures_travaillees, sup, manquantes, recup, statut)
   async function handleEditCell(dateJour, champ, valeur) {
+    if (!isAdmin) return
     try {
       if (valeur === '' || valeur === null) {
         await removeAjustement(selectedEmpId, dateJour, champ)
@@ -144,6 +145,7 @@ export default function PointageTab({ user }) {
 
   // Sauvegarder les sessions modifiées d'un jour
   async function handleSaveTranches(date, sessions) {
+    if (!isAdmin) return
     try {
       const { upsertPointagesDuJour } = await import('../../lib/pointage')
       await upsertPointagesDuJour(selectedEmpId, date, sessions, user.id)
@@ -152,6 +154,71 @@ export default function PointageTab({ user }) {
     } catch (e) {
       alert('Erreur : ' + e.message)
     }
+  }
+
+  // ============================================
+  // EXPORTS (admin)
+  // ============================================
+
+  function downloadCSV(filename, rows) {
+    const csv = rows.map(r => r.map(cell => {
+      const s = String(cell ?? '')
+      return s.includes(';') || s.includes('"') || s.includes('\n')
+        ? '"' + s.replace(/"/g, '""') + '"' : s
+    }).join(';')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleExportSup() {
+    if (!data) return
+    const rows = [['Employé', 'Heures sup du mois']]
+    for (const emp of data.employes) {
+      const r = resultats[emp.id]
+      if (!r) continue
+      // Si heures_sup_mensuelles = false, on met 0 dans l'export
+      const sup = emp.heures_sup_mensuelles === false ? 0 : r.synthese.heures_sup
+      rows.push([emp.nom, sup.toFixed(2)])
+    }
+    const monthName = MOIS_FR[mois - 1] + '_' + annee
+    downloadCSV('heures_sup_' + monthName + '.csv', rows)
+  }
+
+  function handleExportConges() {
+    if (!data) return
+    const rows = [['Employé', 'Jours congé', 'Jours maladie (4+)']]
+    // Pour chaque employé, compter ses jours de congé et maladie ce mois
+    for (const emp of data.employes) {
+      const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
+      let joursConge = 0
+      let joursMaladie = 0
+      for (const c of congesEmp) {
+        // Calcul du nombre de jours dans le mois sélectionné
+        const debut = new Date(Math.max(new Date(c.date_debut), new Date(annee, mois - 1, 1)))
+        const fin = new Date(Math.min(new Date(c.date_fin), new Date(annee, mois, 0)))
+        if (fin < debut) continue
+        const nbJours = Math.floor((fin - debut) / 86400000) + 1
+        const typeLower = (c.type_conge || '').toLowerCase()
+        // Type "maladie" : seulement si > 3 jours (donc 4+)
+        if (typeLower.includes('maladie') || typeLower.includes('malade') || typeLower.includes('sick')) {
+          if (nbJours >= 4) joursMaladie += nbJours
+        } else if (typeLower.includes('récup') || typeLower.includes('recup')) {
+          // Exclure les jours de récup
+          continue
+        } else {
+          // Tout le reste = congé
+          joursConge += nbJours
+        }
+      }
+      if (joursConge > 0 || joursMaladie > 0) {
+        rows.push([emp.nom, joursConge, joursMaladie])
+      }
+    }
+    const monthName = MOIS_FR[mois - 1] + '_' + annee
+    downloadCSV('conges_' + monthName + '.csv', rows)
   }
 
   // Validation du mois
@@ -190,12 +257,17 @@ export default function PointageTab({ user }) {
         </div>
         <button onClick={nextMonth} style={btnNav}>▶</button>
 
-        <div style={{ display: 'flex', gap: 4, padding: 3, background: '#F4F0EA', borderRadius: 8 }}>
-          {[
-            { v: 'single', label: '👤 Un employé' },
-            { v: 'all', label: '👥 Tous' },
-            { v: 'recup', label: '🟣 Récup' },
-          ].map(t => (
+        <div style={{ display: 'flex', gap: 4, padding: 3, background: '#F4F0EA', borderRadius: 8, flexWrap: 'wrap' }}>
+          {(isAdmin
+            ? [
+                { v: 'single', label: '👤 Un employé' },
+                { v: 'all', label: '👥 Tous' },
+                { v: 'recup', label: '🟣 Récup & Absences' },
+              ]
+            : [
+                { v: 'recup', label: '🟣 Récup & Absences' },
+              ]
+          ).map(t => (
             <button key={t.v} onClick={() => setVue(t.v)} style={{
               padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
               background: vue === t.v ? 'white' : 'transparent',
@@ -214,18 +286,22 @@ export default function PointageTab({ user }) {
           </select>
         )}
 
-        <button onClick={handleSync} disabled={syncing} style={{
-          padding: '9px 14px', fontSize: 13, background: '#0C447C', color: 'white',
-          border: '1px solid #0C447C', borderRadius: 8, cursor: syncing ? 'wait' : 'pointer', fontWeight: 500,
-        }}>
-          {syncing ? '⏳ Sync...' : '🔄 Sync Odoo'}
-        </button>
-        <button onClick={handleDebug} style={{
-          padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#6F6A60',
-          border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
-        }} title="Voir ce qu'Odoo renvoie">
-          🐛 Debug
-        </button>
+        {isAdmin && (
+          <>
+            <button onClick={handleSync} disabled={syncing} style={{
+              padding: '9px 14px', fontSize: 13, background: '#0C447C', color: 'white',
+              border: '1px solid #0C447C', borderRadius: 8, cursor: syncing ? 'wait' : 'pointer', fontWeight: 500,
+            }}>
+              {syncing ? '⏳ Sync...' : '🔄 Sync Odoo'}
+            </button>
+            <button onClick={handleDebug} style={{
+              padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#6F6A60',
+              border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
+            }} title="Voir ce qu'Odoo renvoie">
+              🐛 Debug
+            </button>
+          </>
+        )}
       </div>
 
       {error && (
@@ -241,15 +317,32 @@ export default function PointageTab({ user }) {
 
       {loading && <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>}
 
-      {!loading && vue === 'all' && data && (
-        <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} />
+      {!loading && vue === 'all' && data && isAdmin && (
+        <>
+          <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} isAdmin={isAdmin} />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
+            <button onClick={handleExportSup} style={btnExport}>📥 Export heures sup</button>
+            <button onClick={handleExportConges} style={btnExport}>📥 Export congés</button>
+            <button onClick={handleValider} style={btnPrimaryGreen}>✅ Valider le mois</button>
+          </div>
+        </>
       )}
 
       {!loading && vue === 'recup' && data && (
-        <VueRecup data={data} resultats={resultats} mois={mois} annee={annee} />
+        <>
+          <VueRecup data={data} resultats={resultats} mois={mois} annee={annee} />
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={handleExportSup} style={btnExport}>📥 Export heures sup</button>
+              <button onClick={handleExportConges} style={btnExport}>📥 Export congés</button>
+            </div>
+          )}
+        </>
       )}
 
-      {!loading && vue === 'single' && result && (
+
+
+      {!loading && vue === 'single' && result && isAdmin && (
         <>
           {/* Cartes synthèse */}
           <div style={{
@@ -278,12 +371,28 @@ export default function PointageTab({ user }) {
           <Legende />
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
-            <button onClick={handleValider} style={{
-              padding: '10px 18px', fontSize: 13, background: '#27500A', color: 'white',
-              border: '1px solid #27500A', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
-            }}>
-              ✅ Valider le mois
-            </button>
+            {isAdmin && (
+              <>
+                <button onClick={handleExportSup} style={{
+                  padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
+                  border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
+                }}>
+                  📥 Export heures sup
+                </button>
+                <button onClick={handleExportConges} style={{
+                  padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
+                  border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
+                }}>
+                  📥 Export congés
+                </button>
+                <button onClick={handleValider} style={{
+                  padding: '10px 18px', fontSize: 13, background: '#27500A', color: 'white',
+                  border: '1px solid #27500A', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+                }}>
+                  ✅ Valider le mois
+                </button>
+              </>
+            )}
           </div>
         </>
       )}
@@ -516,89 +625,129 @@ function Legende() {
 
 
 
+
+
 function VueRecup({ data, resultats, mois, annee }) {
-  // Pour chaque employé, lister les jours avec récup > 0
-  const lignes = []
+  // Collecter TOUS les événements (récup + absences) de tous les employés
+  // puis trier chronologiquement et grouper par date
+  const evenements = []
   for (const emp of data.employes) {
     const r = resultats[emp.id]
     if (!r) continue
-    const joursRecup = r.journal.filter(j => j.jours_recup > 0)
-    if (joursRecup.length === 0) continue
-    const totalRecup = r.synthese.jours_recup
-    lignes.push({ emp, jours: joursRecup, total: totalRecup })
+    for (const j of r.journal) {
+      if (j.jours_recup > 0) {
+        evenements.push({ type: 'recup', emp, jour: j, date: j.date })
+      } else if (j.statut === 'absent') {
+        evenements.push({ type: 'absent', emp, jour: j, date: j.date })
+      }
+    }
   }
 
-  if (lignes.length === 0) {
+  // Tri chronologique
+  evenements.sort((a, b) => a.date.localeCompare(b.date))
+
+  if (evenements.length === 0) {
     return (
       <div style={{
         padding: 40, textAlign: 'center', color: '#6F6A60',
         background: '#F9F6F1', borderRadius: 10, fontSize: 13,
       }}>
-        Aucun jour de récupération ce mois-ci 🌸
+        Aucune récup ni absence ce mois-ci 🌸
       </div>
     )
   }
 
-  const totalGlobal = lignes.reduce((sum, l) => sum + l.total, 0)
+  // Stats résumé
+  const nbRecup = evenements.filter(e => e.type === 'recup').length
+  const totalJoursRecup = evenements
+    .filter(e => e.type === 'recup')
+    .reduce((sum, e) => sum + e.jour.jours_recup, 0)
+  const nbAbsences = evenements.filter(e => e.type === 'absent').length
+
+  // Grouper par date
+  const parDate = new Map()
+  for (const ev of evenements) {
+    if (!parDate.has(ev.date)) parDate.set(ev.date, [])
+    parDate.get(ev.date).push(ev)
+  }
 
   return (
     <div>
-      <div style={{
-        background: '#EEEDFE', padding: 12, borderRadius: 8, marginBottom: 12,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
-        <span style={{ fontSize: 13, color: '#3C3489' }}>
-          🟣 <strong>{lignes.length}</strong> employé(s) avec des jours de récupération ce mois
-        </span>
-        <span style={{ fontSize: 18, fontWeight: 600, color: '#3C3489' }}>
-          {totalGlobal.toFixed(2)} jours au total
-        </span>
+      {/* Bandeaux de résumé */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 14 }}>
+        <div style={{
+          background: '#EEEDFE', padding: 12, borderRadius: 8,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 12, color: '#3C3489' }}>🟣 Récup ({nbRecup})</span>
+          <span style={{ fontSize: 16, fontWeight: 600, color: '#3C3489' }}>{totalJoursRecup.toFixed(2)} j</span>
+        </div>
+        <div style={{
+          background: '#FCEBEB', padding: 12, borderRadius: 8,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 12, color: '#A32D2D' }}>🔴 Absences</span>
+          <span style={{ fontSize: 16, fontWeight: 600, color: '#A32D2D' }}>{nbAbsences} jour{nbAbsences > 1 ? 's' : ''}</span>
+        </div>
       </div>
 
-      {lignes.map(({ emp, jours, total }) => (
-        <div key={emp.id} style={{
-          background: 'white', borderRadius: 10, border: '1px solid #E8E2D8',
-          marginBottom: 12, overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '10px 14px', background: '#F4F0EA',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          }}>
-            <div>
-              <strong style={{ fontSize: 13 }}>{emp.nom}</strong>
-              {emp.poste && <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 8 }}>· {emp.poste}</span>}
+      {/* Liste chronologique groupée par date */}
+      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflow: 'hidden' }}>
+        {Array.from(parDate.entries()).map(([date, evs]) => {
+          const d = new Date(date)
+          const joursFR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+          const moisFR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juill.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+          const dateLabel = `${joursFR[d.getDay()]} ${d.getDate()} ${moisFR[d.getMonth()]}`
+          return (
+            <div key={date} style={{ borderBottom: '1px solid #F4F0EA' }}>
+              <div style={{
+                padding: '8px 14px', background: '#FAFAF7',
+                fontSize: 12, fontWeight: 500, color: '#3A3733',
+              }}>
+                {dateLabel}
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <tbody>
+                  {evs.map((ev, i) => {
+                    const isRecup = ev.type === 'recup'
+                    const bgRow = isRecup ? '#FBFAFE' : '#FFF8F7'
+                    return (
+                      <tr key={i} style={{ background: bgRow, borderTop: i > 0 ? '1px solid #F4F0EA' : 'none' }}>
+                        <td style={{ padding: '7px 14px', width: 30 }}>
+                          {isRecup ? '🟣' : '🔴'}
+                        </td>
+                        <td style={{ padding: '7px 8px', minWidth: 140 }}>
+                          <strong style={{ fontSize: 12 }}>{ev.emp.nom}</strong>
+                          {ev.emp.poste && <span style={{ fontSize: 10, color: '#9B968D', marginLeft: 6 }}>· {ev.emp.poste}</span>}
+                        </td>
+                        <td style={{ padding: '7px 8px', fontFamily: 'monospace', fontSize: 11, color: '#6F6A60' }}>
+                          {isRecup ? ev.jour.tranches : '—'}
+                        </td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontSize: 11, color: '#6F6A60' }}>
+                          {isRecup
+                            ? `${ev.jour.heures_travaillees.toFixed(2)}h travaillées`
+                            : `${ev.jour.heures_prevues.toFixed(2)}h prévues`}
+                        </td>
+                        <td style={{ padding: '7px 14px', textAlign: 'right', width: 130 }}>
+                          {isRecup ? (
+                            <span style={{ fontSize: 11, fontWeight: 500, color: '#3C3489', background: '#EEEDFE', padding: '3px 8px', borderRadius: 999 }}>
+                              +{ev.jour.jours_recup.toFixed(2)} j récup
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, fontWeight: 500, color: '#A32D2D', background: '#FCEBEB', padding: '3px 8px', borderRadius: 999 }}>
+                              -{ev.jour.heures_manquantes.toFixed(2)}h
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-            <span style={{
-              fontSize: 14, fontWeight: 600, color: '#3C3489',
-              background: '#EEEDFE', padding: '4px 10px', borderRadius: 999,
-            }}>
-              {total.toFixed(2)} j récup
-            </span>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: '#FAFAF7', fontSize: 11, color: '#6F6A60' }}>
-                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, width: 100 }}>Date</th>
-                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500 }}>Tranches</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, width: 90 }}>Travaillé</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, width: 90 }}>Récup</th>
-                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, width: 140 }}>Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jours.map(j => (
-                <tr key={j.date} style={{ borderTop: '1px solid #F4F0EA' }}>
-                  <td style={{ padding: '7px 12px' }}>{j.jour_semaine} {String(j.jour_num).padStart(2, '0')}</td>
-                  <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontSize: 11 }}>{j.tranches}</td>
-                  <td style={{ padding: '7px 12px', textAlign: 'right' }}>{j.heures_travaillees.toFixed(2)}</td>
-                  <td style={{ padding: '7px 12px', textAlign: 'right', color: '#3C3489', fontWeight: 500 }}>{j.jours_recup.toFixed(2)}</td>
-                  <td style={{ padding: '7px 12px', color: '#6F6A60', fontSize: 11 }}>{j.label}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -666,4 +815,14 @@ function VueGlobale({ data, resultats, mois, annee }) {
 const btnNav = {
   padding: '7px 12px', fontSize: 14, background: 'white',
   border: '1px solid #E8E2D8', borderRadius: 6, cursor: 'pointer', color: '#3A3733',
+}
+
+const btnExport = {
+  padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
+  border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
+}
+
+const btnPrimaryGreen = {
+  padding: '10px 18px', fontSize: 13, background: '#27500A', color: 'white',
+  border: '1px solid #27500A', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
 }

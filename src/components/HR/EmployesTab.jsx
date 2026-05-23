@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { loadEmployes, deleteEmploye } from '../../lib/hr'
 import EmployeEditModal from './EmployeEditModal'
 
-export default function EmployesTab({ user }) {
+export default function EmployesTab({ user, isAdmin }) {
   const [employes, setEmployes] = useState([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('actif')  // 'actif' | 'inactif' | 'tous'
@@ -97,7 +97,7 @@ export default function EmployesTab({ user }) {
                 <Th>CNSS</Th>
                 <Th>CIN</Th>
                 <Th>Entrée</Th>
-                <Th>Salaire</Th>
+                {isAdmin && <Th>Salaire</Th>}
                 <Th>Type</Th>
                 <Th>Actions</Th>
               </tr>
@@ -113,7 +113,7 @@ export default function EmployesTab({ user }) {
                   <Td>{e.cnss || '—'}</Td>
                   <Td>{e.cin || '—'}</Td>
                   <Td>{fmtDate(e.date_entree)}</Td>
-                  <Td>{e.salaire_net ? `${Number(e.salaire_net).toLocaleString('fr-FR')} dh` : '—'}</Td>
+                  {isAdmin && <Td>{e.salaire_net ? `${Number(e.salaire_net).toLocaleString('fr-FR')} dh` : '—'}</Td>}
                   <Td>
                     <span style={{
                       fontSize: 10, padding: '2px 8px', borderRadius: 999,
@@ -123,7 +123,7 @@ export default function EmployesTab({ user }) {
                   </Td>
                   <Td>
                     <button onClick={() => setEditingEmp(e)} style={btnEdit}>✏️</button>
-                    <button onClick={() => handleDelete(e)} style={btnDel}>🗑️</button>
+                    {isAdmin && <button onClick={() => handleDelete(e)} style={btnDel}>🗑️</button>}
                   </Td>
                 </tr>
               ))}
@@ -136,6 +136,7 @@ export default function EmployesTab({ user }) {
         <EmployeEditModal
           employe={editingEmp.id ? editingEmp : null}
           user={user}
+          isAdmin={isAdmin}
           onClose={() => setEditingEmp(null)}
           onSaved={() => { setEditingEmp(null); reload() }}
         />

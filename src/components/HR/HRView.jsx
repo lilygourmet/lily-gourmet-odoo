@@ -4,10 +4,12 @@ import EmployesTab from './EmployesTab'
 import PointageTab from './PointageTab'
 
 /**
- * Vue principale HR (réservée admin).
- * Onglets : Attestations, Employés, Pointage
+ * Vue principale HR.
+ * - admin : accès complet
+ * - perm_hr : accès limité (pas de salaire/RIB visible, attestations limitées, pointage en lecture)
  */
 export default function HRView({ user }) {
+  const isAdmin = user?.role === 'admin'
   const [tab, setTab] = useState('attestations')
 
   return (
@@ -15,10 +17,12 @@ export default function HRView({ user }) {
 
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 500, color: '#3A3733' }}>
-          🏢 Ressources Humaines
+          🏢 Ressources Humaines {!isAdmin && <span style={{ fontSize: 12, color: '#9B968D', fontWeight: 400 }}>(accès limité)</span>}
         </h2>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6F6A60' }}>
-          Génération d'attestations, gestion des employés, pointage
+          {isAdmin
+            ? "Génération d'attestations, gestion des employés, pointage"
+            : "Gestion des employés, attestations basiques, récap pointage"}
         </p>
       </div>
 
@@ -37,9 +41,9 @@ export default function HRView({ user }) {
         </TabBtn>
       </div>
 
-      {tab === 'attestations' && <AttestationsTab user={user} />}
-      {tab === 'employes' && <EmployesTab user={user} />}
-      {tab === 'pointage' && <PointageTab user={user} />}
+      {tab === 'attestations' && <AttestationsTab user={user} isAdmin={isAdmin} />}
+      {tab === 'employes' && <EmployesTab user={user} isAdmin={isAdmin} />}
+      {tab === 'pointage' && <PointageTab user={user} isAdmin={isAdmin} />}
     </div>
   )
 }

@@ -121,6 +121,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
         perm_vitrine_sale: formData.permVitrineSale,
+        perm_caisse: formData.permCaisse,
+        perm_caisse_admin: formData.permCaisseAdmin,
+        perm_hr: formData.permHR,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -160,6 +163,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
         perm_vitrine_sale: formData.permVitrineSale,
+        perm_caisse: formData.permCaisse,
+        perm_caisse_admin: formData.permCaisseAdmin,
+        perm_hr: formData.permHR,
       })
       setEditingUser(null)
       await refresh()
@@ -630,6 +636,9 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
     permStockGS: initialData?.perm_stock_gs !== undefined ? initialData.perm_stock_gs : false,
     permVitrineSale: initialData?.perm_vitrine_sale !== undefined ? initialData.perm_vitrine_sale : false,
+    permCaisse: initialData?.perm_caisse !== undefined ? initialData.perm_caisse : false,
+    permCaisseAdmin: initialData?.perm_caisse_admin !== undefined ? initialData.perm_caisse_admin : false,
+    permHR: initialData?.perm_hr !== undefined ? initialData.perm_hr : false,
   })
 
   function handleSubmit() {
@@ -869,6 +878,24 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="🥪 Voir l'onglet Stock GS- (sous-vue salés)"
             checked={isAdmin || formData.permStockGS}
             onChange={v => update('permStockGS', v)}
+          />
+          <PermCheckbox
+            id="perm-caisse"
+            label="💰 Caisse (vue limitée — pour Meriem)"
+            checked={isAdmin || formData.permCaisse}
+            onChange={v => update('permCaisse', v)}
+          />
+          <PermCheckbox
+            id="perm-caisse-admin"
+            label="💰 Caisse · Admin (accès complet au module)"
+            checked={isAdmin || formData.permCaisseAdmin}
+            onChange={v => update('permCaisseAdmin', v)}
+          />
+          <PermCheckbox
+            id="perm-hr"
+            label="🏢 RH (gestion employés sans salaire, attestations limitées, récap pointage)"
+            checked={isAdmin || formData.permHR}
+            onChange={v => update('permHR', v)}
           />
           <PermCheckbox
             id="perm-define-gm"

@@ -3,7 +3,7 @@ import { createEmploye, updateEmploye } from '../../lib/hr'
 
 const TYPES_CONTRAT = ['CDI', 'CDD', 'Stage', 'Interim', 'Autre']
 
-export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
+export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSaved }) {
   const isNew = !employe
   const [form, setForm] = useState({
     nom: employe?.nom || '',
@@ -32,6 +32,7 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
     heures_jour_complet: employe?.heures_jour_complet != null ? String(employe.heures_jour_complet) : '8.50',
     heures_demi_journee: employe?.heures_demi_journee != null ? String(employe.heures_demi_journee) : '4.00',
     nom_odoo_match: employe?.nom_odoo_match || '',
+    heures_sup_mensuelles: employe?.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -73,6 +74,7 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
         heures_jour_complet: form.heures_jour_complet ? parseFloat(form.heures_jour_complet) : 8.50,
         heures_demi_journee: form.heures_demi_journee ? parseFloat(form.heures_demi_journee) : 4.00,
         nom_odoo_match: form.nom_odoo_match.trim() || null,
+        heures_sup_mensuelles: form.heures_sup_mensuelles,
       }
       if (isNew) {
         await createEmploye(data, user.id)
@@ -112,7 +114,9 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
                 {TYPES_CONTRAT.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <Field label="Salaire net (DH)" type="number" value={form.salaire_net} onChange={v => setF('salaire_net', v)} placeholder="8500" />
+            {isAdmin ? (
+              <Field label="Salaire net (DH) 🔒" type="number" value={form.salaire_net} onChange={v => setF('salaire_net', v)} placeholder="8500" />
+            ) : <div />}
           </Row>
           <Row>
             <Field label="Date d'entrée" type="date" value={form.date_entree} onChange={v => setF('date_entree', v)} />
@@ -246,6 +250,19 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
               style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
             />
           </div>
+
+          {isAdmin && (
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+              background: '#FCEEE8', borderRadius: 8, cursor: 'pointer', marginBottom: 10
+            }}>
+              <input type="checkbox" checked={form.heures_sup_mensuelles} onChange={e => setF('heures_sup_mensuelles', e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
+              <span style={{ fontSize: 13, color: '#3A3733' }}>
+                🔒 Heures sup mensuelles payées (décocher si forfait ou autre)
+              </span>
+            </label>
+          )}
 
           <label style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',

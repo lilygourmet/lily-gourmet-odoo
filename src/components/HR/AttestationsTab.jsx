@@ -4,14 +4,14 @@ import { loadEmployes, generateAttestation, getAllTemplates } from '../../lib/hr
 /**
  * Onglet Attestations : choix du type + employé + champs + génération.
  */
-export default function AttestationsTab({ user }) {
+export default function AttestationsTab({ user, isAdmin }) {
   const [employes, setEmployes] = useState([])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
-  const [type, setType] = useState('salaire')
+  const [type, setType] = useState(isAdmin ? 'salaire' : 'travail_en_poste')
   const [empId, setEmpId] = useState('')
   // Données formulaire (saisies/auto-remplies)
   const [form, setForm] = useState({
@@ -22,7 +22,12 @@ export default function AttestationsTab({ user }) {
     nationalite: 'مغربي', duree: '',
   })
 
-  const templates = useMemo(() => getAllTemplates(), [])
+  const allTemplates = useMemo(() => getAllTemplates(), [])
+  const templates = useMemo(() => {
+    if (isAdmin) return allTemplates
+    // perm_hr : seulement travail_en_poste et stage
+    return allTemplates.filter(t => t.key === 'travail_en_poste' || t.key === 'stage')
+  }, [allTemplates, isAdmin])
   const currentTemplate = useMemo(() => templates.find(t => t.key === type), [templates, type])
 
   // Charger les employés
