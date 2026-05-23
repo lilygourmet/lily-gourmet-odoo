@@ -628,25 +628,21 @@ function Legende() {
 
 
 function VueRecup({ data, resultats, mois, annee }) {
-  // Collecter TOUS les événements (récup + absences) de tous les employés
-  // puis trier chronologiquement et grouper par date
-  const evenements = []
+  // Pour chaque employé, collecter ses jours de récup + absences (triés chronologiquement)
+  const lignes = []
   for (const emp of data.employes) {
     const r = resultats[emp.id]
     if (!r) continue
-    for (const j of r.journal) {
-      if (j.jours_recup > 0) {
-        evenements.push({ type: 'recup', emp, jour: j, date: j.date })
-      } else if (j.statut === 'absent') {
-        evenements.push({ type: 'absent', emp, jour: j, date: j.date })
-      }
-    }
+    const jours = r.journal.filter(j => j.jours_recup > 0 || j.statut === 'absent')
+    if (jours.length === 0) continue
+    // Tri chronologique
+    jours.sort((a, b) => a.date.localeCompare(b.date))
+    const totalRecup = jours.filter(j => j.jours_recup > 0).reduce((s, j) => s + j.jours_recup, 0)
+    const nbAbsents = jours.filter(j => j.statut === 'absent').length
+    lignes.push({ emp, jours, totalRecup, nbAbsents })
   }
 
-  // Tri chronologique
-  evenements.sort((a, b) => a.date.localeCompare(b.date))
-
-  if (evenements.length === 0) {
+  if (lignes.length === 0) {
     return (
       <div style={{
         padding: 40, textAlign: 'center', color: '#6F6A60',
@@ -657,97 +653,112 @@ function VueRecup({ data, resultats, mois, annee }) {
     )
   }
 
-  // Stats résumé
-  const nbRecup = evenements.filter(e => e.type === 'recup').length
-  const totalJoursRecup = evenements
-    .filter(e => e.type === 'recup')
-    .reduce((sum, e) => sum + e.jour.jours_recup, 0)
-  const nbAbsences = evenements.filter(e => e.type === 'absent').length
+  // Stats résumé global
+  const totalJoursRecup = lignes.reduce((s, l) => s + l.totalRecup, 0)
+  const totalAbsences = lignes.reduce((s, l) => s + l.nbAbsents, 0)
+  const nbEmpRecup = lignes.filter(l => l.totalRecup > 0).length
+  const nbEmpAbsents = lignes.filter(l => l.nbAbsents > 0).length
 
-  // Grouper par date
-  const parDate = new Map()
-  for (const ev of evenements) {
-    if (!parDate.has(ev.date)) parDate.set(ev.date, [])
-    parDate.get(ev.date).push(ev)
-  }
+  const joursFR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+  const moisFR  = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juill.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 
   return (
     <div>
-      {/* Bandeaux de résumé */}
+      {/* Bandeaux de résumé global */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 14 }}>
         <div style={{
           background: '#EEEDFE', padding: 12, borderRadius: 8,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span style={{ fontSize: 12, color: '#3C3489' }}>🟣 Récup ({nbRecup})</span>
+          <span style={{ fontSize: 12, color: '#3C3489' }}>🟣 Récup · {nbEmpRecup} employé{nbEmpRecup > 1 ? 's' : ''}</span>
           <span style={{ fontSize: 16, fontWeight: 600, color: '#3C3489' }}>{totalJoursRecup.toFixed(2)} j</span>
         </div>
         <div style={{
           background: '#FCEBEB', padding: 12, borderRadius: 8,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span style={{ fontSize: 12, color: '#A32D2D' }}>🔴 Absences</span>
-          <span style={{ fontSize: 16, fontWeight: 600, color: '#A32D2D' }}>{nbAbsences} jour{nbAbsences > 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 12, color: '#A32D2D' }}>🔴 Absences · {nbEmpAbsents} employé{nbEmpAbsents > 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 16, fontWeight: 600, color: '#A32D2D' }}>{totalAbsences} jour{totalAbsences > 1 ? 's' : ''}</span>
         </div>
       </div>
 
-      {/* Liste chronologique groupée par date */}
-      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflow: 'hidden' }}>
-        {Array.from(parDate.entries()).map(([date, evs]) => {
-          const d = new Date(date)
-          const joursFR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
-          const moisFR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juill.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
-          const dateLabel = `${joursFR[d.getDay()]} ${d.getDate()} ${moisFR[d.getMonth()]}`
-          return (
-            <div key={date} style={{ borderBottom: '1px solid #F4F0EA' }}>
-              <div style={{
-                padding: '8px 14px', background: '#FAFAF7',
-                fontSize: 12, fontWeight: 500, color: '#3A3733',
-              }}>
-                {dateLabel}
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <tbody>
-                  {evs.map((ev, i) => {
-                    const isRecup = ev.type === 'recup'
-                    const bgRow = isRecup ? '#FBFAFE' : '#FFF8F7'
-                    return (
-                      <tr key={i} style={{ background: bgRow, borderTop: i > 0 ? '1px solid #F4F0EA' : 'none' }}>
-                        <td style={{ padding: '7px 14px', width: 30 }}>
-                          {isRecup ? '🟣' : '🔴'}
-                        </td>
-                        <td style={{ padding: '7px 8px', minWidth: 140 }}>
-                          <strong style={{ fontSize: 12 }}>{ev.emp.nom}</strong>
-                          {ev.emp.poste && <span style={{ fontSize: 10, color: '#9B968D', marginLeft: 6 }}>· {ev.emp.poste}</span>}
-                        </td>
-                        <td style={{ padding: '7px 8px', fontFamily: 'monospace', fontSize: 11, color: '#6F6A60' }}>
-                          {isRecup ? ev.jour.tranches : '—'}
-                        </td>
-                        <td style={{ padding: '7px 8px', textAlign: 'right', fontSize: 11, color: '#6F6A60' }}>
-                          {isRecup
-                            ? `${ev.jour.heures_travaillees.toFixed(2)}h travaillées`
-                            : `${ev.jour.heures_prevues.toFixed(2)}h prévues`}
-                        </td>
-                        <td style={{ padding: '7px 14px', textAlign: 'right', width: 130 }}>
-                          {isRecup ? (
-                            <span style={{ fontSize: 11, fontWeight: 500, color: '#3C3489', background: '#EEEDFE', padding: '3px 8px', borderRadius: 999 }}>
-                              +{ev.jour.jours_recup.toFixed(2)} j récup
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: 11, fontWeight: 500, color: '#A32D2D', background: '#FCEBEB', padding: '3px 8px', borderRadius: 999 }}>
-                              -{ev.jour.heures_manquantes.toFixed(2)}h
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+      {/* Liste groupée par personnel */}
+      {lignes.map(({ emp, jours, totalRecup, nbAbsents }) => (
+        <div key={emp.id} style={{
+          background: 'white', borderRadius: 10, border: '1px solid #E8E2D8',
+          marginBottom: 12, overflow: 'hidden',
+        }}>
+          {/* Header employé */}
+          <div style={{
+            padding: '10px 14px', background: '#F4F0EA',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          }}>
+            <div>
+              <strong style={{ fontSize: 13 }}>{emp.nom}</strong>
+              {emp.poste && <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 8 }}>· {emp.poste}</span>}
             </div>
-          )
-        })}
-      </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {totalRecup > 0 && (
+                <span style={{
+                  fontSize: 12, fontWeight: 500, color: '#3C3489',
+                  background: '#EEEDFE', padding: '4px 10px', borderRadius: 999,
+                }}>
+                  🟣 {totalRecup.toFixed(2)} j récup
+                </span>
+              )}
+              {nbAbsents > 0 && (
+                <span style={{
+                  fontSize: 12, fontWeight: 500, color: '#A32D2D',
+                  background: '#FCEBEB', padding: '4px 10px', borderRadius: 999,
+                }}>
+                  🔴 {nbAbsents} absent{nbAbsents > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Liste des jours triée chronologiquement */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <tbody>
+              {jours.map((j, i) => {
+                const isRecup = j.jours_recup > 0
+                const d = new Date(j.date)
+                const dateLabel = `${joursFR[d.getDay()]} ${String(d.getDate()).padStart(2, '0')} ${moisFR[d.getMonth()]}`
+                const bgRow = isRecup ? '#FBFAFE' : '#FFF8F7'
+                return (
+                  <tr key={j.date} style={{ background: bgRow, borderTop: i > 0 ? '1px solid #F4F0EA' : 'none' }}>
+                    <td style={{ padding: '7px 14px', width: 30 }}>
+                      {isRecup ? '🟣' : '🔴'}
+                    </td>
+                    <td style={{ padding: '7px 8px', minWidth: 110, fontSize: 12 }}>
+                      {dateLabel}
+                    </td>
+                    <td style={{ padding: '7px 8px', fontFamily: 'monospace', fontSize: 11, color: '#6F6A60' }}>
+                      {isRecup ? j.tranches : '—'}
+                    </td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right', fontSize: 11, color: '#6F6A60' }}>
+                      {isRecup
+                        ? `${j.heures_travaillees.toFixed(2)}h travaillées`
+                        : `${j.heures_prevues.toFixed(2)}h prévues`}
+                    </td>
+                    <td style={{ padding: '7px 14px', textAlign: 'right', width: 130 }}>
+                      {isRecup ? (
+                        <span style={{ fontSize: 11, fontWeight: 500, color: '#3C3489', background: '#EEEDFE', padding: '3px 8px', borderRadius: 999 }}>
+                          +{j.jours_recup.toFixed(2)} j
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 500, color: '#A32D2D', background: '#FCEBEB', padding: '3px 8px', borderRadius: 999 }}>
+                          -{j.heures_manquantes.toFixed(2)}h
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   )
 }
