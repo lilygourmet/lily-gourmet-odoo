@@ -83,33 +83,18 @@ export async function loadEnveloppesByMonth(year, month) {
   const { start, end } = monthBounds(year, month)
   const sel = '*, destinataire:caisse_destinataires(*), assigner:profiles!caisse_enveloppes_assigned_by_fkey(username, full_name)'
 
-  // On charge 2 ensembles : sessions du mois (sans assigned_date) + affectations du mois
-  const [r1, r2] = await Promise.all([
-    supabase.from('caisse_enveloppes').select(sel)
-      .gte('session_date', start).lt('session_date', end)
-      .order('session_date', { ascending: true }).order('source'),
-    supabase.from('caisse_enveloppes').select(sel)
-      .gte('assigned_date', start).lt('assigned_date', end)
-      .order('assigned_date', { ascending: true }).order('source'),
-  ])
-  if (r1.error) throw r1.error
-  if (r2.error) throw r2.error
-
-  // Fusion : une enveloppe avec assigned_date n'apparaît que dans son mois d'affectation
-  const map = new Map()
-  for (const e of (r1.data || [])) {
-    if (!e.assigned_date) map.set(e.id, e)
-  }
-  for (const e of (r2.data || [])) {
-    map.set(e.id, e)
-  }
-  const list = Array.from(map.values())
-  list.sort((a, b) => {
-    const da = a.assigned_date || a.session_date
-    const db = b.assigned_date || b.session_date
-    return da.localeCompare(db) || (a.source || '').localeCompare(b.source || '')
-  })
-  return list
+  // L'enveloppe reste TOUJOURS dans son mois de session POS (date originale Odoo).
+  // La date d'affectation (assigned_date) ne sert qu'à dater le mvt_date côté caisse-gérée,
+  // pas à déplacer l'enveloppe d'un mois à l'autre.
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select(sel)
+    .gte('session_date', start)
+    .lt('session_date', end)
+    .order('session_date', { ascending: true })
+    .order('source')
+  if (error) throw error
+  return data || []
 }
 
 export async function loadEnveloppesUnassigned() {
