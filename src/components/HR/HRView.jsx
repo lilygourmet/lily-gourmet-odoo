@@ -1,23 +1,24 @@
 import { useState } from 'react'
 import AttestationsTab from './AttestationsTab'
 import EmployesTab from './EmployesTab'
+import PointageTab from './PointageTab'
 
 /**
  * Vue principale HR (réservée admin).
- * Onglets : Attestations, Employés
+ * Onglets : Attestations, Employés, Pointage
  */
 export default function HRView({ user }) {
   const [tab, setTab] = useState('attestations')
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.5rem 1.25rem' }}>
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem 1.25rem' }}>
 
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 500, color: '#3A3733' }}>
           🏢 Ressources Humaines
         </h2>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6F6A60' }}>
-          Génération d'attestations, gestion des employés
+          Génération d'attestations, gestion des employés, pointage
         </p>
       </div>
 
@@ -31,11 +32,14 @@ export default function HRView({ user }) {
         <TabBtn active={tab === 'employes'} onClick={() => setTab('employes')}>
           👥 Employés
         </TabBtn>
-        {/* À venir : Contrats */}
+        <TabBtn active={tab === 'pointage'} onClick={() => setTab('pointage')}>
+          ⏰ Pointage
+        </TabBtn>
       </div>
 
       {tab === 'attestations' && <AttestationsTab user={user} />}
       {tab === 'employes' && <EmployesTab user={user} />}
+      {tab === 'pointage' && <PointageTab user={user} />}
     </div>
   )
 }

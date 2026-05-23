@@ -20,6 +20,18 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
     banque: employe?.banque || '',
     actif: employe?.actif != null ? employe.actif : true,
     notes: employe?.notes || '',
+    // PLANNING (pour module Pointage)
+    planning_type: employe?.planning_type || 'aucun',
+    planning_jour_off: employe?.planning_jour_off || '',
+    planning_demi_off: employe?.planning_demi_off || '',
+    planning_paire_off_1: employe?.planning_paire_off_1 || '',
+    planning_paire_off_2: employe?.planning_paire_off_2 || '',
+    planning_impaire_off_1: employe?.planning_impaire_off_1 || '',
+    planning_impaire_off_2: employe?.planning_impaire_off_2 || '',
+    equipe: employe?.equipe || 'normale',
+    heures_jour_complet: employe?.heures_jour_complet != null ? String(employe.heures_jour_complet) : '8.50',
+    heures_demi_journee: employe?.heures_demi_journee != null ? String(employe.heures_demi_journee) : '4.00',
+    nom_odoo_match: employe?.nom_odoo_match || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -49,6 +61,18 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
         banque: form.banque.trim() || null,
         actif: form.actif,
         notes: form.notes.trim() || null,
+        // PLANNING
+        planning_type: form.planning_type || 'aucun',
+        planning_jour_off: form.planning_jour_off || null,
+        planning_demi_off: form.planning_demi_off || null,
+        planning_paire_off_1: form.planning_paire_off_1 || null,
+        planning_paire_off_2: form.planning_paire_off_2 || null,
+        planning_impaire_off_1: form.planning_impaire_off_1 || null,
+        planning_impaire_off_2: form.planning_impaire_off_2 || null,
+        equipe: form.equipe || 'normale',
+        heures_jour_complet: form.heures_jour_complet ? parseFloat(form.heures_jour_complet) : 8.50,
+        heures_demi_journee: form.heures_demi_journee ? parseFloat(form.heures_demi_journee) : 4.00,
+        nom_odoo_match: form.nom_odoo_match.trim() || null,
       }
       if (isNew) {
         await createEmploye(data, user.id)
@@ -115,6 +139,102 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
             <Field label="RIB (numéro de compte)" value={form.rib} onChange={v => setF('rib', v)} placeholder="Ex : 011 810 0000123456789 12" />
             <Field label="Banque" value={form.banque} onChange={v => setF('banque', v)} placeholder="Ex : Attijariwafa Bank, BMCE…" />
           </Row>
+
+          {/* PLANNING (pour module Pointage) */}
+          <div style={{
+            background: '#F4F0EA', padding: 12, borderRadius: 8, marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#3A3733', marginBottom: 8 }}>
+              ⏰ Planning de travail (pour calcul du pointage)
+            </div>
+
+            <Row>
+              <div>
+                <label style={lblStyle}>Type de planning</label>
+                <select value={form.planning_type} onChange={e => setF('planning_type', e.target.value)} style={inputStyle}>
+                  <option value="aucun">Aucun planning</option>
+                  <option value="fixe">Fixe (mêmes jours off chaque semaine)</option>
+                  <option value="alt">Alternant (paire/impaire)</option>
+                </select>
+              </div>
+              <div>
+                <label style={lblStyle}>Équipe</label>
+                <select value={form.equipe} onChange={e => setF('equipe', e.target.value)} style={inputStyle}>
+                  <option value="normale">Normale (8h30/jour)</option>
+                  <option value="cafe">Café (8h si pause / 9h sans pause)</option>
+                </select>
+              </div>
+            </Row>
+
+            {form.planning_type === 'fixe' && (
+              <Row>
+                <div>
+                  <label style={lblStyle}>Journée OFF</label>
+                  <select value={form.planning_jour_off} onChange={e => setF('planning_jour_off', e.target.value)} style={inputStyle}>
+                    <option value="">— Aucun —</option>
+                    {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
+                      <option key={j} value={j}>{j}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lblStyle}>Demi-journée OFF</label>
+                  <select value={form.planning_demi_off} onChange={e => setF('planning_demi_off', e.target.value)} style={inputStyle}>
+                    <option value="">— Aucune —</option>
+                    {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
+                      <option key={j} value={j}>{j}</option>)}
+                  </select>
+                </div>
+              </Row>
+            )}
+
+            {form.planning_type === 'alt' && (
+              <>
+                <Row>
+                  <div>
+                    <label style={lblStyle}>Semaine paire — OFF jour 1</label>
+                    <select value={form.planning_paire_off_1} onChange={e => setF('planning_paire_off_1', e.target.value)} style={inputStyle}>
+                      <option value="">— Aucun —</option>
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
+                        <option key={j} value={j}>{j}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lblStyle}>Semaine paire — OFF jour 2</label>
+                    <select value={form.planning_paire_off_2} onChange={e => setF('planning_paire_off_2', e.target.value)} style={inputStyle}>
+                      <option value="">— Aucun —</option>
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
+                        <option key={j} value={j}>{j}</option>)}
+                    </select>
+                  </div>
+                </Row>
+                <Row>
+                  <div>
+                    <label style={lblStyle}>Semaine impaire — OFF jour 1</label>
+                    <select value={form.planning_impaire_off_1} onChange={e => setF('planning_impaire_off_1', e.target.value)} style={inputStyle}>
+                      <option value="">— Aucun —</option>
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
+                        <option key={j} value={j}>{j}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lblStyle}>Semaine impaire — OFF jour 2</label>
+                    <select value={form.planning_impaire_off_2} onChange={e => setF('planning_impaire_off_2', e.target.value)} style={inputStyle}>
+                      <option value="">— Aucun —</option>
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
+                        <option key={j} value={j}>{j}</option>)}
+                    </select>
+                  </div>
+                </Row>
+              </>
+            )}
+
+            <Row>
+              <Field label="Heures journée complète (h)" type="number" value={form.heures_jour_complet} onChange={v => setF('heures_jour_complet', v)} placeholder="8.50" />
+              <Field label="Heures demi-journée (h)" type="number" value={form.heures_demi_journee} onChange={v => setF('heures_demi_journee', v)} placeholder="4.00" />
+            </Row>
+
+            <Field label="Nom Odoo complet (avec préfixe PA-, PC-, etc. pour matching pointages)" value={form.nom_odoo_match} onChange={v => setF('nom_odoo_match', v)} placeholder="Ex : PA- Asmae El Abbadi" />
+          </div>
 
           <div style={{ marginBottom: 12 }}>
             <label style={lblStyle}>Notes (interne)</label>
