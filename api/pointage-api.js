@@ -297,7 +297,7 @@ function normNomCommon(s) {
  * Trouve le meilleur match d'un nom Odoo dans la liste des employés.
  * Retourne null si rien de raisonnable.
  */
-function findBestMatch(nomOdoo, employes, seuilFuzzy = 0.80) {
+function findBestMatch(nomOdoo, employes, seuilFuzzy = 0.70) {
   const normOdoo = normNomCommon(nomOdoo)
   if (!normOdoo) return null
 
@@ -356,7 +356,7 @@ async function actionSyncAttendance({ mois, annee }) {
 
   function matchEmploye(nomOdoo) {
     if (cacheMatch.has(nomOdoo)) return cacheMatch.get(nomOdoo)
-    const result = findBestMatch(nomOdoo, employesDb, 0.80)
+    const result = findBestMatch(nomOdoo, employesDb, 0.70)
     cacheMatch.set(nomOdoo, result)
     if (result && result.type === 'fuzzy' && !result.employe.nom_odoo_match) {
       // Mémoriser pour update plus tard
@@ -433,6 +433,8 @@ async function actionSyncAttendance({ mois, annee }) {
     matched_exact: uniqueExact,
     matched_fuzzy: uniqueFuzzy,
     new_matches_saved: newMatches.size,
+    employes_db_count: employesDb.length,
+    noms_db: employesDb.map(e => e.nom).sort(),
   }
 }
 
@@ -473,7 +475,7 @@ async function actionSyncLeaves({ mois, annee }) {
   for (const lv of leaves) {
     if (!lv.employee_id) continue
     const empNameOdoo = Array.isArray(lv.employee_id) ? lv.employee_id[1] : null
-    const match = findBestMatch(empNameOdoo, employesDb, 0.80)
+    const match = findBestMatch(empNameOdoo, employesDb, 0.70)
     if (!match) { unmatched++; continue }
     const typeName = Array.isArray(lv.holiday_status_id) ? lv.holiday_status_id[1] : null
     rows.push({

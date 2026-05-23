@@ -108,7 +108,7 @@ export default function PointageTab({ user, isAdmin }) {
         msg += `\n🔗 ${r1.matched_fuzzy.length} employé(s) matché(s) par similarité (mémorisés pour les prochaines syncs).`
       }
       if (r1.unmatched > 0) {
-        msg += `\n⚠️ ${r1.unmatched_names?.length || 0} employé(s) Odoo non rattaché(s) : ${(r1.unmatched_names || []).slice(0, 5).join(', ')}`
+        msg += `\n⚠️ ${r1.unmatched_names?.length || 0} employé(s) Odoo non rattaché(s) :\n  • ${(r1.unmatched_names || []).join('\n  • ')}`
       }
       setSuccess(msg)
       await reload()
