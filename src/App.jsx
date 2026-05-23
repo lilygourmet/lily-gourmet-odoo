@@ -15,6 +15,7 @@ import StockGS from './components/StockBoutique/StockGS'
 import ChecklistView from './components/ChecklistView'
 import CaisseView from './components/Caisse/CaisseView'
 import TasksView from './components/Tasks/TasksView'
+import HRView from './components/HR/HRView'
 import AppHeader from './components/AppHeader'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar } from './lib/auth'
 
@@ -203,6 +204,7 @@ function App() {
   if (activeView === 'stock') return <StockAudit {...navProps} />
   if (activeView === 'stock-gs') return <StockGS {...navProps} />
   if (activeView === 'tasks') return <TasksWrapper {...navProps} />
+  if (activeView === 'hr') return <HRWrapper {...navProps} />
   if (activeView === 'caisse') return <CaisseView {...navProps} />
   if (activeView === 'checklist') return <ChecklistView {...navProps} />
   // Default = Calendar
@@ -219,6 +221,16 @@ function TasksWrapper(props) {
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <TasksView user={user} />
+    </div>
+  )
+}
+
+function HRWrapper(props) {
+  const { user, onLogout, onNavigate, activeView } = props
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <HRView user={user} />
     </div>
   )
 }
