@@ -252,6 +252,78 @@ async function odooExec(uid, model, method, args = [], kwargs = {}) {
   return parseRpcResponse(text)
 }
 
+
+// ============================================================
+// FUZZY MATCHING (similarité de chaînes)
+// ============================================================
+
+/**
+ * Calcule un score de similarité entre 0 (différent) et 1 (identique).
+ * Algorithme : Dice coefficient sur bigrammes (simple et efficace).
+ */
+function similarity(a, b) {
+  if (!a || !b) return 0
+  if (a === b) return 1
+  if (a.length < 2 || b.length < 2) return 0
+  const bigrams = (s) => {
+    const set = new Set()
+    for (let i = 0; i < s.length - 1; i++) set.add(s.substring(i, i + 2))
+    return set
+  }
+  const aB = bigrams(a)
+  const bB = bigrams(b)
+  let common = 0
+  for (const bg of aB) if (bB.has(bg)) common++
+  return (2 * common) / (aB.size + bB.size)
+}
+
+/**
+ * Normalisation des noms (préfixe, accents, casse, espaces).
+ */
+function normNomCommon(s) {
+  if (!s) return ''
+  let n = String(s).trim()
+  if (n.includes('-')) {
+    const idx = n.indexOf('-')
+    const prefix = n.substring(0, idx).trim()
+    if (prefix.length <= 4) n = n.substring(idx + 1)
+  }
+  return n.trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Trouve le meilleur match d'un nom Odoo dans la liste des employés.
+ * Retourne null si rien de raisonnable.
+ */
+function findBestMatch(nomOdoo, employes, seuilFuzzy = 0.80) {
+  const normOdoo = normNomCommon(nomOdoo)
+  if (!normOdoo) return null
+
+  // 1) Match exact d'abord
+  for (const e of employes) {
+    for (const v of [e.nom, e.nom_odoo, e.nom_odoo_match]) {
+      if (v && normNomCommon(v) === normOdoo) {
+        return { employe: e, score: 1.0, type: 'exact' }
+      }
+    }
+  }
+
+  // 2) Match fuzzy (similarité maximale)
+  let best = null
+  for (const e of employes) {
+    for (const v of [e.nom, e.nom_odoo, e.nom_odoo_match]) {
+      if (!v) continue
+      const score = similarity(normOdoo, normNomCommon(v))
+      if (score >= seuilFuzzy && (!best || score > best.score)) {
+        best = { employe: e, score, type: 'fuzzy', via: v }
+      }
+    }
+  }
+  return best
+}
+
 // ============================================================
 // Action : sync-attendance (pointages d'un mois)
 // ============================================================
@@ -259,7 +331,6 @@ async function odooExec(uid, model, method, args = [], kwargs = {}) {
 async function actionSyncAttendance({ mois, annee }) {
   if (!mois || !annee) throw new Error('mois et annee requis')
 
-  // Calcul des bornes (premier jour 00:00, dernier jour 23:59)
   const debut = `${annee}-${String(mois).padStart(2, '0')}-01 00:00:00`
   const nextMonth = mois === 12 ? 1 : mois + 1
   const nextYear  = mois === 12 ? annee + 1 : annee
@@ -267,84 +338,79 @@ async function actionSyncAttendance({ mois, annee }) {
 
   const uid = await odooAuth()
 
-  // Récupérer tous les pointages du mois
+  // Récupérer TOUS les pointages du mois (pagination si > 5000)
   const attendances = await odooExec(uid, 'hr.attendance', 'search_read', [
-    [
-      ['check_in', '>=', debut],
-      ['check_in', '<',  fin],
-    ],
-    ['id', 'employee_id', 'check_in', 'check_out', 'worked_hours']
-  ], { limit: 5000 })
+    [['check_in', '>=', debut], ['check_in', '<', fin]],
+    ['id', 'employee_id', 'check_in', 'check_out']
+  ], { limit: 10000 })
 
-  // Charger les employés en base (pour matching nom Odoo)
+  // Charger les employés en base
   const { data: employesDb, error: empErr } = await sb
     .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
   if (empErr) throw empErr
 
-  // Construire un index nom_odoo (sans préfixe et insensible casse) -> id
-  function normNom(s) {
-    if (!s) return ''
-    // Enlever préfixe avant "-"
-    let n = String(s).trim()
-    if (n.includes('-')) {
-      const parts = n.split('-')
-      // Si premier part fait <=4 chars, c'est le préfixe (PA, PC, PCD, PP, PM)
-      if (parts[0].trim().length <= 4) {
-        n = parts.slice(1).join('-')
-      }
+  // Cache : nom Odoo -> employe (pour ne pas refaire fuzzy à chaque ligne)
+  const cacheMatch = new Map()
+  // Stats des matchs fuzzy pour les apprendre dans nom_odoo_match
+  const newMatches = new Map()  // employe_id -> nom_odoo_brut
+
+  function matchEmploye(nomOdoo) {
+    if (cacheMatch.has(nomOdoo)) return cacheMatch.get(nomOdoo)
+    const result = findBestMatch(nomOdoo, employesDb, 0.80)
+    cacheMatch.set(nomOdoo, result)
+    if (result && result.type === 'fuzzy' && !result.employe.nom_odoo_match) {
+      // Mémoriser pour update plus tard
+      newMatches.set(result.employe.id, nomOdoo)
     }
-    return n.trim().toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // enlever accents
-      .replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+    return result
   }
 
-  const empByName = new Map()
-  for (const e of employesDb) {
-    // Try nom + nom_odoo + nom_odoo_match
-    for (const v of [e.nom, e.nom_odoo, e.nom_odoo_match]) {
-      if (v) empByName.set(normNom(v), e.id)
-    }
-  }
-
-  // Préparer les rows à insérer (groupées par employé+jour)
   const rows = []
   let unmatched = 0
   const unmatchedNames = new Set()
+  const matchedFuzzy = []
+  const matchedExact = []
 
   for (const att of attendances) {
     if (!att || !att.employee_id) continue
     const empNameOdoo = Array.isArray(att.employee_id) ? att.employee_id[1] : null
     if (!empNameOdoo) continue
-    const empId = empByName.get(normNom(empNameOdoo))
-    if (!empId) {
+
+    const match = matchEmploye(empNameOdoo)
+    if (!match) {
       unmatched++
       unmatchedNames.add(empNameOdoo)
       continue
     }
-    // check_in et check_out en datetime Odoo (UTC normalement)
+    if (match.type === 'fuzzy') matchedFuzzy.push({ odoo: empNameOdoo, db: match.employe.nom, score: match.score })
+    else matchedExact.push({ odoo: empNameOdoo, db: match.employe.nom })
+
     const checkIn = att.check_in
-    const checkOut = att.check_out
     if (!checkIn) continue
-    // Date du jour (basée sur check_in)
-    const dateOnly = checkIn.slice(0, 10)  // "YYYY-MM-DD"
+    const dateOnly = checkIn.slice(0, 10)
     rows.push({
-      employe_id: empId,
+      employe_id: match.employe.id,
       date_pointage: dateOnly,
       arrivee: checkIn,
-      depart: checkOut || null,
+      depart: att.check_out || null,
       source: 'odoo',
       odoo_id: att.id,
     })
   }
 
-  // Insertion : on supprime d'abord les pointages du mois existants (sauf ceux modifiés manuellement)
+  // Mémoriser les matches fuzzy dans nom_odoo_match pour accélérer les prochains syncs
+  for (const [empId, nomOdoo] of newMatches.entries()) {
+    await sb.from('employes').update({ nom_odoo_match: nomOdoo }).eq('id', empId)
+  }
+
+  // Supprimer les pointages existants (sauf manuels)
   await sb.from('pointages')
     .delete()
     .gte('date_pointage', `${annee}-${String(mois).padStart(2, '0')}-01`)
     .lt('date_pointage',  `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`)
     .neq('source', 'manuel')
 
-  // Insertion par batches de 100
+  // Insérer par batches
   let inserted = 0
   for (let i = 0; i < rows.length; i += 100) {
     const batch = rows.slice(i, i + 100)
@@ -353,12 +419,20 @@ async function actionSyncAttendance({ mois, annee }) {
     else inserted += batch.length
   }
 
+  // Stats de matching uniques (déduplication)
+  const uniqueFuzzy = Array.from(new Map(matchedFuzzy.map(m => [m.odoo, m])).values())
+  const uniqueExact = Array.from(new Map(matchedExact.map(m => [m.odoo, m])).values())
+
   return {
     ok: true,
     total_odoo: attendances.length,
     inserted,
     unmatched,
     unmatched_names: Array.from(unmatchedNames),
+    nb_employes_matches: cacheMatch.size - unmatchedNames.size,
+    matched_exact: uniqueExact,
+    matched_fuzzy: uniqueFuzzy,
+    new_matches_saved: newMatches.size,
   }
 }
 
@@ -376,7 +450,6 @@ async function actionSyncLeaves({ mois, annee }) {
 
   const uid = await odooAuth()
 
-  // Récupérer les congés validés qui chevauchent le mois
   const leaves = await odooExec(uid, 'hr.leave', 'search_read', [
     [
       ['state', '=', 'validate'],
@@ -386,30 +459,10 @@ async function actionSyncLeaves({ mois, annee }) {
     ['id', 'employee_id', 'date_from', 'date_to', 'holiday_status_id', 'name']
   ], { limit: 2000 })
 
-  // Match employés (même logique que attendance)
   const { data: employesDb } = await sb
     .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
 
-  function normNom(s) {
-    if (!s) return ''
-    let n = String(s).trim()
-    if (n.includes('-')) {
-      const parts = n.split('-')
-      if (parts[0].trim().length <= 4) n = parts.slice(1).join('-')
-    }
-    return n.trim().toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
-  }
-
-  const empByName = new Map()
-  for (const e of employesDb) {
-    for (const v of [e.nom, e.nom_odoo, e.nom_odoo_match]) {
-      if (v) empByName.set(normNom(v), e.id)
-    }
-  }
-
-  // Supprimer les congés existants du mois (issus d'Odoo)
+  // Supprimer les congés existants du mois
   await sb.from('conges')
     .delete()
     .or(`date_debut.lte.${fin},date_fin.gte.${debut}`)
@@ -420,11 +473,11 @@ async function actionSyncLeaves({ mois, annee }) {
   for (const lv of leaves) {
     if (!lv.employee_id) continue
     const empNameOdoo = Array.isArray(lv.employee_id) ? lv.employee_id[1] : null
-    const empId = empByName.get(normNom(empNameOdoo))
-    if (!empId) { unmatched++; continue }
+    const match = findBestMatch(empNameOdoo, employesDb, 0.80)
+    if (!match) { unmatched++; continue }
     const typeName = Array.isArray(lv.holiday_status_id) ? lv.holiday_status_id[1] : null
     rows.push({
-      employe_id: empId,
+      employe_id: match.employe.id,
       date_debut: (lv.date_from || '').slice(0, 10),
       date_fin: (lv.date_to || '').slice(0, 10),
       type_conge: typeName,
@@ -460,37 +513,62 @@ async function actionListEmployees() {
 // ============================================================
 
 async function actionDebugAttendance({ mois, annee }) {
-  if (!mois || !annee) throw new Error('mois et annee requis')
-  const debut = `${annee}-${String(mois).padStart(2, '0')}-01 00:00:00`
-  const nextMonth = mois === 12 ? 1 : mois + 1
-  const nextYear  = mois === 12 ? annee + 1 : annee
-  const fin = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01 00:00:00`
-
   const uid = await odooAuth()
+  const debug = { uid_odoo: uid, tests: [] }
 
-  const attendances = await odooExec(uid, 'hr.attendance', 'search_read', [
-    [['check_in', '>=', debut], ['check_in', '<', fin]],
-    ['id', 'employee_id', 'check_in', 'check_out']
-  ], { limit: 20 })
-
-  // Liste unique des noms Odoo trouvés
-  const noms = new Set()
-  for (const a of attendances) {
-    if (a.employee_id && Array.isArray(a.employee_id)) noms.add(a.employee_id[1])
+  // TEST 1 : count total hr.attendance sans filtre
+  try {
+    const count_total = await odooExec(uid, 'hr.attendance', 'search_count', [[]], {})
+    debug.tests.push({ test: 'search_count hr.attendance (total)', result: count_total })
+  } catch (e) {
+    debug.tests.push({ test: 'search_count hr.attendance (total)', error: e.message })
   }
 
-  // Comparer avec les employés en base
-  const { data: employesDb } = await sb
-    .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
-
-  return {
-    ok: true,
-    requete: { debut, fin },
-    total_odoo: attendances.length,
-    noms_uniques_odoo: Array.from(noms),
-    echantillon: attendances.slice(0, 5),
-    employes_db: employesDb,
+  // TEST 2 : récupérer les 5 derniers pointages sans filtre date
+  try {
+    const last5 = await odooExec(uid, 'hr.attendance', 'search_read',
+      [[]], { limit: 5, order: 'check_in desc', fields: ['id', 'employee_id', 'check_in', 'check_out'] }
+    )
+    debug.tests.push({ test: 'derniers 5 pointages (sans filtre)', result: last5 })
+  } catch (e) {
+    debug.tests.push({ test: 'derniers 5 pointages (sans filtre)', error: e.message })
   }
+
+  // TEST 3 : count attendance pour le mois demandé
+  if (mois && annee) {
+    const debut = `${annee}-${String(mois).padStart(2, '0')}-01 00:00:00`
+    const nextMonth = mois === 12 ? 1 : mois + 1
+    const nextYear  = mois === 12 ? annee + 1 : annee
+    const fin = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01 00:00:00`
+    try {
+      const count_mois = await odooExec(uid, 'hr.attendance', 'search_count',
+        [[['check_in', '>=', debut], ['check_in', '<', fin]]], {}
+      )
+      debug.tests.push({ test: `count pour ${mois}/${annee}`, periode: { debut, fin }, result: count_mois })
+    } catch (e) {
+      debug.tests.push({ test: `count pour ${mois}/${annee}`, error: e.message })
+    }
+  }
+
+  // TEST 4 : list employees count
+  try {
+    const count_emp = await odooExec(uid, 'hr.employee', 'search_count', [[]], {})
+    debug.tests.push({ test: 'count hr.employee', result: count_emp })
+  } catch (e) {
+    debug.tests.push({ test: 'count hr.employee', error: e.message })
+  }
+
+  // TEST 5 : list 5 employees
+  try {
+    const emps = await odooExec(uid, 'hr.employee', 'search_read',
+      [[['active', '=', true]]], { limit: 5, fields: ['id', 'name'] }
+    )
+    debug.tests.push({ test: 'liste 5 employés', result: emps })
+  } catch (e) {
+    debug.tests.push({ test: 'liste 5 employés', error: e.message })
+  }
+
+  return debug
 }
 
 export default async function handler(req, res) {

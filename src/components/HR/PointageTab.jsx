@@ -71,9 +71,23 @@ export default function PointageTab({ user }) {
         body: JSON.stringify({ mois, annee }),
       })
       const data = await resp.json()
-      console.log('[DEBUG ODOO]', data)
-      const msg = `Total Odoo : ${data.total_odoo} pointages\n\nNoms Odoo trouvés (${data.noms_uniques_odoo?.length}) :\n${(data.noms_uniques_odoo || []).slice(0, 30).join('\n')}\n\n(Voir console pour le détail complet)`
-      alert(msg)
+      console.log('[DEBUG ODOO]', JSON.stringify(data, null, 2))
+      // Construire un résumé lisible
+      const lines = [`UID Odoo : ${data.uid_odoo}`, '']
+      for (const t of (data.tests || [])) {
+        lines.push(`▶ ${t.test}`)
+        if (t.periode) lines.push(`  Période : ${t.periode.debut} → ${t.periode.fin}`)
+        if (t.error) lines.push(`  ❌ ERREUR : ${t.error}`)
+        else if (typeof t.result === 'number') lines.push(`  ✅ ${t.result}`)
+        else if (Array.isArray(t.result)) {
+          lines.push(`  ✅ ${t.result.length} résultats`)
+          for (const r of t.result.slice(0, 3)) {
+            lines.push(`    • ${JSON.stringify(r).slice(0, 150)}`)
+          }
+        }
+        lines.push('')
+      }
+      alert(lines.join('\n'))
     } catch (e) {
       setError('Erreur debug : ' + e.message)
     }
@@ -86,8 +100,15 @@ export default function PointageTab({ user }) {
     try {
       const r1 = await syncAttendance(mois, annee)
       const r2 = await syncLeaves(mois, annee)
+      console.log('[SYNC ATTENDANCE]', r1)
+      console.log('[SYNC LEAVES]', r2)
       let msg = `✅ ${r1.inserted} pointages + ${r2.inserted} congés importés.`
-      if (r1.unmatched > 0) msg += ` ⚠️ ${r1.unmatched} pointages non rattachés à un employé.`
+      if (r1.matched_fuzzy && r1.matched_fuzzy.length > 0) {
+        msg += `\n🔗 ${r1.matched_fuzzy.length} employé(s) matché(s) par similarité (mémorisés pour les prochaines syncs).`
+      }
+      if (r1.unmatched > 0) {
+        msg += `\n⚠️ ${r1.unmatched_names?.length || 0} employé(s) Odoo non rattaché(s) : ${(r1.unmatched_names || []).slice(0, 5).join(', ')}`
+      }
       setSuccess(msg)
       await reload()
     } catch (e) {
