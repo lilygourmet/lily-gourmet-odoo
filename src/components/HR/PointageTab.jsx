@@ -29,7 +29,8 @@ export default function PointageTab({ user }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [selectedEmpId, setSelectedEmpId] = useState(null)
-  const [vueGlobale, setVueGlobale] = useState(false)  // false = 1 employé, true = tous
+  const [vue, setVue] = useState('single')  // 'single' | 'all' | 'recup'
+  const [editingTranches, setEditingTranches] = useState(null)  // { date, sessions } | null
 
   // Charger les données du mois
   const reload = useCallback(async () => {
@@ -141,6 +142,18 @@ export default function PointageTab({ user }) {
     }
   }
 
+  // Sauvegarder les sessions modifiées d'un jour
+  async function handleSaveTranches(date, sessions) {
+    try {
+      const { upsertPointagesDuJour } = await import('../../lib/pointage')
+      await upsertPointagesDuJour(selectedEmpId, date, sessions, user.id)
+      setEditingTranches(null)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
+  }
+
   // Validation du mois
   async function handleValider() {
     if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour TOUS les employés ?\n\nLes données seront figées et le solde reporté sur le mois suivant.`)) return
@@ -178,21 +191,21 @@ export default function PointageTab({ user }) {
         <button onClick={nextMonth} style={btnNav}>▶</button>
 
         <div style={{ display: 'flex', gap: 4, padding: 3, background: '#F4F0EA', borderRadius: 8 }}>
-          <button onClick={() => setVueGlobale(false)} style={{
-            padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
-            background: !vueGlobale ? 'white' : 'transparent',
-            color: !vueGlobale ? '#3A3733' : '#6F6A60',
-            fontWeight: !vueGlobale ? 500 : 400,
-          }}>👤 Un employé</button>
-          <button onClick={() => setVueGlobale(true)} style={{
-            padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
-            background: vueGlobale ? 'white' : 'transparent',
-            color: vueGlobale ? '#3A3733' : '#6F6A60',
-            fontWeight: vueGlobale ? 500 : 400,
-          }}>👥 Tous</button>
+          {[
+            { v: 'single', label: '👤 Un employé' },
+            { v: 'all', label: '👥 Tous' },
+            { v: 'recup', label: '🟣 Récup' },
+          ].map(t => (
+            <button key={t.v} onClick={() => setVue(t.v)} style={{
+              padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
+              background: vue === t.v ? 'white' : 'transparent',
+              color: vue === t.v ? '#3A3733' : '#6F6A60',
+              fontWeight: vue === t.v ? 500 : 400,
+            }}>{t.label}</button>
+          ))}
         </div>
 
-        {!vueGlobale && (
+        {vue === 'single' && (
           <select value={selectedEmpId || ''} onChange={e => setSelectedEmpId(Number(e.target.value))}
                   style={{ flex: 1, minWidth: 200, padding: '8px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }}>
             {(data?.employes || []).map(e => (
@@ -228,11 +241,15 @@ export default function PointageTab({ user }) {
 
       {loading && <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>}
 
-      {!loading && vueGlobale && data && (
+      {!loading && vue === 'all' && data && (
         <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} />
       )}
 
-      {!loading && !vueGlobale && result && (
+      {!loading && vue === 'recup' && data && (
+        <VueRecup data={data} resultats={resultats} mois={mois} annee={annee} />
+      )}
+
+      {!loading && vue === 'single' && result && (
         <>
           {/* Cartes synthèse */}
           <div style={{
@@ -254,6 +271,7 @@ export default function PointageTab({ user }) {
             journal={result.journal}
             onEditCell={handleEditCell}
             onEditPointage={handleEditPointage}
+            onEditTranches={setEditingTranches}
           />
 
           {/* Légende */}
@@ -269,6 +287,84 @@ export default function PointageTab({ user }) {
           </div>
         </>
       )}
+
+      {editingTranches && (
+        <TranchesEditModal
+          data={editingTranches}
+          onClose={() => setEditingTranches(null)}
+          onSave={handleSaveTranches}
+        />
+      )}
+    </div>
+  )
+}
+
+// Modal pour éditer les tranches horaires d'un jour
+function TranchesEditModal({ data, onClose, onSave }) {
+  const { date, sessions: initSessions } = data
+  // Convertir sessions en format éditable : [{ arrivee_hm, depart_hm }, ...]
+  const [sessions, setSessions] = useState(() => {
+    if (!initSessions || initSessions.length === 0) return [{ arrivee_hm: '', depart_hm: '' }]
+    return initSessions.map(s => ({
+      id: s.id,
+      arrivee_hm: s.arrivee ? new Date(s.arrivee).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
+      depart_hm:  s.depart  ? new Date(s.depart).toLocaleTimeString('fr-FR',  { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
+    }))
+  })
+
+  function update(i, field, value) {
+    setSessions(s => s.map((row, idx) => idx === i ? { ...row, [field]: value } : row))
+  }
+  function add() {
+    setSessions(s => [...s, { arrivee_hm: '', depart_hm: '' }])
+  }
+  function remove(i) {
+    setSessions(s => s.filter((_, idx) => idx !== i))
+  }
+
+  function save() {
+    // Convertir hm en datetime (date du jour + heure)
+    const final = sessions
+      .filter(s => s.arrivee_hm || s.depart_hm)
+      .map(s => {
+        const arrivee = s.arrivee_hm ? `${date}T${s.arrivee_hm}:00` : null
+        const depart  = s.depart_hm  ? `${date}T${s.depart_hm}:00`  : null
+        return { id: s.id, arrivee, depart }
+      })
+    onSave(date, final)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 10, padding: 20, maxWidth: 500, width: '100%' }}>
+        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, color: '#3A3733' }}>
+          ✏️ Modifier les pointages du {date}
+        </h3>
+        <p style={{ fontSize: 12, color: '#6F6A60', marginTop: 0, marginBottom: 14 }}>
+          Chaque ligne = 1 session (arrivée → départ). Format HH:MM.
+        </p>
+
+        {sessions.map((s, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}>
+            <input type="time" value={s.arrivee_hm} onChange={e => update(i, 'arrivee_hm', e.target.value)}
+                   placeholder="Arrivée" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }} />
+            <input type="time" value={s.depart_hm} onChange={e => update(i, 'depart_hm', e.target.value)}
+                   placeholder="Départ" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }} />
+            <button onClick={() => remove(i)} style={{ padding: '7px 10px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#A32D2D' }}>🗑</button>
+          </div>
+        ))}
+
+        <button onClick={add} style={{ marginTop: 4, padding: '7px 14px', fontSize: 12, background: '#F4F0EA', border: '1px solid #E8E2D8', borderRadius: 6, cursor: 'pointer' }}>
+          ➕ Ajouter une session
+        </button>
+
+        <div style={{ marginTop: 18, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '9px 16px', fontSize: 13, background: 'white', border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer' }}>Annuler</button>
+          <button onClick={save} style={{ padding: '9px 16px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>
+            💾 Enregistrer
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -287,7 +383,7 @@ function Carte({ label, val, color = '#3A3733', sign = '', unit = 'h', signed = 
   )
 }
 
-function JournalTable({ journal, onEditCell, onEditPointage }) {
+function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches }) {
   return (
     <div style={{
       background: 'white', borderRadius: 10, border: '1px solid #E8E2D8',
@@ -308,7 +404,7 @@ function JournalTable({ journal, onEditCell, onEditPointage }) {
         </thead>
         <tbody>
           {journal.map(j => (
-            <Row key={j.date} j={j} onEditCell={onEditCell} onEditPointage={onEditPointage} />
+            <Row key={j.date} j={j} onEditCell={onEditCell} onEditPointage={onEditPointage} onEditTranches={onEditTranches} />
           ))}
         </tbody>
       </table>
@@ -316,12 +412,12 @@ function JournalTable({ journal, onEditCell, onEditPointage }) {
   )
 }
 
-function Row({ j, onEditCell, onEditPointage }) {
+function Row({ j, onEditCell, onEditPointage, onEditTranches }) {
   const c = COULEUR_STATUT[j.statut] || COULEUR_STATUT.normal
   return (
     <tr style={{ borderTop: '1px solid #F4F0EA', background: c.bg }}>
       <Td>{j.jour_semaine} {String(j.jour_num).padStart(2, '0')}</Td>
-      <Td style={{ fontFamily: 'monospace', fontSize: 11, color: c.text }}>{j.tranches}</Td>
+      <Td onClick={() => onEditTranches({ date: j.date, sessions: j.sessions || [], statut: j.statut })} style={{ fontFamily: 'monospace', fontSize: 11, color: c.text, cursor: 'pointer' }} title="Cliquer pour modifier les pointages">{j.tranches}</Td>
       <EditableCell value={j.heures_prevues} onChange={v => onEditCell(j.date, 'heures_prevues', v)} align="right" />
       <EditableCell value={j.heures_travaillees} onChange={v => onEditCell(j.date, 'heures_travaillees', v)} align="right" />
       <EditableCell value={j.heures_sup} onChange={v => onEditCell(j.date, 'heures_sup', v)} align="right" color="#27500A" />
@@ -417,6 +513,95 @@ function Legende() {
 }
 
 
+
+
+
+function VueRecup({ data, resultats, mois, annee }) {
+  // Pour chaque employé, lister les jours avec récup > 0
+  const lignes = []
+  for (const emp of data.employes) {
+    const r = resultats[emp.id]
+    if (!r) continue
+    const joursRecup = r.journal.filter(j => j.jours_recup > 0)
+    if (joursRecup.length === 0) continue
+    const totalRecup = r.synthese.jours_recup
+    lignes.push({ emp, jours: joursRecup, total: totalRecup })
+  }
+
+  if (lignes.length === 0) {
+    return (
+      <div style={{
+        padding: 40, textAlign: 'center', color: '#6F6A60',
+        background: '#F9F6F1', borderRadius: 10, fontSize: 13,
+      }}>
+        Aucun jour de récupération ce mois-ci 🌸
+      </div>
+    )
+  }
+
+  const totalGlobal = lignes.reduce((sum, l) => sum + l.total, 0)
+
+  return (
+    <div>
+      <div style={{
+        background: '#EEEDFE', padding: 12, borderRadius: 8, marginBottom: 12,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 13, color: '#3C3489' }}>
+          🟣 <strong>{lignes.length}</strong> employé(s) avec des jours de récupération ce mois
+        </span>
+        <span style={{ fontSize: 18, fontWeight: 600, color: '#3C3489' }}>
+          {totalGlobal.toFixed(2)} jours au total
+        </span>
+      </div>
+
+      {lignes.map(({ emp, jours, total }) => (
+        <div key={emp.id} style={{
+          background: 'white', borderRadius: 10, border: '1px solid #E8E2D8',
+          marginBottom: 12, overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 14px', background: '#F4F0EA',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <div>
+              <strong style={{ fontSize: 13 }}>{emp.nom}</strong>
+              {emp.poste && <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 8 }}>· {emp.poste}</span>}
+            </div>
+            <span style={{
+              fontSize: 14, fontWeight: 600, color: '#3C3489',
+              background: '#EEEDFE', padding: '4px 10px', borderRadius: 999,
+            }}>
+              {total.toFixed(2)} j récup
+            </span>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: '#FAFAF7', fontSize: 11, color: '#6F6A60' }}>
+                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, width: 100 }}>Date</th>
+                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500 }}>Tranches</th>
+                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, width: 90 }}>Travaillé</th>
+                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, width: 90 }}>Récup</th>
+                <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, width: 140 }}>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jours.map(j => (
+                <tr key={j.date} style={{ borderTop: '1px solid #F4F0EA' }}>
+                  <td style={{ padding: '7px 12px' }}>{j.jour_semaine} {String(j.jour_num).padStart(2, '0')}</td>
+                  <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontSize: 11 }}>{j.tranches}</td>
+                  <td style={{ padding: '7px 12px', textAlign: 'right' }}>{j.heures_travaillees.toFixed(2)}</td>
+                  <td style={{ padding: '7px 12px', textAlign: 'right', color: '#3C3489', fontWeight: 500 }}>{j.jours_recup.toFixed(2)}</td>
+                  <td style={{ padding: '7px 12px', color: '#6F6A60', fontSize: 11 }}>{j.label}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function VueGlobale({ data, resultats, mois, annee }) {
   return (

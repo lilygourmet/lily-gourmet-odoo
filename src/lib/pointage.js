@@ -281,27 +281,43 @@ export function calculerJour(prevu, pointe, employe) {
   }
 
   // ─── CAS 2 : Jour OFF travaillé
+  // Nouvelle règle : prévu = 8.50h (journée complète), récup + sup/manquantes selon écart
   else if (prevu.statut === 'off' && heures_travaillees > 0) {
     statut = 'off_travaille'
     label = 'OFF travaillé'
     jours_recup = 1
-    heures_sup = round2(heures_travaillees)  // toutes les heures = sup
+    heures_prevues = Number(employe.heures_jour_complet || 8.50)
+    if (heures_travaillees >= heures_prevues) {
+      heures_sup = round2(heures_travaillees - heures_prevues)
+    } else {
+      heures_manquantes = round2(heures_prevues - heures_travaillees)
+    }
   }
 
-  // ─── CAS 3 : Férié travaillé
+  // ─── CAS 3 : Férié travaillé (même logique que OFF)
   else if (prevu.statut === 'ferie' && heures_travaillees > 0) {
     statut = 'ferie_travaille'
     label = label + ' (travaillé)'
     jours_recup = 1
-    heures_sup = round2(heures_travaillees)
+    heures_prevues = Number(employe.heures_jour_complet || 8.50)
+    if (heures_travaillees >= heures_prevues) {
+      heures_sup = round2(heures_travaillees - heures_prevues)
+    } else {
+      heures_manquantes = round2(heures_prevues - heures_travaillees)
+    }
   }
 
-  // ─── CAS 4 : Congé avec pointage (rare)
+  // ─── CAS 4 : Congé travaillé (même logique que OFF)
   else if (prevu.statut === 'conge' && heures_travaillees > 0) {
     statut = 'conge_travaille'
     label = label + ' (travaillé)'
     jours_recup = 1
-    heures_sup = round2(heures_travaillees)
+    heures_prevues = Number(employe.heures_jour_complet || 8.50)
+    if (heures_travaillees >= heures_prevues) {
+      heures_sup = round2(heures_travaillees - heures_prevues)
+    } else {
+      heures_manquantes = round2(heures_prevues - heures_travaillees)
+    }
   }
 
   return {
@@ -382,15 +398,48 @@ export function calculerMois(employe, mois, annee, data) {
     const pointe = calculerHeuresPointees(sessions)
     let resultat = calculerJour(prevu, pointe, employe)
 
-    // Appliquer les ajustements manuels
+    // Appliquer les ajustements manuels (avec recalcul auto)
     const ajusts = ajustByDate.get(ymd)
     if (ajusts) {
-      if (ajusts.heures_travaillees !== undefined) resultat.heures_travaillees = round2(Number(ajusts.heures_travaillees))
-      if (ajusts.heures_prevues !== undefined)     resultat.heures_prevues     = round2(Number(ajusts.heures_prevues))
-      if (ajusts.heures_sup !== undefined)         resultat.heures_sup         = round2(Number(ajusts.heures_sup))
-      if (ajusts.heures_manquantes !== undefined)  resultat.heures_manquantes  = round2(Number(ajusts.heures_manquantes))
-      if (ajusts.jours_recup !== undefined)        resultat.jours_recup        = round2(Number(ajusts.jours_recup))
-      if (ajusts.statut !== undefined)             resultat.statut             = ajusts.statut
+      // 1) D'abord appliquer les valeurs sources (prévues, travaillées)
+      const a_prevues = ajusts.heures_prevues !== undefined ? round2(Number(ajusts.heures_prevues)) : null
+      const a_travail = ajusts.heures_travaillees !== undefined ? round2(Number(ajusts.heures_travaillees)) : null
+      const a_sup_override     = ajusts.heures_sup !== undefined        ? round2(Number(ajusts.heures_sup))        : null
+      const a_manq_override    = ajusts.heures_manquantes !== undefined ? round2(Number(ajusts.heures_manquantes)) : null
+      const a_recup_override   = ajusts.jours_recup !== undefined       ? round2(Number(ajusts.jours_recup))       : null
+
+      if (a_prevues !== null)  resultat.heures_prevues = a_prevues
+      if (a_travail !== null)  resultat.heures_travaillees = a_travail
+
+      // 2) Recalculer sup/manquantes/récup à partir des valeurs courantes (sauf si override explicite)
+      const isOffType = ['off', 'off_travaille', 'ferie', 'ferie_travaille', 'conge', 'conge_travaille'].includes(resultat.statut)
+      const prevu = resultat.heures_prevues
+      const travail = resultat.heures_travaillees
+
+      if (a_sup_override !== null) {
+        resultat.heures_sup = a_sup_override
+      } else {
+        // Recalcul auto
+        resultat.heures_sup = travail > prevu ? round2(travail - prevu) : 0
+      }
+
+      if (a_manq_override !== null) {
+        resultat.heures_manquantes = a_manq_override
+      } else {
+        // Recalcul auto
+        if (travail === 0 && resultat.statut !== 'off' && resultat.statut !== 'ferie' && resultat.statut !== 'conge') {
+          resultat.heures_manquantes = prevu  // Absent
+        } else {
+          resultat.heures_manquantes = travail < prevu ? round2(prevu - travail) : 0
+        }
+      }
+
+      if (a_recup_override !== null) {
+        resultat.jours_recup = a_recup_override
+      }
+      // Si pas override, on garde la valeur calculée initiale (donc jours_recup reste tel que calculé)
+
+      if (ajusts.statut !== undefined) resultat.statut = ajusts.statut
     }
 
     journal.push({
@@ -473,6 +522,54 @@ export async function updatePointage(id, updates, userId) {
     .update({ ...updates, source: 'manuel', updated_by: userId, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw error
+}
+
+/**
+ * Remplace toutes les sessions de pointage d'un jour pour un employé.
+ * Sessions = [{ id?, arrivee, depart }]
+ * Si id présent, update. Sinon, insert.
+ * Les sessions existantes pas dans la liste sont supprimées.
+ */
+export async function upsertPointagesDuJour(employeId, date, sessions, userId) {
+  // 1) Charger les pointages existants du jour
+  const { data: existing } = await supabase
+    .from('pointages')
+    .select('id')
+    .eq('employe_id', employeId)
+    .eq('date_pointage', date)
+
+  const existingIds = new Set((existing || []).map(p => p.id))
+  const sentIds = new Set(sessions.filter(s => s.id).map(s => s.id))
+
+  // 2) Supprimer ceux qui ne sont plus dans la liste
+  const toDelete = Array.from(existingIds).filter(id => !sentIds.has(id))
+  if (toDelete.length > 0) {
+    await supabase.from('pointages').delete().in('id', toDelete)
+  }
+
+  // 3) Update / Insert
+  for (const s of sessions) {
+    if (s.id) {
+      await supabase.from('pointages')
+        .update({
+          arrivee: s.arrivee,
+          depart: s.depart,
+          source: 'manuel',
+          updated_by: userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', s.id)
+    } else {
+      await supabase.from('pointages').insert({
+        employe_id: employeId,
+        date_pointage: date,
+        arrivee: s.arrivee,
+        depart: s.depart,
+        source: 'manuel',
+        updated_by: userId,
+      })
+    }
+  }
 }
 
 /**
