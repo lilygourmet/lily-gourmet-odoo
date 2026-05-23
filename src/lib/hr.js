@@ -134,6 +134,35 @@ const TEMPLATES = {
     required: ['nom', 'cin', 'date_debut', 'date_fin'],
     fixedDates: [],  // pas de date statique, on a déjà {DATE_EMISSION}
   },
+  cdi_smig: {
+    file: '/hr_modeles/cdi_smig_template.docx',
+    label: 'Contrat CDI - SMIG (sans montant)',
+    // Note : nom_famille + prenom au lieu de nom_arabe seul
+    required: ['nom_famille', 'prenom', 'cin', 'date_effet'],
+    fixedDates: [],
+    category: 'contrat',
+  },
+  cdi_salaire: {
+    file: '/hr_modeles/cdi_salaire_template.docx',
+    label: 'Contrat CDI - Salaire > SMIG',
+    required: ['nom_famille', 'prenom', 'cin', 'salaire', 'date_effet'],
+    fixedDates: [],
+    category: 'contrat',
+  },
+  cdd_smig: {
+    file: '/hr_modeles/cdd_smig_template.docx',
+    label: 'Contrat CDD - SMIG (sans montant)',
+    required: ['nom_famille', 'prenom', 'cin', 'duree', 'date_debut', 'date_fin', 'date_effet'],
+    fixedDates: [],
+    category: 'contrat',
+  },
+  cdd_salaire: {
+    file: '/hr_modeles/cdd_salaire_template.docx',
+    label: 'Contrat CDD - Salaire > SMIG',
+    required: ['nom_famille', 'prenom', 'cin', 'salaire', 'duree', 'date_debut', 'date_fin', 'date_effet'],
+    fixedDates: [],
+    category: 'contrat',
+  },
 }
 
 export function getTemplateInfo(type) {
@@ -189,14 +218,22 @@ export async function generateAttestation(type, data) {
   // 5. Préparer les valeurs pour le template
   const templateValues = {
     NOM: data.nom || '',
+    NOM_ARABE: data.nom_arabe || data.nom || '',
+    NOM_FAMILLE: data.nom_famille || '',
+    PRENOM: data.prenom || '',
     CNSS: data.cnss || '',
     CIN: data.cin || '',
     POSTE: data.poste || '',
+    ADRESSE: data.adresse || '',
+    NATIONALITE: data.nationalite || 'مغربي',
     SALAIRE: data.salaire ? formatSalaire(data.salaire) : '',
+    DUREE: data.duree || '',
     DATE_ENTREE: fmtDateFR(data.date_entree),
     DATE_SORTIE: fmtDateFR(data.date_sortie),
     DATE_DEBUT: fmtDateFR(data.date_debut),
     DATE_FIN: fmtDateFR(data.date_fin),
+    DATE_EFFET: fmtDateFR(data.date_effet),
+    DATE_REDACTION: today,
     DATE_EMISSION: fmtDateFR(data.date_emission || new Date()),
     DATE: today,
   }
@@ -238,6 +275,10 @@ function formatFilename(type, nom) {
     travail_depart: 'Certificat_Travail_Depart',
     accuse: 'Accuse_Remise_Documents',
     stage: 'Attestation_Stage',
+    cdi_smig: 'Contrat_CDI_SMIG',
+    cdi_salaire: 'Contrat_CDI_Salaire',
+    cdd_smig: 'Contrat_CDD_SMIG',
+    cdd_salaire: 'Contrat_CDD_Salaire',
   }
   const label = labels[type] || 'Document'
   const nomClean = (nom || 'Employe').replace(/\s+/g, '_').replace(/[^\w\-]/g, '')

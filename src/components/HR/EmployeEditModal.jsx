@@ -7,6 +7,7 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
   const isNew = !employe
   const [form, setForm] = useState({
     nom: employe?.nom || '',
+    nom_arabe: employe?.nom_arabe || '',
     cnss: employe?.cnss || '',
     cin: employe?.cin || '',
     poste: employe?.poste || '',
@@ -14,6 +15,9 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
     date_entree: employe?.date_entree || '',
     date_sortie: employe?.date_sortie || '',
     salaire_net: employe?.salaire_net != null ? String(employe.salaire_net) : '',
+    adresse: employe?.adresse || '',
+    rib: employe?.rib || '',
+    banque: employe?.banque || '',
     actif: employe?.actif != null ? employe.actif : true,
     notes: employe?.notes || '',
   })
@@ -32,6 +36,7 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
     try {
       const data = {
         nom: form.nom.trim(),
+        nom_arabe: form.nom_arabe.trim() || null,
         cnss: form.cnss.trim() || null,
         cin: form.cin.trim() || null,
         poste: form.poste.trim() || null,
@@ -39,6 +44,9 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
         date_entree: form.date_entree || null,
         date_sortie: form.date_sortie || null,
         salaire_net: form.salaire_net ? parseFloat(form.salaire_net) : null,
+        adresse: form.adresse.trim() || null,
+        rib: form.rib.trim() || null,
+        banque: form.banque.trim() || null,
         actif: form.actif,
         notes: form.notes.trim() || null,
       }
@@ -85,6 +93,27 @@ export default function EmployeEditModal({ employe, user, onClose, onSaved }) {
           <Row>
             <Field label="Date d'entrée" type="date" value={form.date_entree} onChange={v => setF('date_entree', v)} />
             <Field label="Date de sortie (si parti)" type="date" value={form.date_sortie} onChange={v => setF('date_sortie', v)} />
+          </Row>
+
+          {/* Nouveaux champs pour les contrats arabes */}
+          <Row>
+            <div>
+              <label style={lblStyle}>Nom en arabe (pour contrats)</label>
+              <input
+                type="text"
+                value={form.nom_arabe || ''}
+                onChange={e => setF('nom_arabe', e.target.value)}
+                placeholder="مثال : أسماء العبادي"
+                style={{ ...inputStyle, direction: 'rtl', fontFamily: 'Arial, sans-serif' }}
+              />
+            </div>
+            <Field label="Adresse" value={form.adresse} onChange={v => setF('adresse', v)} placeholder="Ex : 12 rue X, Quartier Y, Rabat" />
+          </Row>
+
+          {/* Informations bancaires */}
+          <Row>
+            <Field label="RIB (numéro de compte)" value={form.rib} onChange={v => setF('rib', v)} placeholder="Ex : 011 810 0000123456789 12" />
+            <Field label="Banque" value={form.banque} onChange={v => setF('banque', v)} placeholder="Ex : Attijariwafa Bank, BMCE…" />
           </Row>
 
           <div style={{ marginBottom: 12 }}>

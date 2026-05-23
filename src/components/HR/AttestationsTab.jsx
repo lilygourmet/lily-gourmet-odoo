@@ -15,9 +15,11 @@ export default function AttestationsTab({ user }) {
   const [empId, setEmpId] = useState('')
   // Données formulaire (saisies/auto-remplies)
   const [form, setForm] = useState({
-    nom: '', cnss: '', cin: '', poste: '',
-    salaire: '', date_entree: '', date_sortie: '',
-    date_debut: '', date_fin: '', date_emission: '',
+    nom: '', nom_arabe: '', nom_famille: '', prenom: '',
+    cnss: '', cin: '', poste: '',
+    salaire: '', adresse: '', date_entree: '', date_sortie: '',
+    date_debut: '', date_fin: '', date_emission: '', date_effet: '',
+    nationalite: 'مغربي', duree: '',
   })
 
   const templates = useMemo(() => getAllTemplates(), [])
@@ -44,13 +46,28 @@ export default function AttestationsTab({ user }) {
     }
     const e = employes.find(emp => String(emp.id) === String(id))
     if (!e) return
+    // Auto-split nom_arabe en prenom + nom_famille
+    // Convention : le 1er mot = prénom, le reste = nom de famille
+    let prenom = '', nom_famille = ''
+    const src = e.nom_arabe || e.nom || ''
+    const parts = src.trim().split(/\s+/)
+    if (parts.length >= 2) {
+      prenom = parts[0]
+      nom_famille = parts.slice(1).join(' ')
+    } else if (parts.length === 1) {
+      prenom = parts[0]
+    }
     setForm({
       ...form,
       nom: e.nom || '',
+      nom_arabe: e.nom_arabe || '',
+      nom_famille: nom_famille,
+      prenom: prenom,
       cnss: e.cnss || '',
       cin: e.cin || '',
       poste: e.poste || '',
       salaire: e.salaire_net ? String(e.salaire_net) : '',
+      adresse: e.adresse || '',
       date_entree: e.date_entree || '',
       date_sortie: e.date_sortie || '',
     })
@@ -139,6 +156,68 @@ export default function AttestationsTab({ user }) {
             )}
           </Row>
 
+          {currentTemplate?.required.includes('nom_arabe') && (
+            <Row>
+              <div>
+                <label style={lblFieldStyle}>Nom en arabe *</label>
+                <input
+                  type="text"
+                  value={form.nom_arabe || ''}
+                  onChange={e => handleChange('nom_arabe', e.target.value)}
+                  placeholder="مثال : أسماء العبادي"
+                  required
+                  style={{ ...inputStyle, direction: 'rtl', fontFamily: 'Arial, sans-serif' }}
+                />
+              </div>
+              <Field label="Adresse"
+                value={form.adresse} onChange={v => handleChange('adresse', v)}
+                placeholder="Ex : 12 rue X, Quartier Y, Rabat" />
+            </Row>
+          )}
+
+          {/* CONTRATS : nom famille + prénom séparés + adresse */}
+          {currentTemplate?.required.includes('nom_famille') && (
+            <>
+              <Row>
+                <div>
+                  <label style={lblFieldStyle}>الإسم العائلي (Nom de famille) *</label>
+                  <input
+                    type="text"
+                    value={form.nom_famille || ''}
+                    onChange={e => handleChange('nom_famille', e.target.value)}
+                    placeholder="مثال : العبادي"
+                    required
+                    style={{ ...inputStyle, direction: 'rtl', fontFamily: 'Arial, sans-serif' }}
+                  />
+                </div>
+                <div>
+                  <label style={lblFieldStyle}>الإسم الشخصي (Prénom) *</label>
+                  <input
+                    type="text"
+                    value={form.prenom || ''}
+                    onChange={e => handleChange('prenom', e.target.value)}
+                    placeholder="مثال : أسماء"
+                    required
+                    style={{ ...inputStyle, direction: 'rtl', fontFamily: 'Arial, sans-serif' }}
+                  />
+                </div>
+              </Row>
+              <Row>
+                <Field label="Adresse (en français)" value={form.adresse} onChange={v => handleChange('adresse', v)} placeholder="Ex : 12 rue X, Quartier Y, Rabat" />
+                <div>
+                  <label style={lblFieldStyle}>Nationalité (arabe)</label>
+                  <input
+                    type="text"
+                    value={form.nationalite || ''}
+                    onChange={e => handleChange('nationalite', e.target.value)}
+                    placeholder="مغربي"
+                    style={{ ...inputStyle, direction: 'rtl', fontFamily: 'Arial, sans-serif' }}
+                  />
+                </div>
+              </Row>
+            </>
+          )}
+
           {currentTemplate?.required.includes('cin') && (
             <Row>
               <Field label="N° CIN *"
@@ -194,6 +273,50 @@ export default function AttestationsTab({ user }) {
                   value={form.date_emission} onChange={v => handleChange('date_emission', v)} />
                 <div />
               </Row>
+            </>
+          )}
+
+          {/* Champs spécifiques aux CONTRATS */}
+          {currentTemplate?.category === 'contrat' && (
+            <>
+              {currentTemplate?.required.includes('date_debut') && (
+                <Row>
+                  <Field label="Date de début *" type="date"
+                    value={form.date_debut} onChange={v => handleChange('date_debut', v)} />
+                  {currentTemplate?.required.includes('date_fin') && (
+                    <Field label="Date de fin (CDD) *" type="date"
+                      value={form.date_fin} onChange={v => handleChange('date_fin', v)} />
+                  )}
+                </Row>
+              )}
+              {currentTemplate?.required.includes('duree') && (
+                <Row>
+                  <div>
+                    <label style={lblFieldStyle}>Durée du contrat (arabe)</label>
+                    <input type="text"
+                      value={form.duree || ''}
+                      onChange={e => handleChange('duree', e.target.value)}
+                      placeholder="6 أشهر"
+                      style={{ ...inputStyle, direction: 'rtl', fontFamily: 'Arial, sans-serif' }} />
+                  </div>
+                  <div />
+                </Row>
+              )}
+              {currentTemplate?.required.includes('salaire') && (
+                <Row>
+                  <Field label="Salaire net (DH) *"
+                    value={form.salaire} onChange={v => handleChange('salaire', v)}
+                    placeholder="Ex : 8500" />
+                  <div />
+                </Row>
+              )}
+              {currentTemplate?.required.includes('date_effet') && (
+                <Row>
+                  <Field label="Date d'effet du contrat *" type="date"
+                    value={form.date_effet} onChange={v => handleChange('date_effet', v)} />
+                  <div />
+                </Row>
+              )}
             </>
           )}
         </div>
