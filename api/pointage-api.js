@@ -459,20 +459,58 @@ async function actionListEmployees() {
 // Handler principal
 // ============================================================
 
+async function actionDebugAttendance({ mois, annee }) {
+  if (!mois || !annee) throw new Error('mois et annee requis')
+  const debut = `${annee}-${String(mois).padStart(2, '0')}-01 00:00:00`
+  const nextMonth = mois === 12 ? 1 : mois + 1
+  const nextYear  = mois === 12 ? annee + 1 : annee
+  const fin = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01 00:00:00`
+
+  const uid = await odooAuth()
+
+  const attendances = await odooExec(uid, 'hr.attendance', 'search_read', [
+    [['check_in', '>=', debut], ['check_in', '<', fin]],
+    ['id', 'employee_id', 'check_in', 'check_out']
+  ], { limit: 20 })
+
+  // Liste unique des noms Odoo trouvés
+  const noms = new Set()
+  for (const a of attendances) {
+    if (a.employee_id && Array.isArray(a.employee_id)) noms.add(a.employee_id[1])
+  }
+
+  // Comparer avec les employés en base
+  const { data: employesDb } = await sb
+    .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
+
+  return {
+    ok: true,
+    requete: { debut, fin },
+    total_odoo: attendances.length,
+    noms_uniques_odoo: Array.from(noms),
+    echantillon: attendances.slice(0, 5),
+    employes_db: employesDb,
+  }
+}
+
 export default async function handler(req, res) {
   try {
     const action = req.query?.action || req.body?.action
     const params = req.body || req.query || {}
 
     let result
-    if (action === 'sync-attendance')      result = await actionSyncAttendance(params)
-    else if (action === 'sync-leaves')     result = await actionSyncLeaves(params)
-    else if (action === 'list-employees')  result = await actionListEmployees()
+    if (action === 'sync-attendance')         result = await actionSyncAttendance(params)
+    else if (action === 'sync-leaves')        result = await actionSyncLeaves(params)
+    else if (action === 'list-employees')     result = await actionListEmployees()
+    else if (action === 'debug-attendance')   result = await actionDebugAttendance(params)
     else return res.status(400).json({ error: 'Unknown action: ' + action })
 
     return res.status(200).json(result)
   } catch (e) {
     console.error('pointage-api error:', e)
-    return res.status(500).json({ error: e.message || String(e) })
+    return res.status(500).json({
+      error: e.message || String(e),
+      stack: e.stack ? e.stack.slice(0, 500) : undefined,
+    })
   }
 }

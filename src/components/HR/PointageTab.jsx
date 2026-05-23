@@ -29,6 +29,7 @@ export default function PointageTab({ user }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [selectedEmpId, setSelectedEmpId] = useState(null)
+  const [vueGlobale, setVueGlobale] = useState(false)  // false = 1 employé, true = tous
 
   // Charger les données du mois
   const reload = useCallback(async () => {
@@ -59,6 +60,24 @@ export default function PointageTab({ user }) {
 
   const empSelected = data?.employes.find(e => e.id === selectedEmpId)
   const result = empSelected ? resultats[selectedEmpId] : null
+
+  // Debug : voir ce qu'Odoo renvoie
+  async function handleDebug() {
+    setError(null); setSuccess(null)
+    try {
+      const resp = await fetch('/api/pointage-api?action=debug-attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mois, annee }),
+      })
+      const data = await resp.json()
+      console.log('[DEBUG ODOO]', data)
+      const msg = `Total Odoo : ${data.total_odoo} pointages\n\nNoms Odoo trouvés (${data.noms_uniques_odoo?.length}) :\n${(data.noms_uniques_odoo || []).slice(0, 30).join('\n')}\n\n(Voir console pour le détail complet)`
+      alert(msg)
+    } catch (e) {
+      setError('Erreur debug : ' + e.message)
+    }
+  }
 
   // Sync Odoo
   async function handleSync() {
@@ -137,18 +156,41 @@ export default function PointageTab({ user }) {
         </div>
         <button onClick={nextMonth} style={btnNav}>▶</button>
 
-        <select value={selectedEmpId || ''} onChange={e => setSelectedEmpId(Number(e.target.value))}
-                style={{ flex: 1, minWidth: 200, padding: '8px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }}>
-          {(data?.employes || []).map(e => (
-            <option key={e.id} value={e.id}>{e.nom}{e.poste ? ' · ' + e.poste : ''}</option>
-          ))}
-        </select>
+        <div style={{ display: 'flex', gap: 4, padding: 3, background: '#F4F0EA', borderRadius: 8 }}>
+          <button onClick={() => setVueGlobale(false)} style={{
+            padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
+            background: !vueGlobale ? 'white' : 'transparent',
+            color: !vueGlobale ? '#3A3733' : '#6F6A60',
+            fontWeight: !vueGlobale ? 500 : 400,
+          }}>👤 Un employé</button>
+          <button onClick={() => setVueGlobale(true)} style={{
+            padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
+            background: vueGlobale ? 'white' : 'transparent',
+            color: vueGlobale ? '#3A3733' : '#6F6A60',
+            fontWeight: vueGlobale ? 500 : 400,
+          }}>👥 Tous</button>
+        </div>
+
+        {!vueGlobale && (
+          <select value={selectedEmpId || ''} onChange={e => setSelectedEmpId(Number(e.target.value))}
+                  style={{ flex: 1, minWidth: 200, padding: '8px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }}>
+            {(data?.employes || []).map(e => (
+              <option key={e.id} value={e.id}>{e.nom}{e.poste ? ' · ' + e.poste : ''}</option>
+            ))}
+          </select>
+        )}
 
         <button onClick={handleSync} disabled={syncing} style={{
           padding: '9px 14px', fontSize: 13, background: '#0C447C', color: 'white',
           border: '1px solid #0C447C', borderRadius: 8, cursor: syncing ? 'wait' : 'pointer', fontWeight: 500,
         }}>
           {syncing ? '⏳ Sync...' : '🔄 Sync Odoo'}
+        </button>
+        <button onClick={handleDebug} style={{
+          padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#6F6A60',
+          border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
+        }} title="Voir ce qu'Odoo renvoie">
+          🐛 Debug
         </button>
       </div>
 
@@ -165,7 +207,11 @@ export default function PointageTab({ user }) {
 
       {loading && <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>}
 
-      {!loading && result && (
+      {!loading && vueGlobale && data && (
+        <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} />
+      )}
+
+      {!loading && !vueGlobale && result && (
         <>
           {/* Cartes synthèse */}
           <div style={{
@@ -345,6 +391,68 @@ function Legende() {
           {i.label}
         </span>
       ))}
+    </div>
+  )
+}
+
+
+
+function VueGlobale({ data, resultats, mois, annee }) {
+  return (
+    <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#6F6A60' }}>
+            <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 500 }}>Employé</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Prévues</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Travail.</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500, color: '#27500A' }}>Sup</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500, color: '#A32D2D' }}>Manq.</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500, color: '#3C3489' }}>Récup</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Reporté</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Solde mois</th>
+            <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 500 }}>Abs.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.employes.map(emp => {
+            const r = resultats[emp.id]
+            if (!r) return null
+            const s = r.synthese
+            return (
+              <tr key={emp.id} style={{ borderTop: '1px solid #F4F0EA' }}>
+                <td style={{ padding: '8px 12px' }}>
+                  <strong style={{ fontSize: 12 }}>{emp.nom}</strong>
+                  {emp.poste && <div style={{ fontSize: 10, color: '#9B968D' }}>{emp.poste}</div>}
+                </td>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_prevues.toFixed(2)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_travaillees.toFixed(2)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_sup > 0 ? '#27500A' : '#9B968D', fontWeight: s.heures_sup > 0 ? 500 : 400 }}>
+                  {s.heures_sup > 0 ? '+' + s.heures_sup.toFixed(2) : '—'}
+                </td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_manquantes > 0 ? '#A32D2D' : '#9B968D', fontWeight: s.heures_manquantes > 0 ? 500 : 400 }}>
+                  {s.heures_manquantes > 0 ? '-' + s.heures_manquantes.toFixed(2) : '—'}
+                </td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.jours_recup > 0 ? '#3C3489' : '#9B968D' }}>
+                  {s.jours_recup > 0 ? s.jours_recup.toFixed(2) + ' j' : '—'}
+                </td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.solde_reporte_precedent === 0 ? '#9B968D' : (s.solde_reporte_precedent > 0 ? '#27500A' : '#A32D2D') }}>
+                  {s.solde_reporte_precedent === 0 ? '—' : (s.solde_reporte_precedent > 0 ? '+' : '') + s.solde_reporte_precedent.toFixed(2)}
+                </td>
+                <td style={{
+                  padding: '8px 12px', textAlign: 'right', fontWeight: 600,
+                  color: s.solde_mois === 0 ? '#9B968D' : (s.solde_mois > 0 ? '#27500A' : '#A32D2D'),
+                }}>
+                  {(s.solde_mois > 0 ? '+' : '') + s.solde_mois.toFixed(2)}
+                </td>
+                <td style={{ padding: '8px 12px', textAlign: 'center', color: s.jours_absents > 0 ? '#A32D2D' : '#9B968D' }}>
+                  {s.jours_absents > 0 ? s.jours_absents : '—'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
