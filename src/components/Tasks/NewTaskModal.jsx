@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createTask, loadAllUsers } from '../lib/tasks'
+import { createTask, loadAllUsers } from '../../lib/tasks'
 
 /**
  * Modal pour créer une nouvelle tâche.

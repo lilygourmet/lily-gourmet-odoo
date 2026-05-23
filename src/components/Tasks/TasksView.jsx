@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   loadTasksReceived, loadTasksSent, countUnreadTasks,
   markTaskRead, deleteTask
-} from '../lib/tasks'
+} from '../../lib/tasks'
 import TaskDetailModal from './TaskDetailModal'
 import NewTaskModal from './NewTaskModal'
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { markTaskDone, undoTaskDone } from '../lib/tasks'
+import { markTaskDone, undoTaskDone } from '../../lib/tasks'
 
 /**
  * Modal de détail d'une tâche.
