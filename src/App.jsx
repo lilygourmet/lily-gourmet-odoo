@@ -14,6 +14,8 @@ import StockAudit from './components/StockBoutique/StockAudit'
 import StockGS from './components/StockBoutique/StockGS'
 import ChecklistView from './components/ChecklistView'
 import CaisseView from './components/Caisse/CaisseView'
+import TasksView from './components/Tasks/TasksView'
+import AppHeader from './components/AppHeader'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar } from './lib/auth'
 
 function App() {
@@ -200,10 +202,25 @@ function App() {
   if (activeView === 'fin-journee') return <StockEvening {...navProps} />
   if (activeView === 'stock') return <StockAudit {...navProps} />
   if (activeView === 'stock-gs') return <StockGS {...navProps} />
+  if (activeView === 'tasks') return <TasksWrapper {...navProps} />
   if (activeView === 'caisse') return <CaisseView {...navProps} />
   if (activeView === 'checklist') return <ChecklistView {...navProps} />
   // Default = Calendar
   return <Calendar {...navProps} />
+}
+
+// ============================================================
+// Wrapper pour TasksView : inclut AppHeader
+// (TasksView ne gere pas le header lui-meme)
+// ============================================================
+function TasksWrapper(props) {
+  const { user, onLogout, onNavigate, activeView } = props
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <TasksView user={user} />
+    </div>
+  )
 }
 
 export default App

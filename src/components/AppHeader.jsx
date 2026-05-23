@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse} from '../lib/auth'
+import { countUnreadTasks } from '../lib/tasks'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -32,6 +33,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [receptionBadge, setReceptionBadge] = useState(0)
   // Badge "articles a ranger" sur le bouton Checklist
   const [checklistBadge, setChecklistBadge] = useState(0)
+  // Badge "taches non lues" sur le bouton Tâches
+  const [tasksBadge, setTasksBadge] = useState(0)
   // Menus deroulants ouverts (un seul a la fois)
   const [openMenu, setOpenMenu] = useState(null) // 'prod' | 'vitrine' | 'outils' | null
 
@@ -219,6 +222,41 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showChecklistBtn, user?.id])
+
+  // Badge Tâches : compte les taches non lues du user connecté
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    let channel = null
+
+    async function refreshTasksBadge() {
+      try {
+        const n = await countUnreadTasks(user.id)
+        if (!cancelled) setTasksBadge(n)
+      } catch (e) {
+        console.warn('[tasksBadge]', e?.message || e)
+      }
+    }
+
+    refreshTasksBadge()
+
+    // Realtime : refresh quand une tâche concernant ce user change
+    channel = supabase
+      .channel('tasks-badge-' + user.id)
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          () => { refreshTasksBadge() })
+      .subscribe()
+
+    // Refresh régulier toutes les 2 min (au cas où realtime louppe un event)
+    const interval = setInterval(refreshTasksBadge, 2 * 60 * 1000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [user?.id])
 
   // Auto-sync toutes les 5 min
   useEffect(() => {
@@ -450,6 +488,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           )}
           {(canRecaps(user) || isLivreur(user)) && (
             <NavButton emoji="📊" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
+          )}
+          {!isLivreur(user) && (
+            <NavButton emoji="📋" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
           )}
           {primary && (
             <NavButton
