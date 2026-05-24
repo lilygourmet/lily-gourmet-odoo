@@ -587,7 +587,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </button>
           )}
 
-          {admin && (
+          {(admin || user?.perm_admin_users) && (
             <div className="relative">
               <button
                 onClick={() => setShowCog(!showCog)}
@@ -602,14 +602,14 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                   <div className="absolute right-0 mt-1 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
                     <CogItem icon="🔑" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
                     <CogItem icon="👥" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
-                    <CogItem icon="🎨" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />
+                    {admin && <CogItem icon="🎨" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
                   </div>
                 </>
               )}
             </div>
           )}
 
-          {!admin && (
+          {!admin && !user?.perm_admin_users && (
             <button
               onClick={() => setShowChangePwd(true)}
               className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
