@@ -130,6 +130,7 @@ export async function updateUser(userId, {
   if (perm_caisse_admin !== undefined) updates.perm_caisse_admin = perm_caisse_admin
   if (perm_hr !== undefined) updates.perm_hr = perm_hr
   if (perm_admin_users !== undefined) updates.perm_admin_users = perm_admin_users
+  if (perm_admin_users !== undefined) updates.perm_admin_users = perm_admin_users
   if (perm_hr !== undefined) updates.perm_hr = perm_hr
 
   const { data, error } = await supabase
