@@ -610,23 +610,14 @@ export default function PointageTab({ user, isAdmin }) {
             )}
           </div>
 
-          {isLocked ? (
+          {isLocked && (
             <div style={{
-              padding: '10px 14px', background: '#FCEEE8', color: '#A32D2D',
-              borderRadius: 6, fontSize: 13, marginBottom: 12,
+              padding: '8px 12px', background: '#FCEEE8', color: '#A32D2D',
+              borderRadius: 6, fontSize: 12, marginBottom: 12,
               border: '1px solid #F5BFBC',
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              🔒 <strong>Mois validé pour {empSelected?.nom}</strong> · Tableau en lecture seule. Cliquez sur 'Débloquer' pour modifier.
-            </div>
-          ) : (
-            <div style={{
-              padding: '8px 12px', background: '#EAF3DE', color: '#27500A',
-              borderRadius: 6, fontSize: 12, marginBottom: 12,
-              border: '1px solid #C0DD97',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              ✏️ <strong>Mois en cours de saisie</strong> · Modifications autorisées. Validez quand prêt.
+              🔒 <strong>Mois validé</strong>
             </div>
           )}
 
@@ -958,23 +949,27 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
 }
 
 function CarteSalaire({ salaire, heuresSup }) {
+  const [revealed, setRevealed] = useState(false)
   // Formule : salaire + (salaire / 26 / 8) × 1.25 × heures_sup
-  // Taux horaire majoré à 1.25× pour heures sup au Maroc
   const tauxHoraire = salaire / 26 / 8
   const tauxMajore = tauxHoraire * 1.25
   const montantSup = tauxMajore * heuresSup
   const total = salaire + montantSup
   return (
     <div style={{ background: '#EAF3DE', padding: 10, borderRadius: 8, border: '1px solid #C0DD97' }}>
-      <p style={{ fontSize: 11, color: '#27500A', margin: 0, marginBottom: 4 }}>💰 Salaire estimé</p>
-      <p style={{ fontSize: 18, fontWeight: 600, color: '#27500A', margin: 0 }}>
-        {total.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} dh
+      <p style={{ fontSize: 11, color: '#27500A', margin: 0, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>💰 Salaire estimé</span>
+        <button onClick={() => setRevealed(!revealed)} style={{
+          background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
+        }} title={revealed ? 'Masquer' : 'Révéler'}>
+          {revealed ? '🙈' : '👁'}
+        </button>
       </p>
-      {heuresSup > 0 && (
-        <p style={{ fontSize: 10, color: '#27500A', margin: '2px 0 0', opacity: 0.8 }}>
-          {salaire.toLocaleString('fr-FR')} + {montantSup.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} sup (1.25×)
-        </p>
-      )}
+      <p style={{ fontSize: 18, fontWeight: 600, color: '#27500A', margin: 0 }}>
+        {revealed
+          ? total.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' dh'
+          : '••••• dh'}
+      </p>
     </div>
   )
 }
