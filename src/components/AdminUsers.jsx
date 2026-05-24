@@ -888,24 +888,30 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             checked={isAdmin || formData.permStockGS}
             onChange={v => update('permStockGS', v)}
           />
-          <PermCheckbox
-            id="perm-caisse"
-            label="💰 Caisse (vue limitée — pour Meriem)"
-            checked={isAdmin || formData.permCaisse}
-            onChange={v => update('permCaisse', v)}
-          />
-          <PermCheckbox
-            id="perm-caisse-admin"
-            label="💰 Caisse · Admin (accès complet au module)"
-            checked={isAdmin || formData.permCaisseAdmin}
-            onChange={v => update('permCaisseAdmin', v)}
-          />
-          <PermCheckbox
-            id="perm-hr"
-            label="🏢 RH (gestion employés sans salaire, attestations limitées, récap pointage)"
-            checked={isAdmin || formData.permHR}
-            onChange={v => update('permHR', v)}
-          />
+          {currentUser?.role === 'admin' && (
+            <PermCheckbox
+              id="perm-caisse"
+              label="💰 Caisse (vue limitée — pour Meriem)"
+              checked={isAdmin || formData.permCaisse}
+              onChange={v => update('permCaisse', v)}
+            />
+          )}
+          {currentUser?.role === 'admin' && (
+            <PermCheckbox
+              id="perm-caisse-admin"
+              label="💰 Caisse · Admin (accès complet au module)"
+              checked={isAdmin || formData.permCaisseAdmin}
+              onChange={v => update('permCaisseAdmin', v)}
+            />
+          )}
+          {currentUser?.role === 'admin' && (
+            <PermCheckbox
+              id="perm-hr"
+              label="🏢 RH (gestion employés sans salaire, attestations limitées, récap pointage)"
+              checked={isAdmin || formData.permHR}
+              onChange={v => update('permHR', v)}
+            />
+          )}
           {currentUser?.role === 'admin' && (
             <PermCheckbox
               id="perm-admin-users"
