@@ -189,56 +189,60 @@ export default function PointageTab({ user, isAdmin }) {
   // EXPORTS (admin)
   // ============================================
 
-  function downloadCSV(filename, rows) {
-    const csv = rows.map(r => r.map(cell => {
-      const s = String(cell ?? '')
-      return s.includes(';') || s.includes('"') || s.includes('\n')
-        ? '"' + s.replace(/"/g, '""') + '"' : s
-    }).join(';')).join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = filename; a.click()
-    URL.revokeObjectURL(url)
+  async function downloadXLSX(filename, rows, sheetName = 'Feuille1') {
+    // Charger SheetJS via CDN (pas de dépendance npm requise)
+    if (!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script')
+        s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+        s.onload = resolve
+        s.onerror = reject
+        document.head.appendChild(s)
+      })
+    }
+    const XLSX = window.XLSX
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    // Largeurs auto
+    const colWidths = rows[0].map((_, i) => ({
+      wch: Math.min(40, Math.max(...rows.map(r => String(r[i] || '').length)) + 2)
+    }))
+    ws['!cols'] = colWidths
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31))
+    XLSX.writeFile(wb, filename)
   }
 
-  function handleExportSup() {
+  async function handleExportSup() {
     if (!data) return
     const rows = [['Employé', 'Heures sup du mois']]
     for (const emp of data.employes) {
       const r = resultats[emp.id]
       if (!r) continue
-      // Si heures_sup_mensuelles = false, on met 0 dans l'export
       const sup = emp.heures_sup_mensuelles === false ? 0 : r.synthese.heures_sup
-      rows.push([emp.nom, sup.toFixed(2)])
+      rows.push([emp.nom, Number(sup.toFixed(2))])
     }
     const monthName = MOIS_FR[mois - 1] + '_' + annee
-    downloadCSV('heures_sup_' + monthName + '.csv', rows)
+    await downloadXLSX('heures_sup_' + monthName + '.xlsx', rows, 'Heures sup ' + monthName)
   }
 
-  function handleExportConges() {
+  async function handleExportConges() {
     if (!data) return
     const rows = [['Employé', 'Jours congé', 'Jours maladie (4+)']]
-    // Pour chaque employé, compter ses jours de congé et maladie ce mois
     for (const emp of data.employes) {
       const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
       let joursConge = 0
       let joursMaladie = 0
       for (const c of congesEmp) {
-        // Calcul du nombre de jours dans le mois sélectionné
         const debut = new Date(Math.max(new Date(c.date_debut), new Date(annee, mois - 1, 1)))
         const fin = new Date(Math.min(new Date(c.date_fin), new Date(annee, mois, 0)))
         if (fin < debut) continue
         const nbJours = Math.floor((fin - debut) / 86400000) + 1
         const typeLower = (c.type_conge || '').toLowerCase()
-        // Type "maladie" : seulement si > 3 jours (donc 4+)
         if (typeLower.includes('maladie') || typeLower.includes('malade') || typeLower.includes('sick')) {
           if (nbJours >= 4) joursMaladie += nbJours
         } else if (typeLower.includes('récup') || typeLower.includes('recup')) {
-          // Exclure les jours de récup
           continue
         } else {
-          // Tout le reste = congé
           joursConge += nbJours
         }
       }
@@ -247,7 +251,7 @@ export default function PointageTab({ user, isAdmin }) {
       }
     }
     const monthName = MOIS_FR[mois - 1] + '_' + annee
-    downloadCSV('conges_' + monthName + '.csv', rows)
+    await downloadXLSX('conges_' + monthName + '.xlsx', rows, 'Congés ' + monthName)
   }
 
   // Validation du mois
@@ -311,13 +315,13 @@ export default function PointageTab({ user, isAdmin }) {
     }
     rows.sort((a, b) => a.nom.localeCompare(b.nom))
 
-    // 1) Excel CSV (compatible Excel, pas besoin de xlsx lib)
+    // 1) Excel xlsx natif via SheetJS (chargé dynamiquement depuis CDN)
     const headers = ['Employé', 'Heures sup', 'Heures manquantes', 'Jours récup', 'Jours congé', 'Jours maladie (4+)', 'Solde mois (h)']
-    const csvRows = [headers]
+    const xlsxRows = [headers]
     for (const r of rows) {
-      csvRows.push([r.nom, r.sup, r.manquantes, r.recup, r.conge, r.maladie, r.solde_mois])
+      xlsxRows.push([r.nom, Number(r.sup), Number(r.manquantes), Number(r.recup), r.conge, r.maladie, Number(r.solde_mois)])
     }
-    downloadCSV('recap_pointage_' + monthName + '.csv', csvRows)
+    await downloadXLSX('recap_pointage_' + monthName + '.xlsx', xlsxRows, 'Récap ' + monthName)
 
     // 2) PDF (simple, via window.print sur une page HTML cachée)
     // ou via jsPDF si disponible. On va générer un HTML imprimable en téléchargement.
