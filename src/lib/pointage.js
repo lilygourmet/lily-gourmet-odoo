@@ -446,7 +446,11 @@ export function calculerMois(employe, mois, annee, data) {
       }
       // Si pas override, on garde la valeur calculée initiale (donc jours_recup reste tel que calculé)
 
-      if (ajusts.statut !== undefined) resultat.statut = ajusts.statut
+      if (ajusts.statut !== undefined) {
+        resultat.statut = ajusts.statut
+        // Si statut forcé à 'present', mettre à jour le label en conséquence
+        if (ajusts.statut === 'present') resultat.label = 'Présent'
+      }
     }
 
     journal.push({

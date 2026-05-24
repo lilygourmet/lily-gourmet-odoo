@@ -3,12 +3,14 @@ import {
   loadMonthData, calculerMois, syncAttendance, syncLeaves,
   setAjustement, removeAjustement, updatePointage, validerMois,
 } from '../../lib/pointage'
+import EmployeEditModal from './EmployeEditModal'
 
 const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
                  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 const COULEUR_STATUT = {
   normal:           { bg: 'white',   text: '#3A3733' },
+  present:          { bg: '#EAF3DE', text: '#27500A' },  // Forcé présent (au lieu d'absent)
   demi:             { bg: '#FFF7E0', text: '#854F0B' },
   off:              { bg: '#F5EFE7', text: '#6F6A60' },
   off_travaille:    { bg: '#EEEDFE', text: '#3C3489' },
@@ -21,8 +23,21 @@ const COULEUR_STATUT = {
 
 export default function PointageTab({ user, isAdmin }) {
   const today = new Date()
-  const [mois, setMois] = useState(today.getMonth() + 1)
-  const [annee, setAnnee] = useState(today.getFullYear())
+  // Charger le dernier mois consulté depuis localStorage
+  const [mois, setMois] = useState(() => {
+    const saved = localStorage.getItem('pointage_last_mois')
+    return saved ? parseInt(saved, 10) : today.getMonth() + 1
+  })
+  const [annee, setAnnee] = useState(() => {
+    const saved = localStorage.getItem('pointage_last_annee')
+    return saved ? parseInt(saved, 10) : today.getFullYear()
+  })
+
+  // Sauvegarder à chaque changement
+  useEffect(() => {
+    localStorage.setItem('pointage_last_mois', String(mois))
+    localStorage.setItem('pointage_last_annee', String(annee))
+  }, [mois, annee])
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -31,6 +46,7 @@ export default function PointageTab({ user, isAdmin }) {
   const [selectedEmpId, setSelectedEmpId] = useState(null)
   const [vue, setVue] = useState(isAdmin ? 'single' : 'recup')  // 'single' | 'all' | 'recup' | 'absences'
   const [editingTranches, setEditingTranches] = useState(null)  // { date, sessions } | null
+  const [editingEmp, setEditingEmp] = useState(null)  // employé édité dans modal
 
   // Charger les données du mois
   const reload = useCallback(async () => {
@@ -235,8 +251,9 @@ export default function PointageTab({ user, isAdmin }) {
   }
 
   // Validation du mois
+  // Valider pour TOUS les employés du mois
   async function handleValider() {
-    if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour TOUS les employés ?\n\nLes données seront figées et le solde reporté sur le mois suivant.\nUn PDF + Excel récapitulatif seront téléchargés.`)) return
+    if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour TOUS les employés ?\n\nLes données seront figées et le solde reporté sur le mois suivant.\nUn PDF + CSV récapitulatif seront téléchargés.`)) return
     try {
       for (const emp of data.employes) {
         const r = resultats[emp.id]
@@ -363,6 +380,20 @@ export default function PointageTab({ user, isAdmin }) {
     setTimeout(() => URL.revokeObjectURL(url), 30000)
   }
 
+  // Valider seulement l'employé sélectionné
+  async function handleValiderEmploye() {
+    if (!isAdmin || !empSelected) return
+    if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour ${empSelected.nom} uniquement ?\n\nSes données seront figées (pas d'export PDF/CSV).`)) return
+    try {
+      const r = resultats[empSelected.id]
+      if (r) await validerMois(empSelected.id, mois, annee, r.synthese, r.journal, user.id)
+      setSuccess(`✅ ${empSelected.nom} validé(e).`)
+      await reload()
+    } catch (e) {
+      setError('Erreur validation : ' + e.message)
+    }
+  }
+
   // Débloquer un mois (admin seulement, supprime le flag valide)
   async function handleDebloquer() {
     if (!isAdmin) return
@@ -382,15 +413,17 @@ export default function PointageTab({ user, isAdmin }) {
     }
   }
 
-  // Forcer un jour "Absent" à "Présent" (efface l'ajustement absence pour ce jour)
+  // Forcer un jour "Absent" à "Présent" (statut + heures travaillées)
   async function handleForcerPresent(dateJour) {
     if (!canEdit) return
-    if (!confirm(`Marquer le ${dateJour} comme PRÉSENT pour ${empSelected?.nom} ?\n\nLes heures prévues seront comptées comme travaillées (8.50h ou selon planning).`)) return
+    if (!confirm(`Marquer le ${dateJour} comme PRÉSENT pour ${empSelected?.nom} ?\n\nLe statut deviendra 'Présent' et les heures prévues seront comptées comme travaillées.`)) return
     try {
-      // On force heures_travaillees = heures_prevues du jour
       const j = result.journal.find(jj => jj.date === dateJour)
       if (!j) return
+      // 1) Forcer heures_travaillees = heures_prevues
       await setAjustement(selectedEmpId, dateJour, 'heures_travaillees', String(j.heures_prevues), user.id)
+      // 2) Forcer le statut à 'present' (badge vert au lieu d'Absent rouge)
+      await setAjustement(selectedEmpId, dateJour, 'statut', 'present', user.id)
       await reload()
     } catch (e) {
       alert('Erreur : ' + e.message)
@@ -409,6 +442,34 @@ export default function PointageTab({ user, isAdmin }) {
     else setMois(mois + 1)
   }
 
+  // Navigation employé précédent / suivant
+  function prevEmp() {
+    if (!data?.employes || !selectedEmpId) return
+    const idx = data.employes.findIndex(e => e.id === selectedEmpId)
+    if (idx > 0) setSelectedEmpId(data.employes[idx - 1].id)
+    else setSelectedEmpId(data.employes[data.employes.length - 1].id)  // wrap
+  }
+  function nextEmp() {
+    if (!data?.employes || !selectedEmpId) return
+    const idx = data.employes.findIndex(e => e.id === selectedEmpId)
+    if (idx < data.employes.length - 1) setSelectedEmpId(data.employes[idx + 1].id)
+    else setSelectedEmpId(data.employes[0].id)  // wrap
+  }
+
+  // Raccourcis clavier ← → pour navigation employé (uniquement en vue single)
+  useEffect(() => {
+    if (vue !== 'single') return
+    function onKey(e) {
+      // Ignorer si focus dans un input/select
+      const tag = (e.target.tagName || '').toLowerCase()
+      if (['input', 'select', 'textarea'].includes(tag)) return
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); prevEmp() }
+      if (e.key === 'ArrowRight') { e.preventDefault(); nextEmp() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [vue, selectedEmpId, data])
+
   return (
     <div>
       {/* Toolbar */}
@@ -425,6 +486,7 @@ export default function PointageTab({ user, isAdmin }) {
           {(isAdmin
             ? [
                 { v: 'single', label: '👤 Un employé' },
+                { v: 'annee', label: '📅 Année' },
                 { v: 'all', label: '👥 Tous' },
                 { v: 'recup', label: '🟣 Récup & Absences' },
               ]
@@ -441,13 +503,17 @@ export default function PointageTab({ user, isAdmin }) {
           ))}
         </div>
 
-        {vue === 'single' && (
-          <select value={selectedEmpId || ''} onChange={e => setSelectedEmpId(Number(e.target.value))}
-                  style={{ flex: 1, minWidth: 200, padding: '8px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }}>
-            {(data?.employes || []).map(e => (
-              <option key={e.id} value={e.id}>{e.nom}{e.poste ? ' · ' + e.poste : ''}</option>
-            ))}
-          </select>
+        {(vue === 'single' || vue === 'annee') && (
+          <div style={{ display: 'flex', gap: 4, flex: 1, minWidth: 200, alignItems: 'center' }}>
+            <button onClick={prevEmp} style={btnNav} title="Employé précédent (←)">◀</button>
+            <select value={selectedEmpId || ''} onChange={e => setSelectedEmpId(Number(e.target.value))}
+                    style={{ flex: 1, padding: '8px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6, cursor: 'pointer' }}>
+              {(data?.employes || []).map(e => (
+                <option key={e.id} value={e.id}>{e.nom}{e.poste ? ' · ' + e.poste : ''}</option>
+              ))}
+            </select>
+            <button onClick={nextEmp} style={btnNav} title="Employé suivant (→)">▶</button>
+          </div>
         )}
 
         {isAdmin && (
@@ -483,6 +549,15 @@ export default function PointageTab({ user, isAdmin }) {
 
       {loading && <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>}
 
+      {!loading && vue === 'annee' && data && isAdmin && result && (
+        <VueAnnee
+          empId={selectedEmpId}
+          emp={empSelected}
+          annee={annee}
+          isAdmin={isAdmin}
+        />
+      )}
+
       {!loading && vue === 'all' && data && isAdmin && (
         <>
           <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} isAdmin={isAdmin} />
@@ -510,14 +585,48 @@ export default function PointageTab({ user, isAdmin }) {
 
       {!loading && vue === 'single' && result && isAdmin && (
         <>
-          {isLocked && (
+          {/* Nom employé cliquable → ouvre modal */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 10, padding: '8px 12px',
+            background: '#F4F0EA', borderRadius: 8, gap: 8, flexWrap: 'wrap',
+          }}>
+            <button onClick={() => setEditingEmp(empSelected)} style={{
+              padding: '4px 8px', fontSize: 14, fontWeight: 500, color: '#993556',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }} title="Cliquer pour éditer la fiche employé">
+              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#6F6A60', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
+            </button>
+            {empSelected?.societe?.code && (
+              <span style={{
+                fontSize: 11, padding: '3px 8px', borderRadius: 999,
+                background: empSelected.societe.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
+                color: empSelected.societe.code === 'LG' ? '#993556' : '#27500A',
+                fontWeight: 500,
+              }}>
+                🏢 {empSelected.societe.nom}
+              </span>
+            )}
+          </div>
+
+          {isLocked ? (
             <div style={{
               padding: '10px 14px', background: '#FCEEE8', color: '#A32D2D',
               borderRadius: 6, fontSize: 13, marginBottom: 12,
               border: '1px solid #F5BFBC',
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              🔒 <strong>Mois validé</strong> · Tableau en lecture seule. Cliquez sur 'Débloquer' pour modifier.
+              🔒 <strong>Mois validé pour {empSelected?.nom}</strong> · Tableau en lecture seule. Cliquez sur 'Débloquer' pour modifier.
+            </div>
+          ) : (
+            <div style={{
+              padding: '8px 12px', background: '#EAF3DE', color: '#27500A',
+              borderRadius: 6, fontSize: 12, marginBottom: 12,
+              border: '1px solid #C0DD97',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              ✏️ <strong>Mois en cours de saisie</strong> · Modifications autorisées. Validez quand prêt.
             </div>
           )}
 
@@ -534,6 +643,12 @@ export default function PointageTab({ user, isAdmin }) {
             <Carte label="Jours récup"         val={result.synthese.jours_recup}      color="#3C3489" unit="j" />
             <Carte label="Solde reporté"       val={result.synthese.solde_reporte_precedent} color={result.synthese.solde_reporte_precedent < 0 ? '#A32D2D' : '#27500A'} signed />
             <Carte label="Solde du mois"       val={result.synthese.solde_mois}        color={result.synthese.solde_mois < 0 ? '#A32D2D' : '#27500A'} signed bold />
+            {isAdmin && empSelected?.salaire_net > 0 && (
+              <CarteSalaire
+                salaire={Number(empSelected.salaire_net)}
+                heuresSup={empSelected.heures_sup_mensuelles === false ? 0 : result.synthese.heures_sup}
+              />
+            )}
           </div>
 
           {/* Tableau journal */}
@@ -554,7 +669,32 @@ export default function PointageTab({ user, isAdmin }) {
               <>
                 <button onClick={handleExportSup} style={btnExport}>📥 Export heures sup</button>
                 <button onClick={handleExportConges} style={btnExport}>📥 Export congés</button>
-                {isLocked ? (
+                {/* Nom employé cliquable → ouvre modal */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 10, padding: '8px 12px',
+            background: '#F4F0EA', borderRadius: 8, gap: 8, flexWrap: 'wrap',
+          }}>
+            <button onClick={() => setEditingEmp(empSelected)} style={{
+              padding: '4px 8px', fontSize: 14, fontWeight: 500, color: '#993556',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }} title="Cliquer pour éditer la fiche employé">
+              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#6F6A60', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
+            </button>
+            {empSelected?.societe?.code && (
+              <span style={{
+                fontSize: 11, padding: '3px 8px', borderRadius: 999,
+                background: empSelected.societe.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
+                color: empSelected.societe.code === 'LG' ? '#993556' : '#27500A',
+                fontWeight: 500,
+              }}>
+                🏢 {empSelected.societe.nom}
+              </span>
+            )}
+          </div>
+
+          {isLocked ? (
                   <button onClick={handleDebloquer} style={{
                     padding: '10px 18px', fontSize: 13, background: '#A32D2D', color: 'white',
                     border: '1px solid #A32D2D', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
@@ -562,9 +702,17 @@ export default function PointageTab({ user, isAdmin }) {
                     🔓 Débloquer le mois
                   </button>
                 ) : (
-                  <button onClick={handleValider} style={btnPrimaryGreen}>
-                    ✅ Valider le mois
-                  </button>
+                  <>
+                    <button onClick={handleValiderEmploye} style={{
+                      padding: '10px 16px', fontSize: 13, background: '#3C3489', color: 'white',
+                      border: '1px solid #3C3489', borderRadius: 8, cursor: 'pointer',
+                    }}>
+                      ✓ Valider {empSelected?.nom?.split(' ')[0] || 'cet employé'}
+                    </button>
+                    <button onClick={handleValider} style={btnPrimaryGreen}>
+                      ✅ Tout valider (avec PDF+CSV)
+                    </button>
+                  </>
                 )}
               </>
             )}
@@ -577,6 +725,16 @@ export default function PointageTab({ user, isAdmin }) {
           data={editingTranches}
           onClose={() => setEditingTranches(null)}
           onSave={handleSaveTranches}
+        />
+      )}
+
+      {editingEmp && (
+        <EmployeEditModal
+          employe={editingEmp}
+          user={user}
+          isAdmin={isAdmin}
+          onClose={() => setEditingEmp(null)}
+          onSaved={() => { setEditingEmp(null); reload() }}
         />
       )}
     </div>
@@ -649,6 +807,174 @@ function TranchesEditModal({ data, onClose, onSave }) {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+
+
+function VueAnnee({ empId, emp, annee, isAdmin }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const MOIS_FR_LOCAL = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+
+  useEffect(() => {
+    (async () => {
+      if (!empId) return
+      setLoading(true)
+      try {
+        // Charger les 12 mois de l'année en parallèle
+        const promises = []
+        for (let m = 1; m <= 12; m++) {
+          promises.push(loadMonthData(m, annee))
+        }
+        const results = await Promise.all(promises)
+        // Pour chaque mois, calculer pour l'employé
+        const yearData = results.map((monthData, idx) => {
+          const empData = monthData.employes.find(e => e.id === empId)
+          if (!empData) return { mois: idx + 1, vide: true }
+          const r = calculerMois(empData, idx + 1, annee, monthData)
+          return { mois: idx + 1, ...r.synthese, valide: monthData.synthese?.find(s => s.employe_id === empId)?.valide || false }
+        })
+        setData(yearData)
+      } catch (e) {
+        console.error('Erreur chargement année :', e)
+      }
+      setLoading(false)
+    })()
+  }, [empId, annee])
+
+  if (loading) {
+    return <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement des 12 mois…</div>
+  }
+  if (!data || !emp) {
+    return <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Sélectionnez un employé.</div>
+  }
+
+  // Totaux annuels
+  const total = data.reduce((acc, m) => {
+    if (m.vide) return acc
+    acc.prevues += m.heures_prevues || 0
+    acc.travaillees += m.heures_travaillees || 0
+    acc.sup += m.heures_sup || 0
+    acc.manquantes += m.heures_manquantes || 0
+    acc.recup += m.jours_recup || 0
+    return acc
+  }, { prevues: 0, travaillees: 0, sup: 0, manquantes: 0, recup: 0 })
+
+  // Salaire annuel
+  const salaireNet = Number(emp.salaire_net || 0)
+  const tauxHoraire = salaireNet / 26 / 8
+  const tauxMajore = tauxHoraire * 1.25
+  const salaireAnnuel = data.reduce((sum, m) => {
+    if (m.vide) return sum
+    const supPay = emp.heures_sup_mensuelles === false ? 0 : (m.heures_sup || 0)
+    return sum + salaireNet + (tauxMajore * supPay)
+  }, 0)
+
+  return (
+    <div>
+      <div style={{
+        background: '#F4F0EA', padding: 12, borderRadius: 8, marginBottom: 12,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+      }}>
+        <span style={{ fontSize: 13, color: '#3A3733' }}>
+          📅 <strong>Vue annuelle</strong> · {emp.nom} · {annee}
+        </span>
+        {salaireNet > 0 && (
+          <span style={{ fontSize: 13, color: '#27500A', fontWeight: 500 }}>
+            💰 Salaire annuel estimé : {salaireAnnuel.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} dh
+          </span>
+        )}
+      </div>
+
+      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#6F6A60' }}>
+              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500 }}>Mois</th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500 }}>Prévues</th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500 }}>Travail.</th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: '#27500A' }}>Sup</th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: '#A32D2D' }}>Manq.</th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: '#3C3489' }}>Récup</th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500 }}>Solde</th>
+              {salaireNet > 0 && <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500 }}>Salaire estimé</th>}
+              <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 500 }}>État</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(m => {
+              const supPay = emp.heures_sup_mensuelles === false ? 0 : (m.heures_sup || 0)
+              const salaireMois = salaireNet > 0 ? salaireNet + (tauxMajore * supPay) : 0
+              return (
+                <tr key={m.mois} style={{ borderTop: '1px solid #F4F0EA', opacity: m.vide ? 0.4 : 1 }}>
+                  <td style={{ padding: '8px 12px' }}><strong>{MOIS_FR_LOCAL[m.mois - 1]}</strong></td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right' }}>{m.vide ? '—' : (m.heures_prevues || 0).toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right' }}>{m.vide ? '—' : (m.heures_travaillees || 0).toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#27500A' }}>{m.vide ? '—' : ((m.heures_sup || 0) > 0 ? '+' + m.heures_sup.toFixed(2) : '—')}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#A32D2D' }}>{m.vide ? '—' : ((m.heures_manquantes || 0) > 0 ? '-' + m.heures_manquantes.toFixed(2) : '—')}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', color: '#3C3489' }}>{m.vide ? '—' : ((m.jours_recup || 0) > 0 ? m.jours_recup.toFixed(2) + 'j' : '—')}</td>
+                  <td style={{
+                    padding: '8px 12px', textAlign: 'right', fontWeight: 500,
+                    color: (m.solde_mois || 0) >= 0 ? '#27500A' : '#A32D2D',
+                  }}>
+                    {m.vide ? '—' : ((m.solde_mois || 0) >= 0 ? '+' : '') + (m.solde_mois || 0).toFixed(2)}
+                  </td>
+                  {salaireNet > 0 && (
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#27500A', fontWeight: 500 }}>
+                      {m.vide ? '—' : salaireMois.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' dh'}
+                    </td>
+                  )}
+                  <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                    {m.vide ? '' : m.valide ? '🔒' : '✏️'}
+                  </td>
+                </tr>
+              )
+            })}
+            {/* Total annuel */}
+            <tr style={{ borderTop: '2px solid #993556', background: '#F9F6F1', fontWeight: 600 }}>
+              <td style={{ padding: '10px 12px' }}>TOTAL {annee}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right' }}>{total.prevues.toFixed(2)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right' }}>{total.travaillees.toFixed(2)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', color: '#27500A' }}>+{total.sup.toFixed(2)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', color: '#A32D2D' }}>-{total.manquantes.toFixed(2)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', color: '#3C3489' }}>{total.recup.toFixed(2)}j</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                {(total.sup - total.manquantes).toFixed(2)}
+              </td>
+              {salaireNet > 0 && (
+                <td style={{ padding: '10px 12px', textAlign: 'right', color: '#27500A' }}>
+                  {salaireAnnuel.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} dh
+                </td>
+              )}
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function CarteSalaire({ salaire, heuresSup }) {
+  // Formule : salaire + (salaire / 26 / 8) × 1.25 × heures_sup
+  // Taux horaire majoré à 1.25× pour heures sup au Maroc
+  const tauxHoraire = salaire / 26 / 8
+  const tauxMajore = tauxHoraire * 1.25
+  const montantSup = tauxMajore * heuresSup
+  const total = salaire + montantSup
+  return (
+    <div style={{ background: '#EAF3DE', padding: 10, borderRadius: 8, border: '1px solid #C0DD97' }}>
+      <p style={{ fontSize: 11, color: '#27500A', margin: 0, marginBottom: 4 }}>💰 Salaire estimé</p>
+      <p style={{ fontSize: 18, fontWeight: 600, color: '#27500A', margin: 0 }}>
+        {total.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} dh
+      </p>
+      {heuresSup > 0 && (
+        <p style={{ fontSize: 10, color: '#27500A', margin: '2px 0 0', opacity: 0.8 }}>
+          {salaire.toLocaleString('fr-FR')} + {montantSup.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} sup (1.25×)
+        </p>
+      )}
     </div>
   )
 }

@@ -6,8 +6,10 @@ export default function EmployesTab({ user, isAdmin }) {
   const [employes, setEmployes] = useState([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('actif')  // 'actif' | 'inactif' | 'tous' — forcé à 'actif' pour perm_hr
+  const [societeFilter, setSocieteFilter] = useState('toutes')  // 'toutes' | 'LG' | 'LN'
   const [search, setSearch] = useState('')
   const [editingEmp, setEditingEmp] = useState(null)  // null = pas d'édition, {} = nouveau, {...} = édit
+  const [revealedSalaries, setRevealedSalaries] = useState(new Set())  // ids des salaires révélés
 
   async function reload() {
     setLoading(true)
@@ -25,15 +27,23 @@ export default function EmployesTab({ user, isAdmin }) {
   useEffect(() => { reload() }, [filter])
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return employes
-    const s = search.trim().toLowerCase()
-    return employes.filter(e =>
-      (e.nom || '').toLowerCase().includes(s) ||
-      (e.poste || '').toLowerCase().includes(s) ||
-      (e.cnss || '').includes(s) ||
-      (e.cin || '').includes(s)
-    )
-  }, [employes, search])
+    let list = employes
+    // Filtre société
+    if (societeFilter !== 'toutes') {
+      list = list.filter(e => e.societe?.code === societeFilter)
+    }
+    // Filtre recherche
+    if (search.trim()) {
+      const s = search.trim().toLowerCase()
+      list = list.filter(e =>
+        (e.nom || '').toLowerCase().includes(s) ||
+        (e.poste || '').toLowerCase().includes(s) ||
+        (e.cnss || '').includes(s) ||
+        (e.cin || '').includes(s)
+      )
+    }
+    return list
+  }, [employes, search, societeFilter])
 
   async function handleDelete(emp) {
     if (!confirm(`Supprimer ${emp.nom} ? Cette action est définitive.`)) return
@@ -72,6 +82,24 @@ export default function EmployesTab({ user, isAdmin }) {
             ))}
           </div>
         )}
+
+        {/* Filtre société */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[
+            { v: 'toutes', label: '🏢 Toutes' },
+            { v: 'LG', label: 'LG' },
+            { v: 'LN', label: 'L&N' },
+          ].map(f => (
+            <button key={f.v} type="button" onClick={() => setSocieteFilter(f.v)} style={{
+              padding: '7px 12px', fontSize: 12, borderRadius: 999, cursor: 'pointer', border: 'none',
+              background: societeFilter === f.v ? '#993556' : '#F4F0EA',
+              color: societeFilter === f.v ? 'white' : '#6F6A60',
+              fontWeight: societeFilter === f.v ? 500 : 400,
+            }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
         <button onClick={() => setEditingEmp({})} style={{
           padding: '9px 14px', fontSize: 13, background: '#993556',
           color: 'white', border: '1px solid #993556', borderRadius: 8,
@@ -126,7 +154,28 @@ export default function EmployesTab({ user, isAdmin }) {
                   <Td>{e.cnss || '—'}</Td>
                   <Td>{e.cin || '—'}</Td>
                   <Td>{fmtDate(e.date_entree)}</Td>
-                  {isAdmin && <Td>{e.salaire_net ? `${Number(e.salaire_net).toLocaleString('fr-FR')} dh` : '—'}</Td>}
+                  {isAdmin && (
+                    <Td>
+                      {e.salaire_net ? (
+                        revealedSalaries.has(e.id) ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            {Number(e.salaire_net).toLocaleString('fr-FR')} dh
+                            <button onClick={() => setRevealedSalaries(s => { const n = new Set(s); n.delete(e.id); return n })} style={{
+                              background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
+                            }} title="Masquer">🙈</button>
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ letterSpacing: 2, color: '#9B968D' }}>•••••</span>
+                            <span style={{ color: '#9B968D', fontSize: 11 }}>dh</span>
+                            <button onClick={() => setRevealedSalaries(s => { const n = new Set(s); n.add(e.id); return n })} style={{
+                              background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
+                            }} title="Révéler">👁</button>
+                          </span>
+                        )
+                      ) : '—'}
+                    </Td>
+                  )}
 {isAdmin && (
                   <Td>
                     <span style={{
