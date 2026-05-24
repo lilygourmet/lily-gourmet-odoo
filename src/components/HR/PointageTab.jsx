@@ -62,6 +62,14 @@ export default function PointageTab({ user, isAdmin }) {
   const empSelected = data?.employes.find(e => e.id === selectedEmpId)
   const result = empSelected ? resultats[selectedEmpId] : null
 
+  // Mois verrouillé pour cet employé (synthese.valide === true)
+  const synthEmp = data?.synthese?.find(s => s.employe_id === selectedEmpId)
+  const isLocked = !!synthEmp?.valide
+  // Tableau éditable uniquement si admin + mois non verrouillé
+  const canEdit = isAdmin && !isLocked
+  // Edition globale du mois (pour Tous, Récup)
+  const monthAllLocked = (data?.synthese || []).every(s => s.valide)
+
   // Debug : voir ce qu'Odoo renvoie
   async function handleDebug() {
     setError(null); setSuccess(null)
@@ -120,7 +128,12 @@ export default function PointageTab({ user, isAdmin }) {
 
   // Édition d'une cellule (heures_travaillees, sup, manquantes, recup, statut)
   async function handleEditCell(dateJour, champ, valeur) {
-    if (!isAdmin) return
+    if (!canEdit) {
+      alert(isLocked
+        ? '🔒 Ce mois est validé. Débloquez-le pour modifier.'
+        : '🔒 Modification réservée à l\'admin.')
+      return
+    }
     try {
       if (valeur === '' || valeur === null) {
         await removeAjustement(selectedEmpId, dateJour, champ)
@@ -145,7 +158,7 @@ export default function PointageTab({ user, isAdmin }) {
 
   // Sauvegarder les sessions modifiées d'un jour
   async function handleSaveTranches(date, sessions) {
-    if (!isAdmin) return
+    if (!canEdit) return
     try {
       const { upsertPointagesDuJour } = await import('../../lib/pointage')
       await upsertPointagesDuJour(selectedEmpId, date, sessions, user.id)
@@ -223,17 +236,168 @@ export default function PointageTab({ user, isAdmin }) {
 
   // Validation du mois
   async function handleValider() {
-    if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour TOUS les employés ?\n\nLes données seront figées et le solde reporté sur le mois suivant.`)) return
+    if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour TOUS les employés ?\n\nLes données seront figées et le solde reporté sur le mois suivant.\nUn PDF + Excel récapitulatif seront téléchargés.`)) return
     try {
       for (const emp of data.employes) {
         const r = resultats[emp.id]
         if (r) await validerMois(emp.id, mois, annee, r.synthese, r.journal, user.id)
       }
-      setSuccess('✅ Mois validé pour tous les employés.')
+      // Générer le récap PDF + Excel
+      await genererRecapMensuel()
+      setSuccess('✅ Mois validé pour tous les employés. PDF + Excel téléchargés.')
+      await reload()
     } catch (e) {
       setError('Erreur validation : ' + e.message)
     }
   }
+
+  // Générer PDF + Excel récap mensuel
+  async function genererRecapMensuel() {
+    const monthName = MOIS_FR[mois - 1] + '_' + annee
+    // Données récap : heures sup + congés
+    const rows = []
+    for (const emp of data.employes) {
+      const r = resultats[emp.id]
+      if (!r) continue
+
+      // Heures sup (respect toggle heures_sup_mensuelles)
+      const sup = emp.heures_sup_mensuelles === false ? 0 : r.synthese.heures_sup
+
+      // Jours congés + maladie (≥ 4 jours)
+      const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
+      let joursConge = 0
+      let joursMaladie = 0
+      for (const cg of congesEmp) {
+        const debut = new Date(Math.max(new Date(cg.date_debut), new Date(annee, mois - 1, 1)))
+        const fin = new Date(Math.min(new Date(cg.date_fin), new Date(annee, mois, 0)))
+        if (fin < debut) continue
+        const nb = Math.floor((fin - debut) / 86400000) + 1
+        const t = (cg.type_conge || '').toLowerCase()
+        if (t.includes('maladie') || t.includes('sick')) {
+          if (nb >= 4) joursMaladie += nb
+        } else if (t.includes('récup') || t.includes('recup')) {
+          continue
+        } else {
+          joursConge += nb
+        }
+      }
+      rows.push({
+        nom: emp.nom,
+        societe: emp.societe_id,
+        sup: sup.toFixed(2),
+        manquantes: r.synthese.heures_manquantes.toFixed(2),
+        recup: r.synthese.jours_recup.toFixed(2),
+        conge: joursConge,
+        maladie: joursMaladie,
+        solde_mois: r.synthese.solde_mois.toFixed(2),
+      })
+    }
+    rows.sort((a, b) => a.nom.localeCompare(b.nom))
+
+    // 1) Excel CSV (compatible Excel, pas besoin de xlsx lib)
+    const headers = ['Employé', 'Heures sup', 'Heures manquantes', 'Jours récup', 'Jours congé', 'Jours maladie (4+)', 'Solde mois (h)']
+    const csvRows = [headers]
+    for (const r of rows) {
+      csvRows.push([r.nom, r.sup, r.manquantes, r.recup, r.conge, r.maladie, r.solde_mois])
+    }
+    downloadCSV('recap_pointage_' + monthName + '.csv', csvRows)
+
+    // 2) PDF (simple, via window.print sur une page HTML cachée)
+    // ou via jsPDF si disponible. On va générer un HTML imprimable en téléchargement.
+    const today = new Date().toLocaleDateString('fr-FR')
+    const html = `
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Récap pointage ${MOIS_FR[mois - 1]} ${annee}</title>
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 30px; color: #3A3733; }
+  h1 { color: #993556; margin: 0 0 8px; }
+  .sub { color: #6F6A60; margin: 0 0 24px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #F4F0EA; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #993556; }
+  td { padding: 7px 10px; border-bottom: 1px solid #F4F0EA; }
+  .right { text-align: right; }
+  .green { color: #27500A; }
+  .red { color: #A32D2D; }
+  .purple { color: #3C3489; }
+  .footer { margin-top: 30px; font-size: 11px; color: #9B968D; }
+  @media print { body { padding: 15px; } }
+</style></head>
+<body>
+  <h1>Récapitulatif Pointage</h1>
+  <p class="sub">${MOIS_FR[mois - 1]} ${annee} · ${rows.length} employés · Généré le ${today}</p>
+  <table>
+    <thead><tr>
+      <th>Employé</th>
+      <th class="right">Heures sup</th>
+      <th class="right">Manquantes</th>
+      <th class="right">Récup</th>
+      <th class="right">Jours congé</th>
+      <th class="right">Maladie (4+)</th>
+      <th class="right">Solde mois</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(r => `<tr>
+        <td><strong>${r.nom}</strong></td>
+        <td class="right green">${r.sup}h</td>
+        <td class="right red">${r.manquantes}h</td>
+        <td class="right purple">${r.recup}j</td>
+        <td class="right">${r.conge}</td>
+        <td class="right">${r.maladie}</td>
+        <td class="right ${Number(r.solde_mois) >= 0 ? 'green' : 'red'}"><strong>${r.solde_mois}h</strong></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+  <p class="footer">Document figé pour la paie · Lily Gourmet</p>
+  <script>setTimeout(() => window.print(), 500);</script>
+</body></html>`
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    // Ouvrir dans nouvel onglet pour impression PDF
+    const win = window.open(url, '_blank')
+    if (!win) {
+      // Fallback : téléchargement HTML
+      const a = document.createElement('a')
+      a.href = url; a.download = 'recap_pointage_' + monthName + '.html'; a.click()
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  // Débloquer un mois (admin seulement, supprime le flag valide)
+  async function handleDebloquer() {
+    if (!isAdmin) return
+    if (!confirm(`Débloquer le mois de ${MOIS_FR[mois - 1]} ${annee} pour ${empSelected?.nom} ?\n\nLes données redeviennent modifiables mais Sync Odoo restera désactivé.`)) return
+    try {
+      const { supabase } = await import('../../lib/supabase')
+      const { error } = await supabase
+        .from('pointages_mois')
+        .update({ valide: false })
+        .eq('employe_id', selectedEmpId)
+        .eq('mois', mois).eq('annee', annee)
+      if (error) throw error
+      await reload()
+      setSuccess('🔓 Mois débloqué pour cet employé.')
+    } catch (e) {
+      setError('Erreur déblocage : ' + e.message)
+    }
+  }
+
+  // Forcer un jour "Absent" à "Présent" (efface l'ajustement absence pour ce jour)
+  async function handleForcerPresent(dateJour) {
+    if (!canEdit) return
+    if (!confirm(`Marquer le ${dateJour} comme PRÉSENT pour ${empSelected?.nom} ?\n\nLes heures prévues seront comptées comme travaillées (8.50h ou selon planning).`)) return
+    try {
+      // On force heures_travaillees = heures_prevues du jour
+      const j = result.journal.find(jj => jj.date === dateJour)
+      if (!j) return
+      await setAjustement(selectedEmpId, dateJour, 'heures_travaillees', String(j.heures_prevues), user.id)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
+  }
+
+
 
   // Anciens / nouveaux mois
   function prevMonth() {
@@ -288,11 +452,13 @@ export default function PointageTab({ user, isAdmin }) {
 
         {isAdmin && (
           <>
-            <button onClick={handleSync} disabled={syncing} style={{
-              padding: '9px 14px', fontSize: 13, background: '#0C447C', color: 'white',
-              border: '1px solid #0C447C', borderRadius: 8, cursor: syncing ? 'wait' : 'pointer', fontWeight: 500,
+            <button onClick={handleSync} disabled={syncing || monthAllLocked} title={monthAllLocked ? 'Mois entièrement validé, sync désactivée' : ''} style={{
+              padding: '9px 14px', fontSize: 13, background: monthAllLocked ? '#9B968D' : '#0C447C', color: 'white',
+              border: '1px solid ' + (monthAllLocked ? '#9B968D' : '#0C447C'), borderRadius: 8,
+              cursor: syncing || monthAllLocked ? 'not-allowed' : 'pointer', fontWeight: 500,
+              opacity: monthAllLocked ? 0.6 : 1,
             }}>
-              {syncing ? '⏳ Sync...' : '🔄 Sync Odoo'}
+              {syncing ? '⏳ Sync...' : (monthAllLocked ? '🔒 Sync (verrouillé)' : '🔄 Sync Odoo')}
             </button>
             <button onClick={handleDebug} style={{
               padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#6F6A60',
@@ -344,6 +510,17 @@ export default function PointageTab({ user, isAdmin }) {
 
       {!loading && vue === 'single' && result && isAdmin && (
         <>
+          {isLocked && (
+            <div style={{
+              padding: '10px 14px', background: '#FCEEE8', color: '#A32D2D',
+              borderRadius: 6, fontSize: 13, marginBottom: 12,
+              border: '1px solid #F5BFBC',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              🔒 <strong>Mois validé</strong> · Tableau en lecture seule. Cliquez sur 'Débloquer' pour modifier.
+            </div>
+          )}
+
           {/* Cartes synthèse */}
           <div style={{
             display: 'grid',
@@ -364,7 +541,9 @@ export default function PointageTab({ user, isAdmin }) {
             journal={result.journal}
             onEditCell={handleEditCell}
             onEditPointage={handleEditPointage}
-            onEditTranches={setEditingTranches}
+            onEditTranches={canEdit ? setEditingTranches : () => {}}
+            onForcerPresent={handleForcerPresent}
+            canEdit={canEdit}
           />
 
           {/* Légende */}
@@ -373,24 +552,20 @@ export default function PointageTab({ user, isAdmin }) {
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
             {isAdmin && (
               <>
-                <button onClick={handleExportSup} style={{
-                  padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
-                  border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
-                }}>
-                  📥 Export heures sup
-                </button>
-                <button onClick={handleExportConges} style={{
-                  padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
-                  border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
-                }}>
-                  📥 Export congés
-                </button>
-                <button onClick={handleValider} style={{
-                  padding: '10px 18px', fontSize: 13, background: '#27500A', color: 'white',
-                  border: '1px solid #27500A', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
-                }}>
-                  ✅ Valider le mois
-                </button>
+                <button onClick={handleExportSup} style={btnExport}>📥 Export heures sup</button>
+                <button onClick={handleExportConges} style={btnExport}>📥 Export congés</button>
+                {isLocked ? (
+                  <button onClick={handleDebloquer} style={{
+                    padding: '10px 18px', fontSize: 13, background: '#A32D2D', color: 'white',
+                    border: '1px solid #A32D2D', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+                  }}>
+                    🔓 Débloquer le mois
+                  </button>
+                ) : (
+                  <button onClick={handleValider} style={btnPrimaryGreen}>
+                    ✅ Valider le mois
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -492,7 +667,7 @@ function Carte({ label, val, color = '#3A3733', sign = '', unit = 'h', signed = 
   )
 }
 
-function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches }) {
+function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches, onForcerPresent, canEdit }) {
   return (
     <div style={{
       background: 'white', borderRadius: 10, border: '1px solid #E8E2D8',
@@ -513,7 +688,7 @@ function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches }) {
         </thead>
         <tbody>
           {journal.map(j => (
-            <Row key={j.date} j={j} onEditCell={onEditCell} onEditPointage={onEditPointage} onEditTranches={onEditTranches} />
+            <Row key={j.date} j={j} onEditCell={onEditCell} onEditPointage={onEditPointage} onEditTranches={onEditTranches} onForcerPresent={onForcerPresent} canEdit={canEdit} />
           ))}
         </tbody>
       </table>
@@ -521,26 +696,34 @@ function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches }) {
   )
 }
 
-function Row({ j, onEditCell, onEditPointage, onEditTranches }) {
+function Row({ j, onEditCell, onEditPointage, onEditTranches, onForcerPresent, canEdit }) {
   const c = COULEUR_STATUT[j.statut] || COULEUR_STATUT.normal
   return (
     <tr style={{ borderTop: '1px solid #F4F0EA', background: c.bg }}>
       <Td>{j.jour_semaine} {String(j.jour_num).padStart(2, '0')}</Td>
-      <Td onClick={() => onEditTranches({ date: j.date, sessions: j.sessions || [], statut: j.statut })} style={{ fontFamily: 'monospace', fontSize: 11, color: c.text, cursor: 'pointer' }} title="Cliquer pour modifier les pointages">{j.tranches}</Td>
-      <EditableCell value={j.heures_prevues} onChange={v => onEditCell(j.date, 'heures_prevues', v)} align="right" />
-      <EditableCell value={j.heures_travaillees} onChange={v => onEditCell(j.date, 'heures_travaillees', v)} align="right" />
-      <EditableCell value={j.heures_sup} onChange={v => onEditCell(j.date, 'heures_sup', v)} align="right" color="#27500A" />
-      <EditableCell value={j.heures_manquantes} onChange={v => onEditCell(j.date, 'heures_manquantes', v)} align="right" color="#A32D2D" />
-      <EditableCell value={j.jours_recup} onChange={v => onEditCell(j.date, 'jours_recup', v)} align="right" color="#3C3489" />
-      <Td><span style={{
-        fontSize: 10, padding: '2px 6px', borderRadius: 6,
-        background: c.text, color: 'white'
-      }}>{j.label}</span></Td>
+      <Td onClick={() => canEdit && onEditTranches({ date: j.date, sessions: j.sessions || [], statut: j.statut })} style={{ fontFamily: 'monospace', fontSize: 11, color: c.text, cursor: canEdit ? 'pointer' : 'default' }} title={canEdit ? 'Cliquer pour modifier les pointages' : ''}>{j.tranches}</Td>
+      <EditableCell value={j.heures_prevues} onChange={v => onEditCell(j.date, 'heures_prevues', v)} align="right" canEdit={canEdit} />
+      <EditableCell value={j.heures_travaillees} onChange={v => onEditCell(j.date, 'heures_travaillees', v)} align="right" canEdit={canEdit} />
+      <EditableCell value={j.heures_sup} onChange={v => onEditCell(j.date, 'heures_sup', v)} align="right" color="#27500A" canEdit={canEdit} />
+      <EditableCell value={j.heures_manquantes} onChange={v => onEditCell(j.date, 'heures_manquantes', v)} align="right" color="#A32D2D" canEdit={canEdit} />
+      <EditableCell value={j.jours_recup} onChange={v => onEditCell(j.date, 'jours_recup', v)} align="right" color="#3C3489" canEdit={canEdit} />
+      <Td>
+        <span style={{
+          fontSize: 10, padding: '2px 6px', borderRadius: 6,
+          background: c.text, color: 'white'
+        }}>{j.label}</span>
+        {j.statut === 'absent' && canEdit && (
+          <button onClick={() => onForcerPresent(j.date)} title="Marquer présent" style={{
+            marginLeft: 4, padding: '2px 6px', fontSize: 10, background: '#EAF3DE', color: '#27500A',
+            border: '1px solid #C0DD97', borderRadius: 4, cursor: 'pointer',
+          }}>✋ Présent</button>
+        )}
+      </Td>
     </tr>
   )
 }
 
-function EditableCell({ value, onChange, align = 'left', color = '#3A3733' }) {
+function EditableCell({ value, onChange, align = 'left', color = '#3A3733', canEdit = true }) {
   const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
@@ -570,9 +753,9 @@ function EditableCell({ value, onChange, align = 'left', color = '#3A3733' }) {
 
   const display = (value === 0 || value == null) ? '—' : Number(value).toFixed(2)
   return (
-    <td onClick={() => setEditing(true)} style={{
+    <td onClick={() => canEdit && setEditing(true)} style={{
       padding: '7px 10px', textAlign: align, color: value > 0 ? color : '#9B968D',
-      cursor: 'pointer',
+      cursor: canEdit ? 'pointer' : 'default',
     }}>
       {display}
     </td>

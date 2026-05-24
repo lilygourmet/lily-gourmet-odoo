@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createEmploye, updateEmploye } from '../../lib/hr'
 
 const TYPES_CONTRAT = ['CDI', 'CDD', 'Stage', 'Interim', 'Autre']
@@ -33,7 +33,15 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
     heures_demi_journee: employe?.heures_demi_journee != null ? String(employe.heures_demi_journee) : '4.00',
     nom_odoo_match: employe?.nom_odoo_match || '',
     heures_sup_mensuelles: employe?.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
+    societe_id: employe?.societe_id || null,
   })
+  const [societes, setSocietes] = useState([])
+
+  useEffect(() => { (async () => {
+    const { supabase } = await import('../../lib/supabase')
+    const { data } = await supabase.from('societes').select('*').order('code')
+    setSocietes(data || [])
+  })() }, [])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -44,6 +52,10 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
   async function handleSubmit(e) {
     e?.preventDefault?.()
     if (!form.nom.trim()) { setError('Le nom est obligatoire'); return }
+      if (!form.societe_id) {
+        setErr('La société est obligatoire')
+        setSaving(false); return
+      }
 
     setSaving(true); setError(null)
     try {
@@ -75,6 +87,7 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
         heures_demi_journee: form.heures_demi_journee ? parseFloat(form.heures_demi_journee) : 4.00,
         nom_odoo_match: form.nom_odoo_match.trim() || null,
         heures_sup_mensuelles: form.heures_sup_mensuelles,
+        societe_id: form.societe_id || null,
       }
       if (isNew) {
         await createEmploye(data, user.id)
@@ -99,6 +112,27 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
         </div>
 
         <form onSubmit={handleSubmit}>
+          <Row>
+            <div>
+              <label style={lblStyle}>Société *</label>
+              <select
+                value={form.societe_id || ''}
+                onChange={e => setF('societe_id', e.target.value ? Number(e.target.value) : null)}
+                style={{
+                  ...inputStyle,
+                  borderColor: form.societe_id ? '#E8E2D8' : '#F5BFBC',
+                  background: form.societe_id ? 'white' : '#FCEEE8',
+                }}
+                required
+              >
+                <option value="">— Choisir la société —</option>
+                {societes.map(s => (
+                  <option key={s.id} value={s.id}>{s.nom}</option>
+                ))}
+              </select>
+            </div>
+            <div />
+          </Row>
           <Row>
             <Field label="Nom complet *" value={form.nom} onChange={v => setF('nom', v)} required autoFocus />
             <Field label="Poste" value={form.poste} onChange={v => setF('poste', v)} placeholder="Pâtissière" />

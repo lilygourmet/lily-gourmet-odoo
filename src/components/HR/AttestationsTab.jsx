@@ -6,11 +6,13 @@ import { loadEmployes, generateAttestation, getAllTemplates } from '../../lib/hr
  */
 export default function AttestationsTab({ user, isAdmin }) {
   const [employes, setEmployes] = useState([])
+  const [societes, setSocietes] = useState([])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
+  const [subTab, setSubTab] = useState('attestations')  // 'attestations' | 'contrats'
   const [type, setType] = useState(isAdmin ? 'salaire' : 'stage')
   const [empId, setEmpId] = useState('')
   // Données formulaire (saisies/auto-remplies)
@@ -23,19 +25,40 @@ export default function AttestationsTab({ user, isAdmin }) {
   })
 
   const allTemplates = useMemo(() => getAllTemplates(), [])
+  // Catégoriser : attestation vs contrat
+  function isContrat(t) {
+    const k = (t.key || '').toLowerCase()
+    return k.includes('cdi') || k.includes('cdd') || k.startsWith('contrat')
+  }
   const templates = useMemo(() => {
-    if (isAdmin) return allTemplates
-    // perm_hr : seulement attestation de stage
-    return allTemplates.filter(t => t.key === 'stage')
-  }, [allTemplates, isAdmin])
+    let list = allTemplates
+    // Restriction perm_hr : seulement attestation de stage
+    if (!isAdmin) list = list.filter(t => t.key === 'stage')
+    // Filtrer par sous-onglet
+    if (subTab === 'contrats') list = list.filter(isContrat)
+    else list = list.filter(t => !isContrat(t))
+    return list
+  }, [allTemplates, isAdmin, subTab])
+
+  // Si le type courant n'est plus dans la liste filtrée, choisir le premier dispo
+  useEffect(() => {
+    if (templates.length > 0 && !templates.find(t => t.key === type)) {
+      setType(templates[0].key)
+    }
+  }, [templates, type])
+
   const currentTemplate = useMemo(() => templates.find(t => t.key === type), [templates, type])
 
   // Charger les employés
   useEffect(() => { (async () => {
     setLoading(true)
     try {
-      const list = await loadEmployes(true)  // actifs seulement
+      const list = await loadEmployes(true)
       setEmployes(list)
+      // Charger les sociétés
+      const { supabase } = await import('../../lib/supabase')
+      const { data: socList } = await supabase.from('societes').select('*')
+      setSocietes(socList || [])
     } catch (e) {
       setError(e.message)
     }
@@ -75,6 +98,7 @@ export default function AttestationsTab({ user, isAdmin }) {
       adresse: e.adresse || '',
       date_entree: e.date_entree || '',
       date_sortie: e.date_sortie || '',
+      societe_id: e.societe_id || null,
     })
   }
 
@@ -86,8 +110,21 @@ export default function AttestationsTab({ user, isAdmin }) {
     e?.preventDefault?.()
     setError(null); setSuccess(null); setGenerating(true)
     try {
-      await generateAttestation(type, form)
-      setSuccess(`✅ Document généré et téléchargé : ${currentTemplate.label} pour ${form.nom}`)
+      // Injecter les données société
+      const soc = societes.find(s => s.id === form.societe_id)
+      const formAvecSociete = {
+        ...form,
+        societe_nom: soc?.nom || '',
+        societe_capital: soc?.capital_dh ? Number(soc.capital_dh).toLocaleString('fr-FR') : '',
+        societe_adresse: soc?.adresse || '',
+        societe_rc: soc?.rc || '',
+        societe_patente: soc?.patente || '',
+        societe_if: soc?.if_num || '',
+        societe_cnss: soc?.cnss || '',
+        societe_ice: soc?.ice || '',
+      }
+      await generateAttestation(type, formAvecSociete)
+      setSuccess(`✅ Document généré et téléchargé : ${currentTemplate.label} pour ${form.nom}${soc ? ' · ' + soc.nom : ''}`)
       setTimeout(() => setSuccess(null), 5000)
     } catch (e) {
       console.error(e)
@@ -98,6 +135,26 @@ export default function AttestationsTab({ user, isAdmin }) {
 
   return (
     <div>
+      {/* Sous-onglets : Attestations / Contrats */}
+      {isAdmin && (
+        <div style={{
+          display: 'flex', gap: 4, padding: 3, background: '#F4F0EA', borderRadius: 8,
+          marginBottom: 16, width: 'fit-content',
+        }}>
+          {[
+            { v: 'attestations', label: '📜 Attestations' },
+            { v: 'contrats', label: '📝 Contrats' },
+          ].map(t => (
+            <button key={t.v} type="button" onClick={() => setSubTab(t.v)} style={{
+              padding: '7px 14px', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer',
+              background: subTab === t.v ? 'white' : 'transparent',
+              color: subTab === t.v ? '#3A3733' : '#6F6A60',
+              fontWeight: subTab === t.v ? 500 : 400,
+            }}>{t.label}</button>
+          ))}
+        </div>
+      )}
+
       <form onSubmit={handleGenerate}>
 
         {/* Type de document */}
@@ -140,6 +197,15 @@ export default function AttestationsTab({ user, isAdmin }) {
               </option>
             ))}
           </select>
+          {form.societe_id && (
+            <div style={{
+              marginTop: 6, padding: '6px 10px',
+              background: '#EAF3DE', color: '#27500A',
+              borderRadius: 6, fontSize: 11, display: 'inline-block',
+            }}>
+              🏢 Société : <strong>{societes.find(s => s.id === form.societe_id)?.nom || '—'}</strong>
+            </div>
+          )}
         </div>
 
         {/* Champs dynamiques selon le type */}

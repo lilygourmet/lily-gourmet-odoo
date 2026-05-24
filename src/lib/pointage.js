@@ -125,7 +125,14 @@ export function statutPrevu(date, employe, feriesMap, congesByEmp) {
   const conges = congesByEmp.get(employe.id) || []
   for (const c of conges) {
     if (ymd >= c.date_debut && ymd <= c.date_fin) {
-      return { statut: 'conge', heures_prevues: 0, label: c.type_conge || 'Congé' }
+      const typeLower = (c.type_conge || '').toLowerCase()
+      const isMaladie = typeLower.includes('maladie') || typeLower.includes('malade') || typeLower.includes('sick')
+      return {
+        statut: 'conge',
+        heures_prevues: 0,
+        label: c.type_conge || 'Congé',
+        isMaladie,
+      }
     }
   }
 
@@ -269,10 +276,10 @@ export function calculerJour(prevu, pointe, employe) {
   // ─── CAS 1 : Jour normal / demi-journée
   if (prevu.statut === 'normal' || prevu.statut === 'demi') {
     if (heures_travaillees === 0 && pointe.nb_sessions === 0) {
-      // Absent
+      // Absent : on garde prévues affichées mais manquantes = 0 (sera affiché '—')
       statut = 'absent'
       label = 'Absent'
-      heures_manquantes = heures_prevues
+      heures_manquantes = 0
     } else if (heures_travaillees >= heures_prevues) {
       heures_sup = round2(heures_travaillees - heures_prevues)
     } else {
@@ -307,11 +314,11 @@ export function calculerJour(prevu, pointe, employe) {
     }
   }
 
-  // ─── CAS 4 : Congé travaillé (même logique que OFF)
+  // ─── CAS 4 : Congé travaillé (même logique que OFF, sauf maladie qui ne donne pas de récup)
   else if (prevu.statut === 'conge' && heures_travaillees > 0) {
     statut = 'conge_travaille'
     label = label + ' (travaillé)'
-    jours_recup = 1
+    jours_recup = prevu.isMaladie ? 0 : 1  // ⚠️ pas de récup si maladie
     heures_prevues = Number(employe.heures_jour_complet || 8.50)
     if (heures_travaillees >= heures_prevues) {
       heures_sup = round2(heures_travaillees - heures_prevues)

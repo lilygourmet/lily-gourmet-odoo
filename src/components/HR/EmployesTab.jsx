@@ -97,6 +97,7 @@ export default function EmployesTab({ user, isAdmin }) {
             <thead>
               <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#6F6A60' }}>
                 <Th>Nom</Th>
+                <Th>Société</Th>
                 <Th>Poste</Th>
                 <Th>CNSS</Th>
                 <Th>CIN</Th>
@@ -113,6 +114,14 @@ export default function EmployesTab({ user, isAdmin }) {
                   opacity: e.actif ? 1 : 0.6
                 }}>
                   <Td><strong>{e.nom}</strong></Td>
+                  <Td>
+                    <span style={{
+                      fontSize: 10, padding: '2px 8px', borderRadius: 999,
+                      background: e.societe?.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
+                      color: e.societe?.code === 'LG' ? '#993556' : '#27500A',
+                      fontWeight: 500,
+                    }}>{e.societe?.code || '—'}</span>
+                  </Td>
                   <Td style={{ color: '#6F6A60' }}>{e.poste || '—'}</Td>
                   <Td>{e.cnss || '—'}</Td>
                   <Td>{e.cin || '—'}</Td>
