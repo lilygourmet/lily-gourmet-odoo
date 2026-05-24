@@ -742,11 +742,13 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             active={formData.role === 'user'}
             onClick={() => update('role', 'user')}
           />
-          <RoleButton
-            label="Admin"
-            active={formData.role === 'admin'}
-            onClick={() => update('role', 'admin')}
-          />
+          {currentUser?.role === 'admin' && (
+            <RoleButton
+              label="Admin"
+              active={formData.role === 'admin'}
+              onClick={() => update('role', 'admin')}
+            />
+          )}
           <RoleButton
             label="Récap"
             active={formData.role === 'recap'}
