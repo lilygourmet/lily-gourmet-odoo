@@ -13,7 +13,7 @@ import { saveAs } from 'file-saver'
 export async function loadEmployes(filterActif = null) {
   let query = supabase
     .from('employes')
-    .select('*')
+    .select('*, societe:societes(*)')
     .order('actif', { ascending: false })
     .order('nom', { ascending: true })
 
