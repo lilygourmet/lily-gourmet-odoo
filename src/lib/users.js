@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -33,6 +33,7 @@ export async function createUser({
   perm_stock_gs = false,
   perm_caisse = false, perm_caisse_admin = false,
   perm_hr = false,
+  perm_admin_users = false,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
@@ -64,6 +65,7 @@ export async function createUser({
           perm_caisse,
           perm_caisse_admin,
           perm_hr,
+          perm_admin_users,
         })
         .eq('id', data.id)
     } catch (e) {
@@ -93,6 +95,7 @@ export async function updateUser(userId, {
   perm_stock_gs,
   perm_caisse, perm_caisse_admin,
   perm_hr,
+  perm_admin_users,
 }) {
   const updates = {}
   if (username !== undefined) updates.username = username
@@ -126,6 +129,7 @@ export async function updateUser(userId, {
   if (perm_caisse !== undefined) updates.perm_caisse = perm_caisse
   if (perm_caisse_admin !== undefined) updates.perm_caisse_admin = perm_caisse_admin
   if (perm_hr !== undefined) updates.perm_hr = perm_hr
+  if (perm_admin_users !== undefined) updates.perm_admin_users = perm_admin_users
   if (perm_hr !== undefined) updates.perm_hr = perm_hr
 
   const { data, error } = await supabase

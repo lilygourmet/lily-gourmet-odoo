@@ -124,6 +124,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_caisse: formData.permCaisse,
         perm_caisse_admin: formData.permCaisseAdmin,
         perm_hr: formData.permHR,
+        perm_admin_users: formData.permAdminUsers,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -166,6 +167,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_caisse: formData.permCaisse,
         perm_caisse_admin: formData.permCaisseAdmin,
         perm_hr: formData.permHR,
+        perm_admin_users: formData.permAdminUsers,
       })
       setEditingUser(null)
       await refresh()
@@ -284,9 +286,14 @@ export default function AdminUsers({ currentUser, onClose }) {
           {!loading && !showNewForm && (
             <div className="space-y-4">
               {(() => {
+                // Si le viewer n'est pas admin (donc perm_admin_users), masquer les admins
+                const isCurrentSuperAdmin = currentUser?.role === 'admin'
+                const visibleUsers = isCurrentSuperAdmin
+                  ? users
+                  : users.filter(u => u.role !== 'admin')
                 // Grouper users par team_id
                 const groups = new Map()
-                for (const u of users) {
+                for (const u of visibleUsers) {
                   const tid = u.team_id || '__none__'
                   if (!groups.has(tid)) groups.set(tid, [])
                   groups.get(tid).push(u)
@@ -345,6 +352,7 @@ export default function AdminUsers({ currentUser, onClose }) {
                                   onSubmit={(data) => handleUpdate(u.id, data)}
                                   onCancel={() => setEditingUser(null)}
                                   isNew={false}
+                                  currentUser={currentUser}
                                   teams={teams}
                                 />
                               ) : (
@@ -606,7 +614,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHa
 // FORMULAIRE (création + édition)
 // ==========================================
 
-function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicatedFromName = null }) {
+function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicatedFromName = null, currentUser = null }) {
   const [formData, setFormData] = useState({
     username: initialData?.username || '',
     fullName: initialData?.full_name || '',
@@ -639,6 +647,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permCaisse: initialData?.perm_caisse !== undefined ? initialData.perm_caisse : false,
     permCaisseAdmin: initialData?.perm_caisse_admin !== undefined ? initialData.perm_caisse_admin : false,
     permHR: initialData?.perm_hr !== undefined ? initialData.perm_hr : false,
+    permAdminUsers: initialData?.perm_admin_users !== undefined ? initialData.perm_admin_users : false,
   })
 
   function handleSubmit() {
@@ -897,6 +906,14 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             checked={isAdmin || formData.permHR}
             onChange={v => update('permHR', v)}
           />
+          {currentUser?.role === 'admin' && (
+            <PermCheckbox
+              id="perm-admin-users"
+              label="👑 Super-admin permissions (gère les utilisateurs sans accès Caisse/RH)"
+              checked={isAdmin || formData.permAdminUsers}
+              onChange={v => update('permAdminUsers', v)}
+            />
+          )}
           <PermCheckbox
             id="perm-define-gm"
             label="✏️ Définir les détails GM"
