@@ -10,7 +10,7 @@ import PointageTab from './PointageTab'
  */
 export default function HRView({ user }) {
   const isAdmin = user?.role === 'admin'
-  const [tab, setTab] = useState('attestations')
+  const [tab, setTab] = useState(isAdmin ? 'attestations' : 'employes')
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem 1.25rem' }}>

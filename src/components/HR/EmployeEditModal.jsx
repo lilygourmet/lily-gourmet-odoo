@@ -107,20 +107,22 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
             <Field label="N° CNSS" value={form.cnss} onChange={v => setF('cnss', v)} placeholder="182572887" />
             <Field label="N° CIN" value={form.cin} onChange={v => setF('cin', v)} placeholder="A394604" />
           </Row>
-          <Row>
-            <div>
-              <label style={lblStyle}>Type de contrat</label>
-              <select value={form.type_contrat} onChange={e => setF('type_contrat', e.target.value)} style={inputStyle}>
-                {TYPES_CONTRAT.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            {isAdmin ? (
+          {isAdmin && (
+            <Row>
+              <div>
+                <label style={lblStyle}>Type de contrat</label>
+                <select value={form.type_contrat} onChange={e => setF('type_contrat', e.target.value)} style={inputStyle}>
+                  {TYPES_CONTRAT.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
               <Field label="Salaire net (DH) 🔒" type="number" value={form.salaire_net} onChange={v => setF('salaire_net', v)} placeholder="8500" />
-            ) : <div />}
-          </Row>
+            </Row>
+          )}
           <Row>
             <Field label="Date d'entrée" type="date" value={form.date_entree} onChange={v => setF('date_entree', v)} />
-            <Field label="Date de sortie (si parti)" type="date" value={form.date_sortie} onChange={v => setF('date_sortie', v)} />
+            {isAdmin ? (
+              <Field label="Date de sortie (si parti)" type="date" value={form.date_sortie} onChange={v => setF('date_sortie', v)} />
+            ) : <div />}
           </Row>
 
           {/* Nouveaux champs pour les contrats arabes */}
@@ -264,16 +266,18 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
             </label>
           )}
 
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-            background: '#F9F6F1', borderRadius: 8, cursor: 'pointer', marginBottom: 14
-          }}>
-            <input type="checkbox" checked={form.actif} onChange={e => setF('actif', e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
-            <span style={{ fontSize: 13, color: '#3A3733' }}>
-              Employé actif (décocher si parti)
-            </span>
-          </label>
+          {isAdmin && (
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+              background: '#F9F6F1', borderRadius: 8, cursor: 'pointer', marginBottom: 14
+            }}>
+              <input type="checkbox" checked={form.actif} onChange={e => setF('actif', e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
+              <span style={{ fontSize: 13, color: '#3A3733' }}>
+                Employé actif (décocher si parti)
+              </span>
+            </label>
+          )}
 
           {error && (
             <div style={{

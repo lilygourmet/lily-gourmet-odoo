@@ -5,14 +5,16 @@ import EmployeEditModal from './EmployeEditModal'
 export default function EmployesTab({ user, isAdmin }) {
   const [employes, setEmployes] = useState([])
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('actif')  // 'actif' | 'inactif' | 'tous'
+  const [filter, setFilter] = useState('actif')  // 'actif' | 'inactif' | 'tous' — forcé à 'actif' pour perm_hr
   const [search, setSearch] = useState('')
   const [editingEmp, setEditingEmp] = useState(null)  // null = pas d'édition, {} = nouveau, {...} = édit
 
   async function reload() {
     setLoading(true)
     try {
-      const list = await loadEmployes(filter === 'tous' ? null : filter === 'actif')
+      // Si pas admin, force à actif uniquement
+      const filterActif = !isAdmin ? true : (filter === 'tous' ? null : filter === 'actif')
+      const list = await loadEmployes(filterActif)
       setEmployes(list)
     } catch (e) {
       console.error(e)
@@ -57,17 +59,19 @@ export default function EmployesTab({ user, isAdmin }) {
             border: '1px solid #E8E2D8', borderRadius: 6
           }}
         />
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['actif', 'inactif', 'tous'].map(f => (
-            <button key={f} type="button" onClick={() => setFilter(f)} style={{
-              padding: '7px 12px', fontSize: 12, borderRadius: 999, cursor: 'pointer', border: 'none',
-              background: filter === f ? '#3A3733' : '#F4F0EA',
-              color: filter === f ? 'white' : '#6F6A60'
-            }}>
-              {f === 'actif' ? 'Actifs' : f === 'inactif' ? 'Inactifs' : 'Tous'}
-            </button>
-          ))}
-        </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {['actif', 'inactif', 'tous'].map(f => (
+              <button key={f} type="button" onClick={() => setFilter(f)} style={{
+                padding: '7px 12px', fontSize: 12, borderRadius: 999, cursor: 'pointer', border: 'none',
+                background: filter === f ? '#3A3733' : '#F4F0EA',
+                color: filter === f ? 'white' : '#6F6A60'
+              }}>
+                {f === 'actif' ? 'Actifs' : f === 'inactif' ? 'Inactifs' : 'Tous'}
+              </button>
+            ))}
+          </div>
+        )}
         <button onClick={() => setEditingEmp({})} style={{
           padding: '9px 14px', fontSize: 13, background: '#993556',
           color: 'white', border: '1px solid #993556', borderRadius: 8,
@@ -98,7 +102,7 @@ export default function EmployesTab({ user, isAdmin }) {
                 <Th>CIN</Th>
                 <Th>Entrée</Th>
                 {isAdmin && <Th>Salaire</Th>}
-                <Th>Type</Th>
+                {isAdmin && <Th>Type</Th>}
                 <Th>Actions</Th>
               </tr>
             </thead>
@@ -114,6 +118,7 @@ export default function EmployesTab({ user, isAdmin }) {
                   <Td>{e.cin || '—'}</Td>
                   <Td>{fmtDate(e.date_entree)}</Td>
                   {isAdmin && <Td>{e.salaire_net ? `${Number(e.salaire_net).toLocaleString('fr-FR')} dh` : '—'}</Td>}
+{isAdmin && (
                   <Td>
                     <span style={{
                       fontSize: 10, padding: '2px 8px', borderRadius: 999,
@@ -121,6 +126,7 @@ export default function EmployesTab({ user, isAdmin }) {
                       color: e.type_contrat === 'CDI' ? '#27500A' : e.type_contrat === 'Stage' ? '#0C447C' : '#6F6A60',
                     }}>{e.type_contrat || '—'}</span>
                   </Td>
+)}
                   <Td>
                     <button onClick={() => setEditingEmp(e)} style={btnEdit}>✏️</button>
                     {isAdmin && <button onClick={() => handleDelete(e)} style={btnDel}>🗑️</button>}

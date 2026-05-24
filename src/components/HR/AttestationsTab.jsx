@@ -11,7 +11,7 @@ export default function AttestationsTab({ user, isAdmin }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
-  const [type, setType] = useState(isAdmin ? 'salaire' : 'travail_en_poste')
+  const [type, setType] = useState(isAdmin ? 'salaire' : 'stage')
   const [empId, setEmpId] = useState('')
   // Données formulaire (saisies/auto-remplies)
   const [form, setForm] = useState({
@@ -25,8 +25,8 @@ export default function AttestationsTab({ user, isAdmin }) {
   const allTemplates = useMemo(() => getAllTemplates(), [])
   const templates = useMemo(() => {
     if (isAdmin) return allTemplates
-    // perm_hr : seulement travail_en_poste et stage
-    return allTemplates.filter(t => t.key === 'travail_en_poste' || t.key === 'stage')
+    // perm_hr : seulement attestation de stage
+    return allTemplates.filter(t => t.key === 'stage')
   }, [allTemplates, isAdmin])
   const currentTemplate = useMemo(() => templates.find(t => t.key === type), [templates, type])
 
