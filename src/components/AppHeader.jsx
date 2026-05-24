@@ -371,7 +371,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) },
-    { view: 'hr',               emoji: '🏢', label: 'RH',               visible: admin || canSeeHR(user) },
+    { view: 'hr',               emoji: '🏢', label: 'RH',               visible: admin || !!user?.perm_hr },
   ].filter(i => i.visible)
 
   // ============================================================
