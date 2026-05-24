@@ -490,9 +490,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {(canRecaps(user) || isLivreur(user)) && (
             <NavButton emoji="📊" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
           )}
-          {!isLivreur(user) && (
-            <NavButton emoji="📋" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
-          )}
+          <NavButton emoji="📋" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
           {primary && (
             <NavButton
               emoji={primary.emoji}
