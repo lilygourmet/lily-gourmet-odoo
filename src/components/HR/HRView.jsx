@@ -2,11 +2,12 @@ import { useState } from 'react'
 import AttestationsTab from './AttestationsTab'
 import EmployesTab from './EmployesTab'
 import PointageTab from './PointageTab'
+import SalairesTab from './SalairesTab'
 
 /**
  * Vue principale HR.
- * - admin : accès complet
- * - perm_hr : accès limité (pas de salaire/RIB visible, attestations limitées, pointage en lecture)
+ * - admin : accès complet (avec Salaires)
+ * - perm_hr : accès limité (pas de Salaires, pas de salaire/RIB visible, attestations limitées)
  */
 export default function HRView({ user }) {
   const isAdmin = user?.role === 'admin'
@@ -21,14 +22,14 @@ export default function HRView({ user }) {
         </h2>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6F6A60' }}>
           {isAdmin
-            ? "Génération d'attestations, gestion des employés, pointage"
+            ? "Génération d'attestations, gestion des employés, pointage, salaires"
             : "Gestion des employés, attestations basiques, récap pointage"}
         </p>
       </div>
 
       {/* Onglets */}
       <div style={{
-        display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #E8E2D8'
+        display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #E8E2D8', flexWrap: 'wrap',
       }}>
         <TabBtn active={tab === 'attestations'} onClick={() => setTab('attestations')}>
           📜 Attestations
@@ -39,11 +40,17 @@ export default function HRView({ user }) {
         <TabBtn active={tab === 'pointage'} onClick={() => setTab('pointage')}>
           ⏰ Pointage
         </TabBtn>
+        {isAdmin && (
+          <TabBtn active={tab === 'salaires'} onClick={() => setTab('salaires')}>
+            💰 Salaires
+          </TabBtn>
+        )}
       </div>
 
       {tab === 'attestations' && <AttestationsTab user={user} isAdmin={isAdmin} />}
       {tab === 'employes' && <EmployesTab user={user} isAdmin={isAdmin} />}
       {tab === 'pointage' && <PointageTab user={user} isAdmin={isAdmin} />}
+      {tab === 'salaires' && isAdmin && <SalairesTab user={user} />}
     </div>
   )
 }

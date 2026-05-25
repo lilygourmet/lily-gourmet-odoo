@@ -34,6 +34,7 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
     nom_odoo_match: employe?.nom_odoo_match || '',
     heures_sup_mensuelles: employe?.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
     societe_id: employe?.societe_id || null,
+    declare: employe?.declare != null ? employe.declare : false,
   })
   const [societes, setSocietes] = useState([])
 
@@ -88,6 +89,7 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
         nom_odoo_match: form.nom_odoo_match.trim() || null,
         heures_sup_mensuelles: form.heures_sup_mensuelles,
         societe_id: form.societe_id || null,
+        declare: form.declare,
       }
       if (isNew) {
         await createEmploye(data, user.id)
@@ -309,6 +311,21 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
                 style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
               <span style={{ fontSize: 13, color: '#3A3733' }}>
                 Employé actif (décocher si parti)
+              </span>
+            </label>
+          )}
+
+          {isAdmin && (
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+              background: form.declare ? '#EAF3DE' : '#F9F6F1',
+              borderRadius: 8, cursor: 'pointer', marginBottom: 14,
+              border: form.declare ? '1px solid #C0DD97' : '1px solid transparent',
+            }}>
+              <input type="checkbox" checked={form.declare} onChange={e => setF('declare', e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: '#27500A', cursor: 'pointer' }} />
+              <span style={{ fontSize: 13, color: form.declare ? '#27500A' : '#3A3733' }}>
+                ✅ <strong>Déclaré</strong> (CNSS — apparaît dans Salaires)
               </span>
             </label>
           )}
