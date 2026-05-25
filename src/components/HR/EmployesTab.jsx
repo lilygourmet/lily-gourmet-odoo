@@ -1,23 +1,47 @@
 import { useState, useEffect, useMemo } from 'react'
 import { loadEmployes, deleteEmploye } from '../../lib/hr'
+import { supabase } from '../../lib/supabase'
 import EmployeEditModal from './EmployeEditModal'
+
+const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
 export default function EmployesTab({ user, isAdmin }) {
   const [employes, setEmployes] = useState([])
+  const [conges, setConges] = useState([])
+  const [joursFeries, setJoursFeries] = useState([])
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('actif')  // 'actif' | 'inactif' | 'tous' — forcé à 'actif' pour perm_hr
-  const [societeFilter, setSocieteFilter] = useState('toutes')  // 'toutes' | 'LG' | 'LN'
+  const [filter, setFilter] = useState('actif')
+  const [societeFilter, setSocieteFilter] = useState('toutes')
   const [search, setSearch] = useState('')
-  const [editingEmp, setEditingEmp] = useState(null)  // null = pas d'édition, {} = nouveau, {...} = édit
-  const [revealedSalaries, setRevealedSalaries] = useState(new Set())  // ids des salaires révélés
+  const [editingEmp, setEditingEmp] = useState(null)
+  const [revealedSalaries, setRevealedSalaries] = useState(new Set())
+
+  // Date d'aujourd'hui pour calcul statut
+  const todayStr = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  const todayDate = new Date()
+  const jourSemaineFR = JOURS_FR[todayDate.getDay()] // ex: "Mardi"
 
   async function reload() {
     setLoading(true)
     try {
-      // Si pas admin, force à actif uniquement
       const filterActif = !isAdmin ? true : (filter === 'tous' ? null : filter === 'actif')
       const list = await loadEmployes(filterActif)
       setEmployes(list)
+
+      // Charger congés du jour
+      const { data: cgs } = await supabase
+        .from('conges')
+        .select('employe_id, date_debut, date_fin, type, statut')
+        .lte('date_debut', todayStr)
+        .gte('date_fin', todayStr)
+      setConges(cgs || [])
+
+      // Charger fériés
+      const { data: fer } = await supabase
+        .from('jours_feries')
+        .select('date, nom')
+        .eq('date', todayStr)
+      setJoursFeries(fer || [])
     } catch (e) {
       console.error(e)
     }
@@ -26,13 +50,60 @@ export default function EmployesTab({ user, isAdmin }) {
 
   useEffect(() => { reload() }, [filter])
 
+  // ---- Calcul du statut du jour ----
+  function getStatutAujourdhui(emp) {
+    // 1) Férié ?
+    if (joursFeries.length > 0) {
+      return { label: '🎉 Férié', bg: '#FFF1DA', color: '#8A5A00' }
+    }
+
+    // 2) Congé ?
+    const cg = conges.find(c => c.employe_id === emp.id)
+    if (cg) {
+      const typeLabel = cg.type === 'maladie' ? 'Maladie'
+                     : cg.type === 'paye' || cg.type === 'payé' ? 'Congé payé'
+                     : cg.type === 'sans_solde' ? 'Sans solde'
+                     : (cg.type || 'Congé')
+      return { label: `🌴 ${typeLabel}`, bg: '#F3E8FF', color: '#5B21B6' }
+    }
+
+    // 3) Planning
+    const ptype = emp.planning_type || 'aucun'
+
+    if (ptype === 'aucun') {
+      return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+    }
+
+    if (ptype === 'fixe') {
+      if (emp.planning_jour_off === jourSemaineFR) {
+        return { label: '😴 OFF', bg: '#E4E4E7', color: '#52525B' }
+      }
+      if (emp.planning_demi_off === jourSemaineFR) {
+        return { label: '½ Demi-journée', bg: '#FEF3C7', color: '#92400E' }
+      }
+      return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+    }
+
+    if (ptype === 'alt') {
+      // Semaine paire/impaire (numéro ISO)
+      const weekNum = getISOWeekNumber(todayDate)
+      const isPaire = weekNum % 2 === 0
+      const off1 = isPaire ? emp.planning_paire_off_1 : emp.planning_impaire_off_1
+      const off2 = isPaire ? emp.planning_paire_off_2 : emp.planning_impaire_off_2
+      if (jourSemaineFR === off1 || jourSemaineFR === off2) {
+        return { label: '😴 OFF', bg: '#E4E4E7', color: '#52525B' }
+      }
+      return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+    }
+
+    return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+  }
+
   const filtered = useMemo(() => {
     let list = employes
-    // Filtre société
     if (societeFilter !== 'toutes') {
       list = list.filter(e => e.societe?.code === societeFilter)
     }
-    // Filtre recherche
     if (search.trim()) {
       const s = search.trim().toLowerCase()
       list = list.filter(e =>
@@ -45,14 +116,25 @@ export default function EmployesTab({ user, isAdmin }) {
     return list
   }, [employes, search, societeFilter])
 
-  async function handleDelete(emp) {
+  async function handleDelete(e, emp) {
+    e.stopPropagation()  // ne pas ouvrir le modal
     if (!confirm(`Supprimer ${emp.nom} ? Cette action est définitive.`)) return
     try {
       await deleteEmploye(emp.id)
       reload()
-    } catch (e) {
-      alert('Erreur : ' + e.message)
+    } catch (err) {
+      alert('Erreur : ' + err.message)
     }
+  }
+
+  function handleRevealSalary(e, empId) {
+    e.stopPropagation()  // ne pas ouvrir le modal
+    setRevealedSalaries(s => {
+      const n = new Set(s)
+      if (n.has(empId)) n.delete(empId)
+      else n.add(empId)
+      return n
+    })
   }
 
   return (
@@ -109,6 +191,13 @@ export default function EmployesTab({ user, isAdmin }) {
         </button>
       </div>
 
+      {/* Info du jour */}
+      <div style={{
+        fontSize: 11, color: '#9B968D', marginBottom: 10, paddingLeft: 4,
+      }}>
+        📅 Aujourd'hui : <strong>{jourSemaineFR}</strong> {todayDate.toLocaleDateString('fr-FR')}
+      </div>
+
       {/* Tableau */}
       {loading && <div style={{ padding: 20, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>}
       {!loading && filtered.length === 0 && (
@@ -131,66 +220,77 @@ export default function EmployesTab({ user, isAdmin }) {
                 <Th>CIN</Th>
                 <Th>Entrée</Th>
                 {isAdmin && <Th>Salaire</Th>}
-                {isAdmin && <Th>Type</Th>}
+                <Th>Aujourd'hui</Th>
                 <Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(e => (
-                <tr key={e.id} style={{
-                  borderTop: '1px solid #F4F0EA',
-                  opacity: e.actif ? 1 : 0.6
-                }}>
-                  <Td><strong>{e.nom}</strong></Td>
-                  <Td>
-                    <span style={{
-                      fontSize: 10, padding: '2px 8px', borderRadius: 999,
-                      background: e.societe?.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
-                      color: e.societe?.code === 'LG' ? '#993556' : '#27500A',
-                      fontWeight: 500,
-                    }}>{e.societe?.code || '—'}</span>
-                  </Td>
-                  <Td style={{ color: '#6F6A60' }}>{e.poste || '—'}</Td>
-                  <Td>{e.cnss || '—'}</Td>
-                  <Td>{e.cin || '—'}</Td>
-                  <Td>{fmtDate(e.date_entree)}</Td>
-                  {isAdmin && (
+              {filtered.map(e => {
+                const statut = getStatutAujourdhui(e)
+                return (
+                  <tr
+                    key={e.id}
+                    onClick={() => setEditingEmp(e)}
+                    style={{
+                      borderTop: '1px solid #F4F0EA',
+                      opacity: e.actif ? 1 : 0.6,
+                      cursor: 'pointer',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={ev => ev.currentTarget.style.background = '#FCFAF7'}
+                    onMouseLeave={ev => ev.currentTarget.style.background = 'transparent'}
+                  >
+                    <Td><strong>{e.nom}</strong></Td>
                     <Td>
-                      {e.salaire_net ? (
-                        revealedSalaries.has(e.id) ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            {Number(e.salaire_net).toLocaleString('fr-FR')} dh
-                            <button onClick={() => setRevealedSalaries(s => { const n = new Set(s); n.delete(e.id); return n })} style={{
-                              background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
-                            }} title="Masquer">🙈</button>
-                          </span>
-                        ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ letterSpacing: 2, color: '#9B968D' }}>•••••</span>
-                            <span style={{ color: '#9B968D', fontSize: 11 }}>dh</span>
-                            <button onClick={() => setRevealedSalaries(s => { const n = new Set(s); n.add(e.id); return n })} style={{
-                              background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
-                            }} title="Révéler">👁</button>
-                          </span>
-                        )
-                      ) : '—'}
+                      <span style={{
+                        fontSize: 10, padding: '2px 8px', borderRadius: 999,
+                        background: e.societe?.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
+                        color: e.societe?.code === 'LG' ? '#993556' : '#27500A',
+                        fontWeight: 500,
+                      }}>{e.societe?.code || '—'}</span>
                     </Td>
-                  )}
-{isAdmin && (
-                  <Td>
-                    <span style={{
-                      fontSize: 10, padding: '2px 8px', borderRadius: 999,
-                      background: e.type_contrat === 'CDI' ? '#EAF3DE' : e.type_contrat === 'Stage' ? '#E6F1FB' : '#F4F0EA',
-                      color: e.type_contrat === 'CDI' ? '#27500A' : e.type_contrat === 'Stage' ? '#0C447C' : '#6F6A60',
-                    }}>{e.type_contrat || '—'}</span>
-                  </Td>
-)}
-                  <Td>
-                    <button onClick={() => setEditingEmp(e)} style={btnEdit}>✏️</button>
-                    {isAdmin && <button onClick={() => handleDelete(e)} style={btnDel}>🗑️</button>}
-                  </Td>
-                </tr>
-              ))}
+                    <Td style={{ color: '#6F6A60' }}>{e.poste || '—'}</Td>
+                    <Td>{e.cnss || '—'}</Td>
+                    <Td>{e.cin || '—'}</Td>
+                    <Td>{fmtDate(e.date_entree)}</Td>
+                    {isAdmin && (
+                      <Td>
+                        {e.salaire_net ? (
+                          revealedSalaries.has(e.id) ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              {Number(e.salaire_net).toLocaleString('fr-FR')} dh
+                              <button onClick={ev => handleRevealSalary(ev, e.id)} style={{
+                                background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
+                              }} title="Masquer">🙈</button>
+                            </span>
+                          ) : (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ letterSpacing: 2, color: '#9B968D' }}>•••••</span>
+                              <span style={{ color: '#9B968D', fontSize: 11 }}>dh</span>
+                              <button onClick={ev => handleRevealSalary(ev, e.id)} style={{
+                                background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
+                              }} title="Révéler">👁</button>
+                            </span>
+                          )
+                        ) : '—'}
+                      </Td>
+                    )}
+                    <Td>
+                      <span style={{
+                        fontSize: 10, padding: '3px 8px', borderRadius: 999,
+                        background: statut.bg, color: statut.color, fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                      }}>{statut.label}</span>
+                    </Td>
+                    <Td>
+                      <span style={{ color: '#9B968D', fontSize: 11, fontStyle: 'italic' }}>✏️ Modifier</span>
+                      {isAdmin && (
+                        <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">🗑️</button>
+                      )}
+                    </Td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -209,6 +309,15 @@ export default function EmployesTab({ user, isAdmin }) {
   )
 }
 
+// Numéro de semaine ISO (1-53)
+function getISOWeekNumber(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
+}
+
 function Th({ children }) {
   return <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 500 }}>{children}</th>
 }
@@ -224,5 +333,4 @@ function fmtDate(d) {
   } catch { return d }
 }
 
-const btnEdit = { padding: '4px 8px', fontSize: 14, background: 'transparent', border: 'none', cursor: 'pointer', marginRight: 6 }
-const btnDel = { padding: '4px 8px', fontSize: 14, background: 'transparent', border: 'none', cursor: 'pointer' }
+const btnDel = { padding: '4px 8px', fontSize: 14, background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: 4 }

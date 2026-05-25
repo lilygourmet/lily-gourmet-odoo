@@ -11,7 +11,8 @@ import SalairesTab from './SalairesTab'
  */
 export default function HRView({ user }) {
   const isAdmin = user?.role === 'admin'
-  const [tab, setTab] = useState(isAdmin ? 'attestations' : 'employes')
+  // Onglet Employés par défaut pour tous
+  const [tab, setTab] = useState('employes')
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem 1.25rem' }}>
@@ -31,11 +32,11 @@ export default function HRView({ user }) {
       <div style={{
         display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #E8E2D8', flexWrap: 'wrap',
       }}>
-        <TabBtn active={tab === 'attestations'} onClick={() => setTab('attestations')}>
-          📜 Attestations
-        </TabBtn>
         <TabBtn active={tab === 'employes'} onClick={() => setTab('employes')}>
           👥 Employés
+        </TabBtn>
+        <TabBtn active={tab === 'attestations'} onClick={() => setTab('attestations')}>
+          📜 Attestations
         </TabBtn>
         <TabBtn active={tab === 'pointage'} onClick={() => setTab('pointage')}>
           ⏰ Pointage
