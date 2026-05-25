@@ -21,16 +21,16 @@ export default function SalairesTab({ user }) {
   const [success, setSuccess] = useState(null)
   const [error, setError] = useState(null)
   const [generating, setGenerating] = useState(false)
-  const [societeFilter, setSocieteFilter] = useState('LN')  // 'LG' | 'LN' (le doc à générer)
+  const [societeFilter, setSocieteFilter] = useState('LN')  // 'LG' | 'LN'
+  const [declareFilter, setDeclareFilter] = useState('declare')  // 'declare' | 'non_declare' | 'tous'
 
   useEffect(() => {
     (async () => {
       setLoading(true)
       try {
-        // Charger employés actifs + déclarés
+        // Charger TOUS les employés actifs (déclarés + non déclarés)
         const all = await loadEmployes(true)
-        const declares = all.filter(e => e.declare === true)
-        setEmployes(declares)
+        setEmployes(all)
 
         // Charger sociétés
         const { data: socs } = await supabase.from('societes').select('*').order('code')
@@ -50,7 +50,7 @@ export default function SalairesTab({ user }) {
           }
         }
         // Pour les employés sans saisie, pré-remplir avec salaire_net
-        for (const e of declares) {
+        for (const e of all) {
           if (!mObj[e.id] && e.salaire_net) {
             mObj[e.id] = String(e.salaire_net)
           }
@@ -73,15 +73,32 @@ export default function SalairesTab({ user }) {
     else setMois(mois + 1)
   }
 
-  // Filtrer employés selon société (pour le doc à générer)
+  // Filtrer employés : société + statut déclaré
   const employesSociete = useMemo(() => {
-    return employes.filter(e => e.societe?.code === societeFilter)
-  }, [employes, societeFilter])
+    return employes.filter(e => {
+      // Filtre société
+      if (e.societe?.code !== societeFilter) return false
+      // Filtre déclaré
+      if (declareFilter === 'declare' && e.declare !== true) return false
+      if (declareFilter === 'non_declare' && e.declare === true) return false
+      return true
+    })
+  }, [employes, societeFilter, declareFilter])
 
   // Total à virer
   const totalMontants = useMemo(() => {
     return employesSociete.reduce((sum, e) => sum + (parseFloat(montants[e.id]) || 0), 0)
   }, [employesSociete, montants])
+
+  // Comptes pour les stats / badges
+  const nbDeclaresSociete = useMemo(
+    () => employes.filter(e => e.societe?.code === societeFilter && e.declare === true).length,
+    [employes, societeFilter]
+  )
+  const nbNonDeclaresSociete = useMemo(
+    () => employes.filter(e => e.societe?.code === societeFilter && e.declare !== true).length,
+    [employes, societeFilter]
+  )
 
   async function handleSauvegarder({ silent = false } = {}) {
     if (!silent) { setSaving(true); setError(null); setSuccess(null) }
@@ -204,6 +221,25 @@ export default function SalairesTab({ user }) {
         </div>
       </div>
 
+      {/* Filtre déclarés / non déclarés / tous */}
+      <div style={{
+        display: 'flex', gap: 4, padding: 3, background: '#F9F6F1', borderRadius: 8,
+        marginBottom: 14, width: 'fit-content',
+      }}>
+        {[
+          { v: 'declare',     label: `✅ Déclarés (${nbDeclaresSociete})`,        bg: '#27500A' },
+          { v: 'non_declare', label: `❌ Non déclarés (${nbNonDeclaresSociete})`, bg: '#A32D2D' },
+          { v: 'tous',        label: `👥 Tous (${nbDeclaresSociete + nbNonDeclaresSociete})`, bg: '#3A3733' },
+        ].map(t => (
+          <button key={t.v} onClick={() => setDeclareFilter(t.v)} style={{
+            padding: '7px 14px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
+            background: declareFilter === t.v ? t.bg : 'transparent',
+            color: declareFilter === t.v ? 'white' : '#6F6A60',
+            fontWeight: declareFilter === t.v ? 500 : 400,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
       {/* Messages */}
       {success && (
         <div style={{ padding: '10px 14px', background: '#EAF3DE', color: '#27500A', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
@@ -221,9 +257,13 @@ export default function SalairesTab({ user }) {
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         gap: 10, marginBottom: 14,
       }}>
-        <Carte label={`Employés déclarés ${societeFilter}`} val={employesSociete.length} unit="" />
+        <Carte
+          label={`${declareFilter === 'declare' ? '✅ Déclarés' : declareFilter === 'non_declare' ? '❌ Non déclarés' : '👥 Tous'} ${societeFilter}`}
+          val={employesSociete.length}
+          unit=""
+        />
         <Carte label="Total à virer" val={totalMontants} unit="dh" color="#27500A" />
-        <Carte label="Total tous déclarés" val={employes.length} unit="" />
+        <Carte label={`Total déclarés ${societeFilter}`} val={nbDeclaresSociete} unit="" />
       </div>
 
       {loading ? (
@@ -233,9 +273,14 @@ export default function SalairesTab({ user }) {
           padding: 40, textAlign: 'center', color: '#6F6A60',
           background: '#F9F6F1', borderRadius: 10, fontSize: 13,
         }}>
-          Aucun employé déclaré dans {societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'} 🌸<br />
+          {declareFilter === 'declare'
+            ? `Aucun employé déclaré dans ${societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'} 🌸`
+            : declareFilter === 'non_declare'
+            ? `Aucun employé non déclaré dans ${societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'}`
+            : `Aucun employé dans ${societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'}`}
+          <br />
           <span style={{ fontSize: 11, color: '#9B968D' }}>
-            Coche "Déclaré" dans la fiche employé pour qu'il apparaisse ici.
+            {declareFilter === 'declare' && 'Coche "Déclaré" dans la fiche employé pour qu\'il apparaisse ici.'}
           </span>
         </div>
       ) : (
@@ -251,8 +296,24 @@ export default function SalairesTab({ user }) {
             </thead>
             <tbody>
               {employesSociete.map(e => (
-                <tr key={e.id} style={{ borderTop: '1px solid #F4F0EA' }}>
-                  <td style={{ padding: '10px 12px' }}><strong>{e.nom}</strong></td>
+                <tr key={e.id} style={{
+                  borderTop: '1px solid #F4F0EA',
+                  background: e.declare ? 'transparent' : '#FFFBF5',
+                }}>
+                  <td style={{ padding: '10px 12px' }}>
+                    <strong>{e.nom}</strong>
+                    {e.declare ? (
+                      <span style={{
+                        marginLeft: 8, fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                        background: '#EAF3DE', color: '#27500A',
+                      }}>✅ Déclaré</span>
+                    ) : (
+                      <span style={{
+                        marginLeft: 8, fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                        background: '#FCEEE8', color: '#A32D2D',
+                      }}>❌ Non déclaré</span>
+                    )}
+                  </td>
                   <td style={{ padding: '10px 12px', color: '#6F6A60', fontSize: 12 }}>{e.banque || '—'}</td>
                   <td style={{ padding: '10px 12px', color: '#6F6A60', fontSize: 11, fontFamily: 'monospace' }}>
                     {e.rib || <span style={{ color: '#A32D2D' }}>⚠️ Manquant</span>}
