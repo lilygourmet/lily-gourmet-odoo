@@ -1,8 +1,6 @@
 // src/lib/ordreVirementPdf.js
 // Génération de l'ordre de virement PDF (côté client, via jsPDF chargé dynamiquement)
-// Stack : React 19 + Vite — pas d'ajout de dépendance npm, on charge via CDN comme SheetJS
-
-import logoLG from "/Logo_LG.jpg"; // si tu veux importer l'image; sinon utilise fetch (voir plus bas)
+// Version Noir & Blanc (compatible impression N&B)
 
 // ----------------- Chargement dynamique de jsPDF + autoTable -----------------
 let jsPDFPromise = null;
@@ -77,13 +75,13 @@ export function nombreEnLettres(n) {
 // ----------------- Formatage montant -----------------
 function formatMontant(m) {
   return Math.round(m).toLocaleString("fr-FR").replace(/\s/g, ".");
-  // 2500 -> "2.500"  (séparateur point comme dans l'image)
 }
 
 // ----------------- Chargement du logo en base64 -----------------
 async function loadLogoBase64() {
   try {
     const res = await fetch("/Logo_LG.jpg");
+    if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise((resolve) => {
       const r = new FileReader();
@@ -91,7 +89,7 @@ async function loadLogoBase64() {
       r.readAsDataURL(blob);
     });
   } catch {
-    return null; // si le logo n'est pas dispo, on dessine un cercle bordeaux
+    return null;
   }
 }
 
@@ -100,8 +98,8 @@ async function loadLogoBase64() {
  * @param {Object} params
  * @param {Object} params.societe - { nom, nom_complet, capital, adresse, rc, ice, compte_bancaire, banque_societe }
  * @param {Array}  params.employes - [{ nom, montant, banque, rib }]
- * @param {Date}   [params.date] - optionnelle, défaut = aujourd'hui
- * @param {string} [params.filename] - défaut "Ordre_virement_<societe>_<mois>.pdf"
+ * @param {Date}   [params.date]
+ * @param {string} [params.filename]
  */
 export async function genererOrdreVirementPDF({ societe, employes, date = new Date(), filename }) {
   const JsPDF = await loadJsPDF();
@@ -110,46 +108,37 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   const W = 210, H = 297;
   const MARGIN = 18;
 
-  const BORDEAUX = [153, 53, 86];     // #993556
-  const JAUNE = [255, 255, 0];
-  const GRIS = [136, 136, 136];
-  const BLANC = [255, 255, 255];
+  // ---- Couleurs N&B ----
   const NOIR = [0, 0, 0];
+  const BLANC = [255, 255, 255];
+  const GRIS_BORDURE = [136, 136, 136];
+  const GRIS_CLAIR = [217, 217, 217];   // remplace l'ex-jaune fluo
 
   // ---- En-tête : logo + nom société (gauche) + date (droite) ----
   const logoB64 = await loadLogoBase64();
+  let logoOK = false;
   if (logoB64) {
     try {
       doc.addImage(logoB64, "JPEG", MARGIN, 12, 22, 22);
-    } catch {
-      // fallback cercle si l'image plante
-      doc.setFillColor(...BORDEAUX);
-      doc.circle(MARGIN + 11, 23, 11, "F");
-      doc.setTextColor(...BLANC);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      const initiales = societe.nom.includes("L&N") || societe.nom.includes("L N") ? "LN" : "LG";
-      doc.text(initiales, MARGIN + 11, 25, { align: "center" });
-    }
-  } else {
-    doc.setFillColor(...BORDEAUX);
-    doc.circle(MARGIN + 11, 23, 11, "F");
+      logoOK = true;
+    } catch { logoOK = false; }
+  }
+  if (!logoOK) {
+    // fallback : carré noir avec initiales blanches
+    doc.setFillColor(...NOIR);
+    doc.rect(MARGIN, 12, 22, 22, "F");
     doc.setTextColor(...BLANC);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
+    doc.setFontSize(13);
     const initiales = societe.nom.includes("L&N") || societe.nom.includes("L N") ? "LN" : "LG";
-    doc.text(initiales, MARGIN + 11, 25, { align: "center" });
+    doc.text(initiales, MARGIN + 11, 25.5, { align: "center" });
   }
 
-  // Nom société à côté
-  doc.setTextColor(...BORDEAUX);
+  // Nom société à droite du logo (noir, sans sous-titre)
+  doc.setTextColor(...NOIR);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(societe.nom, MARGIN + 28, 22);
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(9);
-  doc.setTextColor(102, 102, 102);
-  doc.text("Traiteur événementiel", MARGIN + 28, 28);
+  doc.setFontSize(17);
+  doc.text(societe.nom, MARGIN + 26, 25);
 
   // Date à droite
   const dd = String(date.getDate()).padStart(2, "0");
@@ -172,7 +161,7 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.text("Madame, Monsieur,", MARGIN, y);
-  y += 8;
+  y += 7;
 
   const corps =
     `Merci de bien vouloir réaliser les virements suivants au profit des bénéficiaires ` +
@@ -182,94 +171,100 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   doc.text(lignesCorps, MARGIN, y);
   y += lignesCorps.length * 5 + 4;
 
-  // ---- Tableau employés : 2 lignes par employé (comme dans les images) ----
-  // On construit un tableau "plat" avec autoTable, en stylant ligne par ligne
-  const body = [];
-  const rowStyles = []; // ce qu'on appliquera ligne par ligne via didParseCell
+  // ---- Tableau employés : un mini-tableau de 2 lignes par employé, séparés par un espace ----
+  // Largeurs : Nom 45 | Montant 26 | Lettres 79 (gauche) | DIRHAMS 24
+  const COL_W = [45, 26, 79, 24];
 
-  employes.forEach((emp, idx) => {
+  employes.forEach((emp) => {
     const montantStr = formatMontant(emp.montant) + " MAD";
     const montantLettres = nombreEnLettres(emp.montant).toUpperCase();
-    // Ligne 1 : Nom | Montant (jaune) | Lettres | DIRHAMS
-    body.push([
-      { content: emp.nom, _kind: "nom" },
-      { content: montantStr, _kind: "montant" },
-      { content: montantLettres, _kind: "lettres" },
-      { content: "DIRHAMS", _kind: "dirhams" },
-    ]);
-    // Ligne 2 : Banque | RIB (colspan 3)
-    body.push([
-      { content: emp.banque, _kind: "banque" },
-      { content: emp.rib, _kind: "rib", colSpan: 3 },
-    ]);
-  });
 
-  doc.autoTable({
-    startY: y,
-    margin: { left: MARGIN, right: MARGIN },
-    body,
-    theme: "grid",
-    styles: {
-      font: "helvetica",
-      fontSize: 10,
-      cellPadding: 2.4,
-      lineColor: GRIS,
-      lineWidth: 0.2,
-      textColor: NOIR,
-      valign: "middle",
-    },
-    columnStyles: {
-      0: { cellWidth: 50 },
-      1: { cellWidth: 30, halign: "center" },
-      2: { cellWidth: 75, halign: "center" },
-      3: { cellWidth: 19, halign: "center" },
-    },
-    didParseCell: (data) => {
-      const raw = data.cell.raw;
-      if (!raw || typeof raw !== "object") return;
-      const kind = raw._kind;
-      if (kind === "nom" || kind === "banque" || kind === "dirhams") {
-        data.cell.styles.fontStyle = "bold";
-      }
-      if (kind === "montant") {
-        data.cell.styles.fillColor = JAUNE;
-        data.cell.styles.fontStyle = "bold";
-      }
-      if (kind === "lettres") {
-        data.cell.styles.fontSize = 9;
-      }
-    },
-    // Empêcher de couper un employé sur 2 pages : on regroupe par paquet de 2 lignes
-    rowPageBreak: "avoid",
+    const body = [
+      [
+        { content: emp.nom, _kind: "nom" },
+        { content: montantStr, _kind: "montant" },
+        { content: montantLettres, _kind: "lettres" },
+        { content: "DIRHAMS", _kind: "dirhams" },
+      ],
+      [
+        { content: emp.banque || "—", _kind: "banque" },
+        { content: emp.rib || "", _kind: "rib", colSpan: 3 },
+      ],
+    ];
+
+    doc.autoTable({
+      startY: y,
+      margin: { left: MARGIN, right: MARGIN },
+      body,
+      theme: "grid",
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: { top: 1.8, right: 4, bottom: 1.8, left: 4 },
+        lineColor: GRIS_BORDURE,
+        lineWidth: 0.2,
+        textColor: NOIR,
+        valign: "middle",
+      },
+      columnStyles: {
+        0: { cellWidth: COL_W[0] },
+        1: { cellWidth: COL_W[1], halign: "center" },
+        2: { cellWidth: COL_W[2], halign: "left" },
+        3: { cellWidth: COL_W[3], halign: "center" },
+      },
+      didParseCell: (data) => {
+        const raw = data.cell.raw;
+        if (!raw || typeof raw !== "object") return;
+        const kind = raw._kind;
+        if (kind === "nom" || kind === "banque" || kind === "dirhams") {
+          data.cell.styles.fontStyle = "bold";
+        }
+        if (kind === "montant") {
+          data.cell.styles.fillColor = GRIS_CLAIR;
+          data.cell.styles.fontStyle = "bold";
+        }
+        if (kind === "lettres") {
+          data.cell.styles.fontSize = 8;
+        }
+      },
+      rowPageBreak: "avoid",
+    });
+
+    // ESPACE entre employés
+    y = doc.lastAutoTable.finalY + 4;
   });
 
   // ---- Ligne TOTAL ----
   const total = employes.reduce((s, e) => s + Number(e.montant || 0), 0);
   const totalStr = formatMontant(total) + " MAD";
   const totalLettres = nombreEnLettres(total).toUpperCase();
-  let yTotal = doc.lastAutoTable.finalY + 4;
 
   doc.autoTable({
-    startY: yTotal,
+    startY: y + 1,
     margin: { left: MARGIN, right: MARGIN },
-    body: [["TOTAL", totalStr, totalLettres, "DIRHAMS"]],
+    body: [[
+      { content: "TOTAL", _kind: "t_label" },
+      { content: totalStr, _kind: "t_montant" },
+      { content: totalLettres, _kind: "t_lettres" },
+      { content: "DIRHAMS", _kind: "t_dirhams" },
+    ]],
     theme: "grid",
     styles: {
       font: "helvetica",
       fontStyle: "bold",
-      fontSize: 11,
-      cellPadding: 3,
-      fillColor: BORDEAUX,
+      fontSize: 10,
+      cellPadding: { top: 2.5, right: 4, bottom: 2.5, left: 4 },
+      fillColor: NOIR,
       textColor: BLANC,
-      lineColor: BORDEAUX,
+      lineColor: NOIR,
       lineWidth: 0.3,
       valign: "middle",
     },
     columnStyles: {
-      0: { cellWidth: 50 },
-      1: { cellWidth: 30, halign: "center" },
-      2: { cellWidth: 75, halign: "center" },
-      3: { cellWidth: 19, halign: "center" },
+      0: { cellWidth: COL_W[0] },
+      1: { cellWidth: COL_W[1], halign: "center" },
+      2: { cellWidth: COL_W[2], halign: "left", fontSize: 9 },
+      3: { cellWidth: COL_W[3], halign: "center", fontSize: 9 },
     },
   });
 

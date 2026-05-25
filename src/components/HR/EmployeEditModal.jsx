@@ -1,125 +1,92 @@
 import { useState, useEffect } from 'react'
-import { createEmploye, updateEmploye } from '../../lib/hr'
+import { createEmploye, updateEmploye, loadEmployes } from '../../lib/hr'
 
 const TYPES_CONTRAT = ['CDI', 'CDD', 'Stage', 'Interim', 'Autre']
 
 export default function EmployeEditModal({
   employe, user, isAdmin, onClose, onSaved,
-  // Nouvelles props optionnelles pour la navigation entre employés
-  employesList = null,     // tableau d'employés (ex: tous les actifs filtrés)
-  onNavigate = null,       // fonction (newEmploye) => void appelée pour changer d'employé
+  // Props OPTIONNELLES si le parent veut contrôler la liste (sinon chargée auto)
+  employesList: employesListProp = null,
+  onNavigate = null,
 }) {
   const isNew = !employe
-  const [form, setForm] = useState({
-    nom: employe?.nom || '',
-    nom_arabe: employe?.nom_arabe || '',
-    cnss: employe?.cnss || '',
-    cin: employe?.cin || '',
-    poste: employe?.poste || '',
-    type_contrat: employe?.type_contrat || 'CDI',
-    date_entree: employe?.date_entree || '',
-    date_sortie: employe?.date_sortie || '',
-    salaire_net: employe?.salaire_net != null ? String(employe.salaire_net) : '',
-    adresse: employe?.adresse || '',
-    rib: employe?.rib || '',
-    banque: employe?.banque || '',
-    actif: employe?.actif != null ? employe.actif : true,
-    notes: employe?.notes || '',
-    // PLANNING (pour module Pointage)
-    planning_type: employe?.planning_type || 'aucun',
-    planning_jour_off: employe?.planning_jour_off || '',
-    planning_demi_off: employe?.planning_demi_off || '',
-    planning_paire_off_1: employe?.planning_paire_off_1 || '',
-    planning_paire_off_2: employe?.planning_paire_off_2 || '',
-    planning_impaire_off_1: employe?.planning_impaire_off_1 || '',
-    planning_impaire_off_2: employe?.planning_impaire_off_2 || '',
-    equipe: employe?.equipe || 'normale',
-    heures_jour_complet: employe?.heures_jour_complet != null ? String(employe.heures_jour_complet) : '8.50',
-    heures_demi_journee: employe?.heures_demi_journee != null ? String(employe.heures_demi_journee) : '4.00',
-    nom_odoo_match: employe?.nom_odoo_match || '',
-    heures_sup_mensuelles: employe?.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
-    societe_id: employe?.societe_id || null,
-    declare: employe?.declare != null ? employe.declare : false,
-  })
+  const [form, setForm] = useState(() => initForm(employe))
   const [societes, setSocietes] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  // Liste des employés pour la navigation ◀ ▶
+  // - Si le parent passe employesListProp, on l'utilise
+  // - Sinon on charge tous les actifs depuis Supabase (mode autonome)
+  const [employesListAuto, setEmployesListAuto] = useState([])
+  const [currentEmploye, setCurrentEmploye] = useState(employe)
+
+  const employesList = employesListProp || employesListAuto
+
+  // Charger sociétés
   useEffect(() => { (async () => {
     const { supabase } = await import('../../lib/supabase')
     const { data } = await supabase.from('societes').select('*').order('code')
     setSocietes(data || [])
   })() }, [])
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // Re-synchroniser le formulaire quand on change d'employé via ◀ ▶
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Charger la liste auto des employés actifs si le parent n'en fournit pas
   useEffect(() => {
-    if (!employe) return
-    setForm({
-      nom: employe.nom || '',
-      nom_arabe: employe.nom_arabe || '',
-      cnss: employe.cnss || '',
-      cin: employe.cin || '',
-      poste: employe.poste || '',
-      type_contrat: employe.type_contrat || 'CDI',
-      date_entree: employe.date_entree || '',
-      date_sortie: employe.date_sortie || '',
-      salaire_net: employe.salaire_net != null ? String(employe.salaire_net) : '',
-      adresse: employe.adresse || '',
-      rib: employe.rib || '',
-      banque: employe.banque || '',
-      actif: employe.actif != null ? employe.actif : true,
-      notes: employe.notes || '',
-      planning_type: employe.planning_type || 'aucun',
-      planning_jour_off: employe.planning_jour_off || '',
-      planning_demi_off: employe.planning_demi_off || '',
-      planning_paire_off_1: employe.planning_paire_off_1 || '',
-      planning_paire_off_2: employe.planning_paire_off_2 || '',
-      planning_impaire_off_1: employe.planning_impaire_off_1 || '',
-      planning_impaire_off_2: employe.planning_impaire_off_2 || '',
-      equipe: employe.equipe || 'normale',
-      heures_jour_complet: employe.heures_jour_complet != null ? String(employe.heures_jour_complet) : '8.50',
-      heures_demi_journee: employe.heures_demi_journee != null ? String(employe.heures_demi_journee) : '4.00',
-      nom_odoo_match: employe.nom_odoo_match || '',
-      heures_sup_mensuelles: employe.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
-      societe_id: employe.societe_id || null,
-      declare: employe.declare != null ? employe.declare : false,
-    })
+    if (employesListProp) return  // parent contrôle, rien à faire
+    if (isNew) return
+    ;(async () => {
+      try {
+        const all = await loadEmployes(true)  // actifs uniquement
+        // Tri alphabétique par nom pour une nav cohérente
+        all.sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr', { sensitivity: 'base' }))
+        setEmployesListAuto(all)
+      } catch (e) {
+        console.warn('Impossible de charger la liste employés pour navigation', e)
+      }
+    })()
+  }, [employesListProp, isNew])
+
+  // Si l'employé courant change (via ◀ ▶), re-synchroniser le formulaire
+  useEffect(() => {
+    if (!currentEmploye) return
+    setForm(initForm(currentEmploye))
     setError(null)
-    // Remonter en haut du modal sur changement d'employé
     requestAnimationFrame(() => {
       const m = document.getElementById('emp-edit-modal-body')
       if (m) m.scrollTop = 0
     })
+  }, [currentEmploye?.id])
+
+  // Si l'employé passé en prop change (depuis le parent), suivre
+  useEffect(() => {
+    setCurrentEmploye(employe)
   }, [employe?.id])
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // Navigation ◀ ▶ entre employés (boucle infinie)
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  const canNavigate = !isNew && Array.isArray(employesList) && employesList.length > 1 && typeof onNavigate === 'function'
+  // ━━━ Navigation ◀ ▶ ━━━
+  const canNavigate = !isNew && Array.isArray(employesList) && employesList.length > 1 && currentEmploye
 
   function goPrev() {
     if (!canNavigate) return
-    const idx = employesList.findIndex(e => e.id === employe.id)
+    const idx = employesList.findIndex(e => e.id === currentEmploye.id)
     if (idx === -1) return
-    const newIdx = (idx - 1 + employesList.length) % employesList.length
-    onNavigate(employesList[newIdx])
+    const newEmp = employesList[(idx - 1 + employesList.length) % employesList.length]
+    if (onNavigate) onNavigate(newEmp)
+    else setCurrentEmploye(newEmp)
   }
 
   function goNext() {
     if (!canNavigate) return
-    const idx = employesList.findIndex(e => e.id === employe.id)
+    const idx = employesList.findIndex(e => e.id === currentEmploye.id)
     if (idx === -1) return
-    const newIdx = (idx + 1) % employesList.length
-    onNavigate(employesList[newIdx])
+    const newEmp = employesList[(idx + 1) % employesList.length]
+    if (onNavigate) onNavigate(newEmp)
+    else setCurrentEmploye(newEmp)
   }
 
   // Raccourcis clavier ← →
   useEffect(() => {
     if (!canNavigate) return
     function onKey(e) {
-      // Ignorer si focus dans un input / textarea / select pour ne pas casser la saisie
       const tag = (e.target?.tagName || '').toLowerCase()
       if (['input', 'textarea', 'select'].includes(tag)) return
       if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev() }
@@ -127,12 +94,11 @@ export default function EmployeEditModal({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [canNavigate, employe?.id, employesList])
+  }, [canNavigate, currentEmploye?.id, employesList])
 
-  // Position de l'employé courant dans la liste (pour afficher "3 / 36")
   const positionInfo = canNavigate
     ? (() => {
-        const idx = employesList.findIndex(e => e.id === employe.id)
+        const idx = employesList.findIndex(e => e.id === currentEmploye.id)
         return idx >= 0 ? `${idx + 1} / ${employesList.length}` : ''
       })()
     : ''
@@ -144,10 +110,7 @@ export default function EmployeEditModal({
   async function handleSubmit(e) {
     e?.preventDefault?.()
     if (!form.nom.trim()) { setError('Le nom est obligatoire'); return }
-    if (!form.societe_id) {
-      setError('La société est obligatoire')
-      return
-    }
+    if (!form.societe_id) { setError('La société est obligatoire'); return }
 
     setSaving(true); setError(null)
     try {
@@ -166,7 +129,6 @@ export default function EmployeEditModal({
         banque: form.banque.trim() || null,
         actif: form.actif,
         notes: form.notes.trim() || null,
-        // PLANNING
         planning_type: form.planning_type || 'aucun',
         planning_jour_off: form.planning_jour_off || null,
         planning_demi_off: form.planning_demi_off || null,
@@ -185,7 +147,7 @@ export default function EmployeEditModal({
       if (isNew) {
         await createEmploye(data, user.id)
       } else {
-        await updateEmploye(employe.id, data, user.id)
+        await updateEmploye(currentEmploye.id, data, user.id)
       }
       onSaved?.()
     } catch (e) {
@@ -194,18 +156,14 @@ export default function EmployeEditModal({
     }
   }
 
+  const displayedEmploye = currentEmploye || employe
+
   return (
     <div style={overlay} onClick={onClose}>
       <div id="emp-edit-modal-body" style={modal} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-          {/* Bouton ◀ */}
           {canNavigate ? (
-            <button
-              type="button"
-              onClick={goPrev}
-              style={btnNav}
-              title="Employé précédent (←)"
-            >◀</button>
+            <button type="button" onClick={goPrev} style={btnNav} title="Employé précédent (←)">◀</button>
           ) : <span style={{ width: 36 }} />}
 
           <h3 style={{
@@ -213,7 +171,7 @@ export default function EmployeEditModal({
             flex: 1, textAlign: 'center',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            {isNew ? '➕ Nouvel employé' : `✏️ ${employe.nom}`}
+            {isNew ? '➕ Nouvel employé' : `✏️ ${displayedEmploye?.nom || ''}`}
             {positionInfo && (
               <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 8, fontWeight: 400 }}>
                 ({positionInfo})
@@ -221,14 +179,8 @@ export default function EmployeEditModal({
             )}
           </h3>
 
-          {/* Bouton ▶ */}
           {canNavigate ? (
-            <button
-              type="button"
-              onClick={goNext}
-              style={btnNav}
-              title="Employé suivant (→)"
-            >▶</button>
+            <button type="button" onClick={goNext} style={btnNav} title="Employé suivant (→)">▶</button>
           ) : <span style={{ width: 36 }} />}
 
           <button onClick={onClose} style={btnClose} title="Fermer">✕</button>
@@ -282,7 +234,6 @@ export default function EmployeEditModal({
             ) : <div />}
           </Row>
 
-          {/* Nouveaux champs pour les contrats arabes */}
           <Row>
             <div>
               <label style={lblStyle}>Nom en arabe (pour contrats)</label>
@@ -297,16 +248,12 @@ export default function EmployeEditModal({
             <Field label="Adresse" value={form.adresse} onChange={v => setF('adresse', v)} placeholder="Ex : 12 rue X, Quartier Y, Rabat" />
           </Row>
 
-          {/* Informations bancaires */}
           <Row>
             <Field label="RIB (numéro de compte)" value={form.rib} onChange={v => setF('rib', v)} placeholder="Ex : 011 810 0000123456789 12" />
             <Field label="Banque" value={form.banque} onChange={v => setF('banque', v)} placeholder="Ex : Attijariwafa Bank, BMCE…" />
           </Row>
 
-          {/* PLANNING (pour module Pointage) */}
-          <div style={{
-            background: '#F4F0EA', padding: 12, borderRadius: 8, marginBottom: 12,
-          }}>
+          <div style={{ background: '#F4F0EA', padding: 12, borderRadius: 8, marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#3A3733', marginBottom: 8 }}>
               ⏰ Planning de travail (pour calcul du pointage)
             </div>
@@ -335,16 +282,14 @@ export default function EmployeEditModal({
                   <label style={lblStyle}>Journée OFF</label>
                   <select value={form.planning_jour_off} onChange={e => setF('planning_jour_off', e.target.value)} style={inputStyle}>
                     <option value="">— Aucun —</option>
-                    {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
-                      <option key={j} value={j}>{j}</option>)}
+                    {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j => <option key={j} value={j}>{j}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={lblStyle}>Demi-journée OFF</label>
                   <select value={form.planning_demi_off} onChange={e => setF('planning_demi_off', e.target.value)} style={inputStyle}>
                     <option value="">— Aucune —</option>
-                    {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
-                      <option key={j} value={j}>{j}</option>)}
+                    {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j => <option key={j} value={j}>{j}</option>)}
                   </select>
                 </div>
               </Row>
@@ -357,16 +302,14 @@ export default function EmployeEditModal({
                     <label style={lblStyle}>Semaine paire — OFF jour 1</label>
                     <select value={form.planning_paire_off_1} onChange={e => setF('planning_paire_off_1', e.target.value)} style={inputStyle}>
                       <option value="">— Aucun —</option>
-                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
-                        <option key={j} value={j}>{j}</option>)}
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j => <option key={j} value={j}>{j}</option>)}
                     </select>
                   </div>
                   <div>
                     <label style={lblStyle}>Semaine paire — OFF jour 2</label>
                     <select value={form.planning_paire_off_2} onChange={e => setF('planning_paire_off_2', e.target.value)} style={inputStyle}>
                       <option value="">— Aucun —</option>
-                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
-                        <option key={j} value={j}>{j}</option>)}
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j => <option key={j} value={j}>{j}</option>)}
                     </select>
                   </div>
                 </Row>
@@ -375,16 +318,14 @@ export default function EmployeEditModal({
                     <label style={lblStyle}>Semaine impaire — OFF jour 1</label>
                     <select value={form.planning_impaire_off_1} onChange={e => setF('planning_impaire_off_1', e.target.value)} style={inputStyle}>
                       <option value="">— Aucun —</option>
-                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
-                        <option key={j} value={j}>{j}</option>)}
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j => <option key={j} value={j}>{j}</option>)}
                     </select>
                   </div>
                   <div>
                     <label style={lblStyle}>Semaine impaire — OFF jour 2</label>
                     <select value={form.planning_impaire_off_2} onChange={e => setF('planning_impaire_off_2', e.target.value)} style={inputStyle}>
                       <option value="">— Aucun —</option>
-                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j =>
-                        <option key={j} value={j}>{j}</option>)}
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map(j => <option key={j} value={j}>{j}</option>)}
                     </select>
                   </div>
                 </Row>
@@ -401,13 +342,8 @@ export default function EmployeEditModal({
 
           <div style={{ marginBottom: 12 }}>
             <label style={lblStyle}>Notes (interne)</label>
-            <textarea
-              value={form.notes}
-              onChange={e => setF('notes', e.target.value)}
-              rows={2}
-              placeholder="Remarques…"
-              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-            />
+            <textarea value={form.notes} onChange={e => setF('notes', e.target.value)} rows={2} placeholder="Remarques…"
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
 
           {isAdmin && (
@@ -430,9 +366,7 @@ export default function EmployeEditModal({
             }}>
               <input type="checkbox" checked={form.actif} onChange={e => setF('actif', e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
-              <span style={{ fontSize: 13, color: '#3A3733' }}>
-                Employé actif (décocher si parti)
-              </span>
+              <span style={{ fontSize: 13, color: '#3A3733' }}>Employé actif (décocher si parti)</span>
             </label>
           )}
 
@@ -455,9 +389,7 @@ export default function EmployeEditModal({
             <div style={{
               padding: '8px 12px', background: '#FCE9E8', color: '#99201E',
               borderRadius: 6, fontSize: 12, marginBottom: 12
-            }}>
-              {error}
-            </div>
+            }}>{error}</div>
           )}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -472,6 +404,40 @@ export default function EmployeEditModal({
   )
 }
 
+// Helper : init form depuis un employé
+function initForm(employe) {
+  return {
+    nom: employe?.nom || '',
+    nom_arabe: employe?.nom_arabe || '',
+    cnss: employe?.cnss || '',
+    cin: employe?.cin || '',
+    poste: employe?.poste || '',
+    type_contrat: employe?.type_contrat || 'CDI',
+    date_entree: employe?.date_entree || '',
+    date_sortie: employe?.date_sortie || '',
+    salaire_net: employe?.salaire_net != null ? String(employe.salaire_net) : '',
+    adresse: employe?.adresse || '',
+    rib: employe?.rib || '',
+    banque: employe?.banque || '',
+    actif: employe?.actif != null ? employe.actif : true,
+    notes: employe?.notes || '',
+    planning_type: employe?.planning_type || 'aucun',
+    planning_jour_off: employe?.planning_jour_off || '',
+    planning_demi_off: employe?.planning_demi_off || '',
+    planning_paire_off_1: employe?.planning_paire_off_1 || '',
+    planning_paire_off_2: employe?.planning_paire_off_2 || '',
+    planning_impaire_off_1: employe?.planning_impaire_off_1 || '',
+    planning_impaire_off_2: employe?.planning_impaire_off_2 || '',
+    equipe: employe?.equipe || 'normale',
+    heures_jour_complet: employe?.heures_jour_complet != null ? String(employe.heures_jour_complet) : '8.50',
+    heures_demi_journee: employe?.heures_demi_journee != null ? String(employe.heures_demi_journee) : '4.00',
+    nom_odoo_match: employe?.nom_odoo_match || '',
+    heures_sup_mensuelles: employe?.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
+    societe_id: employe?.societe_id || null,
+    declare: employe?.declare != null ? employe.declare : false,
+  }
+}
+
 function Row({ children }) {
   return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>{children}</div>
 }
@@ -480,15 +446,8 @@ function Field({ label, value, onChange, placeholder, type = 'text', required = 
   return (
     <div>
       <label style={lblStyle}>{label}</label>
-      <input
-        type={type}
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        required={required}
-        autoFocus={autoFocus}
-        style={inputStyle}
-      />
+      <input type={type} value={value || ''} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} required={required} autoFocus={autoFocus} style={inputStyle} />
     </div>
   )
 }
