@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { loadEmployes } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
+import { genererOrdreVirementPDF } from '../../lib/ordreVirementPdf'
 
 const MOIS_FR = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -82,8 +83,8 @@ export default function SalairesTab({ user }) {
     return employesSociete.reduce((sum, e) => sum + (parseFloat(montants[e.id]) || 0), 0)
   }, [employesSociete, montants])
 
-  async function handleSauvegarder() {
-    setSaving(true); setError(null); setSuccess(null)
+  async function handleSauvegarder({ silent = false } = {}) {
+    if (!silent) { setSaving(true); setError(null); setSuccess(null) }
     try {
       // Upsert tous les montants saisis pour le mois (toutes sociétés confondues)
       const rows = []
@@ -101,349 +102,72 @@ export default function SalairesTab({ user }) {
         }
       }
       if (rows.length === 0) {
-        setError('Aucun montant à sauvegarder')
-        setSaving(false); return
+        if (!silent) setError('Aucun montant à sauvegarder')
+        if (!silent) setSaving(false)
+        return false
       }
       const { error: err } = await supabase
         .from('salaires_mois')
         .upsert(rows, { onConflict: 'employe_id,mois,annee' })
       if (err) throw err
-      setSuccess(`✅ ${rows.length} salaire(s) sauvegardé(s) pour ${MOIS_FR[mois - 1]} ${annee}`)
-      setTimeout(() => setSuccess(null), 4000)
+      if (!silent) {
+        setSuccess(`✅ ${rows.length} salaire(s) sauvegardé(s) pour ${MOIS_FR[mois - 1]} ${annee}`)
+        setTimeout(() => setSuccess(null), 4000)
+      }
+      return true
     } catch (e) {
-      setError('Erreur sauvegarde : ' + e.message)
+      if (!silent) setError('Erreur sauvegarde : ' + e.message)
+      else throw e
+      return false
+    } finally {
+      if (!silent) setSaving(false)
     }
-    setSaving(false)
   }
 
-  // Convertit un nombre en lettres (français) — pour montants
-  function nombreEnLettres(n) {
-    const UNITES = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
-                    'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize',
-                    'dix-sept', 'dix-huit', 'dix-neuf']
-    const DIZAINES = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt']
-    n = Math.floor(n)
-    if (n === 0) return 'zéro'
-    if (n < 0) return 'moins ' + nombreEnLettres(-n)
-    if (n < 20) return UNITES[n]
-    if (n < 100) {
-      const d = Math.floor(n / 10), u = n % 10
-      if (d === 7 || d === 9) return DIZAINES[d] + '-' + UNITES[10 + u]
-      if (u === 0) return DIZAINES[d] + (d === 8 ? 's' : '')
-      if (u === 1 && d < 8) return DIZAINES[d] + ' et un'
-      return DIZAINES[d] + '-' + UNITES[u]
-    }
-    if (n < 1000) {
-      const c = Math.floor(n / 100), r = n % 100
-      const prefix = c === 1 ? '' : UNITES[c] + ' '
-      let result = prefix + 'cent' + (c > 1 && r === 0 ? 's' : '')
-      if (r > 0) result += ' ' + nombreEnLettres(r)
-      return result
-    }
-    if (n < 1000000) {
-      const m = Math.floor(n / 1000), r = n % 1000
-      const prefix = m === 1 ? 'mille' : nombreEnLettres(m) + ' mille'
-      if (r > 0) return prefix + ' ' + nombreEnLettres(r)
-      return prefix
-    }
-    return String(n)
-  }
-
-  async function handleGenererExcel() {
+  async function handleGenererPDF() {
     if (employesSociete.length === 0) { setError('Aucun employé déclaré pour cette société'); return }
     const validEmp = employesSociete.filter(e => parseFloat(montants[e.id]) > 0)
     if (validEmp.length === 0) { setError('Aucun montant saisi'); return }
-    setGenerating(true); setError(null)
+
+    setGenerating(true); setError(null); setSuccess(null)
     try {
-      await handleSauvegarder()
+      // 1) Sauvegarde silencieuse
+      await handleSauvegarder({ silent: true })
 
-      // Charger SheetJS via CDN
-      if (!window.XLSX) {
-        await new Promise((resolve, reject) => {
-          const s = document.createElement('script')
-          s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
-          s.onload = resolve
-          s.onerror = reject
-          document.head.appendChild(s)
-        })
-      }
-      const XLSX = window.XLSX
-
+      // 2) Récupération des infos société
       const societe = societes.find(s => s.code === societeFilter)
-      const societeNom = societe?.nom || (societeFilter === 'LG' ? 'LG TRAITEUR SARL' : 'L&N Gourmet SARL')
-      const compteSource = societe?.compte_bancaire || ''
-      const banqueSource = societe?.banque_source || ''
-      const total = validEmp.reduce((s, e) => s + (parseFloat(montants[e.id]) || 0), 0)
-      const dateStr = new Date().toLocaleDateString('fr-FR')
+      if (!societe) throw new Error('Société introuvable')
 
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      // Construction de la matrice avec mise en forme
-      // Colonnes : A (Banque/Label) | B | C (Nom/RIB/Montant) | D | E | F (DIRHAMS) | G (1)
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-      const matrice = []
-      const merges = []      // fusions de cellules
-      const styles = {}      // styles par coordonnée
-
-      let row = 0
-      // Ligne 1-4 : zone logo (vide, image insérée séparément)
-      matrice.push(['', '', '', '', '', '', '']); row++
-      matrice.push(['', '', '', '', '', '', '']); row++
-      matrice.push(['', '', '', '', '', 'À RABAT LE', dateStr]); row++
-      matrice.push(['', '', '', '', '', '', '']); row++
-
-      // Objet
-      matrice.push(['Objet : Ordre de virement', '', '', '', '', '', '']); row++
-      const objetRow = row
-      matrice.push(['', '', '', '', '', '', '']); row++
-      matrice.push(['Merci de bien vouloir réaliser les virements des salaires suivants,', '', '', '', '', '', '']); row++
-      matrice.push([`À partir de notre compte numéro ${compteSource || '____________________________________'}${banqueSource ? '  (' + banqueSource + ')' : ''}`, '', '', '', '', '', '']); row++
-      matrice.push(['', '', '', '', '', '', '']); row++
-
-      // Tableau employés
-      const empStartRow = row + 1   // 1-indexed pour Excel
-      for (const e of validEmp) {
-        const m = parseFloat(montants[e.id])
-        const montantLettres = nombreEnLettres(m).toUpperCase() + ' DIRHAMS'
-        // Ligne 1 : Nom | | Montant | | | DIRHAMS | 1
-        matrice.push([e.nom, '', m, '', '', 'DIRHAMS', 1]); row++
-        // Ligne 2 : Banque | | RIB
-        matrice.push([e.banque || '', '', e.rib || '', '', '', '', '']); row++
-        // Ligne 3 : montant en lettres (fusionnée C:G)
-        matrice.push(['', '', montantLettres, '', '', '', '']); row++
-        merges.push({ s: { r: row - 1, c: 2 }, e: { r: row - 1, c: 6 } })
-        // Ligne vide de séparation
-        matrice.push(['', '', '', '', '', '', '']); row++
-      }
-      const empEndRow = row
-
-      // TOTAL
-      matrice.push(['', '', '', '', '', '', '']); row++
-      matrice.push(['TOTAL', '', total, '', '', 'DIRHAMS', validEmp.length]); row++
-      const totalRow = row
-      matrice.push(['', '', nombreEnLettres(total).toUpperCase() + ' DIRHAMS', '', '', '', '']); row++
-      merges.push({ s: { r: row - 1, c: 2 }, e: { r: row - 1, c: 6 } })
-      const totalLettresRow = row
-
-      matrice.push(['', '', '', '', '', '', '']); row++
-      matrice.push(['', '', '', '', '', '', '']); row++
-      matrice.push(['Cordialement,', '', '', '', '', '', '']); row++
-      matrice.push(['La direction', '', '', '', '', '', '']); row++
-      matrice.push(['', '', '', '', '', '', '']); row++
-      matrice.push(['', '', '', '', '', '', '']); row++
-
-      // Pied de page société
-      const footerStart = row + 1
-      if (societe) {
-        matrice.push([`${societeNom} au capital de ${Number(societe.capital_dh).toLocaleString('fr-FR')} DH`, '', '', '', '', '', '']); row++
-        matrice.push([societe.adresse, '', '', '', '', '', '']); row++
-        matrice.push([`RC : ${societe.rc} · Patente : ${societe.patente} · IF : ${societe.if_num} · CNSS : ${societe.cnss}`, '', '', '', '', '', '']); row++
-        matrice.push([`ICE : ${societe.ice}`, '', '', '', '', '', '']); row++
-      }
-      const footerEnd = row
-
-      // Créer la feuille
-      const ws = XLSX.utils.aoa_to_sheet(matrice)
-      ws['!cols'] = [
-        { wch: 32 },   // A - Nom / Banque / Footer
-        { wch: 3 },    // B
-        { wch: 32 },   // C - RIB / Montant lettres
-        { wch: 3 },    // D
-        { wch: 3 },    // E
-        { wch: 11 },   // F - DIRHAMS
-        { wch: 5 },    // G - Nb
-      ]
-      // Hauteurs : élargir lignes employé et lignes lettres
-      ws['!rows'] = []
-      for (let i = 0; i < matrice.length; i++) ws['!rows'][i] = { hpt: 18 }
-      // Logo zone plus haute (3 premières lignes fusionnées)
-      ws['!rows'][0] = { hpt: 28 }; ws['!rows'][1] = { hpt: 28 }; ws['!rows'][2] = { hpt: 24 }
-
-      // Fusion zone logo (A1:E3) pour image
-      merges.push({ s: { r: 0, c: 0 }, e: { r: 2, c: 4 } })
-
-      // Appliquer les fusions
-      ws['!merges'] = merges
-
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      // Application des styles (police, bordures, alignement)
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-      const fontDefault = { name: 'Arial', sz: 10 }
-      const borderThin = { style: 'thin', color: { rgb: '993556' } }
-      const borderAll = { top: borderThin, bottom: borderThin, left: borderThin, right: borderThin }
-      const bordeauxRgb = '993556'
-      const fillBordeaux = { patternType: 'solid', fgColor: { rgb: bordeauxRgb } }
-
-      // Style helper
-      function setStyle(cellAddr, style) {
-        if (!ws[cellAddr]) ws[cellAddr] = { t: 's', v: '' }
-        ws[cellAddr].s = { ...(ws[cellAddr].s || {}), ...style }
+      const societeData = {
+        nom: societe.nom || (societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'),
+        nom_complet: societe.nom_complet || societe.nom || (societeFilter === 'LG' ? 'LG Traiteur SARL' : 'L&N Gourmet SARL'),
+        capital: societe.capital || '',
+        adresse: societe.adresse || '',
+        rc: societe.rc || '',
+        ice: societe.ice || '',
+        compte_bancaire: societe.compte_bancaire || '___________________',
+        banque_societe: societe.banque_societe || societe.banque_source || '',
       }
 
-      // Date en haut à droite
-      setStyle(XLSX.utils.encode_cell({ r: 2, c: 5 }), {
-        font: { ...fontDefault, italic: true, sz: 9 },
-        alignment: { horizontal: 'right' }
-      })
-      setStyle(XLSX.utils.encode_cell({ r: 2, c: 6 }), {
-        font: { ...fontDefault, italic: true, sz: 9 },
-        alignment: { horizontal: 'left' }
+      // 3) Liste des employés pour le PDF
+      const employesData = validEmp.map(e => ({
+        nom: e.nom,
+        montant: parseFloat(montants[e.id]),
+        banque: e.banque || '—',
+        rib: e.rib || '⚠️ RIB manquant',
+      }))
+
+      // 4) Génération PDF (le fichier est téléchargé directement)
+      await genererOrdreVirementPDF({
+        societe: societeData,
+        employes: employesData,
+        date: new Date(annee, mois - 1, today.getDate()),
       })
 
-      // "Objet" en gras
-      setStyle(XLSX.utils.encode_cell({ r: objetRow - 1, c: 0 }), {
-        font: { ...fontDefault, bold: true, sz: 11 }
-      })
-
-      // Encadrement des blocs employés (3 lignes par employé)
-      for (let idx = 0; idx < validEmp.length; idx++) {
-        const r1 = empStartRow + idx * 4 - 1  // 0-indexed
-        const r2 = r1 + 1
-        const r3 = r1 + 2
-
-        // Ligne 1 (nom + montant + devise + nb) - bold
-        for (let c = 0; c < 7; c++) {
-          const addr = XLSX.utils.encode_cell({ r: r1, c })
-          if (!ws[addr]) ws[addr] = { t: 's', v: '' }
-          ws[addr].s = {
-            font: { ...fontDefault, bold: c === 0, sz: c === 0 ? 11 : 10 },
-            border: {
-              top: borderThin,
-              bottom: { style: 'thin', color: { rgb: 'E8E2D8' } },
-              left: c === 0 ? borderThin : undefined,
-              right: c === 6 ? borderThin : undefined,
-            },
-            alignment: { horizontal: c === 2 ? 'right' : c >= 5 ? 'center' : 'left', vertical: 'center' },
-            fill: { patternType: 'solid', fgColor: { rgb: 'FAF6F0' } },
-          }
-          // Format nombre pour la colonne C (montant)
-          if (c === 2 && typeof ws[addr].v === 'number') {
-            ws[addr].z = '#,##0.00'
-          }
-        }
-        // Ligne 2 (banque + RIB) - italic gris
-        for (let c = 0; c < 7; c++) {
-          const addr = XLSX.utils.encode_cell({ r: r2, c })
-          if (!ws[addr]) ws[addr] = { t: 's', v: '' }
-          ws[addr].s = {
-            font: { ...fontDefault, italic: true, color: { rgb: '6F6A60' }, sz: 9 },
-            border: {
-              left: c === 0 ? borderThin : undefined,
-              right: c === 6 ? borderThin : undefined,
-            },
-            alignment: { horizontal: 'left' },
-          }
-        }
-        // Ligne 3 (montant en lettres fusionnée C:G) - italic centré
-        const addrL = XLSX.utils.encode_cell({ r: r3, c: 2 })
-        if (!ws[addrL]) ws[addrL] = { t: 's', v: '' }
-        ws[addrL].s = {
-          font: { ...fontDefault, italic: true, color: { rgb: '993556' }, sz: 9 },
-          alignment: { horizontal: 'right', vertical: 'center' },
-          border: {
-            bottom: borderThin,
-            right: borderThin,
-          },
-        }
-        // Bordures gauche et bas pour les colonnes vides à gauche
-        for (let c = 0; c < 2; c++) {
-          const addr = XLSX.utils.encode_cell({ r: r3, c })
-          if (!ws[addr]) ws[addr] = { t: 's', v: '' }
-          ws[addr].s = {
-            border: {
-              left: c === 0 ? borderThin : undefined,
-              bottom: borderThin,
-            },
-          }
-        }
-      }
-
-      // Ligne TOTAL (bordeaux)
-      for (let c = 0; c < 7; c++) {
-        const addr = XLSX.utils.encode_cell({ r: totalRow - 1, c })
-        if (!ws[addr]) ws[addr] = { t: 's', v: '' }
-        ws[addr].s = {
-          font: { ...fontDefault, bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
-          fill: fillBordeaux,
-          border: borderAll,
-          alignment: { horizontal: c === 0 ? 'left' : c === 2 ? 'right' : 'center', vertical: 'center' },
-        }
-        if (c === 2 && typeof ws[addr].v === 'number') ws[addr].z = '#,##0.00'
-      }
-      // Ligne total en lettres
-      const addrTL = XLSX.utils.encode_cell({ r: totalLettresRow - 1, c: 2 })
-      if (!ws[addrTL]) ws[addrTL] = { t: 's', v: '' }
-      ws[addrTL].s = {
-        font: { ...fontDefault, italic: true, bold: true, color: { rgb: '993556' }, sz: 10 },
-        alignment: { horizontal: 'right' },
-      }
-
-      // Pied de page
-      if (societe) {
-        for (let r = footerStart - 1; r <= footerEnd - 1; r++) {
-          for (let c = 0; c < 7; c++) {
-            const addr = XLSX.utils.encode_cell({ r, c })
-            if (!ws[addr]) ws[addr] = { t: 's', v: '' }
-            ws[addr].s = {
-              font: { ...fontDefault, sz: 8, color: { rgb: '6F6A60' } },
-              alignment: { horizontal: 'center' },
-            }
-          }
-        }
-        // Première ligne pied : nom + capital en gras
-        const addrFooter = XLSX.utils.encode_cell({ r: footerStart - 1, c: 0 })
-        if (!ws[addrFooter]) ws[addrFooter] = { t: 's', v: '' }
-        ws[addrFooter].s = {
-          font: { ...fontDefault, sz: 9, bold: true, color: { rgb: '993556' } },
-          alignment: { horizontal: 'center' },
-        }
-        // Fusionner pied de page sur toute la largeur (A à G)
-        for (let r = footerStart - 1; r <= footerEnd - 1; r++) {
-          merges.push({ s: { r, c: 0 }, e: { r, c: 6 } })
-        }
-      }
-
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      // Insertion du logo
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      try {
-        const resp = await fetch('/Logo_LG.jpg')
-        if (resp.ok) {
-          const blob = await resp.blob()
-          const base64 = await new Promise(resolve => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result.split(',')[1])
-            reader.readAsDataURL(blob)
-          })
-          // SheetJS xlsx ne supporte pas les images natives en CE-version.
-          // On utilise une astuce : ws['!images'] (extension SheetJS Pro) ne fonctionne pas dans la version free.
-          // Plan B : ajouter le logo via openpyxl en post-traitement n'est pas possible côté front.
-          // Plan C : utiliser le nom de l'entreprise en gros texte stylisé à la place.
-          // → On laisse pour l'instant un nom stylisé.
-        }
-      } catch (e) {
-        console.warn('Logo non chargé', e)
-      }
-      // Plan C : nom société en gros texte stylisé (fusion A1:E3)
-      const addrLogo = XLSX.utils.encode_cell({ r: 0, c: 0 })
-      ws[addrLogo] = {
-        t: 's',
-        v: societeNom,
-        s: {
-          font: { name: 'Georgia', sz: 22, bold: true, italic: true, color: { rgb: '993556' } },
-          alignment: { horizontal: 'left', vertical: 'center' },
-        }
-      }
-
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, `Salaires ${MOIS_FR[mois - 1]} ${annee}`.slice(0, 31))
-      const filename = `Salaires_${societeFilter}_${MOIS_FR[mois - 1]}_${annee}.xlsx`
-      XLSX.writeFile(wb, filename)
-      setSuccess(`✅ Excel téléchargé : ${filename}`)
+      setSuccess(`✅ PDF généré : Ordre de virement ${societeData.nom} ${MOIS_FR[mois - 1]} ${annee}`)
       setTimeout(() => setSuccess(null), 4000)
     } catch (e) {
-      setError('Erreur génération : ' + e.message)
+      setError('Erreur génération : ' + (e.message || e))
     }
     setGenerating(false)
   }
@@ -560,18 +284,18 @@ export default function SalairesTab({ user }) {
       {/* Actions */}
       {!loading && employesSociete.length > 0 && (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
-          <button onClick={handleSauvegarder} disabled={saving} style={{
+          <button onClick={() => handleSauvegarder()} disabled={saving} style={{
             padding: '10px 18px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
             border: '1px solid #E8E2D8', borderRadius: 8, cursor: saving ? 'wait' : 'pointer',
           }}>
             {saving ? '⏳ ...' : '💾 Sauvegarder'}
           </button>
-          <button onClick={handleGenererExcel} disabled={generating} style={{
-            padding: '10px 18px', fontSize: 13, background: '#27500A', color: 'white',
-            border: '1px solid #27500A', borderRadius: 8, cursor: generating ? 'wait' : 'pointer',
+          <button onClick={handleGenererPDF} disabled={generating} style={{
+            padding: '10px 18px', fontSize: 13, background: '#993556', color: 'white',
+            border: '1px solid #993556', borderRadius: 8, cursor: generating ? 'wait' : 'pointer',
             fontWeight: 500,
           }}>
-            {generating ? '⏳ Génération...' : '📥 Générer ordre de virement (.xlsx)'}
+            {generating ? '⏳ Génération...' : '📥 Générer ordre de virement (.pdf)'}
           </button>
         </div>
       )}

@@ -3,7 +3,12 @@ import { createEmploye, updateEmploye } from '../../lib/hr'
 
 const TYPES_CONTRAT = ['CDI', 'CDD', 'Stage', 'Interim', 'Autre']
 
-export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSaved }) {
+export default function EmployeEditModal({
+  employe, user, isAdmin, onClose, onSaved,
+  // Nouvelles props optionnelles pour la navigation entre employés
+  employesList = null,     // tableau d'employés (ex: tous les actifs filtrés)
+  onNavigate = null,       // fonction (newEmploye) => void appelée pour changer d'employé
+}) {
   const isNew = !employe
   const [form, setForm] = useState({
     nom: employe?.nom || '',
@@ -37,14 +42,100 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
     declare: employe?.declare != null ? employe.declare : false,
   })
   const [societes, setSocietes] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => { (async () => {
     const { supabase } = await import('../../lib/supabase')
     const { data } = await supabase.from('societes').select('*').order('code')
     setSocietes(data || [])
   })() }, [])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Re-synchroniser le formulaire quand on change d'employé via ◀ ▶
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  useEffect(() => {
+    if (!employe) return
+    setForm({
+      nom: employe.nom || '',
+      nom_arabe: employe.nom_arabe || '',
+      cnss: employe.cnss || '',
+      cin: employe.cin || '',
+      poste: employe.poste || '',
+      type_contrat: employe.type_contrat || 'CDI',
+      date_entree: employe.date_entree || '',
+      date_sortie: employe.date_sortie || '',
+      salaire_net: employe.salaire_net != null ? String(employe.salaire_net) : '',
+      adresse: employe.adresse || '',
+      rib: employe.rib || '',
+      banque: employe.banque || '',
+      actif: employe.actif != null ? employe.actif : true,
+      notes: employe.notes || '',
+      planning_type: employe.planning_type || 'aucun',
+      planning_jour_off: employe.planning_jour_off || '',
+      planning_demi_off: employe.planning_demi_off || '',
+      planning_paire_off_1: employe.planning_paire_off_1 || '',
+      planning_paire_off_2: employe.planning_paire_off_2 || '',
+      planning_impaire_off_1: employe.planning_impaire_off_1 || '',
+      planning_impaire_off_2: employe.planning_impaire_off_2 || '',
+      equipe: employe.equipe || 'normale',
+      heures_jour_complet: employe.heures_jour_complet != null ? String(employe.heures_jour_complet) : '8.50',
+      heures_demi_journee: employe.heures_demi_journee != null ? String(employe.heures_demi_journee) : '4.00',
+      nom_odoo_match: employe.nom_odoo_match || '',
+      heures_sup_mensuelles: employe.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
+      societe_id: employe.societe_id || null,
+      declare: employe.declare != null ? employe.declare : false,
+    })
+    setError(null)
+    // Remonter en haut du modal sur changement d'employé
+    requestAnimationFrame(() => {
+      const m = document.getElementById('emp-edit-modal-body')
+      if (m) m.scrollTop = 0
+    })
+  }, [employe?.id])
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Navigation ◀ ▶ entre employés (boucle infinie)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  const canNavigate = !isNew && Array.isArray(employesList) && employesList.length > 1 && typeof onNavigate === 'function'
+
+  function goPrev() {
+    if (!canNavigate) return
+    const idx = employesList.findIndex(e => e.id === employe.id)
+    if (idx === -1) return
+    const newIdx = (idx - 1 + employesList.length) % employesList.length
+    onNavigate(employesList[newIdx])
+  }
+
+  function goNext() {
+    if (!canNavigate) return
+    const idx = employesList.findIndex(e => e.id === employe.id)
+    if (idx === -1) return
+    const newIdx = (idx + 1) % employesList.length
+    onNavigate(employesList[newIdx])
+  }
+
+  // Raccourcis clavier ← →
+  useEffect(() => {
+    if (!canNavigate) return
+    function onKey(e) {
+      // Ignorer si focus dans un input / textarea / select pour ne pas casser la saisie
+      const tag = (e.target?.tagName || '').toLowerCase()
+      if (['input', 'textarea', 'select'].includes(tag)) return
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev() }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); goNext() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [canNavigate, employe?.id, employesList])
+
+  // Position de l'employé courant dans la liste (pour afficher "3 / 36")
+  const positionInfo = canNavigate
+    ? (() => {
+        const idx = employesList.findIndex(e => e.id === employe.id)
+        return idx >= 0 ? `${idx + 1} / ${employesList.length}` : ''
+      })()
+    : ''
 
   function setF(field, value) {
     setForm(f => ({ ...f, [field]: value }))
@@ -53,10 +144,10 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
   async function handleSubmit(e) {
     e?.preventDefault?.()
     if (!form.nom.trim()) { setError('Le nom est obligatoire'); return }
-      if (!form.societe_id) {
-        setErr('La société est obligatoire')
-        setSaving(false); return
-      }
+    if (!form.societe_id) {
+      setError('La société est obligatoire')
+      return
+    }
 
     setSaving(true); setError(null)
     try {
@@ -105,12 +196,42 @@ export default function EmployeEditModal({ employe, user, isAdmin, onClose, onSa
 
   return (
     <div style={overlay} onClick={onClose}>
-      <div style={modal} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 500, color: '#3A3733' }}>
+      <div id="emp-edit-modal-body" style={modal} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+          {/* Bouton ◀ */}
+          {canNavigate ? (
+            <button
+              type="button"
+              onClick={goPrev}
+              style={btnNav}
+              title="Employé précédent (←)"
+            >◀</button>
+          ) : <span style={{ width: 36 }} />}
+
+          <h3 style={{
+            margin: 0, fontSize: 16, fontWeight: 500, color: '#3A3733',
+            flex: 1, textAlign: 'center',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
             {isNew ? '➕ Nouvel employé' : `✏️ ${employe.nom}`}
+            {positionInfo && (
+              <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 8, fontWeight: 400 }}>
+                ({positionInfo})
+              </span>
+            )}
           </h3>
-          <button onClick={onClose} style={btnClose}>✕</button>
+
+          {/* Bouton ▶ */}
+          {canNavigate ? (
+            <button
+              type="button"
+              onClick={goNext}
+              style={btnNav}
+              title="Employé suivant (→)"
+            >▶</button>
+          ) : <span style={{ width: 36 }} />}
+
+          <button onClick={onClose} style={btnClose} title="Fermer">✕</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -374,7 +495,8 @@ function Field({ label, value, onChange, placeholder, type = 'text', required = 
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16, overflow: 'auto' }
 const modal = { background: 'white', borderRadius: 12, padding: 22, maxWidth: 560, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }
-const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }
+const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D', marginLeft: 4 }
+const btnNav = { width: 36, height: 32, background: '#F4F0EA', border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer', fontSize: 14, color: '#3A3733', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }
 const lblStyle = { display: 'block', fontSize: 11, fontWeight: 500, color: '#6F6A60', marginBottom: 4 }
 const inputStyle = { width: '100%', padding: '9px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6, background: 'white', fontFamily: 'inherit', boxSizing: 'border-box' }
 const btnSecondary = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', color: '#6F6A60' }
