@@ -34,15 +34,10 @@ function fmtDate(isoString, withTime = true) {
   } catch { return isoString }
 }
 
-/**
- * Vue principale "Tâches à faire".
- * Props :
- *  - user : { id, username, full_name } - le user connecté
- */
 export default function TasksView({ user }) {
   const [received, setReceived] = useState([])
   const [sent, setSent] = useState([])
-  const [filter, setFilter] = useState('todo')   // 'todo' | 'done' | 'sent'
+  const [filter, setFilter] = useState('todo')
   const [detailTask, setDetailTask] = useState(null)
   const [showNew, setShowNew] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -61,7 +56,6 @@ export default function TasksView({ user }) {
       ])
       setReceived(r)
       setSent(s)
-      // Toast au chargement initial si non lues
       if (showInitialToast) {
         const unread = r.filter(t => t.status === 'todo' && !t.is_read).length
         const urgent = r.filter(t => t.status === 'todo' && !t.is_read && t.is_urgent).length
@@ -81,11 +75,8 @@ export default function TasksView({ user }) {
   }
 
   async function openTask(task) {
-    // Si reçue + pas lue → marquer comme lu (auto)
     if (task.to_user_id === user.id && task.status === 'todo' && !task.is_read) {
-      try {
-        await markTaskRead(task.id)
-      } catch (e) { console.warn('markTaskRead:', e?.message) }
+      try { await markTaskRead(task.id) } catch (e) { console.warn('markTaskRead:', e?.message) }
     }
     setDetailTask({ ...task, is_read: true, read_at: task.read_at || new Date().toISOString() })
   }
@@ -100,7 +91,6 @@ export default function TasksView({ user }) {
     }
   }
 
-  // ========== Filtrage et regroupement ==========
   const todoCount  = received.filter(t => t.status === 'todo').length
   const doneCount  = received.filter(t => t.status === 'done').length
   const unreadCount = received.filter(t => t.status === 'todo' && !t.is_read).length
@@ -111,7 +101,6 @@ export default function TasksView({ user }) {
     if (filter === 'sent') list = sent
     else list = received.filter(t => t.status === filter)
 
-    // Tri : urgent en premier, puis non lu, puis date desc
     list = [...list].sort((a, b) => {
       if (a.is_urgent !== b.is_urgent) return b.is_urgent - a.is_urgent
       if (filter === 'todo') {
@@ -134,13 +123,10 @@ export default function TasksView({ user }) {
     return map
   }, [filteredList])
 
-  const sortedMonths = useMemo(() => {
-    return Object.keys(byMonth).sort((a, b) => b.localeCompare(a))
-  }, [byMonth])
+  const sortedMonths = useMemo(() => Object.keys(byMonth).sort((a, b) => b.localeCompare(a)), [byMonth])
 
   return (
     <div style={{ padding: '1rem 1.25rem', maxWidth: 1100, margin: '0 auto' }}>
-      {/* Toast */}
       {showToast && (
         <div style={{
           background: '#FCEEE8', border: '1px solid #993556', padding: '10px 14px',
@@ -155,7 +141,6 @@ export default function TasksView({ user }) {
         </div>
       )}
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: '#3A3733' }}>
@@ -174,7 +159,6 @@ export default function TasksView({ user }) {
         </button>
       </div>
 
-      {/* Filtres */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         <Chip active={filter === 'todo'} onClick={() => setFilter('todo')}>
           À faire ({todoCount})
@@ -189,7 +173,6 @@ export default function TasksView({ user }) {
         </span>
       </div>
 
-      {/* Liste */}
       {loading && (
         <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>
       )}
@@ -237,7 +220,6 @@ export default function TasksView({ user }) {
         )
       })}
 
-      {/* Modals */}
       {detailTask && (
         <TaskDetailModal
           task={detailTask}
@@ -257,25 +239,24 @@ export default function TasksView({ user }) {
   )
 }
 
-// ============================================================
-// Carte d'une tâche
-// ============================================================
 function TaskCard({ task, currentUserId, onClick, onDelete }) {
   const isSent = task.from_user_id === currentUserId && task.to_user_id !== currentUserId
   const isSentToSelf = task.from_user_id === currentUserId && task.to_user_id === currentUserId
   const isReceived = task.to_user_id === currentUserId
   const isDone = task.status === 'done'
+  const wasEdited = (task.edited_count || 0) > 0
+  const hasAttachment = !!task.attachment_path
 
   const fromName = task.from_user?.username || task.from_user?.full_name || '?'
   const toName   = task.to_user?.username   || task.to_user?.full_name   || '?'
 
-  // Variantes visuelles selon contexte
   let borderColor = '#E5C0B6', leftColor = '#993556'
   if (isSent && !isSentToSelf) { borderColor = '#B5D4F4'; leftColor = '#378ADD' }
   if (isDone) { borderColor = '#C8E0AC'; leftColor = '#97C459' }
   if (task.is_urgent && !isDone) { leftColor = '#E24B4A' }
+  // Bordure orangée si modifiée et pas faite
+  if (wasEdited && !isDone) { borderColor = '#F0C97A' }
 
-  // Badge statut
   let statusBadge
   if (isDone) {
     statusBadge = isSent && !isSentToSelf
@@ -289,7 +270,6 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
     statusBadge = <Badge bg="#FCEEE8" col="#993556">⏳ À faire</Badge>
   }
 
-  // Footer
   let footer
   if (isSent && !isSentToSelf) {
     if (isDone)            footer = <>Faite le {fmtDate(task.done_at)}</>
@@ -304,7 +284,6 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
     ? { textDecoration: 'line-through', color: '#6F6A60' }
     : {}
 
-  // Pastille rouge si non lu (reçu)
   const unreadDot = (isReceived || isSentToSelf) && !task.is_read && !isDone
 
   return (
@@ -322,6 +301,12 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
         {statusBadge}
         {task.is_urgent && !isDone && (
           <Badge bg="#FCEBEB" col="#A32D2D">⚠️ Urgent</Badge>
+        )}
+        {wasEdited && !isDone && (
+          <Badge bg="#FFF1DA" col="#8A5A00">⚠️ Modifiée</Badge>
+        )}
+        {hasAttachment && (
+          <Badge bg="#F4F0EA" col="#6F6A60">📎</Badge>
         )}
         {(isReceived || isSentToSelf) && task.is_read && !isDone && (
           <Badge bg="#FFF6E5" col="#7A5510">👁 Lu</Badge>
