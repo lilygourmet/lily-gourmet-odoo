@@ -1,6 +1,6 @@
 // src/lib/ordreVirementPdf.js
 // Génération de l'ordre de virement PDF (côté client, via jsPDF chargé dynamiquement)
-// Version Noir & Blanc (compatible impression N&B)
+// Version Noir & Blanc
 
 // ----------------- Chargement dynamique de jsPDF + autoTable -----------------
 let jsPDFPromise = null;
@@ -96,7 +96,7 @@ async function loadLogoBase64() {
 // ----------------- Génération principale -----------------
 /**
  * @param {Object} params
- * @param {Object} params.societe - { nom, nom_complet, capital, adresse, rc, ice, compte_bancaire, banque_societe }
+ * @param {Object} params.societe - { nom, nom_complet, capital, adresse, rc, patente, if_num, cnss, ice, compte_bancaire, banque_societe }
  * @param {Array}  params.employes - [{ nom, montant, banque, rib }]
  * @param {Date}   [params.date]
  * @param {string} [params.filename]
@@ -112,7 +112,7 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   const NOIR = [0, 0, 0];
   const BLANC = [255, 255, 255];
   const GRIS_BORDURE = [136, 136, 136];
-  const GRIS_CLAIR = [217, 217, 217];   // remplace l'ex-jaune fluo
+  const GRIS_CLAIR = [217, 217, 217];
 
   // ---- En-tête : logo + nom société (gauche) + date (droite) ----
   const logoB64 = await loadLogoBase64();
@@ -124,7 +124,6 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
     } catch { logoOK = false; }
   }
   if (!logoOK) {
-    // fallback : carré noir avec initiales blanches
     doc.setFillColor(...NOIR);
     doc.rect(MARGIN, 12, 22, 22, "F");
     doc.setTextColor(...BLANC);
@@ -134,7 +133,7 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
     doc.text(initiales, MARGIN + 11, 25.5, { align: "center" });
   }
 
-  // Nom société à droite du logo (noir, sans sous-titre)
+  // Nom société à droite du logo (noir)
   doc.setTextColor(...NOIR);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(17);
@@ -171,8 +170,8 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   doc.text(lignesCorps, MARGIN, y);
   y += lignesCorps.length * 5 + 4;
 
-  // ---- Tableau employés : un mini-tableau de 2 lignes par employé, séparés par un espace ----
-  // Largeurs : Nom 45 | Montant 26 | Lettres 79 (gauche) | DIRHAMS 24
+  // ---- Tableau employés ----
+  // Largeurs : Nom 45 | Montant 26 | Lettres 79 (droite) | DIRHAMS 24
   const COL_W = [45, 26, 79, 24];
 
   employes.forEach((emp) => {
@@ -209,7 +208,7 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
       columnStyles: {
         0: { cellWidth: COL_W[0] },
         1: { cellWidth: COL_W[1], halign: "center" },
-        2: { cellWidth: COL_W[2], halign: "left" },
+        2: { cellWidth: COL_W[2], halign: "right" },   // ← Lettres alignées à DROITE
         3: { cellWidth: COL_W[3], halign: "center" },
       },
       didParseCell: (data) => {
@@ -230,7 +229,6 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
       rowPageBreak: "avoid",
     });
 
-    // ESPACE entre employés
     y = doc.lastAutoTable.finalY + 4;
   });
 
@@ -243,10 +241,10 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
     startY: y + 1,
     margin: { left: MARGIN, right: MARGIN },
     body: [[
-      { content: "TOTAL", _kind: "t_label" },
-      { content: totalStr, _kind: "t_montant" },
-      { content: totalLettres, _kind: "t_lettres" },
-      { content: "DIRHAMS", _kind: "t_dirhams" },
+      { content: "TOTAL" },
+      { content: totalStr },
+      { content: totalLettres },
+      { content: "DIRHAMS" },
     ]],
     theme: "grid",
     styles: {
@@ -263,7 +261,7 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
     columnStyles: {
       0: { cellWidth: COL_W[0] },
       1: { cellWidth: COL_W[1], halign: "center" },
-      2: { cellWidth: COL_W[2], halign: "left", fontSize: 9 },
+      2: { cellWidth: COL_W[2], halign: "right", fontSize: 9 },  // ← Total lettres à DROITE
       3: { cellWidth: COL_W[3], halign: "center", fontSize: 9 },
     },
   });
@@ -278,14 +276,22 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   doc.setFont("helvetica", "bold");
   doc.text("La Direction", MARGIN, ySig);
 
-  // ---- Pied de page société (centré tout en bas) ----
-  doc.setFont("helvetica", "bolditalic");
-  doc.setFontSize(8.5);
-  doc.setTextColor(102, 102, 102);
-  const piedLigne1 = `${societe.nom_complet}  ·  Capital : ${societe.capital}  ·  RC : ${societe.rc}  ·  ICE : ${societe.ice}`;
-  doc.text(piedLigne1, W / 2, H - 22, { align: "center" });
-  doc.setFont("helvetica", "italic");
-  doc.text(societe.adresse, W / 2, H - 17, { align: "center" });
+  // ---- Pied de page société (format EXACT demandé, 3 lignes centrées en bas) ----
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...NOIR);
+
+  // Ligne 1 : {Société} au capital de {Capital}, {Adresse}.
+  const piedL1 = `${societe.nom_complet} au capital de ${societe.capital}, ${societe.adresse}.`;
+  // Ligne 2 : RC: X Patente Y IF: Z CNSS: W
+  const piedL2 = `RC: ${societe.rc || ''} Patente ${societe.patente || ''} IF: ${societe.if_num || societe.if || ''} CNSS: ${societe.cnss || ''}`;
+  // Ligne 3 : ICE: X
+  const piedL3 = `ICE: ${societe.ice || ''}`;
+
+  // Positions verticales (calculées du bas vers le haut, espacement large)
+  doc.text(piedL1, W / 2, H - 32, { align: "center" });
+  doc.text(piedL2, W / 2, H - 24, { align: "center" });
+  doc.text(piedL3, W / 2, H - 16, { align: "center" });
 
   // ---- Sauvegarde ----
   const monthFR = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][date.getMonth()];
