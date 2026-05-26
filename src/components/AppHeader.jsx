@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
+import { countConversationBadges, markConversationsVisited } from '../lib/conversations'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -35,11 +36,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [checklistBadge, setChecklistBadge] = useState(0)
   // Badge "taches non lues" sur le bouton Tâches
   const [tasksBadge, setTasksBadge] = useState(0)
+  // Badge double Conversations : { unassigned (à prendre), unread (non lus) }
+  const [convBadge, setConvBadge] = useState({ unassigned: 0, unread: 0 })
+  const lastVisitedConvRef = useRef(user?.last_visited_conversations || null)
   // Menus deroulants ouverts (un seul a la fois)
   const [openMenu, setOpenMenu] = useState(null) // 'prod' | 'vitrine' | 'outils' | null
 
   const showReceptionBtn = !isLivreur(user) && canStockCafe(user)
   const showChecklistBtn = !isLivreur(user) && canSeeChecklist(user)
+  const userCanSeeConv = canSeeConversations(user)
 
   // Refresh affichage relatif chaque minute
   useEffect(() => {
@@ -258,6 +263,45 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
   }, [user?.id])
 
+  // Badge Conversations : double compteur (non assignées / non lus) + temps réel
+  useEffect(() => {
+    if (!userCanSeeConv || !user?.id) return
+    let cancelled = false
+    let channel = null
+
+    async function refreshConvBadge() {
+      try {
+        const b = await countConversationBadges(lastVisitedConvRef.current)
+        if (!cancelled) setConvBadge(b)
+      } catch (e) {
+        console.warn('[convBadge]', e?.message || e)
+      }
+    }
+
+    refreshConvBadge()
+    channel = supabase
+      .channel('conv-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, refreshConvBadge)
+      .subscribe()
+    const interval = setInterval(refreshConvBadge, 30000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      if (channel) supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userCanSeeConv, user?.id])
+
+  // À l'ouverture de l'onglet Conversations : marque la visite + remet "non lus" à 0
+  useEffect(() => {
+    if (activeView === 'conversations' && userCanSeeConv && user?.id) {
+      lastVisitedConvRef.current = new Date().toISOString()
+      markConversationsVisited(user.id).catch(() => {})
+      setConvBadge(prev => ({ ...prev, unread: 0 }))
+    }
+  }, [activeView, userCanSeeConv, user?.id])
+
   // Auto-sync toutes les 5 min
   useEffect(() => {
     if (!userCanSync) return
@@ -369,7 +413,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     // Pour les non-admins qui ont la perm, on la garde dans Outils.
     { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && !admin && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
-    { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user) },
+    { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user), badge: convBadge.unassigned + convBadge.unread, convBadge },
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },
     { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users) },
@@ -378,7 +422,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // ============================================================
   // Composants helper
   // ============================================================
-  function NavButton({ emoji, label, isActive, badgeCount = 0, onClick }) {
+  function NavButton({ emoji, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
     return (
       <button
         onClick={onClick}
@@ -390,7 +434,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       >
         <span>{emoji}</span>
         <span>{label}</span>
-        {badgeCount > 0 && (
+        {convBadge ? (
+          <ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} />
+        ) : badgeCount > 0 && (
           <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center text-[12px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
             {badgeCount > 99 ? '99+' : badgeCount}
           </span>
@@ -451,11 +497,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                       <span className="text-[14px]">{item.emoji}</span>
                       <span>{item.label}</span>
                     </span>
-                    {item.badge > 0 && (
+                    {item.convBadge ? (
+                      <ConvBadgePills unassigned={item.convBadge.unassigned} unread={item.convBadge.unread} absolute={false} />
+                    ) : item.badge > 0 ? (
                       <span className="min-w-[20px] h-[20px] px-1.5 flex items-center justify-center text-[11px] font-bold bg-red-600 text-white rounded-full">
                         {item.badge}
                       </span>
-                    )}
+                    ) : null}
                   </button>
                 )
               })}
@@ -542,6 +590,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                     label={item.label}
                     isActive={activeView === item.view}
                     badgeCount={item.badge || 0}
+                    convBadge={item.convBadge}
                     onClick={() => {
                       if (item.externalUrl) {
                         window.open(item.externalUrl, '_blank', 'noopener,noreferrer')
@@ -635,6 +684,29 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       {showAdminUsers && <AdminUsers currentUser={user} onClose={() => setShowAdminUsers(false)} />}
       {showPalette && <AdminGmConfig onClose={() => setShowPalette(false)} />}
     </>
+  )
+}
+
+// Double pastille Conversations : 🟠 non assignées (à prendre) + 🔴 non lus.
+// absolute=true -> positionné en coin (NavButton) ; false -> inline (dropdown).
+function ConvBadgePills({ unassigned = 0, unread = 0, absolute = true }) {
+  if (!unassigned && !unread) return null
+  const wrap = absolute
+    ? 'absolute -top-2 -right-2 flex items-center gap-0.5'
+    : 'flex items-center gap-1'
+  return (
+    <span className={wrap}>
+      {unassigned > 0 && (
+        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-amber-500 text-white rounded-full border-2 border-cream shadow" title="À prendre (non assignées)">
+          {unassigned > 99 ? '99+' : unassigned}
+        </span>
+      )}
+      {unread > 0 && (
+        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow" title="Non lus">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </span>
   )
 }
 

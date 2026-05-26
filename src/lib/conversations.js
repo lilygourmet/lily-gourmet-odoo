@@ -31,6 +31,40 @@ export async function loadConversations(filter = 'all', userId = null) {
 }
 
 /**
+ * Compte pour le badge de l'onglet : { unassigned, unread }.
+ * - unassigned = conversations status='non_assignee' (à prendre).
+ * - unread = conversations dont last_inbound_at > dernière visite du user.
+ *   Si jamais visité (lastVisited null) → toutes celles ayant reçu un message.
+ */
+export async function countConversationBadges(lastVisited) {
+  const { count: unassigned } = await supabase
+    .from('conversations')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'non_assignee')
+
+  let unreadQuery = supabase
+    .from('conversations')
+    .select('id', { count: 'exact', head: true })
+  unreadQuery = lastVisited
+    ? unreadQuery.gt('last_inbound_at', lastVisited)
+    : unreadQuery.not('last_inbound_at', 'is', null)
+  const { count: unread } = await unreadQuery
+
+  return { unassigned: unassigned || 0, unread: unread || 0 }
+}
+
+/**
+ * Mémorise que le user vient de visiter l'onglet Conversations (remet "non lus" à 0).
+ */
+export async function markConversationsVisited(userId) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ last_visited_conversations: new Date().toISOString() })
+    .eq('id', userId)
+  if (error) throw error
+}
+
+/**
  * Charge une conversation seule (pour la vue détail).
  */
 export async function loadConversation(conversationId) {
