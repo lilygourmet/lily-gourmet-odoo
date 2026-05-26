@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { loadConversations } from '../../lib/conversations'
+import { loadConversations, conversationUrgency } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
 import ConversationDetail from './ConversationDetail'
@@ -83,6 +83,8 @@ export default function InboxView({ user, initialConversationId }) {
       <div className="space-y-2">
         {conversations.map(c => {
           const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
+          const u = conversationUrgency(c)
+          const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'
           return (
             <button
               key={c.id}
@@ -90,7 +92,10 @@ export default function InboxView({ user, initialConversationId }) {
               className="w-full text-left bg-cream-warm rounded-lg border border-line p-3 hover:border-bordeaux transition-colors"
             >
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[14px] font-medium text-ink truncate">{c.client_name || c.client_phone}</span>
+                <span className="text-[14px] font-medium text-ink truncate flex items-center gap-1.5 min-w-0">
+                  {u && <span className="flex-shrink-0">{u.emoji}</span>}
+                  <span className="truncate">{c.client_name || c.client_phone}</span>
+                </span>
                 <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
@@ -99,6 +104,9 @@ export default function InboxView({ user, initialConversationId }) {
                   {st.text}{c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}
                 </span>
               </div>
+              {u && u.text && (
+                <div className={`text-[11px] mt-1 ${toneClass}`}>{u.text}</div>
+              )}
             </button>
           )
         })}

@@ -30,6 +30,45 @@ export async function loadConversations(filter = 'all', userId = null) {
   return data || []
 }
 
+// Durée écoulée, format court : "10 min", "2h", "1 jour", "3 jours".
+function formatElapsed(ts) {
+  const min = Math.floor((Date.now() - ts) / 60000)
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h}h`
+  const d = Math.floor(h / 24)
+  return d === 1 ? '1 jour' : `${d} jours`
+}
+
+/**
+ * État d'urgence d'une conversation pour la liste (emoji + texte + ton).
+ * Retourne null si rien à signaler (échange normal récent).
+ * Priorité : fermée > client attend +30min > silence +3j > non assignée.
+ */
+export function conversationUrgency(conv) {
+  if (conv.status === 'fermee') return { emoji: '✅', text: 'Fermée', tone: 'muted' }
+
+  const now = Date.now()
+  const lastInbound = conv.last_inbound_at ? new Date(conv.last_inbound_at).getTime() : null
+  const lastMsg = conv.last_message_at ? new Date(conv.last_message_at).getTime() : null
+  // Le client a parlé en dernier si aucun message agent n'est venu après lui
+  const clientSpokeLast = lastInbound && (!lastMsg || lastMsg <= lastInbound)
+
+  // 🔴 client attend une réponse depuis > 30 min
+  if (clientSpokeLast && (now - lastInbound) > 30 * 60 * 1000) {
+    return { emoji: '🔴', text: `⏰ Attend une réponse depuis ${formatElapsed(lastInbound)}`, tone: 'urgent' }
+  }
+  // 🟡 silence client > 3 jours (l'agent a parlé en dernier, pas de réponse)
+  if (!clientSpokeLast && lastMsg && (now - lastMsg) > 3 * 24 * 60 * 60 * 1000) {
+    return { emoji: '🟡', text: `😴 Silence depuis ${formatElapsed(lastMsg)} - à relancer`, tone: 'warn' }
+  }
+  // 🆕 nouvelle conversation à prendre (non assignée récente)
+  if (conv.status === 'non_assignee') {
+    return { emoji: '🆕', text: 'Nouvelle conversation à prendre', tone: 'muted' }
+  }
+  return null
+}
+
 /**
  * Compte pour le badge de l'onglet : { unassigned, unread }.
  * - unassigned = conversations status='non_assignee' (à prendre).
