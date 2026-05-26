@@ -32,8 +32,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase env vars missing' })
   }
 
-  // Envoi sortant (depuis l'app, ?action=send) vs réception entrante (appel de Wati)
-  if (req.query?.action === 'send') return handleSend(req, res)
+  // Aiguillage selon ?action= ; sans action = réception entrante (appel de Wati)
+  const action = req.query?.action
+  if (action === 'send') return handleSend(req, res)
+  if (action === 'templates') return handleTemplates(req, res)
+  if (action === 'send-template') return handleSendTemplate(req, res)
   return handleInbound(req, res)
 }
 
@@ -187,6 +190,84 @@ async function handleSend(req, res) {
     return res.status(200).json({ ok: true, message: msg })
   } catch (e) {
     console.error('[wati-send]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// ============================================================
+// TEMPLATES — liste (action=templates) + envoi (action=send-template)
+// ============================================================
+async function handleTemplates(req, res) {
+  const apiToken = process.env.WATI_API_TOKEN
+  const apiEndpoint = process.env.WATI_API_ENDPOINT
+  if (!apiToken || !apiEndpoint) {
+    return res.status(500).json({ error: 'WATI_API_TOKEN / WATI_API_ENDPOINT manquant' })
+  }
+  const base = apiEndpoint.replace(/\/$/, '')
+  const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
+  try {
+    const r = await fetch(`${base}/api/v1/getMessageTemplates?pageSize=100&pageNumber=1`, {
+      method: 'GET',
+      headers: { Authorization: authHeader, Accept: 'application/json' },
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) return res.status(502).json({ error: `Wati templates erreur ${r.status}` })
+    const list = data.messageTemplates || data.templates || data.data || []
+    return res.status(200).json({ templates: list })
+  } catch (e) {
+    console.error('[wati-templates]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+async function handleSendTemplate(req, res) {
+  const apiToken = process.env.WATI_API_TOKEN
+  const apiEndpoint = process.env.WATI_API_ENDPOINT
+  if (!apiToken || !apiEndpoint) {
+    return res.status(500).json({ error: 'WATI_API_TOKEN / WATI_API_ENDPOINT manquant' })
+  }
+  const { clientPhone, templateName, broadcastName, parameters, userId } = req.body || {}
+  if (!clientPhone || !templateName) {
+    return res.status(400).json({ error: 'clientPhone et templateName requis' })
+  }
+  const number = String(clientPhone).replace(/\D/g, '')
+  const base = apiEndpoint.replace(/\/$/, '')
+  const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  try {
+    const r = await fetch(`${base}/api/v1/sendTemplateMessage/${number}`, {
+      method: 'POST',
+      headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        template_name: templateName,
+        broadcast_name: broadcastName || `lily_${Date.now()}`,
+        parameters: parameters || [],
+      }),
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok || data?.result === false) {
+      return res.status(502).json({ error: data?.info || data?.message || `Wati erreur ${r.status}` })
+    }
+
+    // Crée/maj le fil + trace le message sortant
+    const conv = await getOrCreateConversation(supabase, number, null)
+    const sentAt = new Date().toISOString()
+    await supabase.from('messages').insert({
+      conversation_id: conv.id,
+      sender_type: 'agent',
+      sender_user_id: userId || null,
+      body: `[Template] ${templateName}`,
+      sent_at: sentAt,
+      wa_message_id: data?.id || data?.messageId || null,
+    })
+    await supabase.from('conversations')
+      .update({ last_message_at: sentAt, updated_at: sentAt, status: 'en_cours' })
+      .eq('id', conv.id)
+
+    return res.status(200).json({ ok: true, conversationId: conv.id })
+  } catch (e) {
+    console.error('[wati-send-template]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

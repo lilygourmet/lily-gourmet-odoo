@@ -172,6 +172,30 @@ export async function assignConversation(conversationId, userId) {
 }
 
 // ============================================================
+// TEMPLATES (initier une conversation)
+// ============================================================
+
+/** Liste des templates WhatsApp approuvés (via Wati). */
+export async function fetchTemplates() {
+  const res = await fetch('/api/wati-webhook?action=templates', { method: 'POST' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.templates || []
+}
+
+/** Envoie un message template (initie une conversation). */
+export async function sendTemplate({ clientPhone, templateName, broadcastName, parameters, userId }) {
+  const res = await fetch('/api/wati-webhook?action=send-template', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientPhone, templateName, broadcastName, parameters, userId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data
+}
+
+// ============================================================
 // ENVOI (réponse d'un commercial)
 // ============================================================
 

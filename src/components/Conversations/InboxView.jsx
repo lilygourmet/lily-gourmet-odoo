@@ -4,6 +4,7 @@ import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
 import ConversationDetail from './ConversationDetail'
+import NewConversationModal from './NewConversationModal'
 
 const FILTERS = [
   { key: 'all', label: 'Toutes' },
@@ -26,6 +27,7 @@ export default function InboxView({ user, initialConversationId }) {
   const [soundOn, setSoundOn] = useState(isDingEnabled())
   const [search, setSearch] = useState('')
   const [contentMatchIds, setContentMatchIds] = useState(() => new Set())
+  const [showNew, setShowNew] = useState(false)
 
   async function refresh() {
     setLoading(true)
@@ -82,9 +84,14 @@ export default function InboxView({ user, initialConversationId }) {
   return (
     <div className="max-w-3xl mx-auto p-4 pb-32">
       <h1 className="font-fraunces italic text-[26px] text-ink leading-none mb-1">Conversations</h1>
-      <p className="text-[12px] text-ink-mute mb-4 max-w-2xl">
+      <p className="text-[12px] text-ink-mute mb-3 max-w-2xl">
         Messages WhatsApp reçus. Clique « Je prends » pour t'occuper d'un client.
       </p>
+
+      <button
+        onClick={() => setShowNew(true)}
+        className="mb-3 px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all"
+      >+ Nouveau message</button>
 
       {/* Recherche */}
       <div className="relative mb-3">
@@ -167,6 +174,14 @@ export default function InboxView({ user, initialConversationId }) {
           )
         })}
       </div>
+
+      {showNew && (
+        <NewConversationModal
+          user={user}
+          onClose={() => setShowNew(false)}
+          onSent={(id) => { setShowNew(false); if (id) setSelectedId(id); refresh() }}
+        />
+      )}
     </div>
   )
 }
