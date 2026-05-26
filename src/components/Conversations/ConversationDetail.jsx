@@ -305,9 +305,16 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               }`}>
                 {m.media_url && (() => {
                   const href = m.media_url.startsWith('http') ? m.media_url : mediaUrls[m.id]
-                  const isAudio = /audio|voice|ptt/i.test(m.media_type || '') || /\.(ogg|webm|mp4|m4a|mp3|aac)$/i.test(m.media_url)
-                  if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? '🎤 Vocal…' : '📎 Pièce jointe…'}</span>
+                  const mt = m.media_type || ''
+                  const isAudio = /audio|voice|ptt/i.test(mt) || /\.(ogg|opus|webm|mp4|m4a|mp3|aac|amr)$/i.test(m.media_url)
+                  const isImage = /image/i.test(mt) || /\.(jpe?g|png|gif|webp)$/i.test(m.media_url)
+                  if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? '🎤 Vocal…' : isImage ? '🖼 Image…' : '📎 Pièce jointe…'}</span>
                   if (isAudio) return <audio controls src={href} className="block max-w-full mb-1" />
+                  if (isImage) return (
+                    <a href={href} target="_blank" rel="noopener noreferrer">
+                      <img src={href} alt="" className="block max-w-full rounded mb-1" />
+                    </a>
+                  )
                   return (
                     <a href={href} target="_blank" rel="noopener noreferrer" className="block text-[11px] underline mb-1 opacity-90">
                       📎 Pièce jointe

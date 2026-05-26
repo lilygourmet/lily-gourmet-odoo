@@ -76,12 +76,35 @@ async function handleInbound(req, res) {
   try {
     const conv = await getOrCreateConversation(supabase, phone, name)
 
+    // Anti-doublon : Wati renvoie aussi nos propres messages sortants (owner=true).
+    // Si l'app les a déjà enregistrés (sender_user_id rempli, récent), on ignore l'écho.
+    if (senderType === 'agent') {
+      const since = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+      let dupQuery = supabase.from('messages').select('id')
+        .eq('conversation_id', conv.id)
+        .eq('sender_type', 'agent')
+        .not('sender_user_id', 'is', null)
+        .gte('created_at', since)
+      dupQuery = body
+        ? dupQuery.eq('body', body)
+        : dupQuery.is('body', null).not('media_url', 'is', null)
+      const { data: dup } = await dupQuery.limit(1)
+      if (dup && dup.length > 0) return res.status(200).json({ ok: true, echoSkipped: true })
+    }
+
+    // Média entrant : le lien Wati exige le token -> on télécharge et on ré-héberge.
+    let storedMedia = mediaUrl
+    if (mediaUrl) {
+      const rehosted = await rehostWatiMedia(supabase, mediaUrl)
+      if (rehosted) storedMedia = rehosted
+    }
+
     // Insère le message (dédoublonné sur wa_message_id si Wati renvoie le webhook)
     const { error: msgErr } = await supabase.from('messages').insert({
       conversation_id: conv.id,
       sender_type: senderType,
       body: body || null,
-      media_url: mediaUrl || null,
+      media_url: storedMedia || null,
       media_type: (mediaUrl && type && type !== 'text') ? type : null,
       sent_at: sentAt,
       wa_message_id: waMsgId || null,
@@ -290,6 +313,41 @@ async function notifyConversationUsers(supabase, conversationId, title, body, me
     url: `/?conv=${conversationId}`,
     tag: `conv-${conversationId}`,
   })
+}
+
+// Extensions -> MIME autorisés par le bucket conversation-media
+const REHOST_MIME = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+  pdf: 'application/pdf',
+  opus: 'audio/ogg', ogg: 'audio/ogg', m4a: 'audio/mp4', mp4: 'audio/mp4',
+  mp3: 'audio/mpeg', aac: 'audio/aac', amr: 'audio/amr', webm: 'audio/webm',
+}
+
+// Télécharge un fichier Wati (lien protégé par le token) et le ré-héberge dans
+// le bucket conversation-media. Retourne le chemin stocké, ou null si échec
+// (dans ce cas on garde le lien Wati d'origine pour ne pas perdre le message).
+async function rehostWatiMedia(supabase, watiUrl) {
+  try {
+    const apiToken = process.env.WATI_API_TOKEN
+    if (!apiToken) return null
+    const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
+    const r = await fetch(watiUrl, { headers: { Authorization: authHeader } })
+    if (!r.ok) return null
+    const m = /fileName=([^&]+)/.exec(watiUrl)
+    const fileName = m ? decodeURIComponent(m[1]) : watiUrl
+    const ext = (fileName.split('.').pop() || '').toLowerCase()
+    const contentType = REHOST_MIME[ext]
+    if (!contentType) return null
+    const buf = Buffer.from(await r.arrayBuffer())
+    const path = `inbound/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage
+      .from('conversation-media')
+      .upload(path, buf, { contentType, upsert: false })
+    if (error) return null
+    return path
+  } catch (_) {
+    return null
+  }
 }
 
 // Retrouve le fil par numéro, sinon le crée.
