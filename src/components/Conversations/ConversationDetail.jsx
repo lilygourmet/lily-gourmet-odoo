@@ -558,52 +558,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             >{sending ? '…' : 'Envoyer ➤'}</button>
           </div>
         ) : (
-          <div className="flex items-end gap-2">
-            <label className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center cursor-pointer transition-all" title="Joindre une image ou un PDF (max 5 MB)">
-              📎
-              <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" />
-            </label>
-            <div className="relative flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowEmoji(v => !v)}
-                className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-                title="Emojis"
-              >😊</button>
-              {showEmoji && (
-                <>
-                  <div className="fixed inset-0 z-[90]" onClick={() => setShowEmoji(false)} />
-                  <div ref={emojiContainerRef} className="absolute bottom-11 left-0 z-[100]" />
-                </>
-              )}
-            </div>
-            <div className="relative flex-shrink-0">
-              <button
-                type="button"
-                onClick={openReplies}
-                className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-                title="Phrases types"
-              >💬</button>
-              {showReplies && (
-                <>
-                  <div className="fixed inset-0 z-[90]" onClick={() => setShowReplies(false)} />
-                  <div className="absolute bottom-11 left-0 z-[100] w-64 max-w-[80vw] bg-cream border border-line rounded-lg shadow-xl py-1 max-h-64 overflow-y-auto">
-                    {quickReplies.length === 0 ? (
-                      <div className="px-3 py-2 text-[11px] text-ink-mute italic">Aucune phrase. Ajoute-en via « 💬 Phrases » dans la liste.</div>
-                    ) : quickReplies.map(q => (
-                      <button
-                        key={q.id}
-                        onClick={() => { insertAtCursor(q.body); setShowReplies(false) }}
-                        className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-colors"
-                      >
-                        <div className="text-[12px] font-medium text-ink">{q.label}</div>
-                        <div className="text-[10px] text-ink-mute truncate">{q.body}</div>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+          <div className="flex flex-col gap-2">
             <textarea
               ref={textareaRef}
               value={text}
@@ -611,29 +566,76 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
               rows={1}
               placeholder="Écrire une réponse…"
-              className="flex-1 resize-none max-h-32 px-3 py-2 rounded-2xl border border-line bg-cream-warm text-[13px] text-ink focus:outline-none focus:border-bordeaux"
+              className="w-full resize-none max-h-32 px-3 py-2 rounded-2xl border border-line bg-cream-warm text-[13px] text-ink focus:outline-none focus:border-bordeaux"
             />
-            <button
-              type="button"
-              onClick={handleSuggest}
-              disabled={suggesting || sending}
-              className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
-              title="Suggérer 3 réponses (IA)"
-            >{suggesting ? '…' : '✨'}</button>
-            <button
-              type="button"
-              onClick={startRecording}
-              disabled={sending}
-              className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
-              title="Message vocal"
-            >🎤</button>
-            <button
-              onClick={handleSend}
-              disabled={sending || (!text.trim() && !file)}
-              className="px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
-            >
-              {sending ? '…' : 'Envoyer'}
-            </button>
+            <div className="flex items-center gap-2">
+              <label className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center cursor-pointer transition-all" title="Joindre une image ou un PDF (max 5 MB)">
+                📎
+                <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" />
+              </label>
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowEmoji(v => !v)}
+                  className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+                  title="Emojis"
+                >😊</button>
+                {showEmoji && (
+                  <>
+                    <div className="fixed inset-0 z-[90]" onClick={() => setShowEmoji(false)} />
+                    <div ref={emojiContainerRef} className="absolute bottom-11 left-0 z-[100]" />
+                  </>
+                )}
+              </div>
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={openReplies}
+                  className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+                  title="Phrases types"
+                >💬</button>
+                {showReplies && (
+                  <>
+                    <div className="fixed inset-0 z-[90]" onClick={() => setShowReplies(false)} />
+                    <div className="absolute bottom-11 left-0 z-[100] w-64 max-w-[80vw] bg-cream border border-line rounded-lg shadow-xl py-1 max-h-64 overflow-y-auto">
+                      {quickReplies.length === 0 ? (
+                        <div className="px-3 py-2 text-[11px] text-ink-mute italic">Aucune phrase. Ajoute-en via « 💬 Phrases » dans la liste.</div>
+                      ) : quickReplies.map(q => (
+                        <button
+                          key={q.id}
+                          onClick={() => { insertAtCursor(q.body); setShowReplies(false) }}
+                          className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-colors"
+                        >
+                          <div className="text-[12px] font-medium text-ink">{q.label}</div>
+                          <div className="text-[10px] text-ink-mute truncate">{q.body}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleSuggest}
+                disabled={suggesting || sending}
+                className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
+                title="Suggérer 3 réponses (IA)"
+              >{suggesting ? '…' : '✨'}</button>
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={sending}
+                className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
+                title="Message vocal"
+              >🎤</button>
+              <button
+                onClick={handleSend}
+                disabled={sending || (!text.trim() && !file)}
+                className="ml-auto px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
+              >
+                {sending ? '…' : 'Envoyer'}
+              </button>
+            </div>
           </div>
         )}
       </div>

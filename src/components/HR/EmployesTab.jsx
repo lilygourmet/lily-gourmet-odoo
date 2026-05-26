@@ -15,6 +15,16 @@ export default function EmployesTab({ user, isAdmin }) {
   const [search, setSearch] = useState('')
   const [editingEmp, setEditingEmp] = useState(null)
   const [revealedSalaries, setRevealedSalaries] = useState(new Set())
+  const [isMobile, setIsMobile] = useState(false)
+
+  // Détecte le petit écran (téléphone) pour basculer tableau -> cartes
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   // Date d'aujourd'hui pour calcul statut
   const todayStr = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
@@ -208,7 +218,7 @@ export default function EmployesTab({ user, isAdmin }) {
           {search ? 'Aucun employé trouvé.' : 'Aucun employé dans cette catégorie.'}
         </div>
       )}
-      {!loading && filtered.length > 0 && (
+      {!loading && filtered.length > 0 && !isMobile && (
         <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
@@ -293,6 +303,65 @@ export default function EmployesTab({ user, isAdmin }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Version mobile : cartes empilées */}
+      {!loading && filtered.length > 0 && isMobile && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtered.map(e => {
+            const statut = getStatutAujourdhui(e)
+            return (
+              <div
+                key={e.id}
+                onClick={() => setEditingEmp(e)}
+                style={{
+                  background: 'white', border: '1px solid #E8E2D8', borderRadius: 10,
+                  padding: 12, opacity: e.actif ? 1 : 0.6, cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <strong style={{ fontSize: 15 }}>{e.nom}</strong>
+                  <span style={{
+                    fontSize: 10, padding: '2px 8px', borderRadius: 999,
+                    background: e.societe?.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
+                    color: e.societe?.code === 'LG' ? '#993556' : '#27500A', fontWeight: 500,
+                  }}>{e.societe?.code || '—'}</span>
+                </div>
+                {e.poste && <div style={{ fontSize: 12, color: '#6F6A60', marginTop: 2 }}>{e.poste}</div>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 11, color: '#9B968D' }}>
+                  <span style={{
+                    fontSize: 10, padding: '3px 8px', borderRadius: 999,
+                    background: statut.bg, color: statut.color, fontWeight: 500, whiteSpace: 'nowrap',
+                  }}>{statut.label}</span>
+                  {e.cnss && <span>CNSS {e.cnss}</span>}
+                  {e.cin && <span>CIN {e.cin}</span>}
+                  {e.date_entree && <span>Entrée {fmtDate(e.date_entree)}</span>}
+                </div>
+                {isAdmin && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                    <span style={{ fontSize: 12 }}>
+                      {e.salaire_net ? (
+                        revealedSalaries.has(e.id) ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            {Number(e.salaire_net).toLocaleString('fr-FR')} dh
+                            <button onClick={ev => handleRevealSalary(ev, e.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0 }} title="Masquer">🙈</button>
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ letterSpacing: 2, color: '#9B968D' }}>•••••</span>
+                            <span style={{ color: '#9B968D', fontSize: 11 }}>dh</span>
+                            <button onClick={ev => handleRevealSalary(ev, e.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0 }} title="Révéler">👁</button>
+                          </span>
+                        )
+                      ) : <span style={{ color: '#9B968D' }}>—</span>}
+                    </span>
+                    <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">🗑️</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
