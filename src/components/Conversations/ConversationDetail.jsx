@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
+import { supabase } from '../../lib/supabase'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -100,6 +101,20 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   useEffect(() => { load() }, [conversationId])
+
+  // Temps réel : ajoute les nouveaux messages de cette conversation sans recharger
+  useEffect(() => {
+    const channel = supabase
+      .channel(`conv-thread-${conversationId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+        (payload) => {
+          const m = payload.new
+          setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, m])
+        })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [conversationId])
 
   // Génère les URL signées pour les pièces jointes stockées (chemin = pas une URL http)
   useEffect(() => {

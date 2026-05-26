@@ -3,6 +3,7 @@ import { loadConversations, conversationUrgency, searchMessageConversationIds } 
 import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
+import { supabase } from '../../lib/supabase'
 import ConversationDetail from './ConversationDetail'
 import NewConversationModal from './NewConversationModal'
 import QuickRepliesModal from './QuickRepliesModal'
@@ -36,8 +37,8 @@ export default function InboxView({ user, initialConversationId }) {
   // Dernière visite capturée au montage (pour repérer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
 
-  async function refresh() {
-    setLoading(true)
+  async function refresh(silent = false) {
+    if (!silent) setLoading(true)
     setError('')
     try {
       // Tous les filtres se calculent côté app -> on charge tout (chiffres justes)
@@ -46,11 +47,21 @@ export default function InboxView({ user, initialConversationId }) {
     } catch (e) {
       setError(e.message)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => { refresh() }, [filter])
+
+  // Temps réel : rafraîchit la liste quand une conversation change (nouveau message…)
+  useEffect(() => {
+    const channel = supabase
+      .channel('inbox-conversations')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => refresh(true))
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Abonne ce user aux notifs push Conversations (1re ouverture = demande de permission)
   useEffect(() => {
