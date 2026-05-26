@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { loadConversations, conversationUrgency, searchMessageConversationIds } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
@@ -33,6 +33,8 @@ export default function InboxView({ user, initialConversationId }) {
   const [showNew, setShowNew] = useState(false)
   const [showReplies, setShowReplies] = useState(false)
   const [agentFilter, setAgentFilter] = useState('all')
+  // Dernière visite capturée au montage (pour repérer les nouveaux messages reçus)
+  const visitedAtRef = useRef(user?.last_visited_conversations || null)
 
   async function refresh() {
     setLoading(true)
@@ -193,14 +195,16 @@ export default function InboxView({ user, initialConversationId }) {
           const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
           const u = conversationUrgency(c)
           const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'
+          const isNew = c.last_inbound_at && (!visitedAtRef.current || c.last_inbound_at > visitedAtRef.current)
           return (
             <button
               key={c.id}
               onClick={() => setSelectedId(c.id)}
-              className="w-full text-left bg-cream-warm rounded-lg border border-line p-3 hover:border-bordeaux transition-colors"
+              className={`w-full text-left rounded-lg border p-3 transition-colors hover:border-bordeaux ${isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'}`}
             >
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[14px] font-medium text-ink truncate flex items-center gap-1.5 min-w-0">
+                <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
+                  {isNew && <span className="w-2 h-2 rounded-full bg-bordeaux flex-shrink-0" />}
                   {u && <span className="flex-shrink-0">{u.emoji}</span>}
                   <span className="truncate">{c.client_name || c.client_phone}</span>
                 </span>

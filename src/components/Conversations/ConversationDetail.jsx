@@ -69,6 +69,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [showReplies, setShowReplies] = useState(false)
   const [quickReplies, setQuickReplies] = useState([])
   const [forwardMsg, setForwardMsg] = useState(null)
+  // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
+  const visitedAtRef = useRef(user?.last_visited_conversations || null)
   const textareaRef = useRef(null)
   const emojiContainerRef = useRef(null)
   const [recording, setRecording] = useState(false)
@@ -419,10 +421,11 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             )
           }
           const isAgent = m.sender_type === 'agent'
+          const isNewClient = !isAgent && m.sent_at && (!visitedAtRef.current || m.sent_at > visitedAtRef.current)
           return (
             <div key={m.id} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[80%] rounded-lg px-3 py-2 ${
-                isAgent ? 'bg-bordeaux text-cream' : 'bg-cream-warm text-ink border border-line'
+                isAgent ? 'bg-bordeaux text-cream' : isNewClient ? 'bg-amber-100 text-ink border border-amber-300' : 'bg-cream-warm text-ink border border-line'
               }`}>
                 {m.media_url && (() => {
                   const href = m.media_url.startsWith('http') ? m.media_url : mediaUrls[m.id]
