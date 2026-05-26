@@ -62,31 +62,25 @@ async function handleSubscribe(req, res) {
   return res.status(200).json({ ok: true })
 }
 
-// --- Envoie une notification push a tous les abonnes d'un role ---
-async function handleSend(req, res) {
-  if (!vapidPublic || !vapidPrivate) {
-    return res.status(500).json({ error: 'VAPID keys missing' })
-  }
-
-  const { role = 'cafe', title, body, url, tag } = req.body || {}
-  if (!title || !body) {
-    return res.status(400).json({ error: 'title et body requis' })
-  }
+// --- Coeur de l'envoi : cible par liste d'user_ids OU par role ---
+// Fonction reutilisable (appelee par le handler HTTP ET par d'autres fonctions
+// serveur, ex: api/wati-webhook.js pour les Conversations). Pas d'auth ici.
+export async function sendPushToTargets({ userIds, role = 'cafe', title, body, url, tag }) {
+  if (!vapidPublic || !vapidPrivate) throw new Error('VAPID keys missing')
+  if (!title || !body) throw new Error('title et body requis')
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-  // Recupere les abonnements actifs pour ce role
-  const { data: subs, error } = await supabase
-    .from('push_subscriptions')
-    .select('*')
-    .eq('role', role)
-  if (error) {
-    console.error('[push-send] supabase', error)
-    return res.status(500).json({ error: error.message })
+  // Ciblage : par user_ids si fourni, sinon par role (ancien comportement)
+  let query = supabase.from('push_subscriptions').select('*')
+  if (Array.isArray(userIds) && userIds.length > 0) {
+    query = query.in('user_id', userIds)
+  } else {
+    query = query.eq('role', role)
   }
-  if (!subs || subs.length === 0) {
-    return res.status(200).json({ sent: 0, total: 0, note: 'aucun abonne' })
-  }
+  const { data: subs, error } = await query
+  if (error) throw new Error(error.message)
+  if (!subs || subs.length === 0) return { sent: 0, total: 0, note: 'aucun abonne' }
 
   const payload = JSON.stringify({
     title,
@@ -98,32 +92,54 @@ async function handleSend(req, res) {
   let sent = 0
   const failedIds = []
   await Promise.all(subs.map(async (s) => {
-    const subscription = {
-      endpoint: s.endpoint,
-      keys: { p256dh: s.p256dh, auth: s.auth },
-    }
+    const subscription = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }
     try {
       await webpush.sendNotification(subscription, payload)
       sent++
     } catch (e) {
-      // 410 Gone ou 404 Not Found : l'abonnement n'est plus valide, on le supprime
+      // 410 Gone ou 404 : abonnement expire, on le supprime
       const status = e?.statusCode
-      if (status === 410 || status === 404) {
-        failedIds.push(s.id)
-      } else {
-        console.warn('[push-send] err for', s.endpoint, status, e?.message)
-      }
+      if (status === 410 || status === 404) failedIds.push(s.id)
+      else console.warn('[push-send] err for', s.endpoint, status, e?.message)
     }
   }))
 
-  // Nettoie les abonnements expires
   if (failedIds.length > 0) {
     await supabase.from('push_subscriptions').delete().in('id', failedIds)
   }
+  return { sent, total: subs.length, cleaned: failedIds.length }
+}
 
-  return res.status(200).json({
-    sent,
-    total: subs.length,
-    cleaned: failedIds.length,
-  })
+// --- Handler HTTP d'envoi ---
+// Secret obligatoire UNIQUEMENT pour le ciblage par user_ids (nouveau chemin).
+// Le ciblage par role (ancien cron Supabase pending-reception) reste SANS secret.
+async function handleSend(req, res) {
+  if (!vapidPublic || !vapidPrivate) {
+    return res.status(500).json({ error: 'VAPID keys missing' })
+  }
+
+  const { role = 'cafe', userIds, title, body, url, tag, secret } = req.body || {}
+  if (!title || !body) {
+    return res.status(400).json({ error: 'title et body requis' })
+  }
+
+  const usesUserIds = Array.isArray(userIds) && userIds.length > 0
+  if (usesUserIds) {
+    const internalSecret = process.env.PUSH_INTERNAL_SECRET
+    if (!internalSecret) {
+      return res.status(500).json({ error: 'PUSH_INTERNAL_SECRET non configuré' })
+    }
+    const provided = req.headers['x-internal-secret'] || secret
+    if (provided !== internalSecret) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+  }
+
+  try {
+    const result = await sendPushToTargets({ userIds, role, title, body, url, tag })
+    return res.status(200).json(result)
+  } catch (e) {
+    console.error('[push-send]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur' })
+  }
 }

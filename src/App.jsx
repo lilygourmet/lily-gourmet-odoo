@@ -25,6 +25,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   // Vue active : 'calendar' | 'recap' | 'patissier' | 'prod' | 'sales' | 'stock' | ...
   const [activeView, setActiveViewRaw] = useState('calendar')
+  // Conversation à ouvrir d'office (deep-link depuis une notif push)
+  const [deepLinkConv, setDeepLinkConv] = useState(null)
 
   // Wrapper pour setActiveView : persiste dans localStorage pour que Cmd+R
   // ramene l'utilisateur sur la meme page
@@ -83,7 +85,13 @@ function App() {
     // Priorite : on essaie de restaurer la derniere vue depuis localStorage.
     // Sinon fallback sur la vue par defaut du user.
     const persisted = getStoredActiveView()
-    if (persisted) {
+    // Deep-link depuis une notif push (/?conv=123) : ouvre direct la conversation
+    const convParam = new URLSearchParams(window.location.search).get('conv')
+    if (convParam) {
+      setActiveView('conversations')
+      setDeepLinkConv(Number(convParam))
+      try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
+    } else if (persisted) {
       setActiveView(persisted)
     } else {
       setActiveView(pickDefaultView(stored))
@@ -175,6 +183,7 @@ function App() {
   }
 
   function handleNavigate(view) {
+    setDeepLinkConv(null)
     setActiveView(view)
   }
 
@@ -206,7 +215,7 @@ function App() {
   if (activeView === 'stock-gs') return <StockGS {...navProps} />
   if (activeView === 'tasks') return <TasksWrapper {...navProps} />
   if (activeView === 'hr') return <HRWrapper {...navProps} />
-  if (activeView === 'conversations') return <ConversationsWrapper {...navProps} />
+  if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
   if (activeView === 'caisse') return <CaisseView {...navProps} />
   if (activeView === 'checklist') return <ChecklistView {...navProps} />
   // Default = Calendar
@@ -238,11 +247,11 @@ function HRWrapper(props) {
 }
 
 function ConversationsWrapper(props) {
-  const { user, onLogout, onNavigate, activeView } = props
+  const { user, onLogout, onNavigate, activeView, initialConversationId } = props
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
-      <InboxView user={user} />
+      <InboxView user={user} initialConversationId={initialConversationId} />
     </div>
   )
 }

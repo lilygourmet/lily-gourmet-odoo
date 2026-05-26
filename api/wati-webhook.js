@@ -19,6 +19,7 @@
 // Si Wati renvoie d'autres noms de champs, on ajuste les fallbacks ci-dessous.
 
 import { createClient } from '@supabase/supabase-js'
+import { sendPushToTargets } from './push.js'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -93,6 +94,13 @@ async function handleInbound(req, res) {
     if (senderType === 'client') patch.last_inbound_at = sentAt
     if (!conv.client_name && name) patch.client_name = name
     await supabase.from('conversations').update(patch).eq('id', conv.id)
+
+    // Notif push aux users ayant accès aux Conversations (entrant client seulement).
+    // Le push ne doit jamais faire échouer le webhook -> on isole avec catch.
+    if (senderType === 'client') {
+      await notifyConversationUsers(supabase, conv.id, name || conv.client_name || phone, body, mediaUrl)
+        .catch(e => console.warn('[wati push]', e?.message || e))
+    }
 
     return res.status(200).json({ ok: true })
   } catch (e) {
@@ -181,6 +189,24 @@ async function handleSend(req, res) {
     console.error('[wati-send]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
+}
+
+// Notif push aux users ayant accès aux Conversations (perm_conversations = true).
+async function notifyConversationUsers(supabase, conversationId, title, body, mediaUrl) {
+  const { data: users } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('perm_conversations', true)
+    .eq('active', true)
+  if (!users || users.length === 0) return
+  const preview = body ? body.slice(0, 50) : (mediaUrl ? '📎 Pièce jointe' : 'Nouveau message')
+  await sendPushToTargets({
+    userIds: users.map(u => u.id),
+    title: title || 'Nouveau message',
+    body: preview,
+    url: `/?conv=${conversationId}`,
+    tag: `conv-${conversationId}`,
+  })
 }
 
 // Retrouve le fil par numéro, sinon le crée.
