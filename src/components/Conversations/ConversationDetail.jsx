@@ -316,31 +316,31 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   return (
     <div className="max-w-3xl mx-auto p-4 pb-32">
       {/* En-tête : retour + infos contact + bouton Je prends (collant en haut) */}
-      <div className="sticky top-0 z-40 bg-cream flex items-center gap-2 flex-wrap -mx-4 px-4 py-2 mb-3 border-b border-line">
+      <div className="sticky top-0 z-40 bg-bordeaux text-cream flex items-center gap-2 flex-wrap -mx-4 px-4 py-2 mb-3 shadow-sm">
         <button
           onClick={onBack}
-          className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+          className="w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
           title="Retour à la liste"
         >←</button>
         <button
           onClick={() => setThreadSearchOpen(o => !o)}
-          className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+          className="w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
           title="Rechercher dans la conversation"
         >🔍</button>
         <div className="min-w-0 flex-1">
-          <div className="text-[16px] font-medium text-ink truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
-          {conv?.client_name && <div className="font-mono text-[11px] text-ink-mute">{conv.client_phone}</div>}
+          <div className="text-[16px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
+          {conv?.client_name && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
         </div>
         {conv && (
           conv.assigned_to ? (
-            <span className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-bordeaux/10 text-bordeaux flex-shrink-0">
+            <span className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-cream/15 text-cream flex-shrink-0">
               {conv.assigned_to === user.id ? 'À moi' : `Pris par ${conv.assigned?.full_name || conv.assigned?.username || '?'}`}
             </span>
           ) : (
             <button
               onClick={handleAssign}
               disabled={assigning}
-              className="px-4 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60"
+              className="px-4 py-1.5 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60"
             >
               {assigning ? '…' : 'Je prends'}
             </button>
@@ -351,13 +351,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             <button
               onClick={handleReopen}
               disabled={statusBusy}
-              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-line text-ink-soft hover:bg-cream-warm transition-all flex-shrink-0 disabled:opacity-60"
+              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60"
             >Rouvrir</button>
           ) : (
             <button
               onClick={handleClose}
               disabled={statusBusy}
-              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-line text-ink-soft hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-all flex-shrink-0 disabled:opacity-60"
+              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60"
             >Clôturer</button>
           )
         )}
