@@ -17,8 +17,9 @@ import CaisseView from './components/Caisse/CaisseView'
 import TasksView from './components/Tasks/TasksView'
 import HRView from './components/HR/HRView'
 import InboxView from './components/Conversations/InboxView'
+import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar } from './lib/auth'
+import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations } from './lib/auth'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -202,30 +203,47 @@ function App() {
   // Communs : passer activeView, onNavigate, onLogout, user
   const navProps = { user, activeView, onNavigate: handleNavigate, onLogout: handleLogout }
 
-  if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
-  if (activeView === 'patissier') return <PatissierView {...navProps} />
-  if (activeView === 'prod') return <ProdView {...navProps} forcedCategory="prod" />
-  if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
-  if (activeView === 'freezer') return <FreezerView {...navProps} />
-  if (activeView === 'messages') return <MessagesView {...navProps} />
-  if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
-  if (activeView === 'vitrine') return <StockMorning {...navProps} mode="sucre" />
-  if (activeView === 'vitrine-sale') return <StockMorning {...navProps} mode="sale" />
-  if (activeView === 'reception-vitrine') return <StockReception {...navProps} />
-  if (activeView === 'fin-journee') return <StockEvening {...navProps} />
-  if (activeView === 'stock') return <StockAudit {...navProps} />
-  if (activeView === 'stock-gs') return <StockGS {...navProps} />
-  if (activeView === 'tasks') return <TasksWrapper {...navProps} />
-  if (activeView === 'hr') return <HRWrapper {...navProps} />
-  if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
-  if (activeView === 'caisse') return <CaisseView {...navProps} />
-  if (activeView === 'checklist') return <ChecklistView {...navProps} />
-  // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
-  // Sinon repli sûr (livreur -> Récap, autres -> Tâches) pour ne jamais
-  // exposer le calendrier à un user sans perm_calendar.
-  if (canSeeCalendar(user)) return <Calendar {...navProps} />
-  if (isLivreur(user)) return <RecapVentes {...navProps} fullscreen />
-  return <TasksWrapper {...navProps} />
+  // Ouvre une conversation précise (depuis un toast)
+  function openConversation(convId) {
+    setDeepLinkConv(convId)
+    setActiveView('conversations')
+  }
+
+  function renderActiveView() {
+    if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
+    if (activeView === 'patissier') return <PatissierView {...navProps} />
+    if (activeView === 'prod') return <ProdView {...navProps} forcedCategory="prod" />
+    if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
+    if (activeView === 'freezer') return <FreezerView {...navProps} />
+    if (activeView === 'messages') return <MessagesView {...navProps} />
+    if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
+    if (activeView === 'vitrine') return <StockMorning {...navProps} mode="sucre" />
+    if (activeView === 'vitrine-sale') return <StockMorning {...navProps} mode="sale" />
+    if (activeView === 'reception-vitrine') return <StockReception {...navProps} />
+    if (activeView === 'fin-journee') return <StockEvening {...navProps} />
+    if (activeView === 'stock') return <StockAudit {...navProps} />
+    if (activeView === 'stock-gs') return <StockGS {...navProps} />
+    if (activeView === 'tasks') return <TasksWrapper {...navProps} />
+    if (activeView === 'hr') return <HRWrapper {...navProps} />
+    if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
+    if (activeView === 'caisse') return <CaisseView {...navProps} />
+    if (activeView === 'checklist') return <ChecklistView {...navProps} />
+    // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
+    // Sinon repli sûr (livreur -> Récap, autres -> Tâches) pour ne jamais
+    // exposer le calendrier à un user sans perm_calendar.
+    if (canSeeCalendar(user)) return <Calendar {...navProps} />
+    if (isLivreur(user)) return <RecapVentes {...navProps} fullscreen />
+    return <TasksWrapper {...navProps} />
+  }
+
+  return (
+    <>
+      {canSeeConversations(user) && (
+        <ConversationNotifier user={user} onOpen={openConversation} />
+      )}
+      {renderActiveView()}
+    </>
+  )
 }
 
 // ============================================================
