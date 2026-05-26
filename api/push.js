@@ -1,6 +1,10 @@
-// /api/push-send.js
-// Endpoint Vercel : envoie une notification push a tous les abonnes d'un role.
-// Appele typiquement par la vitrine apres avoir envoye des articles au cafe.
+// /api/push.js
+// Endpoint Vercel regroupant 2 actions push (distinguees par ?action=) :
+//   - ?action=subscribe : enregistre l'abonnement push d'un user dans Supabase
+//   - ?action=send      : envoie une notification push a tous les abonnes d'un role
+// Fusion de push-subscribe.js + push-send.js (1 seule fonction pour rester sous
+// la limite Hobby de 12 fonctions). Les anciennes URLs sont preservees via des
+// rewrites dans vercel.json.
 
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
@@ -22,6 +26,44 @@ export default async function handler(req, res) {
   if (!supabaseUrl || !supabaseServiceKey) {
     return res.status(500).json({ error: 'Supabase env vars missing' })
   }
+
+  const action = req.query?.action
+  if (action === 'subscribe') return handleSubscribe(req, res)
+  if (action === 'send') return handleSend(req, res)
+  return res.status(400).json({ error: "action requise : 'subscribe' ou 'send'" })
+}
+
+// --- Enregistre l'abonnement push d'un user dans Supabase ---
+async function handleSubscribe(req, res) {
+  const { user_id, role, subscription } = req.body || {}
+  if (!user_id || !subscription || !subscription.endpoint) {
+    return res.status(400).json({ error: 'user_id + subscription.endpoint requis' })
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  // Upsert sur (endpoint) : si l'endpoint existe deja on met a jour le user/role
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .upsert({
+      user_id,
+      role: role || 'cafe',
+      endpoint: subscription.endpoint,
+      p256dh: subscription.keys?.p256dh || '',
+      auth: subscription.keys?.auth || '',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'endpoint' })
+
+  if (error) {
+    console.error('[push-subscribe]', error)
+    return res.status(500).json({ error: error.message })
+  }
+
+  return res.status(200).json({ ok: true })
+}
+
+// --- Envoie une notification push a tous les abonnes d'un role ---
+async function handleSend(req, res) {
   if (!vapidPublic || !vapidPrivate) {
     return res.status(500).json({ error: 'VAPID keys missing' })
   }

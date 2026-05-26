@@ -85,7 +85,7 @@ export async function subscribeToPush(userId, role = 'cafe') {
 
   // 4. Envoie l'abonnement au backend pour stockage
   try {
-    const r = await fetch('/api/push-subscribe', {
+    const r = await fetch('/api/push?action=subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
