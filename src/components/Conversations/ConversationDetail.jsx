@@ -102,14 +102,16 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   useEffect(() => { load() }, [conversationId])
 
-  // Temps réel : ajoute les nouveaux messages de cette conversation sans recharger
+  // Temps réel : ajoute les nouveaux messages de cette conversation sans recharger.
+  // Pas de filtre serveur (peu fiable) -> on filtre côté app par conversation_id.
   useEffect(() => {
     const channel = supabase
       .channel(`conv-thread-${conversationId}`)
       .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+        { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
           const m = payload.new
+          if (!m || Number(m.conversation_id) !== Number(conversationId)) return
           setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, m])
         })
       .subscribe()
