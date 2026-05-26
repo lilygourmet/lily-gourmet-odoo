@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { playDing } from '../../lib/ding'
 
 // Affiche un toast en haut à droite à chaque nouveau message CLIENT, sur toute
 // l'app (pas seulement l'onglet Conversations). Empilable, auto-dismiss 5 s,
@@ -34,6 +35,7 @@ export default function ConversationNotifier({ user, onOpen }) {
           if (cancelled) return
           const preview = m.body ? m.body.slice(0, 60) : '📎 Pièce jointe'
           const id = `${m.id}-${Date.now()}`
+          playDing()
           setToasts(prev => [...prev, { id, conversationId: m.conversation_id, title, preview }])
           setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id))

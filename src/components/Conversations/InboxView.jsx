@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { loadConversations, conversationUrgency } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
+import { isDingEnabled, setDingEnabled } from '../../lib/ding'
 import ConversationDetail from './ConversationDetail'
 
 const FILTERS = [
@@ -22,6 +23,7 @@ export default function InboxView({ user, initialConversationId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(initialConversationId || null)
+  const [soundOn, setSoundOn] = useState(isDingEnabled())
 
   async function refresh() {
     setLoading(true)
@@ -61,17 +63,26 @@ export default function InboxView({ user, initialConversationId }) {
         Messages WhatsApp reçus. Clique « Je prends » pour t'occuper d'un client.
       </p>
 
-      {/* Filtres */}
-      <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line mb-4">
-        {FILTERS.map(f => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-              filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
-            }`}
-          >{f.label}</button>
-        ))}
+      {/* Filtres + toggle son */}
+      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+        <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line">
+          {FILTERS.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+              }`}
+            >{f.label}</button>
+          ))}
+        </div>
+        <button
+          onClick={() => { const next = !soundOn; setDingEnabled(next); setSoundOn(next) }}
+          className="px-3 py-1.5 rounded-full border border-line text-[13px] hover:border-bordeaux transition-colors flex-shrink-0"
+          title={soundOn ? 'Son activé (cliquer pour couper)' : 'Son coupé (cliquer pour activer)'}
+        >
+          {soundOn ? '🔊' : '🔇'}
+        </button>
       </div>
 
       {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
