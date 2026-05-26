@@ -17,10 +17,18 @@ const GS_SUCRE_PATTERNS = [
   /^GS-\s*cookies?\b/i,
 ]
 
-function isGsSucre(productName) {
+export function isGsSucre(productName) {
   if (!productName) return false
   const cleaned = String(productName).replace(/^\[\d+\]\s*/, '').trim()
   return GS_SUCRE_PATTERNS.some(rx => rx.test(cleaned))
+}
+
+// Un produit est "salé" (Vitrine Salé) : catégorie SU-, ou GS- non-sucré.
+export function isSaleProduct(productName) {
+  const cleaned = String(productName || '').replace(/^\[\d+\]\s*/, '').trim()
+  if (cleaned.startsWith('SU-')) return true
+  if (cleaned.startsWith('GS-') && !isGsSucre(cleaned)) return true
+  return false
 }
 
 export default function ProductGrid({

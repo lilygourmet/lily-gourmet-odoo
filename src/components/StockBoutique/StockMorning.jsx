@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from '../AppHeader'
-import ProductGrid from './ProductGrid'
+import ProductGrid, { isSaleProduct } from './ProductGrid'
 import PrintButton from './PrintButton'
 import {
   getOrCreateStockDay,
@@ -150,11 +150,17 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
   }
 
   // Articles déjà envoyés (visibles dans la zone "Envoyés ce matin")
+  // Filtré selon le mode : salé -> uniquement produits salés ; sucré -> uniquement sucrés.
   const sentItems = useMemo(() => {
-    return todayItems.filter(it => it.source === 'morning').sort((a, b) => {
-      return new Date(b.announced_at || b.created_at) - new Date(a.announced_at || a.created_at)
-    })
-  }, [todayItems])
+    return todayItems
+      .filter(it => it.source === 'morning')
+      .filter(it => {
+        if (mode === 'sale') return isSaleProduct(it.product_name)
+        if (mode === 'sucre') return !isSaleProduct(it.product_name)
+        return true
+      })
+      .sort((a, b) => new Date(b.announced_at || b.created_at) - new Date(a.announced_at || a.created_at))
+  }, [todayItems, mode])
 
   // Filtre les leftovers selon le mode (sucré / salé)
   const filteredLeftovers = leftovers.filter(l => {
