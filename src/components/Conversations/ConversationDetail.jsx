@@ -22,6 +22,33 @@ function pickAudioMime() {
   return ''
 }
 
+// Compte les occurrences d'un terme dans un texte (insensible à la casse).
+function countOccurrences(text, term) {
+  const s = text.toLowerCase(); const t = term.toLowerCase()
+  let n = 0, from = 0
+  while (true) { const i = s.indexOf(t, from); if (i === -1) break; n++; from = i + t.length }
+  return n
+}
+
+// Surligne chaque occurrence ; nextIndex() attribue un id global pour la navigation.
+function renderHighlighted(text, term, nextIndex, activeIndex) {
+  const out = []; const s = text.toLowerCase(); const t = term.toLowerCase()
+  let from = 0, key = 0
+  while (true) {
+    const i = s.indexOf(t, from)
+    if (i === -1) { out.push(text.slice(from)); break }
+    if (i > from) out.push(text.slice(from, i))
+    const idx = nextIndex()
+    out.push(
+      <mark key={`m${key++}`} id={`tmatch-${idx}`} className={idx === activeIndex ? 'bg-amber-300 ring-2 ring-amber-500 rounded px-0.5' : 'bg-amber-200 rounded px-0.5'}>
+        {text.slice(i, i + t.length)}
+      </mark>
+    )
+    from = i + t.length
+  }
+  return out
+}
+
 export default function ConversationDetail({ conversationId, user, onBack }) {
   const [conv, setConv] = useState(null)
   const [messages, setMessages] = useState([])
@@ -33,6 +60,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [statusBusy, setStatusBusy] = useState(false)
+  const [threadSearchOpen, setThreadSearchOpen] = useState(false)
+  const [threadSearch, setThreadSearch] = useState('')
+  const [matchIndex, setMatchIndex] = useState(0)
   const [mediaUrls, setMediaUrls] = useState({}) // messageId -> URL signée
   const [showEmoji, setShowEmoji] = useState(false)
   const textareaRef = useRef(null)
@@ -265,6 +295,24 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     finally { setStatusBusy(false) }
   }
 
+  // Recherche dans le fil : remet à zéro la position quand le terme change
+  useEffect(() => { setMatchIndex(0) }, [threadSearch])
+  // Défile jusqu'à l'occurrence active
+  useEffect(() => {
+    if (!threadSearch.trim()) return
+    const el = document.getElementById(`tmatch-${matchIndex}`)
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [matchIndex, threadSearch, messages])
+
+  const threadTerm = threadSearch.trim()
+  const threadMatches = threadTerm
+    ? messages.reduce((acc, m) => acc + (m.sender_type !== 'system' && m.body ? countOccurrences(m.body, threadTerm) : 0), 0)
+    : 0
+  function nextMatch() { if (threadMatches) setMatchIndex(i => (i + 1) % threadMatches) }
+  function prevMatch() { if (threadMatches) setMatchIndex(i => (i - 1 + threadMatches) % threadMatches) }
+  let matchCounter = 0
+  const nextHl = () => matchCounter++
+
   return (
     <div className="max-w-3xl mx-auto p-4 pb-32">
       {/* En-tête : retour + infos contact + bouton Je prends */}
@@ -274,6 +322,11 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
           title="Retour à la liste"
         >←</button>
+        <button
+          onClick={() => setThreadSearchOpen(o => !o)}
+          className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+          title="Rechercher dans la conversation"
+        >🔍</button>
         <div className="min-w-0 flex-1">
           <div className="text-[16px] font-medium text-ink truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
           {conv?.client_name && <div className="font-mono text-[11px] text-ink-mute">{conv.client_phone}</div>}
@@ -309,6 +362,23 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           )
         )}
       </div>
+
+      {threadSearchOpen && (
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="text"
+            value={threadSearch}
+            onChange={e => setThreadSearch(e.target.value)}
+            autoFocus
+            placeholder="Chercher dans la conversation…"
+            className="flex-1 px-3 py-1.5 text-[13px] bg-cream-warm border border-line rounded-full focus:outline-none focus:border-bordeaux"
+          />
+          <span className="text-[11px] font-mono text-ink-mute flex-shrink-0">{threadMatches ? `${matchIndex + 1}/${threadMatches}` : '0/0'}</span>
+          <button onClick={prevMatch} disabled={!threadMatches} className="w-8 h-8 rounded-full border border-line text-ink-soft hover:bg-cream-warm disabled:opacity-40 flex-shrink-0" title="Précédent">↑</button>
+          <button onClick={nextMatch} disabled={!threadMatches} className="w-8 h-8 rounded-full border border-line text-ink-soft hover:bg-cream-warm disabled:opacity-40 flex-shrink-0" title="Suivant">↓</button>
+          <button onClick={() => { setThreadSearch(''); setThreadSearchOpen(false) }} className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex-shrink-0" title="Fermer">✕</button>
+        </div>
+      )}
 
       {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
       {error && <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded">{error}</div>}
@@ -351,7 +421,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     </a>
                   )
                 })()}
-                {m.body && <div className="text-[13px] whitespace-pre-wrap break-words">{m.body}</div>}
+                {m.body && <div className="text-[13px] whitespace-pre-wrap break-words">{threadTerm ? renderHighlighted(m.body, threadTerm, nextHl, matchIndex) : m.body}</div>}
                 <div className={`text-[9px] mt-1 ${isAgent ? 'text-cream/70' : 'text-ink-mute'}`}>
                   {isAgent && m.sender?.full_name ? `${m.sender.full_name} · ` : ''}{fmtTime(m.sent_at)}
                 </div>
