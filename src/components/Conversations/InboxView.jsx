@@ -5,6 +5,7 @@ import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
 import ConversationDetail from './ConversationDetail'
 import NewConversationModal from './NewConversationModal'
+import QuickRepliesModal from './QuickRepliesModal'
 
 const FILTERS = [
   { key: 'all', label: 'Toutes' },
@@ -30,6 +31,7 @@ export default function InboxView({ user, initialConversationId }) {
   const [search, setSearch] = useState('')
   const [contentMatchIds, setContentMatchIds] = useState(() => new Set())
   const [showNew, setShowNew] = useState(false)
+  const [showReplies, setShowReplies] = useState(false)
   const [agentFilter, setAgentFilter] = useState('all')
 
   async function refresh() {
@@ -102,10 +104,16 @@ export default function InboxView({ user, initialConversationId }) {
         Messages WhatsApp reçus. Clique « Je prends » pour t'occuper d'un client.
       </p>
 
-      <button
-        onClick={() => setShowNew(true)}
-        className="mb-3 px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all"
-      >+ Nouveau message</button>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <button
+          onClick={() => setShowNew(true)}
+          className="px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all"
+        >+ Nouveau message</button>
+        <button
+          onClick={() => setShowReplies(true)}
+          className="px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux hover:text-cream transition-all"
+        >💬 Phrases</button>
+      </div>
 
       {/* Recherche */}
       <div className="relative mb-3">
@@ -210,6 +218,7 @@ export default function InboxView({ user, initialConversationId }) {
           onSent={(id) => { setShowNew(false); if (id) setSelectedId(id); refresh() }}
         />
       )}
+      {showReplies && <QuickRepliesModal onClose={() => setShowReplies(false)} />}
     </div>
   )
 }

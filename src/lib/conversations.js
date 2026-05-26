@@ -205,6 +205,35 @@ export async function reopenConversation(conversationId, userId) {
 }
 
 // ============================================================
+// PHRASES TYPES (réponses rapides, communes à l'équipe)
+// ============================================================
+
+export async function loadQuickReplies() {
+  const { data, error } = await supabase
+    .from('quick_replies').select('*').order('ordre').order('id')
+  if (error) throw error
+  return data || []
+}
+
+export async function createQuickReply(label, body) {
+  const { data, error } = await supabase
+    .from('quick_replies').insert({ label: label.trim(), body }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateQuickReply(id, label, body) {
+  const { error } = await supabase
+    .from('quick_replies').update({ label: label.trim(), body }).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteQuickReply(id) {
+  const { error } = await supabase.from('quick_replies').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ============================================================
 // TEMPLATES (initier une conversation)
 // ============================================================
 

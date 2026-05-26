@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 
 function fmtTime(ts) {
@@ -65,6 +65,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [matchIndex, setMatchIndex] = useState(0)
   const [mediaUrls, setMediaUrls] = useState({}) // messageId -> URL signée
   const [showEmoji, setShowEmoji] = useState(false)
+  const [showReplies, setShowReplies] = useState(false)
+  const [quickReplies, setQuickReplies] = useState([])
   const textareaRef = useRef(null)
   const emojiContainerRef = useRef(null)
   const [recording, setRecording] = useState(false)
@@ -161,6 +163,23 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     if (f.size > 5 * 1024 * 1024) { setSendError('Fichier trop volumineux (max 5 MB).'); return }
     setSendError('')
     setFile(f)
+  }
+
+  // Insère un texte à la position du curseur dans la zone d'écriture
+  function insertAtCursor(snippet) {
+    const el = textareaRef.current
+    if (!el) { setText(t => t + snippet); return }
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? el.value.length
+    setText(el.value.slice(0, start) + snippet + el.value.slice(end))
+    requestAnimationFrame(() => { el.focus(); const p = start + snippet.length; el.setSelectionRange(p, p) })
+  }
+
+  async function openReplies() {
+    setShowReplies(o => !o)
+    if (quickReplies.length === 0) {
+      try { setQuickReplies(await loadQuickReplies()) } catch (_) { /* ignore */ }
+    }
   }
 
   async function handleSend() {
@@ -475,6 +494,33 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 <>
                   <div className="fixed inset-0 z-[90]" onClick={() => setShowEmoji(false)} />
                   <div ref={emojiContainerRef} className="absolute bottom-11 left-0 z-[100]" />
+                </>
+              )}
+            </div>
+            <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={openReplies}
+                className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+                title="Phrases types"
+              >💬</button>
+              {showReplies && (
+                <>
+                  <div className="fixed inset-0 z-[90]" onClick={() => setShowReplies(false)} />
+                  <div className="absolute bottom-11 left-0 z-[100] w-64 max-w-[80vw] bg-cream border border-line rounded-lg shadow-xl py-1 max-h-64 overflow-y-auto">
+                    {quickReplies.length === 0 ? (
+                      <div className="px-3 py-2 text-[11px] text-ink-mute italic">Aucune phrase. Ajoute-en via « 💬 Phrases » dans la liste.</div>
+                    ) : quickReplies.map(q => (
+                      <button
+                        key={q.id}
+                        onClick={() => { insertAtCursor(q.body); setShowReplies(false) }}
+                        className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-colors"
+                      >
+                        <div className="text-[12px] font-medium text-ink">{q.label}</div>
+                        <div className="text-[10px] text-ink-mute truncate">{q.body}</div>
+                      </button>
+                    ))}
+                  </div>
                 </>
               )}
             </div>
