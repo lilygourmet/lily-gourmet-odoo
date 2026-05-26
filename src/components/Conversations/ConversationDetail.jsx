@@ -315,8 +315,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   return (
     <div className="max-w-3xl mx-auto p-4 pb-32">
-      {/* En-tête : retour + infos contact + bouton Je prends */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      {/* En-tête : retour + infos contact + bouton Je prends (collant en haut) */}
+      <div className="sticky top-0 z-40 bg-cream flex items-center gap-2 flex-wrap -mx-4 px-4 py-2 mb-3 border-b border-line">
         <button
           onClick={onBack}
           className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
