@@ -127,8 +127,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     return () => window.removeEventListener('resize', measure)
   }, [])
 
-  // À l'ouverture d'une conversation, on remonte en haut de la page
-  useEffect(() => { window.scrollTo({ top: 0 }) }, [conversationId])
+  // Affiche les derniers messages en bas (comme WhatsApp). On remonte pour
+  // voir les anciens. On ne scrolle pas pendant une recherche dans le fil.
+  useEffect(() => {
+    if (threadSearch.trim() || messages.length === 0) return
+    requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight }))
+  }, [messages, threadSearch])
 
   // Génère les URL signées pour les pièces jointes stockées (chemin = pas une URL http)
   useEffect(() => {
