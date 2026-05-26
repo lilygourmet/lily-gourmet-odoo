@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { loadConversations } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
+import { subscribeToPush } from '../../lib/pushNotif'
 import ConversationDetail from './ConversationDetail'
 
 const FILTERS = [
@@ -15,12 +16,12 @@ const STATUS_LABEL = {
   fermee:       { text: 'Fermée',       cls: 'bg-line/40 text-ink-mute' },
 }
 
-export default function InboxView({ user }) {
+export default function InboxView({ user, initialConversationId }) {
   const [filter, setFilter] = useState('all')
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialConversationId || null)
 
   async function refresh() {
     setLoading(true)
@@ -36,6 +37,11 @@ export default function InboxView({ user }) {
   }
 
   useEffect(() => { refresh() }, [filter])
+
+  // Abonne ce user aux notifs push Conversations (1re ouverture = demande de permission)
+  useEffect(() => {
+    if (user?.id) subscribeToPush(user.id, 'conversations').catch(() => {})
+  }, [user?.id])
 
   // Vue détail : remplace la liste (retour via la flèche)
   if (selectedId) {

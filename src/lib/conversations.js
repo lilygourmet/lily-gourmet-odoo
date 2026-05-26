@@ -81,3 +81,60 @@ export async function assignConversation(conversationId, userId) {
 
   return data
 }
+
+// ============================================================
+// ENVOI (réponse d'un commercial)
+// ============================================================
+
+const MEDIA_BUCKET = 'conversation-media'
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+
+/**
+ * Upload d'une pièce jointe (image ou PDF) dans le bucket privé.
+ * Retourne le CHEMIN du fichier (on génère des URL signées à la demande).
+ */
+export async function uploadConversationMedia(file, userId) {
+  if (!file) return null
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('Fichier trop volumineux (max 5 MB)')
+  }
+  const ts = Date.now()
+  const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `${userId}/${ts}_${cleanName}`
+
+  const { error } = await supabase.storage
+    .from(MEDIA_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false })
+  if (error) throw error
+
+  return path
+}
+
+/**
+ * Génère une URL signée (lien temporaire, 1h) pour afficher une pièce jointe stockée.
+ */
+export async function getMediaSignedUrl(path) {
+  if (!path) return null
+  const { data, error } = await supabase.storage
+    .from(MEDIA_BUCKET)
+    .createSignedUrl(path, 3600)
+  if (error) throw error
+  return data?.signedUrl || null
+}
+
+/**
+ * Envoie un message (texte et/ou média) via Wati puis l'enregistre dans Supabase.
+ * Passe par la fonction serveur (le token Wati ne doit jamais être côté navigateur).
+ * `mediaPath` = chemin retourné par uploadConversationMedia (optionnel).
+ * Retourne le message inséré (avec l'expéditeur joint).
+ */
+export async function sendMessage({ conversationId, clientPhone, userId, text, mediaPath }) {
+  const res = await fetch('/api/wati-webhook?action=send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversationId, clientPhone, userId, text, mediaPath }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.message
+}

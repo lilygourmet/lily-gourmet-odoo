@@ -19,6 +19,7 @@
 // Si Wati renvoie d'autres noms de champs, on ajuste les fallbacks ci-dessous.
 
 import { createClient } from '@supabase/supabase-js'
+import { sendPushToTargets } from './push.js'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -31,6 +32,15 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase env vars missing' })
   }
 
+  // Envoi sortant (depuis l'app, ?action=send) vs réception entrante (appel de Wati)
+  if (req.query?.action === 'send') return handleSend(req, res)
+  return handleInbound(req, res)
+}
+
+// ============================================================
+// RÉCEPTION — Wati appelle cette URL (protégé par token dans l'URL)
+// ============================================================
+async function handleInbound(req, res) {
   // --- Sécurité : mot de passe partagé ---
   const secret = process.env.WATI_WEBHOOK_SECRET
   if (!secret) {
@@ -85,11 +95,118 @@ export default async function handler(req, res) {
     if (!conv.client_name && name) patch.client_name = name
     await supabase.from('conversations').update(patch).eq('id', conv.id)
 
+    // Notif push aux users ayant accès aux Conversations (entrant client seulement).
+    // Le push ne doit jamais faire échouer le webhook -> on isole avec catch.
+    if (senderType === 'client') {
+      await notifyConversationUsers(supabase, conv.id, name || conv.client_name || phone, body, mediaUrl)
+        .catch(e => console.warn('[wati push]', e?.message || e))
+    }
+
     return res.status(200).json({ ok: true })
   } catch (e) {
     console.error('[wati-webhook]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
+}
+
+// ============================================================
+// ENVOI — réponse d'un commercial (?action=send), appelé par l'app
+// ============================================================
+async function handleSend(req, res) {
+  const apiToken = process.env.WATI_API_TOKEN
+  const apiEndpoint = process.env.WATI_API_ENDPOINT
+  if (!apiToken || !apiEndpoint) {
+    return res.status(500).json({ error: 'WATI_API_TOKEN / WATI_API_ENDPOINT manquant' })
+  }
+
+  const { conversationId, clientPhone, userId, text, mediaPath } = req.body || {}
+  if (!conversationId || !clientPhone || !userId) {
+    return res.status(400).json({ error: 'conversationId, clientPhone, userId requis' })
+  }
+  if (!text && !mediaPath) {
+    return res.status(400).json({ error: 'texte ou pièce jointe requis' })
+  }
+
+  const number = String(clientPhone).replace(/\D/g, '') // chiffres uniquement (garde l'indicatif)
+  const base = apiEndpoint.replace(/\/$/, '')
+  const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  try {
+    // Si pièce jointe : URL signée temporaire pour que Wati puisse la récupérer
+    let fileUrl = null
+    if (mediaPath) {
+      const { data, error } = await supabase.storage
+        .from('conversation-media')
+        .createSignedUrl(mediaPath, 3600)
+      if (error) throw error
+      fileUrl = data?.signedUrl
+    }
+
+    // Appel Wati
+    let watiUrl
+    if (fileUrl) {
+      const qs = new URLSearchParams({ fileUrl })
+      if (text) qs.set('caption', text)
+      watiUrl = `${base}/api/v1/sendSessionFileViaUrl/${number}?${qs.toString()}`
+    } else {
+      const qs = new URLSearchParams({ messageText: text })
+      watiUrl = `${base}/api/v1/sendSessionMessage/${number}?${qs.toString()}`
+    }
+    const watiRes = await fetch(watiUrl, {
+      method: 'POST',
+      headers: { Authorization: authHeader, Accept: 'application/json' },
+    })
+    const watiData = await watiRes.json().catch(() => ({}))
+    if (!watiRes.ok || watiData?.result === false) {
+      const msg = watiData?.info || watiData?.message || `erreur ${watiRes.status}`
+      return res.status(502).json({ error: `Envoi WhatsApp refusé : ${msg}` })
+    }
+
+    // Enregistre le message (sortant) côté Supabase
+    const sentAt = new Date().toISOString()
+    const { data: msg, error: insErr } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_type: 'agent',
+        sender_user_id: userId,
+        body: text || null,
+        media_url: mediaPath || null,
+        sent_at: sentAt,
+        wa_message_id: watiData?.id || watiData?.messageId || null,
+      })
+      .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
+      .single()
+    if (insErr) throw insErr
+
+    await supabase.from('conversations')
+      .update({ last_message_at: sentAt, updated_at: sentAt })
+      .eq('id', conversationId)
+
+    return res.status(200).json({ ok: true, message: msg })
+  } catch (e) {
+    console.error('[wati-send]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Notif push aux users ayant accès aux Conversations (perm_conversations = true).
+async function notifyConversationUsers(supabase, conversationId, title, body, mediaUrl) {
+  const { data: users } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('perm_conversations', true)
+    .eq('active', true)
+  if (!users || users.length === 0) return
+  const preview = body ? body.slice(0, 50) : (mediaUrl ? '📎 Pièce jointe' : 'Nouveau message')
+  await sendPushToTargets({
+    userIds: users.map(u => u.id),
+    title: title || 'Nouveau message',
+    body: preview,
+    url: `/?conv=${conversationId}`,
+    tag: `conv-${conversationId}`,
+  })
 }
 
 // Retrouve le fil par numéro, sinon le crée.
