@@ -10,6 +10,8 @@ const FILTERS = [
   { key: 'all', label: 'Toutes' },
   { key: 'mine', label: 'À moi' },
   { key: 'unassigned', label: 'Non assignées' },
+  { key: 'waiting', label: '🔴 En attente' },
+  { key: 'followup', label: '🟡 À relancer' },
 ]
 
 const STATUS_LABEL = {
@@ -28,12 +30,15 @@ export default function InboxView({ user, initialConversationId }) {
   const [search, setSearch] = useState('')
   const [contentMatchIds, setContentMatchIds] = useState(() => new Set())
   const [showNew, setShowNew] = useState(false)
+  const [agentFilter, setAgentFilter] = useState('all')
 
   async function refresh() {
     setLoading(true)
     setError('')
     try {
-      const data = await loadConversations(filter, user.id)
+      // 'waiting'/'followup' se calculent côté app -> on charge tout
+      const serverFilter = (filter === 'mine' || filter === 'unassigned') ? filter : 'all'
+      const data = await loadConversations(serverFilter, user.id)
       setConversations(data)
     } catch (e) {
       setError(e.message)
@@ -74,8 +79,17 @@ export default function InboxView({ user, initialConversationId }) {
     )
   }
 
+  // Agents disponibles (déduits des conversations assignées)
+  const agentOptions = [...new Map(
+    conversations.filter(c => c.assigned).map(c => [c.assigned.id, c.assigned])
+  ).values()]
+
   const term = search.trim().toLowerCase()
-  const filtered = !term ? conversations : conversations.filter(c =>
+  let list = conversations
+  if (filter === 'waiting') list = list.filter(c => conversationUrgency(c)?.emoji === '🔴')
+  else if (filter === 'followup') list = list.filter(c => conversationUrgency(c)?.emoji === '🟡')
+  if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
+  const filtered = !term ? list : list.filter(c =>
     (c.client_name || '').toLowerCase().includes(term) ||
     (c.client_phone || '').toLowerCase().includes(term) ||
     contentMatchIds.has(c.id)
@@ -114,16 +128,30 @@ export default function InboxView({ user, initialConversationId }) {
 
       {/* Filtres + toggle son */}
       <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-        <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line">
-          {FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-                filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
-              }`}
-            >{f.label}</button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-wrap">
+            {FILTERS.map(f => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                  filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+                }`}
+              >{f.label}</button>
+            ))}
+          </div>
+          {agentOptions.length > 0 && (
+            <select
+              value={agentFilter}
+              onChange={e => setAgentFilter(e.target.value)}
+              className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux"
+            >
+              <option value="all">Tous les agents</option>
+              {agentOptions.map(a => (
+                <option key={a.id} value={a.id}>{a.full_name || a.username}</option>
+              ))}
+            </select>
+          )}
         </div>
         <button
           onClick={() => { const next = !soundOn; setDingEnabled(next); setSoundOn(next) }}
