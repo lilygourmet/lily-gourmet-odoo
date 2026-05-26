@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
+import ForwardModal from './ForwardModal'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -67,6 +68,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [showEmoji, setShowEmoji] = useState(false)
   const [showReplies, setShowReplies] = useState(false)
   const [quickReplies, setQuickReplies] = useState([])
+  const [forwardMsg, setForwardMsg] = useState(null)
   const textareaRef = useRef(null)
   const emojiContainerRef = useRef(null)
   const [recording, setRecording] = useState(false)
@@ -441,8 +443,15 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   )
                 })()}
                 {m.body && <div className="text-[13px] whitespace-pre-wrap break-words">{threadTerm ? renderHighlighted(m.body, threadTerm, nextHl, matchIndex) : m.body}</div>}
-                <div className={`text-[9px] mt-1 ${isAgent ? 'text-cream/70' : 'text-ink-mute'}`}>
-                  {isAgent && m.sender?.full_name ? `${m.sender.full_name} · ` : ''}{fmtTime(m.sent_at)}
+                <div className={`flex items-center gap-2 mt-1 ${isAgent ? 'justify-end' : ''}`}>
+                  <span className={`text-[9px] ${isAgent ? 'text-cream/70' : 'text-ink-mute'}`}>
+                    {isAgent && m.sender?.full_name ? `${m.sender.full_name} · ` : ''}{fmtTime(m.sent_at)}
+                  </span>
+                  <button
+                    onClick={() => setForwardMsg(m)}
+                    className={`text-[11px] leading-none ${isAgent ? 'text-cream/70 hover:text-cream' : 'text-ink-mute hover:text-bordeaux'}`}
+                    title="Transférer ce message"
+                  >↪</button>
                 </div>
               </div>
             </div>
@@ -550,6 +559,15 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           </div>
         )}
       </div>
+
+      {forwardMsg && (
+        <ForwardModal
+          sourceMessage={forwardMsg}
+          currentConversationId={conversationId}
+          user={user}
+          onClose={() => setForwardMsg(null)}
+        />
+      )}
     </div>
   )
 }
