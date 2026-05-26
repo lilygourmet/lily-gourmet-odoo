@@ -171,6 +171,39 @@ export async function assignConversation(conversationId, userId) {
   return data
 }
 
+/** Clôture une conversation (statut 'fermee'). */
+export async function closeConversation(conversationId, userId) {
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ status: 'fermee', updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .select(CONV_SEL)
+    .single()
+  if (error) throw error
+  await supabase.from('conversation_events').insert({
+    conversation_id: conversationId, type: 'closed', by_user_id: userId,
+  })
+  return data
+}
+
+/** Rouvre une conversation (en_cours si assignée, sinon non_assignee). */
+export async function reopenConversation(conversationId, userId) {
+  const { data: cur } = await supabase
+    .from('conversations').select('assigned_to').eq('id', conversationId).single()
+  const status = cur?.assigned_to ? 'en_cours' : 'non_assignee'
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .select(CONV_SEL)
+    .single()
+  if (error) throw error
+  await supabase.from('conversation_events').insert({
+    conversation_id: conversationId, type: 'reopened', by_user_id: userId,
+  })
+  return data
+}
+
 // ============================================================
 // TEMPLATES (initier une conversation)
 // ============================================================

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 
 function fmtTime(ts) {
@@ -32,6 +32,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [file, setFile] = useState(null)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [statusBusy, setStatusBusy] = useState(false)
   const [mediaUrls, setMediaUrls] = useState({}) // messageId -> URL signée
   const [showEmoji, setShowEmoji] = useState(false)
   const textareaRef = useRef(null)
@@ -250,10 +251,24 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     }
   }
 
+  async function handleClose() {
+    setStatusBusy(true)
+    try { setConv(await closeConversation(conversationId, user.id)) }
+    catch (e) { alert('Erreur : ' + e.message) }
+    finally { setStatusBusy(false) }
+  }
+
+  async function handleReopen() {
+    setStatusBusy(true)
+    try { setConv(await reopenConversation(conversationId, user.id)) }
+    catch (e) { alert('Erreur : ' + e.message) }
+    finally { setStatusBusy(false) }
+  }
+
   return (
     <div className="max-w-3xl mx-auto p-4 pb-32">
       {/* En-tête : retour + infos contact + bouton Je prends */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <button
           onClick={onBack}
           className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0"
@@ -276,6 +291,21 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             >
               {assigning ? '…' : 'Je prends'}
             </button>
+          )
+        )}
+        {conv && (
+          conv.status === 'fermee' ? (
+            <button
+              onClick={handleReopen}
+              disabled={statusBusy}
+              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-line text-ink-soft hover:bg-cream-warm transition-all flex-shrink-0 disabled:opacity-60"
+            >Rouvrir</button>
+          ) : (
+            <button
+              onClick={handleClose}
+              disabled={statusBusy}
+              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-line text-ink-soft hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-all flex-shrink-0 disabled:opacity-60"
+            >Clôturer</button>
           )
         )}
       </div>
