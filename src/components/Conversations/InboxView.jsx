@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { loadConversations, conversationUrgency } from '../../lib/conversations'
+import { loadConversations, conversationUrgency, searchMessageConversationIds } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
@@ -24,6 +24,8 @@ export default function InboxView({ user, initialConversationId }) {
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(initialConversationId || null)
   const [soundOn, setSoundOn] = useState(isDingEnabled())
+  const [search, setSearch] = useState('')
+  const [contentMatchIds, setContentMatchIds] = useState(() => new Set())
 
   async function refresh() {
     setLoading(true)
@@ -45,6 +47,20 @@ export default function InboxView({ user, initialConversationId }) {
     if (user?.id) subscribeToPush(user.id, 'conversations').catch(() => {})
   }, [user?.id])
 
+  // Recherche dans le contenu des messages (temporisée 300 ms, dès 2 caractères)
+  useEffect(() => {
+    const t = search.trim()
+    if (t.length < 2) { setContentMatchIds(new Set()); return }
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const ids = await searchMessageConversationIds(t)
+        if (!cancelled) setContentMatchIds(new Set(ids))
+      } catch (_) { /* ignore */ }
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [search])
+
   // Vue détail : remplace la liste (retour via la flèche)
   if (selectedId) {
     return (
@@ -56,12 +72,38 @@ export default function InboxView({ user, initialConversationId }) {
     )
   }
 
+  const term = search.trim().toLowerCase()
+  const filtered = !term ? conversations : conversations.filter(c =>
+    (c.client_name || '').toLowerCase().includes(term) ||
+    (c.client_phone || '').toLowerCase().includes(term) ||
+    contentMatchIds.has(c.id)
+  )
+
   return (
     <div className="max-w-3xl mx-auto p-4 pb-32">
       <h1 className="font-fraunces italic text-[26px] text-ink leading-none mb-1">Conversations</h1>
       <p className="text-[12px] text-ink-mute mb-4 max-w-2xl">
         Messages WhatsApp reçus. Clique « Je prends » pour t'occuper d'un client.
       </p>
+
+      {/* Recherche */}
+      <div className="relative mb-3">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute text-[13px]">🔍</span>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher (nom, numéro, message…)"
+          className="w-full pl-9 pr-9 py-2 text-[13px] bg-cream-warm border border-line rounded-full focus:outline-none focus:border-bordeaux"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-mute hover:text-bordeaux text-[14px]"
+            title="Effacer"
+          >✕</button>
+        )}
+      </div>
 
       {/* Filtres + toggle son */}
       <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
@@ -90,9 +132,12 @@ export default function InboxView({ user, initialConversationId }) {
       {!loading && !error && conversations.length === 0 && (
         <div className="text-center py-8 text-ink-mute italic">Aucune conversation.</div>
       )}
+      {!loading && !error && conversations.length > 0 && filtered.length === 0 && (
+        <div className="text-center py-8 text-ink-mute italic">Aucune conversation ne correspond à « {search} ».</div>
+      )}
 
       <div className="space-y-2">
-        {conversations.map(c => {
+        {filtered.map(c => {
           const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
           const u = conversationUrgency(c)
           const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'

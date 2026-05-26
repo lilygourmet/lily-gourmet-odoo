@@ -104,6 +104,22 @@ export async function markConversationsVisited(userId) {
 }
 
 /**
+ * Recherche dans le CONTENU des messages : renvoie les ids de conversations
+ * dont au moins un message contient le terme. Limité pour rester rapide.
+ */
+export async function searchMessageConversationIds(term) {
+  const t = (term || '').trim()
+  if (t.length < 2) return []
+  const { data, error } = await supabase
+    .from('messages')
+    .select('conversation_id')
+    .ilike('body', `%${t}%`)
+    .limit(200)
+  if (error) throw error
+  return [...new Set((data || []).map(m => m.conversation_id))]
+}
+
+/**
  * Charge une conversation seule (pour la vue détail).
  */
 export async function loadConversation(conversationId) {
