@@ -62,6 +62,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [statusBusy, setStatusBusy] = useState(false)
+  const [headerTop, setHeaderTop] = useState(0)
   const [threadSearchOpen, setThreadSearchOpen] = useState(false)
   const [threadSearch, setThreadSearch] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
@@ -117,6 +118,17 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [conversationId])
+
+  // Mesure la hauteur du bandeau de l'app pour poser l'en-tête juste en dessous
+  useEffect(() => {
+    function measure() { setHeaderTop(document.getElementById('app-header')?.offsetHeight || 0) }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+
+  // À l'ouverture d'une conversation, on remonte en haut de la page
+  useEffect(() => { window.scrollTo({ top: 0 }) }, [conversationId])
 
   // Génère les URL signées pour les pièces jointes stockées (chemin = pas une URL http)
   useEffect(() => {
@@ -356,7 +368,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   return (
     <div className="max-w-3xl mx-auto p-4 pb-32">
       {/* En-tête : retour + infos contact + bouton Je prends (collant en haut) */}
-      <div className="sticky top-0 z-40 bg-bordeaux text-cream flex items-center gap-2 flex-wrap -mx-4 px-4 py-2 mb-3 shadow-sm">
+      <div style={{ top: headerTop }} className="sticky z-20 bg-bordeaux text-cream flex items-center gap-2 flex-wrap -mx-4 px-4 py-2 mb-3 shadow-sm">
         <button
           onClick={onBack}
           className="w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
@@ -452,8 +464,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? '🎤 Vocal…' : isImage ? '🖼 Image…' : '📎 Pièce jointe…'}</span>
                   if (isAudio) return <audio controls src={href} className="block max-w-full mb-1" />
                   if (isImage) return (
-                    <a href={href} target="_blank" rel="noopener noreferrer">
-                      <img src={href} alt="" className="block max-w-full rounded mb-1" />
+                    <a href={href} target="_blank" rel="noopener noreferrer" title="Ouvrir en grand">
+                      <img src={href} alt="" className="block max-w-[160px] max-h-[160px] object-cover rounded mb-1" />
                     </a>
                   )
                   return (

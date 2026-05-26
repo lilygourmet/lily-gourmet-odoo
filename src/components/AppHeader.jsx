@@ -516,7 +516,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   return (
     <>
-      <div className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+      <div id="app-header" className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
         {/* Logo cliquable -> calendrier */}
         <button
           onClick={() => !isLivreur(user) && canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
