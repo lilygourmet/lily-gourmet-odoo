@@ -36,6 +36,8 @@ export default function InboxView({ user, initialConversationId }) {
   const [agentFilter, setAgentFilter] = useState('all')
   // Dernière visite capturée au montage (pour repérer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
+  // Conversations vues pendant cette session (id -> horodatage de la vue)
+  const [seenAt, setSeenAt] = useState({})
 
   async function refresh(silent = false) {
     if (!silent) setLoading(true)
@@ -206,11 +208,12 @@ export default function InboxView({ user, initialConversationId }) {
           const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
           const u = conversationUrgency(c)
           const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'
-          const isNew = c.last_inbound_at && (!visitedAtRef.current || c.last_inbound_at > visitedAtRef.current)
+          const seenRef = seenAt[c.id] || visitedAtRef.current
+          const isNew = c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef)
           return (
             <button
               key={c.id}
-              onClick={() => setSelectedId(c.id)}
+              onClick={() => { setSeenAt(prev => ({ ...prev, [c.id]: new Date().toISOString() })); setSelectedId(c.id) }}
               className={`w-full text-left rounded-lg border p-3 transition-colors hover:border-bordeaux ${isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'}`}
             >
               <div className="flex items-center justify-between gap-2 mb-1">
