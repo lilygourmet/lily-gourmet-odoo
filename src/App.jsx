@@ -72,7 +72,9 @@ function App() {
       return 'prod'
     }
     if (isPatissierOnly(u)) return 'patissier'
-    return 'calendar'
+    // Fallback sûr : Tâches est visible par tous les users (aucune permission requise).
+    // Évite d'envoyer par défaut sur Calendrier un user sans perm_calendar (ex: Ismail).
+    return 'tasks'
   }
 
   useEffect(() => {
@@ -218,8 +220,12 @@ function App() {
   if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
   if (activeView === 'caisse') return <CaisseView {...navProps} />
   if (activeView === 'checklist') return <ChecklistView {...navProps} />
-  // Default = Calendar
-  return <Calendar {...navProps} />
+  // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
+  // Sinon repli sûr (livreur -> Récap, autres -> Tâches) pour ne jamais
+  // exposer le calendrier à un user sans perm_calendar.
+  if (canSeeCalendar(user)) return <Calendar {...navProps} />
+  if (isLivreur(user)) return <RecapVentes {...navProps} fullscreen />
+  return <TasksWrapper {...navProps} />
 }
 
 // ============================================================
