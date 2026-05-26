@@ -7,6 +7,21 @@ function fmtTime(ts) {
   return new Date(ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+function fmtDuration(s) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+// Choisit un format d'enregistrement supporté par le navigateur
+// (ogg/opus sur Firefox, mp4 sur Safari, webm sur Chrome).
+function pickAudioMime() {
+  if (typeof MediaRecorder === 'undefined') return ''
+  const candidates = ['audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+  for (const c of candidates) {
+    try { if (MediaRecorder.isTypeSupported(c)) return c } catch (_) { /* ignore */ }
+  }
+  return ''
+}
+
 export default function ConversationDetail({ conversationId, user, onBack }) {
   const [conv, setConv] = useState(null)
   const [messages, setMessages] = useState([])
@@ -21,6 +36,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [showEmoji, setShowEmoji] = useState(false)
   const textareaRef = useRef(null)
   const emojiContainerRef = useRef(null)
+  const [recording, setRecording] = useState(false)
+  const [recordSeconds, setRecordSeconds] = useState(0)
+  const mediaRecorderRef = useRef(null)
+  const chunksRef = useRef([])
+  const recordTimerRef = useRef(null)
+  const recordStreamRef = useRef(null)
+  const recordMimeRef = useRef('')
+  const sendOnStopRef = useRef(false)
 
   async function load() {
     setLoading(true)
@@ -135,6 +158,86 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     }
   }
 
+  // Nettoyage si on quitte la conversation en plein enregistrement
+  useEffect(() => () => {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current)
+    if (recordStreamRef.current) recordStreamRef.current.getTracks().forEach(t => t.stop())
+  }, [])
+
+  async function sendVoice(audioFile) {
+    if (!conv) return
+    setSending(true)
+    setSendError('')
+    try {
+      const mediaPath = await uploadConversationMedia(audioFile, user.id)
+      const msg = await sendMessage({
+        conversationId,
+        clientPhone: conv.client_phone,
+        userId: user.id,
+        text: null,
+        mediaPath,
+        mediaType: 'audio',
+      })
+      setMessages(prev => [...prev, msg])
+    } catch (e) {
+      setSendError(e.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleRecordStop() {
+    if (recordStreamRef.current) {
+      recordStreamRef.current.getTracks().forEach(t => t.stop())
+      recordStreamRef.current = null
+    }
+    const chunks = chunksRef.current
+    chunksRef.current = []
+    if (!sendOnStopRef.current || chunks.length === 0) return
+    const mime = recordMimeRef.current || 'audio/webm'
+    const cleanType = mime.split(';')[0]
+    const ext = cleanType.includes('ogg') ? 'ogg' : cleanType.includes('mp4') ? 'mp4' : 'webm'
+    const f = new File([new Blob(chunks, { type: cleanType })], `vocal-${Date.now()}.${ext}`, { type: cleanType })
+    await sendVoice(f)
+  }
+
+  async function startRecording() {
+    if (!conv) return
+    setSendError('')
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setSendError("L'enregistrement vocal n'est pas supporté par ce navigateur.")
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      recordStreamRef.current = stream
+      const mime = pickAudioMime()
+      recordMimeRef.current = mime
+      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+      chunksRef.current = []
+      mr.ondataavailable = e => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data) }
+      mr.onstop = handleRecordStop
+      mediaRecorderRef.current = mr
+      mr.start()
+      sendOnStopRef.current = false
+      setRecording(true)
+      setRecordSeconds(0)
+      recordTimerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000)
+    } catch (e) {
+      setSendError('Micro non autorisé ou indisponible.')
+    }
+  }
+
+  function finishRecording() {
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null }
+    const mr = mediaRecorderRef.current
+    if (mr && mr.state !== 'inactive') mr.stop() // déclenche handleRecordStop
+    setRecording(false)
+  }
+
+  function stopAndSend() { sendOnStopRef.current = true; finishRecording() }
+  function cancelRecording() { sendOnStopRef.current = false; finishRecording() }
+
   async function handleAssign() {
     setAssigning(true)
     try {
@@ -202,12 +305,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               }`}>
                 {m.media_url && (() => {
                   const href = m.media_url.startsWith('http') ? m.media_url : mediaUrls[m.id]
-                  return href ? (
+                  const isAudio = /audio|voice|ptt/i.test(m.media_type || '') || /\.(ogg|webm|mp4|m4a|mp3|aac)$/i.test(m.media_url)
+                  if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? '🎤 Vocal…' : '📎 Pièce jointe…'}</span>
+                  if (isAudio) return <audio controls src={href} className="block max-w-full mb-1" />
+                  return (
                     <a href={href} target="_blank" rel="noopener noreferrer" className="block text-[11px] underline mb-1 opacity-90">
                       📎 Pièce jointe
                     </a>
-                  ) : (
-                    <span className="block text-[11px] mb-1 opacity-70">📎 Pièce jointe…</span>
                   )
                 })()}
                 {m.body && <div className="text-[13px] whitespace-pre-wrap break-words">{m.body}</div>}
@@ -229,42 +333,69 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             <button onClick={() => setFile(null)} className="text-bordeaux font-bold" title="Retirer">×</button>
           </div>
         )}
-        <div className="flex items-end gap-2">
-          <label className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center cursor-pointer transition-all" title="Joindre une image ou un PDF (max 5 MB)">
-            📎
-            <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" />
-          </label>
-          <div className="relative flex-shrink-0">
+        {recording ? (
+          <div className="flex items-center gap-2 w-full">
+            <span className="text-bordeaux animate-pulse text-[14px]">●</span>
+            <span className="font-mono text-[13px] text-ink flex-1">Enregistrement… {fmtDuration(recordSeconds)}</span>
             <button
               type="button"
-              onClick={() => setShowEmoji(v => !v)}
-              className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-              title="Emojis"
-            >😊</button>
-            {showEmoji && (
-              <>
-                <div className="fixed inset-0 z-[90]" onClick={() => setShowEmoji(false)} />
-                <div ref={emojiContainerRef} className="absolute bottom-11 left-0 z-[100]" />
-              </>
-            )}
+              onClick={cancelRecording}
+              className="w-9 h-9 flex-shrink-0 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+              title="Annuler"
+            >✕</button>
+            <button
+              type="button"
+              onClick={stopAndSend}
+              disabled={sending}
+              className="px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
+              title="Envoyer le vocal"
+            >{sending ? '…' : 'Envoyer ➤'}</button>
           </div>
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
-            rows={1}
-            placeholder="Écrire une réponse…"
-            className="flex-1 resize-none max-h-32 px-3 py-2 rounded-2xl border border-line bg-cream-warm text-[13px] text-ink focus:outline-none focus:border-bordeaux"
-          />
-          <button
-            onClick={handleSend}
-            disabled={sending || (!text.trim() && !file)}
-            className="px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
-          >
-            {sending ? '…' : 'Envoyer'}
-          </button>
-        </div>
+        ) : (
+          <div className="flex items-end gap-2">
+            <label className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center cursor-pointer transition-all" title="Joindre une image ou un PDF (max 5 MB)">
+              📎
+              <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" />
+            </label>
+            <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowEmoji(v => !v)}
+                className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+                title="Emojis"
+              >😊</button>
+              {showEmoji && (
+                <>
+                  <div className="fixed inset-0 z-[90]" onClick={() => setShowEmoji(false)} />
+                  <div ref={emojiContainerRef} className="absolute bottom-11 left-0 z-[100]" />
+                </>
+              )}
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
+              rows={1}
+              placeholder="Écrire une réponse…"
+              className="flex-1 resize-none max-h-32 px-3 py-2 rounded-2xl border border-line bg-cream-warm text-[13px] text-ink focus:outline-none focus:border-bordeaux"
+            />
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={sending}
+              className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
+              title="Message vocal"
+            >🎤</button>
+            <button
+              onClick={handleSend}
+              disabled={sending || (!text.trim() && !file)}
+              className="px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
+            >
+              {sending ? '…' : 'Envoyer'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

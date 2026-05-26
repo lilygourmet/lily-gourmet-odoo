@@ -82,6 +82,7 @@ async function handleInbound(req, res) {
       sender_type: senderType,
       body: body || null,
       media_url: mediaUrl || null,
+      media_type: (mediaUrl && type && type !== 'text') ? type : null,
       sent_at: sentAt,
       wa_message_id: waMsgId || null,
     })
@@ -122,7 +123,7 @@ async function handleSend(req, res) {
     return res.status(500).json({ error: 'WATI_API_TOKEN / WATI_API_ENDPOINT manquant' })
   }
 
-  const { conversationId, clientPhone, userId, text, mediaPath } = req.body || {}
+  const { conversationId, clientPhone, userId, text, mediaPath, mediaType } = req.body || {}
   if (!conversationId || !clientPhone || !userId) {
     return res.status(400).json({ error: 'conversationId, clientPhone, userId requis' })
   }
@@ -176,6 +177,7 @@ async function handleSend(req, res) {
         sender_user_id: userId,
         body: text || null,
         media_url: mediaPath || null,
+        media_type: mediaType || null,
         sent_at: sentAt,
         wa_message_id: watiData?.id || watiData?.messageId || null,
       })

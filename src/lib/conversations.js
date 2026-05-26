@@ -241,11 +241,11 @@ export async function getMediaSignedUrl(path) {
  * `mediaPath` = chemin retourné par uploadConversationMedia (optionnel).
  * Retourne le message inséré (avec l'expéditeur joint).
  */
-export async function sendMessage({ conversationId, clientPhone, userId, text, mediaPath }) {
+export async function sendMessage({ conversationId, clientPhone, userId, text, mediaPath, mediaType }) {
   const res = await fetch('/api/wati-webhook?action=send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversationId, clientPhone, userId, text, mediaPath }),
+    body: JSON.stringify({ conversationId, clientPhone, userId, text, mediaPath, mediaType }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
