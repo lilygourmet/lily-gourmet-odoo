@@ -125,6 +125,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_caisse_admin: formData.permCaisseAdmin,
         perm_hr: formData.permHR,
         perm_admin_users: formData.permAdminUsers,
+        perm_cake_vision: formData.permCakeVision,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -168,6 +169,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_caisse_admin: formData.permCaisseAdmin,
         perm_hr: formData.permHR,
         perm_admin_users: formData.permAdminUsers,
+        perm_cake_vision: formData.permCakeVision,
       })
       setEditingUser(null)
       await refresh()
@@ -648,6 +650,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permCaisseAdmin: initialData?.perm_caisse_admin !== undefined ? initialData.perm_caisse_admin : false,
     permHR: initialData?.perm_hr !== undefined ? initialData.perm_hr : false,
     permAdminUsers: initialData?.perm_admin_users !== undefined ? initialData.perm_admin_users : false,
+    permCakeVision: initialData?.perm_cake_vision !== undefined ? initialData.perm_cake_vision : false,
   })
 
   function handleSubmit() {
@@ -859,6 +862,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="🏷 Voir l'onglet Étiquettes (Entremets/GS/Surgelés)"
             checked={isAdmin || formData.permEtiquettes}
             onChange={v => update('permEtiquettes', v)}
+          />
+          <PermCheckbox
+            id="perm-cake-vision"
+            label="📸 Voir la Galerie CD"
+            checked={isAdmin || formData.permCakeVision}
+            onChange={v => update('permCakeVision', v)}
           />
           <PermCheckbox
             id="perm-stock-patissier"
