@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 
@@ -18,6 +18,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [mediaUrls, setMediaUrls] = useState({}) // messageId -> URL signée
+  const [showEmoji, setShowEmoji] = useState(false)
+  const textareaRef = useRef(null)
+  const emojiContainerRef = useRef(null)
 
   async function load() {
     setLoading(true)
@@ -56,6 +59,44 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages])
+
+  // Picker emoji (emoji-mart "vanilla", chargé à l'ouverture pour rester léger)
+  useEffect(() => {
+    if (!showEmoji) return
+    let picker = null
+    let cancelled = false
+    const handleSelect = (emoji) => {
+      const native = emoji?.native || ''
+      if (!native) return
+      const el = textareaRef.current
+      if (!el) { setText(prev => prev + native); return }
+      const start = el.selectionStart ?? el.value.length
+      const end = el.selectionEnd ?? el.value.length
+      setText(el.value.slice(0, start) + native + el.value.slice(end))
+      requestAnimationFrame(() => {
+        el.focus()
+        el.setSelectionRange(start + native.length, start + native.length)
+      })
+    }
+    Promise.all([import('emoji-mart'), import('@emoji-mart/data')])
+      .then(([mart, dataMod]) => {
+        if (cancelled || !emojiContainerRef.current) return
+        picker = new mart.Picker({
+          data: dataMod.default,
+          onEmojiSelect: handleSelect,
+          locale: 'fr',
+          theme: 'light',
+          previewPosition: 'none',
+        })
+        emojiContainerRef.current.appendChild(picker)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      if (picker && picker.parentNode) picker.parentNode.removeChild(picker)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showEmoji])
 
   function onPickFile(e) {
     const f = e.target.files?.[0]
@@ -193,7 +234,22 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             📎
             <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" />
           </label>
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowEmoji(v => !v)}
+              className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
+              title="Emojis"
+            >😊</button>
+            {showEmoji && (
+              <>
+                <div className="fixed inset-0 z-[90]" onClick={() => setShowEmoji(false)} />
+                <div ref={emojiContainerRef} className="absolute bottom-11 left-0 z-[100]" />
+              </>
+            )}
+          </div>
           <textarea
+            ref={textareaRef}
             value={text}
             onChange={e => setText(e.target.value)}
             onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
