@@ -176,8 +176,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // ============================================================
   // Chargement principal : combine 3 sources de donnees
   // ============================================================
-  async function refresh() {
-    setLoading(true)
+  async function refresh(silent = false) {
+    if (!silent) setLoading(true)
     try {
       const fromStr = shiftISO(todayStr, -DAYS_BEFORE)
       const toStr = shiftISO(todayStr, DAYS_AFTER + 1)
@@ -354,7 +354,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     } catch (e) {
       console.error('[ChecklistView] refresh', e)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -380,7 +380,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     ]
 
     // Refresh toutes les 5 min en backup (realtime gere les changements instantanes)
-    const interval = setInterval(refresh, 5 * 60 * 1000)
+    const interval = setInterval(() => refresh(true), 5 * 60 * 1000)
 
     return () => {
       channels.forEach(c => supabase.removeChannel(c))
@@ -396,6 +396,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     try {
       await confirmReception(item.id, item.qty_announced, user.id)
       setVitrineItems(prev => prev.filter(i => i.id !== item.id))
+      refresh(true)
     } catch (e) {
       console.error('[handleVitrineDone]', e)
       alert('Erreur : ' + (e.message || e))
@@ -406,6 +407,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     try {
       await markCafeReceived(line.odoo_line_id, user.id)
       setProdLines(prev => prev.filter(l => l.odoo_line_id !== line.odoo_line_id))
+      refresh(true)
     } catch (e) {
       console.error('[handleProdDone]', e)
       alert('Erreur : ' + (e.message || e))
@@ -417,6 +419,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       const ok = await checkItemStep(item.id, 'range', user.id)
       if (!ok) throw new Error("La requete a echoue")
       setCommandeItems(prev => prev.filter(i => i.id !== item.id))
+      refresh(true)
     } catch (e) {
       console.error('[handleCommandeDone]', e)
       alert('Erreur : ' + (e.message || e))
@@ -441,6 +444,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           .eq('id', doneItem.item_id)
         setDoneVitrine(prev => prev.filter(d => d.key !== doneItem.key))
       }
+      refresh(true)
     } catch (e) {
       console.error('[handleUndo]', e)
       alert('Erreur : ' + (e.message || e))
