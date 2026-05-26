@@ -237,6 +237,18 @@ export async function deleteQuickReply(id) {
 // TEMPLATES (initier une conversation)
 // ============================================================
 
+/** Suggère 3 réponses (IA) au dernier message du client. */
+export async function suggestReplies(conversationId, userId) {
+  const res = await fetch('/api/wati-webhook?action=suggest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversation_id: conversationId, userId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.suggestions || []
+}
+
 /** Liste des templates WhatsApp approuvés (via Wati). */
 export async function fetchTemplates() {
   const res = await fetch('/api/wati-webhook?action=templates', { method: 'POST' })

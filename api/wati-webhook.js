@@ -37,6 +37,7 @@ export default async function handler(req, res) {
   if (action === 'send') return handleSend(req, res)
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
+  if (action === 'suggest') return handleSuggest(req, res)
   return handleInbound(req, res)
 }
 
@@ -215,6 +216,122 @@ async function handleSend(req, res) {
     return res.status(200).json({ ok: true, message: msg })
   } catch (e) {
     console.error('[wati-send]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// ============================================================
+// SUGGESTIONS IA (action=suggest) — 3 réponses via Claude Haiku
+// ============================================================
+const SUGGEST_SYSTEM = `Tu es l'assistante commerciale virtuelle de Lily Gourmet, une pâtisserie et traiteur marocain artisanal de qualité. Le ton de la marque est chaleureux, féminin, classe, avec une touche marocaine authentique.
+
+Tu vas recevoir une conversation WhatsApp entre un client et une commerciale. Ta mission : proposer 3 réponses possibles que la commerciale pourrait envoyer au DERNIER message du client.
+
+Les 3 réponses doivent avoir 3 tons différents :
+1. FORMELLE : vouvoiement, professionnelle, phrases complètes, polie
+2. AMICALE : chaleureuse, peut utiliser un emoji 🌸 ou 💖, ton Lily Gourmet (vouvoiement chaleureux ou tutoiement selon le contexte de la conversation)
+3. DIRECTE : courte (1-2 phrases max), va droit au but, mais reste polie
+
+Règles importantes :
+- Adapte le contenu au contexte (commande, devis, livraison, plainte, question générale...)
+- Si le client demande un prix, ne JAMAIS inventer un montant — propose plutôt de vérifier et de revenir vers lui
+- Si le client demande une date, ne JAMAIS confirmer une date sans vérification — propose de vérifier le planning
+- Reste fidèle à l'image Lily Gourmet : artisanale, qualité, chaleureuse`
+
+const SUGGEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    suggestions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          tone: { type: 'string', enum: ['formelle', 'amicale', 'directe'] },
+          text: { type: 'string' },
+        },
+        required: ['tone', 'text'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['suggestions'],
+  additionalProperties: false,
+}
+
+function parseSuggestions(text) {
+  if (!text) return []
+  let t = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim()
+  try {
+    const obj = JSON.parse(t)
+    return Array.isArray(obj.suggestions) ? obj.suggestions : []
+  } catch (_) { return [] }
+}
+
+async function handleSuggest(req, res) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY manquant' })
+
+  const { conversation_id, userId } = req.body || {}
+  if (!conversation_id || !userId) {
+    return res.status(400).json({ error: 'conversation_id et userId requis' })
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  // Droit d'accès : admin ou perm_conversations
+  const { data: profile } = await supabase
+    .from('profiles').select('role, perm_conversations').eq('id', userId).maybeSingle()
+  if (!profile || (profile.role !== 'admin' && profile.perm_conversations !== true)) {
+    return res.status(403).json({ error: 'non autorisé' })
+  }
+
+  // 20 derniers messages, remis en ordre chronologique
+  const { data: msgs, error } = await supabase
+    .from('messages')
+    .select('sender_type, body, media_url')
+    .eq('conversation_id', conversation_id)
+    .order('sent_at', { ascending: false })
+    .limit(20)
+  if (error) return res.status(500).json({ error: error.message })
+  const ordered = (msgs || []).reverse()
+  if (ordered.length === 0) return res.status(400).json({ error: 'conversation vide' })
+
+  const transcript = ordered.map(m => {
+    const who = m.sender_type === 'client' ? 'Client' : m.sender_type === 'agent' ? 'Commerciale' : 'Système'
+    const content = m.body || (m.media_url ? '[pièce jointe]' : '')
+    return `${who} : ${content}`
+  }).join('\n')
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 600,
+        system: SUGGEST_SYSTEM,
+        messages: [{
+          role: 'user',
+          content: `Voici la conversation WhatsApp :\n\n${transcript}\n\nPropose 3 réponses possibles au DERNIER message du client.`,
+        }],
+        output_config: { format: { type: 'json_schema', schema: SUGGEST_SCHEMA } },
+      }),
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      console.error('[wati-suggest]', r.status, data?.error?.message)
+      return res.status(502).json({ error: data?.error?.message || `Claude erreur ${r.status}` })
+    }
+    const block = (data.content || []).find(b => b.type === 'text')
+    const suggestions = parseSuggestions(block?.text).slice(0, 3)
+    if (suggestions.length === 0) return res.status(502).json({ error: 'Réponse IA illisible' })
+    return res.status(200).json({ suggestions })
+  } catch (e) {
+    console.error('[wati-suggest]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

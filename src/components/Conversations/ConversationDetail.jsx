@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import { supabase } from '../../lib/supabase'
@@ -12,6 +12,8 @@ function fmtTime(ts) {
 function fmtDuration(s) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
+
+const TONE_LABEL = { formelle: 'Formelle', amicale: 'Amicale', directe: 'Directe' }
 
 // Choisit un format d'enregistrement supporté par le navigateur
 // (ogg/opus sur Firefox, mp4 sur Safari, webm sur Chrome).
@@ -63,6 +65,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [sendError, setSendError] = useState('')
   const [statusBusy, setStatusBusy] = useState(false)
   const [headerTop, setHeaderTop] = useState(0)
+  const [suggestions, setSuggestions] = useState([])
+  const [suggesting, setSuggesting] = useState(false)
   const [threadSearchOpen, setThreadSearchOpen] = useState(false)
   const [threadSearch, setThreadSearch] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
@@ -238,6 +242,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       setMessages(prev => [...prev, msg])
       setText('')
       setFile(null)
+      setSuggestions([])
     } catch (e) {
       setSendError(e.message)
     } finally {
@@ -266,6 +271,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         mediaType: 'audio',
       })
       setMessages(prev => [...prev, msg])
+      setSuggestions([])
     } catch (e) {
       setSendError(e.message)
     } finally {
@@ -349,6 +355,21 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     try { setConv(await reopenConversation(conversationId, user.id)) }
     catch (e) { alert('Erreur : ' + e.message) }
     finally { setStatusBusy(false) }
+  }
+
+  async function handleSuggest() {
+    if (!conv) return
+    setSuggesting(true)
+    setSendError('')
+    try {
+      const s = await suggestReplies(conversationId, user.id)
+      if (s.length === 0) setSendError('Aucune suggestion.')
+      setSuggestions(s)
+    } catch (e) {
+      setSendError(e.message)
+    } finally {
+      setSuggesting(false)
+    }
   }
 
   // Recherche dans le fil : remet à zéro la position quand le terme change
@@ -497,6 +518,20 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
       {/* Zone de réponse */}
       <div className="sticky bottom-0 bg-cream pt-2 pb-3 mt-3 border-t border-line">
+        {suggestions.length > 0 && (
+          <div className="flex flex-col gap-1.5 mb-2">
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => { setText(s.text); setSuggestions([]); requestAnimationFrame(() => textareaRef.current?.focus()) }}
+                className="text-left rounded-lg border border-bordeaux/30 bg-bordeaux/5 px-3 py-2 hover:border-bordeaux transition-colors"
+              >
+                <div className="text-[9px] font-mono uppercase tracking-wider text-bordeaux mb-0.5">✨ {TONE_LABEL[s.tone] || s.tone}</div>
+                <div className="text-[12px] text-ink">{s.text}</div>
+              </button>
+            ))}
+          </div>
+        )}
         {sendError && <div className="text-[11px] text-bordeaux mb-1">{sendError}</div>}
         {file && (
           <div className="flex items-center gap-2 mb-1.5 text-[11px] text-ink-soft">
@@ -578,6 +613,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               placeholder="Écrire une réponse…"
               className="flex-1 resize-none max-h-32 px-3 py-2 rounded-2xl border border-line bg-cream-warm text-[13px] text-ink focus:outline-none focus:border-bordeaux"
             />
+            <button
+              type="button"
+              onClick={handleSuggest}
+              disabled={suggesting || sending}
+              className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
+              title="Suggérer 3 réponses (IA)"
+            >{suggesting ? '…' : '✨'}</button>
             <button
               type="button"
               onClick={startRecording}
