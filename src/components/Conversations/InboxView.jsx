@@ -38,9 +38,8 @@ export default function InboxView({ user, initialConversationId }) {
     setLoading(true)
     setError('')
     try {
-      // 'waiting'/'followup' se calculent côté app -> on charge tout
-      const serverFilter = (filter === 'mine' || filter === 'unassigned') ? filter : 'all'
-      const data = await loadConversations(serverFilter, user.id)
+      // Tous les filtres se calculent côté app -> on charge tout (chiffres justes)
+      const data = await loadConversations('all', user.id)
       setConversations(data)
     } catch (e) {
       setError(e.message)
@@ -86,9 +85,14 @@ export default function InboxView({ user, initialConversationId }) {
     conversations.filter(c => c.assigned).map(c => [c.assigned.id, c.assigned])
   ).values()]
 
+  const waitingCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🔴').length
+  const followupCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🟡').length
+
   const term = search.trim().toLowerCase()
   let list = conversations
-  if (filter === 'waiting') list = list.filter(c => conversationUrgency(c)?.emoji === '🔴')
+  if (filter === 'mine') list = list.filter(c => c.assigned_to === user.id)
+  else if (filter === 'unassigned') list = list.filter(c => c.status === 'non_assignee')
+  else if (filter === 'waiting') list = list.filter(c => conversationUrgency(c)?.emoji === '🔴')
   else if (filter === 'followup') list = list.filter(c => conversationUrgency(c)?.emoji === '🟡')
   if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
   const filtered = !term ? list : list.filter(c =>
@@ -138,15 +142,20 @@ export default function InboxView({ user, initialConversationId }) {
       <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-wrap">
-            {FILTERS.map(f => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-                  filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
-                }`}
-              >{f.label}</button>
-            ))}
+            {FILTERS.map(f => {
+              let label = f.label
+              if (f.key === 'waiting' && waitingCount) label = `🔴 En attente (${waitingCount})`
+              else if (f.key === 'followup' && followupCount) label = `🟡 À relancer (${followupCount})`
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                    filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+                  }`}
+                >{label}</button>
+              )
+            })}
           </div>
           {agentOptions.length > 0 && (
             <select
