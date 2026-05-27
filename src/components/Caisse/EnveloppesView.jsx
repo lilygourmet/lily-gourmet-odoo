@@ -149,9 +149,10 @@ export default function EnveloppesView({ user }) {
         {MOIS_TABS.map(m => (
           <button key={m.idx} onClick={() => setMonth(m.idx)}
             style={{
-              padding: '8px 16px', borderRadius: 8, border: 'none',
-              background: month === m.idx ? '#993556' : '#F4F0EA',
-              color:      month === m.idx ? 'white'    : '#4a3a30',
+              padding: '8px 16px', borderRadius: 999,
+              border: month === m.idx ? '1px solid #993556' : '1px solid #e5d8c3',
+              background: month === m.idx ? '#993556' : 'white',
+              color:      month === m.idx ? '#faf7f2'  : '#1a0f0a',
               fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
             }}>{m.label}</button>
         ))}
@@ -265,9 +266,10 @@ function EnveloppeCard({ env, onClick }) {
 function Chip({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      fontSize: 11, padding: '4px 10px', borderRadius: 999, cursor: 'pointer', border: 'none',
-      background: active ? '#1a0f0a' : '#F4F0EA',
-      color:      active ? 'white'   : '#4a3a30',
+      fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 999, cursor: 'pointer',
+      background: active ? '#993556' : 'white',
+      color:      active ? '#faf7f2' : '#1a0f0a',
+      border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
     }}>{children}</button>
   )
 }
@@ -277,11 +279,11 @@ const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: 
 
 const toggleActiveStyle = {
   flex: 1,
-  padding: '10px 14px',
-  borderRadius: 8,
-  border: '1.5px solid #993556',
+  padding: '8px 16px',
+  borderRadius: 999,
+  border: '1px solid #993556',
   background: '#993556',
-  color: 'white',
+  color: '#faf7f2',
   fontSize: 13,
   fontWeight: 500,
   cursor: 'pointer',
@@ -289,12 +291,12 @@ const toggleActiveStyle = {
 
 const toggleInactiveStyle = {
   flex: 1,
-  padding: '10px 14px',
-  borderRadius: 8,
-  border: '0.5px solid #C4BFB6',
+  padding: '8px 16px',
+  borderRadius: 999,
+  border: '1px solid #e5d8c3',
   background: 'white',
-  color: '#3E3A33',
+  color: '#1a0f0a',
   fontSize: 13,
-  fontWeight: 400,
+  fontWeight: 500,
   cursor: 'pointer',
 }

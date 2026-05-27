@@ -31,7 +31,7 @@ export default function HRView({ user }) {
 
       {/* Onglets */}
       <div style={{
-        display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #e5d8c3', flexWrap: 'wrap',
+        display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap',
       }}>
         <TabBtn active={tab === 'employes'} onClick={() => setTab('employes')}>
           👥 Employés
@@ -66,15 +66,10 @@ export default function HRView({ user }) {
 function TabBtn({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      padding: '10px 18px',
-      background: 'transparent',
-      border: 'none',
-      borderBottom: active ? '2px solid #993556' : '2px solid transparent',
-      color: active ? '#993556' : '#4a3a30',
-      fontSize: 13,
-      fontWeight: active ? 500 : 400,
-      cursor: 'pointer',
-      marginBottom: -1,
+      padding: '8px 16px', borderRadius: 999, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+      background: active ? '#993556' : 'white',
+      color:      active ? '#faf7f2' : '#1a0f0a',
+      border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
     }}>
       {children}
     </button>
