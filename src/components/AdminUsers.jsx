@@ -126,6 +126,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_hr: formData.permHR,
         perm_admin_users: formData.permAdminUsers,
         perm_cake_vision: formData.permCakeVision,
+        perm_conversations: formData.permConversations,
         perm_mark_payment_proof: formData.permMarkPaymentProof,
         perm_view_payments: formData.permViewPayments,
         perm_validate_payments: formData.permValidatePayments,
@@ -173,6 +174,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_hr: formData.permHR,
         perm_admin_users: formData.permAdminUsers,
         perm_cake_vision: formData.permCakeVision,
+        perm_conversations: formData.permConversations,
         perm_mark_payment_proof: formData.permMarkPaymentProof,
         perm_view_payments: formData.permViewPayments,
         perm_validate_payments: formData.permValidatePayments,
@@ -657,6 +659,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permHR: initialData?.perm_hr !== undefined ? initialData.perm_hr : false,
     permAdminUsers: initialData?.perm_admin_users !== undefined ? initialData.perm_admin_users : false,
     permCakeVision: initialData?.perm_cake_vision !== undefined ? initialData.perm_cake_vision : false,
+    permConversations: initialData?.perm_conversations !== undefined ? initialData.perm_conversations : false,
     permMarkPaymentProof: initialData?.perm_mark_payment_proof !== undefined ? initialData.perm_mark_payment_proof : false,
     permViewPayments: initialData?.perm_view_payments !== undefined ? initialData.perm_view_payments : false,
     permValidatePayments: initialData?.perm_validate_payments !== undefined ? initialData.perm_validate_payments : false,
@@ -865,6 +868,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="💌 Voir l'onglet Messages"
             checked={isAdmin || formData.permMessages}
             onChange={v => update('permMessages', v)}
+          />
+          <PermCheckbox
+            id="perm-conversations"
+            label="📱 Voir les Conversations WhatsApp"
+            checked={isAdmin || formData.permConversations}
+            onChange={v => update('permConversations', v)}
           />
           <PermCheckbox
             id="perm-etiquettes"
