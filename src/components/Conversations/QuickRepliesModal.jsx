@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { loadQuickReplies, createQuickReply, updateQuickReply, deleteQuickReply } from '../../lib/conversations'
+import { loadQuickReplies, createQuickReply, updateQuickReply, deleteQuickReply, uploadConversationMedia, getMediaSignedUrl } from '../../lib/conversations'
 
 // Écran de gestion des phrases types (communes à l'équipe).
 export default function QuickRepliesModal({ onClose }) {
@@ -10,6 +10,23 @@ export default function QuickRepliesModal({ onClose }) {
   const [body, setBody] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [mediaPath, setMediaPath] = useState(null)
+  const [mediaPreview, setMediaPreview] = useState(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
+  async function onPickPhoto(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (!f.type.startsWith('image/')) { setError('Image uniquement.'); return }
+    setUploadingPhoto(true); setError('')
+    try {
+      const path = await uploadConversationMedia(f, 'quick-replies')
+      setMediaPath(path)
+      setMediaPreview(await getMediaSignedUrl(path))
+    } catch (e2) { setError(e2.message) }
+    finally { setUploadingPhoto(false) }
+  }
 
   async function refresh() {
     setLoading(true)
@@ -19,19 +36,24 @@ export default function QuickRepliesModal({ onClose }) {
   }
   useEffect(() => { refresh() }, [])
 
-  function startEdit(it) {
+  async function startEdit(it) {
     setEditingId(it.id); setLabel(it.label); setBody(it.body)
+    setMediaPath(it.media_path || null)
+    setMediaPreview(null)
+    if (it.media_path) {
+      try { setMediaPreview(await getMediaSignedUrl(it.media_path)) } catch (_) { /* ignore */ }
+    }
   }
   function resetForm() {
-    setEditingId(null); setLabel(''); setBody('')
+    setEditingId(null); setLabel(''); setBody(''); setMediaPath(null); setMediaPreview(null)
   }
 
   async function handleSave() {
-    if (!label.trim() || !body.trim()) return
+    if (!label.trim() || (!body.trim() && !mediaPath)) return
     setBusy(true); setError('')
     try {
-      if (editingId) await updateQuickReply(editingId, label, body)
-      else await createQuickReply(label, body)
+      if (editingId) await updateQuickReply(editingId, label, body, mediaPath)
+      else await createQuickReply(label, body, mediaPath)
       resetForm()
       await refresh()
     } catch (e) { setError(e.message) }
@@ -66,13 +88,28 @@ export default function QuickRepliesModal({ onClose }) {
             value={body} onChange={e => setBody(e.target.value)} rows={3}
             className="w-full px-3 py-2 text-[13px] bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux resize-y"
           />
-          <div className="flex gap-2 mt-2">
+
+          {/* Photo optionnelle */}
+          <label className="block text-[11px] font-medium text-ink-soft mt-2 mb-1">Photo (optionnelle)</label>
+          {mediaPreview ? (
+            <div className="relative inline-block">
+              <img src={mediaPreview} alt="" className="w-16 h-16 object-cover rounded border border-line" />
+              <button type="button" onClick={() => { setMediaPath(null); setMediaPreview(null) }} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-bordeaux text-cream text-[11px] flex items-center justify-center" title="Retirer">×</button>
+            </div>
+          ) : (
+            <label className="inline-flex items-center px-3 py-1.5 text-[11px] border border-line rounded-lg text-ink-soft hover:border-bordeaux cursor-pointer">
+              {uploadingPhoto ? '⏳ Envoi…' : '📷 Ajouter une photo'}
+              <input type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
+            </label>
+          )}
+
+          <div className="flex gap-2 mt-3">
             {editingId && (
               <button onClick={resetForm} className="px-3 py-1.5 text-[11px] border border-line rounded-lg text-ink-soft hover:bg-cream">Annuler</button>
             )}
             <button
               onClick={handleSave}
-              disabled={busy || !label.trim() || !body.trim()}
+              disabled={busy || uploadingPhoto || !label.trim() || (!body.trim() && !mediaPath)}
               className="px-4 py-1.5 text-[11px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50"
             >{editingId ? 'Enregistrer' : 'Ajouter'}</button>
           </div>
@@ -88,7 +125,7 @@ export default function QuickRepliesModal({ onClose }) {
             {items.map(it => (
               <div key={it.id} className="bg-cream-warm border border-line rounded-lg p-2.5">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[13px] font-medium text-ink">{it.label}</span>
+                  <span className="text-[13px] font-medium text-ink">{it.media_path ? '📷 ' : ''}{it.label}</span>
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => startEdit(it)} className="text-[11px] text-ink-soft hover:text-bordeaux px-1">Modifier</button>
                     <button onClick={() => handleDelete(it.id)} className="text-[11px] text-bordeaux hover:underline px-1">Suppr.</button>

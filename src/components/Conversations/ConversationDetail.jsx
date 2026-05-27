@@ -67,6 +67,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [headerTop, setHeaderTop] = useState(0)
   const [suggestions, setSuggestions] = useState([])
   const [suggesting, setSuggesting] = useState(false)
+  // Photo d'une phrase type, préparée pour l'envoi (option B)
+  const [stagedMediaPath, setStagedMediaPath] = useState(null)
+  const [stagedPreviewUrl, setStagedPreviewUrl] = useState(null)
   const [threadSearchOpen, setThreadSearchOpen] = useState(false)
   const [threadSearch, setThreadSearch] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
@@ -223,15 +226,26 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     }
   }
 
+  // Choisir une phrase type : insère le texte + prépare la photo (si présente)
+  async function pickQuickReply(q) {
+    setShowReplies(false)
+    if (q.body) insertAtCursor(q.body)
+    if (q.media_path) {
+      setStagedMediaPath(q.media_path)
+      try { setStagedPreviewUrl(await getMediaSignedUrl(q.media_path)) } catch (_) { setStagedPreviewUrl(null) }
+    }
+  }
+
   async function handleSend() {
     if (!conv) return
     const trimmed = text.trim()
-    if (!trimmed && !file) return
+    if (!trimmed && !file && !stagedMediaPath) return
     setSending(true)
     setSendError('')
     try {
       let mediaPath = null
       if (file) mediaPath = await uploadConversationMedia(file, user.id)
+      else if (stagedMediaPath) mediaPath = stagedMediaPath
       const msg = await sendMessage({
         conversationId,
         clientPhone: conv.client_phone,
@@ -242,6 +256,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       setMessages(prev => [...prev, msg])
       setText('')
       setFile(null)
+      setStagedMediaPath(null)
+      setStagedPreviewUrl(null)
       setSuggestions([])
     } catch (e) {
       setSendError(e.message)
@@ -539,6 +555,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             <button onClick={() => setFile(null)} className="text-bordeaux font-bold" title="Retirer">×</button>
           </div>
         )}
+        {stagedMediaPath && (
+          <div className="flex items-center gap-2 mb-1.5">
+            {stagedPreviewUrl && <img src={stagedPreviewUrl} alt="" className="w-10 h-10 object-cover rounded border border-line" />}
+            <span className="text-[11px] text-ink-soft">📷 Photo jointe</span>
+            <button onClick={() => { setStagedMediaPath(null); setStagedPreviewUrl(null) }} className="text-bordeaux font-bold" title="Retirer">×</button>
+          </div>
+        )}
         {recording ? (
           <div className="flex items-center gap-2 w-full">
             <span className="text-bordeaux animate-pulse text-[14px]">●</span>
@@ -603,10 +626,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                       ) : quickReplies.map(q => (
                         <button
                           key={q.id}
-                          onClick={() => { insertAtCursor(q.body); setShowReplies(false) }}
+                          onClick={() => pickQuickReply(q)}
                           className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-colors"
                         >
-                          <div className="text-[12px] font-medium text-ink">{q.label}</div>
+                          <div className="text-[12px] font-medium text-ink">{q.media_path ? '📷 ' : ''}{q.label}</div>
                           <div className="text-[10px] text-ink-mute truncate">{q.body}</div>
                         </button>
                       ))}
@@ -630,7 +653,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               >🎤</button>
               <button
                 onClick={handleSend}
-                disabled={sending || (!text.trim() && !file)}
+                disabled={sending || (!text.trim() && !file && !stagedMediaPath)}
                 className="ml-auto px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
               >
                 {sending ? '…' : 'Envoyer'}

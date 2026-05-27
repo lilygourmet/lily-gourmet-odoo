@@ -215,16 +215,16 @@ export async function loadQuickReplies() {
   return data || []
 }
 
-export async function createQuickReply(label, body) {
+export async function createQuickReply(label, body, mediaPath = null) {
   const { data, error } = await supabase
-    .from('quick_replies').insert({ label: label.trim(), body }).select().single()
+    .from('quick_replies').insert({ label: label.trim(), body, media_path: mediaPath }).select().single()
   if (error) throw error
   return data
 }
 
-export async function updateQuickReply(id, label, body) {
+export async function updateQuickReply(id, label, body, mediaPath = null) {
   const { error } = await supabase
-    .from('quick_replies').update({ label: label.trim(), body }).eq('id', id)
+    .from('quick_replies').update({ label: label.trim(), body, media_path: mediaPath }).eq('id', id)
   if (error) throw error
 }
 

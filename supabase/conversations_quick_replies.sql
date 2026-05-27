@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS quick_replies (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Photo optionnelle attachée à une phrase type (chemin dans le bucket conversation-media)
+ALTER TABLE quick_replies ADD COLUMN IF NOT EXISTS media_path TEXT;
+
 ALTER TABLE quick_replies ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
