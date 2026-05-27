@@ -3,6 +3,7 @@ import AttestationsTab from './AttestationsTab'
 import EmployesTab from './EmployesTab'
 import PointageTab from './PointageTab'
 import SalairesTab from './SalairesTab'
+import BulletinsTab from './BulletinsTab'
 
 /**
  * Vue principale HR.
@@ -46,12 +47,18 @@ export default function HRView({ user }) {
             💰 Salaires
           </TabBtn>
         )}
+        {isAdmin && (
+          <TabBtn active={tab === 'bulletins'} onClick={() => setTab('bulletins')}>
+            🧾 Bulletins de paie
+          </TabBtn>
+        )}
       </div>
 
       {tab === 'attestations' && <AttestationsTab user={user} isAdmin={isAdmin} />}
       {tab === 'employes' && <EmployesTab user={user} isAdmin={isAdmin} />}
       {tab === 'pointage' && <PointageTab user={user} isAdmin={isAdmin} />}
       {tab === 'salaires' && isAdmin && <SalairesTab user={user} />}
+      {tab === 'bulletins' && isAdmin && <BulletinsTab />}
     </div>
   )
 }
