@@ -18,6 +18,7 @@ import TasksView from './components/Tasks/TasksView'
 import HRView from './components/HR/HRView'
 import InboxView from './components/Conversations/InboxView'
 import PaymentsView from './components/Conversations/PaymentsView'
+import AbsencesView from './components/AbsencesView'
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
@@ -228,6 +229,7 @@ function App() {
     if (activeView === 'hr') return <HRWrapper {...navProps} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
     if (activeView === 'paiements') return <PaymentsWrapper {...navProps} />
+    if (activeView === 'absences') return <AbsencesWrapper {...navProps} />
     if (activeView === 'caisse') return <CaisseView {...navProps} />
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
@@ -288,6 +290,16 @@ function PaymentsWrapper(props) {
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <PaymentsView user={user} />
+    </div>
+  )
+}
+
+function AbsencesWrapper(props) {
+  const { user, onLogout, onNavigate, activeView } = props
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <AbsencesView user={user} />
     </div>
   )
 }

@@ -31,3 +31,23 @@ ALTER TABLE caisse_audit_log ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
   CREATE POLICY "all caisse_audit_log" ON caisse_audit_log FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Vague 5 ----------------------------------------------------
+-- #6 Conges / absences : module INDEPENDANT (table dediee, aucun lien avec
+-- employes ni la table conges synchronisee depuis Odoo).
+CREATE TABLE IF NOT EXISTS rh_absences (
+  id          BIGSERIAL PRIMARY KEY,
+  person      TEXT NOT NULL,
+  start_date  DATE NOT NULL,
+  end_date    DATE NOT NULL,
+  type        TEXT,
+  reason      TEXT,
+  created_by  UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rh_absences_person ON rh_absences(person, start_date DESC);
+
+ALTER TABLE rh_absences ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  CREATE POLICY "all rh_absences" ON rh_absences FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
