@@ -20,6 +20,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const userCanSync = canSync(user)
 
   const [showCog, setShowCog] = useState(false)
+  const cogRef = useRef(null)
+  useEffect(() => {
+    if (!showCog) return
+    function onDown(e) { if (cogRef.current && !cogRef.current.contains(e.target)) setShowCog(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showCog])
   const [showChangePwd, setShowChangePwd] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
@@ -449,13 +456,20 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   function DropdownMenu({ id, emoji, label, items, footerSlot = null }) {
     const open = openMenu === id
+    const menuRef = useRef(null)
+    useEffect(() => {
+      if (!open) return
+      function onDown(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenu(null) }
+      document.addEventListener('mousedown', onDown)
+      return () => document.removeEventListener('mousedown', onDown)
+    }, [open])
     const hasActive = items.some(it => it.view === activeView)
     const totalBadge = items.reduce((s, it) => s + (it.badge || 0), 0)
 
     if (items.length === 0 && !footerSlot) return null
 
     return (
-      <div className="relative">
+      <div className="relative" ref={menuRef}>
         <button
           onClick={() => setOpenMenu(open ? null : id)}
           className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
@@ -475,7 +489,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         </button>
         {open && (
           <>
-            <div className="fixed inset-0 z-[60]" onClick={() => setOpenMenu(null)} />
             <div className="absolute left-0 top-full mt-1 z-[70] bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
               {items.map(item => {
                 const isActive = item.view === activeView
@@ -641,7 +654,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           )}
 
           {(admin || user?.perm_admin_users) && (
-            <div className="relative">
+            <div className="relative" ref={cogRef}>
               <button
                 onClick={() => setShowCog(!showCog)}
                 className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
@@ -651,7 +664,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               </button>
               {showCog && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowCog(false)} />
                   <div className="absolute right-0 mt-1 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
                     <CogItem icon="🔑" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
                     <CogItem icon="👥" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
