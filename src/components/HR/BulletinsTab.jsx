@@ -66,7 +66,7 @@ export default function BulletinsTab() {
     try {
       const buf = await file.arrayBuffer()
       const pdfjsDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buf).slice() }).promise
-      const srcDoc = await PDFDocument.load(buf.slice(0))
+      const srcDoc = await PDFDocument.load(buf.slice(0), { ignoreEncryption: true })
       const n = pdfjsDoc.numPages
       setProgress({ done: 0, total: n })
       for (let i = 0; i < n; i++) {
@@ -110,7 +110,7 @@ export default function BulletinsTab() {
       for (const p of periods) {
         for (const r of g.rows.filter(x => x.period === p)) {
           const bytes = await downloadBulletinBytes(r.storage_path)
-          const doc = await PDFDocument.load(bytes)
+          const doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
           const pages = await merged.copyPages(doc, doc.getPageIndices())
           pages.forEach(pg => merged.addPage(pg))
         }
