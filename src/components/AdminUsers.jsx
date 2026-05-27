@@ -25,6 +25,7 @@ export default function AdminUsers({ currentUser, onClose }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [confirmHardDelete, setConfirmHardDelete] = useState(null)
   const [collapsedTeams, setCollapsedTeams] = useState({})  // { teamId: true } = replie
+  const [showInactive, setShowInactive] = useState(false)   // masquer les désactivés par défaut
   const [dragOverTeam, setDragOverTeam] = useState(null)
   const [draggedUser, setDraggedUser] = useState(null)
 
@@ -295,12 +296,23 @@ export default function AdminUsers({ currentUser, onClose }) {
           {/* Liste users groupes par equipe */}
           {!loading && !showNewForm && (
             <div className="space-y-4">
+              {users.some(u => u.active === false) && (
+                <button
+                  onClick={() => setShowInactive(v => !v)}
+                  className="px-3 py-1.5 rounded-full text-[12px] font-medium border border-line text-ink-soft hover:bg-cream-warm"
+                >
+                  {showInactive
+                    ? '🙈 Masquer les désactivés'
+                    : `👁 Voir les désactivés (${users.filter(u => u.active === false).length})`}
+                </button>
+              )}
               {(() => {
                 // Si le viewer n'est pas admin (donc perm_admin_users), masquer les admins
                 const isCurrentSuperAdmin = currentUser?.role === 'admin'
-                const visibleUsers = isCurrentSuperAdmin
+                const visibleUsers = (isCurrentSuperAdmin
                   ? users
                   : users.filter(u => u.role !== 'admin')
+                ).filter(u => showInactive || u.active !== false)
                 // Grouper users par team_id
                 const groups = new Map()
                 for (const u of visibleUsers) {
