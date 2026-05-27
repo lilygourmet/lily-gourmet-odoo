@@ -52,8 +52,9 @@ export default function MeriemUserView({ user }) {
 
 function PillTab({ active, onClick, children }) {
   return <button onClick={onClick} style={{
-    fontSize: 13, fontWeight: 500, padding: '9px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-    background: active ? 'white' : 'transparent',
-    color:      active ? '#1a0f0a' : '#4a3a30',
+    fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 999, cursor: 'pointer',
+    background: active ? '#993556' : 'white',
+    color:      active ? '#faf7f2' : '#1a0f0a',
+    border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
   }}>{children}</button>
 }

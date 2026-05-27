@@ -38,18 +38,20 @@ export default function CaissesGereesView({ user }) {
 
 function tabMain(active) {
   return {
-    fontSize: 14, fontWeight: 500, padding: '10px 18px', borderRadius: 8, border: 'none',
-    background: active ? '#993556' : '#F4F0EA',
-    color:      active ? 'white'    : '#4a3a30',
+    fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 999,
+    border: active ? '1px solid #993556' : '1px solid #e5d8c3',
+    background: active ? '#993556' : 'white',
+    color:      active ? '#faf7f2'  : '#1a0f0a',
     cursor: 'pointer',
   }
 }
 function SubBtn({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-      background: active ? 'white' : 'transparent',
-      color:      active ? '#1a0f0a' : '#4a3a30',
+      fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 999, cursor: 'pointer',
+      border: active ? '1px solid #993556' : '1px solid transparent',
+      background: active ? '#993556' : 'transparent',
+      color:      active ? '#faf7f2' : '#1a0f0a',
     }}>{children}</button>
   )
 }
