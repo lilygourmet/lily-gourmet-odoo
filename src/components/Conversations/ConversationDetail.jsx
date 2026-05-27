@@ -134,10 +134,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   // Mesure la hauteur du bandeau de l'app pour poser l'en-tête juste en dessous
   useEffect(() => {
-    function measure() { setHeaderTop(document.getElementById('app-header')?.offsetHeight || 0) }
+    const el = document.getElementById('app-header')
+    function measure() { setHeaderTop(el?.offsetHeight || 0) }
     measure()
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    const ro = el ? new ResizeObserver(measure) : null
+    if (el) ro.observe(el)
+    return () => { window.removeEventListener('resize', measure); ro?.disconnect() }
   }, [])
 
   // Affiche les derniers messages en bas (comme WhatsApp). On remonte pour

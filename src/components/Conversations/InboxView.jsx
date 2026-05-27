@@ -41,10 +41,13 @@ export default function InboxView({ user, initialConversationId }) {
   // Hauteur du bandeau de l'app (pour la colonne liste collante en desktop)
   const [headerTop, setHeaderTop] = useState(0)
   useEffect(() => {
-    const measure = () => setHeaderTop(document.getElementById('app-header')?.offsetHeight || 0)
+    const el = document.getElementById('app-header')
+    const measure = () => setHeaderTop(el?.offsetHeight || 0)
     measure()
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    const ro = el ? new ResizeObserver(measure) : null
+    if (el) ro.observe(el)
+    return () => { window.removeEventListener('resize', measure); ro?.disconnect() }
   }, [])
 
   async function refresh(silent = false) {
