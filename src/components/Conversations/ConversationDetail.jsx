@@ -259,6 +259,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       setStagedMediaPath(null)
       setStagedPreviewUrl(null)
       setSuggestions([])
+      if (conv.status === 'fermee') {
+        try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ }
+      }
     } catch (e) {
       setSendError(e.message)
     } finally {
@@ -288,6 +291,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       })
       setMessages(prev => [...prev, msg])
       setSuggestions([])
+      if (conv.status === 'fermee') {
+        try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ }
+      }
     } catch (e) {
       setSendError(e.message)
     } finally {

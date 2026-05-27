@@ -119,7 +119,11 @@ async function handleInbound(req, res) {
 
     // Met à jour le fil : date du dernier message (+ dernier reçu si entrant)
     const patch = { last_message_at: sentAt, updated_at: new Date().toISOString() }
-    if (senderType === 'client') patch.last_inbound_at = sentAt
+    if (senderType === 'client') {
+      patch.last_inbound_at = sentAt
+      // Un message client rouvre une conversation fermée
+      if (conv.status === 'fermee') patch.status = conv.assigned_to ? 'en_cours' : 'non_assignee'
+    }
     if (!conv.client_name && name) patch.client_name = name
     await supabase.from('conversations').update(patch).eq('id', conv.id)
 
@@ -471,7 +475,7 @@ async function rehostWatiMedia(supabase, watiUrl) {
 async function getOrCreateConversation(supabase, phone, name) {
   const { data: existing } = await supabase
     .from('conversations')
-    .select('id, client_name')
+    .select('id, client_name, status, assigned_to')
     .eq('client_phone', phone)
     .maybeSingle()
   if (existing) return existing
@@ -479,14 +483,14 @@ async function getOrCreateConversation(supabase, phone, name) {
   const { data: created, error } = await supabase
     .from('conversations')
     .insert({ client_phone: phone, client_name: name || null, status: 'non_assignee' })
-    .select('id, client_name')
+    .select('id, client_name, status, assigned_to')
     .single()
   if (error) {
     // Course possible : un autre webhook a créé le fil au même instant
     if (error.code === '23505') {
       const { data: again } = await supabase
         .from('conversations')
-        .select('id, client_name')
+        .select('id, client_name, status, assigned_to')
         .eq('client_phone', phone)
         .single()
       return again
