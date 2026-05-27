@@ -121,8 +121,9 @@ async function handleInbound(req, res) {
     const patch = { last_message_at: sentAt, updated_at: new Date().toISOString() }
     if (senderType === 'client') {
       patch.last_inbound_at = sentAt
-      // Un message client rouvre une conversation fermée
-      if (conv.status === 'fermee') patch.status = conv.assigned_to ? 'en_cours' : 'non_assignee'
+      // Un message client rouvre une conversation fermée → elle redevient
+      // "à prendre" (non assignée) pour forcer quelqu'un à la reprendre.
+      if (conv.status === 'fermee') { patch.status = 'non_assignee'; patch.assigned_to = null }
     }
     if (!conv.client_name && name) patch.client_name = name
     await supabase.from('conversations').update(patch).eq('id', conv.id)
