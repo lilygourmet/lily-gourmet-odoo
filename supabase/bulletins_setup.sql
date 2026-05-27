@@ -11,9 +11,13 @@ CREATE TABLE IF NOT EXISTS bulletins_paie (
   period       TEXT NOT NULL,            -- 'YYYY-MM'
   label        TEXT NOT NULL,            -- nom lu sur le bulletin (corrigeable)
   matricule    TEXT,                     -- matricule lu (si trouve)
+  cnss         TEXT,                     -- N CNSS lu (lien vers la fiche employe)
+  net_amount   NUMERIC,                  -- net a payer lu (alimente l'onglet Salaires)
   storage_path TEXT NOT NULL,            -- chemin du PDF 1 page dans le bucket
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS cnss TEXT;
+ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS net_amount NUMERIC;
 CREATE INDEX IF NOT EXISTS idx_bulletins_period ON bulletins_paie(period);
 CREATE INDEX IF NOT EXISTS idx_bulletins_label ON bulletins_paie(label);
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { loadEmployes } from '../../lib/hr'
+import { loadBulletinsForPeriod } from '../../lib/bulletins'
 import { supabase } from '../../lib/supabase'
 import { genererOrdreVirementPDF } from '../../lib/ordreVirementPdf'
 
@@ -49,11 +50,26 @@ export default function SalairesTab({ user }) {
             if (s.note) nObj[s.employe_id] = s.note
           }
         }
-        // Pour les employés sans saisie, pré-remplir avec salaire_net
-        for (const e of all) {
-          if (!mObj[e.id] && e.salaire_net) {
-            mObj[e.id] = String(e.salaire_net)
+        // Net issu des bulletins du mois (lien par CNSS puis par nom)
+        const period = `${annee}-${String(mois).padStart(2, '0')}`
+        const normCnss = v => String(v || '').replace(/\D/g, '')
+        const nameKey = v => String(v || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^A-Z]+/).filter(w => w.length > 1).sort().join(' ')
+        const byCnss = {}, byName = {}
+        try {
+          const bulletins = await loadBulletinsForPeriod(period)
+          for (const b of bulletins) {
+            if (b.net_amount == null) continue
+            if (b.cnss) byCnss[normCnss(b.cnss)] = b.net_amount
+            const k = nameKey(b.label)
+            if (k) byName[k] = b.net_amount
           }
+        } catch (_) { /* pas bloquant */ }
+        // Pour les employés sans saisie : net du bulletin (CNSS/nom), sinon salaire_net
+        for (const e of all) {
+          if (mObj[e.id]) continue
+          const fromBulletin = byCnss[normCnss(e.cnss)] ?? byName[nameKey(e.nom)]
+          if (fromBulletin != null) mObj[e.id] = String(fromBulletin)
+          else if (e.salaire_net) mObj[e.id] = String(e.salaire_net)
         }
         setMontants(mObj)
         setNotes(nObj)

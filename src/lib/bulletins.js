@@ -19,7 +19,7 @@ export async function loadBulletins() {
 }
 
 // Ajoute une page (1 employé). Réutilise le nom déjà connu pour ce matricule.
-export async function addBulletinPage(period, suggestedLabel, matricule, bytes) {
+export async function addBulletinPage(period, { label: suggestedLabel, matricule, cnss, net }, bytes) {
   let label = suggestedLabel
   if (matricule) {
     const { data: prev } = await supabase
@@ -41,8 +41,18 @@ export async function addBulletinPage(period, suggestedLabel, matricule, bytes) 
 
   const { error } = await supabase
     .from('bulletins_paie')
-    .insert({ period, label, matricule: matricule || null, storage_path: path })
+    .insert({ period, label, matricule: matricule || null, cnss: cnss || null, net_amount: net ?? null, storage_path: path })
   if (error) throw error
+}
+
+// Bulletins d'une période donnée (pour alimenter l'onglet Salaires).
+export async function loadBulletinsForPeriod(period) {
+  const { data, error } = await supabase
+    .from('bulletins_paie')
+    .select('label, matricule, cnss, net_amount')
+    .eq('period', period)
+  if (error) throw error
+  return data || []
 }
 
 // Renomme : par matricule (toutes les pages de l'employé) sinon par id.

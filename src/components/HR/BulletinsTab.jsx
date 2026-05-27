@@ -14,6 +14,16 @@ function parsePage(text) {
   const t = text.replace(/\s+/g, ' ')
   const mat = t.match(/\b0\d{4}\b/)
   const matricule = mat ? mat[0] : null
+  // CNSS = nombre de 8 à 10 chiffres (les montants ont une virgule décimale)
+  const cnssMatch = t.match(/\b\d{8,10}\b/)
+  const cnss = cnssMatch ? cnssMatch[0] : null
+  // Net à payer = valeur de la rubrique 4009 (ex. "6 500,00")
+  let net = null
+  const netMatch = t.match(/4009[^\d]*([\d  .]+,\d{2})/)
+  if (netMatch) {
+    const n = Number(netMatch[1].replace(/[  .]/g, '').replace(',', '.'))
+    if (Number.isFinite(n)) net = n
+  }
   // Nom = première suite d'au moins 2 mots tout en majuscules, hors en-têtes
   const words = t.match(/[A-ZÀ-Ÿ][A-ZÀ-Ÿ'-]{1,}/g) || []
   let best = null, cur = []
@@ -27,7 +37,7 @@ function parsePage(text) {
     }
   }
   if (!best && cur.length >= 2) best = cur.slice(0, 4).join(' ')
-  return { matricule, label: best || '' }
+  return { matricule, cnss, net, label: best || '' }
 }
 
 export default function BulletinsTab() {
@@ -63,12 +73,12 @@ export default function BulletinsTab() {
         const pg = await pdfjsDoc.getPage(i + 1)
         const tc = await pg.getTextContent()
         const text = tc.items.map(it => it.str).join(' ')
-        const { matricule, label } = parsePage(text)
+        const parsed = parsePage(text)
         const out = await PDFDocument.create()
         const [cp] = await out.copyPages(srcDoc, [i])
         out.addPage(cp)
         const bytes = await out.save()
-        await addBulletinPage(period, label, matricule, bytes)
+        await addBulletinPage(period, parsed, bytes)
         setProgress({ done: i + 1, total: n })
       }
       await prunePeriods(3)
