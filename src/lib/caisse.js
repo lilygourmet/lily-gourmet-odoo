@@ -857,6 +857,37 @@ export async function marquerFactureRecuperee({ mouvementId, recoveredDate, user
     .limit(1)
 }
 
+// Récupère plusieurs factures via UN chèque (retrait banque) : les regroupe,
+// crée UNE seule entrée (le total du chèque) dans la caisse Layla LG.
+export async function recupererFacturesParCheque({ factures, cheque, date, userId }) {
+  const ids = factures.map(f => f.id)
+  if (ids.length === 0) throw new Error('Aucune facture sélectionnée')
+  const total = factures.reduce((s, f) => s + Number(f.amount || 0), 0)
+  const chequeVal = (cheque || '').trim() || null
+
+  const { error: e1 } = await supabase
+    .from('caisse_mouvements')
+    .update({ facture_status: 'recovered', facture_recovered_at: date, facture_cheque: chequeVal })
+    .in('id', ids)
+  if (e1) throw e1
+
+  await addMouvement({
+    caisseOwner: 'layla_lg',
+    type: 'entree',
+    sourceType: 'facture_recup',
+    amount: total,
+    label: `Chèque ${chequeVal || '—'} · ${ids.length} facture${ids.length > 1 ? 's' : ''}`,
+    mvtDate: date,
+    userId,
+  })
+
+  await logAction({
+    entityType: 'mouvement', entityId: null, action: 'create',
+    description: `Récupération chèque ${chequeVal || '—'} : ${ids.length} facture(s) · ${total} dh`,
+    amount: total, actorId: userId,
+  })
+}
+
 // ============================================================
 // SALAIRES
 // ============================================================
