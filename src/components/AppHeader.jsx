@@ -445,12 +445,12 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     )
   }
 
-  function DropdownMenu({ id, emoji, label, items }) {
+  function DropdownMenu({ id, emoji, label, items, footerSlot = null }) {
     const open = openMenu === id
     const hasActive = items.some(it => it.view === activeView)
     const totalBadge = items.reduce((s, it) => s + (it.badge || 0), 0)
 
-    if (items.length === 0) return null
+    if (items.length === 0 && !footerSlot) return null
 
     return (
       <div className="relative">
@@ -507,6 +507,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                   </button>
                 )
               })}
+              {footerSlot && (
+                <div className="px-3 py-2 mt-1 border-t border-line">{footerSlot}</div>
+              )}
             </div>
           </>
         )}
@@ -575,7 +578,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               {/* Mode admin : 3 menus deroulants */}
               <DropdownMenu id="prod" emoji="🥐" label="Production" items={menuProduction} />
               <DropdownMenu id="vitrine" emoji="🥐" label="Vitrine" items={menuVitrine} />
-              <DropdownMenu id="outils" emoji="🛠" label="Outils" items={menuOutils} />
+              <DropdownMenu id="outils" emoji="🛠" label="Outils" items={menuOutils} footerSlot={canPrintLabels(user) ? <LabelsButton /> : null} />
             </>
           ) : (
             <>
@@ -606,15 +609,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Actions : sync + roue + logout */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {canPrintLabels(user) && <LabelsButton />}
+          {!admin && canPrintLabels(user) && <LabelsButton />}
 
-          {lastSyncAt && !syncing && (
+          {!admin && lastSyncAt && !syncing && (
             <span className="font-mono text-[9px] text-ink-mute hidden md:inline" title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}>
               sync {fmtRelative(lastSyncAt)}
             </span>
           )}
 
-          {userCanSync && (
+          {!admin && userCanSync && (
             <button
               onClick={handleSync}
               disabled={syncing}
@@ -651,6 +654,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                     <CogItem icon="🔑" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
                     <CogItem icon="👥" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
                     {admin && <CogItem icon="🎨" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
+                    {admin && userCanSync && <CogItem icon="🔄" label="Synchroniser" onClick={() => { setShowCog(false); handleSync() }} />}
+                    {admin && onLogout && <CogItem icon="↩" label="Se déconnecter" onClick={() => { setShowCog(false); onLogout() }} />}
                   </div>
                 </>
               )}
@@ -667,7 +672,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </button>
           )}
 
-          {onLogout && (
+          {!admin && onLogout && (
             <button
               onClick={onLogout}
               className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
