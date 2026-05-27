@@ -2,6 +2,7 @@ import { useState } from 'react'
 import MeriemCaisse from './subviews/MeriemCaisse'
 import MeriemHamid from './subviews/MeriemHamid'
 import MeriemFactures from './subviews/MeriemFactures'
+import MeriemAvances from './subviews/MeriemAvances'
 import LaylaLG from './subviews/LaylaLG'
 
 export default function CaissesGereesView({ user }) {
@@ -22,10 +23,12 @@ export default function CaissesGereesView({ user }) {
             <SubBtn active={sub === 'caisse'}   onClick={() => setSub('caisse')}>💰 Caisse</SubBtn>
             <SubBtn active={sub === 'hamid'}    onClick={() => setSub('hamid')}>🚖 Hamid</SubBtn>
             <SubBtn active={sub === 'factures'} onClick={() => setSub('factures')}>📄 Factures</SubBtn>
+            <SubBtn active={sub === 'avances'}  onClick={() => setSub('avances')}>💸 Avances</SubBtn>
           </div>
           {sub === 'caisse'   && <MeriemCaisse user={user} />}
           {sub === 'hamid'    && <MeriemHamid user={user} />}
           {sub === 'factures' && <MeriemFactures user={user} />}
+          {sub === 'avances'  && <MeriemAvances user={user} />}
         </>
       )}
       {main === 'layla_lg' && <LaylaLG user={user} />}

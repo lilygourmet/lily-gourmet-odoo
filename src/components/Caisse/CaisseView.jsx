@@ -5,15 +5,12 @@ import CaissesGereesView from './CaissesGereesView'
 import SalairesView from './SalairesView'
 import ParametresView from './ParametresView'
 import MeriemUserView from './MeriemUserView'
-import MeriemAvances from './subviews/MeriemAvances'
 import RechercheView from './RechercheView'
 import AppHeader from '../AppHeader'
 
 const TABS = [
   { key: 'enveloppes', label: 'Enveloppes',  icon: '📊' },
-  { key: 'suivi',      label: 'Suivi versements & remboursements', icon: '🏦' },
   { key: 'caisses',    label: 'Caisses gérées', icon: '💼' },
-  { key: 'avances',    label: 'Avances Meriem', icon: '💸' },
   { key: 'salaires',   label: 'Salaires',    icon: '💵' },
   { key: 'recherche',  label: 'Recherche',   icon: '🔍' },
   { key: 'params',     label: 'Paramètres',  icon: '⚙️' },
@@ -34,7 +31,10 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
   }
 
   const [tab, setTab] = useState(() => {
-    try { return localStorage.getItem(STORAGE_KEY) || 'enveloppes' } catch { return 'enveloppes' }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      return TABS.some(t => t.key === saved) ? saved : 'enveloppes'
+    } catch { return 'enveloppes' }
   })
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, tab) } catch {}
@@ -66,10 +66,14 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
         ))}
       </div>
 
-      {tab === 'enveloppes' && <EnveloppesView user={user} />}
-      {tab === 'suivi'      && <SuiviView user={user} />}
+      {tab === 'enveloppes' && (
+        <>
+          <EnveloppesView user={user} />
+          <div style={{ borderTop: '2px solid #E8E2D8', margin: '28px 0 20px' }} />
+          <SuiviView user={user} />
+        </>
+      )}
       {tab === 'caisses'    && <CaissesGereesView user={user} />}
-      {tab === 'avances'    && <MeriemAvances user={user} />}
       {tab === 'salaires'   && <SalairesView user={user} />}
       {tab === 'recherche'  && <RechercheView user={user} />}
       {tab === 'params'     && <ParametresView user={user} />}
