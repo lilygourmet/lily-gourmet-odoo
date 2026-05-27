@@ -186,6 +186,18 @@ export async function closeConversation(conversationId, userId) {
   return data
 }
 
+/** Enregistre la note interne (privée, visible équipe) d'une conversation. */
+export async function updateConversationNote(conversationId, note) {
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ internal_note: note?.trim() || null, updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .select(CONV_SEL)
+    .single()
+  if (error) throw error
+  return data
+}
+
 /** Rouvre une conversation (en_cours si assignée, sinon non_assignee). */
 export async function reopenConversation(conversationId, userId) {
   const { data: cur } = await supabase

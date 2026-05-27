@@ -246,6 +246,8 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
   const isDone = task.status === 'done'
   const wasEdited = (task.edited_count || 0) > 0
   const hasAttachment = !!task.attachment_path
+  const isOverdue = task.due_date && !isDone && task.due_date < new Date().toISOString().slice(0, 10)
+  const dueLabel = task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''
 
   const fromName = task.from_user?.username || task.from_user?.full_name || '?'
   const toName   = task.to_user?.username   || task.to_user?.full_name   || '?'
@@ -307,6 +309,11 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
         )}
         {hasAttachment && (
           <Badge bg="#F4F0EA" col="#6F6A60">📎</Badge>
+        )}
+        {task.due_date && (
+          isOverdue
+            ? <Badge bg="#FCEBEB" col="#A32D2D">📅 En retard ({dueLabel})</Badge>
+            : <Badge bg="#F4F0EA" col="#6F6A60">📅 Avant le {dueLabel}</Badge>
         )}
         {(isReceived || isSentToSelf) && task.is_read && !isDone && (
           <Badge bg="#FFF6E5" col="#7A5510">👁 Lu</Badge>

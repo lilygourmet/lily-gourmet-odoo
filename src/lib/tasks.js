@@ -67,7 +67,7 @@ export async function countUnreadTasks(userId) {
 *   - isUrgent (boolean)
 *   - attachment (optionnel) : { path, name, size, type } — résultat de uploadTaskAttachment
 */
-export async function createTask({ title, description, fromUserId, toUserId, isUrgent = false, attachment = null }) {
+export async function createTask({ title, description, fromUserId, toUserId, isUrgent = false, attachment = null, dueDate = null }) {
   if (!title?.trim()) throw new Error('Le titre est obligatoire')
   if (!fromUserId) throw new Error('Expéditeur manquant')
   if (!toUserId) throw new Error('Destinataire manquant')
@@ -81,6 +81,7 @@ export async function createTask({ title, description, fromUserId, toUserId, isU
     status: 'todo',
     is_read: false,
     sent_at: new Date().toISOString(),
+    due_date: dueDate || null,
   }
   if (attachment) {
     payload.attachment_path = attachment.path

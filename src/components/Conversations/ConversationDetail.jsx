@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, markPaymentProof, unmarkPaymentProof } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, markPaymentProof, unmarkPaymentProof, updateConversationNote } from '../../lib/conversations'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import { supabase } from '../../lib/supabase'
@@ -84,6 +84,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [clientNameInput, setClientNameInput] = useState('')
   const [amountInput, setAmountInput] = useState('')
   const [markBusy, setMarkBusy] = useState(false)
+  // Note interne (privée, visible équipe)
+  const [noteEditing, setNoteEditing] = useState(false)
+  const [noteInput, setNoteInput] = useState('')
+  const [noteBusy, setNoteBusy] = useState(false)
   // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
   const textareaRef = useRef(null)
@@ -389,6 +393,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     finally { setStatusBusy(false) }
   }
 
+  function openNoteEdit() { setNoteInput(conv?.internal_note || ''); setNoteEditing(true) }
+  async function saveNote() {
+    setNoteBusy(true)
+    try { setConv(await updateConversationNote(conversationId, noteInput)); setNoteEditing(false) }
+    catch (e) { alert('Erreur : ' + e.message) }
+    finally { setNoteBusy(false) }
+  }
+
   function openPaymentModal(m) {
     setPaymentMsg(m)
     setOrderRefInput(m.payment_order_ref || '')
@@ -496,6 +508,34 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60"
             >Clôturer</button>
           )
+        )}
+      </div>
+
+      {/* Note interne (privée, visible équipe) */}
+      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex-shrink-0">
+        {noteEditing ? (
+          <div className="flex items-start gap-2">
+            <textarea
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              rows={2}
+              autoFocus
+              placeholder="Note interne sur ce client (allergies, VIP, préférences…)"
+              className="flex-1 px-2 py-1.5 text-[12px] bg-cream border border-amber-300 rounded-lg focus:outline-none focus:border-amber-500 resize-none"
+            />
+            <div className="flex flex-col gap-1 flex-shrink-0">
+              <button onClick={saveNote} disabled={noteBusy} className="px-2 py-1 text-[11px] font-medium bg-amber-600 text-cream rounded-lg hover:bg-amber-700 disabled:opacity-50">{noteBusy ? '…' : 'OK'}</button>
+              <button onClick={() => setNoteEditing(false)} disabled={noteBusy} className="px-2 py-1 text-[11px] border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100">✕</button>
+            </div>
+          </div>
+        ) : conv?.internal_note ? (
+          <button onClick={openNoteEdit} className="w-full text-left flex items-start gap-1.5 text-[12px] text-amber-900" title="Modifier la note">
+            <span className="flex-shrink-0">📌</span>
+            <span className="whitespace-pre-wrap break-words flex-1">{conv.internal_note}</span>
+            <span className="text-[10px] text-amber-600 flex-shrink-0">✎</span>
+          </button>
+        ) : (
+          <button onClick={openNoteEdit} className="text-[11px] text-amber-700 hover:text-amber-900">📌 + Ajouter une note interne</button>
         )}
       </div>
 

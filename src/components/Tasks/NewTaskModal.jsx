@@ -14,6 +14,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
+  const [dueDate, setDueDate] = useState('')
   const [file, setFile] = useState(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -63,6 +64,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
         toUserId,
         isUrgent,
         attachment,
+        dueDate: dueDate || null,
       })
       onCreated?.()
       onClose()
@@ -124,6 +126,16 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
               rows={3}
               style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
               maxLength={1000}
+            />
+          </label>
+
+          <label style={lblStyle}>
+            📅 À faire avant (optionnel)
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              style={inputStyle}
             />
           </label>
 
