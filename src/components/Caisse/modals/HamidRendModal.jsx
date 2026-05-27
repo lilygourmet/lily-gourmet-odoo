@@ -13,13 +13,13 @@ export default function HamidRendModal({ balance, onClose, onSubmit }) {
 
   return (
     <ModalBox title="Hamid rend l'argent" titleColor="#1D7A5C" titleIcon="↩" onClose={onClose}>
-      <div style={{ background: '#F4F0EA', padding: '10px 12px', borderRadius: 8, fontSize: 12, color: '#6F6A60', marginBottom: 14 }}>
+      <div style={{ background: '#F4F0EA', padding: '10px 12px', borderRadius: 8, fontSize: 12, color: '#4a3a30', marginBottom: 14 }}>
         Solde actuel chez Hamid : <strong style={{ color: balance >= 0 ? '#1D7A5C' : '#99201E' }}>{fmtMoney(balance)}</strong>
       </div>
 
-      <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4 }}>Montant rendu (dh)</div>
+      <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Montant rendu (dh)</div>
       <input type="number" autoFocus value={amount} onChange={e => setAmount(e.target.value)} style={ipt} />
-      <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4, marginTop: 10 }}>Date</div>
+      <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4, marginTop: 10 }}>Date</div>
       <input type="date" value={mvtDate} onChange={e => setMvtDate(e.target.value)} style={ipt} />
 
       <div style={{ background: '#E1F5EE', padding: '10px 12px', borderRadius: 8, fontSize: 11, color: '#085041', marginTop: 14 }}>
@@ -35,5 +35,5 @@ export default function HamidRendModal({ balance, onClose, onSubmit }) {
 }
 
 const ipt = { width: '100%', padding: '9px 11px', border: '0.5px solid #C4BFB6', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }
-const btnSlim = { flex: 1, fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnSlim = { flex: 1, fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { flex: 2, fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #1D7A5C', background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontWeight: 500 }

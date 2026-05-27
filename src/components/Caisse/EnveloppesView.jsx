@@ -151,7 +151,7 @@ export default function EnveloppesView({ user }) {
             style={{
               padding: '8px 16px', borderRadius: 8, border: 'none',
               background: month === m.idx ? '#993556' : '#F4F0EA',
-              color:      month === m.idx ? 'white'    : '#6F6A60',
+              color:      month === m.idx ? 'white'    : '#4a3a30',
               fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
             }}>{m.label}</button>
         ))}
@@ -168,10 +168,10 @@ export default function EnveloppesView({ user }) {
         ))}
       </div>
 
-      {loading && <div style={{ color: '#6F6A60', padding: 20 }}>Chargement…</div>}
+      {loading && <div style={{ color: '#4a3a30', padding: 20 }}>Chargement…</div>}
 
       {!loading && sources.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>
+        <div style={{ padding: 40, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>
           Aucune enveloppe {paymentMethodFilter === 'cheque' ? 'chèque' : 'espèces'} pour {monthDisplay} {year}.<br />
           Cliquez sur <strong>Synchroniser</strong> pour récupérer les sessions POS fermées d'Odoo.
         </div>
@@ -188,13 +188,13 @@ export default function EnveloppesView({ user }) {
             <div key={src}>
               <div style={{
                 fontSize: 13, fontWeight: 500, padding: '10px 12px', background: '#F4F0EA',
-                borderRadius: 8, marginBottom: 8, color: '#6F6A60',
+                borderRadius: 8, marginBottom: 8, color: '#4a3a30',
               }}>
                 {src === 'Café' ? '☕' : src === 'Boutique' ? '🛍️' : '📍'} {src}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {(bySource[src] || []).length === 0 ? (
-                  <div style={{ fontSize: 12, color: '#9B968D', padding: 8 }}>Aucune enveloppe</div>
+                  <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune enveloppe</div>
                 ) : (bySource[src] || []).map(env => (
                   <EnveloppeCard key={env.id} env={env}
                     onClick={() => env.destinataire_id ? setDetailEnv(env) : setAttributionEnv(env)} />
@@ -206,7 +206,7 @@ export default function EnveloppesView({ user }) {
       )}
 
       {/* Légende */}
-      <div style={{ marginTop: 28, display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: '#6F6A60' }}>
+      <div style={{ marginTop: 28, display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: '#4a3a30' }}>
         {destinataires.map(d => {
           const c = COLOR_PALETTE[d.color_key]
           if (!c) return null
@@ -266,14 +266,14 @@ function Chip({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
       fontSize: 11, padding: '4px 10px', borderRadius: 999, cursor: 'pointer', border: 'none',
-      background: active ? '#3A3733' : '#F4F0EA',
-      color:      active ? 'white'   : '#6F6A60',
+      background: active ? '#1a0f0a' : '#F4F0EA',
+      color:      active ? 'white'   : '#4a3a30',
     }}>{children}</button>
   )
 }
 
-const btnSlim   = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
-const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnSlim   = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 
 const toggleActiveStyle = {
   flex: 1,

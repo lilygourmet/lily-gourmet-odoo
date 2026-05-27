@@ -40,7 +40,7 @@ function tabMain(active) {
   return {
     fontSize: 14, fontWeight: 500, padding: '10px 18px', borderRadius: 8, border: 'none',
     background: active ? '#993556' : '#F4F0EA',
-    color:      active ? 'white'    : '#6F6A60',
+    color:      active ? 'white'    : '#4a3a30',
     cursor: 'pointer',
   }
 }
@@ -49,7 +49,7 @@ function SubBtn({ active, onClick, children }) {
     <button onClick={onClick} style={{
       fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
       background: active ? 'white' : 'transparent',
-      color:      active ? '#3A3733' : '#6F6A60',
+      color:      active ? '#1a0f0a' : '#4a3a30',
     }}>{children}</button>
   )
 }

@@ -158,7 +158,7 @@ export default function EmployesTab({ user, isAdmin }) {
           placeholder="🔍 Rechercher par nom, poste, CNSS, CIN…"
           style={{
             flex: 1, minWidth: 240, padding: '9px 11px', fontSize: 13,
-            border: '1px solid #E8E2D8', borderRadius: 6
+            border: '1px solid #e5d8c3', borderRadius: 6
           }}
         />
         {isAdmin && (
@@ -166,8 +166,8 @@ export default function EmployesTab({ user, isAdmin }) {
             {['actif', 'inactif', 'tous'].map(f => (
               <button key={f} type="button" onClick={() => setFilter(f)} style={{
                 padding: '7px 12px', fontSize: 12, borderRadius: 999, cursor: 'pointer', border: 'none',
-                background: filter === f ? '#3A3733' : '#F4F0EA',
-                color: filter === f ? 'white' : '#6F6A60'
+                background: filter === f ? '#1a0f0a' : '#F4F0EA',
+                color: filter === f ? 'white' : '#4a3a30'
               }}>
                 {f === 'actif' ? 'Actifs' : f === 'inactif' ? 'Inactifs' : 'Tous'}
               </button>
@@ -185,7 +185,7 @@ export default function EmployesTab({ user, isAdmin }) {
             <button key={f.v} type="button" onClick={() => setSocieteFilter(f.v)} style={{
               padding: '7px 12px', fontSize: 12, borderRadius: 999, cursor: 'pointer', border: 'none',
               background: societeFilter === f.v ? '#993556' : '#F4F0EA',
-              color: societeFilter === f.v ? 'white' : '#6F6A60',
+              color: societeFilter === f.v ? 'white' : '#4a3a30',
               fontWeight: societeFilter === f.v ? 500 : 400,
             }}>
               {f.label}
@@ -203,26 +203,26 @@ export default function EmployesTab({ user, isAdmin }) {
 
       {/* Info du jour */}
       <div style={{
-        fontSize: 11, color: '#9B968D', marginBottom: 10, paddingLeft: 4,
+        fontSize: 11, color: '#8a7a70', marginBottom: 10, paddingLeft: 4,
       }}>
         📅 Aujourd'hui : <strong>{jourSemaineFR}</strong> {todayDate.toLocaleDateString('fr-FR')}
       </div>
 
       {/* Tableau */}
-      {loading && <div style={{ padding: 20, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>}
+      {loading && <div style={{ padding: 20, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>}
       {!loading && filtered.length === 0 && (
         <div style={{
-          padding: 30, textAlign: 'center', color: '#6F6A60',
+          padding: 30, textAlign: 'center', color: '#4a3a30',
           background: '#F9F6F1', borderRadius: 8, fontSize: 13
         }}>
           {search ? 'Aucun employé trouvé.' : 'Aucun employé dans cette catégorie.'}
         </div>
       )}
       {!loading && filtered.length > 0 && !isMobile && (
-        <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#6F6A60' }}>
+              <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
                 <Th>Nom</Th>
                 <Th>Société</Th>
                 <Th>Poste</Th>
@@ -259,7 +259,7 @@ export default function EmployesTab({ user, isAdmin }) {
                         fontWeight: 500,
                       }}>{e.societe?.code || '—'}</span>
                     </Td>
-                    <Td style={{ color: '#6F6A60' }}>{e.poste || '—'}</Td>
+                    <Td style={{ color: '#4a3a30' }}>{e.poste || '—'}</Td>
                     <Td>{e.cnss || '—'}</Td>
                     <Td>{e.cin || '—'}</Td>
                     <Td>{fmtDate(e.date_entree)}</Td>
@@ -275,8 +275,8 @@ export default function EmployesTab({ user, isAdmin }) {
                             </span>
                           ) : (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ letterSpacing: 2, color: '#9B968D' }}>•••••</span>
-                              <span style={{ color: '#9B968D', fontSize: 11 }}>dh</span>
+                              <span style={{ letterSpacing: 2, color: '#8a7a70' }}>•••••</span>
+                              <span style={{ color: '#8a7a70', fontSize: 11 }}>dh</span>
                               <button onClick={ev => handleRevealSalary(ev, e.id)} style={{
                                 background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
                               }} title="Révéler">👁</button>
@@ -293,7 +293,7 @@ export default function EmployesTab({ user, isAdmin }) {
                       }}>{statut.label}</span>
                     </Td>
                     <Td>
-                      <span style={{ color: '#9B968D', fontSize: 11, fontStyle: 'italic' }}>✏️ Modifier</span>
+                      <span style={{ color: '#8a7a70', fontSize: 11, fontStyle: 'italic' }}>✏️ Modifier</span>
                       {isAdmin && (
                         <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">🗑️</button>
                       )}
@@ -316,7 +316,7 @@ export default function EmployesTab({ user, isAdmin }) {
                 key={e.id}
                 onClick={() => setEditingEmp(e)}
                 style={{
-                  background: 'white', border: '1px solid #E8E2D8', borderRadius: 10,
+                  background: 'white', border: '1px solid #e5d8c3', borderRadius: 10,
                   padding: 12, opacity: e.actif ? 1 : 0.6, cursor: 'pointer',
                 }}
               >
@@ -328,8 +328,8 @@ export default function EmployesTab({ user, isAdmin }) {
                     color: e.societe?.code === 'LG' ? '#993556' : '#27500A', fontWeight: 500,
                   }}>{e.societe?.code || '—'}</span>
                 </div>
-                {e.poste && <div style={{ fontSize: 12, color: '#6F6A60', marginTop: 2 }}>{e.poste}</div>}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 11, color: '#9B968D' }}>
+                {e.poste && <div style={{ fontSize: 12, color: '#4a3a30', marginTop: 2 }}>{e.poste}</div>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 11, color: '#8a7a70' }}>
                   <span style={{
                     fontSize: 10, padding: '3px 8px', borderRadius: 999,
                     background: statut.bg, color: statut.color, fontWeight: 500, whiteSpace: 'nowrap',
@@ -349,12 +349,12 @@ export default function EmployesTab({ user, isAdmin }) {
                           </span>
                         ) : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ letterSpacing: 2, color: '#9B968D' }}>•••••</span>
-                            <span style={{ color: '#9B968D', fontSize: 11 }}>dh</span>
+                            <span style={{ letterSpacing: 2, color: '#8a7a70' }}>•••••</span>
+                            <span style={{ color: '#8a7a70', fontSize: 11 }}>dh</span>
                             <button onClick={ev => handleRevealSalary(ev, e.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0 }} title="Révéler">👁</button>
                           </span>
                         )
-                      ) : <span style={{ color: '#9B968D' }}>—</span>}
+                      ) : <span style={{ color: '#8a7a70' }}>—</span>}
                     </span>
                     <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">🗑️</button>
                   </div>

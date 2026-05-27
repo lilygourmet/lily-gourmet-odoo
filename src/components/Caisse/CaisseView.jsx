@@ -47,7 +47,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
       <div className="caisse-root" style={{ padding: '1rem 1.25rem' }}>
       <div style={{
         display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap',
-        borderBottom: '1px solid #E8E2D8', paddingBottom: 12,
+        borderBottom: '1px solid #e5d8c3', paddingBottom: 12,
       }}>
         {TABS.map(t => (
           <button
@@ -58,7 +58,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
               borderRadius: 8,
               border: '1px solid transparent',
               background: tab === t.key ? '#993556' : '#F4F0EA',
-              color:      tab === t.key ? 'white'   : '#3A3733',
+              color:      tab === t.key ? 'white'   : '#1a0f0a',
               fontSize: 13, fontWeight: 500, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
@@ -77,8 +77,8 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
               <button key={s.k} onClick={() => setEnvSub(s.k)} style={{
                 padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
                 fontSize: 13, fontWeight: 500,
-                background: envSub === s.k ? '#3A3733' : '#F4F0EA',
-                color:      envSub === s.k ? 'white'   : '#6F6A60',
+                background: envSub === s.k ? '#1a0f0a' : '#F4F0EA',
+                color:      envSub === s.k ? 'white'   : '#4a3a30',
               }}>{s.icon} {s.label}</button>
             ))}
           </div>

@@ -68,7 +68,7 @@ export default function MeriemFactures({ user }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 18 }}>
-        <StatCard label={`Total factures · ${year}`} value={stats.total} sub={`${stats.countAll} factures`} bg="#F4F0EA" text="#3A3733" border="#E8E2D8" />
+        <StatCard label={`Total factures · ${year}`} value={stats.total} sub={`${stats.countAll} factures`} bg="#F4F0EA" text="#1a0f0a" border="#e5d8c3" />
         <StatCard label="À récupérer (reliquat)" value={stats.pending} sub={`${stats.countPending} en attente`} bg="#FCE9E8" text="#99201E" border="#E5BFB6" highlight />
         <StatCard label="Déjà récupéré" value={stats.recovered} sub={`${stats.countRecovered} · transféré Layla LG`} bg="#E1F5EE" text="#085041" border="#97C9B4" />
       </div>
@@ -86,13 +86,13 @@ export default function MeriemFactures({ user }) {
             <label key={f.id} style={{
               display: 'grid', gridTemplateColumns: '30px 90px 1fr 110px', gap: 12, alignItems: 'center', cursor: 'pointer',
               padding: '12px 16px', borderRadius: 8, marginBottom: 5, background: 'white',
-              border: selected.has(f.id) ? '1.5px solid #378ADD' : '0.5px solid #E8E2D8',
+              border: selected.has(f.id) ? '1.5px solid #378ADD' : '0.5px solid #e5d8c3',
             }}>
               <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggle(f.id)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
-              <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(f.mvt_date)}</div>
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.mvt_date)}</div>
               <div>
                 <div style={{ fontSize: 13 }}>{f.label}</div>
-                <div style={{ fontSize: 11, color: '#6F6A60', marginTop: 2 }}>{f.category}</div>
+                <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 2 }}>{f.category}</div>
               </div>
               <div style={{ fontSize: 15, fontWeight: 500, textAlign: 'right' }}>{fmtMoney(f.amount)}</div>
             </label>
@@ -131,12 +131,12 @@ export default function MeriemFactures({ user }) {
               {g.items.map(f => (
                 <div key={f.id} style={{
                   display: 'grid', gridTemplateColumns: '90px 1fr 110px', gap: 12, alignItems: 'center',
-                  padding: '9px 16px 9px 28px', borderRadius: 8, marginBottom: 4, background: 'white', border: '0.5px solid #E8E2D8',
+                  padding: '9px 16px 9px 28px', borderRadius: 8, marginBottom: 4, background: 'white', border: '0.5px solid #e5d8c3',
                 }}>
-                  <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(f.mvt_date)}</div>
+                  <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.mvt_date)}</div>
                   <div>
                     <div style={{ fontSize: 13 }}>{f.label}</div>
-                    <div style={{ fontSize: 11, color: '#6F6A60', marginTop: 2 }}>{f.category}</div>
+                    <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 2 }}>{f.category}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 500, textAlign: 'right' }}>{fmtMoney(f.amount)}</div>
                 </div>
@@ -151,7 +151,7 @@ export default function MeriemFactures({ user }) {
         <div style={overlay} onClick={() => !busy && setShowCheque(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>💳 Récupérer par chèque</h3>
-            <p style={{ margin: '0 0 14px', fontSize: 12, color: '#6F6A60' }}>{selected.size} facture{selected.size > 1 ? 's' : ''} · total <strong>{fmtMoney(selectedTotal)}</strong> (montant retiré à la banque)</p>
+            <p style={{ margin: '0 0 14px', fontSize: 12, color: '#4a3a30' }}>{selected.size} facture{selected.size > 1 ? 's' : ''} · total <strong>{fmtMoney(selectedTotal)}</strong> (montant retiré à la banque)</p>
             <label style={lbl}>N° de chèque
               <input type="text" value={cheque} onChange={e => setCheque(e.target.value)} autoFocus placeholder="ex. 1234567" style={inp} />
             </label>
@@ -183,16 +183,16 @@ function StatCard({ label, value, sub, bg, text, border, highlight }) {
 function Chip({ active, onClick, children }) {
   return <button onClick={onClick} style={{
     fontSize: 12, padding: '5px 12px', borderRadius: 999, cursor: 'pointer', border: 'none',
-    background: active ? '#3A3733' : '#F4F0EA',
-    color:      active ? 'white'   : '#6F6A60',
+    background: active ? '#1a0f0a' : '#F4F0EA',
+    color:      active ? 'white'   : '#4a3a30',
   }}>{children}</button>
 }
 
-const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
-const emptyBox = { padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }
+const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const emptyBox = { padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
 const modal = { background: 'white', borderRadius: 12, padding: 22, maxWidth: 380, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
-const lbl = { display: 'block', fontSize: 12, fontWeight: 500, color: '#3A3733', marginBottom: 12 }
-const inp = { display: 'block', width: '100%', padding: '9px 11px', marginTop: 5, fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6, boxSizing: 'border-box' }
-const btnSec = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', color: '#6F6A60' }
+const lbl = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }
+const inp = { display: 'block', width: '100%', padding: '9px 11px', marginTop: 5, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, boxSizing: 'border-box' }
+const btnSec = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30' }
 const btnPri = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0C447C', color: 'white', cursor: 'pointer', fontWeight: 500 }

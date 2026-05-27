@@ -230,7 +230,7 @@ export default function SalairesTab({ user }) {
             <button key={t.v} onClick={() => setSocieteFilter(t.v)} style={{
               padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
               background: societeFilter === t.v ? '#993556' : 'transparent',
-              color: societeFilter === t.v ? 'white' : '#6F6A60',
+              color: societeFilter === t.v ? 'white' : '#4a3a30',
               fontWeight: societeFilter === t.v ? 500 : 400,
             }}>{t.label}</button>
           ))}
@@ -245,12 +245,12 @@ export default function SalairesTab({ user }) {
         {[
           { v: 'declare',     label: `✅ Déclarés (${nbDeclaresSociete})`,        bg: '#27500A' },
           { v: 'non_declare', label: `❌ Non déclarés (${nbNonDeclaresSociete})`, bg: '#A32D2D' },
-          { v: 'tous',        label: `👥 Tous (${nbDeclaresSociete + nbNonDeclaresSociete})`, bg: '#3A3733' },
+          { v: 'tous',        label: `👥 Tous (${nbDeclaresSociete + nbNonDeclaresSociete})`, bg: '#1a0f0a' },
         ].map(t => (
           <button key={t.v} onClick={() => setDeclareFilter(t.v)} style={{
             padding: '7px 14px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
             background: declareFilter === t.v ? t.bg : 'transparent',
-            color: declareFilter === t.v ? 'white' : '#6F6A60',
+            color: declareFilter === t.v ? 'white' : '#4a3a30',
             fontWeight: declareFilter === t.v ? 500 : 400,
           }}>{t.label}</button>
         ))}
@@ -283,10 +283,10 @@ export default function SalairesTab({ user }) {
       </div>
 
       {loading ? (
-        <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>
+        <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
       ) : employesSociete.length === 0 ? (
         <div style={{
-          padding: 40, textAlign: 'center', color: '#6F6A60',
+          padding: 40, textAlign: 'center', color: '#4a3a30',
           background: '#F9F6F1', borderRadius: 10, fontSize: 13,
         }}>
           {declareFilter === 'declare'
@@ -295,12 +295,12 @@ export default function SalairesTab({ user }) {
             ? `Aucun employé non déclaré dans ${societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'}`
             : `Aucun employé dans ${societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'}`}
           <br />
-          <span style={{ fontSize: 11, color: '#9B968D' }}>
+          <span style={{ fontSize: 11, color: '#8a7a70' }}>
             {declareFilter === 'declare' && 'Coche "Déclaré" dans la fiche employé pour qu\'il apparaisse ici.'}
           </span>
         </div>
       ) : (
-        <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#F4F0EA' }}>
@@ -330,8 +330,8 @@ export default function SalairesTab({ user }) {
                       }}>❌ Non déclaré</span>
                     )}
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#6F6A60', fontSize: 12 }}>{e.banque || '—'}</td>
-                  <td style={{ padding: '10px 12px', color: '#6F6A60', fontSize: 11, fontFamily: 'monospace' }}>
+                  <td style={{ padding: '10px 12px', color: '#4a3a30', fontSize: 12 }}>{e.banque || '—'}</td>
+                  <td style={{ padding: '10px 12px', color: '#4a3a30', fontSize: 11, fontFamily: 'monospace' }}>
                     {e.rib || <span style={{ color: '#A32D2D' }}>⚠️ Manquant</span>}
                   </td>
                   <td style={{ padding: '8px 12px', textAlign: 'right' }}>
@@ -343,7 +343,7 @@ export default function SalairesTab({ user }) {
                       placeholder="0"
                       style={{
                         width: 110, padding: '6px 10px', fontSize: 13, textAlign: 'right',
-                        border: '1px solid #E8E2D8', borderRadius: 6,
+                        border: '1px solid #e5d8c3', borderRadius: 6,
                       }}
                     />
                   </td>
@@ -365,8 +365,8 @@ export default function SalairesTab({ user }) {
       {!loading && employesSociete.length > 0 && (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
           <button onClick={() => handleSauvegarder()} disabled={saving} style={{
-            padding: '10px 18px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
-            border: '1px solid #E8E2D8', borderRadius: 8, cursor: saving ? 'wait' : 'pointer',
+            padding: '10px 18px', fontSize: 13, background: '#F4F0EA', color: '#1a0f0a',
+            border: '1px solid #e5d8c3', borderRadius: 8, cursor: saving ? 'wait' : 'pointer',
           }}>
             {saving ? '⏳ ...' : '💾 Sauvegarder'}
           </button>
@@ -383,17 +383,17 @@ export default function SalairesTab({ user }) {
   )
 }
 
-function Carte({ label, val, unit, color = '#3A3733' }) {
+function Carte({ label, val, unit, color = '#1a0f0a' }) {
   return (
-    <div style={{ background: 'white', padding: 10, borderRadius: 8, border: '1px solid #E8E2D8' }}>
-      <p style={{ fontSize: 11, color: '#6F6A60', margin: 0, marginBottom: 3 }}>{label}</p>
+    <div style={{ background: 'white', padding: 10, borderRadius: 8, border: '1px solid #e5d8c3' }}>
+      <p style={{ fontSize: 11, color: '#4a3a30', margin: 0, marginBottom: 3 }}>{label}</p>
       <p style={{ fontSize: 18, fontWeight: 600, color, margin: 0 }}>
         {typeof val === 'number' ? val.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : val}
-        {unit && <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 4 }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 11, color: '#8a7a70', marginLeft: 4 }}>{unit}</span>}
       </p>
     </div>
   )
 }
 
-const thStyle = { padding: '10px 12px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#6F6A60' }
-const btnNav = { padding: '6px 12px', fontSize: 14, background: 'white', border: '1px solid #E8E2D8', borderRadius: 6, cursor: 'pointer' }
+const thStyle = { padding: '10px 12px', textAlign: 'left', fontWeight: 500, fontSize: 12, color: '#4a3a30' }
+const btnNav = { padding: '6px 12px', fontSize: 14, background: 'white', border: '1px solid #e5d8c3', borderRadius: 6, cursor: 'pointer' }

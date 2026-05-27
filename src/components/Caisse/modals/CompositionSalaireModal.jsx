@@ -84,23 +84,23 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 28, maxWidth: 720, width: '100%', maxHeight: '92vh', overflowY: 'auto', border: '0.5px solid #E8E2D8' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 28, maxWidth: 720, width: '100%', maxHeight: '92vh', overflowY: 'auto', border: '0.5px solid #e5d8c3' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>Composer le salaire de {salaire.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'} · {salaire.month}/{salaire.year}</div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }}>✕</button>
         </div>
 
         <div style={{ background: '#F4F0EA', padding: '14px 16px', borderRadius: 8, marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: '#6F6A60' }}>Salaire cible</div>
+            <div style={{ fontSize: 11, color: '#4a3a30' }}>Salaire cible</div>
             <input type="number" value={target} onChange={(e) => changeTarget(e.target.value)} style={{ fontSize: 18, fontWeight: 500, padding: '4px 8px', border: '0.5px solid #C4BFB6', borderRadius: 6, width: 110 }} />
-            <div style={{ fontSize: 11, color: '#6F6A60', marginLeft: 'auto' }}>Cumulé</div>
-            <div style={{ fontSize: 18, fontWeight: 500, color: cumule >= target ? '#1D7A5C' : '#3A3733' }}>{fmtMoney(cumule)}</div>
+            <div style={{ fontSize: 11, color: '#4a3a30', marginLeft: 'auto' }}>Cumulé</div>
+            <div style={{ fontSize: 18, fontWeight: 500, color: cumule >= target ? '#1D7A5C' : '#1a0f0a' }}>{fmtMoney(cumule)}</div>
           </div>
           <div style={{ height: 8, background: 'rgba(0,0,0,0.06)', borderRadius: 4, overflow: 'hidden', marginBottom: 6 }}>
             <div style={{ height: '100%', background: colorBen.border, width: `${progress}%`, transition: 'width 0.3s' }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6F6A60' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#4a3a30' }}>
             <span>{selected.length} enveloppes sélectionnées</span>
             <span style={{ color: reliquat >= 0 ? '#1D7A5C' : '#99201E', fontWeight: 500 }}>
               {reliquat >= 0 ? `+${fmtMoney(reliquat)} de reliquat` : `manque ${fmtMoney(Math.abs(reliquat))}`}
@@ -110,10 +110,10 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>Enveloppes disponibles</div>
-          <button onClick={autoFill} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }}>⚡ Auto-remplir</button>
+          <button onClick={autoFill} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }}>⚡ Auto-remplir</button>
         </div>
 
-        {available.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>Aucune enveloppe disponible (toutes affectées).</div>}
+        {available.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>Aucune enveloppe disponible (toutes affectées).</div>}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
           {available.map(env => {
@@ -122,12 +122,12 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
               <label key={env.id} style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
                 background: isSel ? colorBen.bg : '#F4F0EA',
-                border: `0.5px solid ${isSel ? colorBen.border : '#E8E2D8'}`,
+                border: `0.5px solid ${isSel ? colorBen.border : '#e5d8c3'}`,
               }}>
                 <input type="checkbox" checked={isSel} onChange={() => toggle(env)} style={{ accentColor: '#993556' }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, color: isSel ? colorBen.text : '#6F6A60' }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: isSel ? colorBen.text : '#3A3733' }}>{fmtMoney(env.amount_cash)}</div>
+                  <div style={{ fontSize: 11, color: isSel ? colorBen.text : '#4a3a30' }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: isSel ? colorBen.text : '#1a0f0a' }}>{fmtMoney(env.amount_cash)}</div>
                 </div>
               </label>
             )
@@ -135,7 +135,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
         </div>
 
         {reliquat > 0 && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: '0.5px solid #E8E2D8' }}>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: '0.5px solid #e5d8c3' }}>
             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Affecter le reliquat de {fmtMoney(reliquat)} à :</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
               {RELIQUAT_DESTINATIONS.map(d => {
@@ -155,7 +155,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-          <button onClick={saveDraft} disabled={busy} style={{ flex: 1, fontSize: 13, padding: 11, borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }}>
+          <button onClick={saveDraft} disabled={busy} style={{ flex: 1, fontSize: 13, padding: 11, borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }}>
             Enregistrer en brouillon
           </button>
           <button onClick={validatePret} disabled={busy || cumule < Number(target)} style={{

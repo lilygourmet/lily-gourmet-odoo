@@ -22,7 +22,7 @@ function SubTabBtn({ active, onClick, children }) {
     <button onClick={onClick} style={{
       fontSize: 14, fontWeight: 500, padding: '10px 18px', borderRadius: 8, border: 'none',
       background: active ? '#993556' : '#F4F0EA',
-      color:      active ? 'white'    : '#6F6A60',
+      color:      active ? 'white'    : '#4a3a30',
       cursor: 'pointer',
     }}>{children}</button>
   )
@@ -118,8 +118,8 @@ function BanqueSection({ user }) {
         {['pending', 'done', 'all'].map(s => (
           <button key={s} onClick={() => setStatusFilter(s)} style={{
             fontSize: 12, padding: '5px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
-            background: statusFilter === s ? '#3A3733' : '#F4F0EA',
-            color:      statusFilter === s ? 'white'   : '#6F6A60',
+            background: statusFilter === s ? '#1a0f0a' : '#F4F0EA',
+            color:      statusFilter === s ? 'white'   : '#4a3a30',
           }}>{s === 'pending' ? 'En attente' : s === 'done' ? 'Versées' : 'Toutes'}</button>
         ))}
       </div>
@@ -131,7 +131,7 @@ function BanqueSection({ user }) {
       </div>
 
       {filteredList.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>
           Aucune enveloppe banque dans ce filtre.
         </div>
       )}
@@ -139,20 +139,20 @@ function BanqueSection({ user }) {
       {filteredList.map(env => (
         <div key={env.id} style={rowCard}>
           <div>
-            <div style={{ fontSize: 11, color: '#6F6A60', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 11, color: '#4a3a30', display: 'flex', alignItems: 'center', gap: 6 }}>
               Enveloppe <MethodPill method={env.payment_method || 'cash'} />
             </div>
             <div style={{ fontSize: 16, fontWeight: 500 }}>{fmtMoney(env.amount_cash)}</div>
-            <div style={{ fontSize: 11, color: '#6F6A60', marginTop: 2 }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
+            <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 2 }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#9B968D' }}>Date du versement</div>
+            <div style={{ fontSize: 10, color: '#8a7a70' }}>Date du versement</div>
             {editDate[env.id] ? (
               <input type="date" defaultValue={env.proof_date || ''}
                 onBlur={(e) => handleSaveDate(env.id, e.target.value)}
                 style={{ padding: '4px 8px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 6 }} />
             ) : (
-              <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-block', fontSize: 12, color: '#6F6A60' }}>
+              <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-block', fontSize: 12, color: '#4a3a30' }}>
                 📅 {env.proof_date ? fmtDateLongue(env.proof_date) : 'À définir'}
               </div>
             )}
@@ -242,8 +242,8 @@ function PersoSection({ user }) {
         {['pending', 'done', 'all'].map(s => (
           <button key={s} onClick={() => setStatusFilter(s)} style={{
             fontSize: 12, padding: '5px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
-            background: statusFilter === s ? '#3A3733' : '#F4F0EA',
-            color:      statusFilter === s ? 'white'   : '#6F6A60',
+            background: statusFilter === s ? '#1a0f0a' : '#F4F0EA',
+            color:      statusFilter === s ? 'white'   : '#4a3a30',
           }}>{s === 'pending' ? 'En attente' : s === 'done' ? 'Remboursées' : 'Toutes'}</button>
         ))}
       </div>
@@ -258,21 +258,21 @@ function PersoSection({ user }) {
                 <div style={{ fontSize: 14, fontWeight: 500 }}>👤 {dest.name}</div>
                 <div style={{ fontSize: 12 }}>{items.length} · {fmtMoney(totalAttente)}</div>
               </div>
-              {items.length === 0 && <div style={{ fontSize: 12, color: '#9B968D', padding: 8 }}>Aucune enveloppe</div>}
+              {items.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune enveloppe</div>}
               {items.map(env => (
-                <div key={env.id} style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #E8E2D8' }}>
+                <div key={env.id} style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <div style={{ fontSize: 16, fontWeight: 500 }}>{fmtMoney(env.amount_cash)}</div>
                     <span style={env.proof_url ? statusDone : statusPending}>{env.proof_url ? 'Remboursée' : 'À rembourser'}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 8 }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
-                  <div style={{ fontSize: 10, color: '#9B968D' }}>Date de prise</div>
+                  <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 8 }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
+                  <div style={{ fontSize: 10, color: '#8a7a70' }}>Date de prise</div>
                   {editDate[env.id] ? (
                     <input type="date" defaultValue={env.proof_date || ''}
                       onBlur={(e) => handleSaveDate(env.id, e.target.value)}
                       style={{ padding: '3px 8px', fontSize: 12, border: '1px solid #C4BFB6', borderRadius: 6, marginBottom: 8 }} />
                   ) : (
-                    <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-block', fontSize: 12, color: '#6F6A60', marginBottom: 8 }}>
+                    <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-block', fontSize: 12, color: '#4a3a30', marginBottom: 8 }}>
                       📅 {env.proof_date ? fmtDateLongue(env.proof_date) : 'À définir'}
                     </div>
                   )}
@@ -298,11 +298,11 @@ function PersoSection({ user }) {
   )
 }
 
-const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
-const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const rowCard = {
   display: 'grid', gridTemplateColumns: '1fr 1fr 130px 1fr', gap: 14, alignItems: 'center',
-  padding: '12px 16px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #E8E2D8',
+  padding: '12px 16px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3',
 }
 const statusPending = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#FCE9E8', color: '#99201E' }
 const statusDone    = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#E1F5EE', color: '#085041' }
@@ -311,7 +311,7 @@ function tabBtn(active, bg, txt, brd) {
   return {
     padding: '8px 16px', borderRadius: 8, border: active ? `0.5px solid ${brd}` : 'none',
     background: active ? bg    : '#F4F0EA',
-    color:      active ? txt   : '#6F6A60',
+    color:      active ? txt   : '#4a3a30',
     fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
   }
 }
@@ -323,8 +323,8 @@ function methodFilterBtn(active, method) {
   return {
     fontSize: 12, padding: '6px 14px', borderRadius: 999, cursor: 'pointer', fontWeight: 500,
     border: active ? '0.5px solid' : 'none',
-    borderColor: cashActive ? '#085041' : chequeActive ? '#0C447C' : '#3A3733',
-    background: cashActive ? '#DCF0E2' : chequeActive ? '#DCEBFB' : allActive ? '#3A3733' : '#F4F0EA',
-    color:      cashActive ? '#085041' : chequeActive ? '#0C447C' : allActive ? 'white' : '#6F6A60',
+    borderColor: cashActive ? '#085041' : chequeActive ? '#0C447C' : '#1a0f0a',
+    background: cashActive ? '#DCF0E2' : chequeActive ? '#DCEBFB' : allActive ? '#1a0f0a' : '#F4F0EA',
+    color:      cashActive ? '#085041' : chequeActive ? '#0C447C' : allActive ? 'white' : '#4a3a30',
   }
 }

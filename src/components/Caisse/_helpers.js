@@ -13,7 +13,7 @@ export const COLOR_PALETTE = {
   bleu_marine: { bg: '#E0E5F2', border: '#3D54AE', text: '#162455', emoji: '⚓', label: 'Bleu marine' },
   cyan:        { bg: '#E0F1F2', border: '#2DA4B0', text: '#0A4F55', emoji: '💧', label: 'Cyan' },
   violet:      { bg: '#EEEDFE', border: '#7F77DD', text: '#3C3489', emoji: '🟣', label: 'Violet' },
-  gris:        { bg: '#EDEDEA', border: '#9B968D', text: '#3A3733', emoji: '⚫', label: 'Gris' },
+  gris:        { bg: '#EDEDEA', border: '#8a7a70', text: '#1a0f0a', emoji: '⚫', label: 'Gris' },
 }
 
 // Couleurs par type (pour suggérer dans la palette)
@@ -27,7 +27,7 @@ export const COLORS_BY_TYPE = {
 export const UNASSIGNED_STYLE = {
   bg: 'var(--color-background-secondary, #F4F0EA)',
   border: 'var(--color-border-primary, #C4BFB6)',
-  text: 'var(--color-text-primary, #3A3733)',
+  text: 'var(--color-text-primary, #1a0f0a)',
 }
 
 // Récupère le style d'une enveloppe selon son destinataire
@@ -93,7 +93,7 @@ export const CAISSES_GEREES = [
 
 // Statuts salaire
 export const SALAIRE_STATUS_LABELS = {
-  brouillon: { label: 'Brouillon',     bg: 'var(--color-background-secondary, #F4F0EA)', text: 'var(--color-text-secondary, #6F6A60)' },
+  brouillon: { label: 'Brouillon',     bg: 'var(--color-background-secondary, #F4F0EA)', text: 'var(--color-text-secondary, #4a3a30)' },
   pret:      { label: 'Prêt à payer',  bg: '#E6F1FB', text: '#0C447C' },
   paye:      { label: 'Payé',          bg: '#E1F5EE', text: '#085041' },
 }

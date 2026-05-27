@@ -49,7 +49,7 @@ export default function SalairesView({ user }) {
         <button onClick={() => setYear(y => y + 1)} style={btnSlim}>→</button>
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 500, color: '#6F6A60', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <div style={{ fontSize: 13, fontWeight: 500, color: '#4a3a30', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         Salaires de {fmtMois(month - 1)} {year}
       </div>
 
@@ -91,21 +91,21 @@ export default function SalairesView({ user }) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: '#6F6A60', textTransform: 'uppercase', letterSpacing: 0.5 }}>Historique</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>Historique</div>
       </div>
 
-      {history.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>Aucun salaire dans l'historique.</div>}
+      {history.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>Aucun salaire dans l'historique.</div>}
       {history.map(sal => {
         const statusObj = SALAIRE_STATUS_LABELS[sal.status]
         const c = SALAIRE_COLORS[sal.beneficiaire]
         return (
           <div key={sal.id} style={{
             display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 100px 32px', gap: 14, alignItems: 'center',
-            padding: '11px 14px', borderRadius: 8, marginBottom: 4, background: 'white', border: '0.5px solid #E8E2D8',
+            padding: '11px 14px', borderRadius: 8, marginBottom: 4, background: 'white', border: '0.5px solid #e5d8c3',
           }}>
-            <div style={{ fontSize: 12, color: '#6F6A60' }}>{fmtMois(sal.month - 1)} {sal.year}</div>
+            <div style={{ fontSize: 12, color: '#4a3a30' }}>{fmtMois(sal.month - 1)} {sal.year}</div>
             <div><span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 999, background: c.bg, color: c.text }}>👤 {sal.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'}</span></div>
-            <div style={{ fontSize: 12, color: '#6F6A60' }}>
+            <div style={{ fontSize: 12, color: '#4a3a30' }}>
               {sal.reliquat_amount > 0 ? `reliquat ${fmtMoney(sal.reliquat_amount)} → ${sal.reliquat_destination || '—'}` : 'sans reliquat'}
             </div>
             <div><span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, background: statusObj.bg, color: statusObj.text, fontWeight: 500 }}>{statusObj.label}</span></div>
@@ -122,5 +122,5 @@ export default function SalairesView({ user }) {
   )
 }
 
-const btnSlim    = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnSlim    = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '9px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }

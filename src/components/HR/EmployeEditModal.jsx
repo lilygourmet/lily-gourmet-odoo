@@ -167,13 +167,13 @@ export default function EmployeEditModal({
           ) : <span style={{ width: 36 }} />}
 
           <h3 style={{
-            margin: 0, fontSize: 16, fontWeight: 500, color: '#3A3733',
+            margin: 0, fontSize: 16, fontWeight: 500, color: '#1a0f0a',
             flex: 1, textAlign: 'center',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
             {isNew ? '➕ Nouvel employé' : `✏️ ${displayedEmploye?.nom || ''}`}
             {positionInfo && (
-              <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 8, fontWeight: 400 }}>
+              <span style={{ fontSize: 11, color: '#8a7a70', marginLeft: 8, fontWeight: 400 }}>
                 ({positionInfo})
               </span>
             )}
@@ -195,7 +195,7 @@ export default function EmployeEditModal({
                 onChange={e => setF('societe_id', e.target.value ? Number(e.target.value) : null)}
                 style={{
                   ...inputStyle,
-                  borderColor: form.societe_id ? '#E8E2D8' : '#F5BFBC',
+                  borderColor: form.societe_id ? '#e5d8c3' : '#F5BFBC',
                   background: form.societe_id ? 'white' : '#FCEEE8',
                 }}
                 required
@@ -254,7 +254,7 @@ export default function EmployeEditModal({
           </Row>
 
           <div style={{ background: '#F4F0EA', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#3A3733', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 8 }}>
               ⏰ Planning de travail (pour calcul du pointage)
             </div>
 
@@ -353,7 +353,7 @@ export default function EmployeEditModal({
             }}>
               <input type="checkbox" checked={form.heures_sup_mensuelles} onChange={e => setF('heures_sup_mensuelles', e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
-              <span style={{ fontSize: 13, color: '#3A3733' }}>
+              <span style={{ fontSize: 13, color: '#1a0f0a' }}>
                 🔒 Heures sup mensuelles payées (décocher si forfait ou autre)
               </span>
             </label>
@@ -366,7 +366,7 @@ export default function EmployeEditModal({
             }}>
               <input type="checkbox" checked={form.actif} onChange={e => setF('actif', e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
-              <span style={{ fontSize: 13, color: '#3A3733' }}>Employé actif (décocher si parti)</span>
+              <span style={{ fontSize: 13, color: '#1a0f0a' }}>Employé actif (décocher si parti)</span>
             </label>
           )}
 
@@ -379,7 +379,7 @@ export default function EmployeEditModal({
             }}>
               <input type="checkbox" checked={form.declare} onChange={e => setF('declare', e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: '#27500A', cursor: 'pointer' }} />
-              <span style={{ fontSize: 13, color: form.declare ? '#27500A' : '#3A3733' }}>
+              <span style={{ fontSize: 13, color: form.declare ? '#27500A' : '#1a0f0a' }}>
                 ✅ <strong>Déclaré</strong> (CNSS — apparaît dans Salaires)
               </span>
             </label>
@@ -454,9 +454,9 @@ function Field({ label, value, onChange, placeholder, type = 'text', required = 
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16, overflow: 'auto' }
 const modal = { background: 'white', borderRadius: 12, padding: 22, maxWidth: 560, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }
-const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D', marginLeft: 4 }
-const btnNav = { width: 36, height: 32, background: '#F4F0EA', border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer', fontSize: 14, color: '#3A3733', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }
-const lblStyle = { display: 'block', fontSize: 11, fontWeight: 500, color: '#6F6A60', marginBottom: 4 }
-const inputStyle = { width: '100%', padding: '9px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6, background: 'white', fontFamily: 'inherit', boxSizing: 'border-box' }
-const btnSecondary = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', color: '#6F6A60' }
+const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70', marginLeft: 4 }
+const btnNav = { width: 36, height: 32, background: '#F4F0EA', border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer', fontSize: 14, color: '#1a0f0a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }
+const lblStyle = { display: 'block', fontSize: 11, fontWeight: 500, color: '#4a3a30', marginBottom: 4 }
+const inputStyle = { width: '100%', padding: '9px 11px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, background: 'white', fontFamily: 'inherit', boxSizing: 'border-box' }
+const btnSecondary = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30' }
 const btnPrimary = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer', fontWeight: 500 }

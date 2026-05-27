@@ -170,18 +170,18 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
 
         {!editMode ? (
           <>
-            <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 500, color: '#3A3733' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 500, color: '#1a0f0a' }}>
               {task.title}
             </h3>
 
-            <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 14, lineHeight: 1.7 }}>
+            <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 14, lineHeight: 1.7 }}>
               {metaLines.map((line, i) => <div key={i}>{line}</div>)}
             </div>
 
             {task.description && (
               <div style={{
                 padding: '10px 12px', background: '#F9F6F1', borderRadius: 8,
-                fontSize: 13, marginBottom: 14, lineHeight: 1.6, color: '#3A3733',
+                fontSize: 13, marginBottom: 14, lineHeight: 1.6, color: '#1a0f0a',
                 whiteSpace: 'pre-wrap',
               }}>
                 {task.description}
@@ -196,11 +196,11 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
               }}>
                 <span style={{ fontSize: 20 }}>📎</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: '#3A3733', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: '#1a0f0a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {task.attachment_name}
                   </div>
                   {task.attachment_size && (
-                    <div style={{ fontSize: 10, color: '#9B968D' }}>
+                    <div style={{ fontSize: 10, color: '#8a7a70' }}>
                       {(task.attachment_size / 1024).toFixed(1)} KB
                     </div>
                   )}
@@ -227,7 +227,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                   ✓ {saving ? 'Enregistrement…' : 'Marquer comme fait'}
                 </button>
                 {isSent && !isSentToSelf && (
-                  <div style={{ marginTop: 8, fontSize: 10, color: '#9B968D', textAlign: 'center' }}>
+                  <div style={{ marginTop: 8, fontSize: 10, color: '#8a7a70', textAlign: 'center' }}>
                     {fromName} recevra une notification
                   </div>
                 )}
@@ -247,7 +247,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                 <button onClick={handleUndo} disabled={saving} style={btnUndo}>
                   ↩ Défaire (remettre à faire)
                 </button>
-                <div style={{ marginTop: 8, fontSize: 10, color: '#9B968D', textAlign: 'center' }}>
+                <div style={{ marginTop: 8, fontSize: 10, color: '#8a7a70', textAlign: 'center' }}>
                   Seul l'expéditeur peut défaire
                 </div>
               </>
@@ -390,7 +390,7 @@ const modal = {
   background: 'white', borderRadius: 12, padding: 22, maxWidth: 480, width: '100%',
   boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
 }
-const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }
+const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }
 const btnSuccess = {
   width: '100%', padding: '10px 14px', fontSize: 13,
   background: '#97C459', color: 'white', border: '1px solid #97C459',
@@ -398,7 +398,7 @@ const btnSuccess = {
 }
 const btnEdit = {
   width: '100%', padding: '10px 14px', fontSize: 13, marginTop: 8,
-  background: 'white', color: '#3A3733', border: '1px solid #E8E2D8',
+  background: 'white', color: '#1a0f0a', border: '1px solid #e5d8c3',
   borderRadius: 8, cursor: 'pointer', fontWeight: 500,
 }
 const btnUndo = {
@@ -408,12 +408,12 @@ const btnUndo = {
 }
 const btnClose2 = {
   marginTop: 12, width: '100%', padding: '8px 14px', fontSize: 12,
-  background: 'white', border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
-  color: '#6F6A60'
+  background: 'white', border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer',
+  color: '#4a3a30'
 }
-const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#3A3733', marginBottom: 12 }
+const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }
 const inputStyle = {
   display: 'block', width: '100%', padding: '9px 11px', marginTop: 5,
-  fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6,
+  fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6,
   fontFamily: 'inherit', boxSizing: 'border-box', background: 'white'
 }

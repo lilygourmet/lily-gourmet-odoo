@@ -32,9 +32,9 @@ export default function ParametresView({ user }) {
 
 function Section({ title, icon, desc, children }) {
   return (
-    <div style={{ background: 'white', border: '0.5px solid #E8E2D8', borderRadius: 12, padding: 24, marginBottom: 20 }}>
+    <div style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 12, padding: 24, marginBottom: 20 }}>
       <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>{icon} {title}</div>
-      <div style={{ fontSize: 12, color: '#6F6A60', marginBottom: 20 }}>{desc}</div>
+      <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 20 }}>{desc}</div>
       {children}
     </div>
   )
@@ -72,9 +72,9 @@ function DestinatairesSection() {
             <div style={{ width: 22, height: 22, borderRadius: 6, background: c.bg, border: `1px solid ${c.border}` }} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>{d.name}</div>
-              <div style={{ fontSize: 11, color: '#6F6A60' }}>{d.type === 'caisse_geree' ? 'caisse-gérée' : d.type}</div>
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>{d.type === 'caisse_geree' ? 'caisse-gérée' : d.type}</div>
             </div>
-            <div><span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: 'white', color: '#6F6A60' }}>{c.emoji} {c.label}</span></div>
+            <div><span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: 'white', color: '#4a3a30' }}>{c.emoji} {c.label}</span></div>
             <button onClick={() => handleToggleActive(d)} style={iconBtn} title={d.active ? 'Désactiver' : 'Réactiver'}>{d.active ? '👁' : '👁‍🗨'}</button>
             <button onClick={() => handleDelete(d.id)} style={iconBtn}>🗑</button>
           </div>
@@ -84,9 +84,9 @@ function DestinatairesSection() {
       {!adding && <button onClick={() => setAdding(true)} style={addBtn}>+ Ajouter un destinataire</button>}
       {adding && (
         <div style={{ marginTop: 12, padding: 14, background: '#F9F6F1', borderRadius: 8 }}>
-          <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4 }}>Nom</div>
+          <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Nom</div>
           <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
-          <div style={{ fontSize: 11, color: '#6F6A60', margin: '10px 0 4px' }}>Type</div>
+          <div style={{ fontSize: 11, color: '#4a3a30', margin: '10px 0 4px' }}>Type</div>
           <select value={form.type} onChange={e => {
             const newType = e.target.value
             const firstColor = COLORS_BY_TYPE[newType][0]
@@ -96,7 +96,7 @@ function DestinatairesSection() {
             <option value="perso">perso</option>
             <option value="banque">banque</option>
           </select>
-          <div style={{ fontSize: 11, color: '#6F6A60', margin: '10px 0 4px' }}>Couleur</div>
+          <div style={{ fontSize: 11, color: '#4a3a30', margin: '10px 0 4px' }}>Couleur</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {COLORS_BY_TYPE[form.type].map(ck => {
               const c = COLOR_PALETTE[ck]
@@ -133,7 +133,7 @@ function CategoriesSection() {
 
 function EmojiPicker({ selected, onSelect }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4, padding: 8, background: 'white', borderRadius: 8, border: '0.5px solid #E8E2D8', maxHeight: 140, overflowY: 'auto' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4, padding: 8, background: 'white', borderRadius: 8, border: '0.5px solid #e5d8c3', maxHeight: 140, overflowY: 'auto' }}>
       {EMOJI_PICKER.map(em => (
         <button key={em} type="button" onClick={() => onSelect(em)} style={{
           padding: 6, fontSize: 18, lineHeight: 1, cursor: 'pointer',
@@ -184,7 +184,7 @@ function CategoryColumn({ caisseOwner, label, color }) {
           return (
             <div key={c.id} style={{ padding: 10, background: '#F9F6F1', borderRadius: 8, marginBottom: 4, border: '1px solid #993556' }}>
               <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} style={{ ...inputStyle, marginBottom: 8 }} placeholder="Nom" autoFocus />
-              <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4 }}>Emoji : <span style={{ fontSize: 18 }}>{editForm.emoji}</span></div>
+              <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Emoji : <span style={{ fontSize: 18 }}>{editForm.emoji}</span></div>
               <EmojiPicker selected={editForm.emoji} onSelect={(em) => setEditForm({ ...editForm, emoji: em })} />
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <button onClick={() => setEditingId(null)} style={btnSlim}>Annuler</button>
@@ -205,7 +205,7 @@ function CategoryColumn({ caisseOwner, label, color }) {
       {adding && (
         <div style={{ marginTop: 8, padding: 10, background: '#F9F6F1', borderRadius: 8 }}>
           <input type="text" placeholder="Nom de la catégorie" value={newName} onChange={e => setNewName(e.target.value)} style={{ ...inputStyle, marginBottom: 8 }} autoFocus />
-          <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 4 }}>Emoji : <span style={{ fontSize: 18 }}>{newEmoji}</span></div>
+          <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Emoji : <span style={{ fontSize: 18 }}>{newEmoji}</span></div>
           <EmojiPicker selected={newEmoji} onSelect={setNewEmoji} />
           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
             <button onClick={() => setAdding(false)} style={btnSlim}>Annuler</button>
@@ -287,13 +287,13 @@ function PosSessionsSection() {
       <button onClick={handleDetect} disabled={syncing} style={{ ...btnNormal, marginBottom: 14 }}>
         {syncing ? '⏳ Détection…' : '🔍 Détecter les sessions Odoo'}
       </button>
-      {list.length === 0 && <div style={{ fontSize: 12, color: '#9B968D', padding: 10 }}>Aucune session détectée pour l'instant. Cliquez ci-dessus.</div>}
+      {list.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 10 }}>Aucune session détectée pour l'instant. Cliquez ci-dessus.</div>}
       {list.map(p => (
         <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 80px 100px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: '#F4F0EA' }}>
           <span style={{ fontSize: 18 }}>🏪</span>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
-            <div style={{ fontSize: 11, color: '#9B968D' }}>détecté · dernière sync : {p.last_synced_at ? new Date(p.last_synced_at).toLocaleString('fr-FR') : 'jamais'}</div>
+            <div style={{ fontSize: 11, color: '#8a7a70' }}>détecté · dernière sync : {p.last_synced_at ? new Date(p.last_synced_at).toLocaleString('fr-FR') : 'jamais'}</div>
           </div>
           <button onClick={() => handleToggle(p.id, !p.active)} style={{
             width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
@@ -301,16 +301,16 @@ function PosSessionsSection() {
           }}>
             <span style={{ position: 'absolute', top: 2, [p.active ? 'right' : 'left']: 2, width: 16, height: 16, background: 'white', borderRadius: '50%' }} />
           </button>
-          <div style={{ fontSize: 11, color: p.active ? '#1D7A5C' : '#9B968D' }}>{p.active ? 'Actif' : 'Inactif'}</div>
+          <div style={{ fontSize: 11, color: p.active ? '#1D7A5C' : '#8a7a70' }}>{p.active ? 'Actif' : 'Inactif'}</div>
         </div>
       ))}
     </Section>
   )
 }
 
-const iconBtn = { background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: '#9B968D', fontSize: 14 }
-const addBtn  = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', marginTop: 10 }
-const btnSlim    = { fontSize: 13, padding: '6px 12px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
-const btnNormal  = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const iconBtn = { background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, color: '#8a7a70', fontSize: 14 }
+const addBtn  = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', marginTop: 10 }
+const btnSlim    = { fontSize: 13, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const btnNormal  = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '6px 12px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
 const inputStyle = { padding: '8px 10px', border: '0.5px solid #C4BFB6', borderRadius: 8, fontSize: 13, width: '100%', boxSizing: 'border-box' }

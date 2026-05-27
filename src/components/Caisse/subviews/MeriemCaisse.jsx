@@ -136,7 +136,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
     if (remaining.length === 0) setShowReceptionsModal(false)
   }
 
-  const palette = ['#993556', '#C77B9F', '#EF9F27', '#378ADD', '#7F77DD', '#1D9E75', '#D85A30', '#9B968D']
+  const palette = ['#993556', '#C77B9F', '#EF9F27', '#378ADD', '#7F77DD', '#1D9E75', '#D85A30', '#8a7a70']
 
   return (
     <div>
@@ -151,7 +151,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           <button key={m.idx} onClick={() => setMonth(m.idx)} style={{
             padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
             background: month === m.idx ? accent.bg : '#F4F0EA',
-            color:      month === m.idx ? accent.text : '#6F6A60',
+            color:      month === m.idx ? accent.text : '#4a3a30',
             fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0,
           }}>{m.label}</button>
         ))}
@@ -168,12 +168,12 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           {closed && <div style={{ marginTop: 12, fontSize: 12, padding: '6px 12px', background: 'rgba(0,0,0,0.05)', borderRadius: 6, display: 'inline-block', color: accent.text }}>🔒 Mois clôturé</div>}
         </div>
         <div style={{ background: '#F4F0EA', borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 12, color: '#6F6A60', marginBottom: 8 }}>Sorties par catégorie</div>
-          {rankedCats.length === 0 && <div style={{ fontSize: 11, color: '#9B968D' }}>Aucune sortie ce mois</div>}
+          <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 8 }}>Sorties par catégorie</div>
+          {rankedCats.length === 0 && <div style={{ fontSize: 11, color: '#8a7a70' }}>Aucune sortie ce mois</div>}
           {rankedCats.map(([cat, amt], i) => (
             <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, padding: '3px 0' }}>
               <span style={{ width: 9, height: 9, borderRadius: 2, background: palette[i % palette.length] }} />
-              <span style={{ flex: 1, color: '#6F6A60' }}>{cat}</span>
+              <span style={{ flex: 1, color: '#4a3a30' }}>{cat}</span>
               <span style={{ fontWeight: 500 }}>{fmtMoney(amt)}</span>
             </div>
           ))}
@@ -189,7 +189,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           <span style={{ fontSize: 16 }}>⏳</span>
           <span>
             <strong>{pendingReceptions.length}</strong> réception{pendingReceptions.length > 1 ? 's' : ''} en attente de validation
-            <span style={{ color: '#6F6A60', marginLeft: 6 }}>
+            <span style={{ color: '#4a3a30', marginLeft: 6 }}>
               ({fmtMoney(pendingReceptions.reduce((s, r) => s + Number(r.amount), 0))})
             </span>
           </span>
@@ -235,7 +235,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
         ))}
       </div>
 
-      {filtered.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>Aucun mouvement.</div>}
+      {filtered.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>Aucun mouvement.</div>}
       {filtered.map(mvt => (
         <MouvementRow
           key={mvt.id}
@@ -309,12 +309,12 @@ function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof
       gap: 12, alignItems: 'center',
       padding: '10px 14px', borderRadius: 8, marginBottom: 4,
       background: isPendingReception ? '#FAFAF8' : 'white',
-      border: '0.5px solid #E8E2D8',
+      border: '0.5px solid #e5d8c3',
       borderLeft: `3px solid ${mvt.type === 'entree' ? '#97C459' : '#E5C0B6'}`,
       opacity: isPendingReception ? 0.55 : 1,
       borderStyle: isPendingReception ? 'dashed' : 'solid',
     }}>
-      <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(mvt.mvt_date)}</div>
+      <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(mvt.mvt_date)}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13 }}>{mvt.label}</span>
         {isSortie && <ProofBadge status={status} />}
@@ -368,7 +368,7 @@ function ProofBadge({ status }) {
   const cfg = {
     pending:           { bg: '#FFF6E5', col: '#7A5510', txt: '⏳ En attente' },
     with_proof:        { bg: '#E6F4E6', col: '#27500A', txt: '✅ Preuve' },
-    no_proof_declared: { bg: '#F0EEEA', col: '#6F6A60', txt: '⚠️ Sans preuve' },
+    no_proof_declared: { bg: '#F0EEEA', col: '#4a3a30', txt: '⚠️ Sans preuve' },
   }[status]
   if (!cfg) return null
   return <span style={{
@@ -377,19 +377,19 @@ function ProofBadge({ status }) {
   }}>{cfg.txt}</span>
 }
 
-const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
-const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
-const btnIcon = { background: 'transparent', border: '1px solid #E8E2D8', cursor: 'pointer', color: '#6F6A60', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
+const btnIcon = { background: 'transparent', border: '1px solid #e5d8c3', cursor: 'pointer', color: '#4a3a30', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
 const btnIconGreen = { background: 'transparent', border: '1px solid #C8E0AC', cursor: 'pointer', color: '#27500A', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
-const btnIconGray = { background: 'transparent', border: '1px solid #E0DDD5', cursor: 'pointer', color: '#6F6A60', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
+const btnIconGray = { background: 'transparent', border: '1px solid #E0DDD5', cursor: 'pointer', color: '#4a3a30', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
 const btnIconRed = { background: 'transparent', border: '1px solid #F2D1D0', cursor: 'pointer', color: '#99201E', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
-const catTag = { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#F4F0EA', color: '#6F6A60' }
+const catTag = { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#F4F0EA', color: '#4a3a30' }
 
 function Chip({ active, onClick, children }) {
   return <button onClick={onClick} style={{
     fontSize: 11, padding: '4px 10px', borderRadius: 999, cursor: 'pointer', border: 'none',
-    background: active ? '#3A3733' : '#F4F0EA',
-    color:      active ? 'white'   : '#6F6A60',
+    background: active ? '#1a0f0a' : '#F4F0EA',
+    color:      active ? 'white'   : '#4a3a30',
   }}>{children}</button>
 }

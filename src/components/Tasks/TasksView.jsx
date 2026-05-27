@@ -146,7 +146,7 @@ export default function TasksView({ user }) {
           <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a' }}>
             📋 Tâches à faire
           </h2>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6F6A60' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#4a3a30' }}>
             {todoCount} à faire {unreadCount > 0 && (
               <span style={{ color: '#993556', fontWeight: 500 }}>
                 ({unreadCount} non lue{unreadCount > 1 ? 's' : ''})
@@ -174,11 +174,11 @@ export default function TasksView({ user }) {
       </div>
 
       {loading && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
       )}
       {!loading && filteredList.length === 0 && (
         <div style={{
-          padding: 28, textAlign: 'center', color: '#6F6A60',
+          padding: 28, textAlign: 'center', color: '#4a3a30',
           background: '#F9F6F1', borderRadius: 8, fontSize: 13
         }}>
           Aucune tâche dans cette catégorie.
@@ -190,7 +190,7 @@ export default function TasksView({ user }) {
         return (
           <div key={m}>
             <div style={{
-              fontSize: 12, fontWeight: 500, color: '#6F6A60',
+              fontSize: 12, fontWeight: 500, color: '#4a3a30',
               margin: '14px 0 8px', padding: '0 4px', textTransform: 'capitalize'
             }}>
               {monthLabel(m)} · {list.length}
@@ -283,7 +283,7 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
   }
 
   const titleStyle = isDone && !isSent
-    ? { textDecoration: 'line-through', color: '#6F6A60' }
+    ? { textDecoration: 'line-through', color: '#4a3a30' }
     : {}
 
   const unreadDot = (isReceived || isSentToSelf) && !task.is_read && !isDone
@@ -308,19 +308,19 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
           <Badge bg="#FFF1DA" col="#8A5A00">⚠️ Modifiée</Badge>
         )}
         {hasAttachment && (
-          <Badge bg="#F4F0EA" col="#6F6A60">📎</Badge>
+          <Badge bg="#F4F0EA" col="#4a3a30">📎</Badge>
         )}
         {task.due_date && (
           isOverdue
             ? <Badge bg="#FCEBEB" col="#A32D2D">📅 En retard ({dueLabel})</Badge>
-            : <Badge bg="#F4F0EA" col="#6F6A60">📅 Avant le {dueLabel}</Badge>
+            : <Badge bg="#F4F0EA" col="#4a3a30">📅 Avant le {dueLabel}</Badge>
         )}
         {(isReceived || isSentToSelf) && task.is_read && !isDone && (
           <Badge bg="#FFF6E5" col="#7A5510">👁 Lu</Badge>
         )}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3, color: '#3A3733', ...titleStyle }}>
+      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3, color: '#1a0f0a', ...titleStyle }}>
         {unreadDot && (
           <span style={{
             display: 'inline-block', width: 7, height: 7,
@@ -330,7 +330,7 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
         {task.title}
       </div>
 
-      <div style={{ fontSize: 11, color: '#6F6A60' }}>
+      <div style={{ fontSize: 11, color: '#4a3a30' }}>
         {footer}
       </div>
     </div>
@@ -353,8 +353,8 @@ function Chip({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
       fontSize: 11, padding: '4px 11px', borderRadius: 999, cursor: 'pointer', border: 'none',
-      background: active ? '#3A3733' : '#F4F0EA',
-      color:      active ? 'white'   : '#6F6A60',
+      background: active ? '#1a0f0a' : '#F4F0EA',
+      color:      active ? 'white'   : '#4a3a30',
     }}>{children}</button>
   )
 }

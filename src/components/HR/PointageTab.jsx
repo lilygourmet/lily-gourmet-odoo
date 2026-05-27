@@ -9,10 +9,10 @@ const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
                  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 const COULEUR_STATUT = {
-  normal:           { bg: 'white',   text: '#3A3733' },
+  normal:           { bg: 'white',   text: '#1a0f0a' },
   present:          { bg: '#EAF3DE', text: '#27500A' },  // Forcé présent (au lieu d'absent)
   demi:             { bg: '#FFF7E0', text: '#854F0B' },
-  off:              { bg: '#F5EFE7', text: '#6F6A60' },
+  off:              { bg: '#F5EFE7', text: '#4a3a30' },
   off_travaille:    { bg: '#EEEDFE', text: '#3C3489' },
   ferie:            { bg: '#EAF3DE', text: '#27500A' },
   ferie_travaille:  { bg: '#C0DD97', text: '#173404' },
@@ -330,9 +330,9 @@ export default function PointageTab({ user, isAdmin }) {
 <!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Récap pointage ${MOIS_FR[mois - 1]} ${annee}</title>
 <style>
-  body { font-family: -apple-system, sans-serif; padding: 30px; color: #3A3733; }
+  body { font-family: -apple-system, sans-serif; padding: 30px; color: #1a0f0a; }
   h1 { color: #993556; margin: 0 0 8px; }
-  .sub { color: #6F6A60; margin: 0 0 24px; font-size: 13px; }
+  .sub { color: #4a3a30; margin: 0 0 24px; font-size: 13px; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th { background: #F4F0EA; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #993556; }
   td { padding: 7px 10px; border-bottom: 1px solid #F4F0EA; }
@@ -340,7 +340,7 @@ export default function PointageTab({ user, isAdmin }) {
   .green { color: #27500A; }
   .red { color: #A32D2D; }
   .purple { color: #3C3489; }
-  .footer { margin-top: 30px; font-size: 11px; color: #9B968D; }
+  .footer { margin-top: 30px; font-size: 11px; color: #8a7a70; }
   @media print { body { padding: 15px; } }
 </style></head>
 <body>
@@ -481,7 +481,7 @@ export default function PointageTab({ user, isAdmin }) {
         display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap'
       }}>
         <button onClick={prevMonth} style={btnNav}>◀</button>
-        <div style={{ minWidth: 160, textAlign: 'center', fontSize: 15, fontWeight: 500, color: '#3A3733' }}>
+        <div style={{ minWidth: 160, textAlign: 'center', fontSize: 15, fontWeight: 500, color: '#1a0f0a' }}>
           {MOIS_FR[mois - 1]} {annee}
         </div>
         <button onClick={nextMonth} style={btnNav}>▶</button>
@@ -501,7 +501,7 @@ export default function PointageTab({ user, isAdmin }) {
             <button key={t.v} onClick={() => setVue(t.v)} style={{
               padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
               background: vue === t.v ? 'white' : 'transparent',
-              color: vue === t.v ? '#3A3733' : '#6F6A60',
+              color: vue === t.v ? '#1a0f0a' : '#4a3a30',
               fontWeight: vue === t.v ? 500 : 400,
             }}>{t.label}</button>
           ))}
@@ -511,7 +511,7 @@ export default function PointageTab({ user, isAdmin }) {
           <div style={{ display: 'flex', gap: 4, flex: 1, minWidth: 200, alignItems: 'center' }}>
             <button onClick={prevEmp} style={btnNav} title="Employé précédent (←)">◀</button>
             <select value={selectedEmpId || ''} onChange={e => setSelectedEmpId(Number(e.target.value))}
-                    style={{ flex: 1, padding: '8px 11px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6, cursor: 'pointer' }}>
+                    style={{ flex: 1, padding: '8px 11px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, cursor: 'pointer' }}>
               {(data?.employes || []).map(e => (
                 <option key={e.id} value={e.id}>{e.nom}{e.poste ? ' · ' + e.poste : ''}</option>
               ))}
@@ -523,16 +523,16 @@ export default function PointageTab({ user, isAdmin }) {
         {isAdmin && (
           <>
             <button onClick={handleSync} disabled={syncing || monthAllLocked} title={monthAllLocked ? 'Mois entièrement validé, sync désactivée' : ''} style={{
-              padding: '9px 14px', fontSize: 13, background: monthAllLocked ? '#9B968D' : '#0C447C', color: 'white',
-              border: '1px solid ' + (monthAllLocked ? '#9B968D' : '#0C447C'), borderRadius: 8,
+              padding: '9px 14px', fontSize: 13, background: monthAllLocked ? '#8a7a70' : '#0C447C', color: 'white',
+              border: '1px solid ' + (monthAllLocked ? '#8a7a70' : '#0C447C'), borderRadius: 8,
               cursor: syncing || monthAllLocked ? 'not-allowed' : 'pointer', fontWeight: 500,
               opacity: monthAllLocked ? 0.6 : 1,
             }}>
               {syncing ? '⏳ Sync...' : (monthAllLocked ? '🔒 Sync (verrouillé)' : '🔄 Sync Odoo')}
             </button>
             <button onClick={handleDebug} style={{
-              padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#6F6A60',
-              border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
+              padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#4a3a30',
+              border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer',
             }} title="Voir ce qu'Odoo renvoie">
               🐛 Debug
             </button>
@@ -551,7 +551,7 @@ export default function PointageTab({ user, isAdmin }) {
         </div>
       )}
 
-      {loading && <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement…</div>}
+      {loading && <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>}
 
       {!loading && vue === 'annee' && data && isAdmin && result && (
         <VueAnnee
@@ -600,7 +600,7 @@ export default function PointageTab({ user, isAdmin }) {
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 6,
             }} title="Cliquer pour éditer la fiche employé">
-              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#6F6A60', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
+              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
             </button>
             {empSelected?.societe?.code && (
               <span style={{
@@ -675,7 +675,7 @@ export default function PointageTab({ user, isAdmin }) {
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 6,
             }} title="Cliquer pour éditer la fiche employé">
-              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#6F6A60', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
+              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
             </button>
             {empSelected?.societe?.code && (
               <span style={{
@@ -774,29 +774,29 @@ function TranchesEditModal({ data, onClose, onSave }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 10, padding: 20, maxWidth: 500, width: '100%' }}>
-        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, color: '#3A3733' }}>
+        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, color: '#1a0f0a' }}>
           ✏️ Modifier les pointages du {date}
         </h3>
-        <p style={{ fontSize: 12, color: '#6F6A60', marginTop: 0, marginBottom: 14 }}>
+        <p style={{ fontSize: 12, color: '#4a3a30', marginTop: 0, marginBottom: 14 }}>
           Chaque ligne = 1 session (arrivée → départ). Format HH:MM.
         </p>
 
         {sessions.map((s, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}>
             <input type="time" value={s.arrivee_hm} onChange={e => update(i, 'arrivee_hm', e.target.value)}
-                   placeholder="Arrivée" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }} />
+                   placeholder="Arrivée" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6 }} />
             <input type="time" value={s.depart_hm} onChange={e => update(i, 'depart_hm', e.target.value)}
-                   placeholder="Départ" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6 }} />
+                   placeholder="Départ" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6 }} />
             <button onClick={() => remove(i)} style={{ padding: '7px 10px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#A32D2D' }}>🗑</button>
           </div>
         ))}
 
-        <button onClick={add} style={{ marginTop: 4, padding: '7px 14px', fontSize: 12, background: '#F4F0EA', border: '1px solid #E8E2D8', borderRadius: 6, cursor: 'pointer' }}>
+        <button onClick={add} style={{ marginTop: 4, padding: '7px 14px', fontSize: 12, background: '#F4F0EA', border: '1px solid #e5d8c3', borderRadius: 6, cursor: 'pointer' }}>
           ➕ Ajouter une session
         </button>
 
         <div style={{ marginTop: 18, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '9px 16px', fontSize: 13, background: 'white', border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer' }}>Annuler</button>
+          <button onClick={onClose} style={{ padding: '9px 16px', fontSize: 13, background: 'white', border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer' }}>Annuler</button>
           <button onClick={save} style={{ padding: '9px 16px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>
             💾 Enregistrer
           </button>
@@ -840,10 +840,10 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
   }, [empId, annee])
 
   if (loading) {
-    return <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Chargement des 12 mois…</div>
+    return <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement des 12 mois…</div>
   }
   if (!data || !emp) {
-    return <div style={{ padding: 30, textAlign: 'center', color: '#6F6A60' }}>Sélectionnez un employé.</div>
+    return <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Sélectionnez un employé.</div>
   }
 
   // Totaux annuels
@@ -873,7 +873,7 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
         background: '#F4F0EA', padding: 12, borderRadius: 8, marginBottom: 12,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
       }}>
-        <span style={{ fontSize: 13, color: '#3A3733' }}>
+        <span style={{ fontSize: 13, color: '#1a0f0a' }}>
           📅 <strong>Vue annuelle</strong> · {emp.nom} · {annee}
         </span>
         {salaireNet > 0 && (
@@ -883,10 +883,10 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
         )}
       </div>
 
-      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflowX: 'auto' }}>
+      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#6F6A60' }}>
+            <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
               <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500 }}>Mois</th>
               <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500 }}>Prévues</th>
               <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500 }}>Travail.</th>
@@ -978,7 +978,7 @@ function CarteSalaire({ salaire, heuresSup }) {
   )
 }
 
-function Carte({ label, val, color = '#3A3733', sign = '', unit = 'h', signed = false, bold = false }) {
+function Carte({ label, val, color = '#1a0f0a', sign = '', unit = 'h', signed = false, bold = false }) {
   let displayVal = ''
   if (signed) displayVal = (val > 0 ? '+' : '') + val.toFixed(2) + unit
   else if (sign && val > 0) displayVal = sign + val.toFixed(2) + unit
@@ -986,7 +986,7 @@ function Carte({ label, val, color = '#3A3733', sign = '', unit = 'h', signed = 
 
   return (
     <div style={{ background: '#F4F0EA', padding: 10, borderRadius: 8 }}>
-      <p style={{ fontSize: 11, color: '#6F6A60', margin: 0, marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 11, color: '#4a3a30', margin: 0, marginBottom: 4 }}>{label}</p>
       <p style={{ fontSize: 18, fontWeight: bold ? 600 : 500, color, margin: 0 }}>{displayVal}</p>
     </div>
   )
@@ -995,12 +995,12 @@ function Carte({ label, val, color = '#3A3733', sign = '', unit = 'h', signed = 
 function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches, onForcerPresent, canEdit }) {
   return (
     <div style={{
-      background: 'white', borderRadius: 10, border: '1px solid #E8E2D8',
+      background: 'white', borderRadius: 10, border: '1px solid #e5d8c3',
       overflowX: 'auto', marginBottom: 16,
     }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#6F6A60' }}>
+          <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
             <Th w={70}>Jour</Th>
             <Th>Tranches horaires</Th>
             <Th w={70} align="right">Prévu</Th>
@@ -1048,7 +1048,7 @@ function Row({ j, onEditCell, onEditPointage, onEditTranches, onForcerPresent, c
   )
 }
 
-function EditableCell({ value, onChange, align = 'left', color = '#3A3733', canEdit = true }) {
+function EditableCell({ value, onChange, align = 'left', color = '#1a0f0a', canEdit = true }) {
   const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
@@ -1079,7 +1079,7 @@ function EditableCell({ value, onChange, align = 'left', color = '#3A3733', canE
   const display = (value === 0 || value == null) ? '—' : Number(value).toFixed(2)
   return (
     <td onClick={() => canEdit && setEditing(true)} style={{
-      padding: '7px 10px', textAlign: align, color: value > 0 ? color : '#9B968D',
+      padding: '7px 10px', textAlign: align, color: value > 0 ? color : '#8a7a70',
       cursor: canEdit ? 'pointer' : 'default',
     }}>
       {display}
@@ -1104,7 +1104,7 @@ function Td({ children, style = {} }) {
 
 function Legende() {
   const items = [
-    { c: 'white',   border: '#E8E2D8', label: 'Journée normale' },
+    { c: 'white',   border: '#e5d8c3', label: 'Journée normale' },
     { c: '#FFF7E0', label: 'Demi-journée' },
     { c: '#F5EFE7', label: 'OFF' },
     { c: '#EEEDFE', label: 'OFF travaillé (récup)' },
@@ -1114,13 +1114,13 @@ function Legende() {
     { c: '#FCEBEB', label: 'Absent / anomalie' },
   ]
   return (
-    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, color: '#6F6A60', marginBottom: 16 }}>
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, color: '#4a3a30', marginBottom: 16 }}>
       <span style={{ fontWeight: 500 }}>Légende :</span>
       {items.map(i => (
         <span key={i.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <span style={{
             width: 12, height: 12, background: i.c, borderRadius: 3,
-            border: '1px solid ' + (i.border || '#E8E2D8'),
+            border: '1px solid ' + (i.border || '#e5d8c3'),
           }} />
           {i.label}
         </span>
@@ -1153,7 +1153,7 @@ function VueRecup({ data, resultats, mois, annee }) {
   if (lignes.length === 0) {
     return (
       <div style={{
-        padding: 40, textAlign: 'center', color: '#6F6A60',
+        padding: 40, textAlign: 'center', color: '#4a3a30',
         background: '#F9F6F1', borderRadius: 10, fontSize: 13,
       }}>
         Aucune récup ni absence ce mois-ci 🌸
@@ -1193,7 +1193,7 @@ function VueRecup({ data, resultats, mois, annee }) {
       {/* Liste groupée par personnel */}
       {lignes.map(({ emp, jours, totalRecup, nbAbsents }) => (
         <div key={emp.id} style={{
-          background: 'white', borderRadius: 10, border: '1px solid #E8E2D8',
+          background: 'white', borderRadius: 10, border: '1px solid #e5d8c3',
           marginBottom: 12, overflow: 'hidden',
         }}>
           {/* Header employé */}
@@ -1203,7 +1203,7 @@ function VueRecup({ data, resultats, mois, annee }) {
           }}>
             <div>
               <strong style={{ fontSize: 13 }}>{emp.nom}</strong>
-              {emp.poste && <span style={{ fontSize: 11, color: '#9B968D', marginLeft: 8 }}>· {emp.poste}</span>}
+              {emp.poste && <span style={{ fontSize: 11, color: '#8a7a70', marginLeft: 8 }}>· {emp.poste}</span>}
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {totalRecup > 0 && (
@@ -1241,10 +1241,10 @@ function VueRecup({ data, resultats, mois, annee }) {
                     <td style={{ padding: '7px 8px', minWidth: 110, fontSize: 12 }}>
                       {dateLabel}
                     </td>
-                    <td style={{ padding: '7px 8px', fontFamily: 'monospace', fontSize: 11, color: '#6F6A60' }}>
+                    <td style={{ padding: '7px 8px', fontFamily: 'monospace', fontSize: 11, color: '#4a3a30' }}>
                       {isRecup ? j.tranches : '—'}
                     </td>
-                    <td style={{ padding: '7px 8px', textAlign: 'right', fontSize: 11, color: '#6F6A60' }}>
+                    <td style={{ padding: '7px 8px', textAlign: 'right', fontSize: 11, color: '#4a3a30' }}>
                       {isRecup
                         ? `${j.heures_travaillees.toFixed(2)}h travaillées`
                         : `${j.heures_prevues.toFixed(2)}h prévues`}
@@ -1273,10 +1273,10 @@ function VueRecup({ data, resultats, mois, annee }) {
 
 function VueGlobale({ data, resultats, mois, annee }) {
   return (
-    <div style={{ background: 'white', borderRadius: 10, border: '1px solid #E8E2D8', overflowX: 'auto' }}>
+    <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#6F6A60' }}>
+          <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
             <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 500 }}>Employé</th>
             <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Prévues</th>
             <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Travail.</th>
@@ -1297,29 +1297,29 @@ function VueGlobale({ data, resultats, mois, annee }) {
               <tr key={emp.id} style={{ borderTop: '1px solid #F4F0EA' }}>
                 <td style={{ padding: '8px 12px' }}>
                   <strong style={{ fontSize: 12 }}>{emp.nom}</strong>
-                  {emp.poste && <div style={{ fontSize: 10, color: '#9B968D' }}>{emp.poste}</div>}
+                  {emp.poste && <div style={{ fontSize: 10, color: '#8a7a70' }}>{emp.poste}</div>}
                 </td>
                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_prevues.toFixed(2)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_travaillees.toFixed(2)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_sup > 0 ? '#27500A' : '#9B968D', fontWeight: s.heures_sup > 0 ? 500 : 400 }}>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_sup > 0 ? '#27500A' : '#8a7a70', fontWeight: s.heures_sup > 0 ? 500 : 400 }}>
                   {s.heures_sup > 0 ? '+' + s.heures_sup.toFixed(2) : '—'}
                 </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_manquantes > 0 ? '#A32D2D' : '#9B968D', fontWeight: s.heures_manquantes > 0 ? 500 : 400 }}>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_manquantes > 0 ? '#A32D2D' : '#8a7a70', fontWeight: s.heures_manquantes > 0 ? 500 : 400 }}>
                   {s.heures_manquantes > 0 ? '-' + s.heures_manquantes.toFixed(2) : '—'}
                 </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.jours_recup > 0 ? '#3C3489' : '#9B968D' }}>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.jours_recup > 0 ? '#3C3489' : '#8a7a70' }}>
                   {s.jours_recup > 0 ? s.jours_recup.toFixed(2) + ' j' : '—'}
                 </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.solde_reporte_precedent === 0 ? '#9B968D' : (s.solde_reporte_precedent > 0 ? '#27500A' : '#A32D2D') }}>
+                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.solde_reporte_precedent === 0 ? '#8a7a70' : (s.solde_reporte_precedent > 0 ? '#27500A' : '#A32D2D') }}>
                   {s.solde_reporte_precedent === 0 ? '—' : (s.solde_reporte_precedent > 0 ? '+' : '') + s.solde_reporte_precedent.toFixed(2)}
                 </td>
                 <td style={{
                   padding: '8px 12px', textAlign: 'right', fontWeight: 600,
-                  color: s.solde_mois === 0 ? '#9B968D' : (s.solde_mois > 0 ? '#27500A' : '#A32D2D'),
+                  color: s.solde_mois === 0 ? '#8a7a70' : (s.solde_mois > 0 ? '#27500A' : '#A32D2D'),
                 }}>
                   {(s.solde_mois > 0 ? '+' : '') + s.solde_mois.toFixed(2)}
                 </td>
-                <td style={{ padding: '8px 12px', textAlign: 'center', color: s.jours_absents > 0 ? '#A32D2D' : '#9B968D' }}>
+                <td style={{ padding: '8px 12px', textAlign: 'center', color: s.jours_absents > 0 ? '#A32D2D' : '#8a7a70' }}>
                   {s.jours_absents > 0 ? s.jours_absents : '—'}
                 </td>
               </tr>
@@ -1333,12 +1333,12 @@ function VueGlobale({ data, resultats, mois, annee }) {
 
 const btnNav = {
   padding: '7px 12px', fontSize: 14, background: 'white',
-  border: '1px solid #E8E2D8', borderRadius: 6, cursor: 'pointer', color: '#3A3733',
+  border: '1px solid #e5d8c3', borderRadius: 6, cursor: 'pointer', color: '#1a0f0a',
 }
 
 const btnExport = {
-  padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#3A3733',
-  border: '1px solid #E8E2D8', borderRadius: 8, cursor: 'pointer',
+  padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#1a0f0a',
+  border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer',
 }
 
 const btnPrimaryGreen = {

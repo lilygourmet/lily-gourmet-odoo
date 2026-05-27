@@ -63,22 +63,22 @@ export default function RechercheView({ user }) {
             fontSize: 15,
             padding: '14px 44px 14px 44px',
             borderRadius: 10,
-            border: '1px solid #E8E2D8',
+            border: '1px solid #e5d8c3',
             background: 'white',
             outline: 'none',
             boxSizing: 'border-box',
           }}
           onFocus={e => e.target.style.borderColor = '#993556'}
-          onBlur={e => e.target.style.borderColor = '#E8E2D8'}
+          onBlur={e => e.target.style.borderColor = '#e5d8c3'}
         />
-        <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: '#6F6A60' }}>🔍</div>
+        <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: '#4a3a30' }}>🔍</div>
         {query && (
           <button
             onClick={() => setQuery('')}
             style={{
               position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
               background: '#F4F0EA', border: 'none', borderRadius: 999,
-              width: 28, height: 28, cursor: 'pointer', fontSize: 14, color: '#6F6A60',
+              width: 28, height: 28, cursor: 'pointer', fontSize: 14, color: '#4a3a30',
             }}
             title="Effacer"
           >✕</button>
@@ -89,7 +89,7 @@ export default function RechercheView({ user }) {
       {results && !loading && (
         <div style={{
           display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
-          fontSize: 12, color: '#6F6A60', marginBottom: 14,
+          fontSize: 12, color: '#4a3a30', marginBottom: 14,
         }}>
           <span style={{
             padding: '4px 10px', borderRadius: 999, background: '#F4F0EA',
@@ -97,11 +97,11 @@ export default function RechercheView({ user }) {
           }}>
             {QUERY_TYPE_HINT[results.queryType].emoji} {QUERY_TYPE_HINT[results.queryType].label}
           </span>
-          <span style={{ fontWeight: 500, color: '#3A3733' }}>
+          <span style={{ fontWeight: 500, color: '#1a0f0a' }}>
             {results.counts.total} résultat{results.counts.total > 1 ? 's' : ''}
           </span>
           {results.counts.total > 0 && (
-            <span style={{ color: '#9B968D' }}>
+            <span style={{ color: '#8a7a70' }}>
               · {results.counts.mouvement} mvt · {results.counts.enveloppe} env · {results.counts.avance} av · {results.counts.salaire} sal
             </span>
           )}
@@ -109,25 +109,25 @@ export default function RechercheView({ user }) {
       )}
 
       {loading && (
-        <div style={{ padding: 40, textAlign: 'center', color: '#6F6A60' }}>
+        <div style={{ padding: 40, textAlign: 'center', color: '#4a3a30' }}>
           Recherche en cours…
         </div>
       )}
 
       {!query.trim() && !loading && (
         <div style={{
-          padding: '60px 20px', textAlign: 'center', color: '#6F6A60',
-          background: '#F9F6F1', borderRadius: 10, border: '0.5px dashed #E8E2D8',
+          padding: '60px 20px', textAlign: 'center', color: '#4a3a30',
+          background: '#F9F6F1', borderRadius: 10, border: '0.5px dashed #e5d8c3',
         }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-          <div style={{ fontSize: 14, marginBottom: 6, color: '#3A3733', fontWeight: 500 }}>
+          <div style={{ fontSize: 14, marginBottom: 6, color: '#1a0f0a', fontWeight: 500 }}>
             Recherche transversale
           </div>
           <div style={{ fontSize: 12, maxWidth: 380, margin: '0 auto', lineHeight: 1.5 }}>
             Cherche dans toutes les caisses (Meriem, Layla LG, Hamid), les enveloppes,
             les avances et les salaires.
           </div>
-          <div style={{ fontSize: 11, marginTop: 14, color: '#9B968D' }}>
+          <div style={{ fontSize: 11, marginTop: 14, color: '#8a7a70' }}>
             Exemples : <strong>250</strong> · <strong>22/05/2026</strong> · <strong>fleuriste</strong> · <strong>nezha</strong>
           </div>
         </div>
@@ -135,7 +135,7 @@ export default function RechercheView({ user }) {
 
       {results && results.results.length === 0 && !loading && (
         <div style={{
-          padding: 40, textAlign: 'center', color: '#6F6A60',
+          padding: 40, textAlign: 'center', color: '#4a3a30',
           background: '#F9F6F1', borderRadius: 10,
         }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🤷</div>
@@ -162,7 +162,7 @@ function ResultRow({ r }) {
     fontWeight: 500,
     textAlign: 'right',
     fontSize: 13,
-    color: r.type === 'sortie' ? '#99201E' : r.type === 'entree' ? '#085041' : '#3A3733',
+    color: r.type === 'sortie' ? '#99201E' : r.type === 'entree' ? '#085041' : '#1a0f0a',
     whiteSpace: 'nowrap',
   }
   const sign = r.type === 'sortie' ? '− ' : r.type === 'entree' ? '+ ' : ''
@@ -177,14 +177,14 @@ function ResultRow({ r }) {
         padding: '11px 14px',
         borderRadius: 8,
         background: 'white',
-        border: '0.5px solid #E8E2D8',
+        border: '0.5px solid #e5d8c3',
         cursor: 'default',
         transition: 'background 0.15s',
       }}
       onMouseEnter={e => e.currentTarget.style.background = '#FFFAF3'}
       onMouseLeave={e => e.currentTarget.style.background = 'white'}
     >
-      <div style={{ fontSize: 12, color: '#6F6A60' }}>
+      <div style={{ fontSize: 12, color: '#4a3a30' }}>
         {fmtDateLongue(r.date)}
       </div>
       <div>
@@ -198,10 +198,10 @@ function ResultRow({ r }) {
         </span>
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: '#3A3733', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 13, color: '#1a0f0a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {r.label}
         </div>
-        <div style={{ fontSize: 11, color: '#9B968D', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {r.sublabel}
         </div>
       </div>

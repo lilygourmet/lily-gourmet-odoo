@@ -78,7 +78,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#3A3733' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#1a0f0a' }}>
             ➕ Nouvelle tâche
           </h3>
           <button onClick={onClose} style={btnClose}>✕</button>
@@ -150,11 +150,11 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
             {file && (
               <div style={{
                 marginTop: 6, padding: '6px 10px', background: '#F4F0EA',
-                borderRadius: 6, fontSize: 11, color: '#6F6A60',
+                borderRadius: 6, fontSize: 11, color: '#4a3a30',
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
                 <span>📄 {file.name}</span>
-                <span style={{ color: '#9B968D' }}>({(file.size / 1024).toFixed(1)} KB)</span>
+                <span style={{ color: '#8a7a70' }}>({(file.size / 1024).toFixed(1)} KB)</span>
                 <button type="button" onClick={() => setFile(null)} style={{
                   marginLeft: 'auto', background: 'transparent', border: 'none',
                   cursor: 'pointer', fontSize: 14, color: '#993556',
@@ -208,16 +208,16 @@ const modal = {
   background: 'white', borderRadius: 12, padding: 22, maxWidth: 440, width: '100%',
   boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
 }
-const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }
-const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#3A3733', marginBottom: 12 }
+const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }
+const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }
 const inputStyle = {
   display: 'block', width: '100%', padding: '9px 11px', marginTop: 5,
-  fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6,
+  fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6,
   fontFamily: 'inherit', boxSizing: 'border-box', background: 'white'
 }
 const btnSecondary = {
   fontSize: 13, padding: '9px 16px', borderRadius: 8,
-  border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', color: '#6F6A60'
+  border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30'
 }
 const btnPrimary = {
   fontSize: 13, padding: '9px 16px', borderRadius: 8,

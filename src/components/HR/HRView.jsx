@@ -20,9 +20,9 @@ export default function HRView({ user }) {
 
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a' }}>
-          🏢 Ressources Humaines {!isAdmin && <span style={{ fontSize: 12, color: '#9B968D', fontWeight: 400, fontStyle: 'normal', fontFamily: 'Geist, sans-serif' }}>(accès limité)</span>}
+          🏢 Ressources Humaines {!isAdmin && <span style={{ fontSize: 12, color: '#8a7a70', fontWeight: 400, fontStyle: 'normal', fontFamily: 'Geist, sans-serif' }}>(accès limité)</span>}
         </h2>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6F6A60' }}>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#4a3a30' }}>
           {isAdmin
             ? "Génération d'attestations, gestion des employés, pointage, salaires"
             : "Gestion des employés, attestations basiques, récap pointage"}
@@ -31,7 +31,7 @@ export default function HRView({ user }) {
 
       {/* Onglets */}
       <div style={{
-        display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #E8E2D8', flexWrap: 'wrap',
+        display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #e5d8c3', flexWrap: 'wrap',
       }}>
         <TabBtn active={tab === 'employes'} onClick={() => setTab('employes')}>
           👥 Employés
@@ -70,7 +70,7 @@ function TabBtn({ active, onClick, children }) {
       background: 'transparent',
       border: 'none',
       borderBottom: active ? '2px solid #993556' : '2px solid transparent',
-      color: active ? '#993556' : '#6F6A60',
+      color: active ? '#993556' : '#4a3a30',
       fontSize: 13,
       fontWeight: active ? 500 : 400,
       cursor: 'pointer',

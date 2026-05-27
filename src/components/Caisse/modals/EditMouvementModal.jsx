@@ -42,13 +42,13 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#3A3733' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#1a0f0a' }}>
             ✏️ Modifier le mouvement
           </h3>
           <button onClick={onClose} style={btnClose}>✕</button>
         </div>
 
-        <div style={{ fontSize: 12, color: '#6F6A60', marginBottom: 14, padding: '8px 12px', background: '#F9F6F1', borderRadius: 6 }}>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 14, padding: '8px 12px', background: '#F9F6F1', borderRadius: 6 }}>
           Montant : <strong style={{ color: mvt.type === 'entree' ? '#1D7A5C' : '#99201E' }}>
             {mvt.type === 'entree' ? '+' : '−'} {Math.abs(mvt.amount)} dh
           </strong>
@@ -122,8 +122,8 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
 const modal = { background: 'white', borderRadius: 12, padding: 22, maxWidth: 440, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
-const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }
-const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#3A3733', marginBottom: 12 }
-const inputStyle = { display: 'block', width: '100%', padding: '9px 11px', marginTop: 5, fontSize: 13, border: '1px solid #E8E2D8', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box' }
-const btnSecondary = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', color: '#6F6A60' }
+const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }
+const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }
+const inputStyle = { display: 'block', width: '100%', padding: '9px 11px', marginTop: 5, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box' }
+const btnSecondary = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30' }
 const btnPrimary = { fontSize: 13, padding: '9px 16px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }

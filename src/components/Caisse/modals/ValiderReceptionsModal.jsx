@@ -47,7 +47,7 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
 
         <div style={{ padding: 18, maxHeight: '60vh', overflowY: 'auto' }}>
           {receptions.length === 0 && (
-            <div style={{ padding: 20, textAlign: 'center', color: '#6F6A60' }}>
+            <div style={{ padding: 20, textAlign: 'center', color: '#4a3a30' }}>
               ✅ Toutes les réceptions sont validées !
             </div>
           )}
@@ -60,13 +60,13 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
                 alignItems: 'center', padding: '12px 10px',
                 borderRadius: 8, marginBottom: 8,
                 background: isValidating ? '#F0F0F0' : '#FAFAF8',
-                border: `1px solid ${isValidating ? '#D8D8D8' : '#E8E2D8'}`,
+                border: `1px solid ${isValidating ? '#D8D8D8' : '#e5d8c3'}`,
                 opacity: isValidating ? 0.5 : 1,
               }}>
-                <div style={{ fontSize: 11, color: '#6F6A60' }}>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>
                   {fmtDateCourte(r.mvt_date)}
                 </div>
-                <div style={{ fontSize: 13, color: '#3A3733' }}>
+                <div style={{ fontSize: 13, color: '#1a0f0a' }}>
                   {r.label}
                 </div>
                 <div style={{ textAlign: 'right', fontWeight: 500, color: '#1D7A5C', fontSize: 14 }}>
@@ -94,13 +94,13 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
           )}
         </div>
 
-        <div style={{ padding: '14px 18px', borderTop: '1px solid #E8E2D8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontSize: 12, color: '#6F6A60' }}>
-            Total à recevoir : <strong style={{ color: '#3A3733' }}>{fmtMoney(total)}</strong>
+        <div style={{ padding: '14px 18px', borderTop: '1px solid #e5d8c3', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontSize: 12, color: '#4a3a30' }}>
+            Total à recevoir : <strong style={{ color: '#1a0f0a' }}>{fmtMoney(total)}</strong>
           </div>
           <button onClick={onClose} style={{
             fontSize: 13, padding: '8px 14px', borderRadius: 8,
-            border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer', color: '#6F6A60'
+            border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30'
           }}>
             {remaining > 0 ? 'Plus tard' : 'Fermer'}
           </button>

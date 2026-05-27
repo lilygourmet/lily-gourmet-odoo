@@ -148,7 +148,7 @@ export default function AttestationsTab({ user, isAdmin }) {
             <button key={t.v} type="button" onClick={() => setSubTab(t.v)} style={{
               padding: '7px 14px', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer',
               background: subTab === t.v ? 'white' : 'transparent',
-              color: subTab === t.v ? '#3A3733' : '#6F6A60',
+              color: subTab === t.v ? '#1a0f0a' : '#4a3a30',
               fontWeight: subTab === t.v ? 500 : 400,
             }}>{t.label}</button>
           ))}
@@ -169,10 +169,10 @@ export default function AttestationsTab({ user, isAdmin }) {
               const active = type === t.key
               return (
                 <label key={t.key} style={{
-                  padding: '12px 14px', border: `2px solid ${active ? '#993556' : '#E8E2D8'}`,
+                  padding: '12px 14px', border: `2px solid ${active ? '#993556' : '#e5d8c3'}`,
                   background: active ? '#FCEEE8' : 'white', borderRadius: 8,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
-                  fontSize: 13, color: active ? '#993556' : '#3A3733',
+                  fontSize: 13, color: active ? '#993556' : '#1a0f0a',
                   fontWeight: active ? 500 : 400,
                 }}>
                   <input type="radio" name="type" value={t.key}
@@ -212,7 +212,7 @@ export default function AttestationsTab({ user, isAdmin }) {
         <div style={{
           background: '#F9F6F1', padding: 16, borderRadius: 10, marginBottom: 16
         }}>
-          <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 12 }}>
             ℹ️ Champs requis pour ce type d'attestation (auto-remplis si dispo)
           </div>
 
@@ -452,10 +452,10 @@ function Field({ label, value, onChange, placeholder, type = 'text', required = 
   )
 }
 
-const lblStyle = { display: 'block', fontSize: 13, fontWeight: 500, color: '#3A3733', marginBottom: 8 }
-const lblFieldStyle = { display: 'block', fontSize: 11, fontWeight: 500, color: '#6F6A60', marginBottom: 4 }
+const lblStyle = { display: 'block', fontSize: 13, fontWeight: 500, color: '#1a0f0a', marginBottom: 8 }
+const lblFieldStyle = { display: 'block', fontSize: 11, fontWeight: 500, color: '#4a3a30', marginBottom: 4 }
 const inputStyle = {
   width: '100%', padding: '9px 11px', fontSize: 13,
-  border: '1px solid #E8E2D8', borderRadius: 6, background: 'white',
+  border: '1px solid #e5d8c3', borderRadius: 6, background: 'white',
   fontFamily: 'inherit', boxSizing: 'border-box'
 }

@@ -87,13 +87,13 @@ export default function MeriemAvances({ user }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontSize: 13, color: '#6F6A60' }}>
-          Total dû à Meriem : <strong style={{ color: '#3A3733' }}>{fmtMoney(totalPending)}</strong>
+        <div style={{ fontSize: 13, color: '#4a3a30' }}>
+          Total dû à Meriem : <strong style={{ color: '#1a0f0a' }}>{fmtMoney(totalPending)}</strong>
         </div>
         <button onClick={() => setShowNew(true)} style={btnPrimary}>+ Nouvelle avance</button>
       </div>
 
-      <div style={{ fontSize: 11, color: '#6F6A60', padding: '8px 12px', background: '#FAF6F0', borderRadius: 6, marginBottom: 12, border: '0.5px solid #E8E2D8' }}>
+      <div style={{ fontSize: 11, color: '#4a3a30', padding: '8px 12px', background: '#FAF6F0', borderRadius: 6, marginBottom: 12, border: '0.5px solid #e5d8c3' }}>
         ℹ️ Chaque avance crée automatiquement une <strong>sortie</strong> dans la caisse Meriem. Au remboursement, une <strong>entrée</strong> est créée.
       </div>
 
@@ -110,10 +110,10 @@ export default function MeriemAvances({ user }) {
         ))}
       </div>
 
-      {loading && <div style={{ color: '#6F6A60', padding: 20 }}>Chargement…</div>}
+      {loading && <div style={{ color: '#4a3a30', padding: 20 }}>Chargement…</div>}
 
       {!loading && list.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#6F6A60', background: '#F9F6F1', borderRadius: 8 }}>
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>
           Aucune avance dans ce filtre.
         </div>
       )}
@@ -125,26 +125,26 @@ export default function MeriemAvances({ user }) {
         return (
           <div key={a.id} style={rowCard}>
             <div>
-              <div style={{ fontSize: 11, color: '#6F6A60' }}>Date</div>
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>Date</div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>{fmtDateCourte(a.avance_date)}</div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: '#6F6A60' }}>Pour</div>
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>Pour</div>
               <div style={{ display: 'inline-block', background: benefColor.bg, color: benefColor.text, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, marginTop: 2 }}>👤 {benefName}</div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: '#6F6A60' }}>Montant</div>
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>Montant</div>
               <div style={{ fontSize: 16, fontWeight: 500 }}>{fmtMoney(a.amount)}</div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: '#6F6A60' }}>Motif</div>
-              <div style={{ fontSize: 12, color: '#3A3733' }}>{a.motif || '—'}</div>
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>Motif</div>
+              <div style={{ fontSize: 12, color: '#1a0f0a' }}>{a.motif || '—'}</div>
             </div>
             <div>
               {isRefunded ? (
                 <div>
                   <span style={statusDone}>✓ Remboursée</span>
-                  <div style={{ fontSize: 10, color: '#6F6A60', marginTop: 4 }}>
+                  <div style={{ fontSize: 10, color: '#4a3a30', marginTop: 4 }}>
                     {fmtDateLongue(a.refunded_at.slice(0, 10))}
                     {a.refunded_note && <div style={{ fontStyle: 'italic' }}>{a.refunded_note}</div>}
                   </div>
@@ -198,7 +198,7 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
     <div onClick={onClose} style={modalOverlay}>
       <div onClick={e => e.stopPropagation()} style={modalBox}>
         <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>💸 Nouvelle avance</div>
-        <div style={{ fontSize: 12, color: '#6F6A60', marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 16 }}>
           Meriem prend de l'argent de sa caisse pro pour avancer pour Layla ou Nezha
         </div>
 
@@ -227,14 +227,14 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
   )
 }
 
-const btnSlim = { fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnSlim = { fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#993556', color: 'white', cursor: 'pointer', fontWeight: 500 }
 const btnPrimarySmall = { fontSize: 11, padding: '4px 10px', borderRadius: 6, border: 'none', background: '#085041', color: 'white', cursor: 'pointer', fontWeight: 500 }
 const btnDanger = { fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #F2D1D0', background: 'white', color: '#99201E', cursor: 'pointer' }
 
 const rowCard = {
   display: 'grid', gridTemplateColumns: '90px 130px 100px 1fr 130px 110px', gap: 12, alignItems: 'center',
-  padding: '12px 14px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #E8E2D8',
+  padding: '12px 14px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3',
 }
 
 const statusPending = { display: 'inline-block', fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#FAEEDA', color: '#633806' }
@@ -243,8 +243,8 @@ const statusDone    = { display: 'inline-block', fontSize: 11, padding: '4px 10p
 function filterChip(active) {
   return {
     fontSize: 12, padding: '5px 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontWeight: 500,
-    background: active ? '#3A3733' : '#F4F0EA',
-    color:      active ? 'white'   : '#6F6A60',
+    background: active ? '#1a0f0a' : '#F4F0EA',
+    color:      active ? 'white'   : '#4a3a30',
   }
 }
 
@@ -252,7 +252,7 @@ function statusChip(active) {
   return {
     fontSize: 11, padding: '4px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
     background: active ? '#993556' : '#F4F0EA',
-    color:      active ? 'white'   : '#6F6A60',
+    color:      active ? 'white'   : '#4a3a30',
   }
 }
 
@@ -266,5 +266,5 @@ const modalBox = {
   boxShadow: '0 12px 40px rgba(0, 0, 0, 0.18)',
 }
 
-const fieldLabel = { display: 'block', fontSize: 11, color: '#6F6A60', marginBottom: 4, marginTop: 12, fontWeight: 500 }
+const fieldLabel = { display: 'block', fontSize: 11, color: '#4a3a30', marginBottom: 4, marginTop: 12, fontWeight: 500 }
 const fieldInput = { width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 6, boxSizing: 'border-box' }

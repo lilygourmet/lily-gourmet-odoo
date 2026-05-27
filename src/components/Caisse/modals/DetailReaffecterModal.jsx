@@ -42,13 +42,13 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
 
           {/* Date d'affectation modifiable */}
           <div style={{ background: '#F4F0EA', padding: '10px 14px', borderRadius: 8, marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: '#6F6A60', marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 6 }}>
               📅 Date effective (mois où l'argent a été pris)
             </div>
             {!editingDate ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>
-                  {env.assigned_date ? fmtDateLongue(env.assigned_date) : <em style={{ color: '#9B968D' }}>Non défini (utilise la date Odoo)</em>}
+                  {env.assigned_date ? fmtDateLongue(env.assigned_date) : <em style={{ color: '#8a7a70' }}>Non défini (utilise la date Odoo)</em>}
                 </div>
                 <button onClick={() => setEditingDate(true)} style={btnSmall}>✎ Modifier</button>
               </div>
@@ -63,7 +63,7 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
             )}
           </div>
 
-          <div style={{ fontSize: 12, color: '#6F6A60', lineHeight: 1.7, marginBottom: 18 }}>
+          <div style={{ fontSize: 12, color: '#4a3a30', lineHeight: 1.7, marginBottom: 18 }}>
             {env.assigned_at && (
               <div>
                 Affecté le {fmtDateLongue(env.assigned_at)}
@@ -75,7 +75,7 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button onClick={() => setShowReassign(true)} style={btnNormal}>🔄 Réaffecter à un autre destinataire</button>
-            <button onClick={() => { if (confirm('Annuler l\'affectation ? L\'enveloppe redevient grise.')) onUnassign() }} style={{ ...btnNormal, color: '#6F6A60' }}>↩ Retour à « À affecter »</button>
+            <button onClick={() => { if (confirm('Annuler l\'affectation ? L\'enveloppe redevient grise.')) onUnassign() }} style={{ ...btnNormal, color: '#4a3a30' }}>↩ Retour à « À affecter »</button>
             <button onClick={onClose} style={btnNormal}>Fermer</button>
           </div>
         </>
@@ -84,10 +84,10 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
       {showReassign && (
         <>
           <div style={{ background: '#F4F0EA', padding: '14px 16px', borderRadius: 8, marginBottom: 20 }}>
-            <div style={{ fontSize: 12, color: '#6F6A60' }}>{fmtDateLongue(env.session_date)} · {env.source}</div>
+            <div style={{ fontSize: 12, color: '#4a3a30' }}>{fmtDateLongue(env.session_date)} · {env.source}</div>
             <div style={{ fontSize: 24, fontWeight: 500, marginTop: 4 }}>{fmtMoney(env.amount_cash)}</div>
           </div>
-          <div style={{ fontSize: 13, color: '#6F6A60', marginBottom: 10 }}>Nouveau destinataire :</div>
+          <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 10 }}>Nouveau destinataire :</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {sorted.map(d => {
               const cc = COLOR_PALETTE[d.color_key] || COLOR_PALETTE.gris
@@ -112,8 +112,8 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
   )
 }
 
-const btnNormal = { fontSize: 13, padding: '10px 12px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
-const btnSmall  = { fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnNormal = { fontSize: 13, padding: '10px 12px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const btnSmall  = { fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 12, padding: '4px 12px', borderRadius: 6, border: 'none', background: '#993556', color: 'white', cursor: 'pointer', fontWeight: 500 }
 const inputStyle = { flex: 1, padding: '5px 8px', fontSize: 12, border: '1px solid #C4BFB6', borderRadius: 6 }
 
@@ -123,10 +123,10 @@ function Modal({ title, onClose, children }) {
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem',
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 460, width: '100%', border: '0.5px solid #E8E2D8' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 460, width: '100%', border: '0.5px solid #e5d8c3' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>{title}</div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }}>✕</button>
         </div>
         {children}
       </div>

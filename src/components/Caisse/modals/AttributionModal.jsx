@@ -17,12 +17,12 @@ export default function AttributionModal({ env, destinataires, onClose, onAssign
   return (
     <Modal onClose={onClose} title="Affecter cette enveloppe">
       <div style={{ background: '#F4F0EA', padding: '14px 16px', borderRadius: 8, marginBottom: 16 }}>
-        <div style={{ fontSize: 12, color: '#6F6A60' }}>Session POS : {fmtDateLongue(env.session_date)} · {env.source}</div>
+        <div style={{ fontSize: 12, color: '#4a3a30' }}>Session POS : {fmtDateLongue(env.session_date)} · {env.source}</div>
         <div style={{ fontSize: 28, fontWeight: 500, lineHeight: 1, marginTop: 4 }}>{fmtMoney(env.amount_cash)}</div>
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', fontSize: 12, color: '#6F6A60', marginBottom: 6 }}>
+        <label style={{ display: 'block', fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
           📅 Date effective (mois où l'argent a été réellement pris/versé)
         </label>
         <input
@@ -34,12 +34,12 @@ export default function AttributionModal({ env, destinataires, onClose, onAssign
             border: '1px solid #C4BFB6', borderRadius: 6, boxSizing: 'border-box',
           }}
         />
-        <div style={{ fontSize: 10, color: '#9B968D', marginTop: 4, fontStyle: 'italic' }}>
+        <div style={{ fontSize: 10, color: '#8a7a70', marginTop: 4, fontStyle: 'italic' }}>
           L'enveloppe apparaîtra dans le mois de cette date (pas dans le mois de la session POS)
         </div>
       </div>
 
-      <div style={{ fontSize: 13, color: '#6F6A60', marginBottom: 10 }}>Choisir le destinataire :</div>
+      <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 10 }}>Choisir le destinataire :</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {sorted.map(d => {
           const c = COLOR_PALETTE[d.color_key] || COLOR_PALETTE.gris
@@ -67,11 +67,11 @@ function Modal({ title, onClose, children }) {
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: 'white', borderRadius: 12, padding: 28, maxWidth: 460, width: '100%',
-        border: '0.5px solid #E8E2D8',
+        border: '0.5px solid #e5d8c3',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>{title}</div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }}>✕</button>
         </div>
         {children}
       </div>

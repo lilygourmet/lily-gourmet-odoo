@@ -54,6 +54,6 @@ function PillTab({ active, onClick, children }) {
   return <button onClick={onClick} style={{
     fontSize: 13, fontWeight: 500, padding: '9px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
     background: active ? 'white' : 'transparent',
-    color:      active ? '#3A3733' : '#6F6A60',
+    color:      active ? '#1a0f0a' : '#4a3a30',
   }}>{children}</button>
 }

@@ -26,10 +26,10 @@ export default function UploadPreuveModal({ env, kind, onClose, onUpload }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 28, maxWidth: 440, width: '100%', border: '0.5px solid #E8E2D8', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 28, maxWidth: 440, width: '100%', border: '0.5px solid #e5d8c3', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>Ajouter une preuve</div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9B968D' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }}>✕</button>
         </div>
         <div style={{ background: c.bg, color: c.text, border: `0.5px solid ${c.border}`, padding: '14px 16px', borderRadius: 8, marginBottom: 20 }}>
           <div style={{ fontSize: 12 }}>{fmtDateLongue(env.session_date)} · {env.source}</div>
@@ -37,7 +37,7 @@ export default function UploadPreuveModal({ env, kind, onClose, onUpload }) {
           <div style={{ fontSize: 12 }}>{kind === 'banque' ? '🏦 Versement bancaire' : '👤 Remboursement perso'}</div>
         </div>
 
-        <div style={{ fontSize: 13, color: '#6F6A60', marginBottom: 8 }}>Montant réellement {kind === 'banque' ? 'versé à la banque' : 'remboursé'}</div>
+        <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 8 }}>Montant réellement {kind === 'banque' ? 'versé à la banque' : 'remboursé'}</div>
         <input type="number" step="0.01" value={amountProof} onChange={(e) => setAmountProof(e.target.value)}
           style={{ width: '100%', padding: '10px 12px', border: '0.5px solid #C4BFB6', borderRadius: 8, fontSize: 14, marginBottom: hasDiff ? 6 : 16, boxSizing: 'border-box' }} />
         {hasDiff && (
@@ -46,27 +46,27 @@ export default function UploadPreuveModal({ env, kind, onClose, onUpload }) {
           </div>
         )}
 
-        <div style={{ fontSize: 13, color: '#6F6A60', marginBottom: 8 }}>Date du {kind === 'banque' ? 'versement' : 'remboursement'}</div>
+        <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 8 }}>Date du {kind === 'banque' ? 'versement' : 'remboursement'}</div>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
           style={{ width: '100%', padding: '10px 12px', border: '0.5px solid #C4BFB6', borderRadius: 8, fontSize: 14, marginBottom: 20, boxSizing: 'border-box' }} />
 
         {hasDiff && (
           <>
-            <div style={{ fontSize: 13, color: '#6F6A60', marginBottom: 8 }}>Raison de l'écart (optionnel)</div>
+            <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 8 }}>Raison de l'écart (optionnel)</div>
             <input type="text" value={noteProof} onChange={(e) => setNoteProof(e.target.value)} placeholder="ex : ajout cash perso, regroupé avec autre dépôt..."
               style={{ width: '100%', padding: '10px 12px', border: '0.5px solid #C4BFB6', borderRadius: 8, fontSize: 14, marginBottom: 20, boxSizing: 'border-box' }} />
           </>
         )}
 
-        <div style={{ fontSize: 13, color: '#6F6A60', marginBottom: 8 }}>Preuve (photo ou PDF)</div>
+        <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 8 }}>Preuve (photo ou PDF)</div>
         <label style={{ display: 'block', border: '1.5px dashed #C4BFB6', borderRadius: 8, padding: '24px 16px', textAlign: 'center', cursor: 'pointer', background: '#F9F6F1', marginBottom: 24 }}>
           <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files[0])} style={{ display: 'none' }} />
-          <div style={{ fontSize: 28, color: '#9B968D' }}>☁</div>
-          <div style={{ fontSize: 13, color: '#6F6A60', marginTop: 6 }}>{file ? `📎 ${file.name}` : 'Cliquez pour sélectionner'}</div>
-          <div style={{ fontSize: 11, color: '#9B968D', marginTop: 4 }}>JPG, PNG, PDF — max 5 Mo</div>
+          <div style={{ fontSize: 28, color: '#8a7a70' }}>☁</div>
+          <div style={{ fontSize: 13, color: '#4a3a30', marginTop: 6 }}>{file ? `📎 ${file.name}` : 'Cliquez pour sélectionner'}</div>
+          <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>JPG, PNG, PDF — max 5 Mo</div>
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={onClose} style={{ flex: 1, fontSize: 13, padding: 12, borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }}>Annuler</button>
+          <button onClick={onClose} style={{ flex: 1, fontSize: 13, padding: 12, borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }}>Annuler</button>
           <button onClick={submit} disabled={uploading || !file} style={{ flex: 2, fontSize: 13, padding: 12, borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer', opacity: (uploading || !file) ? 0.5 : 1 }}>
             {uploading ? '⏳ Upload…' : '✓ Valider la preuve'}
           </button>

@@ -59,7 +59,7 @@ export default function MeriemHamid({ user }) {
           <button key={m.idx} onClick={() => setMonth(m.idx)} style={{
             padding: '7px 14px', borderRadius: 8, border: month === m.idx ? '0.5px solid #EF9F27' : 'none', cursor: 'pointer',
             background: month === m.idx ? '#FAEEDA' : '#F4F0EA',
-            color:      month === m.idx ? '#633806'  : '#6F6A60',
+            color:      month === m.idx ? '#633806'  : '#4a3a30',
             fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0,
           }}>{m.label}</button>
         ))}
@@ -77,17 +77,17 @@ export default function MeriemHamid({ user }) {
           <div style={{ fontSize: 26, fontWeight: 500, color: negative ? '#99201E' : '#633806', marginTop: 6 }}>
             {balance >= 0 ? '+ ' : '− '}{fmtMoney(Math.abs(balance)).replace(' dh', '')} <span style={{ fontSize: 14 }}>dh</span>
           </div>
-          <div style={{ fontSize: 11, color: '#9B968D', marginTop: 4 }}>{negative ? 'Vous devez à Hamid' : 'Argent chez Hamid'}</div>
+          <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{negative ? 'Vous devez à Hamid' : 'Argent chez Hamid'}</div>
         </div>
         <div style={{ background: '#F4F0EA', borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 11, color: '#6F6A60' }}>↓ Avances reçues · {MOIS_TABS[month - 1].label}</div>
+          <div style={{ fontSize: 11, color: '#4a3a30' }}>↓ Avances reçues · {MOIS_TABS[month - 1].label}</div>
           <div style={{ fontSize: 26, fontWeight: 500, color: '#1D7A5C', marginTop: 6 }}>{fmtMoney(totalAvances)}</div>
-          <div style={{ fontSize: 11, color: '#9B968D', marginTop: 4 }}>{avances.length} versements</div>
+          <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{avances.length} versements</div>
         </div>
         <div style={{ background: '#F4F0EA', borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 11, color: '#6F6A60' }}>↑ Dépenses · {MOIS_TABS[month - 1].label}</div>
+          <div style={{ fontSize: 11, color: '#4a3a30' }}>↑ Dépenses · {MOIS_TABS[month - 1].label}</div>
           <div style={{ fontSize: 26, fontWeight: 500, color: '#99201E', marginTop: 6 }}>{fmtMoney(totalDepenses)}</div>
-          <div style={{ fontSize: 11, color: '#9B968D', marginTop: 4 }}>{depenses.length} dépenses</div>
+          <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{depenses.length} dépenses</div>
         </div>
       </div>
 
@@ -103,12 +103,12 @@ export default function MeriemHamid({ user }) {
             <span>↓ Avances reçues de Meriem</span>
             <span>{fmtMoney(totalAvances)}</span>
           </div>
-          {avances.length === 0 && <div style={{ fontSize: 12, color: '#9B968D', padding: 8 }}>Aucune avance ce mois</div>}
+          {avances.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune avance ce mois</div>}
           {avances.map(a => (
             <div key={a.id} style={miniRow}>
               <div>
                 <div style={{ fontSize: 13 }}>{a.label}</div>
-                <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(a.mvt_date)}</div>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(a.mvt_date)}</div>
               </div>
               <div style={{ color: '#1D7A5C', fontWeight: 500 }}>+ {fmtMoney(a.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></div>
             </div>
@@ -119,12 +119,12 @@ export default function MeriemHamid({ user }) {
             <span>↑ Dépenses de Hamid</span>
             <span>{fmtMoney(totalDepenses)}</span>
           </div>
-          {depenses.length === 0 && <div style={{ fontSize: 12, color: '#9B968D', padding: 8 }}>Aucune dépense ce mois</div>}
+          {depenses.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune dépense ce mois</div>}
           {depenses.map(d => (
             <div key={d.id} style={miniRow}>
               <div>
                 <div style={{ fontSize: 13 }}>{d.label}</div>
-                <div style={{ fontSize: 11, color: '#6F6A60' }}>{fmtDateCourte(d.depense_date)} · {d.category || '—'}</div>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(d.depense_date)} · {d.category || '—'}</div>
               </div>
               <div style={{ color: '#99201E', fontWeight: 500 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></div>
             </div>
@@ -132,8 +132,8 @@ export default function MeriemHamid({ user }) {
         </div>
       </div>
 
-      <div style={{ marginTop: 24, padding: '14px 16px', background: '#F4F0EA', borderRadius: 8, fontSize: 13, color: '#6F6A60', textAlign: 'center' }}>
-        ⚖ <strong style={{ color: '#3A3733' }}>{fmtMoney(totalAvances)} donnés − {fmtMoney(totalDepenses)} dépensés ce mois</strong>
+      <div style={{ marginTop: 24, padding: '14px 16px', background: '#F4F0EA', borderRadius: 8, fontSize: 13, color: '#4a3a30', textAlign: 'center' }}>
+        ⚖ <strong style={{ color: '#1a0f0a' }}>{fmtMoney(totalAvances)} donnés − {fmtMoney(totalDepenses)} dépensés ce mois</strong>
       </div>
 
       {showAvance  && <AjoutAvanceHamidModal  onClose={() => setShowAvance(false)}  onSubmit={handleAvance} />}
@@ -143,7 +143,7 @@ export default function MeriemHamid({ user }) {
   )
 }
 
-const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
-const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #E8E2D8', background: 'white', cursor: 'pointer' }
+const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
-const miniRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 8, marginBottom: 5, background: 'white', border: '0.5px solid #E8E2D8' }
+const miniRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 8, marginBottom: 5, background: 'white', border: '0.5px solid #e5d8c3' }

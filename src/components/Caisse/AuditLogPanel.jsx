@@ -12,7 +12,7 @@ const ACTION_LABELS = {
   refund:        { label: 'Remboursée',        color: '#085041' },
   unrefund:      { label: 'Remb. annulé',      color: '#99201E' },
   pay:           { label: 'Payé',              color: '#085041' },
-  close_month:   { label: 'Clôture',           color: '#3A3733' },
+  close_month:   { label: 'Clôture',           color: '#1a0f0a' },
   update_date:   { label: 'Date modifiée',     color: '#B7771C' },
 }
 
@@ -74,9 +74,9 @@ export default function AuditLogPanel({ entityType = null, title = null, limit =
 
       {open && (
         <div style={bodyStyle}>
-          {loading && <div style={{ padding: 16, color: '#6F6A60', textAlign: 'center' }}>Chargement…</div>}
+          {loading && <div style={{ padding: 16, color: '#4a3a30', textAlign: 'center' }}>Chargement…</div>}
           {!loading && list.length === 0 && (
-            <div style={{ padding: 20, textAlign: 'center', color: '#9B968D', fontSize: 12 }}>
+            <div style={{ padding: 20, textAlign: 'center', color: '#8a7a70', fontSize: 12 }}>
               Aucune action enregistrée.
             </div>
           )}
@@ -89,7 +89,7 @@ export default function AuditLogPanel({ entityType = null, title = null, limit =
 
 function LogRow({ log }) {
   const [showDetails, setShowDetails] = useState(false)
-  const action = ACTION_LABELS[log.action] || { label: log.action, color: '#6F6A60' }
+  const action = ACTION_LABELS[log.action] || { label: log.action, color: '#4a3a30' }
   const dateStr = log.created_at ? new Date(log.created_at).toLocaleString('fr-FR', {
     day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
   }) : ''
@@ -98,9 +98,9 @@ function LogRow({ log }) {
   return (
     <div style={rowStyle}>
       <div onClick={() => setShowDetails(!showDetails)} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 90px 90px', gap: 8, alignItems: 'center', padding: '8px 12px', cursor: 'pointer', fontSize: 11 }}>
-        <div style={{ color: '#9B968D' }}>{dateStr}</div>
-        <div style={{ color: '#3A3733' }}>{log.description}</div>
-        <div style={{ textAlign: 'right', color: log.amount && Number(log.amount) < 0 ? '#99201E' : '#3A3733', fontWeight: 500 }}>
+        <div style={{ color: '#8a7a70' }}>{dateStr}</div>
+        <div style={{ color: '#1a0f0a' }}>{log.description}</div>
+        <div style={{ textAlign: 'right', color: log.amount && Number(log.amount) < 0 ? '#99201E' : '#1a0f0a', fontWeight: 500 }}>
           {log.amount != null ? fmtMoney(log.amount) : '—'}
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -124,7 +124,7 @@ function LogRow({ log }) {
 
 const containerStyle = {
   marginTop: 32,
-  borderTop: '1px solid #E8E2D8',
+  borderTop: '1px solid #e5d8c3',
   paddingTop: 12,
 }
 
@@ -140,24 +140,24 @@ const toggleBtn = (open) => ({
   cursor: 'pointer',
   fontSize: 12,
   fontWeight: 500,
-  color: '#6F6A60',
+  color: '#4a3a30',
 })
 
 const countBadge = {
-  fontSize: 10, padding: '2px 8px', borderRadius: 999, background: '#E8E2D8', color: '#6F6A60', fontWeight: 500,
+  fontSize: 10, padding: '2px 8px', borderRadius: 999, background: '#e5d8c3', color: '#4a3a30', fontWeight: 500,
 }
 
 const bodyStyle = {
   marginTop: 6,
   background: '#FAF6F0',
   borderRadius: 6,
-  border: '0.5px solid #E8E2D8',
+  border: '0.5px solid #e5d8c3',
   maxHeight: 400,
   overflow: 'auto',
 }
 
 const rowStyle = {
-  borderBottom: '0.5px solid #E8E2D8',
+  borderBottom: '0.5px solid #e5d8c3',
   background: 'white',
 }
 
@@ -165,8 +165,8 @@ const detailsStyle = {
   padding: '6px 12px 10px 12px',
   background: '#FAF6F0',
   fontSize: 10,
-  color: '#6F6A60',
-  borderTop: '0.5px solid #E8E2D8',
+  color: '#4a3a30',
+  borderTop: '0.5px solid #e5d8c3',
 }
 
 const preStyle = {
