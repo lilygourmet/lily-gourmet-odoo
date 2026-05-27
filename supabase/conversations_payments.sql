@@ -11,6 +11,10 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_order_ref   TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_client_name TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_validated_at TIMESTAMPTZ;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_validated_by UUID REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_amount        NUMERIC;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_rejected_at   TIMESTAMPTZ;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_rejected_by   UUID REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_rejection_reason TEXT;
 
 -- Index pour charger rapidement la liste des preuves
 CREATE INDEX IF NOT EXISTS idx_msg_payment_proof ON messages(is_payment_proof) WHERE is_payment_proof = true;

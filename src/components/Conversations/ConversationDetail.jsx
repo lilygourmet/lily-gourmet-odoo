@@ -82,6 +82,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [paymentMsg, setPaymentMsg] = useState(null)
   const [orderRefInput, setOrderRefInput] = useState('')
   const [clientNameInput, setClientNameInput] = useState('')
+  const [amountInput, setAmountInput] = useState('')
   const [markBusy, setMarkBusy] = useState(false)
   // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
@@ -392,15 +393,17 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     setPaymentMsg(m)
     setOrderRefInput(m.payment_order_ref || '')
     setClientNameInput(m.payment_client_name || '')
+    setAmountInput(m.payment_amount != null ? String(m.payment_amount) : '')
   }
 
   async function confirmMarkPayment() {
     if (!paymentMsg) return
     setMarkBusy(true)
     try {
-      const updated = await markPaymentProof(paymentMsg.id, orderRefInput, clientNameInput)
+      const amount = amountInput.trim() ? Number(amountInput.replace(',', '.')) : null
+      const updated = await markPaymentProof(paymentMsg.id, orderRefInput, clientNameInput, Number.isFinite(amount) ? amount : null)
       setMessages(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
-      setPaymentMsg(null); setOrderRefInput(''); setClientNameInput('')
+      setPaymentMsg(null); setOrderRefInput(''); setClientNameInput(''); setAmountInput('')
     } catch (e) { alert('Erreur : ' + e.message) }
     finally { setMarkBusy(false) }
   }
@@ -540,7 +543,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               }`}>
                 {m.is_payment_proof && (
                   <div className={`flex items-center gap-1 text-[10px] font-medium mb-1 ${isAgent ? 'text-amber-200' : 'text-amber-700'}`}>
-                    💰 Preuve de paiement{m.payment_order_ref ? ` · Cmd ${m.payment_order_ref}` : ''}{m.payment_validated_at ? ' · ✅ validé' : ''}
+                    💰 Preuve de paiement{m.payment_order_ref ? ` · Cmd ${m.payment_order_ref}` : ''}{m.payment_amount != null ? ` · ${m.payment_amount} DH` : ''}{m.payment_rejected_at ? ' · ❌ refusé' : m.payment_validated_at ? ' · ✅ validé' : ''}
                   </div>
                 )}
                 {m.media_url && (() => {
@@ -746,6 +749,15 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               value={clientNameInput}
               onChange={e => setClientNameInput(e.target.value)}
               placeholder={conv?.client_name || 'ex. nom sur le virement'}
+              className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3"
+            />
+            <label className="block text-[11px] font-medium text-ink-soft mb-1">Montant (DH)</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={amountInput}
+              onChange={e => setAmountInput(e.target.value)}
+              placeholder="ex. 450"
               className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-4"
             />
             <div className="flex gap-2 justify-end">

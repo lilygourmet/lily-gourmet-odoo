@@ -211,14 +211,20 @@ export async function reopenConversation(conversationId, userId) {
 const PAYMENT_SEL = `
   *,
   conversation:conversations!messages_conversation_id_fkey(id, client_name, client_phone),
-  validator:profiles!messages_payment_validated_by_fkey(id, username, full_name)
+  validator:profiles!messages_payment_validated_by_fkey(id, username, full_name),
+  rejector:profiles!messages_payment_rejected_by_fkey(id, username, full_name)
 `
 
-/** Marque un message comme preuve de paiement (n° de commande + nom client optionnels). */
-export async function markPaymentProof(messageId, orderRef, clientName) {
+/** Marque un message comme preuve de paiement (n° commande + nom + montant optionnels). */
+export async function markPaymentProof(messageId, orderRef, clientName, amount) {
   const { data, error } = await supabase
     .from('messages')
-    .update({ is_payment_proof: true, payment_order_ref: orderRef?.trim() || null, payment_client_name: clientName?.trim() || null })
+    .update({
+      is_payment_proof: true,
+      payment_order_ref: orderRef?.trim() || null,
+      payment_client_name: clientName?.trim() || null,
+      payment_amount: amount ?? null,
+    })
     .eq('id', messageId)
     .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
     .single()
@@ -230,7 +236,7 @@ export async function markPaymentProof(messageId, orderRef, clientName) {
 export async function unmarkPaymentProof(messageId) {
   const { data, error } = await supabase
     .from('messages')
-    .update({ is_payment_proof: false, payment_order_ref: null, payment_client_name: null, payment_validated_at: null, payment_validated_by: null })
+    .update({ is_payment_proof: false, payment_order_ref: null, payment_client_name: null, payment_amount: null, payment_validated_at: null, payment_validated_by: null, payment_rejected_at: null, payment_rejected_by: null, payment_rejection_reason: null })
     .eq('id', messageId)
     .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
     .single()
@@ -249,11 +255,23 @@ export async function loadPaymentsToValidate() {
   return data || []
 }
 
-/** Marque un paiement comme validé. */
+/** Marque un paiement comme validé (efface un éventuel refus). */
 export async function validatePayment(messageId, userId) {
   const { data, error } = await supabase
     .from('messages')
-    .update({ payment_validated_at: new Date().toISOString(), payment_validated_by: userId })
+    .update({ payment_validated_at: new Date().toISOString(), payment_validated_by: userId, payment_rejected_at: null, payment_rejected_by: null, payment_rejection_reason: null })
+    .eq('id', messageId)
+    .select(PAYMENT_SEL)
+    .single()
+  if (error) throw error
+  return data
+}
+
+/** Refuse un paiement avec un motif (efface une éventuelle validation). */
+export async function rejectPayment(messageId, userId, reason) {
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ payment_rejected_at: new Date().toISOString(), payment_rejected_by: userId, payment_rejection_reason: reason?.trim() || null, payment_validated_at: null, payment_validated_by: null })
     .eq('id', messageId)
     .select(PAYMENT_SEL)
     .single()
