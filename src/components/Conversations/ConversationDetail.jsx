@@ -396,7 +396,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       <div style={{ top: headerTop }} className="sticky z-20 bg-bordeaux text-cream flex items-center gap-2 flex-wrap -mx-4 px-4 py-2 mb-3 shadow-sm">
         <button
           onClick={onBack}
-          className="w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+          className="md:hidden w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
           title="Retour à la liste"
         >←</button>
         <button
