@@ -246,6 +246,9 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   const totalStr = formatMontant(total) + " MAD";
   const totalLettres = nombreEnLettres(total).toUpperCase();
 
+  // Garder TOTAL + signature ensemble (jamais la signature seule sur une page)
+  if (y + 32 > H - 18) { doc.addPage(); y = MARGIN; }
+
   doc.autoTable({
     startY: y + 1,
     margin: { left: MARGIN, right: MARGIN },
@@ -275,10 +278,8 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
     },
   });
 
-  // ---- Signature ----
+  // ---- Signature ---- (le saut de page éventuel a déjà été fait avant le TOTAL)
   let ySig = doc.lastAutoTable.finalY + 14;
-  // Ne pas chevaucher le pied de page : nouvelle page si trop bas
-  if (ySig + 12 > H - 18) { doc.addPage(); ySig = MARGIN + 6; }
   doc.setTextColor(...NOIR);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
