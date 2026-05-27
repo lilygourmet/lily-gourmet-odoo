@@ -70,7 +70,7 @@ export default function AbsencesView({ user }) {
   const persons = Object.keys(groups).sort((x, y) => x.localeCompare(y))
 
   return (
-    <div className="max-w-3xl mx-auto p-4">
+    <div className="max-w-[1100px] mx-auto px-5 py-5">
       <div className="flex items-center justify-between gap-2 mb-1">
         <h1 className="font-fraunces italic text-[26px] text-ink">🌴 Congés / Absences</h1>
         <button

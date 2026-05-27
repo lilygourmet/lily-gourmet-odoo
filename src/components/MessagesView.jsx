@@ -441,14 +441,11 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} onSyncSuccess={refresh} />
 
-      <div className="max-w-6xl mx-auto px-4 py-4">
+      <div className="max-w-[1100px] mx-auto px-5 py-5">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">💌</span>
-            <h1 className="font-mono text-[14px] tracking-[0.15em] uppercase text-bordeaux font-bold">
-              Messages — Aujourd'hui
-            </h1>
+            <h1 className="font-fraunces italic text-[26px] text-ink">💌 Messages</h1>
           </div>
           <div className="flex gap-2">
             <button

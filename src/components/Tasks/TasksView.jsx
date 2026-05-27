@@ -126,7 +126,7 @@ export default function TasksView({ user }) {
   const sortedMonths = useMemo(() => Object.keys(byMonth).sort((a, b) => b.localeCompare(a)), [byMonth])
 
   return (
-    <div style={{ padding: '1rem 1.25rem', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '1.25rem', maxWidth: 1100, margin: '0 auto' }}>
       {showToast && (
         <div style={{
           background: '#FCEEE8', border: '1px solid #993556', padding: '10px 14px',

@@ -16,7 +16,7 @@ export default function HRView({ user }) {
   const [tab, setTab] = useState('employes')
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem 1.25rem' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.25rem' }}>
 
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a' }}>
