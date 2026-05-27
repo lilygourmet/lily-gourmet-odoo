@@ -25,9 +25,12 @@ function parsePage(text) {
     if (Number.isFinite(n)) net = n
   }
   // Le nom est juste après l'en-tête de colonne "Retenues", avant le N° CIN.
-  // Regex majuscules STRICTES (A-Z + accents MAJUSCULES uniquement, pas les minuscules accentuées)
+  // On coupe la zone du nom au N° CIN (1-2 lettres + chiffres) ou à "Nombre".
   const seg = t.split(/Retenues/i)[1] || t
-  const capWords = seg.match(/[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'-]+/g) || []
+  const cut = seg.search(/\b[A-Z]{1,2}\d{3,}\b|Nombre/)
+  const nameZone = cut > 0 ? seg.slice(0, cut) : seg
+  // Regex majuscules STRICTES (pas les minuscules accentuées)
+  const capWords = nameZone.match(/[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'-]+/g) || []
   const nm = []
   for (const w of capWords) {
     if (STOP.has(w)) { if (nm.length) break; else continue }
