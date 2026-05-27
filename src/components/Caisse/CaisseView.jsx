@@ -39,6 +39,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, tab) } catch {}
   }, [tab])
+  const [envSub, setEnvSub] = useState('affectation') // sous-onglet d'Enveloppes
 
   return (
     <>
@@ -68,9 +69,21 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
 
       {tab === 'enveloppes' && (
         <>
-          <EnveloppesView user={user} />
-          <div style={{ borderTop: '2px solid #E8E2D8', margin: '28px 0 20px' }} />
-          <SuiviView user={user} />
+          <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+            {[
+              { k: 'affectation', icon: '📊', label: 'Affectation' },
+              { k: 'suivi', icon: '🏦', label: 'Suivi versements & remboursements' },
+            ].map(s => (
+              <button key={s.k} onClick={() => setEnvSub(s.k)} style={{
+                padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: 500,
+                background: envSub === s.k ? '#3A3733' : '#F4F0EA',
+                color:      envSub === s.k ? 'white'   : '#6F6A60',
+              }}>{s.icon} {s.label}</button>
+            ))}
+          </div>
+          {envSub === 'affectation' && <EnveloppesView user={user} />}
+          {envSub === 'suivi'       && <SuiviView user={user} />}
         </>
       )}
       {tab === 'caisses'    && <CaissesGereesView user={user} />}
