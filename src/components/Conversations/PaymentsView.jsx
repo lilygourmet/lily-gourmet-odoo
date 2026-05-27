@@ -51,9 +51,13 @@ export default function PaymentsView({ user }) {
     if (tab === 'todo' && isDone) return false
     if (tab === 'done' && !isDone) return false
     if (!term) return true
-    const name = (m.payment_client_name || m.conversation?.client_name || '').toLowerCase()
-    const ref = (m.payment_order_ref || '').toLowerCase()
-    return name.includes(term) || ref.includes(term)
+    const haystack = [
+      m.payment_order_ref,
+      m.payment_client_name,
+      m.conversation?.client_name,
+      m.conversation?.client_phone,
+    ].filter(Boolean).join(' ').toLowerCase()
+    return haystack.includes(term)
   })
   const nbTodo = items.filter(m => !m.payment_validated_at).length
   const nbDone = items.filter(m => m.payment_validated_at).length
