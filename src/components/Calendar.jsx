@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   loadOrdersForWeek,
   loadAllOrders,
@@ -213,6 +213,8 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
   const [selected, setSelected] = useState(null)
   const [diffPopupOrder, setDiffPopupOrder] = useState(null)
   const [stepsMap, setStepsMap] = useState({})
+  const [mobileDayIdx, setMobileDayIdx] = useState(0) // jour affiché sur téléphone
+  const touchStartXRef = useRef(null)
   const [profiles, setProfiles] = useState({})
 
   const [syncing, setSyncing] = useState(false)
@@ -517,6 +519,12 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
     })
   }, [currentMonday, filteredOrders, isSearching, typeFilter, statusFilter, stepsMap])
 
+  // Téléphone : à chaque changement de semaine, ouvrir le jour d'aujourd'hui (sinon lundi)
+  useEffect(() => {
+    const ti = Array.from({ length: 7 }, (_, i) => addDays(currentMonday, i)).findIndex(d => isSameDay(d, today))
+    setMobileDayIdx(ti >= 0 ? ti : 0)
+  }, [currentMonday])
+
   function openCapsule(capsule) {
     const focusItemId = capsule.kind === 'item' ? capsule.item.id : null
     // Si la commande a une modification non vue ET pas annulee -> popup diff d'abord
@@ -533,6 +541,24 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
     } else {
       setSelected({ order, focusItemId: null })
     }
+  }
+
+  // Affiche les capsules (commandes) d'un jour — utilisé en vue ordinateur et téléphone
+  function renderDayCapsules(day) {
+    if (day.capsules.length === 0) {
+      return <div className="py-4 flex items-center justify-center text-[11px] text-ink-mute italic">—</div>
+    }
+    return day.capsules.map(capsule => (
+      <div key={capsule.id} onClick={() => openCapsule(capsule)}>
+        {capsule.kind === 'order' ? (
+          <AllCapsule order={capsule.order} stepsMap={stepsMap} />
+        ) : capsule.item.type === 'CD' ? (
+          <CDItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
+        ) : (
+          <GMItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
+        )}
+      </div>
+    ))
   }
 
   return (
@@ -650,15 +676,16 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
         />
       ) : (
         <div className="flex-1 overflow-hidden">
-          <div className="h-full overflow-y-auto md:overflow-hidden">
-            <div className="min-h-full md:h-full flex flex-col md:grid md:grid-cols-7 gap-2 p-3 md:min-w-0">
+          {/* ORDINATEUR : grille 7 colonnes (inchangée) */}
+          <div className="hidden md:block h-full overflow-hidden">
+            <div className="h-full grid grid-cols-7 gap-2 p-3">
               {days.map((day, idx) => {
                 const isToday = isSameDay(day.date, today)
                 const isPast = day.date < today
                 return (
                   <div
                     key={idx}
-                    className={`w-full md:w-auto flex flex-col rounded-xl p-2.5 flex-shrink-0 ${isToday ? 'bg-cream border border-bordeaux shadow-sm' : 'bg-cream-warm border border-transparent'} ${isPast ? 'opacity-55' : ''}`}
+                    className={`flex flex-col rounded-xl p-2.5 ${isToday ? 'bg-cream border border-bordeaux shadow-sm' : 'bg-cream-warm border border-transparent'} ${isPast ? 'opacity-55' : ''}`}
                   >
                     <div className="flex items-baseline justify-between pb-2 mb-2 border-b border-dashed border-line">
                       <div>
@@ -675,29 +702,66 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
                         {String(day.date.getDate()).padStart(2, '0')}.{String(day.date.getMonth() + 1).padStart(2, '0')}
                       </div>
                     </div>
-
-                    <div className="flex flex-col gap-1.5 md:flex-1 md:overflow-y-auto">
-                      {day.capsules.length === 0 ? (
-                        <div className="py-2 md:flex-1 flex items-center justify-center text-[10px] text-ink-mute italic">
-                          —
-                        </div>
-                      ) : (
-                        day.capsules.map(capsule => (
-                          <div key={capsule.id} onClick={() => openCapsule(capsule)}>
-                            {capsule.kind === 'order' ? (
-                              <AllCapsule order={capsule.order} stepsMap={stepsMap} />
-                            ) : capsule.item.type === 'CD' ? (
-                              <CDItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
-                            ) : (
-                              <GMItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
-                            )}
-                          </div>
-                        ))
-                      )}
+                    <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto">
+                      {renderDayCapsules(day)}
                     </div>
                   </div>
                 )
               })}
+            </div>
+          </div>
+
+          {/* TÉLÉPHONE : un jour à la fois, swipe ←→ pour changer */}
+          <div className="md:hidden flex flex-col h-full">
+            {/* Sélecteur des 7 jours */}
+            <div className="flex gap-1 px-2 pt-2">
+              {days.map((d, i) => {
+                const isToday = isSameDay(d.date, today)
+                const sel = i === mobileDayIdx
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setMobileDayIdx(i)}
+                    className={`flex-1 py-1 rounded-lg text-center leading-tight ${sel ? 'bg-bordeaux text-cream' : isToday ? 'bg-cream border border-bordeaux text-bordeaux' : 'bg-cream-warm text-ink-soft'}`}
+                  >
+                    <div className="text-[10px] font-medium capitalize">{DAY_NAMES[i].slice(0, 3)}</div>
+                    <div className="text-[10px] font-mono">{String(d.date.getDate()).padStart(2, '0')}</div>
+                  </button>
+                )
+              })}
+            </div>
+            {/* Jour courant */}
+            <div
+              className="flex-1 overflow-y-auto p-3"
+              onTouchStart={e => { touchStartXRef.current = e.touches[0].clientX }}
+              onTouchEnd={e => {
+                if (touchStartXRef.current == null) return
+                const dx = e.changedTouches[0].clientX - touchStartXRef.current
+                touchStartXRef.current = null
+                if (dx < -50) setMobileDayIdx(i => Math.min(i + 1, days.length - 1))
+                else if (dx > 50) setMobileDayIdx(i => Math.max(i - 1, 0))
+              }}
+            >
+              {days[mobileDayIdx] && (() => {
+                const day = days[mobileDayIdx]
+                const isToday = isSameDay(day.date, today)
+                return (
+                  <>
+                    <div className="flex items-baseline justify-between pb-2 mb-3 border-b border-dashed border-line">
+                      <div className="font-fraunces font-medium text-[18px] text-ink capitalize">
+                        {DAY_NAMES[mobileDayIdx]}{isToday ? " · aujourd'hui" : ''}
+                      </div>
+                      <div className={`font-mono text-[13px] ${isToday ? 'bg-bordeaux text-cream px-2 py-0.5 rounded' : 'text-ink-mute'}`}>
+                        {String(day.date.getDate()).padStart(2, '0')}.{String(day.date.getMonth() + 1).padStart(2, '0')}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {renderDayCapsules(day)}
+                    </div>
+                    <div className="text-center text-[10px] text-ink-mute mt-4">‹ glisse pour changer de jour ›</div>
+                  </>
+                )
+              })()}
             </div>
           </div>
         </div>
