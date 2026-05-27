@@ -275,7 +275,7 @@ function HRWrapper(props) {
 function ConversationsWrapper(props) {
   const { user, onLogout, onNavigate, activeView, initialConversationId } = props
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-[100dvh] bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <InboxView user={user} initialConversationId={initialConversationId} />
     </div>
