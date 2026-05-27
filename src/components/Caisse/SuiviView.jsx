@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
-import AuditLogPanel from './AuditLogPanel'
 
 export default function SuiviView({ user }) {
   const [subTab, setSubTab] = useState('banque')
@@ -14,7 +13,6 @@ export default function SuiviView({ user }) {
       </div>
       {subTab === 'banque' && <BanqueSection user={user} />}
       {subTab === 'perso'  && <PersoSection  user={user} />}
-      <AuditLogPanel entityType="enveloppe" title="📜 Historique versements & remboursements" />
     </div>
   )
 }

@@ -225,8 +225,6 @@ export default function EnveloppesView({ user }) {
 
       <AuditLogPanel entityType="enveloppe" title="📜 Historique des affectations" />
 
-      <AuditLogPanel entityType="enveloppe" title="📜 Historique des affectations" />
-
       {attributionEnv && (
         <AttributionModal env={attributionEnv} destinataires={destinataires}
           onClose={() => setAttributionEnv(null)}
