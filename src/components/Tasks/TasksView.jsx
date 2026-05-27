@@ -352,15 +352,16 @@ function Badge({ bg, col, children }) {
 function Chip({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      fontSize: 11, padding: '4px 11px', borderRadius: 999, cursor: 'pointer', border: 'none',
-      background: active ? '#1a0f0a' : '#F4F0EA',
-      color:      active ? 'white'   : '#4a3a30',
+      fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 999, cursor: 'pointer',
+      background: active ? '#993556' : 'white',
+      color:      active ? '#faf7f2' : '#1a0f0a',
+      border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
     }}>{children}</button>
   )
 }
 
 const btnPrimary = {
-  padding: '8px 14px', fontSize: 13,
-  background: '#993556', color: 'white', border: '1px solid #993556',
-  borderRadius: 8, cursor: 'pointer', fontWeight: 500
+  padding: '8px 16px', fontSize: 13, fontWeight: 500,
+  background: '#993556', color: '#faf7f2', border: '1px solid #993556',
+  borderRadius: 999, cursor: 'pointer'
 }
