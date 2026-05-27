@@ -117,11 +117,16 @@ export default function InboxView({ user, initialConversationId }) {
     <div className="md:flex md:items-start" style={{ '--appbar': `${headerTop}px` }}>
       {/* COLONNE LISTE (gauche) — collante en desktop */}
       <div className={`${selectedId ? 'hidden md:block' : 'block'} md:w-[35%] md:max-w-[400px] md:flex-shrink-0 md:border-r border-line md:sticky md:top-[var(--appbar)] md:h-[calc(100dvh-var(--appbar))] md:overflow-y-auto`}>
-        <div className="p-4">
-          <h1 className="font-fraunces italic text-[26px] text-ink leading-none mb-1">Conversations</h1>
-          <p className="text-[12px] text-ink-mute mb-3 max-w-2xl">
-            Messages WhatsApp reçus. Clique « Je prends » pour t'occuper d'un client.
-          </p>
+        {/* En-tête figé : titre + son + actions + recherche + filtres */}
+        <div className="md:sticky md:top-0 z-10 bg-cream px-4 pt-4 pb-3 border-b border-line">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h1 className="font-fraunces italic text-[26px] text-ink leading-none">Conversations</h1>
+            <button
+              onClick={() => { const next = !soundOn; setDingEnabled(next); setSoundOn(next) }}
+              className="w-9 h-9 flex-shrink-0 rounded-full border border-line text-[15px] hover:border-bordeaux transition-colors"
+              title={soundOn ? 'Son des notifications activé (cliquer pour couper)' : 'Son des notifications coupé (cliquer pour activer)'}
+            >{soundOn ? '🔊' : '🔇'}</button>
+          </div>
 
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <button
@@ -153,46 +158,41 @@ export default function InboxView({ user, initialConversationId }) {
             )}
           </div>
 
-          {/* Filtres + toggle son */}
-          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-wrap">
-                {FILTERS.map(f => {
-                  let label = f.label
-                  if (f.key === 'waiting' && waitingCount) label = `🔴 En attente (${waitingCount})`
-                  else if (f.key === 'followup' && followupCount) label = `🟡 À relancer (${followupCount})`
-                  return (
-                    <button
-                      key={f.key}
-                      onClick={() => setFilter(f.key)}
-                      className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
-                        filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
-                      }`}
-                    >{label}</button>
-                  )
-                })}
-              </div>
-              {agentOptions.length > 0 && (
-                <select
-                  value={agentFilter}
-                  onChange={e => setAgentFilter(e.target.value)}
-                  className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux"
-                >
-                  <option value="all">Tous les agents</option>
-                  {agentOptions.map(a => (
-                    <option key={a.id} value={a.id}>{a.full_name || a.username}</option>
-                  ))}
-                </select>
-              )}
+          {/* Filtres + agents (collés) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-wrap">
+              {FILTERS.map(f => {
+                let label = f.label
+                if (f.key === 'waiting' && waitingCount) label = `🔴 En attente (${waitingCount})`
+                else if (f.key === 'followup' && followupCount) label = `🟡 À relancer (${followupCount})`
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilter(f.key)}
+                    className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                      filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
+                    }`}
+                  >{label}</button>
+                )
+              })}
             </div>
-            <button
-              onClick={() => { const next = !soundOn; setDingEnabled(next); setSoundOn(next) }}
-              className="px-3 py-1.5 rounded-full border border-line text-[13px] hover:border-bordeaux transition-colors flex-shrink-0"
-              title={soundOn ? 'Son activé (cliquer pour couper)' : 'Son coupé (cliquer pour activer)'}
-            >
-              {soundOn ? '🔊' : '🔇'}
-            </button>
+            {agentOptions.length > 0 && (
+              <select
+                value={agentFilter}
+                onChange={e => setAgentFilter(e.target.value)}
+                className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux"
+              >
+                <option value="all">Tous les agents</option>
+                {agentOptions.map(a => (
+                  <option key={a.id} value={a.id}>{a.full_name || a.username}</option>
+                ))}
+              </select>
+            )}
           </div>
+        </div>
+
+        {/* Liste défilante */}
+        <div className="px-4 py-3">
 
           {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
           {error && <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded">{error}</div>}
