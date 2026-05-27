@@ -174,7 +174,16 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   // Largeurs : Nom 45 | Montant 26 | Lettres 79 (droite) | DIRHAMS 24
   const COL_W = [45, 26, 79, 24];
 
+  // Limite basse (au-dessus du pied de page) + hauteur estimée d'un bloc employé (2 lignes)
+  const BOTTOM_LIMIT = H - 38;
+  const BLOCK_EST = 24;
+
   employes.forEach((emp) => {
+    // Ne pas couper un employé (nom + RIB) entre 2 pages : nouvelle page si ça ne tient pas entier
+    if (y + BLOCK_EST > BOTTOM_LIMIT) {
+      doc.addPage();
+      y = MARGIN;
+    }
     const montantStr = formatMontant(emp.montant) + " MAD";
     const montantLettres = nombreEnLettres(emp.montant).toUpperCase();
 
