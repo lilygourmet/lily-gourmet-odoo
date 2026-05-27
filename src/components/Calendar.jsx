@@ -650,15 +650,15 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
         />
       ) : (
         <div className="flex-1 overflow-hidden">
-          <div className="h-full overflow-x-auto md:overflow-hidden">
-            <div className="h-full flex md:grid md:grid-cols-7 gap-2 p-3 min-w-max md:min-w-0">
+          <div className="h-full overflow-y-auto md:overflow-hidden">
+            <div className="min-h-full md:h-full flex flex-col md:grid md:grid-cols-7 gap-2 p-3 md:min-w-0">
               {days.map((day, idx) => {
                 const isToday = isSameDay(day.date, today)
                 const isPast = day.date < today
                 return (
                   <div
                     key={idx}
-                    className={`w-[180px] md:w-auto flex flex-col rounded-xl p-2.5 flex-shrink-0 ${isToday ? 'bg-cream border border-bordeaux shadow-sm' : 'bg-cream-warm border border-transparent'} ${isPast ? 'opacity-55' : ''}`}
+                    className={`w-full md:w-auto flex flex-col rounded-xl p-2.5 flex-shrink-0 ${isToday ? 'bg-cream border border-bordeaux shadow-sm' : 'bg-cream-warm border border-transparent'} ${isPast ? 'opacity-55' : ''}`}
                   >
                     <div className="flex items-baseline justify-between pb-2 mb-2 border-b border-dashed border-line">
                       <div>
@@ -676,9 +676,9 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
                       </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto">
+                    <div className="flex flex-col gap-1.5 md:flex-1 md:overflow-y-auto">
                       {day.capsules.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center text-[10px] text-ink-mute italic">
+                        <div className="py-2 md:flex-1 flex items-center justify-center text-[10px] text-ink-mute italic">
                           —
                         </div>
                       ) : (
