@@ -497,9 +497,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-[1100px] mx-auto px-5 py-5">
         <div className="mb-5">
-          <h1 className="text-[24px] font-semibold text-ink tracking-tight">📋 Checklist</h1>
+          <h1 className="font-fraunces italic text-[26px] text-ink">📋 Checklist</h1>
           <p className="text-[13px] text-ink-mute mt-1">
             {tab === 'todo'
               ? 'Clique sur une carte pour la confirmer comme rangée'
