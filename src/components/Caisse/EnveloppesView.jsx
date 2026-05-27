@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate } from '../../lib/caisse'
+import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate, loadSalairesYear } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, envStyle, COLOR_PALETTE } from './_helpers'
 import AttributionModal from './modals/AttributionModal'
 import DetailReaffecterModal from './modals/DetailReaffecterModal'
@@ -10,7 +10,8 @@ export default function EnveloppesView({ user }) {
   const [month, setMonth] = useState(currentMonth())
   const [enveloppes, setEnveloppes] = useState([])
   const [destinataires, setDestinataires] = useState([])
-  const [filter, setFilter] = useState('all') // 'all' | 'unassigned' | dest.id
+  const [salaires, setSalaires] = useState([])
+  const [filter, setFilter] = useState('all') // 'all' | 'unassigned' | dest.id | 'sal-<id>'
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('cash') // 'cash' | 'cheque'
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -27,8 +28,9 @@ export default function EnveloppesView({ user }) {
   async function reload() {
     setLoading(true)
     try {
-      const data = await loadEnveloppesByMonth(year, month)
+      const [data, sals] = await Promise.all([loadEnveloppesByMonth(year, month), loadSalairesYear(year)])
       setEnveloppes(data)
+      setSalaires(sals)
     } catch (e) { console.error(e) }
     setLoading(false)
   }
@@ -56,10 +58,24 @@ export default function EnveloppesView({ user }) {
     return Array.from(set).sort()
   }, [envByMethod])
 
-  // Enveloppes filtrées (méthode + destinataire)
+  // Map salaire_id -> bénéficiaire (Nezha/Layla)
+  const salaireMap = useMemo(() => {
+    const m = {}
+    salaires.forEach(s => { m[s.id] = s.beneficiaire })
+    return m
+  }, [salaires])
+
+  // Salaires référencés par les enveloppes du mois (pour les filtres)
+  const salairesPresents = useMemo(() => {
+    const ids = [...new Set(envByMethod.filter(e => e.salaire_id).map(e => e.salaire_id))]
+    return ids.map(id => ({ id, beneficiaire: salaireMap[id] || 'salaire' }))
+  }, [envByMethod, salaireMap])
+
+  // Enveloppes filtrées (méthode + destinataire/salaire)
   const filteredEnveloppes = useMemo(() => {
     if (filter === 'all') return envByMethod
-    if (filter === 'unassigned') return envByMethod.filter(e => !e.destinataire_id)
+    if (filter === 'unassigned') return envByMethod.filter(e => !e.destinataire_id && !e.salaire_id)
+    if (String(filter).startsWith('sal-')) return envByMethod.filter(e => String(e.salaire_id) === String(filter).slice(4))
     return envByMethod.filter(e => String(e.destinataire_id) === String(filter))
   }, [envByMethod, filter])
 
@@ -167,6 +183,11 @@ export default function EnveloppesView({ user }) {
             {d.name}
           </Chip>
         ))}
+        {salairesPresents.map(s => (
+          <Chip key={`sal-${s.id}`} active={filter === `sal-${s.id}`} onClick={() => setFilter(`sal-${s.id}`)}>
+            💰 Salaire {s.beneficiaire}
+          </Chip>
+        ))}
       </div>
 
       {loading && <div style={{ color: '#4a3a30', padding: 20 }}>Chargement…</div>}
@@ -197,7 +218,7 @@ export default function EnveloppesView({ user }) {
                 {(bySource[src] || []).length === 0 ? (
                   <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune enveloppe</div>
                 ) : (bySource[src] || []).map(env => (
-                  <EnveloppeCard key={env.id} env={env}
+                  <EnveloppeCard key={env.id} env={env} salaireMap={salaireMap}
                     onClick={() => env.destinataire_id ? setDetailEnv(env) : setAttributionEnv(env)} />
                 ))}
               </div>
@@ -242,8 +263,12 @@ export default function EnveloppesView({ user }) {
   )
 }
 
-function EnveloppeCard({ env, onClick }) {
-  const style = envStyle(env.destinataire)
+function EnveloppeCard({ env, onClick, salaireMap = {} }) {
+  // Affectée à un salaire (et pas à un destinataire) → style + libellé "Salaire X"
+  const salBenef = !env.destinataire_id && env.salaire_id ? salaireMap[env.salaire_id] : null
+  const style = salBenef
+    ? { bg: '#fdf1d3', border: '#dcb24f', text: '#5c4418', borderStyle: 'solid', borderWidth: '0.5px' }
+    : envStyle(env.destinataire)
   return (
     <div onClick={onClick} style={{
       background: style.bg, borderColor: style.border, borderStyle: style.borderStyle, borderWidth: style.borderWidth,
@@ -252,7 +277,7 @@ function EnveloppeCard({ env, onClick }) {
       <div style={{ fontSize: 11, opacity: 0.85 }}>{fmtDateCourte(env.session_date)}</div>
       <div style={{ fontSize: 15, fontWeight: 500, margin: '2px 0 3px' }}>{fmtMoney(env.amount_cash)}</div>
       <div style={{ fontSize: 11, opacity: 0.95 }}>
-        {env.destinataire ? env.destinataire.name : '👆 À affecter'}
+        {env.destinataire ? env.destinataire.name : salBenef ? `💰 Salaire ${salBenef}` : '👆 À affecter'}
       </div>
       {env.assigner && (
         <div style={{ fontSize: 9, opacity: 0.65, marginTop: 2, fontStyle: 'italic' }}>
