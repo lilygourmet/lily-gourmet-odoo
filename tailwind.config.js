@@ -18,14 +18,14 @@ export default {
           mute: '#8a7a70',
         },
         cream: {
-          DEFAULT: '#faf6f0',
-          warm: '#f4ece0',
-          deep: '#ebe0cf',
+          DEFAULT: '#f3ede3',
+          warm: '#ffffff',
+          deep: '#efe7d8',
         },
         bordeaux: {
-          DEFAULT: '#6b1f2a',
-          deep: '#4a1219',
-          soft: '#8d2f3c',
+          DEFAULT: '#993556',
+          deep: '#7a2a44',
+          soft: '#b35069',
         },
         gold: {
           DEFAULT: '#b8893c',
