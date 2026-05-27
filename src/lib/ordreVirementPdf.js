@@ -277,6 +277,8 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
 
   // ---- Signature ----
   let ySig = doc.lastAutoTable.finalY + 14;
+  // Ne pas chevaucher le pied de page : nouvelle page si trop bas
+  if (ySig + 12 > H - 18) { doc.addPage(); ySig = MARGIN + 6; }
   doc.setTextColor(...NOIR);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
@@ -285,22 +287,21 @@ export async function genererOrdreVirementPDF({ societe, employes, date = new Da
   doc.setFont("helvetica", "bold");
   doc.text("La Direction", MARGIN, ySig);
 
-  // ---- Pied de page société (format EXACT demandé, 3 lignes centrées en bas) ----
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...NOIR);
-
-  // Ligne 1 : {Société} au capital de {Capital}, {Adresse}.
+  // ---- Pied de page société : petit, en bas, sur TOUTES les pages ----
   const piedL1 = `${societe.nom_complet} au capital de ${societe.capital}, ${societe.adresse}.`;
-  // Ligne 2 : RC: X Patente Y IF: Z CNSS: W
   const piedL2 = `RC: ${societe.rc || ''} Patente ${societe.patente || ''} IF: ${societe.if_num || societe.if || ''} CNSS: ${societe.cnss || ''}`;
-  // Ligne 3 : ICE: X
   const piedL3 = `ICE: ${societe.ice || ''}`;
 
-  // Positions verticales (calculées du bas vers le haut, espacement large)
-  doc.text(piedL1, W / 2, H - 32, { align: "center" });
-  doc.text(piedL2, W / 2, H - 24, { align: "center" });
-  doc.text(piedL3, W / 2, H - 16, { align: "center" });
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...NOIR);
+    doc.text(piedL1, W / 2, H - 15, { align: "center" });
+    doc.text(piedL2, W / 2, H - 11, { align: "center" });
+    doc.text(piedL3, W / 2, H - 7, { align: "center" });
+  }
 
   // ---- Sauvegarde ----
   const monthFR = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][date.getMonth()];
