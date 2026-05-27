@@ -81,6 +81,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   // Preuve de paiement : message en cours de marquage + n° commande saisi
   const [paymentMsg, setPaymentMsg] = useState(null)
   const [orderRefInput, setOrderRefInput] = useState('')
+  const [clientNameInput, setClientNameInput] = useState('')
   const [markBusy, setMarkBusy] = useState(false)
   // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
@@ -387,15 +388,16 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   function openPaymentModal(m) {
     setPaymentMsg(m)
     setOrderRefInput(m.payment_order_ref || '')
+    setClientNameInput(m.payment_client_name || '')
   }
 
   async function confirmMarkPayment() {
     if (!paymentMsg) return
     setMarkBusy(true)
     try {
-      const updated = await markPaymentProof(paymentMsg.id, orderRefInput)
+      const updated = await markPaymentProof(paymentMsg.id, orderRefInput, clientNameInput)
       setMessages(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
-      setPaymentMsg(null); setOrderRefInput('')
+      setPaymentMsg(null); setOrderRefInput(''); setClientNameInput('')
     } catch (e) { alert('Erreur : ' + e.message) }
     finally { setMarkBusy(false) }
   }
@@ -732,7 +734,15 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               value={orderRefInput}
               onChange={e => setOrderRefInput(e.target.value)}
               autoFocus
-              placeholder="ex. CMD-1042"
+              placeholder="ex. S-1042"
+              className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3"
+            />
+            <label className="block text-[11px] font-medium text-ink-soft mb-1">Nom du client (si différent)</label>
+            <input
+              type="text"
+              value={clientNameInput}
+              onChange={e => setClientNameInput(e.target.value)}
+              placeholder={conv?.client_name || 'ex. nom sur le virement'}
               className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-4"
             />
             <div className="flex gap-2 justify-end">

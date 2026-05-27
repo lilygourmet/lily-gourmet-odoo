@@ -8,6 +8,7 @@
 -- 1. Colonnes sur les messages
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_payment_proof    BOOLEAN DEFAULT false;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_order_ref   TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_client_name TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_validated_at TIMESTAMPTZ;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS payment_validated_by UUID REFERENCES profiles(id) ON DELETE SET NULL;
 

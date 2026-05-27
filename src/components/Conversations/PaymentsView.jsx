@@ -14,6 +14,8 @@ export default function PaymentsView({ user }) {
   const [error, setError] = useState('')
   const [urls, setUrls] = useState({}) // messageId -> URL affichable
   const [busyId, setBusyId] = useState(null)
+  const [tab, setTab] = useState('todo') // 'todo' = à valider | 'done' = déjà validés
+  const [q, setQ] = useState('')
 
   const canValidate = canValidatePayments(user)
 
@@ -43,8 +45,18 @@ export default function PaymentsView({ user }) {
     finally { setBusyId(null) }
   }
 
-  const aValider = items.filter(m => !m.payment_validated_at)
-  const valides = items.filter(m => m.payment_validated_at)
+  const term = q.trim().toLowerCase()
+  const visible = items.filter(m => {
+    const isDone = !!m.payment_validated_at
+    if (tab === 'todo' && isDone) return false
+    if (tab === 'done' && !isDone) return false
+    if (!term) return true
+    const name = (m.payment_client_name || m.conversation?.client_name || '').toLowerCase()
+    const ref = (m.payment_order_ref || '').toLowerCase()
+    return name.includes(term) || ref.includes(term)
+  })
+  const nbTodo = items.filter(m => !m.payment_validated_at).length
+  const nbDone = items.filter(m => m.payment_validated_at).length
 
   function Card({ m }) {
     const href = urls[m.id]
@@ -65,7 +77,7 @@ export default function PaymentsView({ user }) {
           <div className="flex-shrink-0 w-20 h-20 rounded-lg border border-line bg-cream flex items-center justify-center text-[11px] text-ink-mute">…</div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-medium text-ink truncate">{m.conversation?.client_name || 'Client'}</div>
+          <div className="text-[14px] font-medium text-ink truncate">{m.payment_client_name || m.conversation?.client_name || 'Client'}</div>
           <div className="text-[12px] text-ink-soft">{m.conversation?.client_phone || ''}</div>
           {m.payment_order_ref && <div className="text-[12px] text-ink mt-0.5">Commande : <span className="font-medium">{m.payment_order_ref}</span></div>}
           <div className="text-[10px] text-ink-mute mt-0.5">Reçu le {fmtDate(m.sent_at)}</div>
@@ -90,27 +102,39 @@ export default function PaymentsView({ user }) {
       <h1 className="font-fraunces italic text-[22px] text-ink mb-1">💰 Paiements à valider</h1>
       <p className="text-[12px] text-ink-mute mb-4">Preuves de virement transférées depuis les conversations.</p>
 
+      {/* Onglets À valider / Déjà validés */}
+      <div className="flex gap-2 mb-3">
+        <button
+          onClick={() => setTab('todo')}
+          className={`px-4 py-1.5 text-[12px] font-medium rounded-full transition-all ${tab === 'todo' ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft hover:bg-cream-warm'}`}
+        >À valider ({nbTodo})</button>
+        <button
+          onClick={() => setTab('done')}
+          className={`px-4 py-1.5 text-[12px] font-medium rounded-full transition-all ${tab === 'done' ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft hover:bg-cream-warm'}`}
+        >Déjà validés ({nbDone})</button>
+      </div>
+
+      {/* Recherche par n° de commande ou nom du client */}
+      <input
+        type="text"
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder="Chercher un n° (S-…) ou un nom de client…"
+        className="w-full px-4 py-2 text-[13px] bg-cream-warm border border-line rounded-full focus:outline-none focus:border-bordeaux mb-4"
+      />
+
       {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
       {error && <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded mb-4">{error}</div>}
 
-      {!loading && !error && items.length === 0 && (
-        <div className="text-center py-12 text-ink-mute italic">Aucune preuve de paiement pour l'instant.</div>
-      )}
-
-      {aValider.length > 0 && (
-        <div className="space-y-2 mb-6">
-          {aValider.map(m => <Card key={m.id} m={m} />)}
+      {!loading && !error && visible.length === 0 && (
+        <div className="text-center py-12 text-ink-mute italic">
+          {term ? 'Aucun résultat pour cette recherche.' : tab === 'todo' ? 'Aucune preuve à valider.' : 'Aucune preuve validée.'}
         </div>
       )}
 
-      {valides.length > 0 && (
-        <>
-          <div className="text-[11px] font-medium text-ink-mute uppercase tracking-wider mb-2">Déjà validés</div>
-          <div className="space-y-2">
-            {valides.map(m => <Card key={m.id} m={m} />)}
-          </div>
-        </>
-      )}
+      <div className="space-y-2">
+        {visible.map(m => <Card key={m.id} m={m} />)}
+      </div>
     </div>
   )
 }

@@ -214,11 +214,11 @@ const PAYMENT_SEL = `
   validator:profiles!messages_payment_validated_by_fkey(id, username, full_name)
 `
 
-/** Marque un message comme preuve de paiement (avec n° de commande optionnel). */
-export async function markPaymentProof(messageId, orderRef) {
+/** Marque un message comme preuve de paiement (n° de commande + nom client optionnels). */
+export async function markPaymentProof(messageId, orderRef, clientName) {
   const { data, error } = await supabase
     .from('messages')
-    .update({ is_payment_proof: true, payment_order_ref: orderRef?.trim() || null })
+    .update({ is_payment_proof: true, payment_order_ref: orderRef?.trim() || null, payment_client_name: clientName?.trim() || null })
     .eq('id', messageId)
     .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
     .single()
@@ -230,7 +230,7 @@ export async function markPaymentProof(messageId, orderRef) {
 export async function unmarkPaymentProof(messageId) {
   const { data, error } = await supabase
     .from('messages')
-    .update({ is_payment_proof: false, payment_order_ref: null, payment_validated_at: null, payment_validated_by: null })
+    .update({ is_payment_proof: false, payment_order_ref: null, payment_client_name: null, payment_validated_at: null, payment_validated_by: null })
     .eq('id', messageId)
     .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
     .single()
