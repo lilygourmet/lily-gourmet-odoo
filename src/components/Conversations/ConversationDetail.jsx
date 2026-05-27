@@ -253,7 +253,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         text: trimmed || null,
         mediaPath,
       })
-      setMessages(prev => [...prev, msg])
+      setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
       setText('')
       setFile(null)
       setStagedMediaPath(null)
@@ -289,7 +289,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         mediaPath,
         mediaType: 'audio',
       })
-      setMessages(prev => [...prev, msg])
+      setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
       setSuggestions([])
       if (conv.status === 'fermee') {
         try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ }
