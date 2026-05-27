@@ -24,20 +24,17 @@ function parsePage(text) {
     const n = Number(netMatch[1].replace(/[  .]/g, '').replace(',', '.'))
     if (Number.isFinite(n)) net = n
   }
-  // Nom = première suite d'au moins 2 mots tout en majuscules, hors en-têtes
-  const words = t.match(/[A-ZÀ-Ÿ][A-ZÀ-Ÿ'-]{1,}/g) || []
-  let best = null, cur = []
-  for (const w of words) {
-    const clean = w.replace(/[''-]/g, '')
-    if (STOP.has(w) || STOP.has(clean)) {
-      if (cur.length >= 2 && !best) best = cur.slice(0, 4).join(' ')
-      cur = []
-    } else {
-      cur.push(w)
-    }
+  // Le nom est juste après l'en-tête de colonne "Retenues", avant le N° CIN.
+  // Regex majuscules STRICTES (A-Z + accents MAJUSCULES uniquement, pas les minuscules accentuées)
+  const seg = t.split(/Retenues/i)[1] || t
+  const capWords = seg.match(/[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'-]+/g) || []
+  const nm = []
+  for (const w of capWords) {
+    if (STOP.has(w)) { if (nm.length) break; else continue }
+    nm.push(w)
+    if (nm.length >= 4) break
   }
-  if (!best && cur.length >= 2) best = cur.slice(0, 4).join(' ')
-  return { matricule, cnss, net, label: best || '' }
+  return { matricule, cnss, net, label: nm.join(' ') }
 }
 
 export default function BulletinsTab() {
