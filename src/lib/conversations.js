@@ -205,6 +205,63 @@ export async function reopenConversation(conversationId, userId) {
 }
 
 // ============================================================
+// PAIEMENTS (preuves de virement transférées en interne)
+// ============================================================
+
+const PAYMENT_SEL = `
+  *,
+  conversation:conversations!messages_conversation_id_fkey(id, client_name, client_phone),
+  validator:profiles!messages_payment_validated_by_fkey(id, username, full_name)
+`
+
+/** Marque un message comme preuve de paiement (avec n° de commande optionnel). */
+export async function markPaymentProof(messageId, orderRef) {
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ is_payment_proof: true, payment_order_ref: orderRef?.trim() || null })
+    .eq('id', messageId)
+    .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+/** Annule le marquage d'une preuve de paiement. */
+export async function unmarkPaymentProof(messageId) {
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ is_payment_proof: false, payment_order_ref: null, payment_validated_at: null, payment_validated_by: null })
+    .eq('id', messageId)
+    .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+/** Charge les preuves de paiement (les plus récentes d'abord) avec infos client. */
+export async function loadPaymentsToValidate() {
+  const { data, error } = await supabase
+    .from('messages')
+    .select(PAYMENT_SEL)
+    .eq('is_payment_proof', true)
+    .order('sent_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+/** Marque un paiement comme validé. */
+export async function validatePayment(messageId, userId) {
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ payment_validated_at: new Date().toISOString(), payment_validated_by: userId })
+    .eq('id', messageId)
+    .select(PAYMENT_SEL)
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ============================================================
 // PHRASES TYPES (réponses rapides, communes à l'équipe)
 // ============================================================
 

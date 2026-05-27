@@ -34,6 +34,7 @@ export async function createUser({
   perm_caisse = false, perm_caisse_admin = false,
   perm_hr = false,
   perm_admin_users = false,
+  perm_mark_payment_proof = false, perm_view_payments = false, perm_validate_payments = false,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
@@ -66,6 +67,9 @@ export async function createUser({
           perm_caisse_admin,
           perm_hr,
           perm_admin_users,
+          perm_mark_payment_proof,
+          perm_view_payments,
+          perm_validate_payments,
         })
         .eq('id', data.id)
     } catch (e) {
@@ -96,6 +100,7 @@ export async function updateUser(userId, {
   perm_caisse, perm_caisse_admin,
   perm_hr,
   perm_admin_users,
+  perm_mark_payment_proof, perm_view_payments, perm_validate_payments,
 }) {
   const updates = {}
   if (username !== undefined) updates.username = username
@@ -132,6 +137,9 @@ export async function updateUser(userId, {
   if (perm_admin_users !== undefined) updates.perm_admin_users = perm_admin_users
   if (perm_admin_users !== undefined) updates.perm_admin_users = perm_admin_users
   if (perm_hr !== undefined) updates.perm_hr = perm_hr
+  if (perm_mark_payment_proof !== undefined) updates.perm_mark_payment_proof = perm_mark_payment_proof
+  if (perm_view_payments !== undefined) updates.perm_view_payments = perm_view_payments
+  if (perm_validate_payments !== undefined) updates.perm_validate_payments = perm_validate_payments
 
   const { data, error } = await supabase
     .from('profiles')

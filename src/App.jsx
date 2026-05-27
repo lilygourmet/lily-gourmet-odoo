@@ -17,9 +17,10 @@ import CaisseView from './components/Caisse/CaisseView'
 import TasksView from './components/Tasks/TasksView'
 import HRView from './components/HR/HRView'
 import InboxView from './components/Conversations/InboxView'
+import PaymentsView from './components/Conversations/PaymentsView'
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations } from './lib/auth'
+import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -226,6 +227,7 @@ function App() {
     if (activeView === 'tasks') return <TasksWrapper {...navProps} />
     if (activeView === 'hr') return <HRWrapper {...navProps} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
+    if (activeView === 'paiements') return <PaymentsWrapper {...navProps} />
     if (activeView === 'caisse') return <CaisseView {...navProps} />
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
@@ -276,6 +278,16 @@ function ConversationsWrapper(props) {
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <InboxView user={user} initialConversationId={initialConversationId} />
+    </div>
+  )
+}
+
+function PaymentsWrapper(props) {
+  const { user, onLogout, onNavigate, activeView } = props
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <PaymentsView user={user} />
     </div>
   )
 }

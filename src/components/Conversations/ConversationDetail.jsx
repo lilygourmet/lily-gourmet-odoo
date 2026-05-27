@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies } from '../../lib/conversations'
-import { formatRelativeTime } from '../../lib/auth'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, markPaymentProof, unmarkPaymentProof } from '../../lib/conversations'
+import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import { supabase } from '../../lib/supabase'
 
@@ -78,6 +78,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [showReplies, setShowReplies] = useState(false)
   const [quickReplies, setQuickReplies] = useState([])
   const [forwardMsg, setForwardMsg] = useState(null)
+  // Preuve de paiement : message en cours de marquage + n° commande saisi
+  const [paymentMsg, setPaymentMsg] = useState(null)
+  const [orderRefInput, setOrderRefInput] = useState('')
+  const [markBusy, setMarkBusy] = useState(false)
   // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
   const textareaRef = useRef(null)
@@ -380,6 +384,30 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     finally { setStatusBusy(false) }
   }
 
+  function openPaymentModal(m) {
+    setPaymentMsg(m)
+    setOrderRefInput(m.payment_order_ref || '')
+  }
+
+  async function confirmMarkPayment() {
+    if (!paymentMsg) return
+    setMarkBusy(true)
+    try {
+      const updated = await markPaymentProof(paymentMsg.id, orderRefInput)
+      setMessages(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
+      setPaymentMsg(null); setOrderRefInput('')
+    } catch (e) { alert('Erreur : ' + e.message) }
+    finally { setMarkBusy(false) }
+  }
+
+  async function handleUnmarkPayment(m) {
+    if (!confirm('Retirer cette preuve de paiement ?')) return
+    try {
+      const updated = await unmarkPaymentProof(m.id)
+      setMessages(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
+    } catch (e) { alert('Erreur : ' + e.message) }
+  }
+
   async function handleSuggest() {
     if (!conv) return
     setSuggesting(true)
@@ -505,6 +533,11 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               <div className={`max-w-[80%] rounded-lg px-3 py-2 ${
                 isAgent ? 'bg-bordeaux text-cream' : isNewClient ? 'bg-amber-100 text-ink border border-amber-300' : 'bg-cream-warm text-ink border border-line'
               }`}>
+                {m.is_payment_proof && (
+                  <div className={`flex items-center gap-1 text-[10px] font-medium mb-1 ${isAgent ? 'text-amber-200' : 'text-amber-700'}`}>
+                    💰 Preuve de paiement{m.payment_order_ref ? ` · Cmd ${m.payment_order_ref}` : ''}{m.payment_validated_at ? ' · ✅ validé' : ''}
+                  </div>
+                )}
                 {m.media_url && (() => {
                   const href = m.media_url.startsWith('http') ? m.media_url : mediaUrls[m.id]
                   const mt = m.media_type || ''
@@ -533,6 +566,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     className={`text-[11px] leading-none ${isAgent ? 'text-cream/70 hover:text-cream' : 'text-ink-mute hover:text-bordeaux'}`}
                     title="Transférer ce message"
                   >↪</button>
+                  {canMarkPaymentProof(user) && m.media_url && (
+                    <button
+                      onClick={() => m.is_payment_proof ? handleUnmarkPayment(m) : openPaymentModal(m)}
+                      className={`text-[11px] leading-none transition-opacity ${m.is_payment_proof ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}
+                      title={m.is_payment_proof ? 'Retirer la preuve de paiement' : 'Marquer comme preuve de paiement'}
+                    >💰</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -679,6 +719,28 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           user={user}
           onClose={() => setForwardMsg(null)}
         />
+      )}
+
+      {paymentMsg && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => !markBusy && setPaymentMsg(null)}>
+          <div className="bg-cream rounded-2xl w-full max-w-xs shadow-2xl border border-line p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="font-fraunces italic text-[18px] text-ink mb-1">💰 Preuve de paiement</h3>
+            <p className="text-[12px] text-ink-mute mb-3">Le nom et le numéro du client sont récupérés tout seuls. Ajoute le n° de commande (optionnel).</p>
+            <label className="block text-[11px] font-medium text-ink-soft mb-1">N° de commande</label>
+            <input
+              type="text"
+              value={orderRefInput}
+              onChange={e => setOrderRefInput(e.target.value)}
+              autoFocus
+              placeholder="ex. CMD-1042"
+              className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setPaymentMsg(null)} disabled={markBusy} className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-cream-warm disabled:opacity-50">Annuler</button>
+              <button onClick={confirmMarkPayment} disabled={markBusy} className="px-4 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">{markBusy ? '…' : 'Transférer aux paiements'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

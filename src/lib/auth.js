@@ -45,7 +45,7 @@ export async function loadFreshUser(userId) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, last_visited_conversations')
+      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, last_visited_conversations')
       .eq('id', userId)
       .maybeSingle()
     if (error) {
@@ -296,4 +296,26 @@ export function canAdminCaisse(user) {
 export function canSeeConversations(user) {
   if (!user) return false
   return user.role === 'admin' || user.perm_conversations === true
+}
+
+// =====================================================================
+// PAIEMENTS — permissions (preuves de virement transférées en interne)
+// =====================================================================
+
+// User peut marquer un message comme preuve de paiement (admin ou perm_mark_payment_proof)
+export function canMarkPaymentProof(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_mark_payment_proof === true
+}
+
+// User peut voir la liste des paiements à valider (admin ou perm_view_payments)
+export function canViewPayments(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_view_payments === true
+}
+
+// User peut valider un paiement (admin ou perm_validate_payments)
+export function canValidatePayments(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_validate_payments === true
 }

@@ -126,6 +126,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_hr: formData.permHR,
         perm_admin_users: formData.permAdminUsers,
         perm_cake_vision: formData.permCakeVision,
+        perm_mark_payment_proof: formData.permMarkPaymentProof,
+        perm_view_payments: formData.permViewPayments,
+        perm_validate_payments: formData.permValidatePayments,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -170,6 +173,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_hr: formData.permHR,
         perm_admin_users: formData.permAdminUsers,
         perm_cake_vision: formData.permCakeVision,
+        perm_mark_payment_proof: formData.permMarkPaymentProof,
+        perm_view_payments: formData.permViewPayments,
+        perm_validate_payments: formData.permValidatePayments,
       })
       setEditingUser(null)
       await refresh()
@@ -651,6 +657,9 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permHR: initialData?.perm_hr !== undefined ? initialData.perm_hr : false,
     permAdminUsers: initialData?.perm_admin_users !== undefined ? initialData.perm_admin_users : false,
     permCakeVision: initialData?.perm_cake_vision !== undefined ? initialData.perm_cake_vision : false,
+    permMarkPaymentProof: initialData?.perm_mark_payment_proof !== undefined ? initialData.perm_mark_payment_proof : false,
+    permViewPayments: initialData?.perm_view_payments !== undefined ? initialData.perm_view_payments : false,
+    permValidatePayments: initialData?.perm_validate_payments !== undefined ? initialData.perm_validate_payments : false,
   })
 
   function handleSubmit() {
@@ -868,6 +877,24 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             label="📸 Voir la Galerie CD"
             checked={isAdmin || formData.permCakeVision}
             onChange={v => update('permCakeVision', v)}
+          />
+          <PermCheckbox
+            id="perm-mark-payment-proof"
+            label="💰 Marquer une preuve de paiement"
+            checked={isAdmin || formData.permMarkPaymentProof}
+            onChange={v => update('permMarkPaymentProof', v)}
+          />
+          <PermCheckbox
+            id="perm-view-payments"
+            label="👁 Voir les paiements à valider"
+            checked={isAdmin || formData.permViewPayments}
+            onChange={v => update('permViewPayments', v)}
+          />
+          <PermCheckbox
+            id="perm-validate-payments"
+            label="✅ Valider les paiements"
+            checked={isAdmin || formData.permValidatePayments}
+            onChange={v => update('permValidatePayments', v)}
           />
           <PermCheckbox
             id="perm-stock-patissier"
