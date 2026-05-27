@@ -138,7 +138,7 @@ export default function PaymentsView({ user }) {
 
   return (
     <div className="max-w-3xl mx-auto p-4">
-      <h1 className="font-fraunces italic text-[22px] text-ink mb-1">💰 Paiements à valider</h1>
+      <h1 className="font-fraunces italic text-[26px] text-ink mb-1">💰 Paiements à valider</h1>
       <p className="text-[12px] text-ink-mute mb-4">Preuves de virement transférées depuis les conversations.</p>
 
       {/* Totaux */}

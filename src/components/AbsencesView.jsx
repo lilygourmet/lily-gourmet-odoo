@@ -72,7 +72,7 @@ export default function AbsencesView({ user }) {
   return (
     <div className="max-w-3xl mx-auto p-4">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <h1 className="font-fraunces italic text-[22px] text-ink">🌴 Congés / Absences</h1>
+        <h1 className="font-fraunces italic text-[26px] text-ink">🌴 Congés / Absences</h1>
         <button
           onClick={() => { resetForm(); setError(''); setShowForm(true) }}
           className="px-4 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-full hover:bg-bordeaux-deep flex-shrink-0"

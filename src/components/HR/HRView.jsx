@@ -19,8 +19,8 @@ export default function HRView({ user }) {
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '1.5rem 1.25rem' }}>
 
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 500, color: '#3A3733' }}>
-          🏢 Ressources Humaines {!isAdmin && <span style={{ fontSize: 12, color: '#9B968D', fontWeight: 400 }}>(accès limité)</span>}
+        <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a' }}>
+          🏢 Ressources Humaines {!isAdmin && <span style={{ fontSize: 12, color: '#9B968D', fontWeight: 400, fontStyle: 'normal', fontFamily: 'Geist, sans-serif' }}>(accès limité)</span>}
         </h2>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6F6A60' }}>
           {isAdmin

@@ -143,7 +143,7 @@ export default function TasksView({ user }) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: '#3A3733' }}>
+          <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a' }}>
             📋 Tâches à faire
           </h2>
           <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6F6A60' }}>
