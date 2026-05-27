@@ -18,9 +18,9 @@ export default {
           mute: '#8a7a70',
         },
         cream: {
-          DEFAULT: '#f3ede3',
+          DEFAULT: '#faf7f2',
           warm: '#ffffff',
-          deep: '#efe7d8',
+          deep: '#f1eadd',
         },
         bordeaux: {
           DEFAULT: '#993556',
