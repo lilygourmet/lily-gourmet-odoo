@@ -3,6 +3,7 @@ import MeriemCaisse from './subviews/MeriemCaisse'
 import MeriemHamid from './subviews/MeriemHamid'
 import MeriemFactures from './subviews/MeriemFactures'
 import MeriemAvances from './subviews/MeriemAvances'
+import MeriemCourses from './subviews/MeriemCourses'
 import LaylaLG from './subviews/LaylaLG'
 
 export default function CaissesGereesView({ user }) {
@@ -24,11 +25,13 @@ export default function CaissesGereesView({ user }) {
             <SubBtn active={sub === 'hamid'}    onClick={() => setSub('hamid')}>🚖 Hamid</SubBtn>
             <SubBtn active={sub === 'factures'} onClick={() => setSub('factures')}>📄 Factures</SubBtn>
             <SubBtn active={sub === 'avances'}  onClick={() => setSub('avances')}>💸 Avances</SubBtn>
+            <SubBtn active={sub === 'courses'}  onClick={() => setSub('courses')}>🛒 Courses</SubBtn>
           </div>
           {sub === 'caisse'   && <MeriemCaisse user={user} />}
           {sub === 'hamid'    && <MeriemHamid user={user} />}
           {sub === 'factures' && <MeriemFactures user={user} />}
           {sub === 'avances'  && <MeriemAvances user={user} />}
+          {sub === 'courses'  && <MeriemCourses user={user} />}
         </>
       )}
       {main === 'layla_lg' && <LaylaLG user={user} />}

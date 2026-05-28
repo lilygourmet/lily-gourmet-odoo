@@ -791,6 +791,70 @@ export async function hamidRendArgent({ amount, label, mvtDate, userId }) {
 }
 
 // ============================================================
+// COURSES confiées à des "pions" (occasionnels, nom libre)
+// ============================================================
+
+export async function loadCoursesMonth(year, month) {
+  const { start, end } = monthBounds(year, month)
+  const { data, error } = await supabase
+    .from('caisse_courses')
+    .select('*, depenses:caisse_courses_depenses(*)')
+    .gte('given_date', start)
+    .lt('given_date', end)
+    .order('given_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Donner de l'argent à une personne (nom libre) pour des courses → sortie caisse Meriem
+export async function donnerCourse({ person, amount, date, userId }) {
+  const mvt = await addMouvement({
+    caisseOwner: 'meriem', type: 'sortie', sourceType: 'course_avance',
+    amount: Number(amount), category: null, label: `🛒 Courses · ${person}`,
+    mvtDate: date, hasFacture: false, userId,
+  })
+  const { data, error } = await supabase
+    .from('caisse_courses')
+    .insert({ person: person.trim(), amount_given: Number(amount), given_date: date, sortie_mouvement_id: mvt.id, created_by: userId })
+    .select().single()
+  if (error) { try { await deleteMouvement(mvt.id) } catch (_) {} ; throw error }
+  await logAction({ entityType: 'course', entityId: data.id, action: 'create', description: `🛒 Courses confiées à ${person} : ${Number(amount)} dh`, amount: Number(amount), actorId: userId })
+  return data
+}
+
+// Régler une course : détail des dépenses (lignes catégorisées) + rendu auto
+export async function reglerCourse({ course, lignes, date, userId }) {
+  const spent = lignes.reduce((s, l) => s + Number(l.amount || 0), 0)
+  const returned = Number(course.amount_given) - spent
+  if (lignes.length) {
+    const rows = lignes.map(l => ({ course_id: course.id, amount: Number(l.amount || 0), category: l.category || null, label: l.label || null }))
+    const { error: e1 } = await supabase.from('caisse_courses_depenses').insert(rows)
+    if (e1) throw e1
+  }
+  let entreeId = null
+  if (returned > 0.001) {
+    const mvt = await addMouvement({
+      caisseOwner: 'meriem', type: 'entree', sourceType: 'course_rendu',
+      amount: returned, category: null, label: `Rendu courses · ${course.person}`, mvtDate: date, userId,
+    })
+    entreeId = mvt.id
+  }
+  const { error: e2 } = await supabase.from('caisse_courses')
+    .update({ status: 'regle', settled_at: new Date().toISOString(), entree_mouvement_id: entreeId })
+    .eq('id', course.id)
+  if (e2) throw e2
+  await logAction({ entityType: 'course', entityId: course.id, action: 'update', description: `Règlement courses ${course.person} : dépensé ${spent}, rendu ${returned}`, amount: spent, actorId: userId })
+}
+
+export async function deleteCourse(courseId) {
+  const { data: c } = await supabase.from('caisse_courses').select('sortie_mouvement_id, entree_mouvement_id').eq('id', courseId).single()
+  if (c?.sortie_mouvement_id) { try { await deleteMouvement(c.sortie_mouvement_id) } catch (_) {} }
+  if (c?.entree_mouvement_id) { try { await deleteMouvement(c.entree_mouvement_id) } catch (_) {} }
+  const { error } = await supabase.from('caisse_courses').delete().eq('id', courseId)
+  if (error) throw error
+}
+
+// ============================================================
 // FACTURES (sorties Meriem avec has_facture = true)
 // ============================================================
 
