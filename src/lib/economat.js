@@ -96,15 +96,53 @@ export async function loadCategoryContent(categoryId) {
   return { groups, ungrouped: byGroup.get('__none__') || [] }
 }
 
+// Nom du modèle WhatsApp à créer dans Wati (catégorie Utility, avec un {{1}}).
+const WA_TEMPLATE = 'economat_demande'
+
 // Comptes économes (reçoivent les demandes)
 export async function loadEconomes() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name')
+    .select('id, username, full_name, whatsapp')
     .eq('perm_econome', true)
     .eq('active', true)
   if (error) throw error
   return data || []
+}
+
+// Numéro au format international (Maroc : 0xxxxxxxxx -> 212xxxxxxxxx)
+function normalizePhone(raw) {
+  let n = String(raw || '').replace(/\D/g, '')
+  if (!n) return ''
+  if (n.startsWith('0')) n = '212' + n.slice(1)
+  return n
+}
+
+// Notifie les économes par WhatsApp (modèle Wati). Non bloquant : si ça échoue
+// (ex. modèle pas encore validé), la demande/tâche reste OK.
+async function notifyEconomesWhatsapp(economes, who, userId) {
+  for (const eco of economes) {
+    const phone = normalizePhone(eco.whatsapp)
+    if (!phone) continue
+    try {
+      const res = await fetch('/api/wati-webhook?action=send-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientPhone: phone,
+          templateName: WA_TEMPLATE,
+          parameters: [{ name: '1', value: who }],
+          userId,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        console.warn('[economat] WhatsApp non envoyé:', d.error || res.status)
+      }
+    } catch (e) {
+      console.warn('[economat] WhatsApp erreur réseau:', e.message)
+    }
+  }
 }
 
 // Texte récap lisible, groupé par catégorie (pour la tâche + l'impression)
@@ -172,6 +210,9 @@ export async function createDemande({ user, categoryId, lines }) {
   if (firstTaskId) {
     await supabase.from('economat_demandes').update({ task_id: firstTaskId }).eq('id', dem.id)
   }
+
+  // 5) Notif WhatsApp (non bloquant)
+  await notifyEconomesWhatsapp(economes, who, user.id)
 
   return { demandeId: dem.id, economes: economes.length }
 }

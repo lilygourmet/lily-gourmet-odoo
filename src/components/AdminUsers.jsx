@@ -134,6 +134,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_validate_payments: formData.permValidatePayments,
         economat_profil: formData.economatProfil || null,
         perm_econome: formData.permEconome,
+        whatsapp: formData.whatsapp?.trim() || null,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -184,6 +185,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_validate_payments: formData.permValidatePayments,
         economat_profil: formData.economatProfil || null,
         perm_econome: formData.permEconome,
+        whatsapp: formData.whatsapp?.trim() || null,
       })
       setEditingUser(null)
       await refresh()
@@ -682,6 +684,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permValidatePayments: initialData?.perm_validate_payments !== undefined ? initialData.perm_validate_payments : false,
     economatProfil: initialData?.economat_profil || '',
     permEconome: initialData?.perm_econome !== undefined ? initialData.perm_econome : false,
+    whatsapp: initialData?.whatsapp || '',
   })
 
   function handleSubmit() {
@@ -1053,6 +1056,15 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             checked={formData.permEconome}
             onChange={v => update('permEconome', v)}
           />
+          {formData.permEconome && (
+            <input
+              type="text"
+              value={formData.whatsapp}
+              onChange={e => update('whatsapp', e.target.value)}
+              placeholder="Numéro WhatsApp (ex. 0661114878)"
+              className="w-full mt-2 px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
+            />
+          )}
         </div>
       </div>
 
