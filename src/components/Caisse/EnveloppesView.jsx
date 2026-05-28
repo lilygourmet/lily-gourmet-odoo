@@ -203,7 +203,7 @@ export default function EnveloppesView({ user }) {
       {!loading && sources.length > 0 && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${sources.length}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
           gap: 14,
         }}>
           {sources.map(src => (
