@@ -128,6 +128,28 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
     setError(null)
   }
 
+  // Impression de la tâche (utile pour la demande d'articles côté économe)
+  function handlePrint() {
+    const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const w = window.open('', '_blank')
+    if (!w) { alert('Autorise les popups pour imprimer.'); return }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(task.title)}</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a0f0a;margin:24px;line-height:1.5}
+  h1{font-size:18px;margin:0 0 6px}
+  .meta{font-size:12px;color:#555;margin-bottom:16px}
+  .desc{font-size:14px;white-space:pre-wrap;border-top:1px solid #ccc;padding-top:12px}
+  @media print{body{margin:12mm}}
+</style></head><body>
+<h1>${esc(task.title)}</h1>
+<div class="meta">De ${esc(fromName)} · ${esc(fmtDate(task.sent_at))}</div>
+<div class="desc">${esc(task.description || '')}</div>
+</body></html>`)
+    w.document.close()
+    w.focus()
+    setTimeout(() => w.print(), 300)
+  }
+
   // Badge statut
   let statusBadge
   if (isDone) {
@@ -252,6 +274,14 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                 </div>
               </>
             )}
+
+            <button onClick={handlePrint} style={{
+              width: '100%', padding: '10px', marginTop: 8, fontSize: 13,
+              background: 'white', color: '#1a0f0a', border: '1px solid #e5d8c3',
+              borderRadius: 8, cursor: 'pointer',
+            }}>
+              🖨 Imprimer
+            </button>
 
             <button onClick={onClose} style={btnClose2}>
               Fermer

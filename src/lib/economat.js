@@ -131,14 +131,31 @@ function normalizePhone(raw) {
   return n
 }
 
-// Notifie les économes par WhatsApp (modèle Wati). Non bloquant : si ça échoue
-// (ex. modèle pas encore validé), la demande/tâche reste OK.
+// Notifie les économes par WhatsApp. Non bloquant : si ça échoue, la tâche reste OK.
+// 1) Si une conversation est déjà ouverte (fenêtre 24 h) → message de session (gratuit).
+// 2) Sinon → modèle Wati (à valider une fois dans Wati).
 async function notifyEconomesWhatsapp(economes, who, userId) {
+  const text = `🧾 Nouvelle demande d'articles de ${who}. Ouvre l'app → Tâches pour la traiter.`
   for (const eco of economes) {
     const phone = normalizePhone(eco.whatsapp)
     if (!phone) continue
     try {
-      const res = await fetch('/api/wati-webhook?action=send-template', {
+      // 1) Conversation ouverte ? -> message de session
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('client_phone', phone)
+        .maybeSingle()
+      if (conv?.id) {
+        const r = await fetch('/api/wati-webhook?action=send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId, text }),
+        })
+        if (r.ok) continue
+      }
+      // 2) Sinon -> modèle
+      const rt = await fetch('/api/wati-webhook?action=send-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -148,12 +165,12 @@ async function notifyEconomesWhatsapp(economes, who, userId) {
           userId,
         }),
       })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        console.warn('[economat] WhatsApp non envoyé:', d.error || res.status)
+      if (!rt.ok) {
+        const d = await rt.json().catch(() => ({}))
+        console.warn('[economat] WhatsApp non envoyé:', d.error || rt.status)
       }
     } catch (e) {
-      console.warn('[economat] WhatsApp erreur réseau:', e.message)
+      console.warn('[economat] WhatsApp erreur:', e.message)
     }
   }
 }
