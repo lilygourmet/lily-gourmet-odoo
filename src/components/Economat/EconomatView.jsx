@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
-import { loadCategoriesForUser, loadCategoryContent, createDemande } from '../../lib/economat'
+import { loadCategoriesForUser, loadCategoryContent, createDemande, loadMyDemandes } from '../../lib/economat'
 
 // Écran employé : demande d'articles à l'économat.
 // L'employé entre directement sur les articles de sa catégorie (switch si plusieurs).
@@ -16,6 +16,8 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const [showRecap, setShowRecap] = useState(false)
   const [sending, setSending] = useState(false)
   const [flash, setFlash] = useState('')
+  const [showHistory, setShowHistory] = useState(false)
+  const [myDemandes, setMyDemandes] = useState(null)  // null = pas encore chargé
 
   useEffect(() => {
     (async () => {
@@ -93,6 +95,17 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
     }
   }
 
+  async function openHistory() {
+    setShowHistory(true)
+    setMyDemandes(null)
+    try {
+      setMyDemandes(await loadMyDemandes(user?.id))
+    } catch (e) {
+      console.error('[Économat] historique', e)
+      setMyDemandes([])
+    }
+  }
+
   return (
     <div className="min-h-screen bg-cream pb-28">
       <AppHeader
@@ -111,9 +124,15 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       {/* Sous-header : titre + switch catégorie si plusieurs */}
       <div className="bg-cream-warm/30 border-b border-line py-3 px-4">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[20px]">🧾</span>
-            <span className="font-fraunces italic text-[18px] text-ink">Demande d'articles</span>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[20px]">🧾</span>
+              <span className="font-fraunces italic text-[18px] text-ink">Demande d'articles</span>
+            </div>
+            <button
+              onClick={openHistory}
+              className="px-3 py-1 rounded-full border border-line text-ink text-[12px] font-medium hover:border-bordeaux hover:bg-cream-warm transition-colors"
+            >🕐 Mes demandes</button>
           </div>
           {categories.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
@@ -197,6 +216,55 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
           sending={sending}
         />
       )}
+
+      {showHistory && (
+        <HistoryModal demandes={myDemandes} onClose={() => setShowHistory(false)} />
+      )}
+    </div>
+  )
+}
+
+// Historique des demandes envoyées par l'employé (lecture seule, texte en noir).
+function HistoryModal({ demandes, onClose }) {
+  function fmtDate(iso) {
+    const d = new Date(iso)
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) + ' à ' +
+      d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  }
+  return (
+    <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+         onClick={onClose}>
+      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl border border-line"
+           onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-5 py-3 flex items-center justify-between">
+          <h3 className="font-fraunces italic text-[18px] text-ink">Mes demandes</h3>
+          <button onClick={onClose}
+                  className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center">×</button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {demandes === null ? (
+            <div className="text-center text-ink-mute italic py-6">Chargement...</div>
+          ) : demandes.length === 0 ? (
+            <div className="text-center text-ink-mute italic py-6">Tu n'as pas encore envoyé de demande.</div>
+          ) : (
+            demandes.map(dem => (
+              <div key={dem.id} className="border border-line rounded-lg p-3">
+                <div className="text-[11px] text-ink-mute mb-1.5">{fmtDate(dem.created_at)}</div>
+                <div className="space-y-1">
+                  {(dem.economat_demande_lignes || []).map((l, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px] text-ink">
+                      <span className="font-semibold text-bordeaux w-8 text-right">×{l.qty}</span>
+                      <span className="flex-1">{l.article_name}</span>
+                      {l.unit && <span className="text-[11px] text-ink-mute">{l.unit}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   )
 }

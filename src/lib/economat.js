@@ -96,6 +96,19 @@ export async function loadCategoryContent(categoryId) {
   return { groups, ungrouped: byGroup.get('__none__') || [] }
 }
 
+// Demandes déjà envoyées par un employé (avec le détail des lignes), récentes d'abord.
+export async function loadMyDemandes(userId) {
+  if (!userId) return []
+  const { data, error } = await supabase
+    .from('economat_demandes')
+    .select('id, created_at, status, economat_demande_lignes ( article_name, unit, qty )')
+    .eq('requester_user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(30)
+  if (error) throw error
+  return data || []
+}
+
 // Nom du modèle WhatsApp à créer dans Wati (catégorie Utility, avec un {{1}}).
 const WA_TEMPLATE = 'economat_demande'
 
