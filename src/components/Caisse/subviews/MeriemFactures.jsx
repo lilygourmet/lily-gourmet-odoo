@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
-import { loadFacturesAll, loadFacturesStats, recupererFacturesParCheque } from '../../../lib/caisse'
-import { currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
+import { loadFacturesAll, loadCourseFacturesAll, recupererFacturesParCheque } from '../../../lib/caisse'
+import { fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 
 export default function MeriemFactures({ user }) {
-  const [year, setYear] = useState(currentYear())
   const [filter, setFilter] = useState('pending')
-  const [factures, setFactures] = useState([])
-  const [stats, setStats] = useState({ total: 0, recovered: 0, pending: 0, countAll: 0, countPending: 0, countRecovered: 0 })
+  const [items, setItems] = useState([])   // factures normalisées (Meriem + courses)
   const [selected, setSelected] = useState(new Set())
   const [showCheque, setShowCheque] = useState(false)
   const [cheque, setCheque] = useState('')
@@ -14,31 +12,41 @@ export default function MeriemFactures({ user }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { reload() }, [year])
+  useEffect(() => { reload() }, [])
 
   async function reload() {
-    const [list, st] = await Promise.all([loadFacturesAll(), loadFacturesStats(year)])
-    setFactures(list); setStats(st); setSelected(new Set())
+    const [mvts, courseDeps] = await Promise.all([loadFacturesAll(), loadCourseFacturesAll()])
+    const norm = [
+      ...mvts.map(f => ({ key: `mvt-${f.id}`, kind: 'mvt', id: f.id, amount: Number(f.amount || 0), date: f.mvt_date, label: f.label, category: f.category, status: f.facture_status, cheque: f.facture_cheque, recoveredAt: f.facture_recovered_at })),
+      ...courseDeps.map(d => ({ key: `course-${d.id}`, kind: 'course', id: d.id, amount: Number(d.amount || 0), date: d.course?.given_date, label: `🛒 ${d.course?.person || 'Courses'}${d.label ? ' · ' + d.label : ''}`, category: d.category, status: d.facture_status, cheque: d.facture_cheque, recoveredAt: d.facture_recovered_at })),
+    ]
+    setItems(norm); setSelected(new Set())
   }
 
-  const pending = factures.filter(f => f.facture_status === 'pending')
-  const recovered = factures.filter(f => f.facture_status === 'recovered')
+  const pending = items.filter(f => f.status === 'pending')
+  const recovered = items.filter(f => f.status === 'recovered')
+  const sum = arr => arr.reduce((s, f) => s + f.amount, 0)
+  const stats = {
+    total: sum(items), countAll: items.length,
+    pending: sum(pending), countPending: pending.length,
+    recovered: sum(recovered), countRecovered: recovered.length,
+  }
 
-  function toggle(id) {
+  function toggle(key) {
     setSelected(prev => {
       const n = new Set(prev)
-      n.has(id) ? n.delete(id) : n.add(id)
+      n.has(key) ? n.delete(key) : n.add(key)
       return n
     })
   }
-  const selectedFactures = pending.filter(f => selected.has(f.id))
-  const selectedTotal = selectedFactures.reduce((s, f) => s + Number(f.amount || 0), 0)
+  const selectedFactures = pending.filter(f => selected.has(f.key))
+  const selectedTotal = sum(selectedFactures)
 
   async function confirmCheque() {
     if (selectedFactures.length === 0) return
     setBusy(true); setError('')
     try {
-      await recupererFacturesParCheque({ factures: selectedFactures, cheque, date: chequeDate, userId: user.id })
+      await recupererFacturesParCheque({ items: selectedFactures.map(f => ({ kind: f.kind, id: f.id, amount: f.amount })), cheque, date: chequeDate, userId: user.id })
       setShowCheque(false); setCheque(''); setChequeDate(todayISO())
       await reload()
     } catch (e) { setError(e.message) }
@@ -48,10 +56,10 @@ export default function MeriemFactures({ user }) {
   // Regroupement des récupérées par chèque
   const groups = {}
   for (const f of recovered) {
-    const key = f.facture_cheque || '__none__'
-    if (!groups[key]) groups[key] = { cheque: f.facture_cheque, date: f.facture_recovered_at, total: 0, items: [] }
+    const key = f.cheque || '__none__'
+    if (!groups[key]) groups[key] = { cheque: f.cheque, date: f.recoveredAt, total: 0, items: [] }
     groups[key].items.push(f)
-    groups[key].total += Number(f.amount || 0)
+    groups[key].total += f.amount
   }
   const groupList = Object.values(groups).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
 
@@ -61,14 +69,8 @@ export default function MeriemFactures({ user }) {
         ℹ️ Coche les factures retirées ensemble à la banque, puis « Récupérer par chèque » : elles sont regroupées sous un n° de chèque (le total est versé dans la caisse Layla LG).
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <button onClick={() => setYear(y => y - 1)} style={btnSlim}>←</button>
-        <div style={{ fontSize: 18, fontWeight: 500 }}>{year}</div>
-        <button onClick={() => setYear(y => y + 1)} style={btnSlim}>→</button>
-      </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 18 }}>
-        <StatCard label={`Total factures · ${year}`} value={stats.total} sub={`${stats.countAll} factures`} bg="#F4F0EA" text="#1a0f0a" border="#e5d8c3" />
+        <StatCard label="Total factures" value={stats.total} sub={`${stats.countAll} factures`} bg="#F4F0EA" text="#1a0f0a" border="#e5d8c3" />
         <StatCard label="À récupérer (reliquat)" value={stats.pending} sub={`${stats.countPending} en attente`} bg="#FCE9E8" text="#99201E" border="#E5BFB6" highlight />
         <StatCard label="Déjà récupéré" value={stats.recovered} sub={`${stats.countRecovered} · transféré Layla LG`} bg="#E1F5EE" text="#085041" border="#97C9B4" />
       </div>
@@ -83,13 +85,13 @@ export default function MeriemFactures({ user }) {
         <>
           {pending.length === 0 && <div style={emptyBox}>Aucune facture à récupérer.</div>}
           {pending.map(f => (
-            <label key={f.id} style={{
+            <label key={f.key} style={{
               display: 'grid', gridTemplateColumns: '30px 90px 1fr 110px', gap: 12, alignItems: 'center', cursor: 'pointer',
               padding: '12px 16px', borderRadius: 8, marginBottom: 5, background: 'white',
-              border: selected.has(f.id) ? '1.5px solid #378ADD' : '0.5px solid #e5d8c3',
+              border: selected.has(f.key) ? '1.5px solid #378ADD' : '0.5px solid #e5d8c3',
             }}>
-              <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggle(f.id)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
-              <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.mvt_date)}</div>
+              <input type="checkbox" checked={selected.has(f.key)} onChange={() => toggle(f.key)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.date)}</div>
               <div>
                 <div style={{ fontSize: 13 }}>{f.label}</div>
                 <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 2 }}>{f.category}</div>
@@ -129,11 +131,11 @@ export default function MeriemFactures({ user }) {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{fmtMoney(g.total)} · {g.items.length} fact.</div>
               </div>
               {g.items.map(f => (
-                <div key={f.id} style={{
+                <div key={f.key} style={{
                   display: 'grid', gridTemplateColumns: '90px 1fr 110px', gap: 12, alignItems: 'center',
                   padding: '9px 16px 9px 28px', borderRadius: 8, marginBottom: 4, background: 'white', border: '0.5px solid #e5d8c3',
                 }}>
-                  <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.mvt_date)}</div>
+                  <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.date)}</div>
                   <div>
                     <div style={{ fontSize: 13 }}>{f.label}</div>
                     <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 2 }}>{f.category}</div>

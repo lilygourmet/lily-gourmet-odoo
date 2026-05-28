@@ -827,7 +827,10 @@ export async function reglerCourse({ course, lignes, date, userId }) {
   const spent = lignes.reduce((s, l) => s + Number(l.amount || 0), 0)
   const returned = Number(course.amount_given) - spent
   if (lignes.length) {
-    const rows = lignes.map(l => ({ course_id: course.id, amount: Number(l.amount || 0), category: l.category || null, label: l.label || null }))
+    const rows = lignes.map(l => ({
+      course_id: course.id, amount: Number(l.amount || 0), category: l.category || null, label: l.label || null,
+      is_facture: !!l.is_facture, facture_status: l.is_facture ? 'pending' : null,
+    }))
     const { error: e1 } = await supabase.from('caisse_courses_depenses').insert(rows)
     if (e1) throw e1
   }
@@ -921,33 +924,50 @@ export async function marquerFactureRecuperee({ mouvementId, recoveredDate, user
     .limit(1)
 }
 
+// Factures issues des courses (lignes de dépense marquées "à récupérer")
+export async function loadCourseFacturesAll() {
+  const { data, error } = await supabase
+    .from('caisse_courses_depenses')
+    .select('*, course:caisse_courses(person, given_date)')
+    .eq('is_facture', true)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
 // Récupère plusieurs factures via UN chèque (retrait banque) : les regroupe,
 // crée UNE seule entrée (le total du chèque) dans la caisse Layla LG.
-export async function recupererFacturesParCheque({ factures, cheque, date, userId }) {
-  const ids = factures.map(f => f.id)
-  if (ids.length === 0) throw new Error('Aucune facture sélectionnée')
-  const total = factures.reduce((s, f) => s + Number(f.amount || 0), 0)
+// items = [{ kind: 'mvt' | 'course', id, amount }]
+export async function recupererFacturesParCheque({ items, cheque, date, userId }) {
+  if (!items || items.length === 0) throw new Error('Aucune facture sélectionnée')
+  const total = items.reduce((s, it) => s + Number(it.amount || 0), 0)
   const chequeVal = (cheque || '').trim() || null
+  const patch = { facture_status: 'recovered', facture_recovered_at: date, facture_cheque: chequeVal }
 
-  const { error: e1 } = await supabase
-    .from('caisse_mouvements')
-    .update({ facture_status: 'recovered', facture_recovered_at: date, facture_cheque: chequeVal })
-    .in('id', ids)
-  if (e1) throw e1
+  const mvtIds = items.filter(i => i.kind === 'mvt').map(i => i.id)
+  const courseIds = items.filter(i => i.kind === 'course').map(i => i.id)
+  if (mvtIds.length) {
+    const { error } = await supabase.from('caisse_mouvements').update(patch).in('id', mvtIds)
+    if (error) throw error
+  }
+  if (courseIds.length) {
+    const { error } = await supabase.from('caisse_courses_depenses').update(patch).in('id', courseIds)
+    if (error) throw error
+  }
 
   await addMouvement({
     caisseOwner: 'layla_lg',
     type: 'entree',
     sourceType: 'facture_recup',
     amount: total,
-    label: `Chèque ${chequeVal || '—'} · ${ids.length} facture${ids.length > 1 ? 's' : ''}`,
+    label: `Chèque ${chequeVal || '—'} · ${items.length} facture${items.length > 1 ? 's' : ''}`,
     mvtDate: date,
     userId,
   })
 
   await logAction({
     entityType: 'mouvement', entityId: null, action: 'create',
-    description: `Récupération chèque ${chequeVal || '—'} : ${ids.length} facture(s) · ${total} dh`,
+    description: `Récupération chèque ${chequeVal || '—'} : ${items.length} facture(s) · ${total} dh`,
     amount: total, actorId: userId,
   })
 }

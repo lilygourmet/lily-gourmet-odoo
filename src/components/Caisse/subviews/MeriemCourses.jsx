@@ -47,7 +47,7 @@ export default function MeriemCourses({ user }) {
 
   function openSettle(c) {
     setSettle(c)
-    setLignes([{ amount: '', category: categories[0]?.name || '', label: '' }])
+    setLignes([{ amount: '', category: categories[0]?.name || '', label: '', is_facture: false }])
     setSettleDate(todayISO())
   }
   const spentLignes = lignes.reduce((s, l) => s + Number(l.amount || 0), 0)
@@ -188,12 +188,18 @@ export default function MeriemCourses({ user }) {
                 <input type="text" value={l.label} placeholder="détail (option)"
                   onChange={e => setLignes(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
                   style={{ ...inp, marginTop: 0, flex: 1 }} />
+                <label title="Facture à récupérer (chèque)" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <input type="checkbox" checked={!!l.is_facture}
+                    onChange={e => setLignes(prev => prev.map((x, j) => j === i ? { ...x, is_facture: e.target.checked } : x))} />
+                  📎
+                </label>
                 {lignes.length > 1 && (
                   <button onClick={() => setLignes(prev => prev.filter((_, j) => j !== i))} style={btnIcon} title="Retirer">✕</button>
                 )}
               </div>
             ))}
-            <button onClick={() => setLignes(prev => [...prev, { amount: '', category: categories[0]?.name || '', label: '' }])}
+            <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2 }}>📎 = facture à récupérer (ira dans Factures, récupérable par chèque)</div>
+            <button onClick={() => setLignes(prev => [...prev, { amount: '', category: categories[0]?.name || '', label: '', is_facture: false }])}
               style={{ ...btnSec, marginTop: 2 }}>+ Ligne</button>
 
             <div style={{ marginTop: 14, padding: '10px 12px', background: '#F9F6F1', borderRadius: 8, fontSize: 13 }}>
