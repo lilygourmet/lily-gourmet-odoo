@@ -353,6 +353,36 @@ export async function loadMonthStats(caisseOwner, year, month) {
   return { entrees, sorties, byCat }
 }
 
+// Stats par catégorie UNIFIÉES : Meriem (dépenses réelles) + Hamid + Pions (courses).
+// L'argent CONFIÉ (avances Hamid/courses, avances staff, transferts) n'est PAS une
+// catégorie : seule la dépense réelle compte.
+export async function loadCategoryStats(year, month) {
+  const { start, end } = monthBounds(year, month)
+  const HANDOFF = ['hamid_avance', 'course_avance', 'avance', 'transfert_caisse', 'salaire_reliquat']
+
+  const [mvtRes, hamidRes, courseRes] = await Promise.all([
+    supabase.from('caisse_mouvements').select('amount, category, source_type')
+      .eq('caisse_owner', 'meriem').eq('type', 'sortie')
+      .gte('mvt_date', start).lt('mvt_date', end),
+    supabase.from('caisse_hamid_depenses').select('amount, category')
+      .gte('depense_date', start).lt('depense_date', end),
+    supabase.from('caisse_courses_depenses').select('amount, category, course:caisse_courses(given_date)'),
+  ])
+
+  const cat = {}
+  const add = (c, col, amt) => {
+    const k = c || 'Autre'
+    if (!cat[k]) cat[k] = { meriem: 0, hamid: 0, pions: 0, total: 0 }
+    cat[k][col] += Number(amt || 0)
+    cat[k].total += Number(amt || 0)
+  }
+  ;(mvtRes.data || []).filter(m => !HANDOFF.includes(m.source_type)).forEach(m => add(m.category, 'meriem', m.amount))
+  ;(hamidRes.data || []).forEach(h => add(h.category, 'hamid', h.amount))
+  ;(courseRes.data || []).filter(d => { const gd = d.course?.given_date; return gd && gd >= start && gd < end }).forEach(d => add(d.category, 'pions', d.amount))
+
+  return cat
+}
+
 // Détecte si une catégorie indique un transfert vers la caisse Meriem
 // (insensible à la casse et aux accents)
 function isTransfertVersMeriem(category) {

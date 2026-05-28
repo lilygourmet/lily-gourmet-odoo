@@ -4,6 +4,7 @@ import MeriemHamid from './subviews/MeriemHamid'
 import MeriemFactures from './subviews/MeriemFactures'
 import MeriemAvances from './subviews/MeriemAvances'
 import MeriemCourses from './subviews/MeriemCourses'
+import MeriemStats from './subviews/MeriemStats'
 import RechercheView from './RechercheView'
 import { loadHamidBalance, loadFacturesStats, loadAvancesSummary } from '../../lib/caisse'
 import { fmtMoney, currentYear } from './_helpers'
@@ -40,6 +41,7 @@ export default function MeriemUserView({ user }) {
           💸 Avances {avancesTotal > 0 && (<span style={{ fontSize: 10, background: '#FAEEDA', color: '#633806', padding: '1px 6px', borderRadius: 999, marginLeft: 3 }}>{fmtMoney(avancesTotal).replace(' dh', '')}</span>)}
         </PillTab>
         <PillTab active={sub === 'courses'} onClick={() => setSub('courses')}>🛒 Courses</PillTab>
+        <PillTab active={sub === 'stats'} onClick={() => setSub('stats')}>📊 Stats</PillTab>
         <PillTab active={sub === 'recherche'} onClick={() => setSub('recherche')}>🔍 Recherche</PillTab>
       </div>
 
@@ -48,6 +50,7 @@ export default function MeriemUserView({ user }) {
       {sub === 'factures'  && <MeriemFactures user={user} />}
       {sub === 'avances'   && <MeriemAvances  user={user} />}
       {sub === 'courses'   && <MeriemCourses  user={user} />}
+      {sub === 'stats'     && <MeriemStats />}
       {sub === 'recherche' && <RechercheView  user={user} />}
     </div>
   )
