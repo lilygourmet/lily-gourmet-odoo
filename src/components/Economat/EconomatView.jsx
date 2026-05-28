@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
-import { loadCategoriesForUser, loadCategoryContent } from '../../lib/economat'
+import { loadCategoriesForUser, loadCategoryContent, createDemande } from '../../lib/economat'
 
 // Écran employé : demande d'articles à l'économat.
 // L'employé entre directement sur les articles de sa catégorie (switch si plusieurs).
@@ -14,6 +14,8 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const [loading, setLoading] = useState(true)
   const [loadingContent, setLoadingContent] = useState(false)
   const [showRecap, setShowRecap] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [flash, setFlash] = useState('')
 
   useEffect(() => {
     (async () => {
@@ -68,6 +70,29 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const selectedCount = Object.keys(qty).length
   const totalUnits = useMemo(() => Object.values(qty).reduce((s, n) => s + n, 0), [qty])
 
+  async function handleSend() {
+    const lines = Object.entries(qty).map(([id, n]) => ({
+      articleId: Number(id),
+      qty: n,
+      name: articleInfo[id]?.name || 'Article',
+      unit: articleInfo[id]?.unit || '',
+      catName: articleInfo[id]?.catName || '',
+    }))
+    if (lines.length === 0) return
+    setSending(true)
+    try {
+      await createDemande({ user, categoryId: activeCat, lines })
+      setQty({})
+      setShowRecap(false)
+      setFlash('Demande envoyée à l\'économe ✅')
+      setTimeout(() => setFlash(''), 4000)
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-cream pb-28">
       <AppHeader
@@ -76,6 +101,12 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
         onNavigate={onNavigate}
         onLogout={onLogout}
       />
+
+      {flash && (
+        <div className="fixed top-16 inset-x-0 z-[90] flex justify-center px-4 pointer-events-none">
+          <div className="bg-success text-white text-[13px] font-medium px-4 py-2 rounded-full shadow-lg">{flash}</div>
+        </div>
+      )}
 
       {/* Sous-header : titre + switch catégorie si plusieurs */}
       <div className="bg-cream-warm/30 border-b border-line py-3 px-4">
@@ -162,6 +193,8 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
           articleInfo={articleInfo}
           onChange={setArticleQty}
           onClose={() => setShowRecap(false)}
+          onSend={handleSend}
+          sending={sending}
         />
       )}
     </div>
@@ -203,7 +236,7 @@ function ArticleRow({ article, qty, onChange }) {
   )
 }
 
-function RecapModal({ qty, articleInfo, onChange, onClose }) {
+function RecapModal({ qty, articleInfo, onChange, onClose, onSend, sending }) {
   const lines = Object.entries(qty).map(([id, n]) => ({
     id,
     n,
@@ -253,10 +286,12 @@ function RecapModal({ qty, articleInfo, onChange, onClose }) {
         </div>
 
         <div className="sticky bottom-0 bg-cream/95 backdrop-blur-sm border-t border-line px-5 py-3">
-          <div className="text-[11px] text-ink-mute text-center mb-2 italic">L'envoi à l'économe arrive à l'étape suivante.</div>
-          <button disabled
-                  className="w-full py-2.5 rounded-full bg-bordeaux/40 text-cream text-[13px] font-medium cursor-not-allowed">
-            Envoyer la demande (bientôt)
+          <button
+            onClick={onSend}
+            disabled={sending || lines.length === 0}
+            className="w-full py-2.5 rounded-full bg-bordeaux text-cream text-[13px] font-medium hover:bg-bordeaux-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {sending ? 'Envoi...' : 'Envoyer la demande à l\'économe'}
           </button>
         </div>
       </div>

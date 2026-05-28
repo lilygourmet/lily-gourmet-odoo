@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { createTask } from './tasks'
 
 // ============================================================
 // ÉCONOMAT — demandes d'articles par employé
@@ -93,4 +94,84 @@ export async function loadCategoryContent(categoryId) {
   })).filter(g => g.articles.length > 0)
 
   return { groups, ungrouped: byGroup.get('__none__') || [] }
+}
+
+// Comptes économes (reçoivent les demandes)
+export async function loadEconomes() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, full_name')
+    .eq('perm_econome', true)
+    .eq('active', true)
+  if (error) throw error
+  return data || []
+}
+
+// Texte récap lisible, groupé par catégorie (pour la tâche + l'impression)
+function buildDemandeText(lines) {
+  const byCat = {}
+  for (const l of lines) {
+    const c = l.catName || ''
+    if (!byCat[c]) byCat[c] = []
+    byCat[c].push(l)
+  }
+  const parts = []
+  for (const [cat, items] of Object.entries(byCat)) {
+    if (cat) parts.push(cat.toUpperCase())
+    for (const l of items) parts.push(`• ${l.qty} × ${l.name}${l.unit ? ' (' + l.unit + ')' : ''}`)
+    parts.push('')
+  }
+  return parts.join('\n').trim()
+}
+
+/**
+ * Envoie une demande : enregistre la demande + ses lignes, et crée une tâche
+ * vers chaque économe (avec le nom de l'employé, la date et le détail).
+ * lines : [{ articleId, qty, name, unit, catName }]
+ */
+export async function createDemande({ user, categoryId, lines }) {
+  if (!user?.id) throw new Error('Utilisateur manquant')
+  if (!lines || lines.length === 0) throw new Error('Aucun article sélectionné')
+
+  const economes = await loadEconomes()
+  if (economes.length === 0) {
+    throw new Error("Aucun économe défini. Coche « Économe » sur un compte dans Utilisateurs.")
+  }
+
+  // 1) Demande
+  const { data: dem, error: e1 } = await supabase
+    .from('economat_demandes')
+    .insert({ requester_user_id: user.id, category_id: categoryId || null, status: 'envoyee' })
+    .select('id')
+    .single()
+  if (e1) throw e1
+
+  // 2) Lignes
+  const { error: e2 } = await supabase
+    .from('economat_demande_lignes')
+    .insert(lines.map(l => ({
+      demande_id: dem.id,
+      article_id: l.articleId,
+      article_name: l.name,
+      unit: l.unit || null,
+      qty: l.qty,
+    })))
+  if (e2) throw e2
+
+  // 3) Tâche à chaque économe
+  const who = user.full_name || user.username || 'Employé'
+  const title = `🧾 Demande d'articles — ${who}`
+  const description = buildDemandeText(lines)
+  let firstTaskId = null
+  for (const eco of economes) {
+    const task = await createTask({ title, description, fromUserId: user.id, toUserId: eco.id })
+    if (!firstTaskId && task?.id) firstTaskId = task.id
+  }
+
+  // 4) Lier la tâche principale à la demande
+  if (firstTaskId) {
+    await supabase.from('economat_demandes').update({ task_id: firstTaskId }).eq('id', dem.id)
+  }
+
+  return { demandeId: dem.id, economes: economes.length }
 }
