@@ -627,7 +627,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVit
       </div>
 
       {/* 3 colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <ColumnSection title="VITRINE" count={vitrineItems.length} subtitle="envoyés par la vitrine">
           {vitrineItems.length === 0 ? (
             <EmptyHint>Aucun envoi</EmptyHint>
