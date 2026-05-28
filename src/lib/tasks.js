@@ -27,7 +27,7 @@ function normalizePhone(raw) {
 // Notifie le destinataire d'une tâche par WhatsApp. Non bloquant.
 // 1) Conversation ouverte (fenêtre 24 h) -> message de session (gratuit).
 // 2) Sinon -> modèle Wati générique.
-async function notifyTaskWhatsapp(toUserId, fromName, title) {
+async function notifyTaskWhatsapp(toUserId, fromUserId, fromName, title) {
   try {
     const { data: u } = await supabase.from('profiles').select('whatsapp').eq('id', toUserId).maybeSingle()
     const phone = normalizePhone(u?.whatsapp)
@@ -37,13 +37,13 @@ async function notifyTaskWhatsapp(toUserId, fromName, title) {
     if (conv?.id) {
       const r = await fetch('/api/wati-webhook?action=send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: null, text }),
+        body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: fromUserId, text }),
       })
       if (r.ok) return
     }
     await fetch('/api/wati-webhook?action=send-template', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientPhone: phone, templateName: WA_TASK_TEMPLATE, parameters: [{ name: '1', value: title }], userId: null }),
+      body: JSON.stringify({ clientPhone: phone, templateName: WA_TASK_TEMPLATE, parameters: [{ name: '1', value: title }], userId: fromUserId }),
     }).catch(() => {})
   } catch (e) {
     console.warn('[tasks] WhatsApp notif:', e.message)
@@ -137,7 +137,7 @@ export async function createTask({ title, description, fromUserId, toUserId, isU
   // Notif WhatsApp au destinataire (sauf si on se l'envoie à soi-même). Non bloquant.
   if (toUserId && toUserId !== fromUserId) {
     const fromName = data.from_user?.full_name || data.from_user?.username || ''
-    notifyTaskWhatsapp(toUserId, fromName, payload.title)
+    notifyTaskWhatsapp(toUserId, fromUserId, fromName, payload.title)
   }
 
   return data
