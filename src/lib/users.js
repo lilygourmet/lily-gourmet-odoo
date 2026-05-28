@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, created_at')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, created_at')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -36,6 +36,7 @@ export async function createUser({
   perm_admin_users = false,
   perm_conversations = false,
   perm_mark_payment_proof = false, perm_view_payments = false, perm_validate_payments = false,
+  economat_profil = null, perm_econome = false,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
     payload: {
@@ -72,6 +73,8 @@ export async function createUser({
           perm_mark_payment_proof,
           perm_view_payments,
           perm_validate_payments,
+          economat_profil,
+          perm_econome,
         })
         .eq('id', data.id)
     } catch (e) {
@@ -104,6 +107,7 @@ export async function updateUser(userId, {
   perm_admin_users,
   perm_conversations,
   perm_mark_payment_proof, perm_view_payments, perm_validate_payments,
+  economat_profil, perm_econome,
 }) {
   const updates = {}
   if (username !== undefined) updates.username = username
@@ -144,6 +148,8 @@ export async function updateUser(userId, {
   if (perm_mark_payment_proof !== undefined) updates.perm_mark_payment_proof = perm_mark_payment_proof
   if (perm_view_payments !== undefined) updates.perm_view_payments = perm_view_payments
   if (perm_validate_payments !== undefined) updates.perm_validate_payments = perm_validate_payments
+  if (economat_profil !== undefined) updates.economat_profil = economat_profil
+  if (perm_econome !== undefined) updates.perm_econome = perm_econome
 
   const { data, error } = await supabase
     .from('profiles')

@@ -426,6 +426,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },
     { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users) },
     { view: 'absences',         emoji: '🌴', label: 'Congés',           visible: !isLivreur(user) && (admin || !!user?.perm_hr) },
+    { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil) },
   ].filter(i => i.visible)
 
   // ============================================================
@@ -664,7 +665,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               </button>
               {showCog && (
                 <>
-                  <div className="absolute right-0 mt-1 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
+                  <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
                     <CogItem icon="🔑" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
                     <CogItem icon="👥" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
                     {admin && <CogItem icon="🎨" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}

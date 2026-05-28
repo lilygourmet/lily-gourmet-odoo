@@ -13,6 +13,7 @@ import StockEvening from './components/StockBoutique/StockEvening'
 import StockAudit from './components/StockBoutique/StockAudit'
 import StockGS from './components/StockBoutique/StockGS'
 import ChecklistView from './components/ChecklistView'
+import EconomatView from './components/Economat/EconomatView'
 import CaisseView from './components/Caisse/CaisseView'
 import TasksView from './components/Tasks/TasksView'
 import HRView from './components/HR/HRView'
@@ -232,6 +233,7 @@ function App() {
     if (activeView === 'absences') return <AbsencesWrapper {...navProps} />
     if (activeView === 'caisse') return <CaisseView {...navProps} />
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
+    if (activeView === 'economat') return <EconomatView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Récap, autres -> Tâches) pour ne jamais
     // exposer le calendrier à un user sans perm_calendar.

@@ -12,6 +12,7 @@ import {
   ROLE_LABELS,
   ROLE_COLORS,
 } from '../lib/users'
+import { ECONOMAT_PROFILS } from '../lib/economat'
 
 export default function AdminUsers({ currentUser, onClose }) {
   const [users, setUsers] = useState([])
@@ -131,6 +132,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_mark_payment_proof: formData.permMarkPaymentProof,
         perm_view_payments: formData.permViewPayments,
         perm_validate_payments: formData.permValidatePayments,
+        economat_profil: formData.economatProfil || null,
+        perm_econome: formData.permEconome,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -179,6 +182,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_mark_payment_proof: formData.permMarkPaymentProof,
         perm_view_payments: formData.permViewPayments,
         perm_validate_payments: formData.permValidatePayments,
+        economat_profil: formData.economatProfil || null,
+        perm_econome: formData.permEconome,
       })
       setEditingUser(null)
       await refresh()
@@ -675,6 +680,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     permMarkPaymentProof: initialData?.perm_mark_payment_proof !== undefined ? initialData.perm_mark_payment_proof : false,
     permViewPayments: initialData?.perm_view_payments !== undefined ? initialData.perm_view_payments : false,
     permValidatePayments: initialData?.perm_validate_payments !== undefined ? initialData.perm_validate_payments : false,
+    economatProfil: initialData?.economat_profil || '',
+    permEconome: initialData?.perm_econome !== undefined ? initialData.perm_econome : false,
   })
 
   function handleSubmit() {
@@ -1025,6 +1032,27 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
+        </div>
+
+        {/* Économat : profil (ouvre les catégories) + économe (reçoit les demandes) */}
+        <div className="mt-3 pt-3 border-t border-line">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Économat (demandes d'articles)</div>
+          <select
+            value={formData.economatProfil || ''}
+            onChange={e => update('economatProfil', e.target.value)}
+            className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux mb-2"
+          >
+            <option value="">— Aucun profil (pas d'accès) —</option>
+            {ECONOMAT_PROFILS.map(p => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+          <PermCheckbox
+            id="perm-econome"
+            label="📥 Économe (reçoit les demandes d'articles)"
+            checked={formData.permEconome}
+            onChange={v => update('permEconome', v)}
+          />
         </div>
       </div>
 

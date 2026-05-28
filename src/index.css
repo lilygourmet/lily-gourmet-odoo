@@ -12,6 +12,14 @@ body {
   margin: 0;
 }
 
+/* Empeche la page de depasser la largeur de l'ecran (pas de glissement
+   gauche/droite sur mobile quand on dezoome). 'clip' au lieu de 'hidden'
+   pour ne pas casser l'en-tete sticky. Les tableaux gardent leur propre
+   defilement interne (overflowX: auto). */
+html, body {
+  overflow-x: clip;
+}
+
 /* ============================================================
    IMPRESSION - regles @media print
    ============================================================ */
