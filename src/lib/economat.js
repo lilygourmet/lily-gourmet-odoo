@@ -201,10 +201,10 @@ function norm(s) {
 
 // Produits Odoo (via l'endpoint serveur). { q } = recherche, { ids } = refresh.
 export async function loadOdooProducts({ q = '', ids = null } = {}) {
-  const params = new URLSearchParams()
+  const params = new URLSearchParams({ economat: '1' })
   if (q) params.set('q', q)
   if (ids && ids.length) params.set('ids', ids.join(','))
-  const res = await fetch('/api/economat-odoo?' + params.toString())
+  const res = await fetch('/api/catalog-from-odoo?' + params.toString())
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || 'Erreur Odoo')
   return data.products || []

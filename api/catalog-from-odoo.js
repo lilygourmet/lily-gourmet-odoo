@@ -80,6 +80,10 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
 
+  // Mode économat : produits achetables MP-/P- (fusionné ici pour rester sous la
+  // limite de fonctions Vercel). GET /api/catalog-from-odoo?economat=1[&q=][&ids=]
+  if (req.query.economat) return handleEconomat(req, res)
+
   try {
     if (!process.env.ODOO_URL || !process.env.ODOO_USERNAME) {
       return res.status(500).json({ error: 'Server misconfigured (Odoo env vars manquantes)' })
@@ -219,6 +223,57 @@ export default async function handler(req, res) {
     })
   } catch (e) {
     console.error('[catalog-from-odoo] Erreur:', e)
+    return res.status(500).json({ error: e.message || 'Erreur serveur' })
+  }
+}
+
+// ============================================================
+// ÉCONOMAT — produits achetables (purchase_ok) préfixés MP-/P-
+// ============================================================
+function cleanEconomatName(name) {
+  if (!name) return ''
+  let s = String(name).replace(/^\[\d+\]\s*/, '').trim()  // retire le code [447]
+  s = s.replace(/^(MP-|P-)\s*/i, '').trim()               // retire le préfixe MP-/P-
+  return s
+}
+
+async function handleEconomat(req, res) {
+  try {
+    if (!process.env.ODOO_URL || !process.env.ODOO_USERNAME) {
+      return res.status(500).json({ error: 'Server misconfigured (Odoo env vars manquantes)' })
+    }
+    const q = (req.query.q || '').trim()
+    const idsParam = (req.query.ids || '').trim()
+    const ids = idsParam ? idsParam.split(',').map(s => parseInt(s, 10)).filter(Boolean) : null
+    const withImage = !!q || !!ids
+
+    const uid = await odooAuthenticate()
+
+    let domain
+    if (ids) {
+      domain = [['id', 'in', ids]]
+    } else {
+      domain = [['purchase_ok', '=', true], ['active', '=', true], '|', ['name', '=ilike', 'MP-%'], ['name', '=ilike', 'P-%']]
+      if (q) domain.push(['name', 'ilike', q])
+    }
+
+    const fields = ['id', 'name', 'display_name', 'uom_po_id']
+    if (withImage) fields.push('image_128')
+
+    const limit = ids ? ids.length : (q ? 60 : 2000)
+    const rows = await odooSearchRead(uid, 'product.product', domain, fields, { limit })
+
+    const products = rows.map(p => ({
+      odoo_id: p.id,
+      name: cleanEconomatName(p.display_name || p.name),
+      odoo_name: p.display_name || p.name,
+      unit: Array.isArray(p.uom_po_id) ? p.uom_po_id[1] : null,
+      image_url: (withImage && p.image_128) ? `data:image/png;base64,${p.image_128}` : null,
+    })).sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+
+    return res.status(200).json({ count: products.length, products })
+  } catch (e) {
+    console.error('[catalog-from-odoo economat] Erreur:', e)
     return res.status(500).json({ error: e.message || 'Erreur serveur' })
   }
 }
