@@ -13,6 +13,43 @@ const SEL = `
 const ATTACHMENT_BUCKET = 'task-attachments'
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 
+// Modèle Wati générique pour notifier une nouvelle tâche (à valider dans Wati).
+const WA_TASK_TEMPLATE = 'nouvelle_tache'
+
+// Numéro au format international (Maroc : 0xxxxxxxxx -> 212xxxxxxxxx)
+function normalizePhone(raw) {
+  let n = String(raw || '').replace(/\D/g, '')
+  if (!n) return ''
+  if (n.startsWith('0')) n = '212' + n.slice(1)
+  return n
+}
+
+// Notifie le destinataire d'une tâche par WhatsApp. Non bloquant.
+// 1) Conversation ouverte (fenêtre 24 h) -> message de session (gratuit).
+// 2) Sinon -> modèle Wati générique.
+async function notifyTaskWhatsapp(toUserId, fromName, title) {
+  try {
+    const { data: u } = await supabase.from('profiles').select('whatsapp').eq('id', toUserId).maybeSingle()
+    const phone = normalizePhone(u?.whatsapp)
+    if (!phone) return
+    const text = `📋 Nouvelle tâche${fromName ? ' de ' + fromName : ''} : ${title}`
+    const { data: conv } = await supabase.from('conversations').select('id').eq('client_phone', phone).maybeSingle()
+    if (conv?.id) {
+      const r = await fetch('/api/wati-webhook?action=send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: null, text }),
+      })
+      if (r.ok) return
+    }
+    await fetch('/api/wati-webhook?action=send-template', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientPhone: phone, templateName: WA_TASK_TEMPLATE, parameters: [{ name: '1', value: title }], userId: null }),
+    }).catch(() => {})
+  } catch (e) {
+    console.warn('[tasks] WhatsApp notif:', e.message)
+  }
+}
+
 /**
 * Charge les tâches reçues par un user.
 */
@@ -96,6 +133,13 @@ export async function createTask({ title, description, fromUserId, toUserId, isU
     .select(SEL)
     .single()
   if (error) throw error
+
+  // Notif WhatsApp au destinataire (sauf si on se l'envoie à soi-même). Non bloquant.
+  if (toUserId && toUserId !== fromUserId) {
+    const fromName = data.from_user?.full_name || data.from_user?.username || ''
+    notifyTaskWhatsapp(toUserId, fromName, payload.title)
+  }
+
   return data
 }
 

@@ -426,7 +426,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },
     { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users) },
     { view: 'absences',         emoji: '🌴', label: 'Congés',           visible: !isLivreur(user) && (admin || !!user?.perm_hr) },
-    { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil) },
+    { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil || !!user?.perm_econome) },
   ].filter(i => i.visible)
 
   // ============================================================

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
 import { loadCategoriesForUser, loadCategoryContent, createDemande, loadMyDemandes } from '../../lib/economat'
+import EconomatManageModal from './EconomatManageModal'
 
 // Écran employé : demande d'articles à l'économat.
 // L'employé entre directement sur les articles de sa catégorie (switch si plusieurs).
@@ -18,6 +19,8 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const [flash, setFlash] = useState('')
   const [showHistory, setShowHistory] = useState(false)
   const [myDemandes, setMyDemandes] = useState(null)  // null = pas encore chargé
+  const [showManage, setShowManage] = useState(false)
+  const canManage = user?.role === 'admin' || !!user?.perm_econome
 
   useEffect(() => {
     (async () => {
@@ -106,6 +109,24 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
     }
   }
 
+  // Recharge la structure après une modif dans l'écran de gestion.
+  async function reloadStructure() {
+    try {
+      const cats = await loadCategoriesForUser(user)
+      setCategories(cats)
+      if (activeCat && cats.find(c => c.id === activeCat)) {
+        setContent(await loadCategoryContent(activeCat))
+      } else if (cats.length > 0) {
+        setActiveCat(cats[0].id)
+      } else {
+        setActiveCat(null)
+        setContent({ groups: [], ungrouped: [] })
+      }
+    } catch (e) {
+      console.error('[Économat] reload', e)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-cream pb-28">
       <AppHeader
@@ -129,10 +150,18 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
               <span className="text-[20px]">🧾</span>
               <span className="font-fraunces italic text-[18px] text-ink">Demande d'articles</span>
             </div>
-            <button
-              onClick={openHistory}
-              className="px-3 py-1 rounded-full border border-line text-ink text-[12px] font-medium hover:border-bordeaux hover:bg-cream-warm transition-colors"
-            >🕐 Mes demandes</button>
+            <div className="flex items-center gap-1.5">
+              {canManage && (
+                <button
+                  onClick={() => setShowManage(true)}
+                  className="px-3 py-1 rounded-full border border-line text-ink text-[12px] font-medium hover:border-bordeaux hover:bg-cream-warm transition-colors"
+                >⚙️ Gérer</button>
+              )}
+              <button
+                onClick={openHistory}
+                className="px-3 py-1 rounded-full border border-line text-ink text-[12px] font-medium hover:border-bordeaux hover:bg-cream-warm transition-colors"
+              >🕐 Mes demandes</button>
+            </div>
           </div>
           {categories.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
@@ -219,6 +248,10 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
 
       {showHistory && (
         <HistoryModal demandes={myDemandes} onClose={() => setShowHistory(false)} />
+      )}
+
+      {showManage && (
+        <EconomatManageModal onClose={() => setShowManage(false)} onChanged={reloadStructure} />
       )}
     </div>
   )

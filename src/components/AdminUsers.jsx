@@ -1037,6 +1037,18 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
           </select>
         </div>
 
+        {/* Numéro WhatsApp (pour recevoir les notifs de tâches) */}
+        <div className="mt-3 pt-3 border-t border-line">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Numéro WhatsApp (notifs de tâches)</div>
+          <input
+            type="text"
+            value={formData.whatsapp}
+            onChange={e => update('whatsapp', e.target.value)}
+            placeholder="ex. 0661114878"
+            className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
+          />
+        </div>
+
         {/* Économat : profil (ouvre les catégories) + économe (reçoit les demandes) */}
         <div className="mt-3 pt-3 border-t border-line">
           <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Économat (demandes d'articles)</div>
@@ -1056,15 +1068,6 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             checked={formData.permEconome}
             onChange={v => update('permEconome', v)}
           />
-          {formData.permEconome && (
-            <input
-              type="text"
-              value={formData.whatsapp}
-              onChange={e => update('whatsapp', e.target.value)}
-              placeholder="Numéro WhatsApp (ex. 0661114878)"
-              className="w-full mt-2 px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
-            />
-          )}
         </div>
       </div>
 

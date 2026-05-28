@@ -109,9 +109,6 @@ export async function loadMyDemandes(userId) {
   return data || []
 }
 
-// Nom du modèle WhatsApp à créer dans Wati (catégorie Utility, avec un {{1}}).
-const WA_TEMPLATE = 'economat_demande'
-
 // Comptes économes (reçoivent les demandes)
 export async function loadEconomes() {
   const { data, error } = await supabase
@@ -121,58 +118,6 @@ export async function loadEconomes() {
     .eq('active', true)
   if (error) throw error
   return data || []
-}
-
-// Numéro au format international (Maroc : 0xxxxxxxxx -> 212xxxxxxxxx)
-function normalizePhone(raw) {
-  let n = String(raw || '').replace(/\D/g, '')
-  if (!n) return ''
-  if (n.startsWith('0')) n = '212' + n.slice(1)
-  return n
-}
-
-// Notifie les économes par WhatsApp. Non bloquant : si ça échoue, la tâche reste OK.
-// 1) Si une conversation est déjà ouverte (fenêtre 24 h) → message de session (gratuit).
-// 2) Sinon → modèle Wati (à valider une fois dans Wati).
-async function notifyEconomesWhatsapp(economes, who, userId) {
-  const text = `🧾 Nouvelle demande d'articles de ${who}. Ouvre l'app → Tâches pour la traiter.`
-  for (const eco of economes) {
-    const phone = normalizePhone(eco.whatsapp)
-    if (!phone) continue
-    try {
-      // 1) Conversation ouverte ? -> message de session
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('client_phone', phone)
-        .maybeSingle()
-      if (conv?.id) {
-        const r = await fetch('/api/wati-webhook?action=send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId, text }),
-        })
-        if (r.ok) continue
-      }
-      // 2) Sinon -> modèle
-      const rt = await fetch('/api/wati-webhook?action=send-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientPhone: phone,
-          templateName: WA_TEMPLATE,
-          parameters: [{ name: '1', value: who }],
-          userId,
-        }),
-      })
-      if (!rt.ok) {
-        const d = await rt.json().catch(() => ({}))
-        console.warn('[economat] WhatsApp non envoyé:', d.error || rt.status)
-      }
-    } catch (e) {
-      console.warn('[economat] WhatsApp erreur:', e.message)
-    }
-  }
 }
 
 // Texte récap lisible, groupé par catégorie (pour la tâche + l'impression)
@@ -241,8 +186,157 @@ export async function createDemande({ user, categoryId, lines }) {
     await supabase.from('economat_demandes').update({ task_id: firstTaskId }).eq('id', dem.id)
   }
 
-  // 5) Notif WhatsApp (non bloquant)
-  await notifyEconomesWhatsapp(economes, who, user.id)
+  // La notif WhatsApp au(x) économe(s) est gérée par createTask (notif générique).
 
   return { demandeId: dem.id, economes: economes.length }
+}
+
+// ============================================================
+// GESTION (admin + économe) : catégories / groupes / articles + Odoo
+// ============================================================
+
+function norm(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+// Produits Odoo (via l'endpoint serveur). { q } = recherche, { ids } = refresh.
+export async function loadOdooProducts({ q = '', ids = null } = {}) {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  if (ids && ids.length) params.set('ids', ids.join(','))
+  const res = await fetch('/api/economat-odoo?' + params.toString())
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || 'Erreur Odoo')
+  return data.products || []
+}
+
+// ---- Catégories ----
+export async function loadAllCategories() {
+  const { data, error } = await supabase
+    .from('economat_categories')
+    .select('id, name, display_order')
+    .order('display_order')
+  if (error) throw error
+  return data || []
+}
+export async function createCategory(name) {
+  const { data: max } = await supabase.from('economat_categories')
+    .select('display_order').order('display_order', { ascending: false }).limit(1).maybeSingle()
+  const { data, error } = await supabase.from('economat_categories')
+    .insert({ name: name.trim(), display_order: (max?.display_order || 0) + 10 })
+    .select().single()
+  if (error) throw error
+  return data
+}
+export async function deleteCategory(id) {
+  const { error } = await supabase.from('economat_categories').delete().eq('id', id)
+  if (error) throw error
+}
+export async function loadCategoryProfils(categoryId) {
+  const { data, error } = await supabase.from('economat_profil_categories').select('profil').eq('category_id', categoryId)
+  if (error) throw error
+  return (data || []).map(r => r.profil)
+}
+export async function setCategoryProfils(categoryId, profils) {
+  await supabase.from('economat_profil_categories').delete().eq('category_id', categoryId)
+  if (profils.length) {
+    const { error } = await supabase.from('economat_profil_categories')
+      .insert(profils.map(p => ({ profil: p, category_id: categoryId })))
+    if (error) throw error
+  }
+}
+
+// ---- Groupes ----
+export async function createGroup(categoryId, name) {
+  const { data: max } = await supabase.from('economat_groups')
+    .select('display_order').eq('category_id', categoryId).order('display_order', { ascending: false }).limit(1).maybeSingle()
+  const { data, error } = await supabase.from('economat_groups')
+    .insert({ category_id: categoryId, name: name.trim(), display_order: (max?.display_order || 0) + 10 })
+    .select().single()
+  if (error) throw error
+  return data
+}
+export async function deleteGroup(id) {
+  const { error } = await supabase.from('economat_groups').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---- Articles (gestion) ----
+export async function loadCategoryManage(categoryId) {
+  const [groupsRes, articlesRes] = await Promise.all([
+    supabase.from('economat_groups').select('id, name, display_order').eq('category_id', categoryId).order('display_order'),
+    supabase.from('economat_articles').select('id, name, unit, photo_url, group_id, active, odoo_product_id, display_order').eq('category_id', categoryId).order('display_order'),
+  ])
+  if (groupsRes.error) throw groupsRes.error
+  if (articlesRes.error) throw articlesRes.error
+  return { groups: groupsRes.data || [], articles: articlesRes.data || [] }
+}
+export async function addArticleFromOdoo({ categoryId, groupId, odoo }) {
+  const { data: max } = await supabase.from('economat_articles')
+    .select('display_order').eq('category_id', categoryId).order('display_order', { ascending: false }).limit(1).maybeSingle()
+  const { data, error } = await supabase.from('economat_articles').insert({
+    category_id: categoryId,
+    group_id: groupId || null,
+    name: odoo.name,
+    unit: odoo.unit || null,
+    photo_url: odoo.image_url || null,
+    odoo_product_id: odoo.odoo_id,
+    odoo_name: odoo.odoo_name || odoo.name,
+    display_order: (max?.display_order || 0) + 10,
+  }).select().single()
+  if (error) throw error
+  return data
+}
+export async function setArticleActive(id, active) {
+  const { error } = await supabase.from('economat_articles').update({ active }).eq('id', id)
+  if (error) throw error
+}
+export async function deleteArticle(id) {
+  const { error } = await supabase.from('economat_articles').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---- Synchronisation Odoo : rattache par nom (articles non liés) puis maj nom/unité/photo ----
+export async function syncWithOdoo() {
+  // 1) Rattachement automatique par nom des articles sans lien Odoo
+  const { data: arts, error } = await supabase.from('economat_articles').select('id, name, odoo_product_id')
+  if (error) throw error
+  const unlinked = (arts || []).filter(a => !a.odoo_product_id)
+  let linked = 0, ambiguous = 0
+  if (unlinked.length) {
+    const all = await loadOdooProducts({})
+    const byName = new Map()
+    for (const p of all) {
+      const k = norm(p.name)
+      if (!byName.has(k)) byName.set(k, [])
+      byName.get(k).push(p)
+    }
+    for (const a of unlinked) {
+      const m = byName.get(norm(a.name)) || []
+      if (m.length === 1) {
+        const { error: e } = await supabase.from('economat_articles')
+          .update({ odoo_product_id: m[0].odoo_id, odoo_name: m[0].odoo_name }).eq('id', a.id)
+        if (!e) linked++
+      } else if (m.length > 1) ambiguous++
+    }
+  }
+
+  // 2) Rafraîchit nom/unité/photo de tous les articles liés
+  const { data: now } = await supabase.from('economat_articles').select('id, odoo_product_id').not('odoo_product_id', 'is', null)
+  const ids = [...new Set((now || []).map(a => a.odoo_product_id))]
+  const byId = new Map()
+  for (let i = 0; i < ids.length; i += 100) {
+    const prods = await loadOdooProducts({ ids: ids.slice(i, i + 100) })
+    for (const p of prods) byId.set(p.odoo_id, p)
+  }
+  let updated = 0
+  for (const a of (now || [])) {
+    const p = byId.get(a.odoo_product_id)
+    if (!p) continue
+    const { error: e } = await supabase.from('economat_articles')
+      .update({ name: p.name, unit: p.unit || null, photo_url: p.image_url || null, odoo_name: p.odoo_name }).eq('id', a.id)
+    if (!e) updated++
+  }
+
+  return { linked, ambiguous, updated }
 }
