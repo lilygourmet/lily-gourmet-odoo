@@ -23,7 +23,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
   const isSentToSelf = task.from_user_id === currentUserId && task.to_user_id === currentUserId
   const isReceived = task.to_user_id === currentUserId
   const isDone = task.status === 'done'
-  const canUndo = isDone && task.from_user_id === currentUserId
+  const canUndo = isDone && (task.from_user_id === currentUserId || task.to_user_id === currentUserId)
   // Expéditeur peut modifier une tâche non faite
   const canEdit = !isDone && task.from_user_id === currentUserId
   const wasEdited = (task.edited_count || 0) > 0
@@ -270,7 +270,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                   ↩ Défaire (remettre à faire)
                 </button>
                 <div style={{ marginTop: 8, fontSize: 10, color: '#8a7a70', textAlign: 'center' }}>
-                  Seul l'expéditeur peut défaire
+                  Remet la tâche en « à faire »
                 </div>
               </>
             )}

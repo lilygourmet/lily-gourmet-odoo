@@ -186,12 +186,12 @@ export async function markTaskDone(taskId) {
 export async function undoTaskDone(taskId, currentUserId) {
   const { data: before, error: errBefore } = await supabase
     .from('tasks')
-    .select('from_user_id')
+    .select('from_user_id, to_user_id')
     .eq('id', taskId)
     .single()
   if (errBefore) throw errBefore
-  if (before.from_user_id !== currentUserId) {
-    throw new Error('Seul l\'expéditeur peut défaire une tâche')
+  if (before.from_user_id !== currentUserId && before.to_user_id !== currentUserId) {
+    throw new Error('Tu ne peux défaire que tes propres tâches (envoyées ou reçues)')
   }
 
   const { data, error } = await supabase
