@@ -232,7 +232,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
               disabled={downloading}
               className="text-[12px] px-4 py-1.5 bg-bordeaux text-cream hover:bg-bordeaux-deep rounded-full font-medium disabled:opacity-50"
             >
-              {downloading ? '⏳ Génération...' : '🖨 Télécharger ZPL'}
+              {downloading ? 'Génération...' : 'Télécharger ZPL'}
             </button>
           </div>
         </div>

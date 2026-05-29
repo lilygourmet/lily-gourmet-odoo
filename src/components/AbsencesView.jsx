@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadAbsences, createAbsence, deleteAbsence } from '../lib/absences'
+import { Trash2 } from 'lucide-react'
 
 const TYPES = ['Congé payé', 'Sans solde', 'Maladie', 'Récupération']
 
@@ -72,7 +73,7 @@ export default function AbsencesView({ user }) {
   return (
     <div className="max-w-[1100px] mx-auto px-5 py-5">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <h1 className="font-fraunces italic text-[26px] text-ink">🌴 Congés / Absences</h1>
+        <h1 className="font-fraunces italic text-[26px] text-ink">Congés / Absences</h1>
         <button
           onClick={() => { resetForm(); setError(''); setShowForm(true) }}
           className="px-4 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-full hover:bg-bordeaux-deep flex-shrink-0"
@@ -118,7 +119,7 @@ export default function AbsencesView({ user }) {
                       </div>
                       {a.reason && <div className="text-[12px] text-ink-mute mt-0.5 whitespace-pre-wrap break-words">{a.reason}</div>}
                     </div>
-                    <button onClick={() => handleDelete(a)} className="text-[12px] text-bordeaux hover:underline flex-shrink-0" title="Supprimer">🗑️</button>
+                    <button onClick={() => handleDelete(a)} className="text-ink-mute hover:text-red-600 flex-shrink-0" title="Supprimer"><Trash2 size={14} strokeWidth={1.8} /></button>
                   </div>
                 ))}
               </div>
@@ -131,7 +132,7 @@ export default function AbsencesView({ user }) {
       {showForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => !saving && setShowForm(false)}>
           <div className="bg-cream rounded-2xl w-full max-w-sm shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="font-fraunces italic text-[18px] text-ink mb-3">🌴 Ajouter une absence</h3>
+            <h3 className="font-fraunces italic text-[18px] text-ink mb-3">Ajouter une absence</h3>
 
             <label className="block text-[11px] font-medium text-ink-soft mb-1">Personne</label>
             <input type="text" value={person} onChange={e => setPerson(e.target.value)} autoFocus placeholder="Nom de la personne"
