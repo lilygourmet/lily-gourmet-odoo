@@ -1,6 +1,10 @@
 {
   "rewrites": [
     { "source": "/api/push-send", "destination": "/api/push?action=send" },
-    { "source": "/api/push-subscribe", "destination": "/api/push?action=subscribe" }
+    { "source": "/api/push-subscribe", "destination": "/api/push?action=subscribe" },
+    { "source": "/api/task-reminders", "destination": "/api/wati-webhook?action=task-reminders" }
+  ],
+  "crons": [
+    { "path": "/api/task-reminders", "schedule": "0 7 * * *" }
   ]
 }

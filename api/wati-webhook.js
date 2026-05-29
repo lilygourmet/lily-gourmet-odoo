@@ -25,12 +25,15 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.query?.action !== 'task-reminders') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
   if (!supabaseUrl || !supabaseServiceKey) {
     return res.status(500).json({ error: 'Supabase env vars missing' })
   }
+
+  // Rappels quotidiens : déclenché par le cron Vercel (méthode GET autorisée).
+  if (req.query?.action === 'task-reminders') return handleTaskReminders(req, res)
 
   // Aiguillage selon ?action= ; sans action = réception entrante (appel de Wati)
   const action = req.query?.action
@@ -499,6 +502,106 @@ async function getOrCreateConversation(supabase, phone, name) {
     throw error
   }
   return created
+}
+
+// ============================================================
+// RAPPELS QUOTIDIENS — cron Vercel (GET /api/task-reminders)
+// Pour chaque destinataire ayant des tâches « à faire » + un numéro WhatsApp,
+// envoie UN message récapitulatif. Session si conversation ouverte, sinon modèle.
+// ============================================================
+async function handleTaskReminders(req, res) {
+  // Sécurité : autorisé seulement si déclenché par le cron Vercel (en-tête
+  // x-vercel-cron) ou avec le bon CRON_SECRET.
+  const cronSecret = process.env.CRON_SECRET
+  const authed = !!req.headers['x-vercel-cron']
+    || (cronSecret && (req.headers.authorization === `Bearer ${cronSecret}` || req.query.secret === cronSecret))
+  if (!authed) return res.status(401).json({ error: 'unauthorized' })
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  try {
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('id, title, to_user_id, to_user:profiles!tasks_to_user_id_fkey(whatsapp, full_name, username)')
+      .eq('status', 'todo')
+      .limit(1000)
+    if (error) throw error
+
+    // Regroupe par destinataire (un seul message par personne)
+    const byUser = new Map()
+    for (const t of (tasks || [])) {
+      const phone = t.to_user?.whatsapp
+      if (!phone) continue
+      if (!byUser.has(t.to_user_id)) byUser.set(t.to_user_id, { phone, titles: [] })
+      byUser.get(t.to_user_id).titles.push(t.title)
+    }
+
+    let reminded = 0
+    for (const { phone, titles } of byUser.values()) {
+      const n = titles.length
+      const list = titles.slice(0, 8).map(x => '• ' + x).join('\n')
+      const text = `⏰ Rappel : tu as ${n} tâche${n > 1 ? 's' : ''} à faire :\n${list}${n > 8 ? '\n…' : ''}`
+      const ok = await sendReminderWhatsapp(supabase, phone, text)
+      if (ok) reminded++
+    }
+    return res.status(200).json({ ok: true, people: byUser.size, reminded })
+  } catch (e) {
+    console.error('[task-reminders]', e)
+    return res.status(500).json({ error: e.message || 'Erreur serveur' })
+  }
+}
+
+// Envoi WhatsApp serveur : message de session d'abord (fenêtre 24 h), sinon modèle.
+async function sendReminderWhatsapp(supabase, rawPhone, text) {
+  const apiToken = process.env.WATI_API_TOKEN
+  const apiEndpoint = process.env.WATI_API_ENDPOINT
+  if (!apiToken || !apiEndpoint) return false
+  const number = String(rawPhone).replace(/\D/g, '').replace(/^0/, '212')
+  const base = apiEndpoint.replace(/\/$/, '')
+  const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
+
+  // 1) Message de session (gratuit, si le client a écrit dans les 24 h)
+  try {
+    const qs = new URLSearchParams({ messageText: text }).toString()
+    const r = await fetch(`${base}/api/v1/sendSessionMessage/${number}?${qs}`, {
+      method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' },
+    })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok && d?.result !== false) {
+      await traceOutgoing(supabase, number, text)
+      return true
+    }
+  } catch { /* on tente le modèle */ }
+
+  // 2) Modèle (hors fenêtre 24 h)
+  try {
+    const r = await fetch(`${base}/api/v1/sendTemplateMessage/${number}`, {
+      method: 'POST',
+      headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        template_name: 'nouvelle_tache',
+        broadcast_name: `rappel_${Date.now()}`,
+        parameters: [{ name: '1', value: text.replace(/\n/g, ' ').slice(0, 250) }],
+      }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok && d?.result !== false) {
+      await traceOutgoing(supabase, number, text)
+      return true
+    }
+  } catch { /* abandon silencieux */ }
+  return false
+}
+
+// Trace le message sortant dans le fil de conversation correspondant (si présent).
+async function traceOutgoing(supabase, number, body) {
+  try {
+    const conv = await getOrCreateConversation(supabase, number, null)
+    const sentAt = new Date().toISOString()
+    await supabase.from('messages').insert({
+      conversation_id: conv.id, sender_type: 'agent', body, sent_at: sentAt,
+    })
+    await supabase.from('conversations').update({ last_message_at: sentAt, updated_at: sentAt }).eq('id', conv.id)
+  } catch { /* trace best-effort */ }
 }
 
 // Wati envoie souvent un epoch en secondes ; on tolère ms et chaîne ISO.
