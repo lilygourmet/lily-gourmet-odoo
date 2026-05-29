@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lily Gourmet — style final</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,600&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1a0f0a; --ink-soft:#4a3a30; --ink-mute:#8a7a70;
+    --cream:#faf7f2; --cream-deep:#f1eadd; --white:#fff;
+    --bordeaux:#993556; --bordeaux-deep:#7a2a44;
+    --gold:#b8893c; --gold-pale:#f0deb8;
+    --line:#e5d8c3; --ok:#2f6b2f; --ok-bg:#eaf3de; --danger:#A32D2D; --danger-bg:#FCEBEB;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:'Geist',sans-serif;-webkit-font-smoothing:antialiased}
+  .page{max-width:1000px;margin:0 auto;padding:24px 18px 70px}
+  .note{font-family:'Fraunces',serif;font-style:italic;font-size:24px;margin:0 0 2px}
+  .note-sub{color:var(--ink-soft);font-size:13px;margin:0 0 26px}
+
+  /* ---- briques du style final ---- */
+  .title{font-family:'Fraunces',serif;font-style:italic;font-size:26px;margin:0 0 4px}
+  .title .count{font-family:'Geist';font-style:normal;font-size:13px;color:var(--ink-mute);font-weight:400}
+  .lead{font-size:13px;color:var(--ink-soft);margin:0 0 18px}
+  .mono{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--bordeaux);font-weight:600;margin:18px 0 10px}
+
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px}
+  .tab{font-size:13px;font-weight:500;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:var(--white);color:var(--ink);cursor:pointer}
+  .tab.active{background:var(--bordeaux);border-color:var(--bordeaux);color:var(--cream)}
+
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 10px;border-radius:999px}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .b-todo{background:#F6E7EC;color:var(--bordeaux)} .b-todo .dot{background:var(--bordeaux)}
+  .b-urgent{background:var(--danger-bg);color:var(--danger)} .b-urgent .dot{background:var(--danger)}
+  .b-done{background:var(--ok-bg);color:var(--ok)} .b-done .dot{background:var(--ok)}
+
+  /* carte premium */
+  .card{background:var(--white);border-radius:16px;padding:16px 18px;margin-bottom:14px;
+        box-shadow:0 6px 16px rgba(122,42,68,.08);border-left:4px solid var(--bordeaux)}
+  .card.done{border-left-color:var(--ok)}
+  .card .ttl{font-size:15px;font-weight:600;margin:10px 0 5px}
+  .card .meta{font-size:12px;color:var(--ink-mute)}
+
+  /* bouton rectangulaire (style 3) */
+  .btn{display:inline-block;background:var(--bordeaux);color:var(--cream);border:none;
+       padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn-ghost{background:var(--white);color:var(--bordeaux);border:1px solid var(--bordeaux)}
+
+  /* soldes (caisse) */
+  .solde-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:8px}
+  .solde{background:var(--white);border-radius:16px;padding:16px 18px;box-shadow:0 6px 16px rgba(122,42,68,.07)}
+  .solde .lab{font-size:12px;color:var(--ink-soft);margin:0 0 6px}
+  .solde .val{font-family:'Fraunces',serif;font-size:24px;font-weight:600}
+  .pos{color:var(--ok)} .neg{color:var(--danger)}
+
+  /* lignes de mouvements */
+  .mvt{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--white);
+       border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+  .mvt .left .l1{font-size:13px;font-weight:500}
+  .mvt .left .l2{font-size:11px;color:var(--ink-mute);margin-top:2px}
+  .mvt .amt{font-size:14px;font-weight:600;white-space:nowrap}
+
+  .sep{height:1px;background:var(--line);margin:34px 0;border:none}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 class="note">Lily Gourmet — style final</h1>
+  <p class="note-sub">Style chaleureux/premium · boutons rectangulaires · sans émoticône. Deux écrans en exemple.</p>
+
+  <!-- ============ TÂCHES ============ -->
+  <div class="title">Tâches <span class="count">· 3 à faire · 2 terminées</span></div>
+  <p class="lead">Clique une carte pour l'ouvrir.</p>
+
+  <div class="tabs">
+    <span class="tab active">À faire</span>
+    <span class="tab">Terminées</span>
+    <span class="tab">Équipe</span>
+    <span class="tab">Envoyées par moi</span>
+  </div>
+
+  <div class="mono">Mai</div>
+  <div class="card">
+    <span class="badge b-todo"><span class="dot"></span>À faire</span>
+    <span class="badge b-urgent"><span class="dot"></span>Urgent</span>
+    <div class="ttl">Acheter la farine</div>
+    <div class="meta">De Layla · 12 mai</div>
+  </div>
+  <div class="card done">
+    <span class="badge b-done"><span class="dot"></span>Fait</span>
+    <div class="ttl">Ranger le stock</div>
+    <div class="meta">De Hamid · 11 mai</div>
+  </div>
+  <button class="btn">Nouvelle tâche</button>
+
+  <hr class="sep" />
+
+  <!-- ============ CAISSE ============ -->
+  <div class="title">Caisse</div>
+  <p class="lead">Suivi de l'argent qui entre et sort.</p>
+
+  <div class="tabs">
+    <span class="tab active">Caisses gérées</span>
+    <span class="tab">Enveloppes</span>
+    <span class="tab">Suivi</span>
+    <span class="tab">Salaires</span>
+    <span class="tab">Recherche</span>
+    <span class="tab">Paramètres</span>
+  </div>
+
+  <div class="mono">Soldes</div>
+  <div class="solde-grid">
+    <div class="solde"><div class="lab">Caisse Meriem</div><div class="val pos">3 250 DH</div></div>
+    <div class="solde"><div class="lab">Caisse Layla LG</div><div class="val pos">1 480 DH</div></div>
+    <div class="solde"><div class="lab">Banque</div><div class="val neg">− 600 DH</div></div>
+  </div>
+
+  <div class="mono">Derniers mouvements</div>
+  <div class="mvt">
+    <div class="left"><div class="l1">Versement enveloppe POS</div><div class="l2">Meriem · 12 mai</div></div>
+    <div class="amt pos">+ 1 200 DH</div>
+  </div>
+  <div class="mvt">
+    <div class="left"><div class="l1">Supermarché / courses</div><div class="l2">Sortie · 12 mai · facture à récupérer</div></div>
+    <div class="amt neg">− 340 DH</div>
+  </div>
+  <div class="mvt">
+    <div class="left"><div class="l1">Avance Hamid</div><div class="l2">Sortie · 11 mai</div></div>
+    <div class="amt neg">− 500 DH</div>
+  </div>
+
+  <div style="margin-top:14px;display:flex;gap:10px">
+    <button class="btn">Nouveau mouvement</button>
+    <button class="btn btn-ghost">Clôturer le mois</button>
+  </div>
+</div>
+</body>
+</html>

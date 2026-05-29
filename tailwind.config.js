@@ -39,6 +39,14 @@ export default {
         },
         chocolate: '#3d2418',
         ok: '#4a7a3a',
+        success: {
+          DEFAULT: '#2f6b2f',
+          bg: '#eaf3de',
+        },
+        danger: {
+          DEFAULT: '#a32d2d',
+          bg: '#fcebeb',
+        },
         line: '#e5d8c3',
       },
     },

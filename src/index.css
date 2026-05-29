@@ -21,6 +21,92 @@ html, body {
 }
 
 /* ============================================================
+   DESIGN SYSTEM — « chaleureux & premium »
+   Briques réutilisables (cartes, boutons, titres, onglets, pastilles).
+   Préfixe .lg- pour ne pas entrer en conflit avec Tailwind.
+   ============================================================ */
+.lg-title {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 24px;
+  line-height: 1.15;
+  color: #1a0f0a;
+  margin: 0;
+}
+.lg-lead { font-size: 13px; color: #4a3a30; margin: 4px 0 0; }
+.lg-mono {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #993556;
+  font-weight: 600;
+}
+
+/* Carte premium : coins arrondis, ombre douce, filet bordeaux à gauche */
+.lg-card {
+  background: #fff;
+  border: 1px solid #efe6d6;
+  border-left: 4px solid #993556;
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 6px 16px rgba(122, 42, 68, 0.07);
+}
+.lg-card.is-done { border-left-color: #2f6b2f; }
+
+/* Bouton rectangulaire (coins légèrement arrondis) */
+.lg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #993556;
+  color: #faf7f2;
+  border: 1px solid #993556;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.lg-btn:hover { background: #7a2a44; }
+.lg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.lg-btn--ghost { background: #fff; color: #993556; }
+.lg-btn--ghost:hover { background: #faf7f2; }
+
+/* Onglets / chips */
+.lg-tab {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid #e5d8c3;
+  background: #fff;
+  color: #1a0f0a;
+  cursor: pointer;
+}
+.lg-tab.is-active { background: #993556; border-color: #993556; color: #faf7f2; }
+
+/* Pastilles d'état (sans émoticône : point coloré + texte) */
+.lg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.lg-badge .lg-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.lg-badge--todo   { background: #f6e7ec; color: #993556; }
+.lg-badge--todo   .lg-dot { background: #993556; }
+.lg-badge--urgent { background: #fcebeb; color: #a32d2d; }
+.lg-badge--urgent .lg-dot { background: #a32d2d; }
+.lg-badge--done   { background: #eaf3de; color: #2f6b2f; }
+.lg-badge--done   .lg-dot { background: #2f6b2f; }
+
+/* ============================================================
    IMPRESSION - regles @media print
    ============================================================ */
 

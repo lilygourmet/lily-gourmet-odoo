@@ -89,7 +89,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       await createDemande({ user, categoryId: activeCat, lines })
       setQty({})
       setShowRecap(false)
-      setFlash('Demande envoyée à l\'économe ✅')
+      setFlash('Demande envoyée à l\'économe')
       setTimeout(() => setFlash(''), 4000)
     } catch (e) {
       alert('Erreur : ' + e.message)
@@ -138,29 +138,20 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
 
       {flash && (
         <div className="fixed top-16 inset-x-0 z-[90] flex justify-center px-4 pointer-events-none">
-          <div className="bg-emerald-600 text-white text-[13px] font-semibold px-4 py-2 rounded-full shadow-lg">{flash}</div>
+          <div className="bg-success text-white text-[13px] font-semibold px-4 py-2 rounded-full shadow-lg">{flash}</div>
         </div>
       )}
 
       {/* Sous-header : titre + switch catégorie si plusieurs */}
       <div className="bg-cream-warm/30 border-b border-line py-3 px-4">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[20px]">🧾</span>
-              <span className="font-fraunces italic text-[18px] text-ink">Demande d'articles</span>
-            </div>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className="lg-title">Demande d'articles</span>
             <div className="flex items-center gap-1.5">
               {canManage && (
-                <button
-                  onClick={() => setShowManage(true)}
-                  className="px-3 py-1 rounded-full border border-line text-ink text-[12px] font-medium hover:border-bordeaux hover:bg-cream-warm transition-colors"
-                >⚙️ Gérer</button>
+                <button onClick={() => setShowManage(true)} className="lg-tab">Gérer</button>
               )}
-              <button
-                onClick={openHistory}
-                className="px-3 py-1 rounded-full border border-line text-ink text-[12px] font-medium hover:border-bordeaux hover:bg-cream-warm transition-colors"
-              >🕐 Mes demandes</button>
+              <button onClick={openHistory} className="lg-tab">Mes demandes</button>
             </div>
           </div>
           {categories.length > 1 && (
@@ -169,11 +160,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                 <button
                   key={cat.id}
                   onClick={() => setActiveCat(cat.id)}
-                  className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors border ${
-                    activeCat === cat.id
-                      ? 'bg-bordeaux text-cream border-bordeaux'
-                      : 'bg-white text-ink-soft border-line hover:border-bordeaux/40'
-                  }`}
+                  className={`lg-tab ${activeCat === cat.id ? 'is-active' : ''}`}
                 >{cat.name}</button>
               ))}
             </div>
@@ -194,9 +181,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
           <div className="space-y-5">
             {content.groups.map(group => (
               <div key={group.id}>
-                <div className="font-mono text-[11px] tracking-[0.12em] uppercase text-bordeaux font-bold mb-2">
-                  {group.name}
-                </div>
+                <div className="lg-mono mb-2">{group.name}</div>
                 <div className="space-y-1.5">
                   {group.articles.map(a => (
                     <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)} />
@@ -206,7 +191,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
             ))}
             {content.ungrouped.length > 0 && (
               <div>
-                <div className="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-mute font-bold mb-2">Autres</div>
+                <div className="lg-mono mb-2" style={{ color: '#8a7a70' }}>Autres</div>
                 <div className="space-y-1.5">
                   {content.ungrouped.map(a => (
                     <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)} />
@@ -228,7 +213,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
             </div>
             <button
               onClick={() => setShowRecap(true)}
-              className="px-4 py-2 rounded-full bg-bordeaux text-cream text-[13px] font-medium hover:bg-bordeaux-deep transition-colors"
+              className="lg-btn"
             >Voir le récap</button>
           </div>
         </div>
@@ -306,12 +291,10 @@ function HistoryModal({ demandes, onClose }) {
 function ArticleRow({ article, qty, onChange }) {
   const active = qty > 0
   return (
-    <div className={`flex items-center gap-3 bg-white rounded-lg border p-2 transition-colors ${active ? 'border-bordeaux/50' : 'border-line/60'}`}>
+    <div className={`flex items-center gap-3 bg-white rounded-xl border border-line/70 p-2.5 shadow-sm transition-all ${active ? 'border-l-4 border-l-bordeaux' : ''}`}>
       {/* Emplacement photo (rempli depuis Odoo plus tard) */}
-      <div className="w-11 h-11 rounded-md bg-cream-warm border border-line/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
-        {article.photo_url
-          ? <img src={article.photo_url} alt="" className="w-full h-full object-cover" />
-          : <span className="text-[16px] opacity-30">📦</span>}
+      <div className="w-11 h-11 rounded-lg bg-cream-deep border border-line/40 flex-shrink-0 overflow-hidden">
+        {article.photo_url && <img src={article.photo_url} alt="" className="w-full h-full object-cover" />}
       </div>
 
       <div className="flex-1 min-w-0">
@@ -390,7 +373,7 @@ function RecapModal({ qty, articleInfo, onChange, onClose, onSend, sending }) {
           <button
             onClick={onSend}
             disabled={sending || lines.length === 0}
-            className="w-full py-2.5 rounded-full bg-bordeaux text-cream text-[13px] font-medium hover:bg-bordeaux-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="lg-btn w-full"
           >
             {sending ? 'Envoi...' : 'Envoyer la demande à l\'économe'}
           </button>
