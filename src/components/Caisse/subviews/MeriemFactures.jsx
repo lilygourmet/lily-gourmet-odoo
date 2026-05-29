@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { loadFacturesAll, loadCourseFacturesAll, recupererFacturesParCheque } from '../../../lib/caisse'
+import { loadFacturesAll, loadCourseFacturesAll, loadHamidFacturesAll, recupererFacturesParCheque } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 
 export default function MeriemFactures({ user }) {
@@ -15,10 +15,11 @@ export default function MeriemFactures({ user }) {
   useEffect(() => { reload() }, [])
 
   async function reload() {
-    const [mvts, courseDeps] = await Promise.all([loadFacturesAll(), loadCourseFacturesAll()])
+    const [mvts, courseDeps, hamidDeps] = await Promise.all([loadFacturesAll(), loadCourseFacturesAll(), loadHamidFacturesAll()])
     const norm = [
       ...mvts.map(f => ({ key: `mvt-${f.id}`, kind: 'mvt', id: f.id, amount: Number(f.amount || 0), date: f.mvt_date, label: f.label, category: f.category, status: f.facture_status, cheque: f.facture_cheque, recoveredAt: f.facture_recovered_at })),
       ...courseDeps.map(d => ({ key: `course-${d.id}`, kind: 'course', id: d.id, amount: Number(d.amount || 0), date: d.course?.given_date, label: `🛒 ${d.course?.person || 'Courses'}${d.label ? ' · ' + d.label : ''}`, category: d.category, status: d.facture_status, cheque: d.facture_cheque, recoveredAt: d.facture_recovered_at })),
+      ...hamidDeps.map(d => ({ key: `hamid-${d.id}`, kind: 'hamid', id: d.id, amount: Number(d.amount || 0), date: d.depense_date, label: `Hamid${d.label ? ' · ' + d.label : ''}`, category: d.category, status: d.facture_status, cheque: d.facture_cheque, recoveredAt: d.facture_recovered_at })),
     ]
     setItems(norm); setSelected(new Set())
   }

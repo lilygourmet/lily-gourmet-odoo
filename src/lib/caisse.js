@@ -801,13 +801,28 @@ export async function donnerAHamid({ amount, label, mvtDate, userId }) {
   })
 }
 
-export async function ajouterDepenseHamid({ amount, category, label, mvtDate, userId }) {
+export async function ajouterDepenseHamid({ amount, category, label, mvtDate, userId, isFacture = false }) {
   const { data, error } = await supabase
     .from('caisse_hamid_depenses')
-    .insert({ amount, category, label, depense_date: mvtDate, created_by: userId })
+    .insert({
+      amount, category, label, depense_date: mvtDate, created_by: userId,
+      is_facture: !!isFacture,
+      facture_status: isFacture ? 'pending' : null,
+    })
     .select().single()
   if (error) throw error
   return data
+}
+
+// Factures issues des dépenses de Hamid (marquées "à récupérer")
+export async function loadHamidFacturesAll() {
+  const { data, error } = await supabase
+    .from('caisse_hamid_depenses')
+    .select('*')
+    .eq('is_facture', true)
+    .order('depense_date', { ascending: false })
+  if (error) throw error
+  return data || []
 }
 
 export async function hamidRendArgent({ amount, label, mvtDate, userId }) {
@@ -976,12 +991,17 @@ export async function recupererFacturesParCheque({ items, cheque, date, userId }
 
   const mvtIds = items.filter(i => i.kind === 'mvt').map(i => i.id)
   const courseIds = items.filter(i => i.kind === 'course').map(i => i.id)
+  const hamidIds = items.filter(i => i.kind === 'hamid').map(i => i.id)
   if (mvtIds.length) {
     const { error } = await supabase.from('caisse_mouvements').update(patch).in('id', mvtIds)
     if (error) throw error
   }
   if (courseIds.length) {
     const { error } = await supabase.from('caisse_courses_depenses').update(patch).in('id', courseIds)
+    if (error) throw error
+  }
+  if (hamidIds.length) {
+    const { error } = await supabase.from('caisse_hamid_depenses').update(patch).in('id', hamidIds)
     if (error) throw error
   }
 

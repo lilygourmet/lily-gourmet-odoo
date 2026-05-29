@@ -30,6 +30,10 @@ export default function MeriemHamid({ user }) {
 
   const totalAvances  = useMemo(() => avances.reduce((s, a) => s + Number(a.amount), 0), [avances])
   const totalDepenses = useMemo(() => depenses.reduce((s, d) => s + Number(d.amount), 0), [depenses])
+  const totalFacturesPending = useMemo(
+    () => depenses.filter(d => d.is_facture && d.facture_status === 'pending').reduce((s, d) => s + Number(d.amount), 0),
+    [depenses]
+  )
 
   const negative = balance < 0
 
@@ -37,8 +41,8 @@ export default function MeriemHamid({ user }) {
     await donnerAHamid({ amount, label, mvtDate, userId: user.id })
     setShowAvance(false); reload()
   }
-  async function handleDepense({ amount, label, category, mvtDate }) {
-    await ajouterDepenseHamid({ amount, label, category, mvtDate, userId: user.id })
+  async function handleDepense({ amount, label, category, mvtDate, isFacture }) {
+    await ajouterDepenseHamid({ amount, label, category, mvtDate, isFacture, userId: user.id })
     setShowDepense(false); reload()
   }
   async function handleRend({ amount, label, mvtDate }) {
@@ -115,15 +119,29 @@ export default function MeriemHamid({ user }) {
           ))}
         </div>
         <div>
-          <div style={{ background: '#FCE9E8', color: '#99201E', padding: '10px 14px', borderRadius: 8, marginBottom: 10, display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 500 }}>
-            <span>↑ Dépenses de Hamid</span>
-            <span>{fmtMoney(totalDepenses)}</span>
+          <div style={{ background: '#FCE9E8', color: '#99201E', padding: '10px 14px', borderRadius: 8, marginBottom: 10, fontSize: 13, fontWeight: 500 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>↑ Dépenses de Hamid</span>
+              <span>{fmtMoney(totalDepenses)}</span>
+            </div>
+            {totalFacturesPending > 0 && (
+              <div style={{ fontWeight: 400, fontSize: 11, marginTop: 3 }}>dont {fmtMoney(totalFacturesPending)} à récupérer (factures)</div>
+            )}
           </div>
           {depenses.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune dépense ce mois</div>}
           {depenses.map(d => (
             <div key={d.id} style={miniRow}>
               <div>
-                <div style={{ fontSize: 13 }}>{d.label}</div>
+                <div style={{ fontSize: 13 }}>
+                  {d.label}
+                  {d.is_facture && (
+                    <span style={{
+                      marginLeft: 6, fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                      background: d.facture_status === 'recovered' ? '#E1F5EE' : '#FCE9E8',
+                      color: d.facture_status === 'recovered' ? '#085041' : '#99201E',
+                    }}>{d.facture_status === 'recovered' ? 'Facture récupérée' : 'Facture à récupérer'}</span>
+                  )}
+                </div>
                 <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(d.depense_date)} · {d.category || '—'}</div>
               </div>
               <div style={{ color: '#99201E', fontWeight: 500 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></div>

@@ -8,10 +8,11 @@ export default function AjoutDepenseHamidModal({ categories, onClose, onSubmit }
   const cats = (categories || []).filter(c => c.name !== 'Avance Hamid')
   const [category, setCategory] = useState(cats[0]?.name || '')
   const [mvtDate, setMvtDate] = useState(todayISO())
+  const [isFacture, setIsFacture] = useState(false)
 
   async function submit() {
     if (!amount || !label) { alert('Montant et libellé requis'); return }
-    await onSubmit({ amount: Number(amount), label, category, mvtDate })
+    await onSubmit({ amount: Number(amount), label, category, mvtDate, isFacture })
   }
 
   return (
@@ -27,8 +28,12 @@ export default function AjoutDepenseHamidModal({ categories, onClose, onSubmit }
       <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4, marginTop: 10 }}>Date</div>
       <input type="date" value={mvtDate} onChange={e => setMvtDate(e.target.value)} style={ipt} />
 
-      <div style={{ background: '#F4F0EA', padding: '10px 12px', borderRadius: 8, fontSize: 11, color: '#4a3a30', marginTop: 14 }}>
-        ℹ Cette dépense débite le solde Hamid uniquement (elle ne sort PAS une 2ème fois de la caisse Meriem).
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, padding: '10px 12px', background: '#FCE9E8', border: '0.5px solid #E5BFB6', borderRadius: 8, cursor: 'pointer' }}>
+        <input type="checkbox" checked={isFacture} onChange={e => setIsFacture(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+        <span style={{ fontSize: 12, color: '#99201E', fontWeight: 500 }}>Facture à récupérer</span>
+      </label>
+      <div style={{ background: '#F4F0EA', padding: '10px 12px', borderRadius: 8, fontSize: 11, color: '#4a3a30', marginTop: 10 }}>
+        ℹ Cette dépense débite le solde Hamid uniquement (elle ne sort PAS une 2ème fois de la caisse Meriem). Si « facture à récupérer » est cochée, elle apparaîtra dans l'onglet Factures.
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginTop: 16 }}>
