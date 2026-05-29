@@ -12,7 +12,6 @@
 //   <PrintButton mode="audit" />
 
 import { useState } from 'react'
-import { Printer } from 'lucide-react'
 import { loadDaySummary, loadStockDay, loadDayItems, buildAuditReport } from '../../lib/stockBoutique'
 
 const MODE_TITLES = {
@@ -118,9 +117,10 @@ export default function PrintButton({ mode = 'vitrine' }) {
         onClick={handleOpen}
         title="Imprimer l'historique"
         aria-label="Imprimer"
-        className="w-8 h-8 flex items-center justify-center rounded-md bg-cream/10 hover:bg-cream/25 border border-cream/30 hover:border-cream/60 transition-colors text-cream"
+        className="px-3 py-1.5 inline-flex items-center gap-1.5 rounded-full bg-cream/10 hover:bg-cream/25 border border-cream/30 hover:border-cream/60 transition-colors text-cream text-[11px] font-medium tracking-wider"
       >
-        <Printer size={15} />
+        <i className="ti ti-printer text-[13px]" aria-hidden="true"></i>
+        Imprimer
       </button>
 
       {open && (
@@ -187,9 +187,10 @@ export default function PrintButton({ mode = 'vitrine' }) {
                 type="button"
                 onClick={handlePrint}
                 disabled={!selectedDay || printing || days.length === 0}
-                className="px-4 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-md text-[12px] font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                className="px-4 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
               >
-                {printing ? 'Génération...' : <><Printer size={13} /> Imprimer</>}
+                <i className={`ti ${printing ? 'ti-loader-2 animate-spin' : 'ti-printer'} text-[13px]`} aria-hidden="true"></i>
+                {printing ? 'Génération…' : 'Imprimer'}
               </button>
             </div>
           </div>
