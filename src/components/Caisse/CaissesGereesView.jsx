@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Briefcase, Wallet, Car, FileText, HandCoins, ShoppingCart, BarChart3 } from 'lucide-react'
 import MeriemCaisse from './subviews/MeriemCaisse'
 import MeriemHamid from './subviews/MeriemHamid'
 import MeriemFactures from './subviews/MeriemFactures'
@@ -15,19 +16,19 @@ export default function CaissesGereesView({ user }) {
     <div>
       {/* Sous-onglets caisses */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 18 }}>
-        <button onClick={() => { setMain('meriem'); setSub('caisse') }} style={tabMain(main === 'meriem')}>💼 Meriem</button>
-        <button onClick={() => setMain('layla_lg')} style={tabMain(main === 'layla_lg')}>💼 Layla LG</button>
+        <button onClick={() => { setMain('meriem'); setSub('caisse') }} style={tabMain(main === 'meriem')}><Briefcase size={14} /> Meriem</button>
+        <button onClick={() => setMain('layla_lg')} style={tabMain(main === 'layla_lg')}><Briefcase size={14} /> Layla LG</button>
       </div>
 
       {main === 'meriem' && (
         <>
           <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: '#F4F0EA', borderRadius: 8, marginBottom: 18 }}>
-            <SubBtn active={sub === 'caisse'}   onClick={() => setSub('caisse')}>💰 Caisse</SubBtn>
-            <SubBtn active={sub === 'hamid'}    onClick={() => setSub('hamid')}>🚖 Hamid</SubBtn>
-            <SubBtn active={sub === 'factures'} onClick={() => setSub('factures')}>📄 Factures</SubBtn>
-            <SubBtn active={sub === 'avances'}  onClick={() => setSub('avances')}>💸 Avances</SubBtn>
-            <SubBtn active={sub === 'courses'}  onClick={() => setSub('courses')}>🛒 Courses</SubBtn>
-            <SubBtn active={sub === 'stats'}    onClick={() => setSub('stats')}>📊 Stats</SubBtn>
+            <SubBtn active={sub === 'caisse'}   onClick={() => setSub('caisse')}><Wallet size={14} /> Caisse</SubBtn>
+            <SubBtn active={sub === 'hamid'}    onClick={() => setSub('hamid')}><Car size={14} /> Hamid</SubBtn>
+            <SubBtn active={sub === 'factures'} onClick={() => setSub('factures')}><FileText size={14} /> Factures</SubBtn>
+            <SubBtn active={sub === 'avances'}  onClick={() => setSub('avances')}><HandCoins size={14} /> Avances</SubBtn>
+            <SubBtn active={sub === 'courses'}  onClick={() => setSub('courses')}><ShoppingCart size={14} /> Courses</SubBtn>
+            <SubBtn active={sub === 'stats'}    onClick={() => setSub('stats')}><BarChart3 size={14} /> Stats</SubBtn>
           </div>
           {sub === 'caisse'   && <MeriemCaisse user={user} />}
           {sub === 'hamid'    && <MeriemHamid user={user} />}
@@ -49,6 +50,7 @@ function tabMain(active) {
     background: active ? '#993556' : 'white',
     color:      active ? '#faf7f2'  : '#1a0f0a',
     cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center', gap: 6,
   }
 }
 function SubBtn({ active, onClick, children }) {
@@ -58,6 +60,7 @@ function SubBtn({ active, onClick, children }) {
       border: active ? '1px solid #993556' : '1px solid transparent',
       background: active ? '#993556' : 'transparent',
       color:      active ? '#faf7f2' : '#1a0f0a',
+      display: 'inline-flex', alignItems: 'center', gap: 6,
     }}>{children}</button>
   )
 }

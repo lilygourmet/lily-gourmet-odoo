@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { BarChart3, Briefcase, Banknote, Search, Settings, Landmark } from 'lucide-react'
 import EnveloppesView from './EnveloppesView'
 import SuiviView from './SuiviView'
 import CaissesGereesView from './CaissesGereesView'
@@ -9,11 +10,11 @@ import RechercheView from './RechercheView'
 import AppHeader from '../AppHeader'
 
 const TABS = [
-  { key: 'enveloppes', label: 'Enveloppes',  icon: '📊' },
-  { key: 'caisses',    label: 'Caisses gérées', icon: '💼' },
-  { key: 'salaires',   label: 'Salaires',    icon: '💵' },
-  { key: 'recherche',  label: 'Recherche',   icon: '🔍' },
-  { key: 'params',     label: 'Paramètres',  icon: '⚙️' },
+  { key: 'enveloppes', label: 'Enveloppes',     Icon: BarChart3 },
+  { key: 'caisses',    label: 'Caisses gérées', Icon: Briefcase },
+  { key: 'salaires',   label: 'Salaires',       Icon: Banknote },
+  { key: 'recherche',  label: 'Recherche',      Icon: Search },
+  { key: 'params',     label: 'Paramètres',     Icon: Settings },
 ]
 
 const STORAGE_KEY = 'caisse_active_tab'
@@ -62,7 +63,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
               fontSize: 13, fontWeight: 500, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
-            <span>{t.icon}</span>{t.label}
+            <t.Icon size={15} />{t.label}
           </button>
         ))}
       </div>
@@ -71,15 +72,16 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
         <>
           <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
             {[
-              { k: 'affectation', icon: '📊', label: 'Affectation' },
-              { k: 'suivi', icon: '🏦', label: 'Suivi versements & remboursements' },
+              { k: 'affectation', Icon: BarChart3, label: 'Affectation' },
+              { k: 'suivi', Icon: Landmark, label: 'Suivi versements & remboursements' },
             ].map(s => (
               <button key={s.k} onClick={() => setEnvSub(s.k)} style={{
                 padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
                 fontSize: 13, fontWeight: 500,
                 background: envSub === s.k ? '#1a0f0a' : '#F4F0EA',
                 color:      envSub === s.k ? 'white'   : '#4a3a30',
-              }}>{s.icon} {s.label}</button>
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}><s.Icon size={14} /> {s.label}</button>
             ))}
           </div>
           {envSub === 'affectation' && <EnveloppesView user={user} />}

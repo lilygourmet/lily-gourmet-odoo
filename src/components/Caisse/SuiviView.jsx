@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -8,8 +9,8 @@ export default function SuiviView({ user }) {
   return (
     <div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
-        <SubTabBtn active={subTab === 'banque'} onClick={() => setSubTab('banque')}>🏦 Banque</SubTabBtn>
-        <SubTabBtn active={subTab === 'perso'}  onClick={() => setSubTab('perso')}>👤 Perso</SubTabBtn>
+        <SubTabBtn active={subTab === 'banque'} onClick={() => setSubTab('banque')}><Landmark size={14} /> Banque</SubTabBtn>
+        <SubTabBtn active={subTab === 'perso'}  onClick={() => setSubTab('perso')}><User size={14} /> Perso</SubTabBtn>
       </div>
       {subTab === 'banque' && <BanqueSection user={user} />}
       {subTab === 'perso'  && <PersoSection  user={user} />}
@@ -24,7 +25,7 @@ function SubTabBtn({ active, onClick, children }) {
       background: active ? '#993556' : 'white',
       color:      active ? '#faf7f2' : '#1a0f0a',
       border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
-      cursor: 'pointer',
+      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
     }}>{children}</button>
   )
 }
@@ -40,7 +41,7 @@ function MethodPill({ method }) {
       color:      isCheque ? '#0C447C' : '#085041',
       border: isCheque ? '0.5px solid #B5D4F2' : '0.5px solid #B6E2C8',
     }}>
-      {isCheque ? '📑 Chèque' : '💵 Espèces'}
+      {isCheque ? <><ScrollText size={11} /> Chèque</> : <><Banknote size={11} /> Espèces</>}
     </span>
   )
 }
@@ -107,10 +108,10 @@ function BanqueSection({ user }) {
           Tout ({list.length})
         </button>
         <button onClick={() => setMethodFilter('cash')} style={methodFilterBtn(methodFilter === 'cash', 'cash')}>
-          💵 Espèces ({countCash})
+          <Banknote size={14} /> Espèces ({countCash})
         </button>
         <button onClick={() => setMethodFilter('cheque')} style={methodFilterBtn(methodFilter === 'cheque', 'cheque')}>
-          📑 Chèques ({countCheque})
+          <ScrollText size={14} /> Chèques ({countCheque})
         </button>
       </div>
 
@@ -127,12 +128,12 @@ function BanqueSection({ user }) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 16px', borderRadius: 8, marginBottom: 14, background: '#E6F1FB', color: '#0C447C' }}>
-        <div style={{ fontSize: 15, fontWeight: 500 }}>🏦 Versements bancaires</div>
+        <div style={{ fontSize: 15, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Landmark size={16} /> Versements bancaires</div>
         <div style={{ fontSize: 13 }}>{filteredList.length} {statusFilter === 'pending' ? 'en attente' : ''} · {fmtMoney(total)}</div>
       </div>
 
       {filteredList.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>
           Aucune enveloppe banque dans ce filtre.
         </div>
       )}
@@ -153,8 +154,8 @@ function BanqueSection({ user }) {
                 onBlur={(e) => handleSaveDate(env.id, e.target.value)}
                 style={{ padding: '4px 8px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 6 }} />
             ) : (
-              <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-block', fontSize: 12, color: '#4a3a30' }}>
-                📅 {env.proof_date ? fmtDateLongue(env.proof_date) : 'À définir'}
+              <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#4a3a30' }}>
+                <Calendar size={12} /> {env.proof_date ? fmtDateLongue(env.proof_date) : 'À définir'}
               </div>
             )}
           </div>
@@ -165,9 +166,9 @@ function BanqueSection({ user }) {
             {env.proof_url ? (
               <button onClick={async () => {
                 const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank')
-              }} style={btnNormal}>📄 Voir preuve</button>
+              }} style={btnNormal}><Eye size={14} /> Voir preuve</button>
             ) : (
-              <button onClick={() => setUploadEnv(env)} style={btnNormal}>📤 Ajouter preuve</button>
+              <button onClick={() => setUploadEnv(env)} style={btnNormal}><Upload size={14} /> Ajouter preuve</button>
             )}
           </div>
         </div>
@@ -256,12 +257,12 @@ function PersoSection({ user }) {
           return (
             <div key={dest.id}>
               <div style={{ background: c.bg, color: c.text, padding: '12px 16px', borderRadius: 8, marginBottom: 12, display: 'flex', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>👤 {dest.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}><User size={14} /> {dest.name}</div>
                 <div style={{ fontSize: 12 }}>{items.length} · {fmtMoney(totalAttente)}</div>
               </div>
               {items.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune enveloppe</div>}
               {items.map(env => (
-                <div key={env.id} style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3' }}>
+                <div key={env.id} style={{ padding: '14px 16px', borderRadius: 14, marginBottom: 8, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <div style={{ fontSize: 16, fontWeight: 500 }}>{fmtMoney(env.amount_cash)}</div>
                     <span style={env.proof_url ? statusDone : statusPending}>{env.proof_url ? 'Remboursée' : 'À rembourser'}</span>
@@ -273,15 +274,15 @@ function PersoSection({ user }) {
                       onBlur={(e) => handleSaveDate(env.id, e.target.value)}
                       style={{ padding: '3px 8px', fontSize: 12, border: '1px solid #C4BFB6', borderRadius: 6, marginBottom: 8 }} />
                   ) : (
-                    <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-block', fontSize: 12, color: '#4a3a30', marginBottom: 8 }}>
-                      📅 {env.proof_date ? fmtDateLongue(env.proof_date) : 'À définir'}
+                    <div onClick={() => setEditDate({ ...editDate, [env.id]: true })} style={{ cursor: 'pointer', borderBottom: '1px dashed #C4BFB6', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#4a3a30', marginBottom: 8 }}>
+                      <Calendar size={12} /> {env.proof_date ? fmtDateLongue(env.proof_date) : 'À définir'}
                     </div>
                   )}
                   <div>
                     {env.proof_url ? (
-                      <button onClick={async () => { const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank') }} style={{ ...btnNormal, width: '100%' }}>📄 Voir preuve</button>
+                      <button onClick={async () => { const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank') }} style={{ ...btnNormal, width: '100%' }}><Eye size={14} /> Voir preuve</button>
                     ) : (
-                      <button onClick={() => setUploadEnv(env)} style={{ ...btnNormal, width: '100%' }}>📤 Preuve remboursement</button>
+                      <button onClick={() => setUploadEnv(env)} style={{ ...btnNormal, width: '100%' }}><Upload size={14} /> Preuve remboursement</button>
                     )}
                   </div>
                 </div>
@@ -300,10 +301,11 @@ function PersoSection({ user }) {
 }
 
 const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
-const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
+const btnNormal = { fontSize: 13, padding: '8px 14px', borderRadius: 10, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }
 const rowCard = {
   display: 'grid', gridTemplateColumns: '1fr 1fr 130px 1fr', gap: 14, alignItems: 'center',
-  padding: '12px 16px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3',
+  padding: '14px 16px', borderRadius: 14, marginBottom: 8, background: 'white', border: '0.5px solid #e5d8c3',
+  boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
 }
 const statusPending = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#FCE9E8', color: '#99201E' }
 const statusDone    = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#E1F5EE', color: '#085041' }

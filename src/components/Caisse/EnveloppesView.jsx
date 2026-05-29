@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { RefreshCw, Banknote, ScrollText, Wallet, Coffee, ShoppingBag, MapPin } from 'lucide-react'
 import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate, loadSalairesYear } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, envStyle, COLOR_PALETTE } from './_helpers'
 import AttributionModal from './modals/AttributionModal'
@@ -137,8 +138,8 @@ export default function EnveloppesView({ user }) {
           <div style={{ fontSize: 18, fontWeight: 500 }}>{year}</div>
           <button onClick={() => setYear(y => y + 1)} style={btnSlim}>→</button>
         </div>
-        <button onClick={handleSync} disabled={syncing} style={btnNormal}>
-          🔄 {syncing ? 'Sync…' : 'Synchroniser'}
+        <button onClick={handleSync} disabled={syncing} style={{ ...btnNormal, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Sync…' : 'Synchroniser'}
         </button>
       </div>
 
@@ -147,16 +148,16 @@ export default function EnveloppesView({ user }) {
         <button
           type="button"
           onClick={() => setPaymentMethodFilter('cash')}
-          style={paymentMethodFilter === 'cash' ? toggleActiveStyle : toggleInactiveStyle}
+          style={{ ...(paymentMethodFilter === 'cash' ? toggleActiveStyle : toggleInactiveStyle), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
         >
-          💵 Espèces
+          <Banknote size={15} /> Espèces
         </button>
         <button
           type="button"
           onClick={() => setPaymentMethodFilter('cheque')}
-          style={paymentMethodFilter === 'cheque' ? toggleActiveStyle : toggleInactiveStyle}
+          style={{ ...(paymentMethodFilter === 'cheque' ? toggleActiveStyle : toggleInactiveStyle), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
         >
-          📑 Chèques
+          <ScrollText size={15} /> Chèques
         </button>
       </div>
 
@@ -185,7 +186,7 @@ export default function EnveloppesView({ user }) {
         ))}
         {salairesPresents.map(s => (
           <Chip key={`sal-${s.id}`} active={filter === `sal-${s.id}`} onClick={() => setFilter(`sal-${s.id}`)}>
-            💰 Salaire {s.beneficiaire}
+            <Wallet size={13} /> Salaire {s.beneficiaire}
           </Chip>
         ))}
       </div>
@@ -193,7 +194,7 @@ export default function EnveloppesView({ user }) {
       {loading && <div style={{ color: '#4a3a30', padding: 20 }}>Chargement…</div>}
 
       {!loading && sources.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>
+        <div style={{ padding: 40, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>
           Aucune enveloppe {paymentMethodFilter === 'cheque' ? 'chèque' : 'espèces'} pour {monthDisplay} {year}.<br />
           Cliquez sur <strong>Synchroniser</strong> pour récupérer les sessions POS fermées d'Odoo.
         </div>
@@ -211,8 +212,9 @@ export default function EnveloppesView({ user }) {
               <div style={{
                 fontSize: 13, fontWeight: 500, padding: '10px 12px', background: '#F4F0EA',
                 borderRadius: 8, marginBottom: 8, color: '#4a3a30',
+                display: 'flex', alignItems: 'center', gap: 6,
               }}>
-                {src === 'Café' ? '☕' : src === 'Boutique' ? '🛍️' : '📍'} {src}
+                {src === 'Café' ? <Coffee size={14} /> : src === 'Boutique' ? <ShoppingBag size={14} /> : <MapPin size={14} />} {src}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {(bySource[src] || []).length === 0 ? (
@@ -245,7 +247,7 @@ export default function EnveloppesView({ user }) {
         </div>
       </div>
 
-      <AuditLogPanel entityType="enveloppe" title="📜 Historique des affectations" />
+      <AuditLogPanel entityType="enveloppe" title="Historique des affectations" />
 
       {attributionEnv && (
         <AttributionModal env={attributionEnv} destinataires={destinataires}
@@ -272,12 +274,13 @@ function EnveloppeCard({ env, onClick, salaireMap = {} }) {
   return (
     <div onClick={onClick} style={{
       background: style.bg, borderColor: style.border, borderStyle: style.borderStyle, borderWidth: style.borderWidth,
-      borderRadius: 8, padding: '8px 11px', cursor: 'pointer', color: style.text,
+      borderRadius: 12, padding: '10px 12px', cursor: 'pointer', color: style.text,
+      boxShadow: '0 2px 6px rgba(122,42,68,0.06)',
     }}>
       <div style={{ fontSize: 11, opacity: 0.85 }}>{fmtDateCourte(env.session_date)}</div>
       <div style={{ fontSize: 15, fontWeight: 500, margin: '2px 0 3px' }}>{fmtMoney(env.amount_cash)}</div>
-      <div style={{ fontSize: 11, opacity: 0.95 }}>
-        {env.destinataire ? env.destinataire.name : salBenef ? `💰 Salaire ${salBenef}` : '👆 À affecter'}
+      <div style={{ fontSize: 11, opacity: 0.95, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {env.destinataire ? env.destinataire.name : salBenef ? <><Wallet size={11} /> Salaire {salBenef}</> : 'À affecter'}
       </div>
       {env.assigner && (
         <div style={{ fontSize: 9, opacity: 0.65, marginTop: 2, fontStyle: 'italic' }}>
@@ -295,6 +298,7 @@ function Chip({ active, onClick, children }) {
       background: active ? '#993556' : 'white',
       color:      active ? '#faf7f2' : '#1a0f0a',
       border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
+      display: 'inline-flex', alignItems: 'center', gap: 6,
     }}>{children}</button>
   )
 }
