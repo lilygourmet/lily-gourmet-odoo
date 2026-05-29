@@ -24,6 +24,7 @@ import { loadProdDoneForLines } from '../lib/prodDone'
 import { loadCafeReceivedForLines, markCafeReceived, unmarkCafeReceived } from '../lib/cafeReceived'
 import { confirmReception, todayISO } from '../lib/stockBoutique'
 import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
+import { RefreshCw } from 'lucide-react'
 
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
 const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-']
@@ -499,7 +500,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 
       <div className="max-w-[1100px] mx-auto px-5 py-5">
         <div className="mb-5">
-          <h1 className="font-fraunces italic text-[26px] text-ink">📋 Checklist</h1>
+          <h1 className="font-fraunces italic text-[26px] text-ink">Checklist</h1>
           <p className="text-[13px] text-ink-mute mt-1">
             {tab === 'todo'
               ? 'Clique sur une carte pour la confirmer comme rangée'
@@ -517,7 +518,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
                 : 'bg-white border border-line text-ink hover:border-bordeaux/40'
             }`}
           >
-            <span>⏳ À ranger</span>
+            <span>À ranger</span>
             {totalTodo > 0 && (
               <span className={`min-w-[20px] h-5 px-1.5 flex items-center justify-center text-[11px] font-bold rounded-full ${
                 tab === 'todo' ? 'bg-cream text-bordeaux' : 'bg-red-600 text-white'
@@ -534,7 +535,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
                 : 'bg-white border border-line text-ink hover:border-bordeaux/40'
             }`}
           >
-            <span>✓ Rangé</span>
+            <span>Rangé</span>
             {totalDone > 0 && (
               <span className={`min-w-[20px] h-5 px-1.5 flex items-center justify-center text-[11px] font-bold rounded-full ${
                 tab === 'done' ? 'bg-cream text-bordeaux' : 'bg-emerald-600 text-white'
@@ -551,7 +552,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="🔍 Rechercher..."
+                placeholder="Rechercher..."
                 className="w-full px-3 py-2 pr-8 text-[13px] bg-white border border-line rounded-full focus:outline-none focus:border-bordeaux/60 placeholder:text-ink-mute"
               />
               {searchQuery && (
@@ -570,7 +571,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
               className="px-3 py-2 rounded-full bg-white border border-line text-ink hover:border-bordeaux hover:bg-bordeaux hover:text-cream text-[13px] transition-all disabled:opacity-50 flex items-center gap-1.5"
               title="Rafraîchir maintenant"
             >
-              <span className={refreshing ? 'inline-block animate-spin' : ''}>🔄</span>
+              <RefreshCw size={14} strokeWidth={1.8} className={refreshing ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">{refreshing ? 'Rafraîchissement...' : 'Rafraîchir'}</span>
             </button>
           </div>
@@ -611,8 +612,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVit
   if (allDone) {
     return (
       <div className="bg-white rounded-xl border border-line p-8 text-center">
-        <div className="text-[40px] mb-2">🎉</div>
-        <p className="text-[15px] font-semibold text-emerald-600">Tout est rangé !</p>
+        <p className="text-[15px] font-semibold text-success">Tout est rangé !</p>
         <p className="text-[12px] text-ink-mute mt-1">Rien n'attend de t'être rangé pour l'instant.</p>
       </div>
     )
@@ -715,7 +715,6 @@ function DoneTab({ vitrineItems, prodItems, commandeItems, onUndo }) {
   if (total === 0) {
     return (
       <div className="bg-white rounded-xl border border-line p-8 text-center">
-        <div className="text-[40px] mb-2">📭</div>
         <p className="text-[15px] font-semibold text-ink">Rien rangé pour le moment</p>
         <p className="text-[12px] text-ink-mute mt-1">Les items que tu rangeras apparaîtront ici.</p>
       </div>

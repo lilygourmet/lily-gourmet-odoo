@@ -8,6 +8,7 @@ import {
 } from '../lib/gmFiches'
 import AppHeader from './AppHeader'
 import ActivityLog, { relativeTime } from './ActivityLog'
+import { Printer } from 'lucide-react'
 
 const DAYS = 14
 
@@ -123,7 +124,6 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
       <div className="bg-cream-warm/30 border-b border-line py-3 px-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-[20px]">🧁</span>
             <span className="font-fraunces italic text-[18px] text-ink">Accessoires</span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -133,18 +133,18 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
                 className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
                   viewMode === 'client' ? 'bg-bordeaux text-cream' : 'text-ink-mute'
                 }`}
-              >👤 Par client</button>
+              >Par client</button>
               <button
                 onClick={() => setViewMode('product')}
                 className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
                   viewMode === 'product' ? 'bg-bordeaux text-cream' : 'text-ink-mute'
                 }`}
-              >📦 Par produit</button>
+              >Par produit</button>
             </div>
             <button
               onClick={() => setPrintDate('__open__')}
               className="px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[11px] hover:bg-bordeaux hover:text-cream transition-colors"
-            >🖨 Imprimer</button>
+            >Imprimer</button>
           </div>
         </div>
       </div>
@@ -201,7 +201,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
                           onClick={() => handlePrint(date)}
                           className="px-2 py-0.5 text-[10px] text-bordeaux border border-bordeaux/40 rounded-full hover:bg-bordeaux hover:text-cream"
                           title="Imprimer ce jour"
-                        >🖨</button>
+                        ><Printer size={13} strokeWidth={1.8} /></button>
                       )}
                     </div>
                   </div>
@@ -441,7 +441,7 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
             )}
           </div>
           {fiche.note_patissier && (
-            <div className="text-[10px] text-amber-700 italic mt-0.5">📝 {fiche.note_patissier}</div>
+            <div className="text-[10px] text-amber-700 italic mt-0.5">{fiche.note_patissier}</div>
           )}
 
           {!fiche.parfum_normal && (
