@@ -274,7 +274,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
             <span className="opacity-50">|</span>
             <PrintButton mode="reception" />
             <span className="opacity-50">|</span>
-            <span className="opacity-80">📦 Équipe café</span>
+            <span className="opacity-80">Équipe café</span>
           </div>
         </div>
 
@@ -303,7 +303,6 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
             <div className="p-8 text-center text-ink-mute text-[12px]">Chargement...</div>
           ) : visibleItems.length === 0 ? (
             <div className="p-12 text-center text-ink-mute border border-dashed border-line rounded-lg">
-              <div className="text-3xl mb-2">📭</div>
               <div className="text-[13px]">En attente d'envois de la pâtisserie</div>
               <div className="text-[11px] mt-1 opacity-70">
                 Les articles arriveront automatiquement quand la vitrine les envoie
@@ -384,7 +383,7 @@ function ReceptionRow({ item, isEditing, onEdit, onLocalQtyChange, onConfirm }) 
   } else if (isDiscrepancy) {
     bg = 'bg-orange-50'; border = 'border-orange-500'; icon = '⚠'; iconBg = 'bg-orange-200 text-orange-900'
   } else {
-    bg = 'bg-white'; border = 'border-line'; icon = '📦'; iconBg = 'bg-bordeaux/10 text-bordeaux'
+    bg = 'bg-white'; border = 'border-line'; icon = '·'; iconBg = 'bg-bordeaux/10 text-bordeaux'
   }
 
   return (
@@ -585,7 +584,7 @@ function DiscrepancyModalCafe({ items, onAccept, onMaintain }) {
       <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="bg-red-700 text-white px-4 py-3 flex-shrink-0">
           <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">
-            ⚠️ Vitrine a recompté
+            Vitrine a recompté
           </div>
           <div className="font-semibold text-[13px] mt-0.5">
             {items.length} article{items.length > 1 ? 's' : ''} à recompter physiquement
@@ -604,7 +603,7 @@ function DiscrepancyModalCafe({ items, onAccept, onMaintain }) {
 
               {it.discrepancy_patissier_message && (
                 <div className="bg-bordeaux/5 border-l-[3px] border-bordeaux px-3 py-2 mb-3 text-[11px] italic">
-                  💬 Vitrine : "{it.discrepancy_patissier_message}"
+                  Vitrine : "{it.discrepancy_patissier_message}"
                 </div>
               )}
 

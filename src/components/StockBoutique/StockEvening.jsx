@@ -4,6 +4,7 @@
 // =============================================================
 
 import { useState, useEffect, useMemo } from 'react'
+import { Trash2 } from 'lucide-react'
 import AppHeader from '../AppHeader'
 import PrintButton from './PrintButton'
 import NumpadInline from './NumpadInline'
@@ -214,7 +215,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
           <div className="flex items-center gap-2">
             <PrintButton mode="evening" />
             <div className="text-right text-[11px] opacity-80">
-              <div>🌙 Équipe café</div>
+              <div>Équipe café</div>
             </div>
           </div>
         </div>
@@ -235,7 +236,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
               onClick={handleReopen}
               className="px-3 py-1.5 bg-white border border-blue-400 text-blue-900 rounded-md text-[11px] font-medium hover:bg-blue-100"
             >
-              ✏️ Corriger
+              Corriger
             </button>
           </div>
         )}
@@ -260,7 +261,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
           <>
             {isOpen && counts.length === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
-                💡 Clique l'article que tu vois en vitrine → ajoute une ligne (Frais, 1).
+                Clique l'article que tu vois en vitrine → ajoute une ligne (Frais, 1).
                 Clique la ligne pour la sélectionner, puis tape la qty sur la calculette.
               </div>
             )}
@@ -288,7 +289,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
                   </div>
                   {isOpen && selectedItem ? (
                     <div className="text-[10px] text-bordeaux-deep mt-1.5 text-center font-medium truncate">
-                      ✏️ {selectedItem.product_name}
+                      {selectedItem.product_name}
                     </div>
                   ) : (
                     <div className="text-[10px] text-ink-mute mt-1.5 text-center italic">
@@ -463,7 +464,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
               : 'text-ink-mute hover:bg-cream-warm'
           }`}
         >
-          🍰 Articles
+          Articles
         </button>
         <button
           type="button"
@@ -474,7 +475,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
               : 'text-ink-mute hover:bg-cream-warm'
           }`}
         >
-          🌙 Comptés
+          Comptés
           {totalCount > 0 && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
               mobileTab === 'panier' ? 'bg-cream text-bordeaux' : 'bg-bordeaux text-cream'
@@ -527,9 +528,9 @@ function CountRow({ item, selected, disabled, onSelect, onFreshnessChange, onRem
         }}
         disabled={disabled}
         title="Supprimer"
-        className="text-ink-mute hover:text-red-600 text-[14px] disabled:opacity-50 px-1"
+        className="text-ink-mute hover:text-red-600 disabled:opacity-50 px-1 inline-flex items-center"
       >
-        🗑
+        <Trash2 size={14} strokeWidth={1.8} />
       </button>
     </div>
   )

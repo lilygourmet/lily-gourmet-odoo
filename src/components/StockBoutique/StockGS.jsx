@@ -9,6 +9,7 @@
 // =============================================================
 
 import { useEffect, useMemo, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import AppHeader from '../AppHeader'
 import {
   getOrCreateStockDay,
@@ -168,7 +169,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="mb-5 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-[24px] font-semibold text-ink tracking-tight">🥪 Stock GS-</h1>
+            <h1 className="text-[24px] font-semibold text-ink tracking-tight">Stock GS-</h1>
             <p className="text-[13px] text-ink-mute mt-1">
               Stock vitrine des produits salés à préfixe GS-
             </p>
@@ -179,7 +180,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="🔍 Rechercher..."
+                placeholder="Rechercher..."
                 className="px-3 py-2 pr-8 text-[13px] bg-white border border-line rounded-full focus:outline-none focus:border-bordeaux/60 placeholder:text-ink-mute"
               />
               {searchQuery && (
@@ -197,7 +198,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
               className="px-3 py-2 rounded-full bg-bordeaux text-cream text-[13px] transition-all disabled:opacity-50 flex items-center gap-1.5 hover:bg-bordeaux-deep"
               title="Synchroniser le stock depuis Odoo"
             >
-              <span className={refreshingOdoo ? 'inline-block animate-spin' : ''}>🔄</span>
+              <RefreshCw size={14} strokeWidth={1.8} className={refreshingOdoo ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">{refreshingOdoo ? 'Sync Odoo…' : 'Sync Odoo'}</span>
             </button>
             <button
@@ -226,7 +227,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
             )}
             {countZero > 0 && (
               <div>
-                <span className="text-[11px] text-ink-mute uppercase tracking-wider">🟦 Rupture (0)</span>
+                <span className="text-[11px] text-ink-mute uppercase tracking-wider">Rupture (0)</span>
                 <div className="text-[20px] font-semibold text-ink-mute">{countZero}</div>
               </div>
             )}
@@ -240,7 +241,6 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
           </div>
         ) : filteredLines.length === 0 ? (
           <div className="bg-white rounded-xl border border-line p-8 text-center">
-            <div className="text-[40px] mb-2">📭</div>
             <p className="text-[15px] font-semibold text-ink">
               {q ? 'Aucun résultat' : 'Aucun produit GS- dans le stock'}
             </p>

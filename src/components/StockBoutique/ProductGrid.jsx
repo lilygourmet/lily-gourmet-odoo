@@ -4,6 +4,7 @@
 // =============================================================
 
 import { useState, useEffect, useMemo } from 'react'
+import { Trash2 } from 'lucide-react'
 import { fetchEntremetsCatalog } from '../../lib/stockCatalog'
 import NumpadInline from './NumpadInline'
 
@@ -250,7 +251,7 @@ export default function ProductGrid({
           </div>
           {activeProductName && cart[activeProductName] ? (
             <div className="text-[10px] text-bordeaux-deep mt-1.5 text-center font-medium truncate">
-              ✏️ {activeProductName}
+              {activeProductName}
             </div>
           ) : (
             <div className="text-[10px] text-ink-mute mt-1.5 text-center italic">
@@ -293,10 +294,10 @@ export default function ProductGrid({
                   </div>
                   <button
                     onClick={(ev) => deleteRow(name, ev)}
-                    className="text-ink-mute hover:text-bordeaux p-1"
+                    className="text-ink-mute hover:text-bordeaux p-1 inline-flex items-center"
                     title="Supprimer"
                   >
-                    🗑
+                    <Trash2 size={13} strokeWidth={1.8} />
                   </button>
                 </div>
               )
@@ -436,7 +437,7 @@ export default function ProductGrid({
               : 'text-ink-mute hover:bg-cream-warm'
           }`}
         >
-          🍰 Articles
+          Articles
         </button>
         <button
           type="button"
@@ -447,7 +448,7 @@ export default function ProductGrid({
               : 'text-ink-mute hover:bg-cream-warm'
           }`}
         >
-          🛒 Panier
+          Panier
           {total > 0 && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
               mobileTab === 'panier' ? 'bg-cream text-bordeaux' : 'bg-bordeaux text-cream'

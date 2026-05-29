@@ -4,6 +4,7 @@
 // =============================================================
 
 import { useState, useEffect, useMemo } from 'react'
+import { RefreshCw, Scale } from 'lucide-react'
 import AppHeader from '../AppHeader'
 import PrintButton from './PrintButton'
 import AuditResolveModal from './AuditResolveModal'
@@ -25,7 +26,7 @@ import {
 
 const STATUS_LABELS = {
   open: { label: '… En cours', color: 'bg-amber-100 text-amber-900' },
-  submitted: { label: '📩 Envoyé audit', color: 'bg-blue-100 text-blue-900' },
+  submitted: { label: 'Envoyé audit', color: 'bg-blue-100 text-blue-900' },
   audited: { label: '✓ Audité', color: 'bg-green-100 text-green-900' },
 }
 
@@ -161,7 +162,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 
   async function handleForceClose() {
     if (!stockDay) return
-    if (!confirm("⚠️ Forcer la clôture sans que le café ait fini de compter ?\n\nLe rapport sera généré avec les données disponibles. Cette action est réservée aux admins.")) return
+    if (!confirm("Forcer la clôture sans que le café ait fini de compter ?\n\nLe rapport sera généré avec les données disponibles. Cette action est réservée aux admins.")) return
     try {
       setAuditing(true)
       await submitStockDay(stockDay.id, user.id)
@@ -322,7 +323,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               )}
               {isSubmitted && (
                 <>
-                  <span className="font-semibold text-blue-900">📩 Comptage reçu — en attente d'audit</span>
+                  <span className="font-semibold text-blue-900">Comptage reçu — en attente d'audit</span>
                   {stockDay.submitted_at && (
                     <span className="ml-2 text-blue-800 opacity-70">
                       envoyé {fmtRelative(stockDay.submitted_at)}
@@ -341,7 +342,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                       className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-[11px] font-medium transition-colors disabled:opacity-50"
                       title="Réservé admins / audit"
                     >
-                      ⚠️ Forcer la clôture
+                      Forcer la clôture
                     </button>
                   )}
                 </div>
@@ -363,9 +364,9 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                   title="Rafraîchir le stock Odoo"
                 >
                   {refreshing ? (
-                    <>⏳ <span>Rafraîchissement...</span></>
+                    <><RefreshCw size={14} strokeWidth={1.8} className="animate-spin" /> <span>Rafraîchissement...</span></>
                   ) : (
-                    <>🔄 <span>Rafraîchir Odoo</span></>
+                    <><RefreshCw size={14} strokeWidth={1.8} /> <span>Rafraîchir Odoo</span></>
                   )}
                 </button>
               </div>
@@ -403,7 +404,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 
             {(isSubmitted || isAudited) && report.length > 0 && stats.totalOdooCurrent === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
-                ⚠️ <strong>Snapshot Odoo non disponible.</strong> Clique "Rafraîchir Odoo" pour récupérer le stock actuel.
+                <strong>Snapshot Odoo non disponible.</strong> Clique "Rafraîchir Odoo" pour récupérer le stock actuel.
               </div>
             )}
 
@@ -477,7 +478,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                 {r.product_name}
                                 {isConflictRow && (
                                   <span className="ml-2 inline-block bg-red-100 text-red-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
-                                    ⚖ {conflictItems.length} conflit{conflictItems.length > 1 ? 's' : ''}
+                                    {conflictItems.length} conflit{conflictItems.length > 1 ? 's' : ''}
                                   </span>
                                 )}
                                 {!isConflictRow && notCounted && (
@@ -522,7 +523,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                     className="px-2 py-1 bg-bordeaux text-cream rounded text-[10px] font-medium hover:bg-bordeaux-deep"
                                     title="Trancher"
                                   >
-                                    ⚖
+                                    <Scale size={13} strokeWidth={1.8} />
                                   </button>
                                 ) : null}
                               </td>
@@ -555,7 +556,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               <div className="bg-white border-2 border-bordeaux rounded-lg overflow-hidden">
                 <div className="bg-bordeaux text-cream px-4 py-2.5">
                   <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-90">
-                    ⚖ Conflits
+                    Conflits
                   </div>
                   <div className="font-semibold text-[13px] mt-0.5">
                     {hasPending
@@ -597,12 +598,12 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               </div>
                               {it.reception_note && (
                                 <div className="text-[10px] text-amber-800 italic mb-1">
-                                  💬 Café : "{it.reception_note}"
+                                  Café : "{it.reception_note}"
                                 </div>
                               )}
                               {it.discrepancy_patissier_message && (
                                 <div className="text-[10px] text-red-800 italic mb-1">
-                                  💬 Vitrine : "{it.discrepancy_patissier_message}"
+                                  Vitrine : "{it.discrepancy_patissier_message}"
                                 </div>
                               )}
                               <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full border ${badge.color} font-medium mt-1`}>
@@ -614,7 +615,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               onClick={() => setResolveModalItem(it)}
                               className="px-3 py-1.5 bg-bordeaux text-cream rounded-md text-[11px] font-medium hover:bg-bordeaux-deep flex-shrink-0"
                             >
-                              ⚖ Trancher
+                              Trancher
                             </button>
                           </div>
                         </div>

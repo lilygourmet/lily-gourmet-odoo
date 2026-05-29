@@ -48,7 +48,7 @@ export default function AuditResolveModal({ item, onClose, onResolve, onOverride
         {/* Header */}
         <div className="bg-bordeaux text-cream px-4 py-3 flex-shrink-0">
           <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">
-            ⚖ Trancher l'écart
+            Trancher l'écart
           </div>
           <div className="font-semibold text-[13px] mt-0.5">{item.product_name}</div>
         </div>
@@ -84,12 +84,12 @@ export default function AuditResolveModal({ item, onClose, onResolve, onOverride
           {/* Messages */}
           {patissierMsg && (
             <div className="bg-red-50 border-l-[3px] border-red-400 px-3 py-2 mb-2 text-[11px] italic text-red-900">
-              💬 Hamza : "{patissierMsg}"
+              Hamza : "{patissierMsg}"
             </div>
           )}
           {item.reception_note && (
             <div className="bg-amber-50 border-l-[3px] border-amber-400 px-3 py-2 mb-3 text-[11px] italic text-amber-900">
-              💬 Café : "{item.reception_note}"
+              Café : "{item.reception_note}"
             </div>
           )}
 
@@ -137,7 +137,7 @@ export default function AuditResolveModal({ item, onClose, onResolve, onOverride
                   : 'bg-white border-line hover:bg-cream-warm'
               }`}
             >
-              <div className="font-semibold">✏️ Corriger l'apporté</div>
+              <div className="font-semibold">Corriger l'apporté</div>
               <div className="text-[10px] text-ink-mute mt-0.5 mb-2">
                 Saisis la vraie quantité apportée
               </div>
