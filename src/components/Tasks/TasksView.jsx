@@ -98,7 +98,7 @@ export default function TasksView({ user }) {
   async function handleDeleteTask(taskId) {
     if (!confirm('Supprimer cette tâche ? (action irréversible)')) return
     try {
-      await deleteTask(taskId, user.id)
+      await deleteTask(taskId, user.id, isAdmin)
       reload()
     } catch (e) {
       alert(e?.message || 'Erreur suppression')
@@ -202,6 +202,7 @@ export default function TasksView({ user }) {
           teamPerson={teamPerson} setTeamPerson={setTeamPerson}
           currentUserId={user.id}
           onOpen={openTask}
+          onDelete={handleDeleteTask}
         />
       )}
 
@@ -241,7 +242,7 @@ export default function TasksView({ user }) {
                   task={t}
                   currentUserId={user.id}
                   onClick={() => openTask(t)}
-                  onDelete={t.from_user_id === user.id ? () => handleDeleteTask(t.id) : null}
+                  onDelete={(t.from_user_id === user.id || isAdmin) ? () => handleDeleteTask(t.id) : null}
                 />
               ))}
             </div>
@@ -269,7 +270,7 @@ export default function TasksView({ user }) {
 }
 
 // Vue admin : tâches de toute l'équipe, groupées par personne (destinataire).
-function TeamPanel({ teamTasks, teamStatus, setTeamStatus, teamPerson, setTeamPerson, currentUserId, onOpen }) {
+function TeamPanel({ teamTasks, teamStatus, setTeamStatus, teamPerson, setTeamPerson, currentUserId, onOpen, onDelete }) {
   if (teamTasks === null) {
     return <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
   }
@@ -329,7 +330,7 @@ function TeamPanel({ teamTasks, teamStatus, setTeamStatus, teamPerson, setTeamPe
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
               {list.map(t => (
-                <TaskCard key={t.id} task={t} currentUserId={currentUserId} onClick={() => onOpen(t)} onDelete={null} />
+                <TaskCard key={t.id} task={t} currentUserId={currentUserId} onClick={() => onOpen(t)} onDelete={() => onDelete(t.id)} />
               ))}
             </div>
           </div>
@@ -390,6 +391,7 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
 
   return (
     <div onClick={onClick} style={{
+      position: 'relative',
       background: 'white', borderRadius: 8, padding: '10px 12px', cursor: 'pointer',
       border: `0.5px solid ${borderColor}`, borderLeft: `3px solid ${leftColor}`,
       opacity: isDone ? 0.75 : 1,
@@ -399,7 +401,20 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
     onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
     onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, flexWrap: 'wrap' }}>
+      {onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          title="Supprimer la tâche"
+          style={{
+            position: 'absolute', top: 6, right: 6, width: 24, height: 24,
+            borderRadius: 6, border: '1px solid #e5d8c3', background: 'white',
+            cursor: 'pointer', fontSize: 12, lineHeight: 1, color: '#A32D2D',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >🗑</button>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, flexWrap: 'wrap', paddingRight: onDelete ? 28 : 0 }}>
         {statusBadge}
         {task.is_urgent && !isDone && (
           <Badge bg="#FCEBEB" col="#A32D2D">⚠️ Urgent</Badge>

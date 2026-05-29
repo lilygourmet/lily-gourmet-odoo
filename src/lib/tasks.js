@@ -221,17 +221,17 @@ export async function undoTaskDone(taskId, currentUserId) {
 }
 
 /**
-* Supprime une tâche (seul l'expéditeur peut le faire).
+* Supprime une tâche (l'expéditeur, ou un admin pour n'importe quelle tâche).
 * Supprime aussi la pièce jointe associée si présente.
 */
-export async function deleteTask(taskId, currentUserId) {
+export async function deleteTask(taskId, currentUserId, isAdmin = false) {
   const { data: before } = await supabase
     .from('tasks')
     .select('from_user_id, attachment_path')
     .eq('id', taskId)
     .single()
-  if (before?.from_user_id !== currentUserId) {
-    throw new Error('Seul l\'expéditeur peut supprimer une tâche')
+  if (!isAdmin && before?.from_user_id !== currentUserId) {
+    throw new Error('Seul l\'expéditeur (ou un admin) peut supprimer une tâche')
   }
   // Supprimer la pièce jointe du bucket
   if (before?.attachment_path) {
