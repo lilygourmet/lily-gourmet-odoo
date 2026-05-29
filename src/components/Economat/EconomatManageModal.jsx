@@ -5,6 +5,7 @@ import {
   loadCategoryManage, addArticleFromOdoo, setArticleActive, deleteArticle,
   loadOdooProducts, syncWithOdoo,
 } from '../../lib/economat'
+import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff } from 'lucide-react'
 
 // Gestion de l'économat (admin + économe) : catégories, groupes, articles (depuis Odoo).
 export default function EconomatManageModal({ onClose, onChanged }) {
@@ -114,8 +115,8 @@ export default function EconomatManageModal({ onClose, onChanged }) {
           <h3 className="font-fraunces italic text-[18px] text-ink">Gérer l'économat</h3>
           <div className="flex items-center gap-2">
             <button onClick={runSync} disabled={busy}
-                    className="px-3 py-1.5 rounded-full bg-bordeaux text-cream text-[11px] font-medium hover:bg-bordeaux-deep disabled:opacity-50">
-              🔄 Synchroniser Odoo
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bordeaux text-cream text-[11px] font-medium hover:bg-bordeaux-deep disabled:opacity-50">
+              <RefreshCw size={13} strokeWidth={1.8} className={busy ? 'animate-spin' : ''} /> Synchroniser Odoo
             </button>
             <button onClick={onClose} className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center">×</button>
           </div>
@@ -135,8 +136,8 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                         className="flex-1 px-3 py-2 border border-line rounded-lg text-[13px] bg-white focus:outline-none focus:border-bordeaux">
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                <button onClick={addCategory} disabled={busy} className="px-3 py-2 rounded-lg border border-bordeaux text-bordeaux text-[12px] hover:bg-bordeaux hover:text-cream">➕</button>
-                {catId && <button onClick={removeCategory} disabled={busy} className="px-3 py-2 rounded-lg border border-line text-ink-mute text-[12px] hover:bg-red-600 hover:text-white hover:border-red-600">🗑</button>}
+                <button onClick={addCategory} disabled={busy} title="Nouvelle catégorie" className="px-3 py-2 rounded-lg border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream flex items-center"><Plus size={15} strokeWidth={1.8} /></button>
+                {catId && <button onClick={removeCategory} disabled={busy} title="Supprimer la catégorie" className="px-3 py-2 rounded-lg border border-line text-ink-mute hover:bg-red-600 hover:text-white hover:border-red-600 flex items-center"><Trash2 size={14} strokeWidth={1.8} /></button>}
               </div>
             </div>
 
@@ -157,8 +158,8 @@ export default function EconomatManageModal({ onClose, onChanged }) {
 
                 {/* Ajouter un article depuis Odoo */}
                 <div className="border border-line rounded-lg p-3 bg-cream-warm/30">
-                  <button onClick={() => setShowAdd(v => !v)} className="text-[13px] font-medium text-bordeaux">
-                    {showAdd ? '▼' : '▶'} ➕ Ajouter un article (depuis Odoo)
+                  <button onClick={() => setShowAdd(v => !v)} className="flex items-center gap-1.5 text-[13px] font-medium text-bordeaux">
+                    {showAdd ? <ChevronDown size={15} strokeWidth={1.8} /> : <ChevronRight size={15} strokeWidth={1.8} />} Ajouter un article (depuis Odoo)
                   </button>
                   {showAdd && (
                     <div className="mt-2 space-y-2">
@@ -171,7 +172,7 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && runSearch()}
                                placeholder="Chercher un produit Odoo (ex. amande)"
                                className="flex-1 px-3 py-2 border border-line rounded-lg text-[13px] bg-white focus:outline-none focus:border-bordeaux" />
-                        <button onClick={runSearch} disabled={searching} className="px-3 py-2 rounded-lg bg-bordeaux text-cream text-[12px] disabled:opacity-50">🔍</button>
+                        <button onClick={runSearch} disabled={searching} title="Chercher" className="px-3 py-2 rounded-lg bg-bordeaux text-cream disabled:opacity-50 flex items-center"><Search size={15} strokeWidth={1.8} /></button>
                       </div>
                       {searching ? (
                         <div className="text-[12px] text-ink-mute italic py-2">Recherche...</div>
@@ -180,12 +181,12 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                           {results.map(p => (
                             <button key={p.odoo_id} onClick={() => pickProduct(p)} disabled={busy}
                                     className="w-full flex items-center gap-2 p-1.5 rounded border border-line/60 bg-white text-left hover:border-bordeaux disabled:opacity-50">
-                              <div className="w-8 h-8 rounded bg-cream-warm border border-line/40 flex items-center justify-center overflow-hidden flex-shrink-0">
-                                {p.image_url ? <img src={p.image_url} alt="" className="w-full h-full object-cover" /> : <span className="text-[12px] opacity-30">📦</span>}
+                              <div className="w-8 h-8 rounded bg-cream-deep border border-line/40 overflow-hidden flex-shrink-0">
+                                {p.image_url && <img src={p.image_url} alt="" className="w-full h-full object-cover" />}
                               </div>
                               <span className="flex-1 text-[12px] text-ink">{p.name}</span>
                               {p.unit && <span className="text-[10px] text-ink-mute">{p.unit}</span>}
-                              <span className="text-bordeaux text-[14px]">＋</span>
+                              <Plus size={15} strokeWidth={1.8} className="text-bordeaux" />
                             </button>
                           ))}
                         </div>
@@ -197,7 +198,7 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                 {/* Groupes + articles */}
                 <div className="flex items-center justify-between">
                   <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute">Groupes & articles</div>
-                  <button onClick={addGroup} disabled={busy} className="text-[11px] text-bordeaux hover:underline">➕ Nouveau groupe</button>
+                  <button onClick={addGroup} disabled={busy} className="inline-flex items-center gap-1 text-[11px] text-bordeaux hover:underline"><Plus size={13} strokeWidth={1.8} /> Nouveau groupe</button>
                 </div>
 
                 <div className="space-y-3">
@@ -205,7 +206,7 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                     <div key={g.id} className="border border-line/60 rounded-lg p-2">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[12px] font-semibold text-ink">{g.name}</span>
-                        <button onClick={() => removeGroup(g)} className="text-[11px] text-ink-mute hover:text-red-600">🗑</button>
+                        <button onClick={() => removeGroup(g)} title="Supprimer le groupe" className="text-ink-mute hover:text-red-600"><Trash2 size={13} strokeWidth={1.8} /></button>
                       </div>
                       <ArticleList articles={articlesByGroup(g.id)} onToggle={toggleArticle} onRemove={removeArticle} />
                     </div>
@@ -235,13 +236,13 @@ function ArticleList({ articles, onToggle, onRemove }) {
     <div className="space-y-1">
       {articles.map(a => (
         <div key={a.id} className={`flex items-center gap-2 text-[12px] ${a.active ? '' : 'opacity-50'}`}>
-          <div className="w-7 h-7 rounded bg-cream-warm border border-line/40 flex items-center justify-center overflow-hidden flex-shrink-0">
-            {a.photo_url ? <img src={a.photo_url} alt="" className="w-full h-full object-cover" /> : <span className="text-[11px] opacity-30">📦</span>}
+          <div className="w-7 h-7 rounded bg-cream-deep border border-line/40 overflow-hidden flex-shrink-0">
+            {a.photo_url && <img src={a.photo_url} alt="" className="w-full h-full object-cover" />}
           </div>
           <span className="flex-1 text-ink">{a.name}{!a.odoo_product_id && <span className="text-[9px] text-amber-600 ml-1">(non lié Odoo)</span>}</span>
           {a.unit && <span className="text-[10px] text-ink-mute">{a.unit}</span>}
-          <button onClick={() => onToggle(a)} title={a.active ? 'Désactiver' : 'Activer'} className="text-ink-mute hover:text-bordeaux px-1">{a.active ? '👁' : '🚫'}</button>
-          <button onClick={() => onRemove(a)} title="Supprimer" className="text-ink-mute hover:text-red-600 px-1">🗑</button>
+          <button onClick={() => onToggle(a)} title={a.active ? 'Désactiver' : 'Activer'} className="text-ink-mute hover:text-bordeaux px-1">{a.active ? <Eye size={14} strokeWidth={1.8} /> : <EyeOff size={14} strokeWidth={1.8} />}</button>
+          <button onClick={() => onRemove(a)} title="Supprimer" className="text-ink-mute hover:text-red-600 px-1"><Trash2 size={13} strokeWidth={1.8} /></button>
         </div>
       ))}
     </div>
