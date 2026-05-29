@@ -234,7 +234,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
-        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-lg flex items-center justify-between">
+        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-2xl flex items-center justify-between">
           <div>
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
               {mode === 'sale' ? 'Livraison du matin — Salé' : 'Livraison du matin'}
@@ -243,11 +243,11 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
               {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} — {user.full_name || user.username}
             </div>
           </div>
-          <div className="flex items-center gap-2"><PrintButton mode="vitrine" /><div className="text-[11px] opacity-80">☀️ Pâtissier</div></div>
+          <div className="flex items-center gap-2"><PrintButton mode="vitrine" /><div className="text-[11px] opacity-80">Pâtissier</div></div>
         </div>
 
         {loading ? (
-          <div className="bg-white border border-line rounded-b-lg p-12 text-center text-ink-mute text-[12px]">
+          <div className="bg-white border border-line rounded-b-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
             Chargement...
           </div>
         ) : (
@@ -264,7 +264,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
 
             {/* SECTION 1 — RESTES D'HIER */}
             {filteredLeftovers.length > 0 && !leftoversApplied && (
-              <div className="bg-white border border-line rounded-lg overflow-hidden">
+              <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-4 py-3 border-b border-line flex items-center justify-between">
                   <div>
                     <div className="text-[14px] font-semibold">Restes d'hier — que faire ?</div>
@@ -381,7 +381,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
             )}
 
             {leftovers.length === 0 && (
-              <div className="bg-white border border-line rounded-lg p-4 text-center text-[12px] text-ink-mute">
+              <div className="bg-white border border-line rounded-2xl p-4 text-center text-[12px] text-ink-mute shadow-sm">
                 Pas de restes d'hier en vitrine ce matin.
               </div>
             )}
@@ -393,7 +393,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
             )}
 
             {/* SECTION 2 — NOUVELLE PROD */}
-            <div className="bg-white border border-line rounded-lg overflow-hidden">
+            <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
               <div className="px-4 py-3 border-b border-line">
                 <div className="text-[14px] font-semibold">Nouvelle production du jour</div>
                 <div className="text-[11px] text-ink-mute mt-0.5">
@@ -441,7 +441,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
 
             {/* SECTION 3 — DÉJÀ ENVOYÉS */}
             {sentItems.length > 0 && (
-              <div className="bg-white border border-line rounded-lg overflow-hidden">
+              <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-4 py-3 border-b border-line bg-cream-warm">
                   <div className="text-[12px] font-semibold">Déjà envoyés au café aujourd'hui</div>
                   <div className="text-[10px] text-ink-mute font-mono tracking-wider uppercase mt-0.5">

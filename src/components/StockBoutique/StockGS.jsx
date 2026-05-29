@@ -214,7 +214,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
 
         {/* Compteurs */}
         {!loading && gsLines.length > 0 && (
-          <div className="bg-white rounded-xl border border-line p-4 mb-5 flex flex-wrap gap-4">
+          <div className="bg-white rounded-2xl border border-line shadow-sm p-4 mb-5 flex flex-wrap gap-4">
             <div>
               <span className="text-[11px] text-ink-mute uppercase tracking-wider">Total</span>
               <div className="text-[20px] font-semibold text-ink">{gsLines.length}</div>
@@ -236,11 +236,11 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
 
         {/* Liste */}
         {loading ? (
-          <div className="bg-white rounded-xl border border-line p-6 text-center text-[13px] text-ink-mute">
+          <div className="bg-white rounded-2xl border border-line shadow-sm p-6 text-center text-[13px] text-ink-mute">
             Chargement...
           </div>
         ) : filteredLines.length === 0 ? (
-          <div className="bg-white rounded-xl border border-line p-8 text-center">
+          <div className="bg-white rounded-2xl border border-line shadow-sm p-8 text-center">
             <p className="text-[15px] font-semibold text-ink">
               {q ? 'Aucun résultat' : 'Aucun produit GS- dans le stock'}
             </p>
@@ -288,7 +288,7 @@ function StockGSCard({ line }) {
   }
 
   return (
-    <div className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 transition-all ${containerCls}`}>
+    <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 transition-all shadow-sm ${containerCls}`}>
       <div className="flex-1 min-w-0">
         <div className={`text-[14px] font-medium ${isZero ? 'text-ink-mute' : 'text-ink'} flex items-center`}>
           <span className="truncate">{line.clean_name}</span>

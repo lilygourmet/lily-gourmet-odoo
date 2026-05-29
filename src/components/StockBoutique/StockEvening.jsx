@@ -203,7 +203,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
         {/* HEADER */}
-        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-lg flex items-center justify-between">
+        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-2xl flex items-center justify-between">
           <div>
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
               Comptage du soir
@@ -254,7 +254,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
         )}
 
         {loading ? (
-          <div className="bg-white border border-line rounded-lg p-12 text-center text-ink-mute text-[12px]">
+          <div className="bg-white border border-line rounded-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
             Chargement...
           </div>
         ) : (
@@ -270,7 +270,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
             <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-3 pb-16 md:pb-0">
 
               {/* ============= PANNEAU GAUCHE : CALCULETTE + LISTE (mobile: visible si tab=panier) ============= */}
-              <div className={`${mobileTab === 'panier' ? 'block' : 'hidden'} md:block border border-line rounded-lg overflow-hidden flex flex-col bg-white`}>
+              <div className={`${mobileTab === 'panier' ? 'block' : 'hidden'} md:block border border-line rounded-2xl overflow-hidden shadow-sm flex flex-col bg-white`}>
 
                 {/* HEADER CALCULETTE */}
                 <div className="px-3 py-2 bg-bordeaux/10 text-bordeaux-deep font-mono text-[10px] tracking-[0.2em] uppercase font-semibold">
@@ -350,7 +350,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
               </div>
 
               {/* ============= PANNEAU DROITE : ONGLETS + TUILES (mobile: visible si tab=articles) ============= */}
-              <div className={`${mobileTab === 'articles' ? 'block' : 'hidden'} md:block bg-white border border-line rounded-lg overflow-hidden`}>
+              <div className={`${mobileTab === 'articles' ? 'block' : 'hidden'} md:block bg-white border border-line rounded-2xl overflow-hidden shadow-sm`}>
 
                 {/* NIVEAU 1 : Onglets catégories */}
                 <div className="flex border-b border-line bg-cream-warm overflow-x-auto">
@@ -542,7 +542,7 @@ function NumpadBtn({ label, onClick, disabled }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="py-3 bg-white border border-line rounded-md text-[14px] font-medium hover:bg-cream-warm active:bg-bordeaux/10 disabled:opacity-30 disabled:cursor-not-allowed"
+      className="py-3 bg-white border border-line rounded-lg text-[14px] font-medium hover:bg-cream-warm active:bg-bordeaux/10 disabled:opacity-30 disabled:cursor-not-allowed"
     >
       {label}
     </button>

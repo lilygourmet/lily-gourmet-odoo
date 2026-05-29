@@ -260,7 +260,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
         {/* HEADER + sélecteur date */}
-        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-lg flex items-center justify-between">
+        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-2xl flex items-center justify-between">
           <div>
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
               Rapport audit stock
@@ -386,11 +386,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
         )}
 
         {loading ? (
-          <div className="bg-white border border-line rounded-lg p-12 text-center text-ink-mute text-[12px]">
+          <div className="bg-white border border-line rounded-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
             Chargement...
           </div>
         ) : !stockDay ? (
-          <div className="bg-white border border-line rounded-lg p-12 text-center text-ink-mute text-[12px]">
+          <div className="bg-white border border-line rounded-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
             Aucun comptage enregistré pour ce jour.
           </div>
         ) : (
@@ -409,7 +409,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             )}
 
             {/* TABLEAU RAPPORT */}
-            <div className="bg-white border border-line rounded-lg overflow-hidden">
+            <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
               <div className="px-4 py-2.5 border-b border-line bg-cream-warm">
                 <div className="text-[12px] font-semibold">Rapport d'écarts par article</div>
                 <div className="text-[10px] text-ink-mute mt-0.5">
@@ -553,7 +553,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             {/* SECTION CONFLITS À ARBITRER */}
             {/* ============================================ */}
             {hasConflicts && (
-              <div className="bg-white border-2 border-bordeaux rounded-lg overflow-hidden">
+              <div className="bg-white border-2 border-bordeaux rounded-2xl overflow-hidden shadow-sm">
                 <div className="bg-bordeaux text-cream px-4 py-2.5">
                   <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-90">
                     Conflits
@@ -701,7 +701,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
         )}
 
         {/* HISTORIQUE */}
-        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-lg flex items-center justify-between mt-8">
+        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-2xl flex items-center justify-between mt-8">
           <div>
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
               Historique stock boutique
@@ -724,7 +724,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           </div>
         </div>
 
-        <div className="bg-white border border-line rounded-lg overflow-hidden">
+        <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
           {historyDays.length === 0 ? (
             <div className="p-8 text-center text-ink-mute text-[12px]">
               Aucune journée enregistrée sur la période.
@@ -834,7 +834,7 @@ function StatCard({ label, value, color }) {
     amber: 'bg-amber-100 text-amber-900',
   }
   return (
-    <div className={`p-3 rounded-md text-center ${styles[color] || styles.green}`}>
+    <div className={`p-4 rounded-2xl text-center shadow-sm ${styles[color] || styles.green}`}>
       <div className="text-[10px] tracking-[0.15em] uppercase opacity-70 mb-1">{label}</div>
       <div className="text-[22px] font-semibold">{value}</div>
     </div>
