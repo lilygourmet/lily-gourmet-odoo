@@ -5,6 +5,7 @@ import {
 } from '../../lib/tasks'
 import TaskDetailModal from './TaskDetailModal'
 import NewTaskModal from './NewTaskModal'
+import { Trash2, Paperclip } from 'lucide-react'
 
 const MONTHS_FR = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
@@ -147,7 +148,7 @@ export default function TasksView({ user }) {
           borderRadius: 8, marginBottom: 12, fontSize: 13, color: '#993556',
           display: 'flex', alignItems: 'center', gap: 8
         }}>
-          🔔 {toastMsg}
+          {toastMsg}
           <button onClick={() => setShowToast(false)} style={{
             marginLeft: 'auto', background: 'transparent', border: 'none',
             cursor: 'pointer', color: '#993556', fontSize: 14
@@ -158,7 +159,7 @@ export default function TasksView({ user }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a' }}>
-            📋 Tâches à faire
+            Tâches à faire
           </h2>
           <p style={{ margin: '4px 0 0', fontSize: 12, color: '#4a3a30' }}>
             {todoCount} à faire {unreadCount > 0 && (
@@ -169,7 +170,7 @@ export default function TasksView({ user }) {
           </p>
         </div>
         <button onClick={() => setShowNew(true)} style={btnPrimary}>
-          ➕ Nouvelle tâche
+          Nouvelle tâche
         </button>
       </div>
 
@@ -363,14 +364,14 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
   let statusBadge
   if (isDone) {
     statusBadge = isSent && !isSentToSelf
-      ? <Badge bg="#EAF3DE" col="#27500A">✓ Faite par {toName}</Badge>
-      : <Badge bg="#EAF3DE" col="#27500A">✓ Fait</Badge>
+      ? <Badge bg="#EAF3DE" col="#27500A">Faite par {toName}</Badge>
+      : <Badge bg="#EAF3DE" col="#27500A">Fait</Badge>
   } else if (isSent && !isSentToSelf) {
     statusBadge = task.is_read
-      ? <Badge bg="#E6F1FB" col="#0C447C">👁 Lue par {toName}</Badge>
-      : <Badge bg="#E6F1FB" col="#0C447C">⏳ Envoyée</Badge>
+      ? <Badge bg="#E6F1FB" col="#0C447C">Lue par {toName}</Badge>
+      : <Badge bg="#E6F1FB" col="#0C447C">Envoyée</Badge>
   } else {
-    statusBadge = <Badge bg="#FCEEE8" col="#993556">⏳ À faire</Badge>
+    statusBadge = <Badge bg="#FCEEE8" col="#993556">À faire</Badge>
   }
 
   let footer
@@ -392,8 +393,9 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
   return (
     <div onClick={onClick} style={{
       position: 'relative',
-      background: 'white', borderRadius: 8, padding: '10px 12px', cursor: 'pointer',
-      border: `0.5px solid ${borderColor}`, borderLeft: `3px solid ${leftColor}`,
+      background: 'white', borderRadius: 14, padding: '12px 14px', cursor: 'pointer',
+      border: `1px solid ${borderColor}`, borderLeft: `4px solid ${leftColor}`,
+      boxShadow: '0 4px 12px rgba(122,42,68,.06)',
       opacity: isDone ? 0.75 : 1,
       transition: 'transform 0.1s',
     }}
@@ -411,27 +413,27 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
             cursor: 'pointer', fontSize: 12, lineHeight: 1, color: '#A32D2D',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
-        >🗑</button>
+        ><Trash2 size={13} strokeWidth={1.8} /></button>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, flexWrap: 'wrap', paddingRight: onDelete ? 28 : 0 }}>
         {statusBadge}
         {task.is_urgent && !isDone && (
-          <Badge bg="#FCEBEB" col="#A32D2D">⚠️ Urgent</Badge>
+          <Badge bg="#FCEBEB" col="#A32D2D">Urgent</Badge>
         )}
         {wasEdited && !isDone && (
-          <Badge bg="#FFF1DA" col="#8A5A00">⚠️ Modifiée</Badge>
+          <Badge bg="#FFF1DA" col="#8A5A00">Modifiée</Badge>
         )}
         {hasAttachment && (
-          <Badge bg="#F4F0EA" col="#4a3a30">📎</Badge>
+          <Badge bg="#F4F0EA" col="#4a3a30"><Paperclip size={11} strokeWidth={1.8} /> Pièce jointe</Badge>
         )}
         {task.due_date && (
           isOverdue
-            ? <Badge bg="#FCEBEB" col="#A32D2D">📅 En retard ({dueLabel})</Badge>
-            : <Badge bg="#F4F0EA" col="#4a3a30">📅 Avant le {dueLabel}</Badge>
+            ? <Badge bg="#FCEBEB" col="#A32D2D">En retard ({dueLabel})</Badge>
+            : <Badge bg="#F4F0EA" col="#4a3a30">Avant le {dueLabel}</Badge>
         )}
         {(isReceived || isSentToSelf) && task.is_read && !isDone && (
-          <Badge bg="#FFF6E5" col="#7A5510">👁 Lu</Badge>
+          <Badge bg="#FFF6E5" col="#7A5510">Lu</Badge>
         )}
       </div>
 
@@ -476,7 +478,7 @@ function Chip({ active, onClick, children }) {
 }
 
 const btnPrimary = {
-  padding: '8px 16px', fontSize: 13, fontWeight: 500,
+  padding: '11px 18px', fontSize: 13, fontWeight: 600,
   background: '#993556', color: '#faf7f2', border: '1px solid #993556',
-  borderRadius: 999, cursor: 'pointer'
+  borderRadius: 10, cursor: 'pointer'
 }
