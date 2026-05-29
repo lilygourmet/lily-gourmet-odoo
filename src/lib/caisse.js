@@ -814,6 +814,13 @@ export async function ajouterDepenseHamid({ amount, category, label, mvtDate, us
   return data
 }
 
+// Supprime une dépense de Hamid (admin)
+export async function deleteHamidDepense(id, actorId = null) {
+  const { error } = await supabase.from('caisse_hamid_depenses').delete().eq('id', id)
+  if (error) throw error
+  try { await logAction({ entityType: 'hamid_depense', entityId: id, action: 'delete', description: `Suppression dépense Hamid #${id}`, actorId }) } catch (_) {}
+}
+
 // Factures issues des dépenses de Hamid (marquées "à récupérer")
 export async function loadHamidFacturesAll() {
   const { data, error } = await supabase

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, ajouterDepenseHamid, hamidRendArgent, loadCategories } from '../../../lib/caisse'
+import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, ajouterDepenseHamid, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
+import { Trash2 } from 'lucide-react'
 import AjoutAvanceHamidModal from '../modals/AjoutAvanceHamidModal'
 import AjoutDepenseHamidModal from '../modals/AjoutDepenseHamidModal'
 import HamidRendModal from '../modals/HamidRendModal'
@@ -48,6 +49,18 @@ export default function MeriemHamid({ user }) {
   async function handleRend({ amount, label, mvtDate }) {
     await hamidRendArgent({ amount, label, mvtDate, userId: user.id })
     setShowRend(false); reload()
+  }
+
+  const isAdmin = user?.role === 'admin'
+  async function handleDeleteDepense(d) {
+    if (!confirm(`Supprimer la dépense « ${d.label} » (${fmtMoney(d.amount)}) ?`)) return
+    try { await deleteHamidDepense(d.id, user.id); reload() }
+    catch (e) { alert('Erreur : ' + (e.message || e)) }
+  }
+  async function handleDeleteAvance(a) {
+    if (!confirm(`Supprimer l'avance « ${a.label} » (${fmtMoney(a.amount)}) ?\nCela annule aussi la sortie correspondante de la caisse Meriem.`)) return
+    try { await deleteMouvement(a.id, user.id); reload() }
+    catch (e) { alert('Erreur : ' + (e.message || e)) }
   }
 
   return (
@@ -114,7 +127,10 @@ export default function MeriemHamid({ user }) {
                 <div style={{ fontSize: 13 }}>{a.label}</div>
                 <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(a.mvt_date)}</div>
               </div>
-              <div style={{ color: '#1D7A5C', fontWeight: 500 }}>+ {fmtMoney(a.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#1D7A5C', fontWeight: 500 }}>+ {fmtMoney(a.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>
+                {isAdmin && <button onClick={() => handleDeleteAvance(a)} title="Supprimer" style={trashBtn}><Trash2 size={14} strokeWidth={1.8} /></button>}
+              </div>
             </div>
           ))}
         </div>
@@ -144,7 +160,10 @@ export default function MeriemHamid({ user }) {
                 </div>
                 <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(d.depense_date)} · {d.category || '—'}</div>
               </div>
-              <div style={{ color: '#99201E', fontWeight: 500 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#99201E', fontWeight: 500 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>
+                {isAdmin && <button onClick={() => handleDeleteDepense(d)} title="Supprimer" style={trashBtn}><Trash2 size={14} strokeWidth={1.8} /></button>}
+              </div>
             </div>
           ))}
         </div>
@@ -165,3 +184,4 @@ const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1
 const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
 const miniRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 8, marginBottom: 5, background: 'white', border: '0.5px solid #e5d8c3' }
+const trashBtn = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, border: '1px solid #e5d8c3', background: 'white', color: '#A32D2D', cursor: 'pointer' }
