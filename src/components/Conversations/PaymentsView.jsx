@@ -108,10 +108,10 @@ export default function PaymentsView({ user }) {
           {m.payment_amount != null && <div className="text-[13px] text-ink font-semibold mt-0.5">{fmtAmount(m.payment_amount)}</div>}
           <div className="text-[10px] text-ink-mute mt-0.5">Reçu le {fmtDate(m.sent_at)}</div>
           {validated && (
-            <div className="text-[11px] text-emerald-700 mt-1.5">✅ Validé{m.validator?.full_name ? ` par ${m.validator.full_name}` : ''} · {fmtDate(m.payment_validated_at)}</div>
+            <div className="text-[11px] text-emerald-700 mt-1.5">Validé{m.validator?.full_name ? ` par ${m.validator.full_name}` : ''} · {fmtDate(m.payment_validated_at)}</div>
           )}
           {rejected && (
-            <div className="text-[11px] text-bordeaux mt-1.5">❌ Refusé{m.rejector?.full_name ? ` par ${m.rejector.full_name}` : ''}{m.payment_rejection_reason ? ` — ${m.payment_rejection_reason}` : ''}</div>
+            <div className="text-[11px] text-bordeaux mt-1.5">Refusé{m.rejector?.full_name ? ` par ${m.rejector.full_name}` : ''}{m.payment_rejection_reason ? ` — ${m.payment_rejection_reason}` : ''}</div>
           )}
           {pending && (
             canValidate ? (
@@ -120,15 +120,15 @@ export default function PaymentsView({ user }) {
                   onClick={() => handleValidate(m)}
                   disabled={busyId === m.id}
                   className="px-4 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-full hover:bg-bordeaux-deep disabled:opacity-50"
-                >{busyId === m.id ? '…' : '✅ Valider'}</button>
+                >{busyId === m.id ? '…' : 'Valider'}</button>
                 <button
                   onClick={() => handleReject(m)}
                   disabled={busyId === m.id}
                   className="px-4 py-1.5 text-[12px] font-medium border border-bordeaux text-bordeaux rounded-full hover:bg-bordeaux hover:text-cream disabled:opacity-50"
-                >❌ Refuser</button>
+                >Refuser</button>
               </div>
             ) : (
-              <div className="text-[11px] text-amber-700 mt-1.5">⏳ À valider</div>
+              <div className="text-[11px] text-amber-700 mt-1.5">À valider</div>
             )
           )}
         </div>
@@ -138,7 +138,7 @@ export default function PaymentsView({ user }) {
 
   return (
     <div className="max-w-[1100px] mx-auto px-5 py-5">
-      <h1 className="font-fraunces italic text-[26px] text-ink mb-1">💰 Paiements à valider</h1>
+      <h1 className="font-fraunces italic text-[26px] text-ink mb-1">Paiements à valider</h1>
       <p className="text-[12px] text-ink-mute mb-4">Preuves de virement transférées depuis les conversations.</p>
 
       {/* Totaux */}

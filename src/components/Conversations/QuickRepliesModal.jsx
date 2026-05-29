@@ -98,7 +98,7 @@ export default function QuickRepliesModal({ onClose }) {
             </div>
           ) : (
             <label className="inline-flex items-center px-3 py-1.5 text-[11px] border border-line rounded-lg text-ink-soft hover:border-bordeaux cursor-pointer">
-              {uploadingPhoto ? '⏳ Envoi…' : '📷 Ajouter une photo'}
+              {uploadingPhoto ? 'Envoi…' : 'Ajouter une photo'}
               <input type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
             </label>
           )}
@@ -125,7 +125,7 @@ export default function QuickRepliesModal({ onClose }) {
             {items.map(it => (
               <div key={it.id} className="bg-cream-warm border border-line rounded-lg p-2.5">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[13px] font-medium text-ink">{it.media_path ? '📷 ' : ''}{it.label}</span>
+                  <span className="text-[13px] font-medium text-ink">{it.label}</span>
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => startEdit(it)} className="text-[11px] text-ink-soft hover:text-bordeaux px-1">Modifier</button>
                     <button onClick={() => handleDelete(it.id)} className="text-[11px] text-bordeaux hover:underline px-1">Suppr.</button>

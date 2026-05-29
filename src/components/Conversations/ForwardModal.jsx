@@ -57,11 +57,11 @@ export default function ForwardModal({ sourceMessage, currentConversationId, use
         </div>
 
         <div className="text-[11px] text-ink-mute bg-cream-warm border border-line rounded-lg p-2 mb-3 truncate">
-          {sourceMessage.body || (sourceMessage.media_url ? '📎 Pièce jointe' : '')}
+          {sourceMessage.body || (sourceMessage.media_url ? 'Pièce jointe' : '')}
         </div>
 
         {doneName ? (
-          <div className="text-[13px] text-bordeaux py-3">Transféré à {doneName} ✅</div>
+          <div className="text-[13px] text-bordeaux py-3">Transféré à {doneName}</div>
         ) : (
           <>
             <input

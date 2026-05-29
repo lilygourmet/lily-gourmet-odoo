@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { playDing } from '../../lib/ding'
+import { MessageCircle } from 'lucide-react'
 
 // Affiche un toast en haut à droite à chaque nouveau message CLIENT, sur toute
 // l'app (pas seulement l'onglet Conversations). Empilable, auto-dismiss 5 s,
@@ -33,7 +34,7 @@ export default function ConversationNotifier({ user, onOpen }) {
           } catch (_) { /* ignore */ }
 
           if (cancelled) return
-          const preview = m.body ? m.body.slice(0, 60) : '📎 Pièce jointe'
+          const preview = m.body ? m.body.slice(0, 60) : 'Pièce jointe'
           const id = `${m.id}-${Date.now()}`
           playDing()
           setToasts(prev => [...prev, { id, conversationId: m.conversation_id, title, preview }])
@@ -69,7 +70,7 @@ export default function ConversationNotifier({ user, onOpen }) {
           className="w-72 max-w-[90vw] text-left bg-cream border border-bordeaux/30 rounded-lg shadow-xl px-3 py-2.5 hover:border-bordeaux transition-colors animate-fadeIn"
         >
           <div className="flex items-start gap-2">
-            <span className="text-[16px] flex-shrink-0">📱</span>
+            <MessageCircle size={16} strokeWidth={1.8} className="flex-shrink-0 text-bordeaux mt-0.5" />
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium text-ink truncate">{t.title}</div>
               <div className="text-[11px] text-ink-mute truncate">{t.preview}</div>
