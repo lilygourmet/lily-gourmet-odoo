@@ -1,11 +1,12 @@
+import { Archive, AlertTriangle } from 'lucide-react'
 import { fmtMoney, MOIS_TABS } from '../_helpers'
 import { ModalBox } from './AjoutSortieModal'
 
 export default function ClotureMoisModal({ balance, year, month, caisseOwner, onClose, onConfirm }) {
   return (
-    <ModalBox title={`Clôturer ${MOIS_TABS[month - 1].label} ${year}`} titleColor="#1a0f0a" titleIcon="📁" onClose={onClose}>
-      <div style={{ background: '#FAEEDA', border: '0.5px solid #EF9F27', color: '#633806', padding: '12px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
-        ⚠️ Une fois clôturé, vous ne pourrez plus modifier les mouvements de ce mois.
+    <ModalBox title={`Clôturer ${MOIS_TABS[month - 1].label} ${year}`} titleColor="#1a0f0a" titleIcon={<Archive size={18} />} onClose={onClose}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FAEEDA', border: '0.5px solid #EF9F27', color: '#633806', padding: '12px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
+        <AlertTriangle size={14} /> Une fois clôturé, vous ne pourrez plus modifier les mouvements de ce mois.
       </div>
 
       <div style={{ background: '#F4F0EA', padding: '14px 16px', borderRadius: 8, marginBottom: 14 }}>

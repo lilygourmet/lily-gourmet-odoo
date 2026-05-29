@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Receipt } from 'lucide-react'
 import { todayISO } from '../_helpers'
 import { ModalBox } from './AjoutSortieModal'
 
@@ -16,7 +17,7 @@ export default function AjoutDepenseHamidModal({ categories, onClose, onSubmit }
   }
 
   return (
-    <ModalBox title="Saisir dépense de Hamid" titleColor="#633806" titleIcon="🧾" onClose={onClose}>
+    <ModalBox title="Saisir dépense de Hamid" titleColor="#633806" titleIcon={<Receipt size={18} />} onClose={onClose}>
       <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Montant (dh)</div>
       <input type="number" autoFocus value={amount} onChange={e => setAmount(e.target.value)} style={ipt} />
       <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4, marginTop: 10 }}>Libellé</div>

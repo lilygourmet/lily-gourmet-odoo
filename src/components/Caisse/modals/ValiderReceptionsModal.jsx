@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Clock, CheckCircle2, Check } from 'lucide-react'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 
 /**
@@ -36,9 +37,9 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
   return (
     <div style={overlay}>
       <div style={modal} onClick={e => e.stopPropagation()}>
-        <div style={{ background: 'linear-gradient(135deg, #993556 0%, #B14A6F 100%)', color: 'white', padding: '20px 24px', borderRadius: '12px 12px 0 0' }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-            ⏳ Réceptions à valider
+        <div style={{ background: 'linear-gradient(135deg, #993556 0%, #B14A6F 100%)', color: 'white', padding: '20px 24px', borderRadius: '16px 16px 0 0' }}>
+          <h3 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, fontSize: 18, fontWeight: 600 }}>
+            <Clock size={18} /> Réceptions à valider
           </h3>
           <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4 }}>
             Confirme que tu as bien reçu ces montants pour qu'ils soient comptés dans ton solde.
@@ -47,8 +48,8 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
 
         <div style={{ padding: 18, maxHeight: '60vh', overflowY: 'auto' }}>
           {receptions.length === 0 && (
-            <div style={{ padding: 20, textAlign: 'center', color: '#4a3a30' }}>
-              ✅ Toutes les réceptions sont validées !
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: 20, textAlign: 'center', color: '#4a3a30' }}>
+              <CheckCircle2 size={16} /> Toutes les réceptions sont validées !
             </div>
           )}
 
@@ -76,12 +77,13 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
                   disabled={isValidating}
                   onClick={() => handleValidate(r.id)}
                   style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
                     fontSize: 12, padding: '6px 12px', borderRadius: 6,
                     border: '1px solid #97C459', background: isValidating ? '#E8E8E8' : '#EAF3DE',
                     color: '#27500A', cursor: isValidating ? 'wait' : 'pointer',
                     fontWeight: 500, whiteSpace: 'nowrap'
                   }}>
-                  {isValidating ? '⏳' : '✅ Reçu'}
+                  {isValidating ? <Clock size={14} /> : <><Check size={14} /> Reçu</>}
                 </button>
               </div>
             )
@@ -111,4 +113,4 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
 }
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal = { background: 'white', borderRadius: 12, maxWidth: 580, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }
+const modal = { background: 'white', borderRadius: 16, maxWidth: 580, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }

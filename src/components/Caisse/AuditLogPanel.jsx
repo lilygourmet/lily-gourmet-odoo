@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { loadAuditLog } from '../../lib/caisse'
 import { fmtMoney } from './_helpers'
 
@@ -59,13 +60,13 @@ export default function AuditLogPanel({ entityType = null, title = null, limit =
     setLoading(false)
   }
 
-  const titleLabel = title || '📜 Historique des actions'
+  const titleLabel = title || 'Historique des actions'
   const countLabel = count === null ? '' : (count >= limit ? `${count}+` : count)
 
   return (
     <div style={containerStyle}>
       <button onClick={() => setOpen(!open)} style={toggleBtn(open)}>
-        <span>{open ? '▾' : '▸'}</span>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span style={{ flex: 1, textAlign: 'left' }}>{titleLabel}</span>
         {countLabel !== '' && (
           <span style={countBadge}>{countLabel} action{countLabel !== 1 && countLabel !== '1' ? 's' : ''}</span>
@@ -150,7 +151,7 @@ const countBadge = {
 const bodyStyle = {
   marginTop: 6,
   background: '#FAF6F0',
-  borderRadius: 6,
+  borderRadius: 12,
   border: '0.5px solid #e5d8c3',
   maxHeight: 400,
   overflow: 'auto',

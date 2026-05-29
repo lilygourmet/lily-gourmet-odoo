@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Calendar, Landmark, User, Briefcase } from 'lucide-react'
 import { fmtMoney, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
 
 export default function AttributionModal({ env, destinataires, onClose, onAssign }) {
@@ -22,8 +23,8 @@ export default function AttributionModal({ env, destinataires, onClose, onAssign
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
-          📅 Date effective (mois où l'argent a été réellement pris/versé)
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
+          <Calendar size={14} /> Date effective (mois où l'argent a été réellement pris/versé)
         </label>
         <input
           type="date"
@@ -49,8 +50,9 @@ export default function AttributionModal({ env, destinataires, onClose, onAssign
               background: c.bg, color: c.text, border: `0.5px solid ${c.border}`,
               fontSize: 14, fontWeight: 500, padding: '16px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
               gridColumn: fullWidth ? 'span 2' : 'auto',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
-              {d.type === 'banque' ? '🏦' : d.type === 'perso' ? '👤' : '💼'} {d.name}
+              {d.type === 'banque' ? <Landmark size={14} /> : d.type === 'perso' ? <User size={14} /> : <Briefcase size={14} />} {d.name}
             </button>
           )
         })}
@@ -66,8 +68,8 @@ function Modal({ title, onClose, children }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem',
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: 'white', borderRadius: 12, padding: 28, maxWidth: 460, width: '100%',
-        border: '0.5px solid #e5d8c3',
+        background: 'white', borderRadius: 16, padding: 28, maxWidth: 460, width: '100%',
+        border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>{title}</div>

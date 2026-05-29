@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Car } from 'lucide-react'
 import { todayISO, fmtMoney } from '../_helpers'
 import { ModalBox } from './AjoutSortieModal'
 
@@ -13,7 +14,7 @@ export default function AjoutAvanceHamidModal({ onClose, onSubmit }) {
   }
 
   return (
-    <ModalBox title="Donner argent à Hamid" titleColor="#633806" titleIcon="🚖" onClose={onClose}>
+    <ModalBox title="Donner argent à Hamid" titleColor="#633806" titleIcon={<Car size={18} />} onClose={onClose}>
       <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Montant (dh)</div>
       <input type="number" autoFocus value={amount} onChange={e => setAmount(e.target.value)} style={ipt} />
       <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4, marginTop: 10 }}>Libellé</div>

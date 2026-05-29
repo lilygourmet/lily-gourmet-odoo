@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Zap } from 'lucide-react'
 import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, currentYear, RELIQUAT_DESTINATIONS, COLOR_PALETTE, SALAIRE_COLORS } from '../_helpers'
 import { supabase } from '../../../lib/supabase'
@@ -84,7 +85,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 28, maxWidth: 720, width: '100%', maxHeight: '92vh', overflowY: 'auto', border: '0.5px solid #e5d8c3' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 28, maxWidth: 720, width: '100%', maxHeight: '92vh', overflowY: 'auto', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>Composer le salaire de {salaire.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'} · {salaire.month}/{salaire.year}</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }}>✕</button>
@@ -110,7 +111,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>Enveloppes disponibles</div>
-          <button onClick={autoFill} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }}>⚡ Auto-remplir</button>
+          <button onClick={autoFill} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }}><Zap size={14} /> Auto-remplir</button>
         </div>
 
         {available.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>Aucune enveloppe disponible (toutes affectées).</div>}

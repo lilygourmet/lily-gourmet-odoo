@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Calendar, RefreshCw, Landmark, User, Briefcase } from 'lucide-react'
 import { fmtMoney, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
 
 export default function DetailReaffecterModal({ env, destinataires, onClose, onReassign, onUnassign, onUpdateDate }) {
@@ -42,8 +43,8 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
 
           {/* Date d'affectation modifiable */}
           <div style={{ background: '#F4F0EA', padding: '10px 14px', borderRadius: 8, marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 6 }}>
-              📅 Date effective (mois où l'argent a été pris)
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#4a3a30', marginBottom: 6 }}>
+              <Calendar size={14} /> Date effective (mois où l'argent a été pris)
             </div>
             {!editingDate ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -74,7 +75,7 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
             )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button onClick={() => setShowReassign(true)} style={btnNormal}>🔄 Réaffecter à un autre destinataire</button>
+            <button onClick={() => setShowReassign(true)} style={{ ...btnNormal, display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={14} /> Réaffecter à un autre destinataire</button>
             <button onClick={() => { if (confirm('Annuler l\'affectation ? L\'enveloppe redevient grise.')) onUnassign() }} style={{ ...btnNormal, color: '#4a3a30' }}>↩ Retour à « À affecter »</button>
             <button onClick={onClose} style={btnNormal}>Fermer</button>
           </div>
@@ -99,8 +100,9 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
                   fontSize: 14, fontWeight: 500, padding: '14px 12px', borderRadius: 8,
                   cursor: isCurrent ? 'not-allowed' : 'pointer', textAlign: 'left',
                   gridColumn: fullWidth ? 'span 2' : 'auto', opacity: isCurrent ? 0.4 : 1,
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}>
-                  {d.type === 'banque' ? '🏦' : d.type === 'perso' ? '👤' : '💼'} {d.name}{isCurrent && ' (actuel)'}
+                  {d.type === 'banque' ? <Landmark size={14} /> : d.type === 'perso' ? <User size={14} /> : <Briefcase size={14} />} {d.name}{isCurrent && ' (actuel)'}
                 </button>
               )
             })}
@@ -123,7 +125,7 @@ function Modal({ title, onClose, children }) {
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem',
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 460, width: '100%', border: '0.5px solid #e5d8c3' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 460, width: '100%', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>{title}</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }}>✕</button>

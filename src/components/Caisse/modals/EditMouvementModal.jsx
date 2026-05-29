@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Pencil } from 'lucide-react'
 
 /**
  * Modal pour modifier l'intitulé, la catégorie et la date d'un mouvement.
@@ -42,8 +43,8 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#1a0f0a' }}>
-            ✏️ Modifier le mouvement
+          <h3 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0, fontSize: 16, fontWeight: 600, color: '#1a0f0a' }}>
+            <Pencil size={16} /> Modifier le mouvement
           </h3>
           <button onClick={onClose} style={btnClose}>✕</button>
         </div>
@@ -121,7 +122,7 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
 }
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal = { background: 'white', borderRadius: 12, padding: 22, maxWidth: 440, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
+const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 440, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
 const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }
 const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }
 const inputStyle = { display: 'block', width: '100%', padding: '9px 11px', marginTop: 5, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box' }
