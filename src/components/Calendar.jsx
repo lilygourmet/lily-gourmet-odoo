@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { Search, Printer, FileText } from 'lucide-react'
 import {
   loadOrdersForWeek,
   loadAllOrders,
@@ -583,7 +584,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
             placeholder="Rechercher S47... ou nom"
             className="w-full px-3 py-2 pl-8 text-[12px] bg-cream-warm border border-line rounded-full focus:outline-none focus:border-bordeaux transition-all"
           />
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-mute text-[12px]">🔍</span>
+          <Search size={13} strokeWidth={1.8} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-mute" />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
@@ -640,7 +641,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
                   : 'Aucune nouvelle commande a imprimer'
               }
             >
-              <span>🖨️</span>
+              <Printer size={14} strokeWidth={1.8} />
               <span>{unprintedThisWeek.length}</span>
             </button>
           )}
@@ -1268,7 +1269,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
         {/* Header */}
         <div className="border-b border-line px-6 py-4">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[16px]">📝</span>
+            <FileText size={15} strokeWidth={1.8} className="text-gold" />
             <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-gold font-bold">
               Modification
             </span>
@@ -1322,7 +1323,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
                 {action === 'ajoute' ? (
                   <>
                     <span className="font-mono text-[10px] tracking-wider uppercase text-gold font-semibold">
-                      ➕ Item ajouté
+                      Item ajouté
                     </span>
                     {item && (
                       <span className="text-ink ml-2">
@@ -1332,7 +1333,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
                   </>
                 ) : (
                   <span className="font-mono text-[10px] tracking-wider uppercase text-bordeaux font-semibold">
-                    ➖ Item supprimé (idx {idx})
+                    Item supprimé (idx {idx})
                   </span>
                 )}
               </div>
