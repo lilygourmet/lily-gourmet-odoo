@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, ajouterDepenseHamid, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense } from '../../../lib/caisse'
+import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, ajouterDepenseHamid, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense, uploadHamidDepenseProof } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Paperclip } from 'lucide-react'
 import AjoutAvanceHamidModal from '../modals/AjoutAvanceHamidModal'
 import AjoutDepenseHamidModal from '../modals/AjoutDepenseHamidModal'
 import HamidRendModal from '../modals/HamidRendModal'
@@ -52,6 +52,14 @@ export default function MeriemHamid({ user }) {
   }
 
   const isAdmin = user?.role === 'admin'
+  const [uploadingId, setUploadingId] = useState(null)
+  async function handleProof(d, file) {
+    if (!file) return
+    setUploadingId(d.id)
+    try { await uploadHamidDepenseProof(d.id, file, user.id); await reload() }
+    catch (e) { alert('Erreur : ' + (e.message || e)) }
+    finally { setUploadingId(null) }
+  }
   async function handleDeleteDepense(d) {
     if (!confirm(`Supprimer la dépense « ${d.label} » (${fmtMoney(d.amount)}) ?`)) return
     try { await deleteHamidDepense(d.id, user.id); reload() }
@@ -159,6 +167,22 @@ export default function MeriemHamid({ user }) {
                   )}
                 </div>
                 <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(d.depense_date)} · {d.category || '—'}</div>
+                <div style={{ marginTop: 4, fontSize: 11 }}>
+                  {uploadingId === d.id ? (
+                    <span style={{ color: '#8a7a70' }}>Envoi de la preuve…</span>
+                  ) : d.proof_url ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                      <a href={d.proof_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0C447C', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}><Paperclip size={12} strokeWidth={1.8} /> Voir la preuve</a>
+                      <label style={{ color: '#8a7a70', cursor: 'pointer' }}>remplacer
+                        <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => handleProof(d, e.target.files?.[0])} />
+                      </label>
+                    </span>
+                  ) : (
+                    <label style={{ color: '#993556', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}><Paperclip size={12} strokeWidth={1.8} /> Ajouter une preuve
+                      <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => handleProof(d, e.target.files?.[0])} />
+                    </label>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: '#99201E', fontWeight: 500 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>

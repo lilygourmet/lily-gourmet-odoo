@@ -814,6 +814,34 @@ export async function ajouterDepenseHamid({ amount, category, label, mvtDate, us
   return data
 }
 
+// Upload une preuve (photo/PDF) pour une dépense de Hamid
+export async function uploadHamidDepenseProof(depenseId, file, actorId = null) {
+  if (!file) throw new Error('Aucun fichier fourni')
+  const ext = (file.name?.split('.').pop() || 'bin').toLowerCase()
+  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+  const path = `hamid/dep_${depenseId}/${ts}.${ext}`
+
+  const { error: errUp } = await supabase.storage
+    .from(PROOF_BUCKET)
+    .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+  if (errUp) throw errUp
+
+  const { data: signed, error: errSign } = await supabase.storage
+    .from(PROOF_BUCKET)
+    .createSignedUrl(path, 60 * 60 * 24 * 365)
+  if (errSign) throw errSign
+  const url = signed.signedUrl
+
+  const { error: errUpd } = await supabase
+    .from('caisse_hamid_depenses')
+    .update({ proof_url: url, proof_uploaded_at: new Date().toISOString() })
+    .eq('id', depenseId)
+  if (errUpd) throw errUpd
+
+  try { await logAction({ entityType: 'hamid_depense', entityId: depenseId, action: 'proof_upload', description: `Preuve ajoutée à la dépense Hamid #${depenseId}`, actorId }) } catch (_) {}
+  return { url }
+}
+
 // Supprime une dépense de Hamid (admin)
 export async function deleteHamidDepense(id, actorId = null) {
   const { error } = await supabase.from('caisse_hamid_depenses').delete().eq('id', id)
