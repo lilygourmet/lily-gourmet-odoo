@@ -79,7 +79,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
       <div style={modal} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#1a0f0a' }}>
-            ➕ Nouvelle tâche
+            Nouvelle tâche
           </h3>
           <button onClick={onClose} style={btnClose}>✕</button>
         </div>
@@ -130,7 +130,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
           </label>
 
           <label style={lblStyle}>
-            📅 À faire avant (optionnel)
+            À faire avant (optionnel)
             <input
               type="date"
               value={dueDate}
@@ -141,7 +141,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
 
           {/* Pièce jointe */}
           <label style={lblStyle}>
-            📎 Pièce jointe (optionnel — max 5 MB)
+            Pièce jointe (optionnel — max 5 MB)
             <input
               type="file"
               onChange={handleFileChange}
@@ -153,7 +153,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
                 borderRadius: 6, fontSize: 11, color: '#4a3a30',
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                <span>📄 {file.name}</span>
+                <span>{file.name}</span>
                 <span style={{ color: '#8a7a70' }}>({(file.size / 1024).toFixed(1)} KB)</span>
                 <button type="button" onClick={() => setFile(null)} style={{
                   marginLeft: 'auto', background: 'transparent', border: 'none',
@@ -176,7 +176,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
               style={{ width: 16, height: 16, cursor: 'pointer' }}
             />
             <span style={{ fontSize: 12, color: '#A32D2D', fontWeight: 500 }}>
-              ⚠️ Marquer comme urgent
+              Marquer comme urgent
             </span>
           </label>
 

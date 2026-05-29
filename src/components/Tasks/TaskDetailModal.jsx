@@ -153,28 +153,28 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
   // Badge statut
   let statusBadge
   if (isDone) {
-    statusBadge = <Badge bg="#EAF3DE" col="#27500A">✓ Fait</Badge>
+    statusBadge = <Badge bg="#EAF3DE" col="#27500A">Fait</Badge>
   } else if (task.is_read) {
-    statusBadge = <Badge bg="#FFF6E5" col="#7A5510">👁 Lu</Badge>
+    statusBadge = <Badge bg="#FFF6E5" col="#7A5510">Lu</Badge>
   } else {
-    statusBadge = <Badge bg="#FCEEE8" col="#993556">⏳ À faire</Badge>
+    statusBadge = <Badge bg="#FCEEE8" col="#993556">À faire</Badge>
   }
 
   // Méta lignes
   const metaLines = []
   if (isReceived) {
     metaLines.push(<>De <strong>{fromName}</strong> · envoyé {fmtDate(task.sent_at)}</>)
-    if (task.read_at) metaLines.push(<>👁 Tu l'as lue le {fmtDate(task.read_at)}</>)
-    if (task.done_at) metaLines.push(<>✓ Faite le {fmtDate(task.done_at)}</>)
+    if (task.read_at) metaLines.push(<>Tu l'as lue le {fmtDate(task.read_at)}</>)
+    if (task.done_at) metaLines.push(<>Faite le {fmtDate(task.done_at)}</>)
     if (wasEdited && task.edited_at) {
-      metaLines.push(<><span style={{ color: '#A32D2D' }}>⚠️ Modifiée le {fmtDate(task.edited_at)}{task.edited_count > 1 ? ` (${task.edited_count} fois)` : ''}</span></>)
+      metaLines.push(<><span style={{ color: '#A32D2D' }}>Modifiée le {fmtDate(task.edited_at)}{task.edited_count > 1 ? ` (${task.edited_count} fois)` : ''}</span></>)
     }
   } else {
     metaLines.push(<>Envoyée à <strong>{toName}</strong> · {fmtDate(task.sent_at)}</>)
-    if (task.read_at) metaLines.push(<>👁 Lue par {toName} le {fmtDate(task.read_at)}</>)
-    if (task.done_at) metaLines.push(<>✓ Faite le {fmtDate(task.done_at)}</>)
+    if (task.read_at) metaLines.push(<>Lue par {toName} le {fmtDate(task.read_at)}</>)
+    if (task.done_at) metaLines.push(<>Faite le {fmtDate(task.done_at)}</>)
     if (wasEdited && task.edited_at) {
-      metaLines.push(<>✏️ Dernière modification : {fmtDate(task.edited_at)}{task.edited_count > 1 ? ` (${task.edited_count} fois)` : ''}</>)
+      metaLines.push(<>Dernière modification : {fmtDate(task.edited_at)}{task.edited_count > 1 ? ` (${task.edited_count} fois)` : ''}</>)
     }
   }
 
@@ -184,8 +184,8 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {statusBadge}
-            {task.is_urgent && <Badge bg="#FCEBEB" col="#A32D2D">⚠️ Urgent</Badge>}
-            {wasEdited && <Badge bg="#FFF1DA" col="#8A5A00">⚠️ Modifiée</Badge>}
+            {task.is_urgent && <Badge bg="#FCEBEB" col="#A32D2D">Urgent</Badge>}
+            {wasEdited && <Badge bg="#FFF1DA" col="#8A5A00">Modifiée</Badge>}
           </div>
           <button onClick={onClose} style={btnClose}>✕</button>
         </div>
@@ -216,7 +216,6 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                 padding: '10px 12px', background: '#F4F0EA', borderRadius: 8,
                 marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10,
               }}>
-                <span style={{ fontSize: 20 }}>📎</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 500, color: '#1a0f0a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {task.attachment_name}
@@ -231,7 +230,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                   padding: '6px 12px', fontSize: 12, background: '#993556', color: 'white',
                   border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 500,
                 }}>
-                  ⬇ Ouvrir
+                  Ouvrir
                 </button>
               </div>
             )}
@@ -246,7 +245,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
             {!isDone && (isReceived || isSentToSelf) && (
               <>
                 <button onClick={handleDone} disabled={saving} style={btnSuccess}>
-                  ✓ {saving ? 'Enregistrement…' : 'Marquer comme fait'}
+                  {saving ? 'Enregistrement…' : 'Marquer comme fait'}
                 </button>
                 {isSent && !isSentToSelf && (
                   <div style={{ marginTop: 8, fontSize: 10, color: '#8a7a70', textAlign: 'center' }}>
@@ -259,7 +258,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
             {/* Bouton Modifier : expéditeur sur tâche non faite */}
             {canEdit && (
               <button onClick={() => setEditMode(true)} style={btnEdit}>
-                ✏️ Modifier la tâche
+                Modifier la tâche
               </button>
             )}
 
@@ -267,7 +266,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
             {canUndo && (
               <>
                 <button onClick={handleUndo} disabled={saving} style={btnUndo}>
-                  ↩ Défaire (remettre à faire)
+                  Défaire (remettre à faire)
                 </button>
                 <div style={{ marginTop: 8, fontSize: 10, color: '#8a7a70', textAlign: 'center' }}>
                   Remet la tâche en « à faire »
@@ -280,7 +279,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
               background: 'white', color: '#1a0f0a', border: '1px solid #e5d8c3',
               borderRadius: 8, cursor: 'pointer',
             }}>
-              🖨 Imprimer
+              Imprimer
             </button>
 
             <button onClick={onClose} style={btnClose2}>
@@ -294,7 +293,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
               padding: '8px 12px', background: '#FFF1DA', color: '#8A5A00',
               borderRadius: 6, fontSize: 11, marginBottom: 14,
             }}>
-              ✏️ Modification de la tâche — {toName} sera prévenu(e) que la tâche a été modifiée.
+              Modification de la tâche — {toName} sera prévenu(e) que la tâche a été modifiée.
             </div>
 
             <label style={lblStyle}>
@@ -320,12 +319,12 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                 padding: '8px 10px', background: '#F4F0EA', borderRadius: 6,
                 marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
               }}>
-                <span>📎 {task.attachment_name}</span>
+                <span>{task.attachment_name}</span>
                 <button type="button" onClick={() => setRemoveAttachment(true)} style={{
                   marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer',
                   color: '#993556', fontSize: 12,
                 }}>
-                  🗑 Supprimer
+                  Supprimer
                 </button>
               </div>
             )}
@@ -335,7 +334,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                 borderRadius: 6, marginBottom: 12, fontSize: 11,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                <span>🗑 Pièce jointe sera supprimée</span>
+                <span>Pièce jointe sera supprimée</span>
                 <button type="button" onClick={() => setRemoveAttachment(false)} style={{
                   marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer',
                   color: '#993556',
@@ -344,7 +343,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
             )}
 
             <label style={lblStyle}>
-              📎 {task.attachment_path ? 'Remplacer la pièce jointe' : 'Pièce jointe'} (max 5 MB)
+              {task.attachment_path ? 'Remplacer la pièce jointe' : 'Pièce jointe'} (max 5 MB)
               <input
                 type="file" onChange={handleFileChange}
                 style={{ ...inputStyle, padding: '7px 11px', cursor: 'pointer' }}
@@ -354,7 +353,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                   marginTop: 6, padding: '6px 10px', background: '#EAF3DE',
                   borderRadius: 6, fontSize: 11, color: '#27500A',
                 }}>
-                  📄 Nouveau : {editFile.name} ({(editFile.size / 1024).toFixed(1)} KB)
+                  Nouveau : {editFile.name} ({(editFile.size / 1024).toFixed(1)} KB)
                 </div>
               )}
             </label>
@@ -366,7 +365,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
             }}>
               <input type="checkbox" checked={editUrgent} onChange={e => setEditUrgent(e.target.checked)}
                 style={{ width: 16, height: 16, cursor: 'pointer' }} />
-              <span style={{ fontSize: 12, color: '#A32D2D', fontWeight: 500 }}>⚠️ Urgent</span>
+              <span style={{ fontSize: 12, color: '#A32D2D', fontWeight: 500 }}>Urgent</span>
             </label>
 
             {error && (
@@ -380,7 +379,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
                 Annuler
               </button>
               <button onClick={handleSaveEdit} disabled={saving} style={{ ...btnSuccess, flex: 1 }}>
-                {saving ? 'Enregistrement…' : '✓ Enregistrer modifications'}
+                {saving ? 'Enregistrement…' : 'Enregistrer modifications'}
               </button>
             </div>
           </>
