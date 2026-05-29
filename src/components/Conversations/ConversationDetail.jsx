@@ -3,6 +3,7 @@ import { loadConversation, loadMessages, assignConversation, sendMessage, upload
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import { supabase } from '../../lib/supabase'
+import { ArrowLeft, Search, Pin, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon } from 'lucide-react'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -469,12 +470,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           onClick={onBack}
           className="md:hidden w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
           title="Retour à la liste"
-        >←</button>
+        ><ArrowLeft size={18} strokeWidth={1.8} /></button>
         <button
           onClick={() => setThreadSearchOpen(o => !o)}
           className="w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
           title="Rechercher dans la conversation"
-        >🔍</button>
+        ><Search size={16} strokeWidth={1.8} /></button>
         <div className="min-w-0 flex-1">
           <div className="text-[16px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
           {conv?.client_name && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
@@ -530,12 +531,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           </div>
         ) : conv?.internal_note ? (
           <button onClick={openNoteEdit} className="w-full text-left flex items-start gap-1.5 text-[12px] text-amber-900" title="Modifier la note">
-            <span className="flex-shrink-0">📌</span>
+            <Pin size={13} strokeWidth={1.8} className="flex-shrink-0 mt-0.5" />
             <span className="whitespace-pre-wrap break-words flex-1">{conv.internal_note}</span>
-            <span className="text-[10px] text-amber-600 flex-shrink-0">✎</span>
+            <Pencil size={11} strokeWidth={1.8} className="text-amber-600 flex-shrink-0 mt-0.5" />
           </button>
         ) : (
-          <button onClick={openNoteEdit} className="text-[11px] text-amber-700 hover:text-amber-900">📌 + Ajouter une note interne</button>
+          <button onClick={openNoteEdit} className="inline-flex items-center gap-1.5 text-[11px] text-amber-700 hover:text-amber-900"><Pin size={12} strokeWidth={1.8} /> Ajouter une note interne</button>
         )}
       </div>
 
@@ -583,7 +584,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               }`}>
                 {m.is_payment_proof && (
                   <div className={`flex items-center gap-1 text-[10px] font-medium mb-1 ${isAgent ? 'text-amber-200' : 'text-amber-700'}`}>
-                    💰 Preuve de paiement{m.payment_order_ref ? ` · Cmd ${m.payment_order_ref}` : ''}{m.payment_amount != null ? ` · ${m.payment_amount} DH` : ''}{m.payment_rejected_at ? ' · ❌ refusé' : m.payment_validated_at ? ' · ✅ validé' : ''}
+                    <Banknote size={12} strokeWidth={1.8} /> Preuve de paiement{m.payment_order_ref ? ` · Cmd ${m.payment_order_ref}` : ''}{m.payment_amount != null ? ` · ${m.payment_amount} DH` : ''}{m.payment_rejected_at ? ' · refusé' : m.payment_validated_at ? ' · validé' : ''}
                   </div>
                 )}
                 {m.media_url && (() => {
@@ -591,7 +592,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   const mt = m.media_type || ''
                   const isAudio = /audio|voice|ptt/i.test(mt) || /\.(ogg|opus|webm|mp4|m4a|mp3|aac|amr)$/i.test(m.media_url)
                   const isImage = /image/i.test(mt) || /\.(jpe?g|png|gif|webp)$/i.test(m.media_url)
-                  if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? '🎤 Vocal…' : isImage ? '🖼 Image…' : '📎 Pièce jointe…'}</span>
+                  if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? 'Vocal…' : isImage ? 'Image…' : 'Pièce jointe…'}</span>
                   if (isAudio) return <audio controls src={href} className="block max-w-full mb-1" />
                   if (isImage) return (
                     <a href={href} target="_blank" rel="noopener noreferrer" title="Ouvrir en grand">
@@ -599,8 +600,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     </a>
                   )
                   return (
-                    <a href={href} target="_blank" rel="noopener noreferrer" className="block text-[11px] underline mb-1 opacity-90">
-                      📎 Pièce jointe
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] underline mb-1 opacity-90">
+                      <Paperclip size={12} strokeWidth={1.8} /> Pièce jointe
                     </a>
                   )
                 })()}
@@ -613,13 +614,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     onClick={() => setForwardMsg(m)}
                     className={`text-[11px] leading-none ${isAgent ? 'text-cream/70 hover:text-cream' : 'text-ink-mute hover:text-bordeaux'}`}
                     title="Transférer ce message"
-                  >↪</button>
+                  ><Forward size={13} strokeWidth={1.8} /></button>
                   {canMarkPaymentProof(user) && m.media_url && (
                     <button
                       onClick={() => m.is_payment_proof ? handleUnmarkPayment(m) : openPaymentModal(m)}
                       className={`text-[11px] leading-none transition-opacity ${m.is_payment_proof ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}
                       title={m.is_payment_proof ? 'Retirer la preuve de paiement' : 'Marquer comme preuve de paiement'}
-                    >💰</button>
+                    ><Banknote size={13} strokeWidth={1.8} /></button>
                   )}
                 </div>
               </div>
@@ -639,7 +640,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 onClick={() => { setText(s.text); setSuggestions([]); requestAnimationFrame(() => textareaRef.current?.focus()) }}
                 className="text-left rounded-lg border border-bordeaux/30 bg-bordeaux/5 px-3 py-2 hover:border-bordeaux transition-colors"
               >
-                <div className="text-[9px] font-mono uppercase tracking-wider text-bordeaux mb-0.5">✨ {TONE_LABEL[s.tone] || s.tone}</div>
+                <div className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-bordeaux mb-0.5"><Sparkles size={10} strokeWidth={1.8} /> {TONE_LABEL[s.tone] || s.tone}</div>
                 <div className="text-[12px] text-ink">{s.text}</div>
               </button>
             ))}
@@ -648,14 +649,15 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         {sendError && <div className="text-[11px] text-bordeaux mb-1">{sendError}</div>}
         {file && (
           <div className="flex items-center gap-2 mb-1.5 text-[11px] text-ink-soft">
-            <span className="truncate">📎 {file.name}</span>
+            <Paperclip size={12} strokeWidth={1.8} className="flex-shrink-0" />
+            <span className="truncate">{file.name}</span>
             <button onClick={() => setFile(null)} className="text-bordeaux font-bold" title="Retirer">×</button>
           </div>
         )}
         {stagedMediaPath && (
           <div className="flex items-center gap-2 mb-1.5">
             {stagedPreviewUrl && <img src={stagedPreviewUrl} alt="" className="w-10 h-10 object-cover rounded border border-line" />}
-            <span className="text-[11px] text-ink-soft">📷 Photo jointe</span>
+            <span className="inline-flex items-center gap-1 text-[11px] text-ink-soft"><ImageIcon size={12} strokeWidth={1.8} /> Photo jointe</span>
             <button onClick={() => { setStagedMediaPath(null); setStagedPreviewUrl(null) }} className="text-bordeaux font-bold" title="Retirer">×</button>
           </div>
         )}
@@ -675,7 +677,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               disabled={sending}
               className="px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
               title="Envoyer le vocal"
-            >{sending ? '…' : 'Envoyer ➤'}</button>
+            >{sending ? '…' : 'Envoyer'}</button>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -690,7 +692,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             />
             <div className="flex items-center gap-2">
               <label className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center cursor-pointer transition-all" title="Joindre une image ou un PDF (max 5 MB)">
-                📎
+                <Paperclip size={16} strokeWidth={1.8} />
                 <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" />
               </label>
               <div className="relative flex-shrink-0">
@@ -699,7 +701,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   onClick={() => setShowEmoji(v => !v)}
                   className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
                   title="Emojis"
-                >😊</button>
+                ><Smile size={16} strokeWidth={1.8} /></button>
                 {showEmoji && (
                   <>
                     <div className="fixed inset-0 z-[90]" onClick={() => setShowEmoji(false)} />
@@ -713,20 +715,20 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   onClick={openReplies}
                   className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
                   title="Phrases types"
-                >💬</button>
+                ><MessageSquareText size={16} strokeWidth={1.8} /></button>
                 {showReplies && (
                   <>
                     <div className="fixed inset-0 z-[90]" onClick={() => setShowReplies(false)} />
                     <div className="absolute bottom-11 left-0 z-[100] w-64 max-w-[80vw] bg-cream border border-line rounded-lg shadow-xl py-1 max-h-64 overflow-y-auto">
                       {quickReplies.length === 0 ? (
-                        <div className="px-3 py-2 text-[11px] text-ink-mute italic">Aucune phrase. Ajoute-en via « 💬 Phrases » dans la liste.</div>
+                        <div className="px-3 py-2 text-[11px] text-ink-mute italic">Aucune phrase. Ajoute-en via « Phrases » dans la liste.</div>
                       ) : quickReplies.map(q => (
                         <button
                           key={q.id}
                           onClick={() => pickQuickReply(q)}
                           className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-colors"
                         >
-                          <div className="text-[12px] font-medium text-ink">{q.media_path ? '📷 ' : ''}{q.label}</div>
+                          <div className="text-[12px] font-medium text-ink">{q.label}</div>
                           <div className="text-[10px] text-ink-mute truncate">{q.body}</div>
                         </button>
                       ))}
@@ -740,14 +742,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 disabled={suggesting || sending}
                 className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
                 title="Suggérer 3 réponses (IA)"
-              >{suggesting ? '…' : '✨'}</button>
+              >{suggesting ? '…' : <Sparkles size={16} strokeWidth={1.8} />}</button>
               <button
                 type="button"
                 onClick={startRecording}
                 disabled={sending}
                 className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
                 title="Message vocal"
-              >🎤</button>
+              ><Mic size={16} strokeWidth={1.8} /></button>
               <button
                 onClick={handleSend}
                 disabled={sending || (!text.trim() && !file && !stagedMediaPath)}
@@ -772,7 +774,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       {paymentMsg && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => !markBusy && setPaymentMsg(null)}>
           <div className="bg-cream rounded-2xl w-full max-w-xs shadow-2xl border border-line p-5" onClick={e => e.stopPropagation()}>
-            <h3 className="font-fraunces italic text-[18px] text-ink mb-1">💰 Preuve de paiement</h3>
+            <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Preuve de paiement</h3>
             <p className="text-[12px] text-ink-mute mb-3">Le nom et le numéro du client sont récupérés tout seuls. Ajoute le n° de commande (optionnel).</p>
             <label className="block text-[11px] font-medium text-ink-soft mb-1">N° de commande</label>
             <input

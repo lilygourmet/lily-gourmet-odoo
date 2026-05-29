@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import ConversationDetail from './ConversationDetail'
 import NewConversationModal from './NewConversationModal'
 import QuickRepliesModal from './QuickRepliesModal'
+import { Search, Volume2, VolumeX, MessageSquareText } from 'lucide-react'
 
 const FILTERS = [
   { key: 'all', label: 'Toutes' },
@@ -126,9 +127,9 @@ export default function InboxView({ user, initialConversationId }) {
             <h1 className="font-fraunces italic text-[26px] text-ink leading-none">Conversations</h1>
             <button
               onClick={() => { const next = !soundOn; setDingEnabled(next); setSoundOn(next) }}
-              className="w-9 h-9 flex-shrink-0 rounded-full border border-line text-[15px] hover:border-bordeaux transition-colors"
+              className="w-9 h-9 flex-shrink-0 rounded-full border border-line text-ink-soft hover:border-bordeaux transition-colors flex items-center justify-center"
               title={soundOn ? 'Son des notifications activé (cliquer pour couper)' : 'Son des notifications coupé (cliquer pour activer)'}
-            >{soundOn ? '🔊' : '🔇'}</button>
+            >{soundOn ? <Volume2 size={16} strokeWidth={1.8} /> : <VolumeX size={16} strokeWidth={1.8} />}</button>
           </div>
 
           <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -138,13 +139,13 @@ export default function InboxView({ user, initialConversationId }) {
             >+ Nouveau message</button>
             <button
               onClick={() => setShowReplies(true)}
-              className="px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux hover:text-cream transition-all"
-            >💬 Phrases</button>
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux hover:text-cream transition-all"
+            ><MessageSquareText size={14} strokeWidth={1.8} /> Phrases</button>
           </div>
 
           {/* Recherche */}
           <div className="relative mb-3">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute text-[13px]">🔍</span>
+            <Search size={14} strokeWidth={1.8} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute" />
             <input
               type="text"
               value={search}
