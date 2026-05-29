@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Palette, Tags, Wallet, Store, Eye, EyeOff, Trash2, Pencil, Loader2, Search } from 'lucide-react'
 import { loadDestinataires, createDestinataire, updateDestinataire, deleteDestinataire,
          loadCategories, createCategorie, updateCategorie,
          loadSalairesDefaut, setSalaireDefaut,
@@ -32,7 +33,7 @@ export default function ParametresView({ user }) {
 
 function Section({ title, icon, desc, children }) {
   return (
-    <div style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 12, padding: 24, marginBottom: 20 }}>
+    <div style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 16, padding: 24, marginBottom: 20, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
       <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>{icon} {title}</div>
       <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 20 }}>{desc}</div>
       {children}
@@ -63,7 +64,7 @@ function DestinatairesSection() {
   }
 
   return (
-    <Section title="Destinataires des enveloppes" icon="🎨"
+    <Section title="Destinataires des enveloppes" icon={<Palette size={16} />}
       desc="Chaque destinataire a sa propre couleur. Si déjà utilisé, il sera désactivé au lieu d'être supprimé.">
       {list.map(d => {
         const c = COLOR_PALETTE[d.color_key] || COLOR_PALETTE.gris
@@ -74,9 +75,9 @@ function DestinatairesSection() {
               <div style={{ fontSize: 13, fontWeight: 500 }}>{d.name}</div>
               <div style={{ fontSize: 11, color: '#4a3a30' }}>{d.type === 'caisse_geree' ? 'caisse-gérée' : d.type}</div>
             </div>
-            <div><span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: 'white', color: '#4a3a30' }}>{c.emoji} {c.label}</span></div>
-            <button onClick={() => handleToggleActive(d)} style={iconBtn} title={d.active ? 'Désactiver' : 'Réactiver'}>{d.active ? '👁' : '👁‍🗨'}</button>
-            <button onClick={() => handleDelete(d.id)} style={iconBtn}>🗑</button>
+            <div><span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: 'white', color: '#4a3a30' }}>{c.label}</span></div>
+            <button onClick={() => handleToggleActive(d)} style={iconBtn} title={d.active ? 'Désactiver' : 'Réactiver'}>{d.active ? <Eye size={15} /> : <EyeOff size={15} />}</button>
+            <button onClick={() => handleDelete(d.id)} style={iconBtn} title="Supprimer"><Trash2 size={15} /></button>
           </div>
         )
       })}
@@ -121,7 +122,7 @@ function DestinatairesSection() {
 // ---- Catégories ----
 function CategoriesSection() {
   return (
-    <Section title="Catégories de sortie · par caisse" icon="🏷️"
+    <Section title="Catégories de sortie · par caisse" icon={<Tags size={16} />}
       desc="Chaque caisse a ses propres catégories. Ajouter / renommer / désactiver.">
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <CategoryColumn caisseOwner="meriem"   label="Caisse Meriem"   color={{ bg: '#EAF3DE', text: '#27500A' }} />
@@ -196,8 +197,8 @@ function CategoryColumn({ caisseOwner, label, color }) {
         return (
           <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1fr 28px 28px', gap: 6, alignItems: 'center', padding: '8px 12px', borderRadius: 8, marginBottom: 4, background: '#F4F0EA' }}>
             <div style={{ fontSize: 13 }}>{c.emoji} {c.name}</div>
-            <button onClick={() => startEdit(c)} style={iconBtn} title="Modifier">✎</button>
-            <button onClick={() => handleDeactivate(c.id)} style={iconBtn} title="Supprimer">🗑</button>
+            <button onClick={() => startEdit(c)} style={iconBtn} title="Modifier"><Pencil size={14} /></button>
+            <button onClick={() => handleDeactivate(c.id)} style={iconBtn} title="Supprimer"><Trash2 size={14} /></button>
           </div>
         )
       })}
@@ -231,11 +232,11 @@ function SalairesDefautSection() {
   }
 
   return (
-    <Section title="Salaires par défaut" icon="💰"
+    <Section title="Salaires par défaut" icon={<Wallet size={16} />}
       desc="Montant pré-rempli quand tu crées un nouveau salaire. Éditable au cas par cas.">
       {['nezha', 'layla'].map(ben => (
         <div key={ben} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 200px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: '#F4F0EA' }}>
-          <span style={{ fontSize: 18 }}>{ben === 'nezha' ? '🧡' : '🤎'}</span>
+          <span style={{ width: 14, height: 14, borderRadius: 999, display: 'inline-block', background: ben === 'nezha' ? '#EF9F27' : '#D85A30' }} />
           <div style={{ fontSize: 13, fontWeight: 500 }}>{ben === 'nezha' ? 'Nezha' : 'Layla'}</div>
           <input key={defaults[ben]} type="number" defaultValue={defaults[ben] || 0} onBlur={(e) => handleSave(ben, e.target.value)} style={inputStyle} />
         </div>
@@ -282,15 +283,15 @@ function PosSessionsSection() {
   }
 
   return (
-    <Section title="Sessions POS détectées (Odoo)" icon="🏪"
+    <Section title="Sessions POS détectées (Odoo)" icon={<Store size={16} />}
       desc="Sessions Odoo auto-détectées. Désactivée = aucune enveloppe ne sera créée pour cette session.">
-      <button onClick={handleDetect} disabled={syncing} style={{ ...btnNormal, marginBottom: 14 }}>
-        {syncing ? '⏳ Détection…' : '🔍 Détecter les sessions Odoo'}
+      <button onClick={handleDetect} disabled={syncing} style={{ ...btnNormal, marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {syncing ? <><Loader2 size={14} className="animate-spin" /> Détection…</> : <><Search size={14} /> Détecter les sessions Odoo</>}
       </button>
       {list.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 10 }}>Aucune session détectée pour l'instant. Cliquez ci-dessus.</div>}
       {list.map(p => (
         <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 80px 100px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: '#F4F0EA' }}>
-          <span style={{ fontSize: 18 }}>🏪</span>
+          <span style={{ display: 'inline-flex', color: '#4a3a30' }}><Store size={18} /></span>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
             <div style={{ fontSize: 11, color: '#8a7a70' }}>détecté · dernière sync : {p.last_synced_at ? new Date(p.last_synced_at).toLocaleString('fr-FR') : 'jamais'}</div>

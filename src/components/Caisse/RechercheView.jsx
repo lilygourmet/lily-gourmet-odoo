@@ -1,19 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
+import { Search, SearchX, Wallet, Mail, HandCoins, Banknote, Hash, Calendar, Type } from 'lucide-react'
 import { searchCaisse } from '../../lib/caisse'
 import { fmtMoney, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 
 const KIND_META = {
-  mouvement: { emoji: '💰', label: 'Mouvement' },
-  enveloppe: { emoji: '📊', label: 'Enveloppe' },
-  avance:    { emoji: '💸', label: 'Avance'    },
-  salaire:   { emoji: '💵', label: 'Salaire'   },
+  mouvement: { Icon: Wallet,    label: 'Mouvement' },
+  enveloppe: { Icon: Mail,      label: 'Enveloppe' },
+  avance:    { Icon: HandCoins, label: 'Avance'    },
+  salaire:   { Icon: Banknote,  label: 'Salaire'   },
 }
 
 const QUERY_TYPE_HINT = {
-  amount: { emoji: '🔢', label: 'Recherche par montant' },
-  date:   { emoji: '📅', label: 'Recherche par date'    },
-  text:   { emoji: '🔤', label: 'Recherche par texte'   },
+  amount: { Icon: Hash,     label: 'Recherche par montant' },
+  date:   { Icon: Calendar, label: 'Recherche par date'    },
+  text:   { Icon: Type,     label: 'Recherche par texte'   },
 }
+
+function HintIcon({ type }) { const I = (QUERY_TYPE_HINT[type] || QUERY_TYPE_HINT.text).Icon; return <I size={13} /> }
+function KindIcon({ kind }) { const I = (KIND_META[kind] || KIND_META.mouvement).Icon; return <I size={12} /> }
 
 export default function RechercheView({ user }) {
   const [query, setQuery] = useState('')
@@ -71,7 +75,7 @@ export default function RechercheView({ user }) {
           onFocus={e => e.target.style.borderColor = '#993556'}
           onBlur={e => e.target.style.borderColor = '#e5d8c3'}
         />
-        <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 18, color: '#4a3a30' }}>🔍</div>
+        <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#4a3a30', display: 'flex' }}><Search size={18} /></div>
         {query && (
           <button
             onClick={() => setQuery('')}
@@ -95,7 +99,7 @@ export default function RechercheView({ user }) {
             padding: '4px 10px', borderRadius: 999, background: '#F4F0EA',
             display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 500,
           }}>
-            {QUERY_TYPE_HINT[results.queryType].emoji} {QUERY_TYPE_HINT[results.queryType].label}
+            <HintIcon type={results.queryType} /> {(QUERY_TYPE_HINT[results.queryType] || QUERY_TYPE_HINT.text).label}
           </span>
           <span style={{ fontWeight: 500, color: '#1a0f0a' }}>
             {results.counts.total} résultat{results.counts.total > 1 ? 's' : ''}
@@ -117,9 +121,9 @@ export default function RechercheView({ user }) {
       {!query.trim() && !loading && (
         <div style={{
           padding: '60px 20px', textAlign: 'center', color: '#4a3a30',
-          background: '#F9F6F1', borderRadius: 10, border: '0.5px dashed #e5d8c3',
+          background: '#F9F6F1', borderRadius: 16, border: '0.5px dashed #e5d8c3',
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: '#993556' }}><Search size={32} /></div>
           <div style={{ fontSize: 14, marginBottom: 6, color: '#1a0f0a', fontWeight: 500 }}>
             Recherche transversale
           </div>
@@ -136,9 +140,9 @@ export default function RechercheView({ user }) {
       {results && results.results.length === 0 && !loading && (
         <div style={{
           padding: 40, textAlign: 'center', color: '#4a3a30',
-          background: '#F9F6F1', borderRadius: 10,
+          background: '#F9F6F1', borderRadius: 16,
         }}>
-          <div style={{ fontSize: 24, marginBottom: 8 }}>🤷</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#8a7a70' }}><SearchX size={26} /></div>
           Aucun résultat pour <strong>« {query} »</strong>
         </div>
       )}
@@ -174,12 +178,13 @@ function ResultRow({ r }) {
         gridTemplateColumns: '95px 110px 1fr 110px',
         gap: 12,
         alignItems: 'center',
-        padding: '11px 14px',
-        borderRadius: 8,
+        padding: '13px 16px',
+        borderRadius: 14,
         background: 'white',
         border: '0.5px solid #e5d8c3',
         cursor: 'default',
         transition: 'background 0.15s',
+        boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
       }}
       onMouseEnter={e => e.currentTarget.style.background = '#FFFAF3'}
       onMouseLeave={e => e.currentTarget.style.background = 'white'}
@@ -194,7 +199,7 @@ function ResultRow({ r }) {
           display: 'inline-flex', alignItems: 'center', gap: 4,
           whiteSpace: 'nowrap',
         }}>
-          {meta.emoji} {meta.label}
+          <KindIcon kind={r.kind} /> {meta.label}
         </span>
       </div>
       <div style={{ minWidth: 0 }}>
