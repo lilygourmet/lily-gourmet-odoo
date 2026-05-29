@@ -33,6 +33,9 @@ html, body {
   color: #1a0f0a;
   margin: 0;
 }
+/* Conteneur de page standard : centré, même largeur partout (comme l'Économat). */
+.lg-page { width: 100%; max-width: 42rem; margin: 0 auto; padding: 20px 16px 72px; }
+
 .lg-lead { font-size: 13px; color: #4a3a30; margin: 4px 0 0; }
 .lg-mono {
   font-family: 'Geist Mono', monospace;
