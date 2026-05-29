@@ -12,6 +12,7 @@
 //   <PrintButton mode="audit" />
 
 import { useState } from 'react'
+import { Printer } from 'lucide-react'
 import { loadDaySummary, loadStockDay, loadDayItems, buildAuditReport } from '../../lib/stockBoutique'
 
 const MODE_TITLES = {
@@ -117,9 +118,9 @@ export default function PrintButton({ mode = 'vitrine' }) {
         onClick={handleOpen}
         title="Imprimer l'historique"
         aria-label="Imprimer"
-        className="w-8 h-8 flex items-center justify-center rounded-md bg-cream/10 hover:bg-cream/25 border border-cream/30 hover:border-cream/60 transition-colors text-cream text-[15px]"
+        className="w-8 h-8 flex items-center justify-center rounded-md bg-cream/10 hover:bg-cream/25 border border-cream/30 hover:border-cream/60 transition-colors text-cream"
       >
-        🖨
+        <Printer size={15} />
       </button>
 
       {open && (
@@ -186,9 +187,9 @@ export default function PrintButton({ mode = 'vitrine' }) {
                 type="button"
                 onClick={handlePrint}
                 disabled={!selectedDay || printing || days.length === 0}
-                className="px-4 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-md text-[12px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-md text-[12px] font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
               >
-                {printing ? 'Génération...' : '🖨 Imprimer'}
+                {printing ? 'Génération...' : <><Printer size={13} /> Imprimer</>}
               </button>
             </div>
           </div>
