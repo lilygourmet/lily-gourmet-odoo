@@ -9,6 +9,7 @@ import {
   deleteAvance,
 } from '../../../lib/caisse'
 import AuditLogPanel from '../AuditLogPanel'
+import { User, Info, Check, Clock, Trash2, HandCoins } from 'lucide-react'
 import { fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
 
 export default function MeriemAvances({ user }) {
@@ -77,8 +78,8 @@ export default function MeriemAvances({ user }) {
           const count = Number(s?.count || 0)
           const c = COLOR_PALETTE[d.color_key] || COLOR_PALETTE.gris
           return (
-            <div key={d.id} style={{ background: c.bg, color: c.text, padding: '14px 16px', borderRadius: 10, border: `0.5px solid ${c.border}` }}>
-              <div style={{ fontSize: 12, opacity: 0.85 }}>👤 {d.name} doit</div>
+            <div key={d.id} style={{ background: c.bg, color: c.text, padding: '14px 16px', borderRadius: 16, border: `0.5px solid ${c.border}`, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
+              <div style={{ fontSize: 12, opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: 5 }}><User size={13} /> {d.name} doit</div>
               <div style={{ fontSize: 22, fontWeight: 500, marginTop: 4 }}>{fmtMoney(total)}</div>
               <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>{count} avance{count > 1 ? 's' : ''} en cours</div>
             </div>
@@ -93,14 +94,14 @@ export default function MeriemAvances({ user }) {
         <button onClick={() => setShowNew(true)} style={btnPrimary}>+ Nouvelle avance</button>
       </div>
 
-      <div style={{ fontSize: 11, color: '#4a3a30', padding: '8px 12px', background: '#FAF6F0', borderRadius: 6, marginBottom: 12, border: '0.5px solid #e5d8c3' }}>
-        ℹ️ Chaque avance crée automatiquement une <strong>sortie</strong> dans la caisse Meriem. Au remboursement, une <strong>entrée</strong> est créée.
+      <div style={{ fontSize: 11, color: '#4a3a30', padding: '8px 12px', background: '#FAF6F0', borderRadius: 10, marginBottom: 12, border: '0.5px solid #e5d8c3', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} /> <span>Chaque avance crée automatiquement une <strong>sortie</strong> dans la caisse Meriem. Au remboursement, une <strong>entrée</strong> est créée.</span>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
         <button onClick={() => setBenefFilter('all')} style={filterChip(benefFilter === 'all')}>Tout le monde</button>
         {persoDests.map(d => (
-          <button key={d.id} onClick={() => setBenefFilter(d.id)} style={filterChip(String(benefFilter) === String(d.id))}>👤 {d.name}</button>
+          <button key={d.id} onClick={() => setBenefFilter(d.id)} style={{ ...filterChip(String(benefFilter) === String(d.id)), display: 'inline-flex', alignItems: 'center', gap: 5 }}><User size={12} /> {d.name}</button>
         ))}
       </div>
 
@@ -113,7 +114,7 @@ export default function MeriemAvances({ user }) {
       {loading && <div style={{ color: '#4a3a30', padding: 20 }}>Chargement…</div>}
 
       {!loading && list.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>
           Aucune avance dans ce filtre.
         </div>
       )}
@@ -130,7 +131,7 @@ export default function MeriemAvances({ user }) {
             </div>
             <div>
               <div style={{ fontSize: 11, color: '#4a3a30' }}>Pour</div>
-              <div style={{ display: 'inline-block', background: benefColor.bg, color: benefColor.text, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, marginTop: 2 }}>👤 {benefName}</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: benefColor.bg, color: benefColor.text, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, marginTop: 2 }}><User size={12} /> {benefName}</div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: '#4a3a30' }}>Montant</div>
@@ -143,27 +144,27 @@ export default function MeriemAvances({ user }) {
             <div>
               {isRefunded ? (
                 <div>
-                  <span style={statusDone}>✓ Remboursée</span>
+                  <span style={statusDone}><Check size={12} /> Remboursée</span>
                   <div style={{ fontSize: 10, color: '#4a3a30', marginTop: 4 }}>
                     {fmtDateLongue(a.refunded_at.slice(0, 10))}
                     {a.refunded_note && <div style={{ fontStyle: 'italic' }}>{a.refunded_note}</div>}
                   </div>
                 </div>
-              ) : (<span style={statusPending}>⏳ En attente</span>)}
+              ) : (<span style={statusPending}><Clock size={12} /> En attente</span>)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {isRefunded
                 ? <button onClick={() => handleUnmark(a.id)} style={btnSlim}>↶ Annuler</button>
-                : <button onClick={() => handleMarkRefunded(a.id)} style={btnPrimarySmall}>✓ Remboursée</button>}
-              <button onClick={() => handleDelete(a.id)} style={btnDanger}>🗑</button>
+                : <button onClick={() => handleMarkRefunded(a.id)} style={{ ...btnPrimarySmall, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Check size={13} /> Remboursée</button>}
+              <button onClick={() => handleDelete(a.id)} style={{ ...btnDanger, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Supprimer"><Trash2 size={13} /></button>
             </div>
           </div>
         )
       })}
 
-<AuditLogPanel entityType="avance" title="📜 Historique des avances" />
+<AuditLogPanel entityType="avance" title="Historique des avances" />
 
-<AuditLogPanel entityType="avance" title="📜 Historique des avances" />
+<AuditLogPanel entityType="avance" title="Historique des avances" />
 
       {showNew && <NewAvanceModal persoDests={persoDests} onClose={() => setShowNew(false)} onCreate={handleCreate} />}
     </div>
@@ -197,14 +198,14 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
   return (
     <div onClick={onClose} style={modalOverlay}>
       <div onClick={e => e.stopPropagation()} style={modalBox}>
-        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>💸 Nouvelle avance</div>
+        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><HandCoins size={18} /> Nouvelle avance</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 16 }}>
           Meriem prend de l'argent de sa caisse pro pour avancer pour Layla ou Nezha
         </div>
 
         <label style={fieldLabel}>Pour qui ?</label>
         <select value={beneficiaryId} onChange={e => setBeneficiaryId(e.target.value)} style={fieldInput}>
-          {persoDests.map(d => (<option key={d.id} value={d.id}>👤 {d.name}</option>))}
+          {persoDests.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
         </select>
 
         <label style={fieldLabel}>Montant (DH)</label>
@@ -234,11 +235,12 @@ const btnDanger = { fontSize: 11, padding: '4px 10px', borderRadius: 6, border: 
 
 const rowCard = {
   display: 'grid', gridTemplateColumns: '90px 130px 100px 1fr 130px 110px', gap: 12, alignItems: 'center',
-  padding: '12px 14px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3',
+  padding: '13px 15px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3',
+  boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
 }
 
-const statusPending = { display: 'inline-block', fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#FAEEDA', color: '#633806' }
-const statusDone    = { display: 'inline-block', fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#E1F5EE', color: '#085041' }
+const statusPending = { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#FAEEDA', color: '#633806' }
+const statusDone    = { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#E1F5EE', color: '#085041' }
 
 function filterChip(active) {
   return {
@@ -262,7 +264,7 @@ const modalOverlay = {
 }
 
 const modalBox = {
-  background: 'white', borderRadius: 12, padding: 24, width: 420, maxWidth: '90vw',
+  background: 'white', borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw',
   boxShadow: '0 12px 40px rgba(0, 0, 0, 0.18)',
 }
 

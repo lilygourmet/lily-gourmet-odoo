@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, ajouterDepenseHamid, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense, uploadHamidDepenseProof } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
-import { Trash2, Paperclip } from 'lucide-react'
+import { Trash2, Paperclip, AlertTriangle, Receipt, Scale } from 'lucide-react'
 import AjoutAvanceHamidModal from '../modals/AjoutAvanceHamidModal'
 import AjoutDepenseHamidModal from '../modals/AjoutDepenseHamidModal'
 import HamidRendModal from '../modals/HamidRendModal'
@@ -91,25 +91,25 @@ export default function MeriemHamid({ user }) {
       </div>
 
       {negative && (
-        <div style={{ background: '#FCE9E8', border: '0.5px solid #E5BFB6', color: '#99201E', padding: '12px 16px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
-          ⚠️ <strong>Solde négatif</strong> — Vous devez {fmtMoney(Math.abs(balance))} à Hamid. Pensez à régulariser.
+        <div style={{ background: '#FCE9E8', border: '0.5px solid #E5BFB6', color: '#99201E', padding: '12px 16px', borderRadius: 12, marginBottom: 14, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={16} style={{ flexShrink: 0 }} /> <span><strong>Solde négatif</strong> — Vous devez {fmtMoney(Math.abs(balance))} à Hamid. Pensez à régulariser.</span>
         </div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 18 }}>
-        <div style={{ background: negative ? '#FCE9E8' : '#FAEEDA', border: `0.5px solid ${negative ? '#E5BFB6' : '#EF9F27'}`, borderRadius: 12, padding: 20 }}>
+        <div style={{ background: negative ? '#FCE9E8' : '#FAEEDA', border: `0.5px solid ${negative ? '#E5BFB6' : '#EF9F27'}`, borderRadius: 16, padding: 20, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <div style={{ fontSize: 11, color: negative ? '#99201E' : '#633806' }}>Solde Hamid</div>
           <div style={{ fontSize: 26, fontWeight: 500, color: negative ? '#99201E' : '#633806', marginTop: 6 }}>
             {balance >= 0 ? '+ ' : '− '}{fmtMoney(Math.abs(balance)).replace(' dh', '')} <span style={{ fontSize: 14 }}>dh</span>
           </div>
           <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{negative ? 'Vous devez à Hamid' : 'Argent chez Hamid'}</div>
         </div>
-        <div style={{ background: '#F4F0EA', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#F4F0EA', borderRadius: 16, padding: 20, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <div style={{ fontSize: 11, color: '#4a3a30' }}>↓ Avances reçues · {MOIS_TABS[month - 1].label}</div>
           <div style={{ fontSize: 26, fontWeight: 500, color: '#1D7A5C', marginTop: 6 }}>{fmtMoney(totalAvances)}</div>
           <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{avances.length} versements</div>
         </div>
-        <div style={{ background: '#F4F0EA', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#F4F0EA', borderRadius: 16, padding: 20, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <div style={{ fontSize: 11, color: '#4a3a30' }}>↑ Dépenses · {MOIS_TABS[month - 1].label}</div>
           <div style={{ fontSize: 26, fontWeight: 500, color: '#99201E', marginTop: 6 }}>{fmtMoney(totalDepenses)}</div>
           <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{depenses.length} dépenses</div>
@@ -118,7 +118,7 @@ export default function MeriemHamid({ user }) {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button onClick={() => setShowAvance(true)} style={btnPrimary}>+ Donner argent à Hamid</button>
-        <button onClick={() => setShowDepense(true)} style={btnNormal}>🧾 Saisir dépense Hamid</button>
+        <button onClick={() => setShowDepense(true)} style={{ ...btnNormal, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Receipt size={15} /> Saisir dépense Hamid</button>
         <button onClick={() => setShowRend(true)} style={btnNormal}>↩ Hamid rend l'argent</button>
       </div>
 
@@ -193,8 +193,8 @@ export default function MeriemHamid({ user }) {
         </div>
       </div>
 
-      <div style={{ marginTop: 24, padding: '14px 16px', background: '#F4F0EA', borderRadius: 8, fontSize: 13, color: '#4a3a30', textAlign: 'center' }}>
-        ⚖ <strong style={{ color: '#1a0f0a' }}>{fmtMoney(totalAvances)} donnés − {fmtMoney(totalDepenses)} dépensés ce mois</strong>
+      <div style={{ marginTop: 24, padding: '14px 16px', background: '#F4F0EA', borderRadius: 12, fontSize: 13, color: '#4a3a30', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <Scale size={16} /> <strong style={{ color: '#1a0f0a' }}>{fmtMoney(totalAvances)} donnés − {fmtMoney(totalDepenses)} dépensés ce mois</strong>
       </div>
 
       {showAvance  && <AjoutAvanceHamidModal  onClose={() => setShowAvance(false)}  onSubmit={handleAvance} />}
@@ -207,5 +207,5 @@ export default function MeriemHamid({ user }) {
 const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
-const miniRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 8, marginBottom: 5, background: 'white', border: '0.5px solid #e5d8c3' }
+const miniRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
 const trashBtn = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, border: '1px solid #e5d8c3', background: 'white', color: '#A32D2D', cursor: 'pointer' }

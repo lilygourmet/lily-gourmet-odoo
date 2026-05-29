@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Info, CreditCard, FileText } from 'lucide-react'
 import { loadFacturesAll, loadCourseFacturesAll, loadHamidFacturesAll, recupererFacturesParCheque } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 
@@ -66,8 +67,8 @@ export default function MeriemFactures({ user }) {
 
   return (
     <div>
-      <div style={{ background: '#E6F1FB', border: '0.5px solid #378ADD', color: '#0C447C', padding: '12px 16px', borderRadius: 8, marginBottom: 18, fontSize: 13 }}>
-        ℹ️ Coche les factures retirées ensemble à la banque, puis « Récupérer par chèque » : elles sont regroupées sous un n° de chèque (le total est versé dans la caisse Layla LG).
+      <div style={{ background: '#E6F1FB', border: '0.5px solid #378ADD', color: '#0C447C', padding: '12px 16px', borderRadius: 12, marginBottom: 18, fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} /> <span>Coche les factures retirées ensemble à la banque, puis « Récupérer par chèque » : elles sont regroupées sous un n° de chèque (le total est versé dans la caisse Layla LG).</span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 18 }}>
@@ -88,8 +89,9 @@ export default function MeriemFactures({ user }) {
           {pending.map(f => (
             <label key={f.key} style={{
               display: 'grid', gridTemplateColumns: '30px 90px 1fr 110px', gap: 12, alignItems: 'center', cursor: 'pointer',
-              padding: '12px 16px', borderRadius: 8, marginBottom: 5, background: 'white',
+              padding: '13px 16px', borderRadius: 12, marginBottom: 6, background: 'white',
               border: selected.has(f.key) ? '1.5px solid #378ADD' : '0.5px solid #e5d8c3',
+              boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
             }}>
               <input type="checkbox" checked={selected.has(f.key)} onChange={() => toggle(f.key)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
               <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.date)}</div>
@@ -109,7 +111,8 @@ export default function MeriemFactures({ user }) {
               <div style={{ fontSize: 13 }}>{selected.size} facture{selected.size > 1 ? 's' : ''} · <strong>{fmtMoney(selectedTotal)}</strong></div>
               <button onClick={() => { setError(''); setShowCheque(true) }} style={{
                 fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'white', color: '#0C447C',
-              }}>💳 Récupérer par chèque</button>
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}><CreditCard size={15} /> Récupérer par chèque</button>
             </div>
           )}
         </>
@@ -125,8 +128,8 @@ export default function MeriemFactures({ user }) {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '10px 16px', borderRadius: 8, background: '#E1F5EE', color: '#085041', border: '0.5px solid #97C9B4', marginBottom: 6,
               }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  {g.cheque ? `💳 Chèque n° ${g.cheque}` : '📄 Sans chèque'}
+                <div style={{ fontSize: 14, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {g.cheque ? <><CreditCard size={14} /> Chèque n° {g.cheque}</> : <><FileText size={14} /> Sans chèque</>}
                   {g.date ? <span style={{ fontWeight: 400, fontSize: 12 }}> · {fmtDateCourte(g.date)}</span> : ''}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{fmtMoney(g.total)} · {g.items.length} fact.</div>
@@ -134,7 +137,8 @@ export default function MeriemFactures({ user }) {
               {g.items.map(f => (
                 <div key={f.key} style={{
                   display: 'grid', gridTemplateColumns: '90px 1fr 110px', gap: 12, alignItems: 'center',
-                  padding: '9px 16px 9px 28px', borderRadius: 8, marginBottom: 4, background: 'white', border: '0.5px solid #e5d8c3',
+                  padding: '11px 16px 11px 28px', borderRadius: 12, marginBottom: 5, background: 'white', border: '0.5px solid #e5d8c3',
+                  boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
                 }}>
                   <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(f.date)}</div>
                   <div>
@@ -153,7 +157,7 @@ export default function MeriemFactures({ user }) {
       {showCheque && (
         <div style={overlay} onClick={() => !busy && setShowCheque(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>💳 Récupérer par chèque</h3>
+            <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}><CreditCard size={18} /> Récupérer par chèque</h3>
             <p style={{ margin: '0 0 14px', fontSize: 12, color: '#4a3a30' }}>{selected.size} facture{selected.size > 1 ? 's' : ''} · total <strong>{fmtMoney(selectedTotal)}</strong> (montant retiré à la banque)</p>
             <label style={lbl}>N° de chèque
               <input type="text" value={cheque} onChange={e => setCheque(e.target.value)} autoFocus placeholder="ex. 1234567" style={inp} />
@@ -175,7 +179,7 @@ export default function MeriemFactures({ user }) {
 
 function StatCard({ label, value, sub, bg, text, border, highlight }) {
   return (
-    <div style={{ padding: 20, borderRadius: 12, background: bg, border: `0.5px solid ${border}` }}>
+    <div style={{ padding: 20, borderRadius: 16, background: bg, border: `0.5px solid ${border}`, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
       <div style={{ fontSize: 11, color: text, opacity: highlight ? 1 : 0.85 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 500, color: text, marginTop: 6 }}>{fmtMoney(value)}</div>
       <div style={{ fontSize: 11, color: text, opacity: 0.7, marginTop: 4 }}>{sub}</div>
@@ -193,7 +197,7 @@ function Chip({ active, onClick, children }) {
 }
 
 const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
-const emptyBox = { padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }
+const emptyBox = { padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
 const modal = { background: 'white', borderRadius: 12, padding: 22, maxWidth: 380, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
 const lbl = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }

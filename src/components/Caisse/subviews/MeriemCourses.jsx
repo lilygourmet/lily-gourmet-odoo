@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Info, Trash2, ShoppingCart, Paperclip } from 'lucide-react'
 import { loadCoursesMonth, donnerCourse, reglerCourse, deleteCourse, loadCategories } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 
@@ -72,8 +73,8 @@ export default function MeriemCourses({ user }) {
 
   return (
     <div>
-      <div style={{ background: '#FAEEDA', border: '0.5px solid #d9b14e', color: '#633806', padding: '12px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
-        ℹ️ Donne de l'argent à quelqu'un (nom libre) pour des courses, puis règle avec le détail. Le don sort de la caisse Meriem, le rendu y rentre.
+      <div style={{ background: '#FAEEDA', border: '0.5px solid #d9b14e', color: '#633806', padding: '12px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} /> <span>Donne de l'argent à quelqu'un (nom libre) pour des courses, puis règle avec le détail. Le don sort de la caisse Meriem, le rendu y rentre.</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
@@ -109,7 +110,7 @@ export default function MeriemCourses({ user }) {
           </div>
           <div style={{ fontSize: 15, fontWeight: 500 }}>{fmtMoney(c.amount_given)}</div>
           <button onClick={() => openSettle(c)} style={btnPri}>Régler</button>
-          <button onClick={() => handleDelete(c)} style={btnIcon} title="Supprimer">🗑️</button>
+          <button onClick={() => handleDelete(c)} style={{ ...btnIcon, display: 'inline-flex', alignItems: 'center', color: '#A32D2D' }} title="Supprimer"><Trash2 size={14} /></button>
         </div>
       ))}
 
@@ -129,7 +130,7 @@ export default function MeriemCourses({ user }) {
               <div style={{ fontSize: 12, color: '#4a3a30', textAlign: 'right' }}>
                 donné <b>{fmtMoney(c.amount_given)}</b> · dépensé <b>{fmtMoney(spent)}</b> · rendu <b>{fmtMoney(rendu)}</b>
               </div>
-              <button onClick={() => handleDelete(c)} style={btnIcon} title="Supprimer">🗑️</button>
+              <button onClick={() => handleDelete(c)} style={{ ...btnIcon, display: 'inline-flex', alignItems: 'center', color: '#A32D2D' }} title="Supprimer"><Trash2 size={14} /></button>
             </div>
             {(c.depenses || []).length > 0 && (
               <div style={{ marginTop: 8, borderTop: '0.5px solid #e5d8c3', paddingTop: 6 }}>
@@ -149,7 +150,7 @@ export default function MeriemCourses({ user }) {
       {showGive && (
         <div style={overlay} onClick={() => !busy && setShowGive(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 600 }}>🛒 Donner pour courses</h3>
+            <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}><ShoppingCart size={18} /> Donner pour courses</h3>
             <label style={lbl}>Personne
               <input type="text" value={person} onChange={e => setPerson(e.target.value)} autoFocus placeholder="ex. Rachid" style={inp} />
             </label>
@@ -191,14 +192,14 @@ export default function MeriemCourses({ user }) {
                 <label title="Facture à récupérer (chèque)" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                   <input type="checkbox" checked={!!l.is_facture}
                     onChange={e => setLignes(prev => prev.map((x, j) => j === i ? { ...x, is_facture: e.target.checked } : x))} />
-                  📎
+                  <Paperclip size={13} />
                 </label>
                 {lignes.length > 1 && (
                   <button onClick={() => setLignes(prev => prev.filter((_, j) => j !== i))} style={btnIcon} title="Retirer">✕</button>
                 )}
               </div>
             ))}
-            <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2 }}>📎 = facture à récupérer (ira dans Factures, récupérable par chèque)</div>
+            <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Paperclip size={11} /> = facture à récupérer (ira dans Factures, récupérable par chèque)</div>
             <button onClick={() => setLignes(prev => [...prev, { amount: '', category: categories[0]?.name || '', label: '', is_facture: false }])}
               style={{ ...btnSec, marginTop: 2 }}>+ Ligne</button>
 
@@ -224,10 +225,10 @@ const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1
 const btnPri = { padding: '8px 16px', fontSize: 13, fontWeight: 500, background: '#993556', color: '#faf7f2', border: '1px solid #993556', borderRadius: 999, cursor: 'pointer' }
 const btnSec = { padding: '8px 16px', fontSize: 13, fontWeight: 500, background: 'white', color: '#1a0f0a', border: '1px solid #e5d8c3', borderRadius: 999, cursor: 'pointer' }
 const btnIcon = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14 }
-const emptyBox = { padding: 16, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8, fontSize: 13, marginBottom: 6 }
-const rowCard = { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3' }
-const rowCardCol = { padding: '12px 16px', borderRadius: 8, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3' }
+const emptyBox = { padding: 20, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16, fontSize: 13, marginBottom: 6 }
+const rowCard = { display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
+const rowCardCol = { padding: '13px 16px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal = { background: 'white', borderRadius: 12, padding: 22, maxWidth: 360, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }
+const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 360, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }
 const lbl = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }
 const inp = { display: 'block', width: '100%', padding: '9px 11px', marginTop: 5, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, boxSizing: 'border-box' }

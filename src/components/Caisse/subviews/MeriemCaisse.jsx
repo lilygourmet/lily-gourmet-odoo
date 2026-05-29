@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Lock, Clock, Archive, Paperclip, X, Image, Pencil, Coins, Trash2, Check, AlertTriangle } from 'lucide-react'
 import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof, loadPendingReceptions, validateReception } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 import AjoutSortieModal from '../modals/AjoutSortieModal'
@@ -158,16 +159,16 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 20 }}>
-        <div style={{ background: accent.bg, border: `0.5px solid ${accent.border}`, borderRadius: 12, padding: 24 }}>
+        <div style={{ background: accent.bg, border: `0.5px solid ${accent.border}`, borderRadius: 16, padding: 24, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <div style={{ fontSize: 12, color: accent.text, opacity: 0.85 }}>Solde actuel · caisse {caisseOwner === 'meriem' ? 'Meriem' : 'Layla LG'}</div>
           <div style={{ fontSize: 36, fontWeight: 500, color: accent.text, margin: '8px 0 4px' }}>{fmtMoney(balance)}</div>
           <div style={{ display: 'flex', gap: 18, marginTop: 14, fontSize: 12, color: accent.text }}>
             <div>↓ Entrées : <strong>{fmtMoney(stats.entrees)}</strong></div>
             <div>↑ Sorties : <strong>{fmtMoney(stats.sorties)}</strong></div>
           </div>
-          {closed && <div style={{ marginTop: 12, fontSize: 12, padding: '6px 12px', background: 'rgba(0,0,0,0.05)', borderRadius: 6, display: 'inline-block', color: accent.text }}>🔒 Mois clôturé</div>}
+          {closed && <div style={{ marginTop: 12, fontSize: 12, padding: '6px 12px', background: 'rgba(0,0,0,0.05)', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 5, color: accent.text }}><Lock size={13} /> Mois clôturé</div>}
         </div>
-        <div style={{ background: '#F4F0EA', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#F4F0EA', borderRadius: 16, padding: 20, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 8 }}>Sorties par catégorie</div>
           {rankedCats.length === 0 && <div style={{ fontSize: 11, color: '#8a7a70' }}>Aucune sortie ce mois</div>}
           {rankedCats.map(([cat, amt], i) => (
@@ -186,7 +187,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           borderRadius: 8, marginBottom: 14, fontSize: 13, color: '#993556',
           display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap'
         }}>
-          <span style={{ fontSize: 16 }}>⏳</span>
+          <span style={{ display: 'inline-flex' }}><Clock size={16} /></span>
           <span>
             <strong>{pendingReceptions.length}</strong> réception{pendingReceptions.length > 1 ? 's' : ''} en attente de validation
             <span style={{ color: '#4a3a30', marginLeft: 6 }}>
@@ -207,7 +208,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
           borderRadius: 8, marginBottom: 14, fontSize: 13, color: '#7A5510',
           display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap'
         }}>
-          <span style={{ fontSize: 16 }}>⏳</span>
+          <span style={{ display: 'inline-flex' }}><Clock size={16} /></span>
           <span><strong>{pendingProofCount}</strong> sortie{pendingProofCount > 1 ? 's' : ''} sans état de preuve ce mois.</span>
           <button onClick={() => setFilter('pending_proof')} style={{
             marginLeft: 'auto', fontSize: 11, padding: '4px 10px',
@@ -220,7 +221,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
         <button disabled={closed} onClick={() => setShowSortie(true)} style={{ ...btnPrimary, opacity: closed ? 0.4 : 1 }}>↑ Ajouter sortie</button>
         <button disabled={closed} onClick={() => setShowEntree(true)} style={{ ...btnNormal, opacity: closed ? 0.4 : 1 }}>↓ Ajouter entrée manuelle</button>
-        <button disabled={closed} onClick={() => setShowCloture(true)} style={{ ...btnNormal, marginLeft: 'auto', opacity: closed ? 0.4 : 1 }}>📁 Clôturer le mois</button>
+        <button disabled={closed} onClick={() => setShowCloture(true)} style={{ ...btnNormal, marginLeft: 'auto', opacity: closed ? 0.4 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Archive size={15} /> Clôturer le mois</button>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -228,14 +229,14 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
         <Chip active={filter === 'entree'} onClick={() => setFilter('entree')}>Entrées</Chip>
         <Chip active={filter === 'sortie'} onClick={() => setFilter('sortie')}>Sorties</Chip>
         {pendingProofCount > 0 && (
-          <Chip active={filter === 'pending_proof'} onClick={() => setFilter('pending_proof')}>⏳ Sans preuve décidée</Chip>
+          <Chip active={filter === 'pending_proof'} onClick={() => setFilter('pending_proof')}><Clock size={13} /> Sans preuve décidée</Chip>
         )}
         {categories.map(c => (
           <Chip key={c.id} active={filter === c.name} onClick={() => setFilter(c.name)}>{c.emoji} {c.name}</Chip>
         ))}
       </div>
 
-      {filtered.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>Aucun mouvement.</div>}
+      {filtered.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>Aucun mouvement.</div>}
       {filtered.map(mvt => (
         <MouvementRow
           key={mvt.id}
@@ -252,7 +253,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
       ))}
 
       {/* Log déroulable en bas */}
-      <AuditLogPanel entityType="mouvement" title="📜 Historique des mouvements caisse" />
+      <AuditLogPanel entityType="mouvement" title="Historique des mouvements caisse" />
 
       {showSortie && (
         <AjoutSortieModal categories={categories} onClose={() => setShowSortie(false)} onSubmit={handleAddSortie} caisseOwner={caisseOwner} />
@@ -307,10 +308,11 @@ function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof
       display: 'grid',
       gridTemplateColumns: 'minmax(80px, 90px) 1fr 140px 110px auto',
       gap: 12, alignItems: 'center',
-      padding: '10px 14px', borderRadius: 8, marginBottom: 4,
+      padding: '12px 14px', borderRadius: 12, marginBottom: 6,
       background: isPendingReception ? '#FAFAF8' : 'white',
       border: '0.5px solid #e5d8c3',
       borderLeft: `3px solid ${mvt.type === 'entree' ? '#97C459' : '#E5C0B6'}`,
+      boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
       opacity: isPendingReception ? 0.55 : 1,
       borderStyle: isPendingReception ? 'dashed' : 'solid',
     }}>
@@ -321,8 +323,9 @@ function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof
         {isPendingReception && (
           <span style={{
             fontSize: 10, padding: '2px 7px', borderRadius: 999,
-            background: '#FCEEE8', color: '#993556', fontWeight: 500
-          }}>⏳ À valider</span>
+            background: '#FCEEE8', color: '#993556', fontWeight: 500,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}><Clock size={11} /> À valider</span>
         )}
       </div>
       <div>{mvt.category && <span style={catTag}>{mvt.category}</span>}</div>
@@ -333,29 +336,29 @@ function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof
         {/* Boutons preuve (sorties uniquement, mois non clôturé) */}
         {isSortie && canEdit && (status === 'pending' || status === 'legacy') && (
           <>
-            <button onClick={onAddProof} title="Ajouter une preuve" style={btnIconGreen}>📎</button>
+            <button onClick={onAddProof} title="Ajouter une preuve" style={btnIconGreen}><Paperclip size={14} /></button>
             {status === 'pending' && (
-              <button onClick={onNoProof} title="Déclarer : pas de preuve" style={btnIconGray}>❌</button>
+              <button onClick={onNoProof} title="Déclarer : pas de preuve" style={btnIconGray}><X size={14} /></button>
             )}
           </>
         )}
         {isSortie && canEdit && status === 'with_proof' && (
-          <button onClick={onViewProof} title="Voir / changer la preuve" style={btnIconGreen}>🖼️</button>
+          <button onClick={onViewProof} title="Voir / changer la preuve" style={btnIconGreen}><Image size={14} /></button>
         )}
         {isSortie && canEdit && status === 'no_proof_declared' && (
-          <button onClick={onAddProof} title="Changer d'avis : ajouter une preuve" style={btnIconGray}>📎</button>
+          <button onClick={onAddProof} title="Changer d'avis : ajouter une preuve" style={btnIconGray}><Paperclip size={14} /></button>
         )}
 
         {/* Modifier intitulé + date (tout le monde, sortie ou entrée) */}
         {canEdit && (
-          <button onClick={onEdit} title="Modifier intitulé et date" style={btnIcon}>✏️</button>
+          <button onClick={onEdit} title="Modifier intitulé et date" style={btnIcon}><Pencil size={14} /></button>
         )}
 
         {/* Modifier montant + supprimer : admin seulement */}
         {canEdit && isAdmin && (
           <>
-            <button onClick={onEditAmount} title="Modifier le montant" style={btnIcon}>💰</button>
-            <button onClick={onDelete} title="Supprimer ce mouvement" style={btnIconRed}>🗑</button>
+            <button onClick={onEditAmount} title="Modifier le montant" style={btnIcon}><Coins size={14} /></button>
+            <button onClick={onDelete} title="Supprimer ce mouvement" style={btnIconRed}><Trash2 size={14} /></button>
           </>
         )}
       </div>
@@ -366,24 +369,25 @@ function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof
 function ProofBadge({ status }) {
   if (status === 'legacy') return null
   const cfg = {
-    pending:           { bg: '#FFF6E5', col: '#7A5510', txt: '⏳ En attente' },
-    with_proof:        { bg: '#E6F4E6', col: '#27500A', txt: '✅ Preuve' },
-    no_proof_declared: { bg: '#F0EEEA', col: '#4a3a30', txt: '⚠️ Sans preuve' },
+    pending:           { bg: '#FFF6E5', col: '#7A5510', Icon: Clock,         txt: 'En attente' },
+    with_proof:        { bg: '#E6F4E6', col: '#27500A', Icon: Check,         txt: 'Preuve' },
+    no_proof_declared: { bg: '#F0EEEA', col: '#4a3a30', Icon: AlertTriangle, txt: 'Sans preuve' },
   }[status]
   if (!cfg) return null
   return <span style={{
     fontSize: 10, padding: '2px 7px', borderRadius: 999,
-    background: cfg.bg, color: cfg.col, fontWeight: 500, whiteSpace: 'nowrap'
-  }}>{cfg.txt}</span>
+    background: cfg.bg, color: cfg.col, fontWeight: 500, whiteSpace: 'nowrap',
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+  }}><cfg.Icon size={11} /> {cfg.txt}</span>
 }
 
 const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
-const btnIcon = { background: 'transparent', border: '1px solid #e5d8c3', cursor: 'pointer', color: '#4a3a30', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
-const btnIconGreen = { background: 'transparent', border: '1px solid #C8E0AC', cursor: 'pointer', color: '#27500A', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
-const btnIconGray = { background: 'transparent', border: '1px solid #E0DDD5', cursor: 'pointer', color: '#4a3a30', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
-const btnIconRed = { background: 'transparent', border: '1px solid #F2D1D0', cursor: 'pointer', color: '#99201E', borderRadius: 6, padding: '4px 8px', fontSize: 11 }
+const btnIcon = { background: 'transparent', border: '1px solid #e5d8c3', cursor: 'pointer', color: '#4a3a30', borderRadius: 8, padding: '5px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }
+const btnIconGreen = { background: 'transparent', border: '1px solid #C8E0AC', cursor: 'pointer', color: '#27500A', borderRadius: 8, padding: '5px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }
+const btnIconGray = { background: 'transparent', border: '1px solid #E0DDD5', cursor: 'pointer', color: '#4a3a30', borderRadius: 8, padding: '5px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }
+const btnIconRed = { background: 'transparent', border: '1px solid #F2D1D0', cursor: 'pointer', color: '#99201E', borderRadius: 8, padding: '5px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }
 const catTag = { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#F4F0EA', color: '#4a3a30' }
 
 function Chip({ active, onClick, children }) {
@@ -392,5 +396,6 @@ function Chip({ active, onClick, children }) {
     background: active ? '#993556' : 'white',
     color:      active ? '#faf7f2' : '#1a0f0a',
     border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
+    display: 'inline-flex', alignItems: 'center', gap: 6,
   }}>{children}</button>
 }
