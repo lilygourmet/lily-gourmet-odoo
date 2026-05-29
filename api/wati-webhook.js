@@ -189,13 +189,17 @@ async function handleSend(req, res) {
       const qs = new URLSearchParams({ messageText: text })
       watiUrl = `${base}/api/v1/sendSessionMessage/${number}?${qs.toString()}`
     }
+    console.log(`[WATI session] to ${number} · ${fileUrl ? 'file' : 'text'} · url ${watiUrl.split('?')[0]}`)
     const watiRes = await fetch(watiUrl, {
       method: 'POST',
       headers: { Authorization: authHeader, Accept: 'application/json' },
     })
-    const watiData = await watiRes.json().catch(() => ({}))
+    const rawBody = await watiRes.text()
+    let watiData = {}
+    try { watiData = JSON.parse(rawBody) } catch { /* réponse non JSON */ }
+    console.log('[WATI session] status', watiRes.status, '· body', rawBody)
     if (!watiRes.ok || watiData?.result === false) {
-      const msg = watiData?.info || watiData?.message || `erreur ${watiRes.status}`
+      const msg = watiData?.info || watiData?.message || rawBody || `erreur ${watiRes.status}`
       return res.status(502).json({ error: `Envoi WhatsApp refusé : ${msg}` })
     }
 
