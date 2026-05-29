@@ -7,6 +7,32 @@ import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
 import LabelsButton from './LabelsButton'
+import {
+  Calendar, BarChart3, ListTodo, Cake, Croissant, Sandwich, Boxes, Store,
+  PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
+  MessageCircle, Wallet, CreditCard, Snowflake, Banknote, Users, Plane, Receipt,
+  Settings, RefreshCw, LogOut, KeyRound, Printer, Wrench, Palette, Circle, ChevronDown,
+} from 'lucide-react'
+
+// Icône (Lucide) par vue / menu / action — remplace les émoticônes du header.
+const HEADER_ICONS = {
+  calendar: Calendar, recap: BarChart3, tasks: ListTodo, patissier: Cake,
+  prod: Croissant, sales: Sandwich, 'stock-gs': Boxes,
+  vitrine: Store, 'vitrine-sale': Store, 'reception-vitrine': PackageCheck,
+  'fin-journee': Moon, stock: ClipboardList, checklist: ListChecks,
+  etiquettes: Tag, 'cake-vision-link': Camera, messages: MessageSquare,
+  conversations: MessageCircle, paiements: CreditCard, freezer: Snowflake,
+  caisse: Banknote, hr: Users, absences: Plane, economat: Receipt,
+  // menus déroulants
+  menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench,
+  // actions
+  settings: Settings, sync: RefreshCw, logout: LogOut, password: KeyRound,
+  print: Printer, palette: Palette, users: Users,
+}
+function Ico({ name, size = 16, className = '' }) {
+  const C = HEADER_ICONS[name] || Circle
+  return <C size={size} strokeWidth={1.8} className={className} />
+}
 
 // ============================================================
 // AppHeader : header de navigation unifie (Option B)
@@ -432,7 +458,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // ============================================================
   // Composants helper
   // ============================================================
-  function NavButton({ emoji, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
+  function NavButton({ view, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
     return (
       <button
         onClick={onClick}
@@ -442,7 +468,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
         }`}
       >
-        <span>{emoji}</span>
+        <Ico name={view} size={15} />
         <span>{label}</span>
         {convBadge ? (
           <ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} />
@@ -455,7 +481,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     )
   }
 
-  function DropdownMenu({ id, emoji, label, items, footerSlot = null }) {
+  function DropdownMenu({ id, label, items, footerSlot = null }) {
     const open = openMenu === id
     const menuRef = useRef(null)
     useEffect(() => {
@@ -479,9 +505,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
           }`}
         >
-          <span>{emoji}</span>
+          <Ico name={`menu_${id}`} size={15} />
           <span>{label}</span>
-          <span className="text-[9px] opacity-70">▾</span>
+          <ChevronDown size={13} strokeWidth={1.8} className="opacity-70" />
           {totalBadge > 0 && !hasActive && (
             <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
               {totalBadge > 99 ? '99+' : totalBadge}
@@ -510,7 +536,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                     }`}
                   >
                     <span className="flex items-center gap-2">
-                      <span className="text-[14px]">{item.emoji}</span>
+                      <Ico name={item.view} size={15} />
                       <span>{item.label}</span>
                     </span>
                     {item.convBadge ? (
@@ -553,15 +579,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         {/* Navigation : 3 boutons fixes + 3 menus deroulants */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {!isLivreur(user) && canSeeCalendar(user) && (
-            <NavButton emoji="📅" label="Calendrier" isActive={activeView === 'calendar'} onClick={() => onNavigate('calendar')} />
+            <NavButton view="calendar" label="Calendrier" isActive={activeView === 'calendar'} onClick={() => onNavigate('calendar')} />
           )}
           {(canRecaps(user) || isLivreur(user)) && (
-            <NavButton emoji="📊" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
+            <NavButton view="recap" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
           )}
-          <NavButton emoji="📋" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
+          <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
           {primary && (
             <NavButton
-              emoji={primary.emoji}
+              view={primary.view}
               label={primary.label}
               isActive={activeView === primary.view}
               badgeCount={primary.badge}
@@ -576,7 +602,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           )}
           {showChecklistBtn && (
             <NavButton
-              emoji="📋"
+              view="checklist"
               label="Checklist"
               isActive={activeView === 'checklist'}
               badgeCount={checklistBadge}
@@ -592,9 +618,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {admin ? (
             <>
               {/* Mode admin : 3 menus deroulants */}
-              <DropdownMenu id="prod" emoji="🥐" label="Production" items={menuProduction} />
-              <DropdownMenu id="vitrine" emoji="🥐" label="Vitrine" items={menuVitrine} />
-              <DropdownMenu id="outils" emoji="🛠" label="Outils" items={menuOutils} footerSlot={canPrintLabels(user) ? <LabelsButton /> : null} />
+              <DropdownMenu id="prod" label="Production" items={menuProduction} />
+              <DropdownMenu id="vitrine" label="Vitrine" items={menuVitrine} />
+              <DropdownMenu id="outils" label="Outils" items={menuOutils} footerSlot={canPrintLabels(user) ? <LabelsButton /> : null} />
             </>
           ) : (
             <>
@@ -605,7 +631,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                 .map(item => (
                   <NavButton
                     key={item.view}
-                    emoji={item.emoji}
+                    view={item.view}
                     label={item.label}
                     isActive={activeView === item.view}
                     badgeCount={item.badge || 0}
@@ -642,12 +668,12 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             >
               {syncing ? (
                 <>
-                  <span>⏳</span>
+                  <RefreshCw size={14} strokeWidth={1.8} className="animate-spin" />
                   <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
                 </>
               ) : (
                 <>
-                  <span>🔄</span>
+                  <RefreshCw size={14} strokeWidth={1.8} />
                   <span className="hidden sm:inline">SYNC</span>
                 </>
               )}
@@ -661,16 +687,16 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                 className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
                 title="Paramètres"
               >
-                ⚙️
+                <Ico name="settings" size={17} />
               </button>
               {showCog && (
                 <>
                   <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
-                    <CogItem icon="🔑" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
-                    <CogItem icon="👥" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
-                    {admin && <CogItem icon="🎨" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
-                    {admin && userCanSync && <CogItem icon="🔄" label="Synchroniser" onClick={() => { setShowCog(false); handleSync() }} />}
-                    {admin && onLogout && <CogItem icon="↩" label="Se déconnecter" onClick={() => { setShowCog(false); onLogout() }} />}
+                    <CogItem name="password" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
+                    <CogItem name="users" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
+                    {admin && <CogItem name="palette" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
+                    {admin && userCanSync && <CogItem name="sync" label="Synchroniser" onClick={() => { setShowCog(false); handleSync() }} />}
+                    {admin && onLogout && <CogItem name="logout" label="Se déconnecter" onClick={() => { setShowCog(false); onLogout() }} />}
                   </div>
                 </>
               )}
@@ -683,7 +709,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
               title="Changer mot de passe"
             >
-              🔑
+              <Ico name="password" size={17} />
             </button>
           )}
 
@@ -693,7 +719,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
               title="Se déconnecter"
             >
-              ↩
+              <Ico name="logout" size={17} />
             </button>
           )}
         </div>
@@ -730,13 +756,13 @@ function ConvBadgePills({ unassigned = 0, unread = 0, absolute = true }) {
   )
 }
 
-function CogItem({ icon, label, onClick }) {
+function CogItem({ name, label, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-cream-warm text-[12px] text-ink"
+      className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-cream-warm text-[12px] text-ink"
     >
-      <span className="text-[14px]">{icon}</span>
+      <Ico name={name} size={15} />
       <span>{label}</span>
     </button>
   )
