@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   loadTasksReceived, loadTasksSent, countUnreadTasks,
-  markTaskRead, deleteTask
+  markTaskRead, deleteTask, loadTeamTasks
 } from '../../lib/tasks'
 import TaskDetailModal from './TaskDetailModal'
 import NewTaskModal from './NewTaskModal'
@@ -43,8 +43,19 @@ export default function TasksView({ user }) {
   const [loading, setLoading] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
+  const isAdmin = user?.role === 'admin'
+  const [teamTasks, setTeamTasks] = useState(null)
+  const [teamStatus, setTeamStatus] = useState('todo')
+  const [teamPerson, setTeamPerson] = useState('all')
 
   useEffect(() => { reload(true) }, [user?.id])
+
+  // Charge les tâches de l'équipe quand on ouvre l'onglet Équipe (admin)
+  useEffect(() => {
+    if (filter === 'team' && isAdmin && teamTasks === null) {
+      loadTeamTasks().then(setTeamTasks).catch(e => { console.error('team tasks:', e); setTeamTasks([]) })
+    }
+  }, [filter, isAdmin, teamTasks])
 
   async function reload(showInitialToast = false) {
     if (!user?.id) return
@@ -67,6 +78,9 @@ export default function TasksView({ user }) {
           setShowToast(true)
           setTimeout(() => setShowToast(false), 5000)
         }
+      }
+      if (teamTasks !== null) {
+        loadTeamTasks().then(setTeamTasks).catch(() => {})
       }
     } catch (e) {
       console.error('reload tasks:', e)
@@ -166,6 +180,11 @@ export default function TasksView({ user }) {
         <Chip active={filter === 'done'} onClick={() => setFilter('done')}>
           Terminées ({doneCount})
         </Chip>
+        {isAdmin && (
+          <Chip active={filter === 'team'} onClick={() => setFilter('team')}>
+            👥 Équipe
+          </Chip>
+        )}
         <span style={{ marginLeft: 'auto' }}>
           <Chip active={filter === 'sent'} onClick={() => setFilter('sent')}>
             Envoyées par moi ({sentCount})
@@ -176,7 +195,17 @@ export default function TasksView({ user }) {
       {loading && (
         <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
       )}
-      {!loading && filteredList.length === 0 && (
+      {filter === 'team' && (
+        <TeamPanel
+          teamTasks={teamTasks}
+          teamStatus={teamStatus} setTeamStatus={setTeamStatus}
+          teamPerson={teamPerson} setTeamPerson={setTeamPerson}
+          currentUserId={user.id}
+          onOpen={openTask}
+        />
+      )}
+
+      {!loading && filter !== 'team' && filteredList.length === 0 && (
         <div style={{
           padding: 28, textAlign: 'center', color: '#4a3a30',
           background: '#F9F6F1', borderRadius: 8, fontSize: 13
@@ -184,7 +213,7 @@ export default function TasksView({ user }) {
           Aucune tâche dans cette catégorie.
         </div>
       )}
-      {!loading && sortedMonths.map(m => {
+      {!loading && filter !== 'team' && sortedMonths.map(m => {
         const list = byMonth[m]
         const urgents = list.filter(t => t.is_urgent && t.status !== 'done').length
         return (
@@ -235,6 +264,77 @@ export default function TasksView({ user }) {
           onCreated={reload}
         />
       )}
+    </div>
+  )
+}
+
+// Vue admin : tâches de toute l'équipe, groupées par personne (destinataire).
+function TeamPanel({ teamTasks, teamStatus, setTeamStatus, teamPerson, setTeamPerson, currentUserId, onOpen }) {
+  if (teamTasks === null) {
+    return <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
+  }
+
+  const peopleMap = {}
+  for (const t of teamTasks) {
+    const id = t.to_user_id
+    if (!id) continue
+    if (!peopleMap[id]) peopleMap[id] = { id, name: t.to_user?.full_name || t.to_user?.username || '?', todo: 0, done: 0 }
+    if (t.status === 'done') peopleMap[id].done++
+    else peopleMap[id].todo++
+  }
+  const people = Object.values(peopleMap).sort((a, b) => b.todo - a.todo || a.name.localeCompare(b.name))
+
+  const visible = teamTasks.filter(t => {
+    if (teamPerson !== 'all' && t.to_user_id !== teamPerson) return false
+    if (teamStatus === 'todo') return t.status === 'todo'
+    if (teamStatus === 'done') return t.status === 'done'
+    return true
+  })
+  const groups = {}
+  for (const t of visible) {
+    const id = t.to_user_id || 'none'
+    if (!groups[id]) groups[id] = []
+    groups[id].push(t)
+  }
+  const groupIds = Object.keys(groups).sort((a, b) => (peopleMap[b]?.todo || 0) - (peopleMap[a]?.todo || 0))
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <select value={teamPerson} onChange={e => setTeamPerson(e.target.value)}
+                style={{ padding: '8px 11px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8, background: 'white', cursor: 'pointer' }}>
+          <option value="all">Tout le monde</option>
+          {people.map(p => <option key={p.id} value={p.id}>{p.name} ({p.todo} à faire)</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <Chip active={teamStatus === 'todo'} onClick={() => setTeamStatus('todo')}>À faire</Chip>
+          <Chip active={teamStatus === 'done'} onClick={() => setTeamStatus('done')}>Faites</Chip>
+          <Chip active={teamStatus === 'all'} onClick={() => setTeamStatus('all')}>Toutes</Chip>
+        </div>
+      </div>
+
+      {visible.length === 0 && (
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8, fontSize: 13 }}>
+          Aucune tâche.
+        </div>
+      )}
+
+      {groupIds.map(id => {
+        const list = groups[id]
+        const p = peopleMap[id]
+        return (
+          <div key={id} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a0f0a', margin: '8px 4px' }}>
+              {p?.name || '—'} <span style={{ fontWeight: 400, color: '#8a7a70', fontSize: 12 }}>· {p?.todo || 0} à faire · {p?.done || 0} faites</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+              {list.map(t => (
+                <TaskCard key={t.id} task={t} currentUserId={currentUserId} onClick={() => onOpen(t)} onDelete={null} />
+              ))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

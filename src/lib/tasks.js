@@ -81,6 +81,19 @@ export async function loadTasksSent(userId) {
 }
 
 /**
+* Charge TOUTES les tâches (vue admin équipe), expéditeur + destinataire joints.
+*/
+export async function loadTeamTasks() {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(SEL)
+    .order('sent_at', { ascending: false })
+    .limit(500)
+  if (error) throw error
+  return data || []
+}
+
+/**
 * Compte les tâches non lues pour un user (pour le badge header).
 */
 export async function countUnreadTasks(userId) {
