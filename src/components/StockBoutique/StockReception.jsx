@@ -255,7 +255,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
         {/* HEADER */}
-        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-lg flex items-center justify-between">
+        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-2xl flex items-center justify-between">
           <div>
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
               Réception du jour
@@ -278,13 +278,13 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
           </div>
         </div>
 
-        <div className="bg-white border border-line rounded-b-lg p-4">
+        <div className="bg-white border border-line rounded-b-2xl p-4 shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
           {/* Actions bar */}
           <div className="flex justify-end mb-4">
             <button
               type="button"
               onClick={() => setSurpriseModalOpen(true)}
-              className="px-4 py-2 bg-green-700 text-white rounded-md text-[12px] font-medium tracking-wider hover:bg-green-800 flex items-center gap-1"
+              className="px-4 py-2 bg-green-700 text-white rounded-lg text-[12px] font-medium tracking-wider hover:bg-green-800 flex items-center gap-1"
             >
               + Ajouter article (non annoncé)
             </button>
@@ -360,7 +360,7 @@ function StatCard({ label, value, color }) {
     teal: 'bg-teal-100 text-teal-900',
   }
   return (
-    <div className={`p-3 rounded-md text-center ${styles[color] || styles.bordeaux}`}>
+    <div className={`p-4 rounded-2xl text-center shadow-sm ${styles[color] || styles.bordeaux}`}>
       <div className="text-[10px] tracking-[0.15em] uppercase opacity-70 mb-1">{label}</div>
       <div className="text-[22px] font-semibold">{value}</div>
     </div>
@@ -387,7 +387,7 @@ function ReceptionRow({ item, isEditing, onEdit, onLocalQtyChange, onConfirm }) 
   }
 
   return (
-    <div className={`grid grid-cols-[40px_1fr_auto_auto] gap-3 items-center p-3 rounded-md border ${border} ${bg} animate-slidein`}>
+    <div className={`grid grid-cols-[40px_1fr_auto_auto] gap-3 items-center p-3.5 rounded-2xl border ${border} ${bg} shadow-sm animate-slidein`}>
       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[14px] ${iconBg}`}>
         {icon}
       </div>
