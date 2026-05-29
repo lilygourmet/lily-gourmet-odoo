@@ -267,7 +267,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
               <div className="bg-white border border-line rounded-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-line flex items-center justify-between">
                   <div>
-                    <div className="text-[14px] font-semibold">🔄 Restes d'hier — que faire ?</div>
+                    <div className="text-[14px] font-semibold">Restes d'hier — que faire ?</div>
                     <div className="text-[11px] text-ink-mute mt-0.5">
                       Hier soir il restait ces articles en vitrine. À toi de décider.
                     </div>
@@ -314,7 +314,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                                 : 'bg-white border-line hover:bg-green-50 hover:border-green-500'
                             }`}
                           >
-                            ↓ Garde ({nextLabel})
+                            Garde ({nextLabel})
                           </button>
                           <button
                             type="button"
@@ -325,7 +325,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                                 : 'bg-white border-line hover:bg-amber-50 hover:border-amber-500'
                             }`}
                           >
-                            ⚖ Partielle
+                            Partielle
                           </button>
                           <button
                             type="button"
@@ -336,7 +336,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                                 : 'bg-white border-line hover:bg-red-50 hover:border-red-500'
                             }`}
                           >
-                            🗑 Casse
+                            Casse
                           </button>
                         </div>
                         {dec === 'partial' && (
@@ -354,7 +354,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                             <span className="text-[11px] text-ink-mute">/ {totalQty} (le reste = gardés)</span>
                             {currentLossQty > 0 && currentLossQty <= totalQty && (
                               <span className="text-[11px] text-amber-800 font-medium">
-                                → 🗑 {currentLossQty} cassés + ↓ {totalQty - currentLossQty} gardés
+                                {currentLossQty} cassés · {totalQty - currentLossQty} gardés
                               </span>
                             )}
                             {currentLossQty > totalQty && (
@@ -395,7 +395,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
             {/* SECTION 2 — NOUVELLE PROD */}
             <div className="bg-white border border-line rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b border-line">
-                <div className="text-[14px] font-semibold">➕ Nouvelle production du jour</div>
+                <div className="text-[14px] font-semibold">Nouvelle production du jour</div>
                 <div className="text-[11px] text-ink-mute mt-0.5">
                   Combien d'articles frais tu apportes en vitrine ? Tu peux envoyer plusieurs fois dans la matinée.
                 </div>
@@ -416,7 +416,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                       className="px-4 py-2 bg-bordeaux text-cream rounded-full text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bordeaux-deep whitespace-nowrap shadow-sm"
                       title={totalNewToSend === 0 ? "Ajoute des articles dans le panier" : `${totalNewToSend} article${totalNewToSend > 1 ? 's' : ''} à envoyer`}
                     >
-                      {sending ? 'Envoi...' : '📦 Envoyer au café'}
+                      {sending ? 'Envoi...' : 'Envoyer au café'}
                     </button>
                   }
                 />
@@ -434,7 +434,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                   disabled={totalNewToSend === 0 || sending}
                   className="px-4 py-2 bg-bordeaux text-cream rounded-md text-[12px] font-medium tracking-wider disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bordeaux-deep"
                 >
-                  {sending ? 'Envoi...' : '📦 Envoyer au café'}
+                  {sending ? 'Envoi...' : 'Envoyer au café'}
                 </button>
               </div>
             </div>
@@ -443,7 +443,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
             {sentItems.length > 0 && (
               <div className="bg-white border border-line rounded-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-line bg-cream-warm">
-                  <div className="text-[12px] font-semibold">✅ Déjà envoyés au café aujourd'hui</div>
+                  <div className="text-[12px] font-semibold">Déjà envoyés au café aujourd'hui</div>
                   <div className="text-[10px] text-ink-mute font-mono tracking-wider uppercase mt-0.5">
                     {sentItems.length} ligne{sentItems.length > 1 ? 's' : ''} · {sentItems.reduce((s, i) => s + (i.qty_announced || 0), 0)} article{sentItems.reduce((s, i) => s + (i.qty_announced || 0), 0) > 1 ? 's' : ''}
                   </div>
@@ -496,7 +496,7 @@ function DiscrepancyModalPatissier({ items, resolvedItems, onAccept, onRequestRe
         {/* Header */}
         <div className="bg-red-700 text-white px-4 py-3 flex-shrink-0">
           <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">
-            ⚠️ Écarts à traiter
+            Écarts à traiter
           </div>
           <div className="font-semibold text-[13px] mt-0.5">
             {items.length} article{items.length > 1 ? 's' : ''} avec écart — résous chacun avant de continuer
@@ -547,8 +547,8 @@ function DiscrepancyModalPatissier({ items, resolvedItems, onAccept, onRequestRe
               </div>
               {resolvedItems.map(it => (
                 <div key={it.id} className="px-4 py-2 text-[11px] text-ink-mute line-through">
-                  {it.product_name} · {it.discrepancy_status === 'unresolved' ? '⚠️ désaccord — audit' :
-                                       it.discrepancy_status === 'pending_cafe' ? '⏳ balle au café' :
+                  {it.product_name} · {it.discrepancy_status === 'unresolved' ? 'désaccord — audit' :
+                                       it.discrepancy_status === 'pending_cafe' ? 'balle au café' :
                                        'résolu'}
                 </div>
               ))}
