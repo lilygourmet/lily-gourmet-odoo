@@ -386,16 +386,26 @@ async function handleSendTemplate(req, res) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
   try {
-    const r = await fetch(`${base}/api/v1/sendTemplateMessage/${number}`, {
+    // WATI : le numéro va en PARAMÈTRE d'URL (?whatsappNumber=), pas dans le chemin.
+    const url = `${base}/api/v1/sendTemplateMessage?whatsappNumber=${number}`
+    const payload = {
+      template_name: templateName,
+      broadcast_name: broadcastName || `lily_${Date.now()}`,
+      parameters: parameters || [],
+    }
+    console.log(`[WATI] Sending template ${templateName} to ${number}`)
+    console.log('[WATI] URL:', url)
+    console.log('[WATI] Payload:', JSON.stringify(payload))
+    const r = await fetch(url, {
       method: 'POST',
       headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        template_name: templateName,
-        broadcast_name: broadcastName || `lily_${Date.now()}`,
-        parameters: parameters || [],
-      }),
+      body: JSON.stringify(payload),
     })
-    const data = await r.json().catch(() => ({}))
+    const raw = await r.text()
+    let data = {}
+    try { data = JSON.parse(raw) } catch { /* réponse non JSON */ }
+    console.log('[WATI] Response status:', r.status)
+    console.log('[WATI] Response body:', raw)
     if (!r.ok || data?.result === false) {
       return res.status(502).json({ error: data?.info || data?.message || `Wati erreur ${r.status}` })
     }
@@ -572,9 +582,9 @@ async function sendReminderWhatsapp(supabase, rawPhone, text) {
     }
   } catch { /* on tente le modèle */ }
 
-  // 2) Modèle (hors fenêtre 24 h)
+  // 2) Modèle (hors fenêtre 24 h) — numéro en ?whatsappNumber=
   try {
-    const r = await fetch(`${base}/api/v1/sendTemplateMessage/${number}`, {
+    const r = await fetch(`${base}/api/v1/sendTemplateMessage?whatsappNumber=${number}`, {
       method: 'POST',
       headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
