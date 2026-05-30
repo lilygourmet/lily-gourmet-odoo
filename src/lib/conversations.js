@@ -171,11 +171,11 @@ export async function assignConversation(conversationId, userId) {
   return data
 }
 
-/** Clôture une conversation (statut 'fermee'). */
+/** Clôture une conversation (statut 'fermee') et la désassigne. */
 export async function closeConversation(conversationId, userId) {
   const { data, error } = await supabase
     .from('conversations')
-    .update({ status: 'fermee', updated_at: new Date().toISOString() })
+    .update({ status: 'fermee', assigned_to: null, updated_at: new Date().toISOString() })
     .eq('id', conversationId)
     .select(CONV_SEL)
     .single()
