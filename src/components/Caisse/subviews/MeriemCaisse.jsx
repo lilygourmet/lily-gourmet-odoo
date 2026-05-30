@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Lock, Clock, Archive, Paperclip, X, Image, Pencil, Coins, Trash2, Check, AlertTriangle } from 'lucide-react'
+import { Lock, Clock, Archive, Paperclip, X, Image, Pencil, Coins, Trash2, Check, AlertTriangle, Tags, ChevronDown, ChevronUp } from 'lucide-react'
 import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof, loadPendingReceptions, validateReception } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 import AjoutSortieModal from '../modals/AjoutSortieModal'
@@ -32,6 +32,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
   const [pendingReceptions, setPendingReceptions] = useState([])
   const [showReceptionsModal, setShowReceptionsModal] = useState(false)
   const [hasAutoShownReceptions, setHasAutoShownReceptions] = useState(false)
+  const [catFilterOpen, setCatFilterOpen] = useState(false)
 
   useEffect(() => { (async () => {
     setCategories(await loadCategories(caisseOwner))
@@ -224,17 +225,30 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
         <button disabled={closed} onClick={() => setShowCloture(true)} style={{ ...btnNormal, marginLeft: 'auto', opacity: closed ? 0.4 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Archive size={15} /> Clôturer le mois</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+      {(() => { const selectedCat = categories.find(c => c.name === filter); return (
+      <>
+      <div style={{ display: 'flex', gap: 6, marginBottom: catFilterOpen ? 10 : 16, flexWrap: 'wrap' }}>
         <Chip active={filter === 'all'}    onClick={() => setFilter('all')}>Tout</Chip>
         <Chip active={filter === 'entree'} onClick={() => setFilter('entree')}>Entrées</Chip>
         <Chip active={filter === 'sortie'} onClick={() => setFilter('sortie')}>Sorties</Chip>
         {pendingProofCount > 0 && (
           <Chip active={filter === 'pending_proof'} onClick={() => setFilter('pending_proof')}><Clock size={13} /> Sans preuve décidée</Chip>
         )}
-        {categories.map(c => (
-          <Chip key={c.id} active={filter === c.name} onClick={() => setFilter(c.name)}>{c.emoji} {c.name}</Chip>
-        ))}
+        {categories.length > 0 && (
+          <Chip active={!!selectedCat} onClick={() => setCatFilterOpen(o => !o)}>
+            <Tags size={13} /> {selectedCat ? `Catégorie : ${selectedCat.name}` : 'Catégorie'} {catFilterOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </Chip>
+        )}
       </div>
+      {catFilterOpen && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', padding: 12, background: '#FAF6F0', borderRadius: 12, border: '0.5px solid #e5d8c3' }}>
+          {categories.map(c => (
+            <Chip key={c.id} active={filter === c.name} onClick={() => setFilter(c.name)}>{c.emoji} {c.name}</Chip>
+          ))}
+        </div>
+      )}
+      </>
+      )})()}
 
       {filtered.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>Aucun mouvement.</div>}
       {filtered.map(mvt => (
