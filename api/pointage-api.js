@@ -637,6 +637,83 @@ async function actionListAllocations({ annee } = {}) {
 }
 
 // ============================================================
+// Action : import-allocations — copie les allocations Odoo de l'année
+// dans la table conges_allocations (source='odoo'). Idempotent : on
+// remplace systématiquement les lignes 'odoo' de l'année ; les lignes
+// 'manuel' et 'auto' ne sont jamais touchées.
+// ============================================================
+function mapOdooAllocType(odooTypeName) {
+  if (!odooTypeName) return 'autre'
+  const t = String(odooTypeName).toLowerCase()
+  if (t.includes('annuel') || t.includes('payé') || t.includes('paid'))    return 'annuel'
+  if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) return 'maladie_courte'
+  if (t.includes('mariage') || t.includes('marriage'))                     return 'mariage'
+  if (t.includes('naissance') || t.includes('birth'))                      return 'naissance'
+  if (t.includes('décès') || t.includes('deces') || t.includes('death'))   return 'deces'
+  if (t.includes('circoncis'))                                             return 'circoncision'
+  if (t.includes('reliquat') || t.includes('report'))                       return 'reliquat'
+  return 'autre'
+}
+
+async function actionImportAllocations({ annee } = {}) {
+  const year = annee || new Date().getFullYear()
+  const debut = `${year}-01-01`
+  const fin   = `${year}-12-31`
+  const uid = await odooAuth()
+
+  const allocs = await odooExec(uid, 'hr.leave.allocation', 'search_read', [
+    [['state', '=', 'validate']],
+    ['id', 'employee_id', 'holiday_status_id', 'number_of_days', 'date_from', 'date_to', 'state', 'name'],
+  ], { limit: 5000 })
+
+  // Garde celles qui chevauchent l'année
+  const inYear = allocs.filter(a => {
+    const df = a.date_from ? a.date_from.slice(0, 10) : null
+    const dt = a.date_to   ? a.date_to.slice(0, 10)   : null
+    if (df && df > fin)   return false
+    if (dt && dt < debut) return false
+    return true
+  })
+
+  const { data: employesDb } = await sb
+    .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
+
+  // Purge les allocations odoo de l'année (idempotence)
+  await sb.from('conges_allocations')
+    .delete()
+    .eq('annee', year)
+    .eq('source', 'odoo')
+
+  let unmatched = 0
+  let inserted = 0
+  const rows = []
+  for (const a of inYear) {
+    if (!a.employee_id) continue
+    const empNameOdoo = Array.isArray(a.employee_id) ? a.employee_id[1] : null
+    const match = findBestMatch(empNameOdoo, employesDb, 0.70)
+    if (!match) { unmatched++; continue }
+    const typeOdoo = Array.isArray(a.holiday_status_id) ? a.holiday_status_id[1] : null
+    rows.push({
+      employe_id: match.employe.id,
+      annee:      year,
+      type:       mapOdooAllocType(typeOdoo),
+      jours:      Number(a.number_of_days || 0),
+      source:     'odoo',
+      raison:     a.name || typeOdoo || null,
+      date_evt:   a.date_from ? a.date_from.slice(0, 10) : null,
+      statut:     'valide',
+    })
+  }
+  if (rows.length > 0) {
+    const { error } = await sb.from('conges_allocations').insert(rows)
+    if (!error) inserted = rows.length
+    else console.warn('[import-allocations] insert error:', error.message)
+  }
+
+  return { ok: true, year, total_odoo: inYear.length, inserted, unmatched }
+}
+
+// ============================================================
 // Action : list-employees (récupérer tous les employés Odoo)
 // ============================================================
 
@@ -722,6 +799,7 @@ export default async function handler(req, res) {
     else if (action === 'sync-leaves')        result = await actionSyncLeaves(params)
     else if (action === 'sync-leaves-year')   result = await actionSyncLeavesYear(params)
     else if (action === 'list-allocations')   result = await actionListAllocations(params)
+    else if (action === 'import-allocations') result = await actionImportAllocations(params)
     else if (action === 'list-employees')     result = await actionListEmployees()
     else if (action === 'debug-attendance')   result = await actionDebugAttendance(params)
     else return res.status(400).json({ error: 'Unknown action: ' + action })

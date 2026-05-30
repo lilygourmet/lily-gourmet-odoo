@@ -372,3 +372,19 @@ export async function listAllocationsOdoo(annee = null) {
   }
   return resp.json()
 }
+
+// Importe les allocations Odoo dans la table conges_allocations.
+// Remplace les lignes source='odoo' de l'année (idempotent), ne touche pas
+// les lignes 'manuel' ou 'auto'.
+export async function importAllocationsOdoo(annee = null) {
+  const resp = await fetch('/api/pointage-api?action=import-allocations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ annee: annee || new Date().getFullYear() }),
+  })
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '')
+    throw new Error(txt || `HTTP ${resp.status}`)
+  }
+  return resp.json()
+}

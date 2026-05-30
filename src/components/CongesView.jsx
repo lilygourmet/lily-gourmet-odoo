@@ -6,7 +6,7 @@ import {
   calculSoldeConges, quotaAnnuel,
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
-  syncCongesAnneeOdoo, listAllocationsOdoo,
+  syncCongesAnneeOdoo, listAllocationsOdoo, importAllocationsOdoo,
   loadAllocations, createAllocation, cancelAllocation,
   initAutoAllocationsTous, ALLOC_TYPES,
 } from '../lib/conges'
@@ -147,6 +147,21 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     try {
       const added = await initAutoAllocationsTous(employes, annee, user.id)
       alert(`${added} allocation(s) auto créée(s).`)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    } finally {
+      setInitAllocBusy(false)
+    }
+  }
+
+  async function handleImportAllocations() {
+    const annee = new Date().getFullYear()
+    if (!confirm(`Importer les allocations Odoo de ${annee} ?\n\nLes lignes Odoo déjà importées seront remplacées ; les allocations manuelles ou auto ne sont pas touchées.`)) return
+    setInitAllocBusy(true)
+    try {
+      const r = await importAllocationsOdoo(annee)
+      alert(`Import terminé.\n\n${r.inserted} allocation(s) importée(s)\n${r.total_odoo} trouvée(s) côté Odoo\n${r.unmatched} sans correspondance d'employé`)
       await reload()
     } catch (e) {
       alert('Erreur : ' + e.message)
@@ -310,9 +325,14 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                 <Plus size={14} /> Allouer des jours
               </button>
               {user?.role === 'admin' && (
-                <button onClick={handleInitAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Plus size={14} /> {initAllocBusy ? 'Création…' : `Init allocations auto ${new Date().getFullYear()}`}
-                </button>
+                <>
+                  <button onClick={handleInitAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Plus size={14} /> Init allocations auto {new Date().getFullYear()}
+                  </button>
+                  <button onClick={handleImportAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Download size={14} /> Importer allocations Odoo {new Date().getFullYear()}
+                  </button>
+                </>
               )}
               <div style={{ flex: 1 }} />
               <div>
