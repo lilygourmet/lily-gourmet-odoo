@@ -123,6 +123,7 @@ export default function EmployeEditModal({
         poste: form.poste.trim() || null,
         type_contrat: form.type_contrat,
         date_entree: form.date_entree || null,
+        date_anciennete: form.date_anciennete || null,
         date_sortie: form.date_sortie || null,
         salaire_net: form.salaire_net ? parseFloat(form.salaire_net) : null,
         adresse: form.adresse.trim() || null,
@@ -241,10 +242,19 @@ export default function EmployeEditModal({
             </Row>
           )}
           <Row>
-            <Field label="Date d'entrée" type="date" value={form.date_entree} onChange={v => setF('date_entree', v)} />
+            <Field label="Date d'entrée (fiche de salaire)" type="date" value={form.date_entree} onChange={v => setF('date_entree', v)} />
+            <div>
+              <Field label="Date d'ancienneté (manuelle)" type="date" value={form.date_anciennete} onChange={v => setF('date_anciennete', v)} />
+              <div style={{ fontSize: 10, color: '#8a7a70', marginTop: 2 }}>
+                Si renseignée, sert au calcul du quota congés (prime sur la date d'entrée).
+              </div>
+            </div>
+          </Row>
+          <Row>
             {isAdmin ? (
               <Field label="Date de sortie (si parti)" type="date" value={form.date_sortie} onChange={v => setF('date_sortie', v)} />
             ) : <div />}
+            <div />
           </Row>
 
           <Row>
@@ -464,6 +474,7 @@ function initForm(employe) {
     poste: employe?.poste || '',
     type_contrat: employe?.type_contrat || 'CDI',
     date_entree: employe?.date_entree || '',
+    date_anciennete: employe?.date_anciennete || '',
     date_sortie: employe?.date_sortie || '',
     salaire_net: employe?.salaire_net != null ? String(employe.salaire_net) : '',
     adresse: employe?.adresse || '',

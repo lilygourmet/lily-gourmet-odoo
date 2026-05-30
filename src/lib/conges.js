@@ -33,8 +33,11 @@ function moisEntre(dateA, dateB) {
 
 // Quota annuel pour un employé (selon ancienneté). Renvoie le total en jours/an.
 export function quotaAnnuel(emp, refDate = todayYMD()) {
-  if (!emp?.date_entree) return QUOTA_BASE
-  const anciennete = moisEntre(emp.date_entree, refDate) / 12
+  // Priorité à la date d'ancienneté manuelle (si renseignée), sinon repli
+  // sur date_entree (qui peut venir de la fiche de salaire).
+  const dateAnc = emp?.date_anciennete || emp?.date_entree
+  if (!dateAnc) return QUOTA_BASE
+  const anciennete = moisEntre(dateAnc, refDate) / 12
   let q = QUOTA_BASE
   if (anciennete >= 5)  q += BONUS_5_ANS
   if (anciennete >= 10) q += BONUS_10_ANS
@@ -248,7 +251,8 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   const maladieDispo  = Math.max(0, maladieAlloue - maladiePris)
 
   // Verrou des 6 mois
-  const moisDepuisEntree = emp?.date_entree ? moisEntre(emp.date_entree, refDate) : 999
+  const dateAncRef       = emp?.date_anciennete || emp?.date_entree
+  const moisDepuisEntree = dateAncRef ? moisEntre(dateAncRef, refDate) : 999
   const peutPrendre      = moisDepuisEntree >= MOIS_AVANT_PRISE
 
   return {
