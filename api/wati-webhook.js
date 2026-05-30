@@ -41,6 +41,7 @@ export default async function handler(req, res) {
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
+  if (action === 'correct') return handleCorrect(req, res)
   if (action === 'fetch-photo') return handleFetchPhoto(req, res)
   if (action === 'conges-notif') return handleCongesNotif(req, res)
   return handleInbound(req, res)
@@ -350,6 +351,60 @@ async function handleSuggest(req, res) {
     return res.status(200).json({ suggestions })
   } catch (e) {
     console.error('[wati-suggest]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// ============================================================
+// CORRECTION orthographe/grammaire avant envoi (action=correct)
+// ============================================================
+async function handleCorrect(req, res) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY manquant' })
+
+  const { text, userId } = req.body || {}
+  if (!text || !userId) return res.status(400).json({ error: 'text et userId requis' })
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const { data: profile } = await supabase
+    .from('profiles').select('role, perm_conversations').eq('id', userId).maybeSingle()
+  if (!profile || (profile.role !== 'admin' && profile.perm_conversations !== true)) {
+    return res.status(403).json({ error: 'non autorisé' })
+  }
+
+  const system = `Tu corriges l'orthographe, la grammaire et la ponctuation d'un message professionnel en français destiné à un client de pâtisserie.
+Règles strictes :
+- Garde le sens, le ton et la longueur originale.
+- Ne change pas les noms propres, les prix, les dates, les heures.
+- Pas d'emoji ajouté ni retiré.
+- Renvoie UNIQUEMENT le texte corrigé, sans préambule, sans guillemets, sans explication.`
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 800,
+        system,
+        messages: [{ role: 'user', content: String(text) }],
+      }),
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      console.error('[wati-correct]', r.status, data?.error?.message)
+      return res.status(502).json({ error: data?.error?.message || `Claude erreur ${r.status}` })
+    }
+    const block = (data.content || []).find(b => b.type === 'text')
+    const corrected = (block?.text || '').trim()
+    if (!corrected) return res.status(502).json({ error: 'Réponse IA vide' })
+    return res.status(200).json({ corrected })
+  } catch (e) {
+    console.error('[wati-correct]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

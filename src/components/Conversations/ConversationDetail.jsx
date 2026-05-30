@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName } from '../../lib/conversations'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import ClientAvatar from './ClientAvatar'
@@ -477,6 +477,21 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     }
   }
 
+  const [correcting, setCorrecting] = useState(false)
+  async function handleCorrect() {
+    if (!text.trim()) return
+    setCorrecting(true)
+    setSendError('')
+    try {
+      const corrected = await correctText(text, user.id)
+      if (corrected && corrected !== text) setText(corrected)
+    } catch (e) {
+      setSendError(e.message)
+    } finally {
+      setCorrecting(false)
+    }
+  }
+
   // Recherche dans le fil : remet à zéro la position quand le terme change
   useEffect(() => { setMatchIndex(0) }, [threadSearch])
   // Défile jusqu'à l'occurrence active
@@ -817,6 +832,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
                 title="Suggérer 3 réponses (IA)"
               >{suggesting ? '…' : <Sparkles size={16} strokeWidth={1.8} />}</button>
+              <button
+                type="button"
+                onClick={handleCorrect}
+                disabled={correcting || sending || !text.trim()}
+                className="px-3 h-9 flex-shrink-0 rounded-full border border-line text-[11px] font-medium hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
+                title="Corriger l'orthographe / grammaire (IA)"
+              >{correcting ? '…' : 'Corriger'}</button>
               <button
                 type="button"
                 onClick={startRecording}

@@ -348,6 +348,18 @@ export async function suggestReplies(conversationId, userId) {
   return data.suggestions || []
 }
 
+/** Corrige orthographe/grammaire d'un message avant envoi. */
+export async function correctText(text, userId) {
+  const res = await fetch('/api/wati-webhook?action=correct', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, userId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.corrected || text
+}
+
 /** Liste des templates WhatsApp approuvés (via Wati). */
 export async function fetchTemplates() {
   const res = await fetch('/api/wati-webhook?action=templates', { method: 'POST' })
