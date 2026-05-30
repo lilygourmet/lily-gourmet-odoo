@@ -234,9 +234,11 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   }
 
   // 2) Allocations de l'année (toutes sources : auto, manuel, odoo)
+  //    Statut 'valide' uniquement — les allocations en attente ne comptent
+  //    pas dans le solde tant qu'un admin n'a pas validé.
   let allocs
   if (prefetched?.allocsByEmp) {
-    allocs = prefetched.allocsByEmp.get(emp.id) || []
+    allocs = (prefetched.allocsByEmp.get(emp.id) || []).filter(a => a.statut === 'valide')
   } else {
     const { data: allocsData } = await supabase
       .from('conges_allocations')
@@ -456,7 +458,10 @@ export const ALLOC_TYPES = [
 
 export async function loadAllocations({ annee = null, employeId = null, statut = 'valide' } = {}) {
   let q = supabase.from('conges_allocations').select('*')
-  if (statut)     q = q.eq('statut', statut)
+  if (statut) {
+    if (Array.isArray(statut)) q = q.in('statut', statut)
+    else                       q = q.eq('statut', statut)
+  }
   if (annee)      q = q.eq('annee', annee)
   if (employeId)  q = q.eq('employe_id', employeId)
   q = q.order('created_at', { ascending: false })
@@ -465,11 +470,31 @@ export async function loadAllocations({ annee = null, employeId = null, statut =
   return data || []
 }
 
-export async function createAllocation({ employe_id, annee, type, jours, raison = null, date_evt = null, source = 'manuel', created_by = null }) {
+export async function createAllocation({ employe_id, annee, type, jours, raison = null, date_evt = null, source = 'manuel', created_by = null, statut = 'valide' }) {
   if (!employe_id || !annee || !type || jours == null) throw new Error('employe_id, annee, type et jours requis')
   const { data, error } = await supabase
     .from('conges_allocations')
-    .insert({ employe_id, annee, type, jours, raison, date_evt, source, created_by })
+    .insert({ employe_id, annee, type, jours, raison, date_evt, source, created_by, statut })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function validerAllocation(id, userId) {
+  const { data, error } = await supabase
+    .from('conges_allocations')
+    .update({ statut: 'valide', valide_par: userId, valide_le: new Date().toISOString() })
+    .eq('id', id)
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function rejeterAllocation(id, userId) {
+  const { data, error } = await supabase
+    .from('conges_allocations')
+    .update({ statut: 'annule', valide_par: userId, valide_le: new Date().toISOString() })
+    .eq('id', id)
     .select().single()
   if (error) throw error
   return data

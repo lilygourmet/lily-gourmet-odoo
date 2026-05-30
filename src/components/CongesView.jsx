@@ -24,6 +24,7 @@ import {
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
   loadAllocations, createAllocation, cancelAllocation,
+  validerAllocation, rejeterAllocation,
   ALLOC_TYPES,
   updateAllocation, updateConge,
 } from '../lib/conges'
@@ -105,6 +106,7 @@ function nbJours(start, end) {
 }
 
 export default function CongesView({ user, activeView, onNavigate, onLogout }) {
+  const isAdmin = user?.role === 'admin'
   const [employes, setEmployes]     = useState([])
   const [conges, setConges]         = useState([])
   const [loading, setLoading]       = useState(true)
@@ -129,7 +131,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       const [emps, all, allocs, recupRows] = await Promise.all([
         loadEmployes(true),
         loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule']),
-        loadAllocations({ annee, statut: 'valide' }),
+        loadAllocations({ annee, statut: ['valide', 'attente'] }),
         supabase.from('pointages_mois').select('employe_id, jours_recup').eq('annee', annee),
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
@@ -255,12 +257,26 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
   async function handleAddAllocation(payload) {
     try {
-      await createAllocation({ ...payload, created_by: user.id })
+      // RH (non-admin) : l'allocation passe en 'attente' jusqu'à validation admin.
+      const statut = isAdmin ? 'valide' : 'attente'
+      await createAllocation({ ...payload, created_by: user.id, statut })
       setShowAllocForm(false)
       await reload()
+      if (!isAdmin) alert('Allocation enregistrée. Elle sera visible une fois validée par un admin.')
     } catch (e) {
       alert('Erreur : ' + e.message)
     }
+  }
+
+  async function handleValiderAlloc(a) {
+    if (!confirm(`Valider l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`)) return
+    try { await validerAllocation(a.id, user.id); await reload() }
+    catch (e) { alert('Erreur : ' + e.message) }
+  }
+  async function handleRejeterAlloc(a) {
+    if (!confirm(`Rejeter l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`)) return
+    try { await rejeterAllocation(a.id, user.id); await reload() }
+    catch (e) { alert('Erreur : ' + e.message) }
   }
 
   async function handleUpdateAllocation(id, patch) {
@@ -315,12 +331,12 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                 {demandes.map(c => (
                   <CongeCard
                     key={c.id} c={c} emp={empById[c.employe_id]}
-                    actions={
+                    actions={isAdmin ? (
                       <>
                         <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>
                         <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>
                       </>
-                    }
+                    ) : null}
                   />
                 ))}
               </div>
@@ -373,10 +389,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                           {list.map(c => (
                             <CongeCard
                               key={c.id} c={c} emp={empById[c.employe_id]}
-                              actions={<>
+                              actions={isAdmin ? <>
                       <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>
                       <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>
-                    </>}
+                    </> : null}
                             />
                           ))}
                         </div>
@@ -405,8 +421,38 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               </div>
             </div>
 
+            {/* Allocations en ATTENTE de validation (visibles seulement pour admin) */}
+            {isAdmin && allocations.some(a => a.statut === 'attente') && (
+              <div style={{ background: '#FFF7E0', border: '0.5px solid #F0D89A', borderRadius: 12, padding: 12, marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#854F0B', marginBottom: 8 }}>
+                  ⏳ Allocations en attente de validation
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {allocations.filter(a => a.statut === 'attente').map(a => {
+                    const emp = empById[a.employe_id]
+                    const t = ALLOC_TYPES.find(x => x.v === a.type)
+                    return (
+                      <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, background: 'white', padding: '6px 10px', borderRadius: 8 }}>
+                        <strong>{emp?.nom || `#${a.employe_id}`}</strong>
+                        <span>· {t?.label || a.type}</span>
+                        <span style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</span>
+                        {a.raison && <span style={{ color: '#8a7a70' }}>· {a.raison}</span>}
+                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                          <button onClick={() => handleValiderAlloc(a)} style={{ ...btnValider, padding: '4px 10px', fontSize: 11 }}><Check size={12} /> Valider</button>
+                          <button onClick={() => handleRejeterAlloc(a)} style={{ ...btnRejeter, padding: '4px 10px', fontSize: 11 }}><X size={12} /> Rejeter</button>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {(() => {
-              const filtered = allocations.filter(a => filterEmp === 'all' || String(a.employe_id) === String(filterEmp))
+              // Liste principale : on n'affiche que les allocations validées.
+              const filtered = allocations
+                .filter(a => a.statut === 'valide')
+                .filter(a => filterEmp === 'all' || String(a.employe_id) === String(filterEmp))
               if (filtered.length === 0) return <div style={emptyBox}>Aucune allocation pour ces filtres.</div>
               // Regroupement par employé pour affichage
               const byEmp = new Map()
@@ -469,16 +515,18 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                                       </div>
                                       {a.raison && <div style={{ color: '#8a7a70', fontSize: 11, marginTop: 2 }}>{a.raison}</div>}
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                      <button onClick={() => setEditAlloc(a)} title="Modifier"
-                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
-                                        <Pencil size={14} />
-                                      </button>
-                                      <button onClick={() => handleCancelAllocation(a)} title="Annuler"
-                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
-                                        <Trash2 size={14} />
-                                      </button>
-                                    </div>
+                                    {isAdmin && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <button onClick={() => setEditAlloc(a)} title="Modifier"
+                                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                                          <Pencil size={14} />
+                                        </button>
+                                        <button onClick={() => handleCancelAllocation(a)} title="Annuler"
+                                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    )}
                                   </>
                                 ) : (
                                   <>
@@ -494,14 +542,18 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                                     <div style={{ color: '#8a7a70', fontStyle: a.raison ? 'normal' : 'italic' }}>
                                       {a.raison || '—'}
                                     </div>
-                                    <button onClick={() => setEditAlloc(a)} title="Modifier cette allocation"
-                                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
-                                      <Pencil size={13} />
-                                    </button>
-                                    <button onClick={() => handleCancelAllocation(a)} title="Annuler cette allocation"
-                                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
-                                      <Trash2 size={13} />
-                                    </button>
+                                    {isAdmin && (
+                                      <>
+                                        <button onClick={() => setEditAlloc(a)} title="Modifier cette allocation"
+                                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                                          <Pencil size={13} />
+                                        </button>
+                                        <button onClick={() => handleCancelAllocation(a)} title="Annuler cette allocation"
+                                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </>
+                                    )}
                                   </>
                                 )}
                               </div>
