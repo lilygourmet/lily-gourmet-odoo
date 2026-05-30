@@ -15,7 +15,7 @@ function useIsMobile(maxWidth = 640) {
   return isMobile
 }
 
-import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download, Pencil, ChevronRight } from 'lucide-react'
+import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Pencil, ChevronRight } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { supabase } from '../lib/supabase'
 import { loadEmployes } from '../lib/hr'
@@ -23,9 +23,8 @@ import {
   calculSoldeConges, quotaAnnuel,
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
-  syncCongesAnneeOdoo, listAllocationsOdoo, importAllocationsOdoo,
   loadAllocations, createAllocation, cancelAllocation,
-  initAutoAllocationsTous, deleteAutoAllocations, reporterReliquats, ALLOC_TYPES,
+  ALLOC_TYPES,
   updateAllocation, updateConge,
 } from '../lib/conges'
 
@@ -98,14 +97,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [showForm, setShowForm]     = useState(false)
   const [soldes, setSoldes]         = useState({})  // empId -> { dispo, ... }
   const [tab, setTab]               = useState('demandes')  // 'demandes' | 'valides' | 'soldes'
-  const [importing, setImporting]   = useState(false)
   const [filterEmp, setFilterEmp]   = useState('all')   // 'all' | empId
   const [filterYear, setFilterYear] = useState('all')   // 'all' | YYYY
-  const [allocLoading, setAllocLoading] = useState(false)
-  const [allocResult, setAllocResult]   = useState(null) // { par_employe, details, ... }
   const [allocations, setAllocations]   = useState([])    // table conges_allocations
   const [showAllocForm, setShowAllocForm] = useState(false)
-  const [initAllocBusy, setInitAllocBusy] = useState(false)
   const [detailEmp, setDetailEmp]         = useState(null)  // employé sélectionné pour voir le détail
   const [editAlloc, setEditAlloc]         = useState(null)  // allocation en cours d'édition
   const [editConge, setEditConge]         = useState(null)  // congé en cours d'édition
@@ -212,78 +207,6 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     catch (e) { alert('Erreur : ' + e.message) }
   }
 
-  async function handleVoirAllocations() {
-    setAllocLoading(true)
-    try {
-      const r = await listAllocationsOdoo()
-      setAllocResult(r)
-    } catch (e) {
-      alert('Erreur : ' + e.message)
-    } finally {
-      setAllocLoading(false)
-    }
-  }
-
-  async function handleInitAllocations() {
-    const annee = new Date().getFullYear()
-    if (!confirm(`Créer les allocations auto manquantes (Annuel + Maladie ≤ 3 j) pour ${employes.length} employé(s) actifs en ${annee} ?`)) return
-    setInitAllocBusy(true)
-    try {
-      const added = await initAutoAllocationsTous(employes, annee, user.id)
-      alert(`${added} allocation(s) auto créée(s).`)
-      await reload()
-    } catch (e) {
-      alert('Erreur : ' + e.message)
-    } finally {
-      setInitAllocBusy(false)
-    }
-  }
-
-  async function handleReporterReliquats() {
-    const annee = new Date().getFullYear()
-    if (!confirm(`Reporter les soldes dispo au 31/12/${annee} en reliquats pour ${annee + 1} ?\n\nChaque employé avec un dispo > 0 aura une allocation 'reliquat' créée pour ${annee + 1} (qui expirera le 30 mai ${annee + 1}). Idempotent : annule les reports auto précédents avant.`)) return
-    setInitAllocBusy(true)
-    try {
-      const r = await reporterReliquats(employes, annee, user.id)
-      alert(`Report terminé.\n\n${r.reportes} employé(s) avec reliquat reporté\nTotal jours reportés : ${r.total_jours.toFixed(1)}\n${annee} → ${annee + 1}`)
-      await reload()
-    } catch (e) {
-      alert('Erreur : ' + e.message)
-    } finally {
-      setInitAllocBusy(false)
-    }
-  }
-
-  async function handleDeleteAutoAllocations() {
-    const annee = new Date().getFullYear()
-    if (!confirm(`Supprimer DÉFINITIVEMENT toutes les allocations auto (annuel + maladie ≤ 3 j) de ${annee} ?\n\nLes allocations importées d'Odoo et les manuelles ne sont pas touchées. Tu pourras toujours relancer "Init allocations auto" plus tard.`)) return
-    setInitAllocBusy(true)
-    try {
-      const n = await deleteAutoAllocations(annee)
-      alert(`${n} allocation(s) auto supprimée(s).`)
-      await reload()
-    } catch (e) {
-      alert('Erreur : ' + e.message)
-    } finally {
-      setInitAllocBusy(false)
-    }
-  }
-
-  async function handleImportAllocations() {
-    const annee = new Date().getFullYear()
-    if (!confirm(`Importer les allocations Odoo de ${annee} ?\n\nLes lignes Odoo déjà importées seront remplacées ; les allocations manuelles ou auto ne sont pas touchées.`)) return
-    setInitAllocBusy(true)
-    try {
-      const r = await importAllocationsOdoo(annee)
-      alert(`Import terminé.\n\n${r.inserted} allocation(s) importée(s)\n${r.total_odoo} trouvée(s) côté Odoo\n${r.unmatched} sans correspondance d'employé`)
-      await reload()
-    } catch (e) {
-      alert('Erreur : ' + e.message)
-    } finally {
-      setInitAllocBusy(false)
-    }
-  }
-
   async function handleAddAllocation(payload) {
     try {
       await createAllocation({ ...payload, created_by: user.id })
@@ -311,21 +234,6 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     catch (e) { alert('Erreur : ' + e.message) }
   }
 
-  async function handleImportOdoo() {
-    const annee = new Date().getFullYear()
-    if (!confirm(`Importer les congés validés depuis Odoo (du 1er janvier ${annee} à aujourd'hui) ?\n\nLes congés Odoo déjà importés seront remplacés ; les congés saisis dans l'app ne seront pas touchés.`)) return
-    setImporting(true)
-    try {
-      const r = await syncCongesAnneeOdoo(annee)
-      alert(`Import terminé.\n\n${r.inserted} congé(s) importé(s)\n${r.total_odoo} trouvé(s) côté Odoo\n${r.unmatched} sans correspondance d'employé`)
-      await reload()
-    } catch (e) {
-      alert('Erreur import : ' + e.message)
-    } finally {
-      setImporting(false)
-    }
-  }
-
   return (
     <>
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
@@ -335,16 +243,6 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             <Palmtree size={22} /> Congés
           </h1>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {user?.role === 'admin' && (
-              <>
-                <button onClick={handleVoirAllocations} disabled={allocLoading} style={{ ...btnSlim, opacity: allocLoading ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Download size={14} /> {allocLoading ? 'Chargement…' : 'Voir allocations Odoo'}
-                </button>
-                <button onClick={handleImportOdoo} disabled={importing} style={{ ...btnSlim, opacity: importing ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Download size={14} /> {importing ? 'Import…' : 'Importer Odoo (année)'}
-                </button>
-              </>
-            )}
             <button onClick={() => setShowForm(true)} style={btnPrimary}>
               <Plus size={14} /> Nouvelle demande
             </button>
@@ -451,22 +349,6 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               <button onClick={() => setShowAllocForm(true)} style={btnPrimary}>
                 <Plus size={14} /> Allouer des jours
               </button>
-              {user?.role === 'admin' && (
-                <>
-                  <button onClick={handleInitAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Plus size={14} /> Init allocations auto {new Date().getFullYear()}
-                  </button>
-                  <button onClick={handleImportAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Download size={14} /> Importer allocations Odoo {new Date().getFullYear()}
-                  </button>
-                  <button onClick={handleReporterReliquats} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Download size={14} /> Reporter dispo {new Date().getFullYear()} → reliquat {new Date().getFullYear() + 1}
-                  </button>
-                  <button onClick={handleDeleteAutoAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, color: '#A32D2D', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Trash2 size={14} /> Supprimer auto {new Date().getFullYear()}
-                  </button>
-                </>
-              )}
               <div style={{ flex: 1 }} />
               <div>
                 <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Filtrer employé</div>
@@ -651,7 +533,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                       {e.nom} <ChevronRight size={13} style={{ color: '#993556' }} />
                     </div>
                     <div style={{ fontSize: 11, color: '#8a7a70' }}>
-                      {e.poste || '—'}{!s.peutPrendre && ` · ⚠ pas encore éligible (< 6 mois)`}
+                      {e.poste || '—'}
                       {' · '}
                       <span title="Maladie courte ≤ 3 j : pool séparé de 6 j/an" style={{ color: '#0C447C' }}>
                         Maladie {s.maladie.pris}/{s.maladie.alloue || 6}
@@ -685,10 +567,6 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); reload() }}
         />
-      )}
-
-      {allocResult && (
-        <AllocationsModal result={allocResult} onClose={() => setAllocResult(null)} />
       )}
 
       {detailEmp && (
@@ -977,11 +855,6 @@ function DetailEmployeModal({ emp, conges, solde, onClose }) {
           <span>Maladie longue (non payée, non décomptée) : {totalMaladieLongue}</span>{' · '}
           <span>Récup (ignoré, s'ajoute au solde) : {totalRecup}</span>
         </div>
-        <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 8 }}>
-          <strong>Heuristique de classification</strong> (sur <code>type_conge</code>) : « maladie/sick » → maladie (court si ≤ 3 j, long sinon).
-          « mariage », « naissance », « décès/deces », « circoncision » → événement. « sans solde/unpaid » → autre. « récup/recup » → ignoré. Sinon → annuel.<br />
-          Si un type Odoo est mal catégorisé, dis-le-moi avec le libellé exact, j'ajoute la règle.
-        </div>
       </div>
     </div>
   )
@@ -1092,66 +965,6 @@ function NouvelleAllocationModal({ employes, onClose, onSubmit }) {
   )
 }
 
-function AllocationsModal({ result, onClose }) {
-  const totalGlobal = result.par_employe.reduce((s, e) => s + e.total_jours, 0)
-  return (
-    <div style={overlay} onClick={onClose}>
-      <div style={{ ...modal, maxWidth: 720 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
-          <div style={{ fontSize: 17, fontWeight: 600 }}>
-            Allocations Odoo · {result.year}
-          </div>
-          <button onClick={onClose} style={btnSlim}>Fermer</button>
-        </div>
-        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
-          {result.par_employe.length} employé{result.par_employe.length > 1 ? 's' : ''} ·
-          {' '}{totalGlobal.toFixed(1)} jours alloués au total ·
-          {' '}{result.unmatched > 0 && <span style={{ color: '#A32D2D' }}>{result.unmatched} allocation(s) sans correspondance d'employé</span>}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 8, padding: '8px 12px', fontSize: 11, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5, background: '#F4F0EA', borderRadius: 8 }}>
-          <div>Employé</div>
-          <div style={{ textAlign: 'right' }}>Jours alloués</div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
-          {result.par_employe.map(e => (
-            <details key={e.employe_id} style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 10, padding: '8px 12px' }}>
-              <summary style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 8, cursor: 'pointer', alignItems: 'center' }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{e.nom}</div>
-                <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#085041' }}>{e.total_jours.toFixed(1)} j</div>
-              </summary>
-              <div style={{ marginTop: 8, fontSize: 11, color: '#4a3a30' }}>
-                {e.lignes.map((l, i) => (
-                  <div key={i} style={{ padding: '4px 0', borderTop: i > 0 ? '0.5px solid #f0e8d5' : 'none' }}>
-                    <strong>{l.jours} j</strong> · {l.type || '(type ?)'} ·
-                    {' '}{l.date_from || '?'} → {l.date_to || '?'}
-                    {l.name && <div style={{ color: '#8a7a70' }}>{l.name}</div>}
-                  </div>
-                ))}
-              </div>
-            </details>
-          ))}
-        </div>
-
-        {result.unmatched > 0 && (
-          <details style={{ marginTop: 12, background: '#FCEEE8', borderRadius: 8, padding: '8px 12px' }}>
-            <summary style={{ cursor: 'pointer', fontSize: 12, color: '#99201E', fontWeight: 500 }}>
-              {result.unmatched} allocation(s) sans correspondance — voir les noms Odoo
-            </summary>
-            <div style={{ marginTop: 6, fontSize: 11, color: '#4a3a30' }}>
-              {result.details.filter(d => !d.match_employe_id).map((d, i) => (
-                <div key={i} style={{ padding: '3px 0', borderTop: i > 0 ? '0.5px solid #f0e8d5' : 'none' }}>
-                  <strong>{d.odoo_employee || '?'}</strong> · {d.jours} j · {d.type || '?'}
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
-      </div>
-    </div>
-  )
-}
 
 // Renvoie le nb de jours réellement décomptés (annuel : exclut jour off fixe ;
 // récup : 0 ; maladie/événement : calendaire). Sert à harmoniser l'affichage
