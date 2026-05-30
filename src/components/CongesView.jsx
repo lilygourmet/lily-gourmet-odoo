@@ -55,6 +55,21 @@ function formatTypeConge(t) {
   return t
 }
 
+// Date à partir de laquelle un congé de ce type peut être consommé,
+// d'après la date_evt des allocations événementielles. Null si aucune
+// contrainte (pas de date_evt, ou type non événementiel).
+function debutPossibleType(solde, type) {
+  const allocs = (solde?.events?.detail || []).filter(d => {
+    if (type === 'recup') return d.type === 'autre'
+    return d.type === type
+  })
+  if (!allocs.length) return null
+  const dates = allocs.map(a => a.date_evt).filter(Boolean)
+  if (!dates.length) return null   // pas de contrainte de date
+  // La PLUS ANCIENNE des dates : dès qu'une allocation devient consommable, c'est OK.
+  return dates.sort()[0]
+}
+
 // Dispo restant pour un type de congé donné, à partir du solde calculé.
 // Renvoie null si aucune limite (sans solde, maladie longue) ou undefined
 // si le type n'est pas autorisé (allocation événementielle manquante).
@@ -648,8 +663,13 @@ function EditAllocationModal({ alloc, emp, onClose, onSave }) {
         <label style={{ ...lbl, marginTop: 10 }}>Année</label>
         <input type="number" value={annee} onChange={e => setAnnee(e.target.value)} style={ipt} />
 
-        <label style={{ ...lbl, marginTop: 10 }}>Date de l'événement (optionnel)</label>
+        <label style={{ ...lbl, marginTop: 10 }}>Date de début (consommable à partir de)</label>
         <input type="date" value={dateEvt} onChange={e => setDateEvt(e.target.value)} style={ipt} />
+        <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>
+          {dateEvt
+            ? `Consommable du ${new Date(dateEvt + 'T00:00:00').toLocaleDateString('fr-FR')} au 31/12/${annee || new Date().getFullYear()}.`
+            : `Si vide : consommable immédiatement, jusqu'au 31/12/${annee || new Date().getFullYear()}.`}
+        </div>
 
         <label style={{ ...lbl, marginTop: 10 }}>Raison (optionnel)</label>
         <input type="text" value={raison} onChange={e => setRaison(e.target.value)} style={ipt} />
@@ -948,8 +968,13 @@ function NouvelleAllocationModal({ employes, onClose, onSubmit }) {
         <label style={{ ...lbl, marginTop: 10 }}>Nombre de jours</label>
         <input type="number" step="0.5" value={jours} onChange={e => setJours(e.target.value)} placeholder="ex : 3" style={ipt} />
 
-        <label style={{ ...lbl, marginTop: 10 }}>Date de l'événement (optionnel)</label>
+        <label style={{ ...lbl, marginTop: 10 }}>Date de début (consommable à partir de)</label>
         <input type="date" value={dateEvt} onChange={e => setDateEvt(e.target.value)} style={ipt} />
+        <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>
+          {dateEvt
+            ? `Consommable du ${new Date(dateEvt + 'T00:00:00').toLocaleDateString('fr-FR')} au 31/12/${new Date().getFullYear()}.`
+            : `Si vide : consommable immédiatement, jusqu'au 31/12/${new Date().getFullYear()}.`}
+        </div>
 
         <label style={{ ...lbl, marginTop: 10 }}>Raison / détail (optionnel)</label>
         <input type="text" value={raison} onChange={e => setRaison(e.target.value)} placeholder="ex : mariage de sa fille" style={ipt} />
@@ -1047,6 +1072,11 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
     if (depassement) {
       const label = TYPES.find(t => t.v === typeConge)?.label || typeConge
       setErrMsg(`Le nombre demandé (${nbDemande} j) dépasse le solde « ${label} » (${dispoType} j).`); return
+    }
+    const debutAlloc = debutPossibleType(solde, typeConge)
+    if (debutAlloc && dateDebut < debutAlloc) {
+      const label = TYPES.find(t => t.v === typeConge)?.label || typeConge
+      setErrMsg(`L'allocation « ${label} » n'est consommable qu'à partir du ${fmt(debutAlloc)}.`); return
     }
     setBusy(true)
     try {
