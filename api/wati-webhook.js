@@ -25,7 +25,7 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'fetch-photo') {
+  if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'fetch-photo' && req.query?.action !== 'conges-notif') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -42,6 +42,7 @@ export default async function handler(req, res) {
   if (action === 'send-template') return handleSendTemplate(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'fetch-photo') return handleFetchPhoto(req, res)
+  if (action === 'conges-notif') return handleCongesNotif(req, res)
   return handleInbound(req, res)
 }
 
@@ -562,7 +563,37 @@ async function handleTaskReminders(req, res) {
       const ok = await sendReminderWhatsapp(supabase, phone, text)
       if (ok) reminded++
     }
-    return res.status(200).json({ ok: true, people: byUser.size, reminded })
+
+    // ============================================================
+    // Rappels de reprise de congé : envoyé le matin du dernier jour de congé
+    // (date_fin = today). Anti-doublon via wati_notif_rappel_retour_sent_at.
+    // ============================================================
+    const today = new Date().toISOString().slice(0, 10)
+    let congesRappels = 0
+    try {
+      const { data: congesFinAujourdHui } = await supabase
+        .from('conges')
+        .select('id, employe_id, date_debut, date_fin')
+        .eq('statut', 'valide')
+        .eq('date_fin', today)
+        .is('wati_notif_rappel_retour_sent_at', null)
+      for (const c of (congesFinAujourdHui || [])) {
+        const { phone, nom } = await getEmployePhone(supabase, c.employe_id)
+        if (!phone) continue
+        const text = buildCongeMessage('rappel_retour', c, nom)
+        const ok = await sendReminderWhatsapp(supabase, phone, text)
+        if (ok) {
+          await supabase.from('conges')
+            .update({ wati_notif_rappel_retour_sent_at: new Date().toISOString() })
+            .eq('id', c.id)
+          congesRappels++
+        }
+      }
+    } catch (e) {
+      console.warn('[task-reminders] congés rappels:', e?.message || e)
+    }
+
+    return res.status(200).json({ ok: true, people: byUser.size, reminded, congesRappels })
   } catch (e) {
     console.error('[task-reminders]', e)
     return res.status(500).json({ error: e.message || 'Erreur serveur' })
@@ -668,6 +699,97 @@ async function handleFetchPhoto(req, res) {
   }).eq('client_phone', phone)
 
   return res.status(200).json({ photo: photoUrl })
+}
+
+// ============================================================
+// CONGÉS — notif WhatsApp à la validation, au rejet et au rappel reprise.
+// Appelé depuis l'UI (action=conges-notif) ou depuis le cron quotidien
+// (handleTaskReminders qui balaie aussi les rappels de reprise).
+// ============================================================
+function fmtDateFR(ymd) {
+  if (!ymd) return ''
+  const [y, m, d] = ymd.split('-')
+  return `${d}/${m}/${y}`
+}
+
+function joursEntre(debut, fin) {
+  if (!debut || !fin) return 0
+  return Math.round((new Date(fin + 'T00:00:00') - new Date(debut + 'T00:00:00')) / 86400000) + 1
+}
+
+function jourSuivantYMD(ymd) {
+  const d = new Date(ymd + 'T00:00:00')
+  d.setDate(d.getDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+async function getEmployePhone(supabase, employeId) {
+  // Priorité au numéro saisi directement sur l'employé.
+  const { data: emp } = await supabase
+    .from('employes')
+    .select('id, nom, telephone')
+    .eq('id', employeId)
+    .maybeSingle()
+  if (!emp) return { phone: null, nom: null }
+  if (emp.telephone) return { phone: emp.telephone, nom: emp.nom }
+  // Repli : numéro WhatsApp du user lié.
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('whatsapp')
+    .eq('employe_id', employeId)
+    .maybeSingle()
+  return { phone: prof?.whatsapp || null, nom: emp.nom }
+}
+
+function buildCongeMessage(type, conge, nom) {
+  const debut = fmtDateFR(conge.date_debut)
+  const fin   = fmtDateFR(conge.date_fin)
+  const nbJ   = joursEntre(conge.date_debut, conge.date_fin)
+  const prenom = (nom || '').split(' ')[0] || ''
+  if (type === 'validation') {
+    return `Bonjour ${prenom},\nVotre congé du ${debut} au ${fin} (${nbJ} jour${nbJ > 1 ? 's' : ''}) a été validé.\nBon repos !`
+  }
+  if (type === 'rejet') {
+    return `Bonjour ${prenom},\nVotre demande de congé du ${debut} au ${fin} n'a pas été validée.\nMerci de te rapprocher de l'administration.`
+  }
+  if (type === 'rappel_retour') {
+    const reprise = fmtDateFR(jourSuivantYMD(conge.date_fin))
+    return `Bonjour ${prenom},\nVotre congé se termine aujourd'hui.\nReprise demain ${reprise}. À très vite !`
+  }
+  return `Bonjour ${prenom}, notification congés.`
+}
+
+async function handleCongesNotif(req, res) {
+  const congeId = req.query?.congeId
+  const type = req.query?.type || 'validation'   // 'validation' | 'rejet' | 'rappel_retour'
+  if (!congeId) return res.status(400).json({ error: 'congeId requis' })
+  if (!['validation', 'rejet', 'rappel_retour'].includes(type)) return res.status(400).json({ error: 'type invalide' })
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const { data: conge, error } = await supabase
+    .from('conges')
+    .select('*')
+    .eq('id', congeId)
+    .maybeSingle()
+  if (error)  return res.status(500).json({ error: error.message })
+  if (!conge) return res.status(404).json({ error: 'congé introuvable' })
+
+  const { phone, nom } = await getEmployePhone(supabase, conge.employe_id)
+  if (!phone) return res.status(200).json({ ok: false, reason: 'pas de numéro téléphone pour cet employé' })
+
+  const text = buildCongeMessage(type, conge, nom)
+  const ok = await sendReminderWhatsapp(supabase, phone, text)
+
+  // Anti-doublon : on note la date d'envoi sur la colonne correspondante.
+  const patch = {}
+  if (type === 'validation')    patch.wati_notif_validation_sent_at = new Date().toISOString()
+  if (type === 'rejet')          patch.wati_notif_rejet_sent_at = new Date().toISOString()
+  if (type === 'rappel_retour') patch.wati_notif_rappel_retour_sent_at = new Date().toISOString()
+  if (ok && Object.keys(patch).length > 0) {
+    await supabase.from('conges').update(patch).eq('id', congeId)
+  }
+
+  return res.status(200).json({ ok, phone, type })
 }
 
 // Wati envoie souvent un epoch en secondes ; on tolère ms et chaîne ISO.

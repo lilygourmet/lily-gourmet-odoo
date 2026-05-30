@@ -20,6 +20,7 @@ import HRView from './components/HR/HRView'
 import InboxView from './components/Conversations/InboxView'
 import PaymentsView from './components/Conversations/PaymentsView'
 import AbsencesView from './components/AbsencesView'
+import CongesView from './components/CongesView'
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
@@ -300,8 +301,7 @@ function AbsencesWrapper(props) {
   const { user, onLogout, onNavigate, activeView } = props
   return (
     <div className="min-h-screen bg-cream">
-      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
-      <AbsencesView user={user} />
+      <CongesView user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
     </div>
   )
 }
