@@ -435,7 +435,7 @@ export const ALLOC_TYPES = [
   { v: 'naissance',      label: 'Naissance',        defaultJours: 3,     isAuto: false },
   { v: 'deces',          label: 'Décès',            defaultJours: 3,     isAuto: false },
   { v: 'circoncision',   label: 'Circoncision',     defaultJours: 2,     isAuto: false },
-  { v: 'autre',          label: 'Autre',            defaultJours: null,  isAuto: false },
+  { v: 'autre',          label: 'Récupération',     defaultJours: null,  isAuto: false },
 ]
 
 export async function loadAllocations({ annee = null, employeId = null, statut = 'valide' } = {}) {
