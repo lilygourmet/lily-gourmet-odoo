@@ -222,17 +222,13 @@ async function handleSend(req, res) {
       .single()
     if (insErr) throw insErr
 
-    // Met à jour le fil. Si la conversation était fermée, on la rouvre
-    // automatiquement et on l'assigne à l'expéditeur (puisqu'il vient
-    // d'écrire dedans), pour qu'elle réapparaisse dans le flux actif.
-    const { data: convRow } = await supabase
-      .from('conversations').select('status').eq('id', conversationId).maybeSingle()
-    const convPatch = { last_message_at: sentAt, updated_at: sentAt }
-    if (convRow?.status === 'fermee') {
-      convPatch.status = 'en_cours'
-      convPatch.assigned_to = userId
-    }
-    await supabase.from('conversations').update(convPatch).eq('id', conversationId)
+    // On met à jour la date du dernier message mais on NE change PAS le statut.
+    // Si la conversation était fermée, elle reste fermée : on n'embête pas
+    // les commerciaux avec un fil refermé. Seul un message entrant du client
+    // (géré dans handleInbound) la rouvrira automatiquement.
+    await supabase.from('conversations')
+      .update({ last_message_at: sentAt, updated_at: sentAt })
+      .eq('id', conversationId)
 
     return res.status(200).json({ ok: true, message: msg })
   } catch (e) {
@@ -623,14 +619,9 @@ async function traceOutgoing(supabase, number, body) {
     await supabase.from('messages').insert({
       conversation_id: conv.id, sender_type: 'agent', body, sent_at: sentAt,
     })
-    // Si la conversation était fermée, on la sort de "fermée" → "non assignée"
-    // pour qu'un commercial puisse la reprendre suite à cette tâche envoyée.
-    const patch = { last_message_at: sentAt, updated_at: sentAt }
-    if (conv.status === 'fermee') {
-      patch.status = 'non_assignee'
-      patch.assigned_to = null
-    }
-    await supabase.from('conversations').update(patch).eq('id', conv.id)
+    // On NE change PAS le statut : si la conv était fermée, elle reste fermée.
+    // (Envoyer une tâche ne doit pas faire réapparaître la conv pour les commerciaux.)
+    await supabase.from('conversations').update({ last_message_at: sentAt, updated_at: sentAt }).eq('id', conv.id)
   } catch { /* trace best-effort */ }
 }
 
