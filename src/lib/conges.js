@@ -237,12 +237,12 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   const sumByType = {}
   for (const a of allocs) sumByType[a.type] = (sumByType[a.type] || 0) + Number(a.jours)
 
-  // 3) ANNUEL : pro-rata par mois écoulés (1.5 j à fin de chaque mois).
-  //    Si pas d'allocation 'annuel' configurée → repli sur le quota calculé.
+  // 3) ANNUEL : l'allocation stockée est déjà la valeur accumulée à ce jour
+  //    (1.5 × mois échus depuis l'entrée). Si aucune allocation → repli sur
+  //    le calcul dynamique.
   const annuelAlloue   = sumByType.annuel || 0
-  const annuelEffectif = annuelAlloue > 0 ? annuelAlloue : quotaAnnuel(emp, refDate)
-  const moisEchus      = Math.max(0, ref.getMonth())   // janvier=0 → 0 mois échus
-  const acquis         = annuelEffectif * moisEchus / 12
+  const annuelEffectif = annuelAlloue > 0 ? annuelAlloue : joursAnnuelAccumules(emp, refDate, annee)
+  const acquis         = annuelEffectif   // pas de re-prorata, déjà accumulé
 
   // 4) RELIQUAT : valide jusqu'au 30 mai
   const reliquatAlloue = sumByType.reliquat || 0
@@ -548,21 +548,68 @@ export async function deleteAutoAllocations(annee) {
 // Pour un (employé, année) donné : crée les allocations auto manquantes
 // (annuel = quota selon ancienneté ; maladie_courte = 6 j).
 // Idempotent grâce à l'unique partial index côté SQL.
+// Jours d'annuel ACCUMULÉS à la date refDate dans l'année donnée :
+//   1.5 × nb de mois échus depuis max(1er janvier, date d'entrée), capé au
+//   quota plein annuel (18 + bonus ancienneté éventuels).
+// Si l'employé n'a pas encore commencé → 0.
+// Si l'employé a commencé l'année passée → simple prorata mois écoulés × 1.5.
+export function joursAnnuelAccumules(emp, refDate = todayYMD(), annee = null) {
+  const ref = new Date(refDate + 'T00:00:00')
+  const year = annee || ref.getFullYear()
+  const dateAnc = emp?.date_anciennete || emp?.date_entree
+  if (!dateAnc) return QUOTA_BASE   // sans date d'entrée, on suppose plein quota
+
+  const entry = new Date(dateAnc + 'T00:00:00')
+  const yearStart = new Date(`${year}-01-01T00:00:00`)
+  const startDate = entry > yearStart ? entry : yearStart
+  if (ref < startDate) return 0
+
+  const moisEchus = moisEntre(startDate.toISOString().slice(0, 10), refDate)
+
+  // Plafond annuel (avec bonus ancienneté éventuels)
+  let plafond = QUOTA_BASE
+  const anciennete = moisEntre(dateAnc, refDate) / 12
+  if (anciennete >= 5)  plafond += BONUS_5_ANS
+  if (anciennete >= 10) plafond += BONUS_10_ANS
+
+  const acc = Math.min(moisEchus * 1.5, plafond)
+  return Number(acc.toFixed(2))
+}
+
+// Crée les allocations auto manquantes (annuel = accumulé à ce jour ;
+// maladie_courte = 6). Si une allocation auto existe déjà, elle est mise à jour
+// pour refléter l'accumulation actuelle (l'annuel grandit chaque mois).
 export async function ensureAutoAllocationsForEmploye(emp, annee, createdBy = null) {
-  const refDate = `${annee}-01-01`
-  const quota = quotaAnnuel(emp, refDate)
+  const today = todayYMD()
+  // Pour l'année en cours on prend aujourd'hui ; pour les années passées on prend
+  // le 31/12 (l'accumulation est complète) ; pour les années futures on prend
+  // le 1er janvier de l'année (= 0).
+  let refDate
+  const yearStr = String(annee)
+  if (today.startsWith(yearStr))     refDate = today
+  else if (today > `${yearStr}-12-31`) refDate = `${yearStr}-12-31`
+  else                                refDate = `${yearStr}-01-01`
+
+  const annuelAccumule = joursAnnuelAccumules(emp, refDate, annee)
   const lignes = [
-    { type: 'annuel',         jours: quota },
-    { type: 'maladie_courte', jours: 6      },
+    { type: 'annuel',         jours: annuelAccumule },
+    { type: 'maladie_courte', jours: 6              },
   ]
   const existantes = await loadAllocations({ annee, employeId: emp.id, statut: 'valide' })
   for (const l of lignes) {
     const deja = existantes.find(x => x.type === l.type && x.source === 'auto')
-    if (deja) continue
+    if (deja) {
+      // Mise à jour si la valeur a changé (cas de l'annuel qui grandit chaque mois)
+      if (Number(deja.jours) !== l.jours) {
+        try { await updateAllocation(deja.id, { jours: l.jours }) }
+        catch (e) { console.warn('[ensureAutoAllocations:update]', e?.message || e) }
+      }
+      continue
+    }
     try {
       await createAllocation({ employe_id: emp.id, annee, type: l.type, jours: l.jours, source: 'auto', created_by: createdBy })
     } catch (e) {
-      console.warn('[ensureAutoAllocations]', e?.message || e)
+      console.warn('[ensureAutoAllocations:create]', e?.message || e)
     }
   }
 }
