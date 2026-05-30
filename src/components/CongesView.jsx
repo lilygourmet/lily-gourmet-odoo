@@ -36,6 +36,19 @@ const TYPES = [
   { v: 'recup',      label: 'Récupération' },
 ]
 
+// Traduction des libellés Odoo (en anglais) → français pour l'affichage.
+function formatTypeConge(t) {
+  if (!t) return '—'
+  const match = TYPES.find(x => x.v === t)
+  if (match) return match.label
+  const s = String(t).toLowerCase()
+  if (s.includes('paid time off'))    return 'Congé annuel'
+  if (s.includes('compensatory days')) return 'Récupération'
+  if (s.includes('sick leave'))        return 'Congé maladie'
+  if (s.includes('unpaid'))            return 'Sans solde'
+  return t
+}
+
 function fmt(d) {
   return d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 }
@@ -911,7 +924,7 @@ function DetailEmployeModal({ emp, conges, solde, onClose }) {
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px 90px 130px 60px 50px 60px 80px', gap: 6, fontSize: 11, padding: '6px 10px', borderRadius: 8, background: 'white', border: '0.5px solid #e5d8c3', alignItems: 'center' }}>
                   <div>{l.debut.slice(8,10)}/{l.debut.slice(5,7)} → {l.fin.slice(8,10)}/{l.fin.slice(5,7)}</div>
                   <div style={{ fontWeight: 500, color: catColor(l.cat) }}>{catLabel(l.cat)}</div>
-                  <div style={{ color: '#8a7a70', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.c.type_conge || '—'}>{l.c.type_conge || '—'}</div>
+                  <div style={{ color: '#8a7a70', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.c.type_conge || '—'}>{formatTypeConge(l.c.type_conge)}</div>
                   <div>{l.nbCal}</div>
                   <div style={{ color: l.offFixes > 0 ? '#A32D2D' : '#8a7a70' }}>{l.offFixes > 0 ? `−${l.offFixes}` : '—'}</div>
                   <div style={{ fontWeight: 600 }}>{l.compte}</div>
@@ -1119,7 +1132,7 @@ function joursDecomptesConge(c, emp) {
 function CongeCard({ c, emp, actions }) {
   const nbCal = nbJours(c.date_debut, c.date_fin)
   const nbDec = joursDecomptesConge(c, emp)
-  const typeLabel = TYPES.find(t => t.v === c.type_conge)?.label || c.type_conge || 'Congé'
+  const typeLabel = formatTypeConge(c.type_conge) || 'Congé'
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
