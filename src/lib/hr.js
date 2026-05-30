@@ -107,60 +107,50 @@ const TEMPLATES = {
     file: '/hr_modeles/salaire_template.docx',
     label: 'Attestation de salaire',
     required: ['nom', 'cnss', 'salaire'],
-    // Dates statiques dans le modèle à remplacer par la date du jour
-    fixedDates: ['02 /03 /2026', '02/03/2026'],
   },
   travail_en_poste: {
     file: '/hr_modeles/travail_en_poste_template.docx',
     label: 'Certificat de travail (en poste)',
     required: ['nom', 'cnss', 'date_entree', 'poste'],
-    fixedDates: ['02 /03  /2026', '02 /03 /2026', '02/03/2026'],
   },
   travail_depart: {
     file: '/hr_modeles/travail_depart_template.docx',
     label: 'Certificat de travail (départ)',
     required: ['nom', 'cnss', 'date_entree', 'date_sortie', 'poste'],
-    fixedDates: ['03 /03  /2026', '03 /03 /2026', '03/03/2026'],
   },
   accuse: {
     file: '/hr_modeles/accuse_template.docx',
     label: 'Accusé de remise des documents de départ',
     required: ['nom'],
-    fixedDates: ['10 /2/ 2026', '10/02/2026'],
   },
   stage: {
     file: '/hr_modeles/stage_template.docx',
     label: 'Attestation de stage',
     required: ['nom', 'cin', 'date_debut', 'date_fin'],
-    fixedDates: [],  // pas de date statique, on a déjà {DATE_EMISSION}
   },
   cdi_smig: {
     file: '/hr_modeles/cdi_smig_template.docx',
     label: 'Contrat CDI - SMIG (sans montant)',
     // Note : nom_famille + prenom au lieu de nom_arabe seul
     required: ['nom_famille', 'prenom', 'cin', 'date_effet'],
-    fixedDates: [],
     category: 'contrat',
   },
   cdi_salaire: {
     file: '/hr_modeles/cdi_salaire_template.docx',
     label: 'Contrat CDI - Salaire > SMIG',
     required: ['nom_famille', 'prenom', 'cin', 'salaire', 'date_effet'],
-    fixedDates: [],
     category: 'contrat',
   },
   cdd_smig: {
     file: '/hr_modeles/cdd_smig_template.docx',
     label: 'Contrat CDD - SMIG (sans montant)',
     required: ['nom_famille', 'prenom', 'cin', 'duree', 'date_debut', 'date_fin', 'date_effet'],
-    fixedDates: [],
     category: 'contrat',
   },
   cdd_salaire: {
     file: '/hr_modeles/cdd_salaire_template.docx',
     label: 'Contrat CDD - Salaire > SMIG',
     required: ['nom_famille', 'prenom', 'cin', 'salaire', 'duree', 'date_debut', 'date_fin', 'date_effet'],
-    fixedDates: [],
     category: 'contrat',
   },
 }
@@ -197,16 +187,9 @@ export async function generateAttestation(type, data) {
   // 2. PizZip + Docxtemplater
   const zip = new PizZip(buf)
 
-  // 3. PRÉ-TRAITEMENT : remplacer les dates statiques par la date du jour
-  // (avant d'envoyer à docxtemplater, on modifie le XML brut)
   const today = todayFR()
-  if (info.fixedDates && info.fixedDates.length > 0) {
-    let xml = zip.file('word/document.xml').asText()
-    for (const dateStr of info.fixedDates) {
-      xml = xml.split(dateStr).join(today)
-    }
-    zip.file('word/document.xml', xml)
-  }
+  // Les modèles utilisent un placeholder {DATE_REDACTION} (cf. scripts/fix-attestations-templates.mjs)
+  // → plus besoin de remplacer des dates hardcodées dans le XML.
 
   // 4. Docxtemplater
   const doc = new Docxtemplater(zip, {
