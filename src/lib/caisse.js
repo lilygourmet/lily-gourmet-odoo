@@ -814,6 +814,101 @@ export async function ajouterDepenseHamid({ amount, category, label, mvtDate, us
   return data
 }
 
+// Crée une session Hamid groupée : N lignes + 1 preuve commune optionnelle.
+// Chaque ligne = { amount, category, label, isFacture }.
+export async function addHamidSession({ sessionDate, lignes, userId, proofFile = null }) {
+  const validLignes = (lignes || []).filter(l => Number(l.amount) > 0)
+  if (validLignes.length === 0) throw new Error('Au moins une ligne avec un montant > 0 est requise')
+
+  // 1) Crée la session
+  const { data: session, error: sErr } = await supabase
+    .from('caisse_hamid_sessions')
+    .insert({ session_date: sessionDate, user_id: userId })
+    .select().single()
+  if (sErr) throw sErr
+
+  // 2) Crée les dépenses liées à la session
+  const rows = validLignes.map(l => ({
+    amount: Number(l.amount),
+    category: l.category || null,
+    label: l.label || null,
+    depense_date: sessionDate,
+    created_by: userId,
+    is_facture: !!l.isFacture,
+    facture_status: l.isFacture ? 'pending' : null,
+    hamid_session_id: session.id,
+  }))
+  const { error: dErr } = await supabase.from('caisse_hamid_depenses').insert(rows)
+  if (dErr) {
+    // Rollback : on supprime la session si l'insertion des dépenses a échoué
+    await supabase.from('caisse_hamid_sessions').delete().eq('id', session.id)
+    throw dErr
+  }
+
+  // 3) Upload de la preuve commune si fournie (best-effort)
+  if (proofFile) {
+    try { await uploadHamidSessionProof(session.id, proofFile, userId) }
+    catch (e) { console.warn('[addHamidSession] preuve échouée:', e?.message || e) }
+  }
+
+  return session
+}
+
+// Upload une preuve commune (photo/PDF) pour une session Hamid.
+// La preuve couvre toutes les dépenses liées à cette session.
+export async function uploadHamidSessionProof(sessionId, file, actorId = null) {
+  if (!file) throw new Error('Aucun fichier fourni')
+  const ext = (file.name?.split('.').pop() || 'bin').toLowerCase()
+  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+  const path = `hamid/session_${sessionId}/${ts}.${ext}`
+
+  const { error: errUp } = await supabase.storage
+    .from(PROOF_BUCKET)
+    .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+  if (errUp) throw errUp
+
+  const { data: signed, error: errSign } = await supabase.storage
+    .from(PROOF_BUCKET)
+    .createSignedUrl(path, 60 * 60 * 24 * 365)
+  if (errSign) throw errSign
+  const url = signed.signedUrl
+
+  const { error: errUpd } = await supabase
+    .from('caisse_hamid_sessions')
+    .update({ proof_url: url, proof_uploaded_at: new Date().toISOString() })
+    .eq('id', sessionId)
+  if (errUpd) throw errUpd
+
+  try { await logAction({ entityType: 'hamid_session', entityId: sessionId, action: 'proof_upload', description: `Preuve ajoutée à la session Hamid #${sessionId}`, actorId }) } catch (_) {}
+  return { url }
+}
+
+// Charge les sessions du mois avec leurs dépenses associées.
+export async function loadHamidSessionsMonth(year, month) {
+  const { start, end } = monthBounds(year, month)
+  const { data, error } = await supabase
+    .from('caisse_hamid_sessions')
+    .select('*, depenses:caisse_hamid_depenses!hamid_session_id(*)')
+    .gte('session_date', start)
+    .lt('session_date', end)
+    .order('session_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Supprime une session Hamid + toutes ses dépenses associées (admin).
+export async function deleteHamidSession(sessionId, actorId = null) {
+  // Les dépenses ont ON DELETE SET NULL, donc on les supprime explicitement avant.
+  const { error: dErr } = await supabase
+    .from('caisse_hamid_depenses')
+    .delete()
+    .eq('hamid_session_id', sessionId)
+  if (dErr) throw dErr
+  const { error } = await supabase.from('caisse_hamid_sessions').delete().eq('id', sessionId)
+  if (error) throw error
+  try { await logAction({ entityType: 'hamid_session', entityId: sessionId, action: 'delete', description: `Suppression session Hamid #${sessionId}`, actorId }) } catch (_) {}
+}
+
 // Upload une preuve (photo/PDF) pour une dépense de Hamid
 export async function uploadHamidDepenseProof(depenseId, file, actorId = null) {
   if (!file) throw new Error('Aucun fichier fourni')

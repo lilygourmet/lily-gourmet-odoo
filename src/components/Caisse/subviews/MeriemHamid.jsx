@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, ajouterDepenseHamid, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense, uploadHamidDepenseProof } from '../../../lib/caisse'
+import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, addHamidSession, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense, uploadHamidDepenseProof, loadHamidSessionsMonth, uploadHamidSessionProof, deleteHamidSession } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 import { Trash2, Paperclip, AlertTriangle, Receipt, Scale } from 'lucide-react'
 import AjoutAvanceHamidModal from '../modals/AjoutAvanceHamidModal'
@@ -11,6 +11,7 @@ export default function MeriemHamid({ user }) {
   const [month, setMonth] = useState(currentMonth())
   const [avances, setAvances] = useState([])
   const [depenses, setDepenses] = useState([])
+  const [sessions, setSessions] = useState([])
   const [balance, setBalance] = useState(0)
   const [categories, setCategories] = useState([])
   const [showAvance, setShowAvance] = useState(false)
@@ -21,12 +22,13 @@ export default function MeriemHamid({ user }) {
   useEffect(() => { reload() }, [year, month])
 
   async function reload() {
-    const [av, dep, bal] = await Promise.all([
+    const [av, dep, ses, bal] = await Promise.all([
       loadHamidAvancesMonth(year, month),
       loadHamidDepensesMonth(year, month),
+      loadHamidSessionsMonth(year, month),
       loadHamidBalance(),
     ])
-    setAvances(av); setDepenses(dep); setBalance(bal)
+    setAvances(av); setDepenses(dep); setSessions(ses); setBalance(bal)
   }
 
   const totalAvances  = useMemo(() => avances.reduce((s, a) => s + Number(a.amount), 0), [avances])
@@ -42,8 +44,8 @@ export default function MeriemHamid({ user }) {
     await donnerAHamid({ amount, label, mvtDate, userId: user.id })
     setShowAvance(false); reload()
   }
-  async function handleDepense({ amount, label, category, mvtDate, isFacture }) {
-    await ajouterDepenseHamid({ amount, label, category, mvtDate, isFacture, userId: user.id })
+  async function handleDepense({ sessionDate, lignes, proofFile }) {
+    await addHamidSession({ sessionDate, lignes, userId: user.id, proofFile })
     setShowDepense(false); reload()
   }
   async function handleRend({ amount, label, mvtDate }) {
@@ -53,6 +55,7 @@ export default function MeriemHamid({ user }) {
 
   const isAdmin = user?.role === 'admin'
   const [uploadingId, setUploadingId] = useState(null)
+  const [uploadingSessionId, setUploadingSessionId] = useState(null)
   async function handleProof(d, file) {
     if (!file) return
     setUploadingId(d.id)
@@ -60,11 +63,47 @@ export default function MeriemHamid({ user }) {
     catch (e) { alert('Erreur : ' + (e.message || e)) }
     finally { setUploadingId(null) }
   }
+  async function handleSessionProof(sessionId, file) {
+    if (!file) return
+    setUploadingSessionId(sessionId)
+    try { await uploadHamidSessionProof(sessionId, file, user.id); await reload() }
+    catch (e) { alert('Erreur : ' + (e.message || e)) }
+    finally { setUploadingSessionId(null) }
+  }
   async function handleDeleteDepense(d) {
     if (!confirm(`Supprimer la dépense « ${d.label} » (${fmtMoney(d.amount)}) ?`)) return
     try { await deleteHamidDepense(d.id, user.id); reload() }
     catch (e) { alert('Erreur : ' + (e.message || e)) }
   }
+  async function handleDeleteSession(s, total) {
+    if (!confirm(`Supprimer la session du ${fmtDateCourte(s.session_date)} (${fmtMoney(total)}) et toutes ses dépenses ?`)) return
+    try { await deleteHamidSession(s.id, user.id); reload() }
+    catch (e) { alert('Erreur : ' + (e.message || e)) }
+  }
+
+  // Regroupe les dépenses par session ; les dépenses sans session (legacy)
+  // restent affichées individuellement comme avant.
+  const items = useMemo(() => {
+    const sessionMap = new Map(sessions.map(s => [s.id, s]))
+    const grouped = new Map() // sessionId -> [depenses]
+    const legacy = []
+    for (const d of depenses) {
+      if (d.hamid_session_id && sessionMap.has(d.hamid_session_id)) {
+        if (!grouped.has(d.hamid_session_id)) grouped.set(d.hamid_session_id, [])
+        grouped.get(d.hamid_session_id).push(d)
+      } else {
+        legacy.push(d)
+      }
+    }
+    const out = []
+    for (const s of sessions) {
+      const lines = grouped.get(s.id) || []
+      out.push({ kind: 'session', date: s.session_date, session: s, lines })
+    }
+    for (const d of legacy) out.push({ kind: 'one', date: d.depense_date, dep: d })
+    out.sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    return out
+  }, [sessions, depenses])
   async function handleDeleteAvance(a) {
     if (!confirm(`Supprimer l'avance « ${a.label} » (${fmtMoney(a.amount)}) ?\nCela annule aussi la sortie correspondante de la caisse Meriem.`)) return
     try { await deleteMouvement(a.id, user.id); reload() }
@@ -152,41 +191,51 @@ export default function MeriemHamid({ user }) {
               <div style={{ fontWeight: 400, fontSize: 11, marginTop: 3 }}>dont {fmtMoney(totalFacturesPending)} à récupérer (factures)</div>
             )}
           </div>
-          {depenses.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune dépense ce mois</div>}
-          {depenses.map(d => (
-            <div key={d.id} style={miniRow}>
+          {items.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune dépense ce mois</div>}
+          {items.map(item => item.kind === 'session' ? (
+            <SessionCard
+              key={`s${item.session.id}`}
+              session={item.session}
+              lines={item.lines}
+              isAdmin={isAdmin}
+              uploading={uploadingSessionId === item.session.id}
+              onUploadProof={file => handleSessionProof(item.session.id, file)}
+              onDeleteSession={total => handleDeleteSession(item.session, total)}
+            />
+          ) : (
+            <div key={`d${item.dep.id}`} style={miniRow}>
               <div>
                 <div style={{ fontSize: 13 }}>
-                  {d.label}
-                  {d.is_facture && (
+                  {item.dep.label}
+                  {item.dep.is_facture && (
                     <span style={{
                       marginLeft: 6, fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
-                      background: d.facture_status === 'recovered' ? '#E1F5EE' : '#FCE9E8',
-                      color: d.facture_status === 'recovered' ? '#085041' : '#99201E',
-                    }}>{d.facture_status === 'recovered' ? 'Facture récupérée' : 'Facture à récupérer'}</span>
+                      background: item.dep.facture_status === 'recovered' ? '#E1F5EE' : '#FCE9E8',
+                      color: item.dep.facture_status === 'recovered' ? '#085041' : '#99201E',
+                    }}>{item.dep.facture_status === 'recovered' ? 'Facture récupérée' : 'Facture à récupérer'}</span>
                   )}
                 </div>
-                <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(d.depense_date)} · {d.category || '—'}</div>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(item.dep.depense_date)} · {item.dep.category || '—'}</div>
                 <div style={{ marginTop: 4, fontSize: 11 }}>
-                  {uploadingId === d.id ? (
+                  {uploadingId === item.dep.id ? (
                     <span style={{ color: '#8a7a70' }}>Envoi de la preuve…</span>
-                  ) : d.proof_url ? (
+                  ) : item.dep.proof_url ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                      <a href={d.proof_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0C447C', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}><Paperclip size={12} strokeWidth={1.8} /> Voir la preuve</a>
+                      <a href={item.dep.proof_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0C447C', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}><Paperclip size={12} strokeWidth={1.8} /> Voir la preuve</a>
                       <label style={{ color: '#8a7a70', cursor: 'pointer' }}>remplacer
-                        <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => handleProof(d, e.target.files?.[0])} />
+                        <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => handleProof(item.dep, e.target.files?.[0])} />
                       </label>
                     </span>
                   ) : (
                     <label style={{ color: '#993556', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}><Paperclip size={12} strokeWidth={1.8} /> Ajouter une preuve
-                      <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => handleProof(d, e.target.files?.[0])} />
+                      <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => handleProof(item.dep, e.target.files?.[0])} />
                     </label>
                   )}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#99201E', fontWeight: 500 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>
-                {isAdmin && <button onClick={() => handleDeleteDepense(d)} title="Supprimer" style={trashBtn}><Trash2 size={14} strokeWidth={1.8} /></button>}
+                <span style={{ color: '#99201E', fontWeight: 500 }}>− {fmtMoney(item.dep.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>
+                {isAdmin && <button onClick={() => handleDeleteDepense(item.dep)} title="Supprimer" style={trashBtn}><Trash2 size={14} strokeWidth={1.8} /></button>}
               </div>
             </div>
           ))}
@@ -208,4 +257,69 @@ const btnSlim = { fontSize: 13, padding: '4px 10px', borderRadius: 8, border: '1
 const btnNormal = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }
 const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }
 const miniRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
+
+// Carte « session » : N lignes de dépense + UNE preuve commune.
+function SessionCard({ session, lines, isAdmin, uploading, onUploadProof, onDeleteSession }) {
+  const total = lines.reduce((s, l) => s + Number(l.amount || 0), 0)
+  const facturesCount = lines.filter(l => l.is_facture).length
+  return (
+    <div style={{ borderRadius: 14, marginBottom: 8, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)', overflow: 'hidden' }}>
+      {/* En-tête session */}
+      <div style={{ background: '#FAF0E5', padding: '10px 14px', borderBottom: '0.5px solid #e5d8c3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#633806', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'monospace' }}>Session</span>
+          <span style={{ fontSize: 12, color: '#4a3a30' }}>{(session.session_date || '').slice(8, 10)}/{(session.session_date || '').slice(5, 7)}</span>
+          <span style={{ fontSize: 11, color: '#8a7a70' }}>· {lines.length} ligne{lines.length > 1 ? 's' : ''}{facturesCount > 0 ? ` · ${facturesCount} facture${facturesCount > 1 ? 's' : ''}` : ''}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: '#99201E', fontWeight: 500, fontSize: 14 }}>− {fmtMoney(total)}</span>
+          {isAdmin && <button onClick={() => onDeleteSession(total)} title="Supprimer la session" style={trashBtn}><Trash2 size={14} strokeWidth={1.8} /></button>}
+        </div>
+      </div>
+
+      {/* Preuve commune */}
+      <div style={{ padding: '8px 14px', background: '#F9F6F1', fontSize: 11, borderBottom: '0.5px solid #e5d8c3' }}>
+        {uploading ? (
+          <span style={{ color: '#8a7a70' }}>Envoi de la preuve…</span>
+        ) : session.proof_url ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            <a href={session.proof_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0C447C', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+              <Paperclip size={12} strokeWidth={1.8} /> Preuve commune
+            </a>
+            <label style={{ color: '#8a7a70', cursor: 'pointer' }}>remplacer
+              <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => onUploadProof(e.target.files?.[0])} />
+            </label>
+          </span>
+        ) : (
+          <label style={{ color: '#993556', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+            <Paperclip size={12} strokeWidth={1.8} /> Ajouter une preuve commune
+            <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => onUploadProof(e.target.files?.[0])} />
+          </label>
+        )}
+      </div>
+
+      {/* Lignes de la session */}
+      <div>
+        {lines.map(d => (
+          <div key={d.id} style={{ padding: '8px 14px', borderTop: '0.5px solid #f0e8d5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13 }}>
+                {d.label || <span style={{ color: '#8a7a70', fontStyle: 'italic' }}>(sans libellé)</span>}
+                {d.is_facture && (
+                  <span style={{
+                    marginLeft: 6, fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                    background: d.facture_status === 'recovered' ? '#E1F5EE' : '#FCE9E8',
+                    color: d.facture_status === 'recovered' ? '#085041' : '#99201E',
+                  }}>{d.facture_status === 'recovered' ? 'Facture récupérée' : 'Facture à récupérer'}</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: '#4a3a30' }}>{d.category || '—'}</div>
+            </div>
+            <span style={{ color: '#99201E', fontWeight: 500, fontSize: 13 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 const trashBtn = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, border: '1px solid #e5d8c3', background: 'white', color: '#A32D2D', cursor: 'pointer' }
