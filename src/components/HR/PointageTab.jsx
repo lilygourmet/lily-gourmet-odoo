@@ -6,23 +6,30 @@ import {
 import {
   loadMonthData, calculerMois, syncAttendance, syncLeaves,
   setAjustement, removeAjustement, updatePointage, validerMois,
-  nomJour, paireOuImpaire,
+  nomJour,
 } from '../../lib/pointage'
 
-// Pour congés annuels d'employés en planning alterné (2 jours off/semaine) :
-// le jour off "fixe" (commun aux deux semaines) compte comme congé,
-// le jour off "tournant" (qui change paire/impaire) ne compte PAS.
-function compteJoursOffTournants(emp, debut, fin) {
-  if (emp.planning_type !== 'alt') return 0
-  const paireOffs   = [emp.planning_paire_off_1,   emp.planning_paire_off_2  ].filter(Boolean)
-  const impaireOffs = [emp.planning_impaire_off_1, emp.planning_impaire_off_2].filter(Boolean)
-  const fixedOff = paireOffs.find(d => impaireOffs.includes(d)) || null
+// Congés annuels : le jour off "fixe" (jour complet de repos chaque semaine)
+// ne compte PAS dans le décompte des jours de congé pris.
+// - planning fixe : c'est planning_jour_off (le demi-off n'est PAS exclu →
+//   un demi-off tombé en congé compte comme un jour de congé pris).
+// - planning alterné : c'est le jour commun aux semaines paire et impaire.
+//   Le jour off "tournant" (qui change d'une semaine à l'autre) compte
+//   comme un jour de congé pris.
+function compteJoursOffFixesDansPeriode(emp, debut, fin) {
+  let jourFixe = null
+  if (emp.planning_type === 'fixe') {
+    jourFixe = emp.planning_jour_off || null
+  } else if (emp.planning_type === 'alt') {
+    const paireOffs   = [emp.planning_paire_off_1,   emp.planning_paire_off_2  ].filter(Boolean)
+    const impaireOffs = [emp.planning_impaire_off_1, emp.planning_impaire_off_2].filter(Boolean)
+    jourFixe = paireOffs.find(d => impaireOffs.includes(d)) || null
+  }
+  if (!jourFixe) return 0
   let count = 0
   const d = new Date(debut)
   while (d <= fin) {
-    const jour = nomJour(d)
-    const offs = paireOuImpaire(d) === 'Paire' ? paireOffs : impaireOffs
-    if (offs.includes(jour) && jour !== fixedOff) count++
+    if (nomJour(d) === jourFixe) count++
     d.setDate(d.getDate() + 1)
   }
   return count
@@ -244,7 +251,7 @@ export default function PointageTab({ user, isAdmin }) {
         } else if (typeLower.includes('récup') || typeLower.includes('recup')) {
           continue
         } else {
-          joursConge += nbJours - compteJoursOffTournants(emp, debut, fin)
+          joursConge += nbJours - compteJoursOffFixesDansPeriode(emp, debut, fin)
         }
       }
       if (joursConge > 0 || joursMaladie > 0) {
@@ -300,7 +307,7 @@ export default function PointageTab({ user, isAdmin }) {
         } else if (t.includes('récup') || t.includes('recup')) {
           continue
         } else {
-          joursConge += nb - compteJoursOffTournants(emp, debut, fin)
+          joursConge += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)
         }
       }
       rows.push({
