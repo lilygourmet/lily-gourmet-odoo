@@ -549,31 +549,31 @@ export async function deleteAutoAllocations(annee) {
 // (annuel = quota selon ancienneté ; maladie_courte = 6 j).
 // Idempotent grâce à l'unique partial index côté SQL.
 // Jours d'annuel ACCUMULÉS à la date refDate dans l'année donnée :
-//   1.5 × nb de mois échus depuis max(1er janvier, date d'entrée), capé au
-//   quota plein annuel (18 + bonus ancienneté éventuels).
-// Si l'employé n'a pas encore commencé → 0.
-// Si l'employé a commencé l'année passée → simple prorata mois écoulés × 1.5.
+//   - Ancienneté TOTALE ≥ 6 mois (à la date de référence) → quota plein annuel
+//     (18 + bonus ancienneté 5 / 10 ans).
+//   - Ancienneté TOTALE < 6 mois → 1,5 × nb de mois travaillés depuis la date
+//     d'intégration (ramping pour les nouveaux).
+// Si l'employé n'a pas encore commencé à la date de référence → 0.
 export function joursAnnuelAccumules(emp, refDate = todayYMD(), annee = null) {
   const ref = new Date(refDate + 'T00:00:00')
-  const year = annee || ref.getFullYear()
   const dateAnc = emp?.date_anciennete || emp?.date_entree
   if (!dateAnc) return QUOTA_BASE   // sans date d'entrée, on suppose plein quota
 
   const entry = new Date(dateAnc + 'T00:00:00')
-  const yearStart = new Date(`${year}-01-01T00:00:00`)
-  const startDate = entry > yearStart ? entry : yearStart
-  if (ref < startDate) return 0
+  if (ref < entry) return 0
+  void annee   // paramètre conservé pour compat (non utilisé : règle basée sur l'ancienneté)
 
-  const moisEchus = moisEntre(startDate.toISOString().slice(0, 10), refDate)
+  const ancienneteMois = moisEntre(dateAnc, refDate)
 
-  // Plafond annuel (avec bonus ancienneté éventuels)
-  let plafond = QUOTA_BASE
-  const anciennete = moisEntre(dateAnc, refDate) / 12
-  if (anciennete >= 5)  plafond += BONUS_5_ANS
-  if (anciennete >= 10) plafond += BONUS_10_ANS
+  // Bonus ancienneté (calculés depuis la date d'intégration)
+  let quotaPlein = QUOTA_BASE
+  const ancienneteAnnees = ancienneteMois / 12
+  if (ancienneteAnnees >= 5)  quotaPlein += BONUS_5_ANS
+  if (ancienneteAnnees >= 10) quotaPlein += BONUS_10_ANS
 
-  const acc = Math.min(moisEchus * 1.5, plafond)
-  return Number(acc.toFixed(2))
+  // ≥ 6 mois → plein quota d'un coup ; sinon ramping 1,5 j/mois.
+  if (ancienneteMois >= MOIS_AVANT_PRISE) return quotaPlein
+  return Number((ancienneteMois * 1.5).toFixed(2))
 }
 
 // Crée les allocations auto manquantes (annuel = accumulé à ce jour ;
