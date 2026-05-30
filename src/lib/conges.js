@@ -196,8 +196,17 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     else if (t.includes('circoncis'))       category = 'circoncision'
     else if (t.includes('sans solde') || t.includes('unpaid')) category = 'autre'
 
-    // Pour 'annuel' on retire le jour off fixe (règle Layla déjà discutée)
-    const compte = category === 'annuel' ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) : nb
+    // Si jours_decomptes est figé (validation ou édition), on l'utilise tel quel
+    // (uniquement pour les congés entièrement dans la période [yearStart, refDate],
+    // sinon on retombe sur le calcul clippé).
+    const conge_entier = (c.date_debut >= yearStart && c.date_fin <= refDate)
+    let compte
+    if (conge_entier && c.jours_decomptes !== null && c.jours_decomptes !== undefined) {
+      compte = Number(c.jours_decomptes)
+    } else {
+      // Pour 'annuel' on retire le jour off fixe (règle Layla déjà discutée)
+      compte = category === 'annuel' ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) : nb
+    }
     out[category] = (out[category] || 0) + compte
   }
   return out
@@ -360,10 +369,14 @@ export async function createDemandeConge({ employe_id, date_debut, date_fin, typ
   return data
 }
 
-export async function validerConge(congeId, userId) {
+export async function validerConge(congeId, userId, joursDecomptes = null) {
+  const patch = { statut: 'valide', valide_par: userId, valide_le: new Date().toISOString() }
+  if (joursDecomptes !== null && joursDecomptes !== undefined) {
+    patch.jours_decomptes = Number(joursDecomptes)
+  }
   const { data, error } = await supabase
     .from('conges')
-    .update({ statut: 'valide', valide_par: userId, valide_le: new Date().toISOString() })
+    .update(patch)
     .eq('id', congeId)
     .select().single()
   if (error) throw error

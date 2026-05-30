@@ -137,6 +137,22 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       setConges(all)
       setAllocations(allocs)
 
+      // Backfill silencieux : fige jours_decomptes pour les congés validés
+      // qui n'en ont pas encore (calcul actuel basé sur le planning courant).
+      // Idempotent : une fois fait, ne re-tourne plus.
+      const empMap = new Map(empsActifs.map(e => [e.id, e]))
+      const aFiger = all.filter(c => c.statut === 'valide' && (c.jours_decomptes === null || c.jours_decomptes === undefined))
+      if (aFiger.length > 0) {
+        for (const c of aFiger) {
+          const emp = empMap.get(c.employe_id)
+          if (!emp) continue
+          const jd = joursDecomptesCalcul(c, emp)
+          try { await supabase.from('conges').update({ jours_decomptes: jd }).eq('id', c.id) }
+          catch (e) { console.warn('[backfill jours_decomptes]', e?.message || e) }
+          c.jours_decomptes = jd   // patch local pour ce reload
+        }
+      }
+
       // Indexation des données pré-chargées (évite N requêtes serial)
       const validesParEmp = new Map()
       for (const c of all) {
@@ -208,7 +224,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
   async function handleValider(c) {
     if (!confirm(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.`)) return
-    try { await validerConge(c.id, user.id); await reload() }
+    try {
+      const jd = joursDecomptesCalcul(c, empById[c.employe_id])
+      await validerConge(c.id, user.id, jd); await reload()
+    }
     catch (e) { alert('Erreur : ' + e.message) }
   }
   async function handleRejeter(c) {
@@ -691,6 +710,11 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
   const [typeConge, setTypeConge] = useState(conge.type_conge || 'annuel')
   const [motif, setMotif]         = useState(conge.motif || '')
   const [statut, setStatut]       = useState(conge.statut)
+  const [joursDecomptes, setJoursDecomptes] = useState(
+    conge.jours_decomptes !== null && conge.jours_decomptes !== undefined
+      ? String(conge.jours_decomptes)
+      : ''
+  )
   const [busy, setBusy]           = useState(false)
   const [err, setErr]             = useState('')
 
@@ -706,6 +730,7 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
         type_conge: typeConge,
         motif: motif.trim() || null,
         statut,
+        jours_decomptes: joursDecomptes === '' ? null : Number(joursDecomptes),
       })
     } catch (e) { setErr(e.message) }
     finally { setBusy(false) }
@@ -744,6 +769,13 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
           <option value="rejete">Rejeté</option>
           <option value="annule">Annulé</option>
         </select>
+
+        <label style={{ ...lbl, marginTop: 10 }}>Jours décomptés (laisser vide = calcul auto)</label>
+        <input type="number" step="0.5" value={joursDecomptes} onChange={e => setJoursDecomptes(e.target.value)} placeholder="ex : 4" style={ipt} />
+        <div style={{ fontSize: 10, color: '#8a7a70', marginTop: 2 }}>
+          Si vide, l'app calcule selon les jours off de l'employé. Si rempli, cette valeur est figée
+          (ne change pas si tu modifies le planning de l'employé plus tard).
+        </div>
 
         <label style={{ ...lbl, marginTop: 10 }}>Motif (optionnel)</label>
         <input type="text" value={motif} onChange={e => setMotif(e.target.value)} style={ipt} />
@@ -991,10 +1023,18 @@ function NouvelleAllocationModal({ employes, onClose, onSubmit }) {
 }
 
 
-// Renvoie le nb de jours réellement décomptés (annuel : exclut jour off fixe ;
-// récup : 0 ; maladie/événement : calendaire). Sert à harmoniser l'affichage
-// dans « Congés validés » avec la colonne « Pris » des soldes.
+// Renvoie le nb de jours réellement décomptés.
+// Si c.jours_decomptes est défini (figé à la validation ou édité manuellement),
+// on le respecte. Sinon, recalcul dynamique (annuel : exclut jour off fixe ;
+// récup : 0 ; maladie/événement : calendaire).
 function joursDecomptesConge(c, emp) {
+  if (c.jours_decomptes !== null && c.jours_decomptes !== undefined) {
+    return Number(c.jours_decomptes)
+  }
+  return joursDecomptesCalcul(c, emp)
+}
+
+function joursDecomptesCalcul(c, emp) {
   const nbCal = nbJours(c.date_debut, c.date_fin)
   if (!emp) return nbCal
   const cat = classifierConge(c)
