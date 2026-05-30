@@ -31,17 +31,38 @@ function moisEntre(dateA, dateB) {
   return Math.max(0, m)
 }
 
-// Quota annuel pour un employé (selon ancienneté). Renvoie le total en jours/an.
+// Quota annuel pour un employé.
+//   - Présent depuis avant l'année courante → quota plein (18 + bonus ancienneté).
+//   - Entré dans l'année courante → prorata : (mois travaillés dans l'année) × 1.5.
+//     Le mois d'entrée est compté entier (générosité conforme à la règle
+//     « 1.5 j à la fin de chaque mois » discutée).
+//   - Pas encore embauché → 0.
+// Le bonus d'ancienneté (5 ans / 10 ans) s'ajoute si applicable.
 export function quotaAnnuel(emp, refDate = todayYMD()) {
-  // Priorité à la date d'ancienneté manuelle (si renseignée), sinon repli
-  // sur date_entree (qui peut venir de la fiche de salaire).
   const dateAnc = emp?.date_anciennete || emp?.date_entree
   if (!dateAnc) return QUOTA_BASE
+  const ref       = new Date(refDate + 'T00:00:00')
+  const refYear   = ref.getFullYear()
+  const entry     = new Date(dateAnc + 'T00:00:00')
+  const entryYear = entry.getFullYear()
+
+  let base
+  if (entryYear < refYear) {
+    base = QUOTA_BASE                       // présent toute l'année → quota plein
+  } else if (entryYear > refYear) {
+    base = 0                                 // pas encore embauché
+  } else {
+    // Même année : prorata mois travaillés (mois d'entrée inclus).
+    // Ex : entrée 2026-03-15 → 10 mois (mars→déc) × 1.5 = 15 j.
+    const moisDansAnnee = 12 - entry.getMonth()
+    base = moisDansAnnee * (QUOTA_BASE / 12)
+  }
+
+  // Bonus ancienneté (calculé depuis la date d'entrée, indépendamment de l'année)
   const anciennete = moisEntre(dateAnc, refDate) / 12
-  let q = QUOTA_BASE
-  if (anciennete >= 5)  q += BONUS_5_ANS
-  if (anciennete >= 10) q += BONUS_10_ANS
-  return q
+  if (anciennete >= 5)  base += BONUS_5_ANS
+  if (anciennete >= 10) base += BONUS_10_ANS
+  return base
 }
 
 // Acquis depuis le 1er janvier de l'année de refDate (1,5 j à la fin de chaque mois échu,
