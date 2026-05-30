@@ -65,6 +65,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [, setNow] = useState(0)
   // Badge "articles non termines" sur le bouton Reception Vitrine
   const [receptionBadge, setReceptionBadge] = useState(0)
+  // Badge "demandes congés + allocations en attente" sur le bouton Congés
+  const [congesBadge, setCongesBadge] = useState(0)
   // Badge "articles a ranger" sur le bouton Checklist
   const [checklistBadge, setChecklistBadge] = useState(0)
   // Badge "paiements en attente de validation"
@@ -131,6 +133,34 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showReceptionBtn, user?.id])
+
+  // Badge Congés : compte demandes de congé + allocations en attente
+  useEffect(() => {
+    if (!user?.id || !(admin || user?.perm_hr)) return
+    let cancelled = false
+
+    async function refreshCongesBadge() {
+      try {
+        const [{ count: c1 }, { count: c2 }] = await Promise.all([
+          supabase.from('conges').select('id', { count: 'exact', head: true }).eq('statut', 'demande'),
+          supabase.from('conges_allocations').select('id', { count: 'exact', head: true }).eq('statut', 'attente'),
+        ])
+        if (!cancelled) setCongesBadge((c1 || 0) + (c2 || 0))
+      } catch (e) {
+        console.warn('[congesBadge]', e?.message || e)
+      }
+    }
+    refreshCongesBadge()
+
+    const ch = supabase
+      .channel('conges-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conges' },             () => refreshCongesBadge())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conges_allocations' }, () => refreshCongesBadge())
+      .subscribe()
+
+    return () => { cancelled = true; supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin, user?.id, user?.perm_hr])
 
   // Badge Paiements : compte les preuves de paiement à valider
   useEffect(() => {
@@ -489,7 +519,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },
     { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users) },
-    { view: 'absences',         emoji: '🌴', label: 'Congés',           visible: !isLivreur(user) && (admin || !!user?.perm_hr) },
+    { view: 'absences',         emoji: '🌴', label: 'Congés',           visible: !isLivreur(user) && (admin || !!user?.perm_hr), badge: congesBadge },
     { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil || !!user?.perm_econome) },
   ].filter(i => i.visible)
 

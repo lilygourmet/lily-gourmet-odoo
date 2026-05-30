@@ -317,7 +317,9 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             Demandes en attente {demandes.length > 0 && <span style={badge}>{demandes.length}</span>}
           </Tab>
           <Tab active={tab === 'valides'} onClick={() => setTab('valides')}>Congés validés</Tab>
-          <Tab active={tab === 'allocations'} onClick={() => setTab('allocations')}>Allocations</Tab>
+          <Tab active={tab === 'allocations'} onClick={() => setTab('allocations')}>
+            Allocations {allocations.filter(a => a.statut === 'attente').length > 0 && <span style={badge}>{allocations.filter(a => a.statut === 'attente').length}</span>}
+          </Tab>
           <Tab active={tab === 'soldes'} onClick={() => setTab('soldes')}>Soldes employés</Tab>
         </div>
 
