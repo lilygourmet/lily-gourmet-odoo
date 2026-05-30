@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, markPaymentProof, unmarkPaymentProof, updateConversationNote } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName } from '../../lib/conversations'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Search, Pin, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon } from 'lucide-react'
+import { ArrowLeft, Search, Pin, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -89,6 +89,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [noteEditing, setNoteEditing] = useState(false)
   const [noteInput, setNoteInput] = useState('')
   const [noteBusy, setNoteBusy] = useState(false)
+  // Édition du nom du client
+  const [nameEditing, setNameEditing] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [nameBusy, setNameBusy] = useState(false)
   // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
   const textareaRef = useRef(null)
@@ -402,6 +406,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     finally { setNoteBusy(false) }
   }
 
+  function openNameEdit() { setNameInput(conv?.client_name || ''); setNameEditing(true) }
+  async function saveName() {
+    setNameBusy(true)
+    try { setConv(await updateConversationClientName(conversationId, nameInput)); setNameEditing(false) }
+    catch (e) { alert('Erreur : ' + e.message) }
+    finally { setNameBusy(false) }
+  }
+
   function openPaymentModal(m) {
     setPaymentMsg(m)
     setOrderRefInput(m.payment_order_ref || '')
@@ -477,8 +489,29 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           title="Rechercher dans la conversation"
         ><Search size={16} strokeWidth={1.8} /></button>
         <div className="min-w-0 flex-1">
-          <div className="text-[16px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
-          {conv?.client_name && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
+          {nameEditing ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setNameEditing(false) }}
+                autoFocus
+                placeholder="Nom du client"
+                className="flex-1 min-w-0 px-2 py-1 text-[14px] text-ink bg-cream rounded border border-cream/40 focus:outline-none focus:border-cream"
+              />
+              <button onClick={saveName} disabled={nameBusy} title="Enregistrer" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all"><Check size={14} /></button>
+              <button onClick={() => setNameEditing(false)} disabled={nameBusy} title="Annuler" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all"><X size={14} /></button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="text-[16px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
+              {conv && (
+                <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
+              )}
+            </div>
+          )}
+          {conv?.client_name && !nameEditing && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
         </div>
         {conv && (
           conv.assigned_to ? (

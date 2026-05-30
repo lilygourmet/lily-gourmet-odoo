@@ -186,6 +186,18 @@ export async function closeConversation(conversationId, userId) {
   return data
 }
 
+/** Renomme le client d'une conversation (utile quand on n'a que le numéro). */
+export async function updateConversationClientName(conversationId, name) {
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ client_name: name?.trim() || null, updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .select(CONV_SEL)
+    .single()
+  if (error) throw error
+  return data
+}
+
 /** Enregistre la note interne (privée, visible équipe) d'une conversation. */
 export async function updateConversationNote(conversationId, note) {
   const { data, error } = await supabase
