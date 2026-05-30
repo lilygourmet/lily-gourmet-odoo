@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  User, Users, Calendar, RefreshCw, Bug, Clock, Lock, Unlock, Building2,
+  User, Users, Calendar, RefreshCw, Clock, Lock, Unlock, Building2,
   Pencil, Trash2, Plus, Download, Save, Hand, Eye, EyeOff, Wallet,
 } from 'lucide-react'
 import {
@@ -89,38 +89,6 @@ export default function PointageTab({ user, isAdmin }) {
   const canEdit = isAdmin && !isLocked
   // Edition globale du mois (pour Tous, Récup)
   const monthAllLocked = (data?.synthese || []).every(s => s.valide)
-
-  // Debug : voir ce qu'Odoo renvoie
-  async function handleDebug() {
-    setError(null); setSuccess(null)
-    try {
-      const resp = await fetch('/api/pointage-api?action=debug-attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mois, annee }),
-      })
-      const data = await resp.json()
-      console.log('[DEBUG ODOO]', JSON.stringify(data, null, 2))
-      // Construire un résumé lisible
-      const lines = [`UID Odoo : ${data.uid_odoo}`, '']
-      for (const t of (data.tests || [])) {
-        lines.push(`▶ ${t.test}`)
-        if (t.periode) lines.push(`  Période : ${t.periode.debut} → ${t.periode.fin}`)
-        if (t.error) lines.push(`  ❌ ERREUR : ${t.error}`)
-        else if (typeof t.result === 'number') lines.push(`  ✅ ${t.result}`)
-        else if (Array.isArray(t.result)) {
-          lines.push(`  ✅ ${t.result.length} résultats`)
-          for (const r of t.result.slice(0, 3)) {
-            lines.push(`    • ${JSON.stringify(r).slice(0, 150)}`)
-          }
-        }
-        lines.push('')
-      }
-      alert(lines.join('\n'))
-    } catch (e) {
-      setError('Erreur debug : ' + e.message)
-    }
-  }
 
   // Sync Odoo
   async function handleSync() {
@@ -530,29 +498,17 @@ export default function PointageTab({ user, isAdmin }) {
           </div>
         )}
 
-        {isAdmin && (
-          <>
-            <button onClick={handleSync} disabled={syncing || monthAllLocked} title={monthAllLocked ? 'Mois entièrement validé, sync désactivée' : ''} style={{
-              padding: '9px 14px', fontSize: 13, background: monthAllLocked ? '#8a7a70' : '#0C447C', color: 'white',
-              border: '1px solid ' + (monthAllLocked ? '#8a7a70' : '#0C447C'), borderRadius: 8,
-              cursor: syncing || monthAllLocked ? 'not-allowed' : 'pointer', fontWeight: 500,
-              opacity: monthAllLocked ? 0.6 : 1,
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
-              {syncing
-                ? <><Clock size={14} /> Sync...</>
-                : (monthAllLocked
-                    ? <><Lock size={14} /> Sync (verrouillé)</>
-                    : <><RefreshCw size={14} /> Sync Odoo</>)}
-            </button>
-            <button onClick={handleDebug} style={{
-              padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#4a3a30',
-              border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }} title="Voir ce qu'Odoo renvoie">
-              <Bug size={14} /> Debug
-            </button>
-          </>
+        {isAdmin && !monthAllLocked && (
+          <button onClick={handleSync} disabled={syncing} style={{
+            padding: '9px 14px', fontSize: 13, background: '#0C447C', color: 'white',
+            border: '1px solid #0C447C', borderRadius: 8,
+            cursor: syncing ? 'not-allowed' : 'pointer', fontWeight: 500,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            {syncing
+              ? <><Clock size={14} /> Sync...</>
+              : <><RefreshCw size={14} /> Sync Odoo</>}
+          </button>
         )}
       </div>
 

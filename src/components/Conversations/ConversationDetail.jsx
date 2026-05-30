@@ -605,7 +605,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     </a>
                   )
                 })()}
-                {m.body && <div className="text-[13px] whitespace-pre-wrap break-words">{threadTerm ? renderHighlighted(m.body, threadTerm, nextHl, matchIndex) : m.body}</div>}
+                {m.body && <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{threadTerm ? renderHighlighted(m.body, threadTerm, nextHl, matchIndex) : m.body}</div>}
                 <div className={`flex items-center gap-2 mt-1 ${isAgent ? 'justify-end' : ''}`}>
                   <span className={`text-[9px] ${isAgent ? 'text-cream/70' : 'text-ink-mute'}`}>
                     {isAgent && m.sender?.full_name ? `${m.sender.full_name} · ` : ''}{fmtTime(m.sent_at)}
@@ -632,6 +632,25 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
       {/* Zone de réponse (toujours fixée en bas) */}
       <div className="bg-cream px-4 pt-2 pb-3 border-t border-line flex-shrink-0">
+        {conv && conv.assigned_to !== user.id ? (
+          <div className="flex items-center justify-between gap-3 py-2 flex-wrap">
+            <div className="text-[12px] text-ink-soft flex-1 min-w-0">
+              {conv.assigned_to
+                ? `Cette conversation est prise par ${conv.assigned?.full_name || conv.assigned?.username || '?'}.`
+                : 'Prends la conversation pour pouvoir répondre.'}
+            </div>
+            {!conv.assigned_to && (
+              <button
+                onClick={handleAssign}
+                disabled={assigning}
+                className="px-4 py-1.5 bg-bordeaux text-cream hover:bg-bordeaux-deep rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60"
+              >
+                {assigning ? '…' : 'Je prends'}
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
         {suggestions.length > 0 && (
           <div className="flex flex-col gap-1.5 mb-2">
             {suggestions.map((s, i) => (
@@ -685,10 +704,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               ref={textareaRef}
               value={text}
               onChange={e => setText(e.target.value)}
-              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px' }}
-              rows={1}
+              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px' }}
+              rows={3}
               placeholder="Écrire une réponse…"
-              className="w-full resize-none max-h-32 px-3 py-2 rounded-2xl border border-line bg-cream-warm text-[13px] text-ink focus:outline-none focus:border-bordeaux"
+              className="w-full resize-none max-h-[200px] px-4 py-3 rounded-2xl border border-line bg-cream-warm text-[15px] leading-relaxed text-ink focus:outline-none focus:border-bordeaux"
             />
             <div className="flex items-center gap-2">
               <label className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center cursor-pointer transition-all" title="Joindre une image ou un PDF (max 5 MB)">
@@ -759,6 +778,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               </button>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
 
