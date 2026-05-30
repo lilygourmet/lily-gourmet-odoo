@@ -190,7 +190,11 @@ export default function PointageTab({ user, isAdmin }) {
   // ============================================
 
   async function downloadXLSX(filename, rows, sheetName = 'Feuille1') {
-    // Charger SheetJS via CDN (pas de dépendance npm requise)
+    await downloadXLSXMulti(filename, [{ name: sheetName, rows }])
+  }
+
+  // Variante multi-onglets : sheets = [{ name, rows }, ...]
+  async function downloadXLSXMulti(filename, sheets) {
     if (!window.XLSX) {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script')
@@ -201,72 +205,96 @@ export default function PointageTab({ user, isAdmin }) {
       })
     }
     const XLSX = window.XLSX
-    const ws = XLSX.utils.aoa_to_sheet(rows)
-    // Largeurs auto
-    const colWidths = rows[0].map((_, i) => ({
-      wch: Math.min(40, Math.max(...rows.map(r => String(r[i] || '').length)) + 2)
-    }))
-    ws['!cols'] = colWidths
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31))
+    for (const sh of sheets) {
+      const ws = XLSX.utils.aoa_to_sheet(sh.rows)
+      const colWidths = (sh.rows[0] || []).map((_, i) => ({
+        wch: Math.min(40, Math.max(...sh.rows.map(r => String(r[i] || '').length)) + 2)
+      }))
+      ws['!cols'] = colWidths
+      XLSX.utils.book_append_sheet(wb, ws, String(sh.name).slice(0, 31))
+    }
     XLSX.writeFile(wb, filename)
   }
 
   async function handleExportSup() {
     if (!data) return
-    const monthLabel = `${MOIS_FR[mois - 1]} ${annee}`
+    const monthName = MOIS_FR[mois - 1] + '_' + annee
+    await downloadXLSX('heures_sup_' + monthName + '.xlsx', exportRowsHeuresSup(), 'Heures sup ' + monthName)
+  }
+
+  // Calcule les jours de congé par catégorie pour un employé dans le mois affiché.
+  // Retourne { annuel, maladieLongue, sansSolde }.
+  function congesParTypeDuMois(emp) {
+    let annuel = 0, maladieLongue = 0, sansSolde = 0
+    const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
+    for (const c of congesEmp) {
+      const debut = new Date(Math.max(new Date(c.date_debut), new Date(annee, mois - 1, 1)))
+      const fin   = new Date(Math.min(new Date(c.date_fin),   new Date(annee, mois, 0)))
+      if (fin < debut) continue
+      const nb = Math.floor((fin - debut) / 86400000) + 1
+      const t = (c.type_conge || '').toLowerCase()
+      if (t === 'maladie_courte')          continue   // ≤ 3 j : non payé en bulletin
+      if (t === 'maladie_longue')          { maladieLongue += nb; continue }
+      if (t.includes('récup') || t.includes('recup')) continue
+      if (t.includes('sans solde') || t.includes('unpaid')) { sansSolde += nb; continue }
+      if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
+        if (nb > 3) maladieLongue += nb   // > 3 j → maladie longue
+        continue                          // ≤ 3 j : ignoré
+      }
+      // Tout le reste (annuel, événementiel) → catégorie 'annuel' pour le bulletin
+      annuel += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)
+    }
+    return { annuel, maladieLongue, sansSolde }
+  }
+
+  function exportRowsConges() {
     const rows = [
-      [`Heures sup — ${monthLabel}`],
+      [`Congés — ${MOIS_FR[mois - 1]} ${annee}`],
+      [],
+      ['Employé', 'Congé annuel (hors récup)', 'Maladie > 3 j', 'Sans solde'],
+    ]
+    for (const emp of data.employes) {
+      if (!emp.declare) continue
+      const { annuel, maladieLongue, sansSolde } = congesParTypeDuMois(emp)
+      if (annuel > 0 || maladieLongue > 0 || sansSolde > 0) {
+        rows.push([emp.nom, annuel, maladieLongue, sansSolde])
+      }
+    }
+    return rows
+  }
+
+  function exportRowsHeuresSup() {
+    const rows = [
+      [`Heures sup — ${MOIS_FR[mois - 1]} ${annee}`],
       [],
       ['Employé', 'Solde heures sup du mois'],
     ]
     for (const emp of data.employes) {
-      if (!emp.declare) continue  // n'exporter que le personnel déclaré
+      if (!emp.declare) continue
       const r = resultats[emp.id]
       if (!r) continue
-      // Solde = heures sup - heures manquantes (signé : positif si gain, négatif si manque).
       const solde = emp.heures_sup_mensuelles === false
         ? 0
         : (r.synthese.heures_sup - r.synthese.heures_manquantes)
       rows.push([emp.nom, Number(solde.toFixed(2))])
     }
-    const monthName = MOIS_FR[mois - 1] + '_' + annee
-    await downloadXLSX('heures_sup_' + monthName + '.xlsx', rows, 'Heures sup ' + monthName)
+    return rows
   }
 
   async function handleExportConges() {
     if (!data) return
-    const monthLabel = `${MOIS_FR[mois - 1]} ${annee}`
-    const rows = [
-      [`Congés / Maladie — ${monthLabel}`],
-      [],
-      ['Employé', 'Jours congé', 'Jours maladie (4+)'],
-    ]
-    for (const emp of data.employes) {
-      if (!emp.declare) continue  // n'exporter que le personnel déclaré
-      const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
-      let joursConge = 0
-      let joursMaladie = 0
-      for (const c of congesEmp) {
-        const debut = new Date(Math.max(new Date(c.date_debut), new Date(annee, mois - 1, 1)))
-        const fin = new Date(Math.min(new Date(c.date_fin), new Date(annee, mois, 0)))
-        if (fin < debut) continue
-        const nbJours = Math.floor((fin - debut) / 86400000) + 1
-        const typeLower = (c.type_conge || '').toLowerCase()
-        if (typeLower.includes('maladie') || typeLower.includes('malade') || typeLower.includes('sick')) {
-          if (nbJours >= 4) joursMaladie += nbJours
-        } else if (typeLower.includes('récup') || typeLower.includes('recup')) {
-          continue
-        } else {
-          joursConge += nbJours - compteJoursOffFixesDansPeriode(emp, debut, fin)
-        }
-      }
-      if (joursConge > 0 || joursMaladie > 0) {
-        rows.push([emp.nom, joursConge, joursMaladie])
-      }
-    }
     const monthName = MOIS_FR[mois - 1] + '_' + annee
-    await downloadXLSX('conges_' + monthName + '.xlsx', rows, 'Congés ' + monthName)
+    await downloadXLSX('conges_' + monthName + '.xlsx', exportRowsConges(), 'Congés ' + monthName)
+  }
+
+  async function handleExportCongesEtSup() {
+    if (!data) return
+    const monthName = MOIS_FR[mois - 1] + '_' + annee
+    await downloadXLSXMulti('conges_heures_sup_' + monthName + '.xlsx', [
+      { name: 'Congés ' + monthName,    rows: exportRowsConges() },
+      { name: 'Heures sup ' + monthName, rows: exportRowsHeuresSup() },
+    ])
   }
 
   // Validation du mois
@@ -604,6 +632,7 @@ export default function PointageTab({ user, isAdmin }) {
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
             <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
             <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
+            <button onClick={handleExportCongesEtSup} style={btnExport}><Download size={14} /> Export congés + h. sup</button>
             <button onClick={handleValider} style={btnPrimaryGreen}>✓ Valider le mois</button>
           </div>
         </>
