@@ -137,20 +137,32 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       setConges(all)
       setAllocations(allocs)
 
-      // Backfill silencieux : fige jours_decomptes pour les congés validés
-      // qui n'en ont pas encore (calcul actuel basé sur le planning courant).
-      // Idempotent : une fois fait, ne re-tourne plus.
+      // Backfill : on calcule jours_decomptes en mémoire IMMÉDIATEMENT (utilisé
+      // pour le rendu), puis on persiste en BDD en arrière-plan (non bloquant).
       const empMap = new Map(empsActifs.map(e => [e.id, e]))
-      const aFiger = all.filter(c => c.statut === 'valide' && (c.jours_decomptes === null || c.jours_decomptes === undefined))
-      if (aFiger.length > 0) {
-        for (const c of aFiger) {
-          const emp = empMap.get(c.employe_id)
-          if (!emp) continue
-          const jd = joursDecomptesCalcul(c, emp)
-          try { await supabase.from('conges').update({ jours_decomptes: jd }).eq('id', c.id) }
-          catch (e) { console.warn('[backfill jours_decomptes]', e?.message || e) }
-          c.jours_decomptes = jd   // patch local pour ce reload
-        }
+      const aFigerPayload = []
+      for (const c of all) {
+        if (c.statut !== 'valide') continue
+        if (c.jours_decomptes !== null && c.jours_decomptes !== undefined) continue
+        const emp = empMap.get(c.employe_id)
+        if (!emp) continue
+        const jd = joursDecomptesCalcul(c, emp)
+        c.jours_decomptes = jd                        // immédiat en mémoire
+        aFigerPayload.push({ id: c.id, jd })
+      }
+      // Persistence en arrière-plan (par chunks de 20 en parallèle)
+      if (aFigerPayload.length > 0) {
+        (async () => {
+          const chunkSize = 20
+          for (let i = 0; i < aFigerPayload.length; i += chunkSize) {
+            const chunk = aFigerPayload.slice(i, i + chunkSize)
+            await Promise.all(chunk.map(({ id, jd }) =>
+              supabase.from('conges').update({ jours_decomptes: jd }).eq('id', id)
+                .then(() => {})
+                .catch(e => console.warn('[backfill jours_decomptes]', e?.message || e))
+            ))
+          }
+        })()
       }
 
       // Indexation des données pré-chargées (évite N requêtes serial)
