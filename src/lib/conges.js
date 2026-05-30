@@ -433,6 +433,34 @@ export async function cancelAllocation(id) {
   if (error) throw error
 }
 
+// Met à jour les champs modifiables d'une allocation.
+export async function updateAllocation(id, patch) {
+  const allowed = ['type', 'jours', 'raison', 'date_evt', 'annee']
+  const clean = {}
+  for (const k of allowed) if (patch[k] !== undefined) clean[k] = patch[k]
+  const { data, error } = await supabase
+    .from('conges_allocations')
+    .update(clean)
+    .eq('id', id)
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+// Met à jour les champs modifiables d'un congé.
+export async function updateConge(id, patch) {
+  const allowed = ['date_debut', 'date_fin', 'type_conge', 'motif', 'statut']
+  const clean = {}
+  for (const k of allowed) if (patch[k] !== undefined) clean[k] = patch[k]
+  const { data, error } = await supabase
+    .from('conges')
+    .update(clean)
+    .eq('id', id)
+    .select().single()
+  if (error) throw error
+  return data
+}
+
 // Reporte les soldes dispo d'une année N en allocations type='reliquat'
 // pour l'année N+1. Idempotent : annule les reliquats auto existants pour
 // N+1 puis recrée à partir du dispo actuel au 31/12 de N.

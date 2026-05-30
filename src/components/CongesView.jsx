@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download } from 'lucide-react'
+import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download, Pencil } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { loadEmployes } from '../lib/hr'
 import {
@@ -9,6 +9,7 @@ import {
   syncCongesAnneeOdoo, listAllocationsOdoo, importAllocationsOdoo,
   loadAllocations, createAllocation, cancelAllocation,
   initAutoAllocationsTous, deleteAutoAllocations, reporterReliquats, ALLOC_TYPES,
+  updateAllocation, updateConge,
 } from '../lib/conges'
 
 const TYPES = [
@@ -43,6 +44,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [showAllocForm, setShowAllocForm] = useState(false)
   const [initAllocBusy, setInitAllocBusy] = useState(false)
   const [detailEmp, setDetailEmp]         = useState(null)  // employé sélectionné pour voir le détail
+  const [editAlloc, setEditAlloc]         = useState(null)  // allocation en cours d'édition
+  const [editConge, setEditConge]         = useState(null)  // congé en cours d'édition
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
@@ -211,6 +214,16 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     }
   }
 
+  async function handleUpdateAllocation(id, patch) {
+    try { await updateAllocation(id, patch); setEditAlloc(null); await reload() }
+    catch (e) { alert('Erreur : ' + e.message) }
+  }
+
+  async function handleUpdateConge(id, patch) {
+    try { await updateConge(id, patch); setEditConge(null); await reload() }
+    catch (e) { alert('Erreur : ' + e.message) }
+  }
+
   async function handleCancelAllocation(a) {
     const lbl = (ALLOC_TYPES.find(t => t.v === a.type)?.label) || a.type
     if (!confirm(`Annuler cette allocation ?\n\n${lbl} · ${a.jours} j${a.raison ? ` · ${a.raison}` : ''}`)) return
@@ -336,7 +349,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                           {list.map(c => (
                             <CongeCard
                               key={c.id} c={c} emp={empById[c.employe_id]}
-                              actions={<button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>}
+                              actions={<>
+                      <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>
+                      <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>
+                    </>}
                             />
                           ))}
                         </div>
@@ -421,7 +437,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                             const debutAlloc = a.date_evt || `${a.annee}-01-01`
                             const finAlloc   = `${a.annee}-12-31`
                             return (
-                              <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '160px 70px 170px 1fr auto', gap: 8, fontSize: 12, padding: '6px 8px', borderTop: '0.5px solid #f0e8d5', alignItems: 'center' }}>
+                              <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '160px 70px 180px 1fr auto auto', gap: 8, fontSize: 12, padding: '6px 8px', borderTop: '0.5px solid #f0e8d5', alignItems: 'center' }}>
                                 <div style={{ color: '#1a0f0a' }}>
                                   {t?.label || a.type}
                                   {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
@@ -429,11 +445,15 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                                 <div style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</div>
                                 <div style={{ color: '#4a3a30', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <Calendar size={11} />
-                                  du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)} au 31/12
+                                  du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} au {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
                                 </div>
                                 <div style={{ color: '#8a7a70', fontStyle: a.raison ? 'normal' : 'italic' }}>
                                   {a.raison || '—'}
                                 </div>
+                                <button onClick={() => setEditAlloc(a)} title="Modifier cette allocation"
+                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                                  <Pencil size={13} />
+                                </button>
                                 <button onClick={() => handleCancelAllocation(a)} title="Annuler cette allocation"
                                   style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
                                   <Trash2 size={13} />
@@ -524,7 +544,157 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           onSubmit={handleAddAllocation}
         />
       )}
+
+      {editAlloc && (
+        <EditAllocationModal
+          alloc={editAlloc}
+          emp={empById[editAlloc.employe_id]}
+          onClose={() => setEditAlloc(null)}
+          onSave={patch => handleUpdateAllocation(editAlloc.id, patch)}
+        />
+      )}
+
+      {editConge && (
+        <EditCongeModal
+          conge={editConge}
+          emp={empById[editConge.employe_id]}
+          onClose={() => setEditConge(null)}
+          onSave={patch => handleUpdateConge(editConge.id, patch)}
+        />
+      )}
     </>
+  )
+}
+
+function EditAllocationModal({ alloc, emp, onClose, onSave }) {
+  const [type, setType]       = useState(alloc.type)
+  const [jours, setJours]     = useState(String(alloc.jours))
+  const [raison, setRaison]   = useState(alloc.raison || '')
+  const [dateEvt, setDateEvt] = useState(alloc.date_evt || '')
+  const [annee, setAnnee]     = useState(String(alloc.annee))
+  const [busy, setBusy]       = useState(false)
+  const [err, setErr]         = useState('')
+
+  async function submit() {
+    setErr('')
+    const j = Number(jours)
+    if (!j || j <= 0) { setErr('Nombre de jours requis (> 0).'); return }
+    const a = Number(annee)
+    if (!a || a < 2020 || a > 2100) { setErr('Année invalide.'); return }
+    setBusy(true)
+    try {
+      await onSave({ type, jours: j, raison: raison.trim() || null, date_evt: dateEvt || null, annee: a })
+    } catch (e) { setErr(e.message) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 12, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Pencil size={18} /> Modifier allocation
+        </div>
+        {emp && <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 10 }}>{emp.nom}</div>}
+
+        <label style={lbl}>Type</label>
+        <select value={type} onChange={e => setType(e.target.value)} style={ipt}>
+          {ALLOC_TYPES.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+        </select>
+
+        <label style={{ ...lbl, marginTop: 10 }}>Nombre de jours</label>
+        <input type="number" step="0.5" value={jours} onChange={e => setJours(e.target.value)} style={ipt} />
+
+        <label style={{ ...lbl, marginTop: 10 }}>Année</label>
+        <input type="number" value={annee} onChange={e => setAnnee(e.target.value)} style={ipt} />
+
+        <label style={{ ...lbl, marginTop: 10 }}>Date de l'événement (optionnel)</label>
+        <input type="date" value={dateEvt} onChange={e => setDateEvt(e.target.value)} style={ipt} />
+
+        <label style={{ ...lbl, marginTop: 10 }}>Raison (optionnel)</label>
+        <input type="text" value={raison} onChange={e => setRaison(e.target.value)} style={ipt} />
+
+        {err && <div style={errBox}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+          <button onClick={onClose} disabled={busy} style={btnSlim}>Annuler</button>
+          <button onClick={submit} disabled={busy} style={btnPrimary}>{busy ? '…' : 'Enregistrer'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditCongeModal({ conge, emp, onClose, onSave }) {
+  const [dateDebut, setDateDebut] = useState(conge.date_debut)
+  const [dateFin, setDateFin]     = useState(conge.date_fin)
+  const [typeConge, setTypeConge] = useState(conge.type_conge || 'annuel')
+  const [motif, setMotif]         = useState(conge.motif || '')
+  const [statut, setStatut]       = useState(conge.statut)
+  const [busy, setBusy]           = useState(false)
+  const [err, setErr]             = useState('')
+
+  async function submit() {
+    setErr('')
+    if (!dateDebut || !dateFin) { setErr('Dates requises.'); return }
+    if (dateFin < dateDebut) { setErr('La date de fin est avant la date de début.'); return }
+    setBusy(true)
+    try {
+      await onSave({
+        date_debut: dateDebut,
+        date_fin: dateFin,
+        type_conge: typeConge,
+        motif: motif.trim() || null,
+        statut,
+      })
+    } catch (e) { setErr(e.message) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 12, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Pencil size={18} /> Modifier congé
+        </div>
+        {emp && <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 10 }}>{emp.nom}</div>}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={lbl}>Date début</label>
+            <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} style={ipt} />
+          </div>
+          <div>
+            <label style={lbl}>Date fin</label>
+            <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} style={ipt} />
+          </div>
+        </div>
+
+        <label style={{ ...lbl, marginTop: 10 }}>Type</label>
+        <input type="text" value={typeConge || ''} onChange={e => setTypeConge(e.target.value)} placeholder="ex : annuel / maladie / mariage…" style={ipt} />
+        <div style={{ fontSize: 10, color: '#8a7a70', marginTop: 2 }}>
+          Le calcul détecte « annuel » par défaut, sauf si le texte contient
+          maladie / mariage / naissance / décès / circoncision / récup / sans solde.
+        </div>
+
+        <label style={{ ...lbl, marginTop: 10 }}>Statut</label>
+        <select value={statut} onChange={e => setStatut(e.target.value)} style={ipt}>
+          <option value="demande">Demande</option>
+          <option value="valide">Validé</option>
+          <option value="rejete">Rejeté</option>
+          <option value="annule">Annulé</option>
+        </select>
+
+        <label style={{ ...lbl, marginTop: 10 }}>Motif (optionnel)</label>
+        <input type="text" value={motif} onChange={e => setMotif(e.target.value)} style={ipt} />
+
+        {err && <div style={errBox}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+          <button onClick={onClose} disabled={busy} style={btnSlim}>Annuler</button>
+          <button onClick={submit} disabled={busy} style={btnPrimary}>{busy ? '…' : 'Enregistrer'}</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
