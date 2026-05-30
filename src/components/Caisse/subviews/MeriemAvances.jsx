@@ -164,8 +164,6 @@ export default function MeriemAvances({ user }) {
 
 <AuditLogPanel entityType="avance" title="Historique des avances" />
 
-<AuditLogPanel entityType="avance" title="Historique des avances" />
-
       {showNew && <NewAvanceModal persoDests={persoDests} onClose={() => setShowNew(false)} onCreate={handleCreate} />}
     </div>
   )

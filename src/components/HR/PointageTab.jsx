@@ -682,34 +682,7 @@ export default function PointageTab({ user, isAdmin }) {
               <>
                 <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
                 <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
-                {/* Nom employé cliquable → ouvre modal */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 10, padding: '8px 12px',
-            background: '#F4F0EA', borderRadius: 12, gap: 8, flexWrap: 'wrap',
-            boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
-          }}>
-            <button onClick={() => setEditingEmp(empSelected)} style={{
-              padding: '4px 8px', fontSize: 14, fontWeight: 500, color: '#993556',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }} title="Cliquer pour éditer la fiche employé">
-              <User size={14} /> {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <Pencil size={12} />
-            </button>
-            {empSelected?.societe?.code && (
-              <span style={{
-                fontSize: 11, padding: '3px 8px', borderRadius: 999,
-                background: empSelected.societe.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
-                color: empSelected.societe.code === 'LG' ? '#993556' : '#27500A',
-                fontWeight: 500,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                <Building2 size={12} /> {empSelected.societe.nom}
-              </span>
-            )}
-          </div>
-
-          {isLocked ? (
+                {isLocked ? (
                   <button onClick={handleDebloquer} style={{
                     padding: '10px 18px', fontSize: 13, background: '#A32D2D', color: 'white',
                     border: '1px solid #A32D2D', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
