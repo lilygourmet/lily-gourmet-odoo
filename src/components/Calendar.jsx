@@ -1060,7 +1060,7 @@ function AllCapsule({ order, stepsMap }) {
 
         <div className="flex items-start gap-3">
           {photoUrl && (
-            <div className="w-28 h-28 rounded-lg overflow-hidden border border-line/60 bg-cream-warm flex-shrink-0">
+            <div className="w-24 h-24 rounded-lg overflow-hidden border border-line/60 bg-cream-warm flex-shrink-0">
               <img
                 src={photoUrl}
                 alt=""
@@ -1074,7 +1074,7 @@ function AllCapsule({ order, stepsMap }) {
             {mainCD ? (
               <>
                 {(mainCD.etages_count || mainCD.pers) && (
-                  <div className={`text-[13px] text-ink leading-tight ${titleClass}`}>
+                  <div className={`text-[15px] text-ink leading-tight ${titleClass}`}>
                     {mainCD.etages_count && (
                       <span className="font-medium">
                         {mainCD.etages_count} étage{mainCD.etages_count > 1 ? 's' : ''}
@@ -1085,13 +1085,13 @@ function AllCapsule({ order, stepsMap }) {
                   </div>
                 )}
                 {mainCD.theme && (
-                  <div className={`text-[12px] text-ink-soft italic leading-tight ${titleClass}`}>
+                  <div className={`text-[14px] text-ink-soft italic leading-tight ${titleClass}`}>
                     {mainCD.theme}
                   </div>
                 )}
               </>
             ) : gmItems.length > 0 ? (
-              <div className={`text-[13px] text-ink leading-tight ${titleClass}`}>
+              <div className={`text-[15px] text-ink leading-tight ${titleClass}`}>
                 {gmItems.length} accessoire{gmItems.length > 1 ? 's' : ''}
               </div>
             ) : null}
@@ -1222,7 +1222,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
 
         <div className="flex items-start gap-3">
           {photoUrl && (
-            <div className="w-28 h-28 rounded-lg overflow-hidden border border-line/60 bg-cream-warm flex-shrink-0">
+            <div className="w-24 h-24 rounded-lg overflow-hidden border border-line/60 bg-cream-warm flex-shrink-0">
               <img
                 src={photoUrl}
                 alt=""
@@ -1234,7 +1234,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
           )}
           <div className="flex-1 min-w-0 space-y-1">
             {(item.etages_count || item.pers) && (
-              <div className={`text-[13px] text-ink leading-tight ${titleClass}`}>
+              <div className={`text-[15px] text-ink leading-tight ${titleClass}`}>
                 {item.etages_count && (
                   <span className="font-medium">
                     {item.etages_count} étage{item.etages_count > 1 ? 's' : ''}
@@ -1245,7 +1245,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
               </div>
             )}
             {item.theme && (
-              <div className={`text-[12px] text-ink-soft italic leading-tight ${titleClass}`}>
+              <div className={`text-[14px] text-ink-soft italic leading-tight ${titleClass}`}>
                 {item.theme}
               </div>
             )}
@@ -1335,7 +1335,7 @@ function GMItemCapsule({ order, item, stepsMap }) {
 
         <div className="flex items-start gap-3">
           {photoUrl && (
-            <div className="w-28 h-28 rounded-lg overflow-hidden border border-line/60 bg-cream-warm flex-shrink-0">
+            <div className="w-24 h-24 rounded-lg overflow-hidden border border-line/60 bg-cream-warm flex-shrink-0">
               <img
                 src={photoUrl}
                 alt=""
@@ -1346,11 +1346,11 @@ function GMItemCapsule({ order, item, stepsMap }) {
             </div>
           )}
           <div className="flex-1 min-w-0 space-y-1">
-            <div className={`text-[13px] text-ink leading-tight font-medium ${titleClass}`}>
+            <div className={`text-[15px] text-ink leading-tight font-medium ${titleClass}`}>
               {item.title || '—'}
             </div>
             {item.parfums && item.parfums.length > 0 && (
-              <div className={`text-[12px] text-ink-soft italic leading-tight ${titleClass}`}>
+              <div className={`text-[14px] text-ink-soft italic leading-tight ${titleClass}`}>
                 {item.parfums.join(', ')}
               </div>
             )}
