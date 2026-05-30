@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Search, Printer, FileText } from 'lucide-react'
 import {
-  loadOrdersForWeek,
+  loadOrdersForWeek, loadOrdersByIds,
   loadAllOrders,
   loadStepsForOrders,
   cleanupOldOrders,
@@ -399,6 +399,30 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
 
   const isPatissierMode = viewMode === 'patissier'
 
+  // Dernier batch imprimé (localStorage) — pour permettre de réimprimer en cas
+  // de pépin d'imprimante (papier coincé, hors-ligne…).
+  const [lastBatchInfo, setLastBatchInfo] = useState(null)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('lastPrintBatch')
+      if (raw) setLastBatchInfo(JSON.parse(raw))
+    } catch (_) { /* ignore */ }
+  }, [showBatchPrint])    // recharge après chaque fermeture du modal
+  const [reprintOrders, setReprintOrders] = useState(null)
+  async function handleReprintLastBatch() {
+    if (!lastBatchInfo?.ids?.length) return
+    try {
+      const fresh = await loadOrdersByIds(lastBatchInfo.ids)
+      if (fresh.length === 0) {
+        alert('Les commandes du dernier batch ne sont plus disponibles.')
+        return
+      }
+      setReprintOrders(fresh)
+    } catch (e) {
+      alert('Erreur de chargement : ' + e.message)
+    }
+  }
+
   // Commandes de la semaine courante non imprimees (pour le bouton batch)
   const unprintedThisWeek = useMemo(() => {
     const inWeek = filterCurrentWeek(orders, currentMonday)
@@ -645,6 +669,17 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
               <span>{unprintedThisWeek.length}</span>
             </button>
           )}
+          {/* Bouton réimprimer dernier batch (en cas de pépin d'imprimante) */}
+          {canPrintBatch(user) && !isPatissierMode && lastBatchInfo?.ids?.length > 0 && (
+            <button
+              onClick={handleReprintLastBatch}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-medium tracking-wider border border-amber-500 text-amber-700 hover:bg-amber-500 hover:text-cream transition-all flex-shrink-0"
+              title={`Réimprimer le dernier batch (${lastBatchInfo.count} commandes, imprimé le ${new Date(lastBatchInfo.printedAt).toLocaleString('fr-FR')})`}
+            >
+              <Printer size={14} strokeWidth={1.8} />
+              <span>↻ {lastBatchInfo.count}</span>
+            </button>
+          )}
           {/* Bouton Etiquettes Zebra deplace dans AppHeader */}
         </div>
 
@@ -819,6 +854,18 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
           onClose={() => setShowBatchPrint(false)}
           onPrinted={async () => {
             // Recharger les commandes pour avoir les nouveaux printed_at
+            const fresh = await loadOrdersForWeek(currentMonday)
+            setOrders(fresh)
+          }}
+        />
+      )}
+
+      {reprintOrders && (
+        <PrintBatchModal
+          orders={reprintOrders}
+          user={user}
+          onClose={() => setReprintOrders(null)}
+          onPrinted={async () => {
             const fresh = await loadOrdersForWeek(currentMonday)
             setOrders(fresh)
           }}

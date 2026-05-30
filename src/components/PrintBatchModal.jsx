@@ -380,6 +380,16 @@ ${ordersHtml}
         try {
           const result = await markOrdersPrintedBatch(ids, user.id)
           console.log('[print] markOrdersPrintedBatch resultat:', result)
+          // Sauvegarde le batch pour permettre une réimpression en cas de pépin
+          // d'imprimante (papier coincé, hors-ligne…). Stocké en local, valable
+          // jusqu'au prochain batch.
+          try {
+            localStorage.setItem('lastPrintBatch', JSON.stringify({
+              ids,
+              printedAt: printedAt.toISOString(),
+              count: orders.length,
+            }))
+          } catch (_) { /* localStorage indispo, ignore */ }
         } catch (e) {
           console.error('[print] ERREUR markOrdersPrintedBatch:', e)
           alert('Erreur marquage: ' + e.message)

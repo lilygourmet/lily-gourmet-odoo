@@ -303,6 +303,28 @@ export async function cleanupOldOrders() {
 // ============================================================
 // LOAD d'une semaine
 // ============================================================
+// Charge un set de commandes par leurs ids (pour la fonction « Réimprimer dernier batch »).
+export async function loadOrdersByIds(ids) {
+  if (!ids || ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      id, order_num, client_name, delivery_at, seller_name,
+      odoo_state, modified_at, last_changes_summary,
+      printed_at, printed_by,
+      order_items (
+        id, item_idx, type, title, etages_count, pers, parfums,
+        taille_value, taille_unit,
+        theme, message, age, warnings, image_urls, polys, quantity,
+        modified_at, last_changes
+      )
+    `)
+    .in('id', ids)
+    .order('delivery_at', { ascending: true })
+  if (error) { console.error('❌ loadOrdersByIds :', error); return [] }
+  return data || []
+}
+
 export async function loadOrdersForWeek(monday) {
   const start = new Date(monday)
   start.setHours(0, 0, 0, 0)
