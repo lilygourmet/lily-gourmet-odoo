@@ -236,8 +236,11 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   const prisAnnuel = prisType.annuel
   const prisEvents = prisType.mariage + prisType.naissance + prisType.deces + prisType.circoncision + prisType.autre
 
-  // 8) DISPO (annuel + reliquat + récup + événements applicables − pris annuels & événements)
-  const dispo = acquis + reliquatN1 + recup + eventsApplicable - prisAnnuel - prisEvents
+  // 8) TOTAL ALLOCATIONS = annuel FULL + reliquat valide + événements applicables.
+  //    DISPO = total + récup − pris (pas de pro-rata mensuel : l'employé
+  //    peut consommer dès le début de l'année).
+  const totalAllocations = annuelEffectif + reliquatN1 + eventsApplicable
+  const dispo = totalAllocations + recup - prisAnnuel - prisEvents
 
   // 9) MALADIE ≤ 3 j : pool séparé (6 j/an par défaut)
   const maladieAlloue = sumByType.maladie_courte || 0
@@ -250,8 +253,11 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
 
   return {
     acquis, reliquatN1, recup,
-    pris: prisAnnuel,
+    pris: prisAnnuel + prisEvents,
+    prisAnnuel,
+    prisEvents,
     dispo: Math.max(0, dispo),
+    totalAllocations,
     peutPrendre,
     moisDepuisEntree,
     quotaAnnuel: annuelEffectif,

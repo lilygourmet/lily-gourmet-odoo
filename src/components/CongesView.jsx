@@ -399,15 +399,21 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {allocs.map(a => {
                             const t = ALLOC_TYPES.find(t => t.v === a.type)
+                            const debutAlloc = a.date_evt || `${a.annee}-01-01`
+                            const finAlloc   = `${a.annee}-12-31`
                             return (
-                              <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '160px 70px 1fr auto', gap: 8, fontSize: 12, padding: '6px 8px', borderTop: '0.5px solid #f0e8d5', alignItems: 'center' }}>
+                              <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '160px 70px 170px 1fr auto', gap: 8, fontSize: 12, padding: '6px 8px', borderTop: '0.5px solid #f0e8d5', alignItems: 'center' }}>
                                 <div style={{ color: '#1a0f0a' }}>
                                   {t?.label || a.type}
                                   {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
                                 </div>
                                 <div style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</div>
+                                <div style={{ color: '#4a3a30', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <Calendar size={11} />
+                                  du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)} au 31/12
+                                </div>
                                 <div style={{ color: '#8a7a70', fontStyle: a.raison ? 'normal' : 'italic' }}>
-                                  {a.raison || (a.date_evt ? `(${a.date_evt})` : '—')}
+                                  {a.raison || '—'}
                                 </div>
                                 <button onClick={() => handleCancelAllocation(a)} title="Annuler cette allocation"
                                   style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
@@ -430,7 +436,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               <div>Employé</div>
-              <div title="Acquis (annuel × mois écoulés / 12) + reliquat valide + événements applicables (hors maladie ≤ 3 j)">Allocations accumulé</div>
+              <div title="Annuel permis + reliquat + événements applicables (hors maladie ≤ 3 j)">Total allocations</div>
               <div title="Report N-1 (expire le 30 mai)">Reliquat</div>
               <div title="Jours déjà pris (annuel + événements)">Pris</div>
               <div style={{ textAlign: 'right' }} title="Allocations accumulé + récup − pris">Dispo</div>
@@ -438,8 +444,6 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             {employes.map(e => {
               const s = soldes[e.id]
               if (!s) return null
-              const allocAccumule = s.acquis + s.reliquatN1 + s.events.applicable
-              const prisTotal = s.pris + s.events.pris
               return (
                 <div key={e.id} style={{ ...soldeRow, gridTemplateColumns: '1fr 140px 90px 90px 110px' }}>
                   <div>
@@ -452,9 +456,9 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                       </span>
                     </div>
                   </div>
-                  <div style={cellNum}>{allocAccumule.toFixed(1)} j</div>
+                  <div style={cellNum}>{s.totalAllocations.toFixed(1)} j</div>
                   <div style={cellNum}>{s.reliquatN1 > 0 ? s.reliquatN1 : '—'}</div>
-                  <div style={cellNum}>{prisTotal.toFixed(1)}</div>
+                  <div style={cellNum}>{s.pris.toFixed(1)}</div>
                   <div style={{ ...cellNum, textAlign: 'right', fontWeight: 600, color: s.dispo > 0 ? '#085041' : '#A32D2D' }}>
                     {s.dispo.toFixed(1)} j
                   </div>
@@ -462,10 +466,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               )
             })}
             <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 8, padding: '0 4px' }}>
-              <strong>Allocations accumulé</strong> = (annuel × mois écoulés / 12) + reliquat valide + événements applicables.
-              Maladie ≤ 3 j est un <strong>pool séparé</strong> (6 j/an), affiché en bleu sous le nom.<br />
-              <strong>Dispo</strong> = Allocations accumulé + récup − jours pris.<br />
-              <strong>Reliquat</strong> = report de l'année précédente. <em>Expire le 30 mai.</em>
+              <strong>Total allocations</strong> = annuel permis + reliquat valide + événements applicables (hors maladie ≤ 3 j).<br />
+              <strong>Dispo</strong> = Total allocations + récup − jours pris.<br />
+              <strong>Reliquat</strong> = report de l'année précédente. <em>Expire le 30 mai.</em><br />
+              <strong>Maladie ≤ 3 j</strong> = pool séparé (6 j/an), affiché en bleu sous chaque nom.
             </div>
           </div>
         )}
