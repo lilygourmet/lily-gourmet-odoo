@@ -485,6 +485,8 @@ async function actionSyncLeaves({ mois, annee }) {
       type_conge: typeName,
       odoo_id: lv.id,
       notes: lv.name,
+      statut: 'valide',
+      source: 'odoo',
     })
   }
 
@@ -495,6 +497,71 @@ async function actionSyncLeaves({ mois, annee }) {
   }
 
   return { ok: true, total_odoo: leaves.length, inserted, unmatched }
+}
+
+// ============================================================
+// Action : sync-leaves-year — import initial Jan 1 → aujourd'hui.
+// Pratique pour la transition Odoo → app : on rapatrie tous les congés
+// déjà pris cette année. Les congés Odoo existants dans la fourchette
+// sont remplacés (idempotent côté Odoo) ; les congés saisis dans l'app
+// (odoo_id NULL) ne sont jamais touchés.
+// ============================================================
+async function actionSyncLeavesYear({ annee }) {
+  const year = annee || new Date().getFullYear()
+  const debut = `${year}-01-01`
+  const today = new Date().toISOString().slice(0, 10)
+  const fin   = today.slice(0, 4) === String(year) ? today : `${year}-12-31`
+  // borne exclusive en interrogeant Odoo
+  const finExcl = (() => { const d = new Date(fin + 'T00:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })()
+
+  const uid = await odooAuth()
+
+  const leaves = await odooExec(uid, 'hr.leave', 'search_read', [
+    [
+      ['state', '=', 'validate'],
+      ['date_from', '<', finExcl],
+      ['date_to', '>=', debut],
+    ],
+    ['id', 'employee_id', 'date_from', 'date_to', 'holiday_status_id', 'name']
+  ], { limit: 5000 })
+
+  const { data: employesDb } = await sb
+    .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
+
+  // On purge les congés Odoo existants de l'année (idempotence)
+  await sb.from('conges')
+    .delete()
+    .gte('date_fin', debut)
+    .lte('date_debut', fin)
+    .not('odoo_id', 'is', null)
+
+  const rows = []
+  let unmatched = 0
+  for (const lv of leaves) {
+    if (!lv.employee_id) continue
+    const empNameOdoo = Array.isArray(lv.employee_id) ? lv.employee_id[1] : null
+    const match = findBestMatch(empNameOdoo, employesDb, 0.70)
+    if (!match) { unmatched++; continue }
+    const typeName = Array.isArray(lv.holiday_status_id) ? lv.holiday_status_id[1] : null
+    rows.push({
+      employe_id: match.employe.id,
+      date_debut: (lv.date_from || '').slice(0, 10),
+      date_fin:   (lv.date_to   || '').slice(0, 10),
+      type_conge: typeName,
+      odoo_id:    lv.id,
+      notes:      lv.name,
+      statut:     'valide',
+      source:     'odoo',
+    })
+  }
+
+  let inserted = 0
+  if (rows.length > 0) {
+    const { error } = await sb.from('conges').insert(rows)
+    if (!error) inserted = rows.length
+  }
+
+  return { ok: true, year, total_odoo: leaves.length, inserted, unmatched, range: [debut, fin] }
 }
 
 // ============================================================
@@ -581,6 +648,7 @@ export default async function handler(req, res) {
     let result
     if (action === 'sync-attendance')         result = await actionSyncAttendance(params)
     else if (action === 'sync-leaves')        result = await actionSyncLeaves(params)
+    else if (action === 'sync-leaves-year')   result = await actionSyncLeavesYear(params)
     else if (action === 'list-employees')     result = await actionListEmployees()
     else if (action === 'debug-attendance')   result = await actionDebugAttendance(params)
     else return res.status(400).json({ error: 'Unknown action: ' + action })

@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle } from 'lucide-react'
+import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { loadEmployes } from '../lib/hr'
 import {
   calculSoldeConges, quotaAnnuel,
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
+  syncCongesAnneeOdoo,
 } from '../lib/conges'
 
 const TYPES = [
@@ -31,6 +32,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [showForm, setShowForm]     = useState(false)
   const [soldes, setSoldes]         = useState({})  // empId -> { dispo, ... }
   const [tab, setTab]               = useState('demandes')  // 'demandes' | 'valides' | 'soldes'
+  const [importing, setImporting]   = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
@@ -84,6 +86,21 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     catch (e) { alert('Erreur : ' + e.message) }
   }
 
+  async function handleImportOdoo() {
+    const annee = new Date().getFullYear()
+    if (!confirm(`Importer les congés validés depuis Odoo (du 1er janvier ${annee} à aujourd'hui) ?\n\nLes congés Odoo déjà importés seront remplacés ; les congés saisis dans l'app ne seront pas touchés.`)) return
+    setImporting(true)
+    try {
+      const r = await syncCongesAnneeOdoo(annee)
+      alert(`Import terminé.\n\n${r.inserted} congé(s) importé(s)\n${r.total_odoo} trouvé(s) côté Odoo\n${r.unmatched} sans correspondance d'employé`)
+      await reload()
+    } catch (e) {
+      alert('Erreur import : ' + e.message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <>
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
@@ -92,9 +109,16 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           <h1 style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, margin: 0, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
             <Palmtree size={22} /> Congés
           </h1>
-          <button onClick={() => setShowForm(true)} style={btnPrimary}>
-            <Plus size={14} /> Nouvelle demande
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {user?.role === 'admin' && (
+              <button onClick={handleImportOdoo} disabled={importing} style={{ ...btnSlim, opacity: importing ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Download size={14} /> {importing ? 'Import…' : 'Importer Odoo (année)'}
+              </button>
+            )}
+            <button onClick={() => setShowForm(true)} style={btnPrimary}>
+              <Plus size={14} /> Nouvelle demande
+            </button>
+          </div>
         </div>
 
         {/* Onglets */}
