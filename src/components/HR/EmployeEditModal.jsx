@@ -150,6 +150,7 @@ export default function EmployeEditModal({
         contact_urgence_2_nom: form.contact_urgence_2_nom.trim() || null,
         contact_urgence_2_telephone: form.contact_urgence_2_telephone.trim() || null,
         lieu_urgence: form.lieu_urgence || null,
+        lieu_urgence_nom: form.lieu_urgence_nom.trim() || null,
       }
       if (isNew) {
         await createEmploye(data, user.id)
@@ -281,6 +282,17 @@ export default function EmployeEditModal({
                 </select>
               </div>
             </Row>
+            {(form.lieu_urgence === 'clinique' || form.lieu_urgence === 'hopital_public') && (
+              <Row>
+                <Field
+                  label={form.lieu_urgence === 'clinique' ? 'Nom de la clinique' : "Nom de l'hôpital"}
+                  value={form.lieu_urgence_nom}
+                  onChange={v => setF('lieu_urgence_nom', v)}
+                  placeholder={form.lieu_urgence === 'clinique' ? 'Ex : Clinique Atlas, Rabat' : 'Ex : CHU Ibn Sina, Rabat'}
+                />
+                <div />
+              </Row>
+            )}
             <Row>
               <Field label="Contact urgence 1 — nom" value={form.contact_urgence_1_nom} onChange={v => setF('contact_urgence_1_nom', v)} placeholder="Ex : Mère, frère, conjoint(e)" />
               <Field label="Contact urgence 1 — téléphone" value={form.contact_urgence_1_telephone} onChange={v => setF('contact_urgence_1_telephone', v)} placeholder="Ex : 06 11 22 33 44" />
@@ -479,6 +491,7 @@ function initForm(employe) {
     contact_urgence_2_nom: employe?.contact_urgence_2_nom || '',
     contact_urgence_2_telephone: employe?.contact_urgence_2_telephone || '',
     lieu_urgence: employe?.lieu_urgence || '',
+    lieu_urgence_nom: employe?.lieu_urgence_nom || '',
   }
 }
 
