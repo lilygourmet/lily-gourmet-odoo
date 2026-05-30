@@ -167,7 +167,7 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
 function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
   const ref = new Date(refDate + 'T00:00:00')
   const yearStart = `${ref.getFullYear()}-01-01`
-  const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, autre: 0 }
+  const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, maternite: 0, autre: 0 }
   for (const c of congesValides) {
     if (c.employe_id !== emp.id) continue
     if (c.statut !== 'valide') continue
@@ -185,6 +185,7 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     let category = 'annuel'
     if (t === 'maladie_courte')             category = 'maladie_courte'
     else if (t === 'maladie_longue')        category = 'maladie_longue'
+    else if (t.includes('maternit'))        category = 'maternite'
     else if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
       // Durée totale du congé maladie (pas seulement la partie clippée)
       const dureeTotale = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
@@ -253,7 +254,7 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   const reliquatN1     = ref <= deadline ? reliquatAlloue : 0
 
   // 5) ÉVÉNEMENTS : applicable si date_evt absent ou ≤ refDate
-  const eventTypes = ['mariage', 'naissance', 'deces', 'circoncision', 'autre']
+  const eventTypes = ['mariage', 'naissance', 'deces', 'circoncision', 'maternite', 'autre']
   let eventsApplicable = 0
   const eventsDetail = []
   for (const a of allocs) {
@@ -271,7 +272,7 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   // 7) CONGÉS PRIS par type
   const prisType = joursPrisParTypeAnnee(emp, congesValides, refDate)
   const prisAnnuel = prisType.annuel
-  const prisEvents = prisType.mariage + prisType.naissance + prisType.deces + prisType.circoncision + prisType.autre
+  const prisEvents = prisType.mariage + prisType.naissance + prisType.deces + prisType.circoncision + prisType.maternite + prisType.autre
 
   // 8) TOTAL ALLOCATIONS = annuel FULL + reliquat valide + événements applicables.
   //    DISPO = total + récup − pris (pas de pro-rata mensuel : l'employé
@@ -299,6 +300,7 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
     peutPrendre,
     moisDepuisEntree,
     quotaAnnuel: annuelEffectif,
+    prisType,                                    // pris détaillé par catégorie
     // Détails par catégorie
     maladie: { alloue: maladieAlloue, pris: maladiePris, dispo: maladieDispo },
     events:  { applicable: eventsApplicable, pris: prisEvents, detail: eventsDetail },
@@ -435,6 +437,7 @@ export const ALLOC_TYPES = [
   { v: 'naissance',      label: 'Naissance',        defaultJours: 3,     isAuto: false },
   { v: 'deces',          label: 'Décès',            defaultJours: 3,     isAuto: false },
   { v: 'circoncision',   label: 'Circoncision',     defaultJours: 2,     isAuto: false },
+  { v: 'maternite',      label: 'Maternité',        defaultJours: 98,    isAuto: false },
   { v: 'autre',          label: 'Récupération',     defaultJours: null,  isAuto: false },
 ]
 

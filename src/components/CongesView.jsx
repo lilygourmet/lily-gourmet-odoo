@@ -33,6 +33,11 @@ const TYPES = [
   { v: 'annuel',           label: 'Congé annuel' },
   { v: 'maladie_courte',   label: 'Congé maladie ≤ 3 j' },
   { v: 'maladie_longue',   label: 'Congé maladie > 3 j' },
+  { v: 'mariage',          label: 'Mariage' },
+  { v: 'naissance',        label: 'Naissance' },
+  { v: 'deces',            label: 'Décès' },
+  { v: 'circoncision',     label: 'Circoncision' },
+  { v: 'maternite',        label: 'Congé maternité' },
   { v: 'sans solde',       label: 'Sans solde' },
   { v: 'recup',            label: 'Récupération' },
 ]
@@ -45,9 +50,36 @@ function formatTypeConge(t) {
   const s = String(t).toLowerCase()
   if (s.includes('paid time off'))    return 'Congé annuel'
   if (s.includes('compensatory days')) return 'Récupération'
+  if (s.includes('maternity'))         return 'Congé maternité'
   if (s.includes('sick leave'))        return 'Congé maladie'
   if (s.includes('unpaid'))            return 'Sans solde'
   return t
+}
+
+// Dispo restant pour un type de congé donné, à partir du solde calculé.
+// Renvoie null si aucune limite (sans solde, maladie longue) ou undefined
+// si le type n'est pas autorisé (allocation événementielle manquante).
+function dispoTypeConge(solde, type) {
+  if (!solde) return undefined
+  if (type === 'sans solde')      return null
+  if (type === 'maladie_longue')  return null
+  if (type === 'annuel')          return solde.dispo
+  if (type === 'maladie_courte')  return solde.maladie?.dispo ?? 0
+  if (type === 'recup') {
+    const allocAutre = (solde.events?.detail || [])
+      .filter(d => d.type === 'autre' && d.applicable)
+      .reduce((s, e) => s + Number(e.jours), 0)
+    const total = (solde.recup || 0) + allocAutre
+    if (total <= 0) return undefined            // pas d'allocation ni gain
+    return Math.max(0, total - (solde.prisType?.autre || 0))
+  }
+  // Événements : mariage / naissance / deces / circoncision / maternite
+  const alloc = (solde.events?.detail || [])
+    .filter(d => d.type === type && d.applicable)
+    .reduce((s, e) => s + Number(e.jours), 0)
+  if (alloc <= 0) return undefined              // aucune allocation → type non dispo
+  const pris = solde.prisType?.[type] || 0
+  return Math.max(0, alloc - pris)
 }
 
 function fmt(d) {
@@ -834,6 +866,7 @@ function classifierConge(c) {
   const t = (c.type_conge || '').toLowerCase()
   if (t === 'maladie_courte') return 'maladie_courte'
   if (t === 'maladie_longue') return 'maladie_longue'
+  if (t.includes('maternit')) return 'maternite'
   if (t.includes('récup') || t.includes('recup')) return 'recup'
   if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
     const duree = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
@@ -882,7 +915,7 @@ function DetailEmployeModal({ emp, conges, solde, onClose }) {
     let offFixes = 0
     if (cat === 'annuel') offFixes = compteJoursOffFixesPeriode(emp, debut, fin)
     const compte = cat === 'recup' ? 0 : (cat === 'annuel' ? nbCal - offFixes : nbCal)
-    const dansPris = ['annuel','mariage','naissance','deces','circoncision','autre'].includes(cat)
+    const dansPris = ['annuel','mariage','naissance','deces','circoncision','maternite','autre'].includes(cat)
     return { c, debut, fin, nbCal, cat, offFixes, compte, dansPris }
   })
 
@@ -1173,7 +1206,22 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
   const emp   = employes.find(e => e.id === Number(employeId))
   const solde = emp ? soldes[emp.id] : null
   const nbDemande = nbJours(dateDebut, dateFin)
-  const depassement = typeConge === 'annuel' && solde && nbDemande > 0 && nbDemande > solde.dispo
+
+  // Types disponibles : on filtre ceux qui ont une allocation événementielle
+  // (mariage / naissance / deces / circoncision / maternite / recup).
+  const typesAffiches = TYPES.filter(t => {
+    if (['annuel','maladie_courte','maladie_longue','sans solde'].includes(t.v)) return true
+    const d = dispoTypeConge(solde, t.v)
+    return d !== undefined   // undefined = pas d'allocation → on masque
+  })
+  // Si le type sélectionné disparaît du filtre, on retombe sur 'annuel'.
+  useEffect(() => {
+    if (!typesAffiches.find(t => t.v === typeConge)) setTypeConge('annuel')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeId])
+
+  const dispoType = dispoTypeConge(solde, typeConge)   // null = illimité, number = limite
+  const depassement = typeof dispoType === 'number' && nbDemande > 0 && nbDemande > dispoType
 
   async function submit() {
     setErrMsg('')
@@ -1182,6 +1230,10 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
     if (dateFin < dateDebut)      { setErrMsg('La date de fin est avant la date de début.'); return }
     if (solde && !solde.peutPrendre && typeConge === 'annuel') {
       setErrMsg('Cet employé n\'a pas encore 6 mois d\'ancienneté.'); return
+    }
+    if (depassement) {
+      const label = TYPES.find(t => t.v === typeConge)?.label || typeConge
+      setErrMsg(`Le nombre demandé (${nbDemande} j) dépasse le solde « ${label} » (${dispoType} j).`); return
     }
     setBusy(true)
     try {
@@ -1235,13 +1287,17 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
         )}
         {depassement && (
           <div style={{ background: '#FCE9E8', color: '#99201E', padding: '8px 10px', borderRadius: 8, marginTop: 8, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <AlertCircle size={13} /> Le nombre demandé dépasse le solde dispo.
+            <AlertCircle size={13} /> Dépasse le solde « {TYPES.find(t => t.v === typeConge)?.label} » ({dispoType} j dispo).
           </div>
         )}
 
         <label style={{ ...lbl, marginTop: 10 }}>Type</label>
         <select value={typeConge} onChange={e => setTypeConge(e.target.value)} style={ipt}>
-          {TYPES.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+          {typesAffiches.map(t => {
+            const d = dispoTypeConge(solde, t.v)
+            const suffix = typeof d === 'number' ? ` (${d} j dispo)` : ''
+            return <option key={t.v} value={t.v}>{t.label}{suffix}</option>
+          })}
         </select>
 
         <label style={{ ...lbl, marginTop: 10 }}>Motif (optionnel)</label>
