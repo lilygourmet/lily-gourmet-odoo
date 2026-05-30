@@ -360,12 +360,23 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {empsTriees.map(({ emp, allocs }) => {
-                    const total = allocs.reduce((s, a) => s + Number(a.jours), 0)
+                    // Maladie courte = pool séparé (6 j/an), pas compté dans le total alloué.
+                    const allocsMaladie = allocs.filter(a => a.type === 'maladie_courte')
+                    const allocsAutres  = allocs.filter(a => a.type !== 'maladie_courte')
+                    const totalAlloue   = allocsAutres.reduce((s, a) => s + Number(a.jours), 0)
+                    const totalMaladie  = allocsMaladie.reduce((s, a) => s + Number(a.jours), 0)
                     return (
                       <div key={emp.id} style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 14, padding: '12px 16px', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
                           <div style={{ fontSize: 14, fontWeight: 600 }}>{emp.nom}{emp.poste ? <span style={{ fontWeight: 400, fontSize: 12, color: '#8a7a70' }}> · {emp.poste}</span> : null}</div>
-                          <div style={{ fontSize: 13, color: '#085041', fontWeight: 600 }}>{total} j alloués</div>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div style={{ fontSize: 13, color: '#085041', fontWeight: 600 }}>{totalAlloue} j alloués</div>
+                            {totalMaladie > 0 && (
+                              <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: '#E6F1FB', color: '#0C447C', fontWeight: 500 }}>
+                                Maladie ≤ 3 j : {totalMaladie} j (pool séparé)
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {allocs.map(a => {
