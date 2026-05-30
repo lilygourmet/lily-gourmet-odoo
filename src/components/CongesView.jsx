@@ -7,6 +7,8 @@ import {
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
   syncCongesAnneeOdoo, listAllocationsOdoo,
+  loadAllocations, createAllocation, cancelAllocation,
+  initAutoAllocationsTous, ALLOC_TYPES,
 } from '../lib/conges'
 
 const TYPES = [
@@ -37,17 +39,23 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [filterYear, setFilterYear] = useState('all')   // 'all' | YYYY
   const [allocLoading, setAllocLoading] = useState(false)
   const [allocResult, setAllocResult]   = useState(null) // { par_employe, details, ... }
+  const [allocations, setAllocations]   = useState([])    // table conges_allocations
+  const [showAllocForm, setShowAllocForm] = useState(false)
+  const [initAllocBusy, setInitAllocBusy] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [emps, all] = await Promise.all([
+      const annee = new Date().getFullYear()
+      const [emps, all, allocs] = await Promise.all([
         loadEmployes(true),
         loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule']),
+        loadAllocations({ annee, statut: 'valide' }),
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
       setEmployes(empsActifs)
       setConges(all)
+      setAllocations(allocs)
       // Calcule les soldes en parallèle.
       const validesParEmp = new Map()
       for (const c of all) {
@@ -132,6 +140,38 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     }
   }
 
+  async function handleInitAllocations() {
+    const annee = new Date().getFullYear()
+    if (!confirm(`Créer les allocations auto manquantes (Annuel + Maladie ≤ 3 j) pour ${employes.length} employé(s) actifs en ${annee} ?`)) return
+    setInitAllocBusy(true)
+    try {
+      const added = await initAutoAllocationsTous(employes, annee, user.id)
+      alert(`${added} allocation(s) auto créée(s).`)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    } finally {
+      setInitAllocBusy(false)
+    }
+  }
+
+  async function handleAddAllocation(payload) {
+    try {
+      await createAllocation({ ...payload, created_by: user.id })
+      setShowAllocForm(false)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
+  }
+
+  async function handleCancelAllocation(a) {
+    const lbl = (ALLOC_TYPES.find(t => t.v === a.type)?.label) || a.type
+    if (!confirm(`Annuler cette allocation ?\n\n${lbl} · ${a.jours} j${a.raison ? ` · ${a.raison}` : ''}`)) return
+    try { await cancelAllocation(a.id); await reload() }
+    catch (e) { alert('Erreur : ' + e.message) }
+  }
+
   async function handleImportOdoo() {
     const annee = new Date().getFullYear()
     if (!confirm(`Importer les congés validés depuis Odoo (du 1er janvier ${annee} à aujourd'hui) ?\n\nLes congés Odoo déjà importés seront remplacés ; les congés saisis dans l'app ne seront pas touchés.`)) return
@@ -178,6 +218,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             Demandes en attente {demandes.length > 0 && <span style={badge}>{demandes.length}</span>}
           </Tab>
           <Tab active={tab === 'valides'} onClick={() => setTab('valides')}>Congés validés</Tab>
+          <Tab active={tab === 'allocations'} onClick={() => setTab('allocations')}>Allocations</Tab>
           <Tab active={tab === 'soldes'} onClick={() => setTab('soldes')}>Soldes employés</Tab>
         </div>
 
@@ -262,6 +303,80 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           </>
         )}
 
+        {!loading && tab === 'allocations' && (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+              <button onClick={() => setShowAllocForm(true)} style={btnPrimary}>
+                <Plus size={14} /> Allouer des jours
+              </button>
+              {user?.role === 'admin' && (
+                <button onClick={handleInitAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Plus size={14} /> {initAllocBusy ? 'Création…' : `Init allocations auto ${new Date().getFullYear()}`}
+                </button>
+              )}
+              <div style={{ flex: 1 }} />
+              <div>
+                <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Filtrer employé</div>
+                <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)} style={{ ...ipt, width: 'auto', minWidth: 180 }}>
+                  <option value="all">— Tous les employés —</option>
+                  {employes.map(e => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {(() => {
+              const filtered = allocations.filter(a => filterEmp === 'all' || String(a.employe_id) === String(filterEmp))
+              if (filtered.length === 0) return <div style={emptyBox}>Aucune allocation pour ces filtres.</div>
+              // Regroupement par employé pour affichage
+              const byEmp = new Map()
+              for (const a of filtered) {
+                if (!byEmp.has(a.employe_id)) byEmp.set(a.employe_id, [])
+                byEmp.get(a.employe_id).push(a)
+              }
+              const empsTriees = Array.from(byEmp.entries())
+                .map(([id, allocs]) => ({ emp: empById[id], allocs }))
+                .filter(x => x.emp)
+                .sort((a, b) => (a.emp.nom || '').localeCompare(b.emp.nom || ''))
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {empsTriees.map(({ emp, allocs }) => {
+                    const total = allocs.reduce((s, a) => s + Number(a.jours), 0)
+                    return (
+                      <div key={emp.id} style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 14, padding: '12px 16px', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600 }}>{emp.nom}{emp.poste ? <span style={{ fontWeight: 400, fontSize: 12, color: '#8a7a70' }}> · {emp.poste}</span> : null}</div>
+                          <div style={{ fontSize: 13, color: '#085041', fontWeight: 600 }}>{total} j alloués</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {allocs.map(a => {
+                            const t = ALLOC_TYPES.find(t => t.v === a.type)
+                            return (
+                              <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '160px 70px 1fr auto', gap: 8, fontSize: 12, padding: '6px 8px', borderTop: '0.5px solid #f0e8d5', alignItems: 'center' }}>
+                                <div style={{ color: '#1a0f0a' }}>
+                                  {t?.label || a.type}
+                                  {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
+                                </div>
+                                <div style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</div>
+                                <div style={{ color: '#8a7a70', fontStyle: a.raison ? 'normal' : 'italic' }}>
+                                  {a.raison || (a.date_evt ? `(${a.date_evt})` : '—')}
+                                </div>
+                                <button onClick={() => handleCancelAllocation(a)} title="Annuler cette allocation"
+                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </>
+        )}
+
         {!loading && tab === 'soldes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 11, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -309,7 +424,94 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       {allocResult && (
         <AllocationsModal result={allocResult} onClose={() => setAllocResult(null)} />
       )}
+
+      {showAllocForm && (
+        <NouvelleAllocationModal
+          employes={employes}
+          onClose={() => setShowAllocForm(false)}
+          onSubmit={handleAddAllocation}
+        />
+      )}
     </>
+  )
+}
+
+function NouvelleAllocationModal({ employes, onClose, onSubmit }) {
+  const [employeId, setEmployeId] = useState(employes[0]?.id || '')
+  const [type, setType]           = useState('mariage')
+  const [jours, setJours]         = useState('')
+  const [raison, setRaison]       = useState('')
+  const [dateEvt, setDateEvt]     = useState('')
+  const [busy, setBusy]           = useState(false)
+  const [err, setErr]             = useState('')
+
+  // Suggère le nombre de jours par défaut selon le type
+  function onChangeType(newType) {
+    setType(newType)
+    const def = ALLOC_TYPES.find(t => t.v === newType)?.defaultJours
+    if (def && !jours) setJours(String(def))
+  }
+
+  async function submit() {
+    setErr('')
+    if (!employeId) { setErr('Choisis un employé.'); return }
+    if (!type)      { setErr('Choisis un type.'); return }
+    const j = Number(jours)
+    if (!j || j <= 0) { setErr('Nombre de jours requis (> 0).'); return }
+    setBusy(true)
+    try {
+      await onSubmit({
+        employe_id: Number(employeId),
+        annee: new Date().getFullYear(),
+        type,
+        jours: j,
+        raison: raison.trim() || null,
+        date_evt: dateEvt || null,
+        source: 'manuel',
+      })
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Plus size={18} /> Allouer des jours
+        </div>
+
+        <label style={lbl}>Employé</label>
+        <select value={employeId} onChange={e => setEmployeId(e.target.value)} style={ipt}>
+          {employes.map(e => <option key={e.id} value={e.id}>{e.nom}</option>)}
+        </select>
+
+        <label style={{ ...lbl, marginTop: 10 }}>Type d'allocation</label>
+        <select value={type} onChange={e => onChangeType(e.target.value)} style={ipt}>
+          {ALLOC_TYPES.filter(t => !t.isAuto).map(t => (
+            <option key={t.v} value={t.v}>{t.label}{t.defaultJours ? ` (par défaut ${t.defaultJours} j)` : ''}</option>
+          ))}
+        </select>
+
+        <label style={{ ...lbl, marginTop: 10 }}>Nombre de jours</label>
+        <input type="number" step="0.5" value={jours} onChange={e => setJours(e.target.value)} placeholder="ex : 3" style={ipt} />
+
+        <label style={{ ...lbl, marginTop: 10 }}>Date de l'événement (optionnel)</label>
+        <input type="date" value={dateEvt} onChange={e => setDateEvt(e.target.value)} style={ipt} />
+
+        <label style={{ ...lbl, marginTop: 10 }}>Raison / détail (optionnel)</label>
+        <input type="text" value={raison} onChange={e => setRaison(e.target.value)} placeholder="ex : mariage de sa fille" style={ipt} />
+
+        {err && <div style={errBox}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={onClose} disabled={busy} style={btnSlim}>Annuler</button>
+          <button onClick={submit} disabled={busy} style={btnPrimary}>{busy ? '…' : 'Allouer'}</button>
+        </div>
+      </div>
+    </div>
   )
 }
 

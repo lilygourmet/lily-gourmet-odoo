@@ -278,6 +278,87 @@ export async function syncCongesAnneeOdoo(annee = null) {
   return resp.json()
 }
 
+// ============================================================
+// ALLOCATIONS (table conges_allocations)
+//   Source de vérité pour « combien de jours chacun a droit cette année ».
+// ============================================================
+
+// Types reconnus + libellés UI
+export const ALLOC_TYPES = [
+  { v: 'annuel',         label: 'Congé annuel',     defaultJours: null,  isAuto: true  },
+  { v: 'maladie_courte', label: 'Maladie ≤ 3 j',    defaultJours: 6,     isAuto: true  },
+  { v: 'reliquat',       label: 'Reliquat N-1',     defaultJours: null,  isAuto: false },
+  { v: 'mariage',        label: 'Mariage',          defaultJours: 4,     isAuto: false },
+  { v: 'naissance',      label: 'Naissance',        defaultJours: 3,     isAuto: false },
+  { v: 'deces',          label: 'Décès',            defaultJours: 3,     isAuto: false },
+  { v: 'circoncision',   label: 'Circoncision',     defaultJours: 2,     isAuto: false },
+  { v: 'autre',          label: 'Autre',            defaultJours: null,  isAuto: false },
+]
+
+export async function loadAllocations({ annee = null, employeId = null, statut = 'valide' } = {}) {
+  let q = supabase.from('conges_allocations').select('*')
+  if (statut)     q = q.eq('statut', statut)
+  if (annee)      q = q.eq('annee', annee)
+  if (employeId)  q = q.eq('employe_id', employeId)
+  q = q.order('created_at', { ascending: false })
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function createAllocation({ employe_id, annee, type, jours, raison = null, date_evt = null, source = 'manuel', created_by = null }) {
+  if (!employe_id || !annee || !type || jours == null) throw new Error('employe_id, annee, type et jours requis')
+  const { data, error } = await supabase
+    .from('conges_allocations')
+    .insert({ employe_id, annee, type, jours, raison, date_evt, source, created_by })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function cancelAllocation(id) {
+  const { error } = await supabase
+    .from('conges_allocations')
+    .update({ statut: 'annule' })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// Pour un (employé, année) donné : crée les allocations auto manquantes
+// (annuel = quota selon ancienneté ; maladie_courte = 6 j).
+// Idempotent grâce à l'unique partial index côté SQL.
+export async function ensureAutoAllocationsForEmploye(emp, annee, createdBy = null) {
+  const refDate = `${annee}-01-01`
+  const quota = quotaAnnuel(emp, refDate)
+  const lignes = [
+    { type: 'annuel',         jours: quota },
+    { type: 'maladie_courte', jours: 6      },
+  ]
+  const existantes = await loadAllocations({ annee, employeId: emp.id, statut: 'valide' })
+  for (const l of lignes) {
+    const deja = existantes.find(x => x.type === l.type && x.source === 'auto')
+    if (deja) continue
+    try {
+      await createAllocation({ employe_id: emp.id, annee, type: l.type, jours: l.jours, source: 'auto', created_by: createdBy })
+    } catch (e) {
+      console.warn('[ensureAutoAllocations]', e?.message || e)
+    }
+  }
+}
+
+// Pour TOUS les employés actifs : crée les allocations auto manquantes.
+// Renvoie le nombre de lignes effectivement ajoutées.
+export async function initAutoAllocationsTous(employes, annee, createdBy = null) {
+  let added = 0
+  for (const emp of employes) {
+    const before = (await loadAllocations({ annee, employeId: emp.id, statut: 'valide' })).length
+    await ensureAutoAllocationsForEmploye(emp, annee, createdBy)
+    const after = (await loadAllocations({ annee, employeId: emp.id, statut: 'valide' })).length
+    added += (after - before)
+  }
+  return added
+}
+
 // Allocations Odoo de l'année (« à quoi chaque employé a eu droit »).
 export async function listAllocationsOdoo(annee = null) {
   const resp = await fetch('/api/pointage-api?action=list-allocations', {
