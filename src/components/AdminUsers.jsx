@@ -13,10 +13,12 @@ import {
   ROLE_COLORS,
 } from '../lib/users'
 import { ECONOMAT_PROFILS } from '../lib/economat'
+import { loadEmployes } from '../lib/hr'
 
 export default function AdminUsers({ currentUser, onClose }) {
   const [users, setUsers] = useState([])
   const [teams, setTeams] = useState([])
+  const [employes, setEmployes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNewForm, setShowNewForm] = useState(false)
   const [duplicateFromUser, setDuplicateFromUser] = useState(null)
@@ -53,9 +55,10 @@ export default function AdminUsers({ currentUser, onClose }) {
   async function refresh() {
     setLoading(true)
     try {
-      const [data, teamsData] = await Promise.all([loadUsers(), loadTeams()])
+      const [data, teamsData, empData] = await Promise.all([loadUsers(), loadTeams(), loadEmployes(true)])
       setUsers(data || [])
       setTeams(teamsData || [])
+      setEmployes((empData || []).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || '')))
       // Au premier chargement seulement : fermer toutes les equipes par defaut.
       // On garde les choix de l'utilisateur sur les refreshs suivants pour ne pas
       // refermer une equipe qu'il vient d'ouvrir.
@@ -135,6 +138,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         economat_profil: formData.economatProfil || null,
         perm_econome: formData.permEconome,
         whatsapp: formData.whatsapp?.trim() || null,
+        employe_id: formData.employe_id || null,
       })
       setShowNewForm(false)
       setDuplicateFromUser(null)
@@ -186,6 +190,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         economat_profil: formData.economatProfil || null,
         perm_econome: formData.permEconome,
         whatsapp: formData.whatsapp?.trim() || null,
+        employe_id: formData.employe_id || null,
       })
       setEditingUser(null)
       await refresh()
@@ -296,6 +301,7 @@ export default function AdminUsers({ currentUser, onClose }) {
               onCancel={() => { setShowNewForm(false); setDuplicateFromUser(null) }}
               isNew={true}
               teams={teams}
+              employes={employes}
               duplicatedFromName={duplicateFromUser ? (duplicateFromUser.full_name || duplicateFromUser.username) : null}
             />
           )}
@@ -383,6 +389,7 @@ export default function AdminUsers({ currentUser, onClose }) {
                                   isNew={false}
                                   currentUser={currentUser}
                                   teams={teams}
+                                  employes={employes}
                                 />
                               ) : (
                                 <UserCard
@@ -643,7 +650,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHa
 // FORMULAIRE (création + édition)
 // ==========================================
 
-function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicatedFromName = null, currentUser = null }) {
+function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes = [], duplicatedFromName = null, currentUser = null }) {
   const [formData, setFormData] = useState({
     username: initialData?.username || '',
     fullName: initialData?.full_name || '',
@@ -685,6 +692,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
     economatProfil: initialData?.economat_profil || '',
     permEconome: initialData?.perm_econome !== undefined ? initialData.perm_econome : false,
     whatsapp: initialData?.whatsapp || '',
+    employe_id: initialData?.employe_id ?? '',
   })
 
   function handleSubmit() {
@@ -1037,6 +1045,32 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
           </select>
         </div>
 
+        {/* Lien avec un employé (source du numéro de téléphone) */}
+        <div className="mt-3 pt-3 border-t border-line">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Employé lié (source du numéro)</div>
+          <select
+            value={formData.employe_id || ''}
+            onChange={e => {
+              const newId = e.target.value ? Number(e.target.value) : ''
+              const emp = employes.find(x => x.id === newId)
+              setFormData(prev => ({
+                ...prev,
+                employe_id: newId === '' ? null : newId,
+                // Si l'employé a un téléphone, on l'auto-remplit dans WhatsApp.
+                whatsapp: emp?.telephone ? emp.telephone : prev.whatsapp,
+              }))
+            }}
+            className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
+          >
+            <option value="">— Aucun employé lié —</option>
+            {employes.map(e => (
+              <option key={e.id} value={e.id}>
+                {e.nom}{e.poste ? ` · ${e.poste}` : ''}{e.telephone ? ` · ${e.telephone}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Numéro WhatsApp (pour recevoir les notifs de tâches) */}
         <div className="mt-3 pt-3 border-t border-line">
           <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Numéro WhatsApp (notifs de tâches)</div>
@@ -1047,6 +1081,11 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], duplicat
             placeholder="ex. 0661114878"
             className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
           />
+          {formData.employe_id && (
+            <div className="text-[10px] text-ink-mute mt-1">
+              Pré-rempli depuis l'employé lié. Modifie ici si le WhatsApp diffère.
+            </div>
+          )}
         </div>
 
         {/* Économat : profil (ouvre les catégories) + économe (reçoit les demandes) */}
