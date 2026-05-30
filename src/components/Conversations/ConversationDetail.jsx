@@ -17,11 +17,17 @@ function fmtDuration(s) {
 
 const TONE_LABEL = { formelle: 'Formelle', amicale: 'Amicale', directe: 'Directe' }
 
-// Choisit un format d'enregistrement supporté par le navigateur
-// (ogg/opus sur Firefox, mp4 sur Safari, webm sur Chrome).
+// Choisit un format d'enregistrement supporté par le navigateur ET par WhatsApp.
+// WhatsApp accepte officiellement : mp4/m4a, ogg/opus, mp3, aac, amr.
+// PAS webm — donc on le met en DERNIER recours (mieux que rien).
 function pickAudioMime() {
   if (typeof MediaRecorder === 'undefined') return ''
-  const candidates = ['audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+  const candidates = [
+    'audio/mp4',                  // Safari + Chrome macOS récent → .m4a (WhatsApp OK)
+    'audio/ogg;codecs=opus',      // Firefox → .ogg (WhatsApp OK)
+    'audio/webm;codecs=opus',     // Chrome (fallback, WhatsApp KO)
+    'audio/webm',
+  ]
   for (const c of candidates) {
     try { if (MediaRecorder.isTypeSupported(c)) return c } catch (_) { /* ignore */ }
   }
@@ -341,6 +347,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   async function sendVoice(audioFile) {
     if (!conv) return
+    // Avertir si le format n'est pas compatible WhatsApp (webm)
+    if (/webm/i.test(audioFile.type)) {
+      if (!confirm("⚠️ Ton navigateur a enregistré en WebM, format que WhatsApp ne lit pas toujours. Le client risque de ne pas recevoir l'audio.\n\nAstuce : utilise Safari (iPhone/Mac) ou Firefox pour des vocaux fiables.\n\nEnvoyer quand même ?")) {
+        return
+      }
+    }
     setSending(true)
     setSendError('')
     try {
@@ -360,6 +372,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       }
     } catch (e) {
       setSendError(e.message)
+      alert("Échec d'envoi de l'audio : " + e.message)
     } finally {
       setSending(false)
     }
