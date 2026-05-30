@@ -30,10 +30,11 @@ import {
 } from '../lib/conges'
 
 const TYPES = [
-  { v: 'annuel',     label: 'Congé annuel' },
-  { v: 'maladie',    label: 'Congé maladie' },
-  { v: 'sans solde', label: 'Sans solde' },
-  { v: 'recup',      label: 'Récupération' },
+  { v: 'annuel',           label: 'Congé annuel' },
+  { v: 'maladie_courte',   label: 'Congé maladie ≤ 3 j' },
+  { v: 'maladie_longue',   label: 'Congé maladie > 3 j' },
+  { v: 'sans solde',       label: 'Sans solde' },
+  { v: 'recup',            label: 'Récupération' },
 ]
 
 // Traduction des libellés Odoo (en anglais) → français pour l'affichage.
@@ -831,6 +832,8 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
 // ----- Détail employé : vue d'audit des congés pris en N -----
 function classifierConge(c) {
   const t = (c.type_conge || '').toLowerCase()
+  if (t === 'maladie_courte') return 'maladie_courte'
+  if (t === 'maladie_longue') return 'maladie_longue'
   if (t.includes('récup') || t.includes('recup')) return 'recup'
   if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
     const duree = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1

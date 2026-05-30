@@ -180,9 +180,12 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     const nb = (new Date(fin + 'T00:00:00') - new Date(debut + 'T00:00:00')) / 86400000 + 1
     if (nb <= 0) continue
 
-    // Classification heuristique sur type_conge
+    // Classification heuristique sur type_conge (les valeurs explicites
+    // 'maladie_courte' / 'maladie_longue' priment sur la durée).
     let category = 'annuel'
-    if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
+    if (t === 'maladie_courte')             category = 'maladie_courte'
+    else if (t === 'maladie_longue')        category = 'maladie_longue'
+    else if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
       // Durée totale du congé maladie (pas seulement la partie clippée)
       const dureeTotale = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
       category = dureeTotale <= 3 ? 'maladie_courte' : 'maladie_longue'
