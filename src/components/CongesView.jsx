@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download, Pencil } from 'lucide-react'
 import AppHeader from './AppHeader'
+import { supabase } from '../lib/supabase'
 import { loadEmployes } from '../lib/hr'
 import {
   calculSoldeConges, quotaAnnuel,
@@ -51,26 +52,42 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     setLoading(true); setError('')
     try {
       const annee = new Date().getFullYear()
-      const [emps, all, allocs] = await Promise.all([
+      // 4 requêtes batchées au lieu de 2 par employé.
+      const [emps, all, allocs, recupRows] = await Promise.all([
         loadEmployes(true),
         loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule']),
         loadAllocations({ annee, statut: 'valide' }),
+        supabase.from('pointages_mois').select('employe_id, jours_recup').eq('annee', annee),
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
       setEmployes(empsActifs)
       setConges(all)
       setAllocations(allocs)
-      // Calcule les soldes en parallèle.
+
+      // Indexation des données pré-chargées (évite N requêtes serial)
       const validesParEmp = new Map()
       for (const c of all) {
         if (c.statut !== 'valide') continue
         if (!validesParEmp.has(c.employe_id)) validesParEmp.set(c.employe_id, [])
         validesParEmp.get(c.employe_id).push(c)
       }
-      const out = {}
-      for (const emp of empsActifs) {
-        out[emp.id] = await calculSoldeConges(emp, validesParEmp.get(emp.id) || [])
+      const allocsByEmp = new Map()
+      for (const a of allocs) {
+        if (!allocsByEmp.has(a.employe_id)) allocsByEmp.set(a.employe_id, [])
+        allocsByEmp.get(a.employe_id).push(a)
       }
+      const recupByEmp = new Map()
+      for (const r of (recupRows?.data || [])) {
+        recupByEmp.set(r.employe_id, (recupByEmp.get(r.employe_id) || 0) + Number(r.jours_recup || 0))
+      }
+      const prefetched = { allocsByEmp, recupByEmp }
+
+      // Calcul des soldes en parallèle (toutes les données déjà en mémoire)
+      const soldesArr = await Promise.all(empsActifs.map(emp =>
+        calculSoldeConges(emp, validesParEmp.get(emp.id) || [], undefined, prefetched)
+      ))
+      const out = {}
+      empsActifs.forEach((emp, i) => { out[emp.id] = soldesArr[i] })
       setSoldes(out)
     } catch (e) {
       setError(e.message)

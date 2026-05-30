@@ -184,7 +184,10 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
 // événements). Si aucune allocation 'annuel' n'existe encore, on tombe
 // sur le quota calculé (18 + ancienneté) en repli.
 // ------------------------------------------------------------
-export async function calculSoldeConges(emp, congesValides = null, refDate = todayYMD()) {
+// Pour éviter des centaines de requêtes quand on calcule pour beaucoup
+// d'employés, on accepte des données pré-chargées dans `prefetched` :
+//   { allocsByEmp: Map<empId, [allocations]>, recupByEmp: Map<empId, jours> }
+export async function calculSoldeConges(emp, congesValides = null, refDate = todayYMD(), prefetched = null) {
   const ref = new Date(refDate + 'T00:00:00')
   const annee = ref.getFullYear()
 
@@ -197,13 +200,18 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   }
 
   // 2) Allocations de l'année (toutes sources : auto, manuel, odoo)
-  const { data: allocsData } = await supabase
-    .from('conges_allocations')
-    .select('*')
-    .eq('employe_id', emp.id)
-    .eq('annee', annee)
-    .eq('statut', 'valide')
-  const allocs = allocsData || []
+  let allocs
+  if (prefetched?.allocsByEmp) {
+    allocs = prefetched.allocsByEmp.get(emp.id) || []
+  } else {
+    const { data: allocsData } = await supabase
+      .from('conges_allocations')
+      .select('*')
+      .eq('employe_id', emp.id)
+      .eq('annee', annee)
+      .eq('statut', 'valide')
+    allocs = allocsData || []
+  }
 
   const sumByType = {}
   for (const a of allocs) sumByType[a.type] = (sumByType[a.type] || 0) + Number(a.jours)
@@ -232,7 +240,9 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   }
 
   // 6) RÉCUP gagnés
-  const recup = await joursRecupGagnesAnnee(emp, refDate)
+  const recup = prefetched?.recupByEmp
+    ? (prefetched.recupByEmp.get(emp.id) || 0)
+    : await joursRecupGagnesAnnee(emp, refDate)
 
   // 7) CONGÉS PRIS par type
   const prisType = joursPrisParTypeAnnee(emp, congesValides, refDate)
