@@ -374,8 +374,10 @@ async function handleCorrect(req, res) {
 
   const system = `Tu corriges l'orthographe, la grammaire et la ponctuation d'un message professionnel en français destiné à un client de pâtisserie.
 Règles strictes :
-- Garde le sens, le ton et la longueur originale.
-- Ne change pas les noms propres, les prix, les dates, les heures.
+- Ajoute systématiquement la ponctuation manquante (majuscule en début de phrase, point/virgule/point d'interrogation/point d'exclamation à la fin).
+- Corrige les accents manquants (à, é, è, ê, ç…).
+- Garde le sens et le ton (cordial, professionnel).
+- Ne change pas les noms propres, les prix, les dates, les heures, les numéros.
 - Pas d'emoji ajouté ni retiré.
 - Renvoie UNIQUEMENT le texte corrigé, sans préambule, sans guillemets, sans explication.`
 

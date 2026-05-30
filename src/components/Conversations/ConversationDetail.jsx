@@ -280,6 +280,29 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     if (!conv) return
     const trimmed = text.trim()
     if (!trimmed && !file && !stagedMediaPath) return
+
+    // Étape 1 : si du texte ET pas encore validé → corriger d'abord (preview)
+    if (trimmed && correctedText !== text) {
+      setCorrecting(true)
+      setSendError('')
+      try {
+        const c = await correctText(text, user.id)
+        if (c && c.trim() && c !== text) {
+          setText(c)
+          setCorrectedText(c)
+          setSendError('✨ Texte corrigé — relis puis re-clique « Envoyer » pour confirmer.')
+          setCorrecting(false)
+          return
+        }
+        // Pas de modif → on enchaîne sur l'envoi direct
+        setCorrectedText(text)
+      } catch (_) {
+        // Erreur IA silencieuse : on envoie quand même
+      } finally {
+        setCorrecting(false)
+      }
+    }
+
     setSending(true)
     setSendError('')
     try {
@@ -295,6 +318,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       })
       setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
       setText('')
+      setCorrectedText(null)
       setFile(null)
       setStagedMediaPath(null)
       setStagedPreviewUrl(null)
@@ -478,19 +502,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   const [correcting, setCorrecting] = useState(false)
-  async function handleCorrect() {
-    if (!text.trim()) return
-    setCorrecting(true)
-    setSendError('')
-    try {
-      const corrected = await correctText(text, user.id)
-      if (corrected && corrected !== text) setText(corrected)
-    } catch (e) {
-      setSendError(e.message)
-    } finally {
-      setCorrecting(false)
-    }
-  }
+  const [correctedText, setCorrectedText] = useState(null)   // dernière version validée par l'IA
 
   // Recherche dans le fil : remet à zéro la position quand le terme change
   useEffect(() => { setMatchIndex(0) }, [threadSearch])
@@ -773,7 +785,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             <textarea
               ref={textareaRef}
               value={text}
-              onChange={e => setText(e.target.value)}
+              onChange={e => { setText(e.target.value); setCorrectedText(null) }}
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px' }}
               rows={3}
               placeholder="Écrire une réponse…"
@@ -834,13 +846,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               >{suggesting ? '…' : <Sparkles size={16} strokeWidth={1.8} />}</button>
               <button
                 type="button"
-                onClick={handleCorrect}
-                disabled={correcting || sending || !text.trim()}
-                className="px-3 h-9 flex-shrink-0 rounded-full border border-line text-[11px] font-medium hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
-                title="Corriger l'orthographe / grammaire (IA)"
-              >{correcting ? '…' : 'Corriger'}</button>
-              <button
-                type="button"
                 onClick={startRecording}
                 disabled={sending}
                 className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all disabled:opacity-50"
@@ -848,10 +853,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               ><Mic size={16} strokeWidth={1.8} /></button>
               <button
                 onClick={handleSend}
-                disabled={sending || (!text.trim() && !file && !stagedMediaPath)}
+                disabled={sending || correcting || (!text.trim() && !file && !stagedMediaPath)}
                 className="ml-auto px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
               >
-                {sending ? '…' : 'Envoyer'}
+                {correcting ? 'Correction…' : sending ? '…' : (text.trim() && correctedText === text ? 'Confirmer' : 'Envoyer')}
               </button>
             </div>
           </div>
