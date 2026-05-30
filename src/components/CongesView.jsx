@@ -15,7 +15,7 @@ function useIsMobile(maxWidth = 640) {
   return isMobile
 }
 
-import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download, Pencil } from 'lucide-react'
+import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download, Pencil, ChevronRight } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { supabase } from '../lib/supabase'
 import { loadEmployes } from '../lib/hr'
@@ -560,10 +560,12 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               if (isMobile) {
                 // Vue compacte : carte empilée, dispo en gros à droite
                 return (
-                  <div key={e.id} onClick={() => setDetailEmp(e)} style={{ padding: '12px 14px', borderRadius: 12, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)', cursor: 'pointer' }}>
+                  <div key={e.id} onClick={() => setDetailEmp(e)} style={{ padding: '12px 14px', borderRadius: 12, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)', cursor: 'pointer' }} title="Cliquer pour voir le résumé">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a' }}>{e.nom}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {e.nom} <ChevronRight size={14} style={{ color: '#993556' }} />
+                        </div>
                         <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2 }}>
                           {e.poste || '—'}
                           {!s.peutPrendre && <span style={{ color: '#A32D2D' }}> · ⚠ &lt; 6 mois</span>}
@@ -597,9 +599,11 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                 )
               }
               return (
-                <div key={e.id} onClick={() => setDetailEmp(e)} style={{ ...soldeRow, gridTemplateColumns: '1fr 140px 90px 90px 110px', cursor: 'pointer' }} title="Cliquer pour voir le détail du calcul">
+                <div key={e.id} onClick={() => setDetailEmp(e)} style={{ ...soldeRow, gridTemplateColumns: '1fr 140px 90px 90px 110px', cursor: 'pointer' }} title="Cliquer pour voir le résumé">
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{e.nom}</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {e.nom} <ChevronRight size={13} style={{ color: '#993556' }} />
+                    </div>
                     <div style={{ fontSize: 11, color: '#8a7a70' }}>
                       {e.poste || '—'}{!s.peutPrendre && ` · ⚠ pas encore éligible (< 6 mois)`}
                       {' · '}
