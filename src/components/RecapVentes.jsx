@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Phone, MapPin } from 'lucide-react'
+import { Phone, MapPin, Cake, Truck, Cookie, User, Croissant } from 'lucide-react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
+
+const CAT_ICONS = { CD: Cake, LIVR: Truck, PROD: Cookie, CLT: User, RAHN: Croissant }
+function CatIcon({ catId, size = 16, className = '' }) {
+  const I = CAT_ICONS[catId]
+  if (!I) return null
+  return <I size={size} className={className} />
+}
 import { isLivreur } from '../lib/auth'
 import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
@@ -386,7 +393,7 @@ function CategoryPopup({
         {/* Header popup */}
         <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-center justify-between gap-3 z-10">
           <div className="flex items-center gap-3">
-            <span className="text-[24px]">{cat.emoji}</span>
+            <CatIcon catId={cat.id} size={24} className="text-bordeaux" />
             <div>
               <div className="font-mono text-[10px] tracking-[0.2em] text-bordeaux font-bold uppercase">
                 {cat.label}
@@ -920,7 +927,7 @@ function RecapCard({ cat, linesForCategory, linesForCategoryFull, allLines = [],
     <button onClick={onClick}
             className={`rounded-2xl p-4 transition-all text-left cursor-pointer shadow-sm ${borderClass}`}>
       <div className="flex items-center gap-2 mb-2 min-w-0">
-        <span className="text-[15px] opacity-80">{cat.emoji}</span>
+        <span className="opacity-80 inline-flex"><CatIcon catId={cat.id} size={15} /></span>
         <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-mute truncate">
           {cat.label.replace(/^Vente\s+/i, '')}
         </span>

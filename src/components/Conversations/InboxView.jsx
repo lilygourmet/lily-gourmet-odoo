@@ -7,14 +7,22 @@ import { supabase } from '../../lib/supabase'
 import ConversationDetail from './ConversationDetail'
 import NewConversationModal from './NewConversationModal'
 import QuickRepliesModal from './QuickRepliesModal'
-import { Search, Volume2, VolumeX, MessageSquareText } from 'lucide-react'
+import { Search, Volume2, VolumeX, MessageSquareText, AlertCircle, Clock, Sparkles, CheckCircle2 } from 'lucide-react'
+
+function UrgencyIcon({ code, size = 14 }) {
+  if (code === 'urgent') return <AlertCircle size={size} className="text-bordeaux" />
+  if (code === 'warn')   return <Clock size={size} className="text-amber-600" />
+  if (code === 'new')    return <Sparkles size={size} className="text-bordeaux" />
+  if (code === 'closed') return <CheckCircle2 size={size} className="text-ink-mute" />
+  return null
+}
 
 const FILTERS = [
   { key: 'all', label: 'Toutes' },
   { key: 'mine', label: 'À moi' },
   { key: 'unassigned', label: 'Non assignées' },
-  { key: 'waiting', label: '🔴 En attente' },
-  { key: 'followup', label: '🟡 À relancer' },
+  { key: 'waiting', label: 'En attente', code: 'urgent' },
+  { key: 'followup', label: 'À relancer', code: 'warn' },
 ]
 
 const STATUS_LABEL = {
@@ -101,15 +109,15 @@ export default function InboxView({ user, initialConversationId }) {
     conversations.filter(c => c.assigned).map(c => [c.assigned.id, c.assigned])
   ).values()]
 
-  const waitingCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🔴').length
-  const followupCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🟡').length
+  const waitingCount = conversations.filter(c => conversationUrgency(c)?.code === 'urgent').length
+  const followupCount = conversations.filter(c => conversationUrgency(c)?.code === 'warn').length
 
   const term = search.trim().toLowerCase()
   let list = conversations
   if (filter === 'mine') list = list.filter(c => c.assigned_to === user.id)
   else if (filter === 'unassigned') list = list.filter(c => c.status === 'non_assignee')
-  else if (filter === 'waiting') list = list.filter(c => conversationUrgency(c)?.emoji === '🔴')
-  else if (filter === 'followup') list = list.filter(c => conversationUrgency(c)?.emoji === '🟡')
+  else if (filter === 'waiting') list = list.filter(c => conversationUrgency(c)?.code === 'urgent')
+  else if (filter === 'followup') list = list.filter(c => conversationUrgency(c)?.code === 'warn')
   if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
   const filtered = !term ? list : list.filter(c =>
     (c.client_name || '').toLowerCase().includes(term) ||
@@ -167,16 +175,16 @@ export default function InboxView({ user, initialConversationId }) {
             <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-wrap">
               {FILTERS.map(f => {
                 let label = f.label
-                if (f.key === 'waiting' && waitingCount) label = `🔴 En attente (${waitingCount})`
-                else if (f.key === 'followup' && followupCount) label = `🟡 À relancer (${followupCount})`
+                if (f.key === 'waiting' && waitingCount) label = `En attente (${waitingCount})`
+                else if (f.key === 'followup' && followupCount) label = `À relancer (${followupCount})`
                 return (
                   <button
                     key={f.key}
                     onClick={() => setFilter(f.key)}
-                    className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                    className={`px-3 py-1 text-[11px] font-medium rounded-full transition-colors inline-flex items-center gap-1.5 ${
                       filter === f.key ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'
                     }`}
-                  >{label}</button>
+                  >{f.code && <UrgencyIcon code={f.code} size={12} />}{label}</button>
                 )
               })}
             </div>
@@ -226,7 +234,7 @@ export default function InboxView({ user, initialConversationId }) {
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
                       {isNew && <span className="w-2 h-2 rounded-full bg-bordeaux flex-shrink-0" />}
-                      {u && <span className="flex-shrink-0">{u.emoji}</span>}
+                      {u && <span className="flex-shrink-0 inline-flex"><UrgencyIcon code={u.code} size={13} /></span>}
                       <span className="truncate">{c.client_name || c.client_phone}</span>
                     </span>
                     <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
