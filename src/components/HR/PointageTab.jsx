@@ -208,9 +208,10 @@ export default function PointageTab({ user, isAdmin }) {
     if (!data) return
     const rows = [['Employé', 'Heures sup du mois']]
     for (const emp of data.employes) {
+      if (emp.heures_sup_mensuelles === false) continue  // employé non déclaré pour les heures sup
       const r = resultats[emp.id]
       if (!r) continue
-      const sup = emp.heures_sup_mensuelles === false ? 0 : r.synthese.heures_sup
+      const sup = r.synthese.heures_sup
       rows.push([emp.nom, Number(sup.toFixed(2))])
     }
     const monthName = MOIS_FR[mois - 1] + '_' + annee
