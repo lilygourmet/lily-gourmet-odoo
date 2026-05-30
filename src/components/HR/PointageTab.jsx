@@ -6,7 +6,27 @@ import {
 import {
   loadMonthData, calculerMois, syncAttendance, syncLeaves,
   setAjustement, removeAjustement, updatePointage, validerMois,
+  nomJour, paireOuImpaire,
 } from '../../lib/pointage'
+
+// Pour congés annuels d'employés en planning alterné (2 jours off/semaine) :
+// le jour off "fixe" (commun aux deux semaines) compte comme congé,
+// le jour off "tournant" (qui change paire/impaire) ne compte PAS.
+function compteJoursOffTournants(emp, debut, fin) {
+  if (emp.planning_type !== 'alt') return 0
+  const paireOffs   = [emp.planning_paire_off_1,   emp.planning_paire_off_2  ].filter(Boolean)
+  const impaireOffs = [emp.planning_impaire_off_1, emp.planning_impaire_off_2].filter(Boolean)
+  const fixedOff = paireOffs.find(d => impaireOffs.includes(d)) || null
+  let count = 0
+  const d = new Date(debut)
+  while (d <= fin) {
+    const jour = nomJour(d)
+    const offs = paireOuImpaire(d) === 'Paire' ? paireOffs : impaireOffs
+    if (offs.includes(jour) && jour !== fixedOff) count++
+    d.setDate(d.getDate() + 1)
+  }
+  return count
+}
 import EmployeEditModal from './EmployeEditModal'
 
 const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -215,7 +235,7 @@ export default function PointageTab({ user, isAdmin }) {
         } else if (typeLower.includes('récup') || typeLower.includes('recup')) {
           continue
         } else {
-          joursConge += nbJours
+          joursConge += nbJours - compteJoursOffTournants(emp, debut, fin)
         }
       }
       if (joursConge > 0 || joursMaladie > 0) {
@@ -271,7 +291,7 @@ export default function PointageTab({ user, isAdmin }) {
         } else if (t.includes('récup') || t.includes('recup')) {
           continue
         } else {
-          joursConge += nb
+          joursConge += nb - compteJoursOffTournants(emp, debut, fin)
         }
       }
       rows.push({
