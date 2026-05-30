@@ -927,34 +927,54 @@ function FilterButton({ active, onClick, label, small }) {
   )
 }
 
-function ProgressDotsOrder({ order, stepsMap }) {
+function ProgressDotsOrder({ order, stepsMap, size }) {
   const total = totalSequentialSteps(order)
   const done = checkedSequentialSteps(order, stepsMap)
-  return <ProgressDotsRaw total={total} done={done} />
+  return <ProgressDotsRaw total={total} done={done} size={size} />
 }
 
-function ProgressDotsItem({ item, stepsMap }) {
+function ProgressDotsItem({ item, stepsMap, size }) {
   const total = itemTotalSteps(item)
   const done = itemCheckedSteps(item, stepsMap)
-  return <ProgressDotsRaw total={total} done={done} />
+  return <ProgressDotsRaw total={total} done={done} size={size} />
 }
 
-function ProgressDotsRaw({ total, done }) {
+function ProgressDotsForItems({ items, stepsMap, size = 'lg', label, labelColor = 'text-bordeaux' }) {
+  let total = 0, done = 0
+  for (const it of items) {
+    total += itemTotalSteps(it)
+    done += itemCheckedSteps(it, stepsMap)
+  }
+  if (total === 0) return null
+  return (
+    <div className="flex items-center gap-2">
+      {label && (
+        <span className={`font-mono text-[10px] font-semibold tracking-wider uppercase ${labelColor} flex-shrink-0 w-10`}>
+          {label}
+        </span>
+      )}
+      <ProgressDotsRaw total={total} done={done} size={size} />
+    </div>
+  )
+}
+
+function ProgressDotsRaw({ total, done, size = 'sm' }) {
   if (total === 0) return null
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
   const isFull = done === total
+  const lg = size === 'lg'
   return (
     <div
-      className="flex items-center gap-1.5 flex-shrink-0"
+      className={`flex items-center flex-shrink-0 ${lg ? 'gap-2' : 'gap-1.5'}`}
       title={`${done}/${total} étapes complétées`}
     >
-      <div className="w-12 h-[3px] rounded-full bg-line/60 overflow-hidden">
+      <div className={`rounded-full bg-line/60 overflow-hidden ${lg ? 'w-24 h-[6px]' : 'w-12 h-[3px]'}`}>
         <div
           className={`h-full rounded-full transition-all ${isFull ? 'bg-ok' : 'bg-bordeaux/70'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className={`font-mono text-[9px] font-medium ${isFull ? 'text-ok' : 'text-ink-mute'}`}>
+      <span className={`font-mono font-medium ${lg ? 'text-[13px]' : 'text-[9px]'} ${isFull ? 'text-ok' : 'text-ink-mute'}`}>
         {done}/{total}
       </span>
     </div>
@@ -1042,13 +1062,20 @@ function AllCapsule({ order, stepsMap }) {
             <span className="truncate">{order.order_num}</span>
             {warningOnOrder && <WarningBadge />}
           </span>
-          <div className="flex-shrink-0">
-            <ProgressDotsOrder order={order} stepsMap={stepsMap} />
-          </div>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <span className="font-mono text-[12px] text-ink-soft font-medium">{deliveryTime}</span>
             {!cancelled && needsPolys && <PolyBadge />}
           </div>
+        </div>
+
+        {/* Deux lignes de progression : CD (Cake Design) et Access (GM) */}
+        <div className="space-y-1 mb-2">
+          {cdItems.length > 0 && (
+            <ProgressDotsForItems items={cdItems} stepsMap={stepsMap} size="lg" label="CD" labelColor="text-bordeaux" />
+          )}
+          {gmItems.length > 0 && (
+            <ProgressDotsForItems items={gmItems} stepsMap={stepsMap} size="lg" label="Access" labelColor="text-chocolate" />
+          )}
         </div>
 
         {(cancelled || modified) && (
@@ -1205,7 +1232,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
             {itemWarning && <WarningBadge />}
           </span>
           <div className="flex-shrink-0">
-            <ProgressDotsItem item={item} stepsMap={stepsMap} />
+            <ProgressDotsItem item={item} stepsMap={stepsMap} size="lg" />
           </div>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <span className="font-mono text-[12px] text-ink-soft font-medium">{deliveryTime}</span>
@@ -1321,7 +1348,7 @@ function GMItemCapsule({ order, item, stepsMap }) {
             {itemWarning && <WarningBadge />}
           </span>
           <div className="flex-shrink-0">
-            <ProgressDotsItem item={item} stepsMap={stepsMap} />
+            <ProgressDotsItem item={item} stepsMap={stepsMap} size="lg" />
           </div>
           <span className="font-mono text-[12px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
         </div>
