@@ -8,6 +8,7 @@ import {
   setAjustement, removeAjustement, updatePointage, validerMois,
   nomJour,
 } from '../../lib/pointage'
+import { createDemandeConge, validerConge } from '../../lib/conges'
 
 // Congés annuels : le jour off "fixe" (jour complet de repos chaque semaine)
 // ne compte PAS dans le décompte des jours de congé pris.
@@ -448,6 +449,27 @@ export default function PointageTab({ user, isAdmin }) {
     }
   }
 
+  // Modal pour transformer une absence en congé : on demande le type
+  const [congeModalDate, setCongeModalDate] = useState(null)
+  async function handleCreateConge(dateJour, typeConge) {
+    try {
+      const c = await createDemandeConge({
+        employe_id: selectedEmpId,
+        date_debut: dateJour,
+        date_fin:   dateJour,
+        type_conge: typeConge,
+        motif: 'Créé depuis pointage',
+        demande_par: user.id,
+      })
+      // Validation immédiate : le congé devient effectif tout de suite
+      await validerConge(c.id, user.id, 1)
+      setCongeModalDate(null)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
+  }
+
 
 
   // Anciens / nouveaux mois
@@ -669,6 +691,7 @@ export default function PointageTab({ user, isAdmin }) {
             onEditPointage={handleEditPointage}
             onEditTranches={canEdit ? setEditingTranches : () => {}}
             onForcerPresent={handleForcerPresent}
+            onMarquerConge={(d) => setCongeModalDate(d)}
             canEdit={canEdit}
           />
 
@@ -724,6 +747,49 @@ export default function PointageTab({ user, isAdmin }) {
           onSaved={() => { setEditingEmp(null); reload() }}
         />
       )}
+
+      {congeModalDate && (
+        <CongeAbsenceModal
+          date={congeModalDate}
+          empNom={empSelected?.nom || ''}
+          onClose={() => setCongeModalDate(null)}
+          onConfirm={(type) => handleCreateConge(congeModalDate, type)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Mini modal pour transformer une absence en congé : choix du type.
+function CongeAbsenceModal({ date, empNom, onClose, onConfirm }) {
+  const [type, setType] = useState('annuel')
+  const [busy, setBusy] = useState(false)
+  const TYPES = [
+    { v: 'annuel',         label: 'Congé annuel' },
+    { v: 'maladie_courte', label: 'Congé maladie ≤ 3 j' },
+    { v: 'maladie_longue', label: 'Congé maladie > 3 j' },
+    { v: 'sans solde',     label: 'Sans solde' },
+    { v: 'recup',          label: 'Récupération' },
+  ]
+  const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
+  const modal   = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 360, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
+  const ipt     = { width: '100%', padding: '8px 10px', border: '1px solid #E5D8C3', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Marquer comme congé</div>
+        <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>{empNom} · {date}</div>
+
+        <label style={{ fontSize: 12, color: '#4a3a30', marginBottom: 4, display: 'block' }}>Type d'absence</label>
+        <select value={type} onChange={e => setType(e.target.value)} style={ipt}>
+          {TYPES.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+        </select>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={onClose} disabled={busy} style={{ padding: '6px 12px', border: '1px solid #E5D8C3', borderRadius: 8, background: 'white', cursor: 'pointer', fontSize: 12 }}>Annuler</button>
+          <button onClick={async () => { setBusy(true); await onConfirm(type); setBusy(false) }} disabled={busy} style={{ padding: '6px 12px', border: 'none', borderRadius: 8, background: '#993556', color: 'white', cursor: 'pointer', fontSize: 12 }}>{busy ? '…' : 'Créer & valider'}</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -988,7 +1054,7 @@ function Carte({ label, val, color = '#1a0f0a', sign = '', unit = 'h', signed = 
   )
 }
 
-function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches, onForcerPresent, canEdit }) {
+function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches, onForcerPresent, onMarquerConge, canEdit }) {
   return (
     <div style={{
       background: 'white', borderRadius: 12, border: '1px solid #e5d8c3',
@@ -1009,7 +1075,7 @@ function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches, onF
         </thead>
         <tbody>
           {journal.map(j => (
-            <Row key={j.date} j={j} onEditCell={onEditCell} onEditPointage={onEditPointage} onEditTranches={onEditTranches} onForcerPresent={onForcerPresent} canEdit={canEdit} />
+            <Row key={j.date} j={j} onEditCell={onEditCell} onEditPointage={onEditPointage} onEditTranches={onEditTranches} onForcerPresent={onForcerPresent} onMarquerConge={onMarquerConge} canEdit={canEdit} />
           ))}
         </tbody>
       </table>
@@ -1017,7 +1083,7 @@ function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches, onF
   )
 }
 
-function Row({ j, onEditCell, onEditPointage, onEditTranches, onForcerPresent, canEdit }) {
+function Row({ j, onEditCell, onEditPointage, onEditTranches, onForcerPresent, onMarquerConge, canEdit }) {
   const c = COULEUR_STATUT[j.statut] || COULEUR_STATUT.normal
   return (
     <tr style={{ borderTop: '1px solid #F4F0EA', background: c.bg }}>
@@ -1034,11 +1100,18 @@ function Row({ j, onEditCell, onEditPointage, onEditTranches, onForcerPresent, c
           background: c.text, color: 'white'
         }}>{j.label}</span>
         {j.statut === 'absent' && canEdit && (
-          <button onClick={() => onForcerPresent(j.date)} title="Marquer présent" style={{
-            marginLeft: 4, padding: '2px 6px', fontSize: 10, background: '#EAF3DE', color: '#27500A',
-            border: '1px solid #C0DD97', borderRadius: 4, cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-          }}><Hand size={12} /> Présent</button>
+          <>
+            <button onClick={() => onForcerPresent(j.date)} title="Marquer présent" style={{
+              marginLeft: 4, padding: '2px 6px', fontSize: 10, background: '#EAF3DE', color: '#27500A',
+              border: '1px solid #C0DD97', borderRadius: 4, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}><Hand size={12} /> Présent</button>
+            <button onClick={() => onMarquerConge(j.date)} title="Marquer comme congé / absence" style={{
+              marginLeft: 4, padding: '2px 6px', fontSize: 10, background: '#FDF1F5', color: '#993556',
+              border: '1px solid #E8B6C7', borderRadius: 4, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}>Congé</button>
+          </>
         )}
       </Td>
     </tr>
