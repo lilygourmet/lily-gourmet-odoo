@@ -16,6 +16,30 @@ function fmtDuration(s) {
 
 const TONE_LABEL = { formelle: 'Formelle', amicale: 'Amicale', directe: 'Directe' }
 
+// Avatar du client : photo WATI si dispo, sinon initiales (du nom ou du tel).
+function ClientAvatar({ conv }) {
+  if (!conv) return null
+  const [broken, setBroken] = useState(false)
+  const photo = !broken && conv.client_photo_url
+  if (photo) {
+    return (
+      <img
+        src={photo}
+        alt=""
+        onError={() => setBroken(true)}
+        className="w-9 h-9 rounded-full object-cover border border-cream/40 flex-shrink-0 bg-cream/15"
+      />
+    )
+  }
+  const label = conv.client_name || conv.client_phone || '?'
+  const initials = label.replace(/[^A-Za-zÀ-ÿ ]/g, '').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
+  return (
+    <div className="w-9 h-9 rounded-full border border-cream/40 bg-cream/15 text-cream flex items-center justify-center text-[12px] font-medium flex-shrink-0">
+      {initials}
+    </div>
+  )
+}
+
 // Choisit un format d'enregistrement supporté par le navigateur
 // (ogg/opus sur Firefox, mp4 sur Safari, webm sur Chrome).
 function pickAudioMime() {
@@ -125,6 +149,26 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   useEffect(() => { load() }, [conversationId])
+
+  // Tentative de récupération de la photo client via WATI, une fois par
+  // semaine au max (best-effort, ne bloque rien si WATI ne renvoie rien).
+  useEffect(() => {
+    if (!conv?.client_phone) return
+    const fetchedAt = conv.client_photo_fetched_at ? new Date(conv.client_photo_fetched_at).getTime() : 0
+    const stale = (Date.now() - fetchedAt) > 7 * 24 * 60 * 60 * 1000
+    if (!stale) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/wati-webhook?action=fetch-photo&phone=${encodeURIComponent(conv.client_phone)}`)
+        if (!r.ok || cancelled) return
+        const d = await r.json()
+        if (d?.photo) setConv(prev => prev ? { ...prev, client_photo_url: d.photo, client_photo_fetched_at: new Date().toISOString() } : prev)
+        else setConv(prev => prev ? { ...prev, client_photo_fetched_at: new Date().toISOString() } : prev)
+      } catch { /* silencieux */ }
+    })()
+    return () => { cancelled = true }
+  }, [conv?.client_phone, conv?.client_photo_fetched_at])
 
   // Temps réel : ajoute les nouveaux messages de cette conversation sans recharger.
   // Pas de filtre serveur (peu fiable) -> on filtre côté app par conversation_id.
@@ -488,6 +532,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           className="w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
           title="Rechercher dans la conversation"
         ><Search size={16} strokeWidth={1.8} /></button>
+        <ClientAvatar conv={conv} />
         <div className="min-w-0 flex-1">
           {nameEditing ? (
             <div className="flex items-center gap-1.5">

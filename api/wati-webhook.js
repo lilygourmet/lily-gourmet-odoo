@@ -25,7 +25,7 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.query?.action !== 'task-reminders') {
+  if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'fetch-photo') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -41,6 +41,7 @@ export default async function handler(req, res) {
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
+  if (action === 'fetch-photo') return handleFetchPhoto(req, res)
   return handleInbound(req, res)
 }
 
@@ -616,6 +617,51 @@ async function traceOutgoing(supabase, number, body) {
     })
     await supabase.from('conversations').update({ last_message_at: sentAt, updated_at: sentAt }).eq('id', conv.id)
   } catch { /* trace best-effort */ }
+}
+
+// ============================================================
+// PHOTO CLIENT — récupère la photo de profil WATI/WhatsApp pour un n°
+// et l'enregistre sur la conversation. Best-effort : si WATI ne renvoie
+// pas de photo (cas fréquent à cause de la privacy WhatsApp), on stocke
+// juste la date de tentative pour ne pas re-tenter trop souvent.
+// ============================================================
+async function handleFetchPhoto(req, res) {
+  const phone = (req.query?.phone || '').toString().trim()
+  if (!phone) return res.status(400).json({ error: 'phone manquant' })
+
+  const apiToken = process.env.WATI_API_TOKEN
+  const apiEndpoint = process.env.WATI_API_ENDPOINT
+  if (!apiToken || !apiEndpoint) return res.status(500).json({ error: 'WATI config manquante' })
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const base = apiEndpoint.replace(/\/+$/, '')
+  // Le wAid WhatsApp = n° sans le + (ex: "212661234567"). On tolère les deux.
+  const wAid = phone.replace(/^\+/, '').replace(/\s+/g, '')
+
+  let photoUrl = null
+  try {
+    const url = `${base}/api/v1/getContacts?attribute=wAid&attributeValue=${encodeURIComponent(wAid)}&pageSize=1&pageNumber=1`
+    const watiRes = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } })
+    if (watiRes.ok) {
+      const data = await watiRes.json()
+      const list = data?.contact_list || data?.contacts || data?.items || (Array.isArray(data) ? data : [])
+      const contact = list?.[0] || data?.contact || null
+      photoUrl = contact?.photo || contact?.displayPicture || contact?.profilePicture || null
+    } else {
+      console.warn('[fetch-photo] WATI', watiRes.status)
+    }
+  } catch (e) {
+    console.warn('[fetch-photo] erreur:', e?.message || e)
+  }
+
+  // Met à jour toutes les conversations correspondant à ce n°. Toujours marquer
+  // fetched_at (même si null) pour ne pas re-spammer WATI à chaque ouverture.
+  await supabase.from('conversations').update({
+    client_photo_url: photoUrl || null,
+    client_photo_fetched_at: new Date().toISOString(),
+  }).eq('client_phone', phone)
+
+  return res.status(200).json({ photo: photoUrl })
 }
 
 // Wati envoie souvent un epoch en secondes ; on tolère ms et chaîne ISO.
