@@ -67,6 +67,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [receptionBadge, setReceptionBadge] = useState(0)
   // Badge "articles a ranger" sur le bouton Checklist
   const [checklistBadge, setChecklistBadge] = useState(0)
+  // Badge "paiements en attente de validation"
+  const [paiementsBadge, setPaiementsBadge] = useState(0)
   // Badge "taches non lues" sur le bouton Tâches
   const [tasksBadge, setTasksBadge] = useState(0)
   // Badge double Conversations : { unassigned (à prendre), unread (non lus) }
@@ -129,6 +131,42 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showReceptionBtn, user?.id])
+
+  // Badge Paiements : compte les preuves de paiement à valider
+  useEffect(() => {
+    if (!user?.id || !canViewPayments(user)) return
+    let cancelled = false
+    let channel = null
+
+    async function refreshPaiementsBadge() {
+      try {
+        const { count, error } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_payment_proof', true)
+          .is('payment_validated_at', null)
+          .is('payment_rejected_at', null)
+        if (!error && !cancelled) setPaiementsBadge(count || 0)
+      } catch (e) {
+        console.warn('[paiementsBadge]', e?.message || e)
+      }
+    }
+
+    refreshPaiementsBadge()
+
+    channel = supabase
+      .channel('paiements-badge')
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'messages' },
+          () => { refreshPaiementsBadge() })
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   // Badge Checklist : compte les articles a ranger (toutes sections confondues)
   // Vitrine pending + lignes Prod 'done' non encore 'cafe_received'
@@ -447,7 +485,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && !admin && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user), badge: convBadge.unassigned + convBadge.unread, convBadge },
-    { view: 'paiements',        emoji: '💰', label: 'Paiements',         visible: !isLivreur(user) && canViewPayments(user) },
+    { view: 'paiements',        emoji: '💰', label: 'Paiements',         visible: !isLivreur(user) && canViewPayments(user), badge: paiementsBadge },
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },
     { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users) },
