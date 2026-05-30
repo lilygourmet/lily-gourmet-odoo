@@ -35,6 +35,7 @@ export async function loadMonthData(mois, annee) {
       .gte('date_pointage', firstDay(mois, annee))
       .lte('date_pointage', lastDay(mois, annee)),
     supabase.from('conges').select('*')
+      .eq('statut', 'valide')
       .lte('date_debut', lastDay(mois, annee))
       .gte('date_fin', firstDay(mois, annee)),
     supabase.from('pointages_ajustements').select('*')
