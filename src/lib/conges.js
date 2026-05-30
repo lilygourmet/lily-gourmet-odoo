@@ -423,6 +423,19 @@ export async function cancelAllocation(id) {
   if (error) throw error
 }
 
+// Supprime (vraiment) toutes les allocations source='auto' d'une année donnée.
+// Utile quand on a importé les allocations Odoo et qu'on veut s'appuyer
+// uniquement sur celles-là (et non sur le calcul auto de l'app).
+export async function deleteAutoAllocations(annee) {
+  const { error, count } = await supabase
+    .from('conges_allocations')
+    .delete({ count: 'exact' })
+    .eq('annee', annee)
+    .eq('source', 'auto')
+  if (error) throw error
+  return count || 0
+}
+
 // Pour un (employé, année) donné : crée les allocations auto manquantes
 // (annuel = quota selon ancienneté ; maladie_courte = 6 j).
 // Idempotent grâce à l'unique partial index côté SQL.

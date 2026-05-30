@@ -8,7 +8,7 @@ import {
   validerConge, rejeterConge, annulerConge,
   syncCongesAnneeOdoo, listAllocationsOdoo, importAllocationsOdoo,
   loadAllocations, createAllocation, cancelAllocation,
-  initAutoAllocationsTous, ALLOC_TYPES,
+  initAutoAllocationsTous, deleteAutoAllocations, ALLOC_TYPES,
 } from '../lib/conges'
 
 const TYPES = [
@@ -147,6 +147,21 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     try {
       const added = await initAutoAllocationsTous(employes, annee, user.id)
       alert(`${added} allocation(s) auto créée(s).`)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    } finally {
+      setInitAllocBusy(false)
+    }
+  }
+
+  async function handleDeleteAutoAllocations() {
+    const annee = new Date().getFullYear()
+    if (!confirm(`Supprimer DÉFINITIVEMENT toutes les allocations auto (annuel + maladie ≤ 3 j) de ${annee} ?\n\nLes allocations importées d'Odoo et les manuelles ne sont pas touchées. Tu pourras toujours relancer "Init allocations auto" plus tard.`)) return
+    setInitAllocBusy(true)
+    try {
+      const n = await deleteAutoAllocations(annee)
+      alert(`${n} allocation(s) auto supprimée(s).`)
       await reload()
     } catch (e) {
       alert('Erreur : ' + e.message)
@@ -332,6 +347,9 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                   <button onClick={handleImportAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <Download size={14} /> Importer allocations Odoo {new Date().getFullYear()}
                   </button>
+                  <button onClick={handleDeleteAutoAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, color: '#A32D2D', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Trash2 size={14} /> Supprimer auto {new Date().getFullYear()}
+                  </button>
                 </>
               )}
               <div style={{ flex: 1 }} />
@@ -410,20 +428,20 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
         {!loading && tab === 'soldes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px 70px 70px 90px 100px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               <div>Employé</div>
-              <div title="Quota annuel : 18 j + bonus ancienneté">Quota/an</div>
-              <div title="Pro-rata : quota × mois écoulés / 12">Acquis</div>
-              <div title="Report année N-1 (expire le 30 mai)">Reliquat</div>
-              <div title="Jours d'événements applicables à ce jour">Évén.</div>
+              <div title="Acquis (annuel × mois écoulés / 12) + reliquat valide + événements applicables (hors maladie ≤ 3 j)">Allocations accumulé</div>
+              <div title="Report N-1 (expire le 30 mai)">Reliquat</div>
               <div title="Jours déjà pris (annuel + événements)">Pris</div>
-              <div style={{ textAlign: 'right' }} title="Acquis + reliquat + récup + événements − pris">Dispo</div>
+              <div style={{ textAlign: 'right' }} title="Allocations accumulé + récup − pris">Dispo</div>
             </div>
             {employes.map(e => {
               const s = soldes[e.id]
               if (!s) return null
+              const allocAccumule = s.acquis + s.reliquatN1 + s.events.applicable
+              const prisTotal = s.pris + s.events.pris
               return (
-                <div key={e.id} style={{ ...soldeRow, gridTemplateColumns: '1fr 70px 70px 70px 70px 90px 100px' }}>
+                <div key={e.id} style={{ ...soldeRow, gridTemplateColumns: '1fr 140px 90px 90px 110px' }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{e.nom}</div>
                     <div style={{ fontSize: 11, color: '#8a7a70' }}>
@@ -434,11 +452,9 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                       </span>
                     </div>
                   </div>
-                  <div style={cellNum}>{s.quotaAnnuel}</div>
-                  <div style={cellNum}>{s.acquis.toFixed(1)}</div>
+                  <div style={cellNum}>{allocAccumule.toFixed(1)} j</div>
                   <div style={cellNum}>{s.reliquatN1 > 0 ? s.reliquatN1 : '—'}</div>
-                  <div style={cellNum}>{s.events.applicable > 0 ? s.events.applicable.toFixed(1) : '—'}</div>
-                  <div style={cellNum}>{(s.pris + s.events.pris).toFixed(1)}</div>
+                  <div style={cellNum}>{prisTotal.toFixed(1)}</div>
                   <div style={{ ...cellNum, textAlign: 'right', fontWeight: 600, color: s.dispo > 0 ? '#085041' : '#A32D2D' }}>
                     {s.dispo.toFixed(1)} j
                   </div>
@@ -446,9 +462,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               )
             })}
             <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 8, padding: '0 4px' }}>
-              <strong>Calcul :</strong> (reliquat N-1 si avant 30 mai) + (quota_annuel × mois écoulés / 12) + (récup gagnés) + (événements applicables) − (jours pris annuels et événements).<br />
-              <strong>Quota annuel :</strong> 18 j + 1,5 j à 5 ans d'ancienneté + 1,5 j à 10 ans. Si tu as configuré une allocation "annuel" manuelle, c'est elle qui prime.<br />
-              <strong>Maladie ≤ 3 j</strong> = pool séparé de 6 j/an (compté à part). Maladie &gt; 3 j et sans solde ne consomment pas le solde dispo.
+              <strong>Allocations accumulé</strong> = (annuel × mois écoulés / 12) + reliquat valide + événements applicables.
+              Maladie ≤ 3 j est un <strong>pool séparé</strong> (6 j/an), affiché en bleu sous le nom.<br />
+              <strong>Dispo</strong> = Allocations accumulé + récup − jours pris.<br />
+              <strong>Reliquat</strong> = report de l'année précédente. <em>Expire le 30 mai.</em>
             </div>
           </div>
         )}
