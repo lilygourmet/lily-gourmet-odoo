@@ -429,6 +429,46 @@ export async function cancelAllocation(id) {
   if (error) throw error
 }
 
+// Reporte les soldes dispo d'une année N en allocations type='reliquat'
+// pour l'année N+1. Idempotent : annule les reliquats auto existants pour
+// N+1 puis recrée à partir du dispo actuel au 31/12 de N.
+// Retourne { reportes, total_jours, annee_source, annee_cible }.
+export async function reporterReliquats(employes, annee, createdBy = null) {
+  const refDate = `${annee}-12-31`
+  const anneeSuivante = annee + 1
+
+  // 1) Annule les reliquats auto existants pour N+1 (idempotence)
+  await supabase.from('conges_allocations')
+    .update({ statut: 'annule' })
+    .eq('annee', anneeSuivante)
+    .eq('type', 'reliquat')
+    .eq('source', 'auto')
+    .eq('statut', 'valide')
+
+  let reportes = 0
+  let totalJours = 0
+  for (const emp of employes) {
+    const s = await calculSoldeConges(emp, null, refDate)
+    if (s.dispo <= 0) continue
+    try {
+      await createAllocation({
+        employe_id: emp.id,
+        annee: anneeSuivante,
+        type: 'reliquat',
+        jours: Number(s.dispo.toFixed(2)),
+        raison: `Reliquat ${annee} (auto)`,
+        source: 'auto',
+        created_by: createdBy,
+      })
+      reportes++
+      totalJours += s.dispo
+    } catch (e) {
+      console.warn('[reporterReliquats]', emp.nom, e?.message || e)
+    }
+  }
+  return { reportes, total_jours: totalJours, annee_source: annee, annee_cible: anneeSuivante }
+}
+
 // Supprime (vraiment) toutes les allocations source='auto' d'une année donnée.
 // Utile quand on a importé les allocations Odoo et qu'on veut s'appuyer
 // uniquement sur celles-là (et non sur le calcul auto de l'app).

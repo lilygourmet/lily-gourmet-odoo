@@ -8,7 +8,7 @@ import {
   validerConge, rejeterConge, annulerConge,
   syncCongesAnneeOdoo, listAllocationsOdoo, importAllocationsOdoo,
   loadAllocations, createAllocation, cancelAllocation,
-  initAutoAllocationsTous, deleteAutoAllocations, ALLOC_TYPES,
+  initAutoAllocationsTous, deleteAutoAllocations, reporterReliquats, ALLOC_TYPES,
 } from '../lib/conges'
 
 const TYPES = [
@@ -147,6 +147,21 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     try {
       const added = await initAutoAllocationsTous(employes, annee, user.id)
       alert(`${added} allocation(s) auto créée(s).`)
+      await reload()
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    } finally {
+      setInitAllocBusy(false)
+    }
+  }
+
+  async function handleReporterReliquats() {
+    const annee = new Date().getFullYear()
+    if (!confirm(`Reporter les soldes dispo au 31/12/${annee} en reliquats pour ${annee + 1} ?\n\nChaque employé avec un dispo > 0 aura une allocation 'reliquat' créée pour ${annee + 1} (qui expirera le 30 mai ${annee + 1}). Idempotent : annule les reports auto précédents avant.`)) return
+    setInitAllocBusy(true)
+    try {
+      const r = await reporterReliquats(employes, annee, user.id)
+      alert(`Report terminé.\n\n${r.reportes} employé(s) avec reliquat reporté\nTotal jours reportés : ${r.total_jours.toFixed(1)}\n${annee} → ${annee + 1}`)
       await reload()
     } catch (e) {
       alert('Erreur : ' + e.message)
@@ -346,6 +361,9 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                   </button>
                   <button onClick={handleImportAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <Download size={14} /> Importer allocations Odoo {new Date().getFullYear()}
+                  </button>
+                  <button onClick={handleReporterReliquats} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Download size={14} /> Reporter dispo {new Date().getFullYear()} → reliquat {new Date().getFullYear() + 1}
                   </button>
                   <button onClick={handleDeleteAutoAllocations} disabled={initAllocBusy} style={{ ...btnSlim, opacity: initAllocBusy ? 0.6 : 1, color: '#A32D2D', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <Trash2 size={14} /> Supprimer auto {new Date().getFullYear()}
