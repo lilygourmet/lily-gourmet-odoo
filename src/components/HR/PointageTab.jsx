@@ -206,13 +206,21 @@ export default function PointageTab({ user, isAdmin }) {
 
   async function handleExportSup() {
     if (!data) return
-    const rows = [['Employé', 'Heures sup du mois']]
+    const monthLabel = `${MOIS_FR[mois - 1]} ${annee}`
+    const rows = [
+      [`Heures sup — ${monthLabel}`],
+      [],
+      ['Employé', 'Solde heures sup du mois'],
+    ]
     for (const emp of data.employes) {
       if (!emp.declare) continue  // n'exporter que le personnel déclaré
       const r = resultats[emp.id]
       if (!r) continue
-      const sup = emp.heures_sup_mensuelles === false ? 0 : r.synthese.heures_sup
-      rows.push([emp.nom, Number(sup.toFixed(2))])
+      // Solde = heures sup - heures manquantes (signé : positif si gain, négatif si manque).
+      const solde = emp.heures_sup_mensuelles === false
+        ? 0
+        : (r.synthese.heures_sup - r.synthese.heures_manquantes)
+      rows.push([emp.nom, Number(solde.toFixed(2))])
     }
     const monthName = MOIS_FR[mois - 1] + '_' + annee
     await downloadXLSX('heures_sup_' + monthName + '.xlsx', rows, 'Heures sup ' + monthName)
