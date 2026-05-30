@@ -1113,28 +1113,46 @@ function CDItemCapsule({ order, item, stepsMap }) {
   const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-xl p-2 border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
-      <div className="flex items-center justify-between mb-1.5 gap-1">
-        <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-          <span className="truncate">{order.order_num}</span>
-          <span className="text-[8px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
-          {itemWarning && <WarningBadge />}
-        </span>
-        <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
-      </div>
-
-      {(cancelled || modified) && (
-        <div className="flex gap-1 mb-1.5">
-          {cancelled && <CancelledBadge />}
-          {!cancelled && modified && <ModifiedBadge />}
+    <div className={`bg-cream rounded-xl border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
+      {/* === Mobile (< md) : progression au milieu, Poly sous l'horaire, image en grand === */}
+      <div className="md:hidden p-2.5">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <span className={`font-mono text-[12px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
+            <span className="truncate">{order.order_num}</span>
+            <span className="text-[9px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
+            {itemWarning && <WarningBadge />}
+          </span>
+          <div className="flex-shrink-0">
+            <ProgressDotsItem item={item} stepsMap={stepsMap} />
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <span className="font-mono text-[12px] text-ink-soft font-medium">{deliveryTime}</span>
+            {!cancelled && needsPolys && <PolyBadge />}
+          </div>
         </div>
-      )}
 
-      <div className="flex items-center gap-2">
-        <MiniPhoto url={photoUrl} dimmed={cancelled} />
-        <div className="flex-1 min-w-0 space-y-0.5">
+        {(cancelled || modified) && (
+          <div className="flex gap-1 mb-2">
+            {cancelled && <CancelledBadge />}
+            {!cancelled && modified && <ModifiedBadge />}
+          </div>
+        )}
+
+        {photoUrl && (
+          <div className="w-full aspect-square rounded-lg overflow-hidden border border-line/60 bg-cream-warm mb-2">
+            <img
+              src={photoUrl}
+              alt=""
+              className={`w-full h-full object-cover ${cancelled ? 'grayscale' : ''}`}
+              loading="lazy"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+          </div>
+        )}
+
+        <div className="space-y-1">
           {(item.etages_count || item.pers) && (
-            <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
+            <div className={`text-[13px] text-ink leading-tight ${titleClass}`}>
               {item.etages_count && (
                 <span className="font-medium">
                   {item.etages_count} étage{item.etages_count > 1 ? 's' : ''}
@@ -1145,16 +1163,57 @@ function CDItemCapsule({ order, item, stepsMap }) {
             </div>
           )}
           {item.theme && (
-            <div className={`text-[10px] text-ink-soft italic leading-tight truncate ${titleClass}`}>
+            <div className={`text-[12px] text-ink-soft italic leading-tight ${titleClass}`}>
               {item.theme}
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-1.5">
-        <div>{!cancelled && needsPolys && <PolyBadge />}</div>
-        <ProgressDotsItem item={item} stepsMap={stepsMap} />
+      {/* === Desktop (md+) : layout compact original === */}
+      <div className="hidden md:block p-2">
+        <div className="flex items-center justify-between mb-1.5 gap-1">
+          <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
+            <span className="truncate">{order.order_num}</span>
+            <span className="text-[8px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
+            {itemWarning && <WarningBadge />}
+          </span>
+          <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+        </div>
+
+        {(cancelled || modified) && (
+          <div className="flex gap-1 mb-1.5">
+            {cancelled && <CancelledBadge />}
+            {!cancelled && modified && <ModifiedBadge />}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <MiniPhoto url={photoUrl} dimmed={cancelled} />
+          <div className="flex-1 min-w-0 space-y-0.5">
+            {(item.etages_count || item.pers) && (
+              <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
+                {item.etages_count && (
+                  <span className="font-medium">
+                    {item.etages_count} étage{item.etages_count > 1 ? 's' : ''}
+                  </span>
+                )}
+                {item.etages_count && item.pers && <span className="text-ink-mute"> · </span>}
+                {item.pers && <span className="font-medium">{item.pers} pers</span>}
+              </div>
+            )}
+            {item.theme && (
+              <div className={`text-[10px] text-ink-soft italic leading-tight truncate ${titleClass}`}>
+                {item.theme}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mt-1.5">
+          <div>{!cancelled && needsPolys && <PolyBadge />}</div>
+          <ProgressDotsItem item={item} stepsMap={stepsMap} />
+        </div>
       </div>
     </div>
   )
