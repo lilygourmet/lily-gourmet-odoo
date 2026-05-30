@@ -42,6 +42,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [allocations, setAllocations]   = useState([])    // table conges_allocations
   const [showAllocForm, setShowAllocForm] = useState(false)
   const [initAllocBusy, setInitAllocBusy] = useState(false)
+  const [detailEmp, setDetailEmp]         = useState(null)  // employé sélectionné pour voir le détail
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
@@ -319,8 +320,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                   {validesGroupedByMonth.map(([monthKey, list]) => {
-                    // Total jours du mois (somme calendrier)
-                    const totalJ = list.reduce((s, c) => s + nbJours(c.date_debut, c.date_fin), 0)
+                    // Total jours décomptés du mois (= ce qui sera décompté du quota)
+                    const totalJ = list.reduce((s, c) => s + joursDecomptesConge(c, empById[c.employe_id]), 0)
                     return (
                       <div key={monthKey}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '6px 10px', background: '#F4F0EA', borderRadius: 8 }}>
@@ -328,7 +329,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                             {fmtMonthLabel(monthKey)}
                           </div>
                           <div style={{ fontSize: 11, color: '#4a3a30' }}>
-                            {list.length} congé{list.length > 1 ? 's' : ''} · {totalJ} j cumulé{totalJ > 1 ? 's' : ''}
+                            {list.length} congé{list.length > 1 ? 's' : ''} · {totalJ} j décompté{totalJ > 1 ? 's' : ''}
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -463,7 +464,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               const s = soldes[e.id]
               if (!s) return null
               return (
-                <div key={e.id} style={{ ...soldeRow, gridTemplateColumns: '1fr 140px 90px 90px 110px' }}>
+                <div key={e.id} onClick={() => setDetailEmp(e)} style={{ ...soldeRow, gridTemplateColumns: '1fr 140px 90px 90px 110px', cursor: 'pointer' }} title="Cliquer pour voir le détail du calcul">
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{e.nom}</div>
                     <div style={{ fontSize: 11, color: '#8a7a70' }}>
@@ -507,6 +508,15 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
         <AllocationsModal result={allocResult} onClose={() => setAllocResult(null)} />
       )}
 
+      {detailEmp && (
+        <DetailEmployeModal
+          emp={detailEmp}
+          conges={conges.filter(c => c.employe_id === detailEmp.id)}
+          solde={soldes[detailEmp.id]}
+          onClose={() => setDetailEmp(null)}
+        />
+      )}
+
       {showAllocForm && (
         <NouvelleAllocationModal
           employes={employes}
@@ -516,6 +526,155 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       )}
     </>
   )
+}
+
+// ----- Détail employé : vue d'audit des congés pris en N -----
+function classifierConge(c) {
+  const t = (c.type_conge || '').toLowerCase()
+  if (t.includes('récup') || t.includes('recup')) return 'recup'
+  if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
+    const duree = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
+    return duree <= 3 ? 'maladie_courte' : 'maladie_longue'
+  }
+  if (t.includes('mariage'))       return 'mariage'
+  if (t.includes('naissance'))     return 'naissance'
+  if (t.includes('deces') || t.includes('décès')) return 'deces'
+  if (t.includes('circoncis'))     return 'circoncision'
+  if (t.includes('sans solde') || t.includes('unpaid')) return 'autre'
+  return 'annuel'
+}
+function compteJoursOffFixesPeriode(emp, debutYMD, finYMD) {
+  let jourFixe = null
+  if (emp.planning_type === 'fixe') jourFixe = emp.planning_jour_off || null
+  else if (emp.planning_type === 'alt') {
+    const paireOffs   = [emp.planning_paire_off_1,   emp.planning_paire_off_2  ].filter(Boolean)
+    const impaireOffs = [emp.planning_impaire_off_1, emp.planning_impaire_off_2].filter(Boolean)
+    jourFixe = paireOffs.find(d => impaireOffs.includes(d)) || null
+  }
+  if (!jourFixe) return 0
+  const J = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']
+  let n = 0
+  const d = new Date(debutYMD + 'T00:00:00')
+  const f = new Date(finYMD + 'T00:00:00')
+  while (d <= f) {
+    if (J[d.getDay()] === jourFixe) n++
+    d.setDate(d.getDate() + 1)
+  }
+  return n
+}
+
+function DetailEmployeModal({ emp, conges, solde, onClose }) {
+  const annee = new Date().getFullYear()
+  const yearStart = `${annee}-01-01`
+  const today = new Date().toISOString().slice(0, 10)
+  const congesAnnee = (conges || []).filter(c => c.statut === 'valide' && !(c.date_fin < yearStart || c.date_debut > today))
+    .sort((a, b) => a.date_debut.localeCompare(b.date_debut))
+
+  // Pour chaque congé, calcule le nb de jours décomptés et la catégorie
+  const lignes = congesAnnee.map(c => {
+    const debut = c.date_debut < yearStart ? yearStart : c.date_debut
+    const fin   = c.date_fin   > today     ? today     : c.date_fin
+    const nbCal = Math.round((new Date(fin + 'T00:00:00') - new Date(debut + 'T00:00:00')) / 86400000) + 1
+    const cat   = classifierConge(c)
+    let offFixes = 0
+    if (cat === 'annuel') offFixes = compteJoursOffFixesPeriode(emp, debut, fin)
+    const compte = cat === 'recup' ? 0 : (cat === 'annuel' ? nbCal - offFixes : nbCal)
+    const dansPris = ['annuel','mariage','naissance','deces','circoncision','autre'].includes(cat)
+    return { c, debut, fin, nbCal, cat, offFixes, compte, dansPris }
+  })
+
+  const totalPris = lignes.filter(l => l.dansPris).reduce((s, l) => s + l.compte, 0)
+  const totalMaladieCourte = lignes.filter(l => l.cat === 'maladie_courte').reduce((s, l) => s + l.compte, 0)
+  const totalMaladieLongue = lignes.filter(l => l.cat === 'maladie_longue').reduce((s, l) => s + l.compte, 0)
+  const totalRecup = lignes.filter(l => l.cat === 'recup').length
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={{ ...modal, maxWidth: 780 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 600 }}>{emp.nom}</div>
+            <div style={{ fontSize: 11, color: '#8a7a70' }}>Détail des congés validés en {annee}</div>
+          </div>
+          <button onClick={onClose} style={btnSlim}>Fermer</button>
+        </div>
+
+        {solde && (
+          <div style={{ background: '#F4F0EA', padding: '10px 12px', borderRadius: 10, marginBottom: 12, fontSize: 12 }}>
+            <div><strong>Total allocations</strong> : {solde.totalAllocations.toFixed(1)} j · <strong>Reliquat</strong> : {solde.reliquatN1 || 0} · <strong>Récup gagnés</strong> : {solde.recup}</div>
+            <div><strong>Pris (annuel + événements)</strong> : {solde.pris.toFixed(1)} j · <strong>Dispo</strong> : {solde.dispo.toFixed(1)} j</div>
+            <div style={{ color: '#0C447C', marginTop: 4 }}>Maladie ≤ 3 j : {solde.maladie.pris}/{solde.maladie.alloue} (pool séparé)</div>
+          </div>
+        )}
+
+        {lignes.length === 0
+          ? <div style={emptyBox}>Aucun congé validé en {annee}.</div>
+          : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 90px 130px 60px 50px 60px 80px', gap: 6, fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 10px', background: '#F4F0EA', borderRadius: 8 }}>
+                <div>Période</div>
+                <div>Cat.</div>
+                <div title="Type tel qu'il est dans la base">Type Odoo</div>
+                <div title="Jours calendaires (date_fin − date_debut + 1)">Cal.</div>
+                <div title="Jours off fixes exclus (annuel uniquement)">−Off</div>
+                <div style={{ fontWeight: 700 }} title="Jours décomptés du quota">=&nbsp;Compté</div>
+                <div>Dans "Pris"?</div>
+              </div>
+              {lignes.map((l, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px 90px 130px 60px 50px 60px 80px', gap: 6, fontSize: 11, padding: '6px 10px', borderRadius: 8, background: 'white', border: '0.5px solid #e5d8c3', alignItems: 'center' }}>
+                  <div>{l.debut.slice(8,10)}/{l.debut.slice(5,7)} → {l.fin.slice(8,10)}/{l.fin.slice(5,7)}</div>
+                  <div style={{ fontWeight: 500, color: catColor(l.cat) }}>{catLabel(l.cat)}</div>
+                  <div style={{ color: '#8a7a70', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.c.type_conge || '—'}>{l.c.type_conge || '—'}</div>
+                  <div>{l.nbCal}</div>
+                  <div style={{ color: l.offFixes > 0 ? '#A32D2D' : '#8a7a70' }}>{l.offFixes > 0 ? `−${l.offFixes}` : '—'}</div>
+                  <div style={{ fontWeight: 600 }}>{l.compte}</div>
+                  <div style={{ color: l.dansPris ? '#085041' : '#8a7a70' }}>{l.dansPris ? '✓' : '—'}</div>
+                </div>
+              ))}
+            </div>
+          )
+        }
+
+        <div style={{ marginTop: 12, padding: '10px 12px', background: '#FAF6F0', borderRadius: 10, fontSize: 12, color: '#4a3a30' }}>
+          <strong>Total qui apparaît dans la colonne « Pris »</strong> : {totalPris.toFixed(1)} j<br />
+          <span style={{ color: '#0C447C' }}>Maladie courte (pool séparé) : {totalMaladieCourte}</span>{' · '}
+          <span>Maladie longue (non payée, non décomptée) : {totalMaladieLongue}</span>{' · '}
+          <span>Récup (ignoré, s'ajoute au solde) : {totalRecup}</span>
+        </div>
+        <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 8 }}>
+          <strong>Heuristique de classification</strong> (sur <code>type_conge</code>) : « maladie/sick » → maladie (court si ≤ 3 j, long sinon).
+          « mariage », « naissance », « décès/deces », « circoncision » → événement. « sans solde/unpaid » → autre. « récup/recup » → ignoré. Sinon → annuel.<br />
+          Si un type Odoo est mal catégorisé, dis-le-moi avec le libellé exact, j'ajoute la règle.
+        </div>
+      </div>
+    </div>
+  )
+}
+function catLabel(c) {
+  return ({
+    annuel: 'Annuel',
+    maladie_courte: 'Maladie ≤3j',
+    maladie_longue: 'Maladie >3j',
+    mariage: 'Mariage',
+    naissance: 'Naissance',
+    deces: 'Décès',
+    circoncision: 'Circoncision',
+    autre: 'Autre',
+    recup: 'Récup',
+  })[c] || c
+}
+function catColor(c) {
+  return ({
+    annuel: '#1a0f0a',
+    maladie_courte: '#0C447C',
+    maladie_longue: '#A32D2D',
+    mariage: '#993556',
+    naissance: '#993556',
+    deces: '#993556',
+    circoncision: '#993556',
+    autre: '#4a3a30',
+    recup: '#8a7a70',
+  })[c] || '#4a3a30'
 }
 
 function NouvelleAllocationModal({ employes, onClose, onSubmit }) {
@@ -658,16 +817,36 @@ function AllocationsModal({ result, onClose }) {
   )
 }
 
+// Renvoie le nb de jours réellement décomptés (annuel : exclut jour off fixe ;
+// récup : 0 ; maladie/événement : calendaire). Sert à harmoniser l'affichage
+// dans « Congés validés » avec la colonne « Pris » des soldes.
+function joursDecomptesConge(c, emp) {
+  const nbCal = nbJours(c.date_debut, c.date_fin)
+  if (!emp) return nbCal
+  const cat = classifierConge(c)
+  if (cat === 'recup') return 0
+  if (cat === 'annuel') return Math.max(0, nbCal - compteJoursOffFixesPeriode(emp, c.date_debut, c.date_fin))
+  return nbCal
+}
+
 function CongeCard({ c, emp, actions }) {
-  const nb = nbJours(c.date_debut, c.date_fin)
+  const nbCal = nbJours(c.date_debut, c.date_fin)
+  const nbDec = joursDecomptesConge(c, emp)
   const typeLabel = TYPES.find(t => t.v === c.type_conge)?.label || c.type_conge || 'Congé'
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a' }}>{emp?.nom || `Employé #${c.employe_id}`}</div>
-          <div style={{ fontSize: 12, color: '#4a3a30', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Calendar size={13} /> du <strong>{fmt(c.date_debut)}</strong> au <strong>{fmt(c.date_fin)}</strong> · {nb} jour{nb > 1 ? 's' : ''}
+          <div style={{ fontSize: 12, color: '#4a3a30', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Calendar size={13} /> du <strong>{fmt(c.date_debut)}</strong> au <strong>{fmt(c.date_fin)}</strong>
+            {' · '}
+            <strong style={{ color: '#993556' }}>{nbDec} jour{nbDec > 1 ? 's' : ''} décompté{nbDec > 1 ? 's' : ''}</strong>
+            {nbCal !== nbDec && (
+              <span style={{ fontSize: 11, color: '#8a7a70' }} title={`Calendaire = ${nbCal} j, dont ${nbCal - nbDec} jour(s) off non décompté(s)`}>
+                ({nbCal} cal.)
+              </span>
+            )}
           </div>
           <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>
             {typeLabel}{c.motif ? ` · ${c.motif}` : ''}
