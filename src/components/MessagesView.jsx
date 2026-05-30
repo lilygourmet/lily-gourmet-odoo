@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { MessageSquareText, Cake, Croissant, Printer } from 'lucide-react'
 import AppHeader from './AppHeader'
 import {
   loadMessagesToday,
@@ -445,7 +446,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         {/* Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <h1 className="font-fraunces italic text-[26px] text-ink">💌 Messages</h1>
+            <h1 className="font-fraunces italic text-[26px] text-ink inline-flex items-center gap-2"><MessageSquareText size={22} /> Messages</h1>
           </div>
           <div className="flex gap-2">
             <button
@@ -465,19 +466,19 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
         <div className="flex gap-1 mb-4 border-b border-line">
           <button
             onClick={() => setActiveTab('cd')}
-            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
+            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px inline-flex items-center gap-1.5 ${
               activeTab === 'cd' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
             }`}
           >
-            🎂 Gâteaux ({cdMessages.length})
+            <Cake size={14} /> Gâteaux ({cdMessages.length})
           </button>
           <button
             onClick={() => setActiveTab('prod')}
-            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px ${
+            className={`px-4 py-2 text-[12px] font-medium tracking-wider transition-colors border-b-2 -mb-px inline-flex items-center gap-1.5 ${
               activeTab === 'prod' ? 'border-bordeaux text-bordeaux' : 'border-transparent text-ink-mute hover:text-ink'
             }`}
           >
-            🥐 Production ({prodMessages.length})
+            <Croissant size={14} /> Production ({prodMessages.length})
           </button>
         </div>
 
@@ -638,9 +639,9 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
             <button
               onClick={handlePrint}
               disabled={selected.size === 0}
-              className="w-full py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
             >
-              🖨 Imprimer ({selected.size} message{selected.size > 1 ? 's' : ''})
+              <Printer size={14} /> Imprimer ({selected.size} message{selected.size > 1 ? 's' : ''})
             </button>
           </div>
         </div>

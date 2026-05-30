@@ -46,7 +46,7 @@ function formatElapsed(ts) {
  * Priorité : fermée > client attend +30min > silence +3j > non assignée.
  */
 export function conversationUrgency(conv) {
-  if (conv.status === 'fermee') return { code: 'closed', text: 'Fermée', tone: 'muted' }
+  if (conv.status === 'fermee') return { emoji: '✅', text: 'Fermée', tone: 'muted' }
 
   const now = Date.now()
   const lastInbound = conv.last_inbound_at ? new Date(conv.last_inbound_at).getTime() : null
@@ -54,17 +54,17 @@ export function conversationUrgency(conv) {
   // Le client a parlé en dernier si aucun message agent n'est venu après lui
   const clientSpokeLast = lastInbound && (!lastMsg || lastMsg <= lastInbound)
 
-  // Client attend une réponse depuis > 30 min
+  // 🔴 client attend une réponse depuis > 30 min
   if (clientSpokeLast && (now - lastInbound) > 30 * 60 * 1000) {
-    return { code: 'urgent', text: `Attend une réponse depuis ${formatElapsed(lastInbound)}`, tone: 'urgent' }
+    return { emoji: '🔴', text: `⏰ Attend une réponse depuis ${formatElapsed(lastInbound)}`, tone: 'urgent' }
   }
-  // Silence client > 3 jours (l'agent a parlé en dernier, pas de réponse)
+  // 🟡 silence client > 3 jours (l'agent a parlé en dernier, pas de réponse)
   if (!clientSpokeLast && lastMsg && (now - lastMsg) > 3 * 24 * 60 * 60 * 1000) {
-    return { code: 'warn', text: `Silence depuis ${formatElapsed(lastMsg)} — à relancer`, tone: 'warn' }
+    return { emoji: '🟡', text: `😴 Silence depuis ${formatElapsed(lastMsg)} - à relancer`, tone: 'warn' }
   }
-  // Nouvelle conversation à prendre (non assignée récente)
+  // 🆕 nouvelle conversation à prendre (non assignée récente)
   if (conv.status === 'non_assignee') {
-    return { code: 'new', text: 'Nouvelle conversation à prendre', tone: 'muted' }
+    return { emoji: '🆕', text: 'Nouvelle conversation à prendre', tone: 'muted' }
   }
   return null
 }
