@@ -144,6 +144,12 @@ export default function EmployeEditModal({
         heures_sup_mensuelles: form.heures_sup_mensuelles,
         societe_id: form.societe_id || null,
         declare: form.declare,
+        telephone: form.telephone.trim() || null,
+        contact_urgence_1_nom: form.contact_urgence_1_nom.trim() || null,
+        contact_urgence_1_telephone: form.contact_urgence_1_telephone.trim() || null,
+        contact_urgence_2_nom: form.contact_urgence_2_nom.trim() || null,
+        contact_urgence_2_telephone: form.contact_urgence_2_telephone.trim() || null,
+        lieu_urgence: form.lieu_urgence || null,
       }
       if (isNew) {
         await createEmploye(data, user.id)
@@ -258,6 +264,32 @@ export default function EmployeEditModal({
             <Field label="RIB (numéro de compte)" value={form.rib} onChange={v => setF('rib', v)} placeholder="Ex : 011 810 0000123456789 12" />
             <Field label="Banque" value={form.banque} onChange={v => setF('banque', v)} placeholder="Ex : Attijariwafa Bank, BMCE…" />
           </Row>
+
+          <div style={{ background: '#FCEEE8', padding: 12, borderRadius: 12, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              Contact & urgence
+            </div>
+            <Row>
+              <Field label="Téléphone (employé)" value={form.telephone} onChange={v => setF('telephone', v)} placeholder="Ex : 06 12 34 56 78" />
+              <div>
+                <label style={lblStyle}>Lieu en cas d'urgence grave</label>
+                <select value={form.lieu_urgence} onChange={e => setF('lieu_urgence', e.target.value)} style={inputStyle}>
+                  <option value="">— non défini —</option>
+                  <option value="clinique">Clinique</option>
+                  <option value="hopital_public">Hôpital public</option>
+                  <option value="famille">Appeler la famille</option>
+                </select>
+              </div>
+            </Row>
+            <Row>
+              <Field label="Contact urgence 1 — nom" value={form.contact_urgence_1_nom} onChange={v => setF('contact_urgence_1_nom', v)} placeholder="Ex : Mère, frère, conjoint(e)" />
+              <Field label="Contact urgence 1 — téléphone" value={form.contact_urgence_1_telephone} onChange={v => setF('contact_urgence_1_telephone', v)} placeholder="Ex : 06 11 22 33 44" />
+            </Row>
+            <Row>
+              <Field label="Contact urgence 2 — nom" value={form.contact_urgence_2_nom} onChange={v => setF('contact_urgence_2_nom', v)} placeholder="(optionnel)" />
+              <Field label="Contact urgence 2 — téléphone" value={form.contact_urgence_2_telephone} onChange={v => setF('contact_urgence_2_telephone', v)} placeholder="(optionnel)" />
+            </Row>
+          </div>
 
           <div style={{ background: '#F4F0EA', padding: 12, borderRadius: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -441,6 +473,12 @@ function initForm(employe) {
     heures_sup_mensuelles: employe?.heures_sup_mensuelles != null ? employe.heures_sup_mensuelles : true,
     societe_id: employe?.societe_id || null,
     declare: employe?.declare != null ? employe.declare : false,
+    telephone: employe?.telephone || '',
+    contact_urgence_1_nom: employe?.contact_urgence_1_nom || '',
+    contact_urgence_1_telephone: employe?.contact_urgence_1_telephone || '',
+    contact_urgence_2_nom: employe?.contact_urgence_2_nom || '',
+    contact_urgence_2_telephone: employe?.contact_urgence_2_telephone || '',
+    lieu_urgence: employe?.lieu_urgence || '',
   }
 }
 
