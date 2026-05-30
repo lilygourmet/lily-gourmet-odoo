@@ -432,7 +432,7 @@ export async function syncCongesAnneeOdoo(annee = null) {
 export const ALLOC_TYPES = [
   { v: 'annuel',         label: 'Congé annuel',     defaultJours: null,  isAuto: true  },
   { v: 'maladie_courte', label: 'Maladie ≤ 3 j',    defaultJours: 6,     isAuto: true  },
-  { v: 'reliquat',       label: 'Reliquat N-1',     defaultJours: null,  isAuto: false },
+  { v: 'reliquat',       label: 'Reliquat N-1',     defaultJours: null,  isAuto: true  },
   { v: 'mariage',        label: 'Mariage',          defaultJours: 4,     isAuto: false },
   { v: 'naissance',      label: 'Naissance',        defaultJours: 3,     isAuto: false },
   { v: 'deces',          label: 'Décès',            defaultJours: 3,     isAuto: false },

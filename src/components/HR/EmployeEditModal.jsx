@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Clock, Lock, CheckCircle2 } from 'lucide-react'
 import { createEmploye, updateEmploye, loadEmployes } from '../../lib/hr'
+import { supabase } from '../../lib/supabase'
+
+// Normalise un numéro marocain en format international WATI (212XXXXXXXXX)
+// Ex : "06 66 32 84 93" → "212666328493"
+function normalizePhoneMA(raw) {
+  if (!raw) return null
+  const digits = String(raw).replace(/\D/g, '')
+  if (!digits) return null
+  if (digits.startsWith('212')) return digits
+  if (digits.startsWith('0'))   return '212' + digits.slice(1)
+  return digits
+}
 
 const TYPES_CONTRAT = ['CDI', 'CDD', 'Stage', 'Interim', 'Autre']
 
@@ -157,6 +169,16 @@ export default function EmployeEditModal({
         await createEmploye(data, user.id)
       } else {
         await updateEmploye(currentEmploye.id, data, user.id)
+        // Propagation du téléphone vers le user lié (s'il existe).
+        // Le format est normalisé en 212XXXXXXXXX pour WATI.
+        const tel = normalizePhoneMA(data.telephone)
+        if (tel) {
+          try {
+            await supabase.from('users').update({ whatsapp: tel }).eq('employe_id', currentEmploye.id)
+          } catch (e) {
+            console.warn('[propagate-tel-user]', e?.message || e)
+          }
+        }
       }
       onSaved?.()
     } catch (e) {
