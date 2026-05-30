@@ -1,4 +1,20 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+
+// Hook : retourne true si l'écran est ≤ 640px (mobile)
+function useIsMobile(maxWidth = 640) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia(`(max-width: ${maxWidth}px)`).matches
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`)
+    const handler = e => setIsMobile(e.matches)
+    mq.addEventListener?.('change', handler) || mq.addListener(handler)
+    return () => mq.removeEventListener?.('change', handler) || mq.removeListener(handler)
+  }, [maxWidth])
+  return isMobile
+}
+
 import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Download, Pencil } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { supabase } from '../lib/supabase'
@@ -47,6 +63,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [detailEmp, setDetailEmp]         = useState(null)  // employé sélectionné pour voir le détail
   const [editAlloc, setEditAlloc]         = useState(null)  // allocation en cours d'édition
   const [editConge, setEditConge]         = useState(null)  // congé en cours d'édition
+  const isMobile = useIsMobile()
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
@@ -266,7 +283,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   return (
     <>
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 72px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '14px 10px 80px' : '20px 16px 72px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
           <h1 style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, margin: 0, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
             <Palmtree size={22} /> Congés
@@ -288,8 +305,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           </div>
         </div>
 
-        {/* Onglets */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {/* Onglets — scrollables horizontalement sur mobile */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : 'visible', paddingBottom: isMobile ? 4 : 0 }}>
           <Tab active={tab === 'demandes'} onClick={() => setTab('demandes')}>
             Demandes en attente {demandes.length > 0 && <span style={badge}>{demandes.length}</span>}
           </Tab>
@@ -454,27 +471,65 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                             const debutAlloc = a.date_evt || `${a.annee}-01-01`
                             const finAlloc   = `${a.annee}-12-31`
                             return (
-                              <div key={a.id} style={{ display: 'grid', gridTemplateColumns: '160px 70px 180px 1fr auto auto', gap: 8, fontSize: 12, padding: '6px 8px', borderTop: '0.5px solid #f0e8d5', alignItems: 'center' }}>
-                                <div style={{ color: '#1a0f0a' }}>
-                                  {t?.label || a.type}
-                                  {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
-                                </div>
-                                <div style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</div>
-                                <div style={{ color: '#4a3a30', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Calendar size={11} />
-                                  du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} au {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
-                                </div>
-                                <div style={{ color: '#8a7a70', fontStyle: a.raison ? 'normal' : 'italic' }}>
-                                  {a.raison || '—'}
-                                </div>
-                                <button onClick={() => setEditAlloc(a)} title="Modifier cette allocation"
-                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
-                                  <Pencil size={13} />
-                                </button>
-                                <button onClick={() => handleCancelAllocation(a)} title="Annuler cette allocation"
-                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
-                                  <Trash2 size={13} />
-                                </button>
+                              <div key={a.id} style={{
+                                display: 'grid',
+                                gridTemplateColumns: isMobile ? '1fr auto' : '160px 70px 180px 1fr auto auto',
+                                gap: 8,
+                                fontSize: 12,
+                                padding: '6px 8px',
+                                borderTop: '0.5px solid #f0e8d5',
+                                alignItems: 'center',
+                              }}>
+                                {isMobile ? (
+                                  <>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ color: '#1a0f0a', fontWeight: 500 }}>
+                                        {t?.label || a.type}
+                                        {' · '}
+                                        <span style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</span>
+                                        {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
+                                      </div>
+                                      <div style={{ color: '#4a3a30', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                        <Calendar size={10} />
+                                        {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} → {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
+                                      </div>
+                                      {a.raison && <div style={{ color: '#8a7a70', fontSize: 11, marginTop: 2 }}>{a.raison}</div>}
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                      <button onClick={() => setEditAlloc(a)} title="Modifier"
+                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button onClick={() => handleCancelAllocation(a)} title="Annuler"
+                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div style={{ color: '#1a0f0a' }}>
+                                      {t?.label || a.type}
+                                      {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
+                                    </div>
+                                    <div style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</div>
+                                    <div style={{ color: '#4a3a30', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                      <Calendar size={11} />
+                                      du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} au {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
+                                    </div>
+                                    <div style={{ color: '#8a7a70', fontStyle: a.raison ? 'normal' : 'italic' }}>
+                                      {a.raison || '—'}
+                                    </div>
+                                    <button onClick={() => setEditAlloc(a)} title="Modifier cette allocation"
+                                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                                      <Pencil size={13} />
+                                    </button>
+                                    <button onClick={() => handleCancelAllocation(a)} title="Annuler cette allocation"
+                                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             )
                           })}
@@ -490,16 +545,57 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
         {!loading && tab === 'soldes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              <div>Employé</div>
-              <div title="Annuel permis + reliquat + événements applicables (hors maladie ≤ 3 j)">Total allocations</div>
-              <div title="Report N-1 (expire le 30 mai)">Reliquat</div>
-              <div title="Jours déjà pris (annuel + événements)">Pris</div>
-              <div style={{ textAlign: 'right' }} title="Allocations accumulé + récup − pris">Dispo</div>
-            </div>
+            {!isMobile && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <div>Employé</div>
+                <div title="Annuel permis + reliquat + événements applicables (hors maladie ≤ 3 j)">Total allocations</div>
+                <div title="Report N-1 (expire le 30 mai)">Reliquat</div>
+                <div title="Jours déjà pris (annuel + événements)">Pris</div>
+                <div style={{ textAlign: 'right' }} title="Allocations accumulé + récup − pris">Dispo</div>
+              </div>
+            )}
             {employes.map(e => {
               const s = soldes[e.id]
               if (!s) return null
+              if (isMobile) {
+                // Vue compacte : carte empilée, dispo en gros à droite
+                return (
+                  <div key={e.id} onClick={() => setDetailEmp(e)} style={{ padding: '12px 14px', borderRadius: 12, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a' }}>{e.nom}</div>
+                        <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2 }}>
+                          {e.poste || '—'}
+                          {!s.peutPrendre && <span style={{ color: '#A32D2D' }}> · ⚠ &lt; 6 mois</span>}
+                        </div>
+                        <div style={{ fontSize: 11, marginTop: 4, color: '#0C447C' }}>
+                          Maladie ≤ 3 j : {s.maladie.pris}/{s.maladie.alloue || 6}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5 }}>Dispo</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: s.dispo > 0 ? '#085041' : '#A32D2D', lineHeight: 1 }}>
+                          {s.dispo.toFixed(1)}<span style={{ fontSize: 12 }}> j</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, fontSize: 11, paddingTop: 8, borderTop: '0.5px solid #f0e8d5' }}>
+                      <div>
+                        <div style={{ fontSize: 9, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.3 }}>Total alloc.</div>
+                        <div style={{ fontWeight: 600 }}>{s.totalAllocations.toFixed(1)} j</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.3 }}>Reliquat</div>
+                        <div style={{ fontWeight: 600 }}>{s.reliquatN1 > 0 ? `${s.reliquatN1} j` : '—'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.3 }}>Pris</div>
+                        <div style={{ fontWeight: 600 }}>{s.pris.toFixed(1)} j</div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
               return (
                 <div key={e.id} onClick={() => setDetailEmp(e)} style={{ ...soldeRow, gridTemplateColumns: '1fr 140px 90px 90px 110px', cursor: 'pointer' }} title="Cliquer pour voir le détail du calcul">
                   <div>
@@ -525,7 +621,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               <strong>Total allocations</strong> = annuel permis + reliquat valide + événements applicables (hors maladie ≤ 3 j).<br />
               <strong>Dispo</strong> = Total allocations + récup − jours pris.<br />
               <strong>Reliquat</strong> = report de l'année précédente. <em>Expire le 30 mai.</em><br />
-              <strong>Maladie ≤ 3 j</strong> = pool séparé (6 j/an), affiché en bleu sous chaque nom.
+              <strong>Maladie ≤ 3 j</strong> = pool séparé (6 j/an).
             </div>
           </div>
         )}
