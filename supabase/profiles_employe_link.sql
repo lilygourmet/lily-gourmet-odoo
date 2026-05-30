@@ -8,7 +8,7 @@
 
 -- 1) Ajout de la colonne et de son index
 ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS employe_id UUID REFERENCES employes(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS employe_id BIGINT REFERENCES employes(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS profiles_employe_id_idx ON profiles(employe_id);
 
