@@ -578,7 +578,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-xl border border-line p-6 text-center text-[13px] text-ink-mute">
+          <div className="bg-white rounded-2xl border border-line p-6 text-center text-[13px] text-ink-mute shadow-sm">
             Chargement...
           </div>
         ) : tab === 'todo' ? (
@@ -611,7 +611,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVitrineDone, onProdDone, onCommandeDone }) {
   if (allDone) {
     return (
-      <div className="bg-white rounded-xl border border-line p-8 text-center">
+      <div className="bg-white rounded-2xl border border-line p-8 text-center shadow-sm">
         <p className="text-[15px] font-semibold text-success">Tout est rangé !</p>
         <p className="text-[12px] text-ink-mute mt-1">Rien n'attend de t'être rangé pour l'instant.</p>
       </div>
@@ -620,7 +620,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVit
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-line p-4 mb-6">
+      <div className="bg-white rounded-2xl border border-line p-4 mb-6 shadow-sm">
         <p className="text-[14px] font-medium text-bordeaux">
           {total} article{total > 1 ? 's' : ''} à ranger
         </p>
@@ -714,7 +714,7 @@ function DoneTab({ vitrineItems, prodItems, commandeItems, onUndo }) {
   const total = vitrineItems.length + prodItems.length + commandeItems.length
   if (total === 0) {
     return (
-      <div className="bg-white rounded-xl border border-line p-8 text-center">
+      <div className="bg-white rounded-2xl border border-line p-8 text-center shadow-sm">
         <p className="text-[15px] font-semibold text-ink">Rien rangé pour le moment</p>
         <p className="text-[12px] text-ink-mute mt-1">Les items que tu rangeras apparaîtront ici.</p>
       </div>
@@ -844,7 +844,7 @@ function ItemCard({ title, subtitle, quantity, onClick, done = false, compact = 
   return (
     <button
       onClick={onClick}
-      className={`w-full bg-white border rounded-lg ${padding} text-left transition-all flex items-center justify-between gap-2 group ${baseColor}`}
+      className={`w-full bg-white border rounded-xl shadow-sm ${padding} text-left transition-all flex items-center justify-between gap-2 group ${baseColor}`}
     >
       <div className="flex-1 min-w-0">
         <div className={`${titleSize} font-medium truncate ${done ? 'line-through text-ink-mute' : ''}`}>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Search, Building2, Plus, Calendar, Pencil, Trash2, PartyPopper, Palmtree, CheckCircle2, Moon, Eye, EyeOff } from 'lucide-react'
 import { loadEmployes, deleteEmploye } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
 import EmployeEditModal from './EmployeEditModal'
@@ -64,7 +65,7 @@ export default function EmployesTab({ user, isAdmin }) {
   function getStatutAujourdhui(emp) {
     // 1) Férié ?
     if (joursFeries.length > 0) {
-      return { label: '🎉 Férié', bg: '#FFF1DA', color: '#8A5A00' }
+      return { label: 'Férié', Icon: PartyPopper, bg: '#FFF1DA', color: '#8A5A00' }
     }
 
     // 2) Congé ?
@@ -74,24 +75,24 @@ export default function EmployesTab({ user, isAdmin }) {
                      : cg.type === 'paye' || cg.type === 'payé' ? 'Congé payé'
                      : cg.type === 'sans_solde' ? 'Sans solde'
                      : (cg.type || 'Congé')
-      return { label: `🌴 ${typeLabel}`, bg: '#F3E8FF', color: '#5B21B6' }
+      return { label: typeLabel, Icon: Palmtree, bg: '#F3E8FF', color: '#5B21B6' }
     }
 
     // 3) Planning
     const ptype = emp.planning_type || 'aucun'
 
     if (ptype === 'aucun') {
-      return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+      return { label: 'Présent', Icon: CheckCircle2, bg: '#EAF3DE', color: '#27500A' }
     }
 
     if (ptype === 'fixe') {
       if (emp.planning_jour_off === jourSemaineFR) {
-        return { label: '😴 OFF', bg: '#E4E4E7', color: '#52525B' }
+        return { label: 'OFF', Icon: Moon, bg: '#E4E4E7', color: '#52525B' }
       }
       if (emp.planning_demi_off === jourSemaineFR) {
         return { label: '½ Demi-journée', bg: '#FEF3C7', color: '#92400E' }
       }
-      return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+      return { label: 'Présent', Icon: CheckCircle2, bg: '#EAF3DE', color: '#27500A' }
     }
 
     if (ptype === 'alt') {
@@ -101,12 +102,12 @@ export default function EmployesTab({ user, isAdmin }) {
       const off1 = isPaire ? emp.planning_paire_off_1 : emp.planning_impaire_off_1
       const off2 = isPaire ? emp.planning_paire_off_2 : emp.planning_impaire_off_2
       if (jourSemaineFR === off1 || jourSemaineFR === off2) {
-        return { label: '😴 OFF', bg: '#E4E4E7', color: '#52525B' }
+        return { label: 'OFF', Icon: Moon, bg: '#E4E4E7', color: '#52525B' }
       }
-      return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+      return { label: 'Présent', Icon: CheckCircle2, bg: '#EAF3DE', color: '#27500A' }
     }
 
-    return { label: '✅ Présent', bg: '#EAF3DE', color: '#27500A' }
+    return { label: 'Présent', Icon: CheckCircle2, bg: '#EAF3DE', color: '#27500A' }
   }
 
   const filtered = useMemo(() => {
@@ -153,14 +154,17 @@ export default function EmployesTab({ user, isAdmin }) {
       <div style={{
         display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap'
       }}>
-        <input
-          type="text" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Rechercher par nom, poste, CNSS, CIN…"
-          style={{
-            flex: 1, minWidth: 240, padding: '9px 11px', fontSize: 13,
-            border: '1px solid #e5d8c3', borderRadius: 6
-          }}
-        />
+        <div style={{ position: 'relative', flex: 1, minWidth: 240, display: 'inline-flex', alignItems: 'center' }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, color: '#8a7a70', pointerEvents: 'none' }} />
+          <input
+            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher par nom, poste, CNSS, CIN…"
+            style={{
+              width: '100%', padding: '9px 11px 9px 30px', fontSize: 13,
+              border: '1px solid #e5d8c3', borderRadius: 8
+            }}
+          />
+        </div>
         {isAdmin && (
           <div style={{ display: 'flex', gap: 4 }}>
             {['actif', 'inactif', 'tous'].map(f => (
@@ -178,7 +182,7 @@ export default function EmployesTab({ user, isAdmin }) {
         {/* Filtre société */}
         <div style={{ display: 'flex', gap: 4 }}>
           {[
-            { v: 'toutes', label: '🏢 Toutes' },
+            { v: 'toutes', label: 'Toutes', icon: true },
             { v: 'LG', label: 'LG' },
             { v: 'LN', label: 'L&N' },
           ].map(f => (
@@ -187,25 +191,28 @@ export default function EmployesTab({ user, isAdmin }) {
               background: societeFilter === f.v ? '#993556' : '#F4F0EA',
               color: societeFilter === f.v ? 'white' : '#4a3a30',
               fontWeight: societeFilter === f.v ? 500 : 400,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
-              {f.label}
+              {f.icon && <Building2 size={14} />}{f.label}
             </button>
           ))}
         </div>
         <button onClick={() => setEditingEmp({})} style={{
           padding: '9px 14px', fontSize: 13, background: '#993556',
           color: 'white', border: '1px solid #993556', borderRadius: 8,
-          cursor: 'pointer', fontWeight: 500
+          cursor: 'pointer', fontWeight: 500,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
         }}>
-          ➕ Nouvel employé
+          <Plus size={14} /> Nouvel employé
         </button>
       </div>
 
       {/* Info du jour */}
       <div style={{
         fontSize: 11, color: '#8a7a70', marginBottom: 10, paddingLeft: 4,
+        display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
-        📅 Aujourd'hui : <strong>{jourSemaineFR}</strong> {todayDate.toLocaleDateString('fr-FR')}
+        <Calendar size={14} /> Aujourd'hui : <strong>{jourSemaineFR}</strong> {todayDate.toLocaleDateString('fr-FR')}
       </div>
 
       {/* Tableau */}
@@ -219,7 +226,7 @@ export default function EmployesTab({ user, isAdmin }) {
         </div>
       )}
       {!loading && filtered.length > 0 && !isMobile && (
-        <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5d8c3', overflow: 'hidden', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
@@ -270,16 +277,18 @@ export default function EmployesTab({ user, isAdmin }) {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                               {Number(e.salaire_net).toLocaleString('fr-FR')} dh
                               <button onClick={ev => handleRevealSalary(ev, e.id)} style={{
-                                background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
-                              }} title="Masquer">🙈</button>
+                                background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                                display: 'inline-flex', alignItems: 'center',
+                              }} title="Masquer"><EyeOff size={14} /></button>
                             </span>
                           ) : (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ letterSpacing: 2, color: '#8a7a70' }}>•••••</span>
                               <span style={{ color: '#8a7a70', fontSize: 11 }}>dh</span>
                               <button onClick={ev => handleRevealSalary(ev, e.id)} style={{
-                                background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
-                              }} title="Révéler">👁</button>
+                                background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                                display: 'inline-flex', alignItems: 'center',
+                              }} title="Révéler"><Eye size={14} /></button>
                             </span>
                           )
                         ) : '—'}
@@ -290,12 +299,17 @@ export default function EmployesTab({ user, isAdmin }) {
                         fontSize: 10, padding: '3px 8px', borderRadius: 999,
                         background: statut.bg, color: statut.color, fontWeight: 500,
                         whiteSpace: 'nowrap',
-                      }}>{statut.label}</span>
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                      }}>{statut.Icon && <statut.Icon size={12} />}{statut.label}</span>
                     </Td>
                     <Td>
-                      <span style={{ color: '#8a7a70', fontSize: 11, fontStyle: 'italic' }}>✏️ Modifier</span>
+                      <span style={{ color: '#8a7a70', fontSize: 11, fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Pencil size={12} /> Modifier
+                      </span>
                       {isAdmin && (
-                        <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">🗑️</button>
+                        <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">
+                          <Trash2 size={14} />
+                        </button>
                       )}
                     </Td>
                   </tr>
@@ -316,8 +330,9 @@ export default function EmployesTab({ user, isAdmin }) {
                 key={e.id}
                 onClick={() => setEditingEmp(e)}
                 style={{
-                  background: 'white', border: '1px solid #e5d8c3', borderRadius: 10,
+                  background: 'white', border: '1px solid #e5d8c3', borderRadius: 12,
                   padding: 12, opacity: e.actif ? 1 : 0.6, cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -333,7 +348,8 @@ export default function EmployesTab({ user, isAdmin }) {
                   <span style={{
                     fontSize: 10, padding: '3px 8px', borderRadius: 999,
                     background: statut.bg, color: statut.color, fontWeight: 500, whiteSpace: 'nowrap',
-                  }}>{statut.label}</span>
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>{statut.Icon && <statut.Icon size={12} />}{statut.label}</span>
                   {e.cnss && <span>CNSS {e.cnss}</span>}
                   {e.cin && <span>CIN {e.cin}</span>}
                   {e.date_entree && <span>Entrée {fmtDate(e.date_entree)}</span>}
@@ -345,18 +361,20 @@ export default function EmployesTab({ user, isAdmin }) {
                         revealedSalaries.has(e.id) ? (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                             {Number(e.salaire_net).toLocaleString('fr-FR')} dh
-                            <button onClick={ev => handleRevealSalary(ev, e.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0 }} title="Masquer">🙈</button>
+                            <button onClick={ev => handleRevealSalary(ev, e.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center' }} title="Masquer"><EyeOff size={14} /></button>
                           </span>
                         ) : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ letterSpacing: 2, color: '#8a7a70' }}>•••••</span>
                             <span style={{ color: '#8a7a70', fontSize: 11 }}>dh</span>
-                            <button onClick={ev => handleRevealSalary(ev, e.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0 }} title="Révéler">👁</button>
+                            <button onClick={ev => handleRevealSalary(ev, e.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center' }} title="Révéler"><Eye size={14} /></button>
                           </span>
                         )
                       ) : <span style={{ color: '#8a7a70' }}>—</span>}
                     </span>
-                    <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">🗑️</button>
+                    <button onClick={ev => handleDelete(ev, e)} style={btnDel} title="Supprimer">
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 )}
               </div>
@@ -402,4 +420,4 @@ function fmtDate(d) {
   } catch { return d }
 }
 
-const btnDel = { padding: '4px 8px', fontSize: 14, background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: 4 }
+const btnDel = { padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: 4, color: '#A32D2D', display: 'inline-flex', alignItems: 'center' }

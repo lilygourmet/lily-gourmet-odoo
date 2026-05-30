@@ -110,7 +110,7 @@ export default function AbsencesView({ user }) {
               </div>
               <div className="space-y-2">
                 {list.map(a => (
-                  <div key={a.id} className="rounded-xl border border-line bg-cream-warm p-3 flex items-start gap-3">
+                  <div key={a.id} className="rounded-2xl border border-line bg-cream-warm p-3 flex items-start gap-3 shadow-sm">
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] text-ink">
                         {a.type && <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux mr-2">{a.type}</span>}

@@ -176,7 +176,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
               })).filter(({ items }) => items.length > 0)
 
               return (
-                <div key={date} className="bg-white rounded-lg border border-line p-3">
+                <div key={date} className="bg-white rounded-2xl border border-line p-3 shadow-sm">
                   <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-bordeaux/30 flex-wrap">
                     <div className="font-mono text-[11px] tracking-[0.15em] uppercase text-bordeaux font-bold capitalize">
                       {label}

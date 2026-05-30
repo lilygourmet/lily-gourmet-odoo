@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Phone, MapPin } from 'lucide-react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
 import { isLivreur } from '../lib/auth'
 import { printArticleBatch, pingPrinter } from '../lib/printTicket'
@@ -530,10 +531,10 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
           {clientPhone && (
             <a
               href={`tel:${clientPhone.replace(/\s/g, '')}`}
-              className="text-bordeaux hover:underline"
+              className="text-bordeaux hover:underline inline-flex items-center gap-1.5"
               onClick={e => e.stopPropagation()}
             >
-              📞 {clientPhone}
+              <Phone size={12} strokeWidth={1.8} /> {clientPhone}
             </a>
           )}
           {mapsUrl && (
@@ -541,10 +542,10 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
               href={mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-bordeaux hover:underline"
+              className="text-bordeaux hover:underline inline-flex items-center gap-1.5"
               onClick={e => e.stopPropagation()}
             >
-              📍 Voir sur Maps
+              <MapPin size={12} strokeWidth={1.8} /> Voir sur Maps
             </a>
           )}
           {orderNote && !mapsUrl && (
@@ -917,7 +918,7 @@ function RecapCard({ cat, linesForCategory, linesForCategoryFull, allLines = [],
 
   return (
     <button onClick={onClick}
-            className={`rounded-xl p-4 transition-all text-left cursor-pointer ${borderClass}`}>
+            className={`rounded-2xl p-4 transition-all text-left cursor-pointer shadow-sm ${borderClass}`}>
       <div className="flex items-center gap-2 mb-2 min-w-0">
         <span className="text-[15px] opacity-80">{cat.emoji}</span>
         <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-mute truncate">

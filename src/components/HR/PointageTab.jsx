@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
+  User, Users, Calendar, RefreshCw, Bug, Clock, Lock, Unlock, Building2,
+  Pencil, Trash2, Plus, Download, Save, Hand, Eye, EyeOff, Wallet,
+} from 'lucide-react'
+import {
   loadMonthData, calculerMois, syncAttendance, syncLeaves,
   setAjustement, removeAjustement, updatePointage, validerMois,
 } from '../../lib/pointage'
@@ -489,13 +493,13 @@ export default function PointageTab({ user, isAdmin }) {
         <div style={{ display: 'flex', gap: 4, padding: 3, background: '#F4F0EA', borderRadius: 8, flexWrap: 'wrap' }}>
           {(isAdmin
             ? [
-                { v: 'single', label: '👤 Un employé' },
-                { v: 'annee', label: '📅 Année' },
-                { v: 'all', label: '👥 Tous' },
-                { v: 'recup', label: '🟣 Récup & Absences' },
+                { v: 'single', label: 'Un employé', Icon: User },
+                { v: 'annee', label: 'Année', Icon: Calendar },
+                { v: 'all', label: 'Tous', Icon: Users },
+                { v: 'recup', label: 'Récup & Absences', dot: '#9333EA' },
               ]
             : [
-                { v: 'recup', label: '🟣 Récup & Absences' },
+                { v: 'recup', label: 'Récup & Absences', dot: '#9333EA' },
               ]
           ).map(t => (
             <button key={t.v} onClick={() => setVue(t.v)} style={{
@@ -503,7 +507,13 @@ export default function PointageTab({ user, isAdmin }) {
               background: vue === t.v ? 'white' : 'transparent',
               color: vue === t.v ? '#1a0f0a' : '#4a3a30',
               fontWeight: vue === t.v ? 500 : 400,
-            }}>{t.label}</button>
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              {t.Icon ? <t.Icon size={14} /> : (
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: t.dot, display: 'inline-block' }} />
+              )}
+              {t.label}
+            </button>
           ))}
         </div>
 
@@ -527,14 +537,20 @@ export default function PointageTab({ user, isAdmin }) {
               border: '1px solid ' + (monthAllLocked ? '#8a7a70' : '#0C447C'), borderRadius: 8,
               cursor: syncing || monthAllLocked ? 'not-allowed' : 'pointer', fontWeight: 500,
               opacity: monthAllLocked ? 0.6 : 1,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
-              {syncing ? '⏳ Sync...' : (monthAllLocked ? '🔒 Sync (verrouillé)' : '🔄 Sync Odoo')}
+              {syncing
+                ? <><Clock size={14} /> Sync...</>
+                : (monthAllLocked
+                    ? <><Lock size={14} /> Sync (verrouillé)</>
+                    : <><RefreshCw size={14} /> Sync Odoo</>)}
             </button>
             <button onClick={handleDebug} style={{
               padding: '9px 12px', fontSize: 12, background: '#F4F0EA', color: '#4a3a30',
               border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
             }} title="Voir ce qu'Odoo renvoie">
-              🐛 Debug
+              <Bug size={14} /> Debug
             </button>
           </>
         )}
@@ -542,7 +558,7 @@ export default function PointageTab({ user, isAdmin }) {
 
       {error && (
         <div style={{ padding: '10px 14px', background: '#FCE9E8', color: '#99201E', borderRadius: 6, fontSize: 13, marginBottom: 12 }}>
-          ❌ {error}
+          {error}
         </div>
       )}
       {success && (
@@ -566,9 +582,9 @@ export default function PointageTab({ user, isAdmin }) {
         <>
           <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} isAdmin={isAdmin} />
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
-            <button onClick={handleExportSup} style={btnExport}>📥 Export heures sup</button>
-            <button onClick={handleExportConges} style={btnExport}>📥 Export congés</button>
-            <button onClick={handleValider} style={btnPrimaryGreen}>✅ Valider le mois</button>
+            <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
+            <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
+            <button onClick={handleValider} style={btnPrimaryGreen}>✓ Valider le mois</button>
           </div>
         </>
       )}
@@ -578,8 +594,8 @@ export default function PointageTab({ user, isAdmin }) {
           <VueRecup data={data} resultats={resultats} mois={mois} annee={annee} />
           {isAdmin && (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
-              <button onClick={handleExportSup} style={btnExport}>📥 Export heures sup</button>
-              <button onClick={handleExportConges} style={btnExport}>📥 Export congés</button>
+              <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
+              <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
             </div>
           )}
         </>
@@ -593,14 +609,15 @@ export default function PointageTab({ user, isAdmin }) {
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: 10, padding: '8px 12px',
-            background: '#F4F0EA', borderRadius: 8, gap: 8, flexWrap: 'wrap',
+            background: '#F4F0EA', borderRadius: 12, gap: 8, flexWrap: 'wrap',
+            boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
           }}>
             <button onClick={() => setEditingEmp(empSelected)} style={{
               padding: '4px 8px', fontSize: 14, fontWeight: 500, color: '#993556',
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 6,
             }} title="Cliquer pour éditer la fiche employé">
-              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
+              <User size={14} /> {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <Pencil size={12} />
             </button>
             {empSelected?.societe?.code && (
               <span style={{
@@ -608,8 +625,9 @@ export default function PointageTab({ user, isAdmin }) {
                 background: empSelected.societe.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
                 color: empSelected.societe.code === 'LG' ? '#993556' : '#27500A',
                 fontWeight: 500,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
               }}>
-                🏢 {empSelected.societe.nom}
+                <Building2 size={12} /> {empSelected.societe.nom}
               </span>
             )}
           </div>
@@ -621,7 +639,7 @@ export default function PointageTab({ user, isAdmin }) {
               border: '1px solid #F5BFBC',
               display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              🔒 <strong>Mois validé</strong>
+              <Lock size={14} /> <strong>Mois validé</strong>
             </div>
           )}
 
@@ -662,20 +680,21 @@ export default function PointageTab({ user, isAdmin }) {
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
             {isAdmin && (
               <>
-                <button onClick={handleExportSup} style={btnExport}>📥 Export heures sup</button>
-                <button onClick={handleExportConges} style={btnExport}>📥 Export congés</button>
+                <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
+                <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
                 {/* Nom employé cliquable → ouvre modal */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: 10, padding: '8px 12px',
-            background: '#F4F0EA', borderRadius: 8, gap: 8, flexWrap: 'wrap',
+            background: '#F4F0EA', borderRadius: 12, gap: 8, flexWrap: 'wrap',
+            boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
           }}>
             <button onClick={() => setEditingEmp(empSelected)} style={{
               padding: '4px 8px', fontSize: 14, fontWeight: 500, color: '#993556',
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 6,
             }} title="Cliquer pour éditer la fiche employé">
-              👤 {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <span style={{ fontSize: 11 }}>✏️</span>
+              <User size={14} /> {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <Pencil size={12} />
             </button>
             {empSelected?.societe?.code && (
               <span style={{
@@ -683,8 +702,9 @@ export default function PointageTab({ user, isAdmin }) {
                 background: empSelected.societe.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
                 color: empSelected.societe.code === 'LG' ? '#993556' : '#27500A',
                 fontWeight: 500,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
               }}>
-                🏢 {empSelected.societe.nom}
+                <Building2 size={12} /> {empSelected.societe.nom}
               </span>
             )}
           </div>
@@ -693,8 +713,9 @@ export default function PointageTab({ user, isAdmin }) {
                   <button onClick={handleDebloquer} style={{
                     padding: '10px 18px', fontSize: 13, background: '#A32D2D', color: 'white',
                     border: '1px solid #A32D2D', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
                   }}>
-                    🔓 Débloquer le mois
+                    <Unlock size={14} /> Débloquer le mois
                   </button>
                 ) : (
                   <>
@@ -705,7 +726,7 @@ export default function PointageTab({ user, isAdmin }) {
                       ✓ Valider {empSelected?.nom?.split(' ')[0] || 'cet employé'}
                     </button>
                     <button onClick={handleValider} style={btnPrimaryGreen}>
-                      ✅ Tout valider (avec PDF+CSV)
+                      ✓ Tout valider (avec PDF+CSV)
                     </button>
                   </>
                 )}
@@ -773,9 +794,9 @@ function TranchesEditModal({ data, onClose, onSave }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 10, padding: 20, maxWidth: 500, width: '100%' }}>
-        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, color: '#1a0f0a' }}>
-          ✏️ Modifier les pointages du {date}
+      <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 20, maxWidth: 500, width: '100%' }}>
+        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Pencil size={16} /> Modifier les pointages du {date}
         </h3>
         <p style={{ fontSize: 12, color: '#4a3a30', marginTop: 0, marginBottom: 14 }}>
           Chaque ligne = 1 session (arrivée → départ). Format HH:MM.
@@ -787,18 +808,20 @@ function TranchesEditModal({ data, onClose, onSave }) {
                    placeholder="Arrivée" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6 }} />
             <input type="time" value={s.depart_hm} onChange={e => update(i, 'depart_hm', e.target.value)}
                    placeholder="Départ" style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6 }} />
-            <button onClick={() => remove(i)} style={{ padding: '7px 10px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#A32D2D' }}>🗑</button>
+            <button onClick={() => remove(i)} style={{ padding: '7px 10px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#A32D2D', display: 'inline-flex', alignItems: 'center' }}>
+              <Trash2 size={14} />
+            </button>
           </div>
         ))}
 
-        <button onClick={add} style={{ marginTop: 4, padding: '7px 14px', fontSize: 12, background: '#F4F0EA', border: '1px solid #e5d8c3', borderRadius: 6, cursor: 'pointer' }}>
-          ➕ Ajouter une session
+        <button onClick={add} style={{ marginTop: 4, padding: '7px 14px', fontSize: 12, background: '#F4F0EA', border: '1px solid #e5d8c3', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Plus size={14} /> Ajouter une session
         </button>
 
         <div style={{ marginTop: 18, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '9px 16px', fontSize: 13, background: 'white', border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer' }}>Annuler</button>
-          <button onClick={save} style={{ padding: '9px 16px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>
-            💾 Enregistrer
+          <button onClick={save} style={{ padding: '9px 16px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Save size={14} /> Enregistrer
           </button>
         </div>
       </div>
@@ -870,20 +893,21 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
   return (
     <div>
       <div style={{
-        background: '#F4F0EA', padding: 12, borderRadius: 8, marginBottom: 12,
+        background: '#F4F0EA', padding: 12, borderRadius: 12, marginBottom: 12,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+        boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
       }}>
-        <span style={{ fontSize: 13, color: '#1a0f0a' }}>
-          📅 <strong>Vue annuelle</strong> · {emp.nom} · {annee}
+        <span style={{ fontSize: 13, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Calendar size={14} /> <strong>Vue annuelle</strong> · {emp.nom} · {annee}
         </span>
         {salaireNet > 0 && (
-          <span style={{ fontSize: 13, color: '#27500A', fontWeight: 500 }}>
-            💰 Salaire annuel estimé : {salaireAnnuel.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} dh
+          <span style={{ fontSize: 13, color: '#27500A', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Wallet size={14} /> Salaire annuel estimé : {salaireAnnuel.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} dh
           </span>
         )}
       </div>
 
-      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflowX: 'auto' }}>
+      <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5d8c3', overflowX: 'auto', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
@@ -922,7 +946,7 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
                     </td>
                   )}
                   <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                    {m.vide ? '' : m.valide ? '🔒' : '✏️'}
+                    {m.vide ? '' : m.valide ? <Lock size={14} /> : <Pencil size={14} />}
                   </td>
                 </tr>
               )
@@ -960,13 +984,14 @@ function CarteSalaire({ salaire, heuresSup }) {
   const montantSup = tauxMajore * heuresSup
   const total = salaire + montantSup
   return (
-    <div style={{ background: '#EAF3DE', padding: 10, borderRadius: 8, border: '1px solid #C0DD97' }}>
+    <div style={{ background: '#EAF3DE', padding: 12, borderRadius: 12, border: '1px solid #C0DD97', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
       <p style={{ fontSize: 11, color: '#27500A', margin: 0, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>💰 Salaire estimé</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Wallet size={14} /> Salaire estimé</span>
         <button onClick={() => setRevealed(!revealed)} style={{
-          background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0,
+          background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+          display: 'inline-flex', alignItems: 'center',
         }} title={revealed ? 'Masquer' : 'Révéler'}>
-          {revealed ? '🙈' : '👁'}
+          {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       </p>
       <p style={{ fontSize: 18, fontWeight: 600, color: '#27500A', margin: 0 }}>
@@ -985,7 +1010,7 @@ function Carte({ label, val, color = '#1a0f0a', sign = '', unit = 'h', signed = 
   else displayVal = val.toFixed(unit === 'j' ? 2 : 2) + unit
 
   return (
-    <div style={{ background: '#F4F0EA', padding: 10, borderRadius: 8 }}>
+    <div style={{ background: '#F4F0EA', padding: 12, borderRadius: 12, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
       <p style={{ fontSize: 11, color: '#4a3a30', margin: 0, marginBottom: 4 }}>{label}</p>
       <p style={{ fontSize: 18, fontWeight: bold ? 600 : 500, color, margin: 0 }}>{displayVal}</p>
     </div>
@@ -995,8 +1020,8 @@ function Carte({ label, val, color = '#1a0f0a', sign = '', unit = 'h', signed = 
 function JournalTable({ journal, onEditCell, onEditPointage, onEditTranches, onForcerPresent, canEdit }) {
   return (
     <div style={{
-      background: 'white', borderRadius: 10, border: '1px solid #e5d8c3',
-      overflowX: 'auto', marginBottom: 16,
+      background: 'white', borderRadius: 12, border: '1px solid #e5d8c3',
+      overflowX: 'auto', marginBottom: 16, boxShadow: '0 4px 14px rgba(122,42,68,0.05)',
     }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
@@ -1041,7 +1066,8 @@ function Row({ j, onEditCell, onEditPointage, onEditTranches, onForcerPresent, c
           <button onClick={() => onForcerPresent(j.date)} title="Marquer présent" style={{
             marginLeft: 4, padding: '2px 6px', fontSize: 10, background: '#EAF3DE', color: '#27500A',
             border: '1px solid #C0DD97', borderRadius: 4, cursor: 'pointer',
-          }}>✋ Présent</button>
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}><Hand size={12} /> Présent</button>
         )}
       </Td>
     </tr>
@@ -1175,17 +1201,25 @@ function VueRecup({ data, resultats, mois, annee }) {
       {/* Bandeaux de résumé global */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 14 }}>
         <div style={{
-          background: '#EEEDFE', padding: 12, borderRadius: 8,
+          background: '#EEEDFE', padding: 12, borderRadius: 12,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          boxShadow: '0 4px 14px rgba(122,42,68,0.05)',
         }}>
-          <span style={{ fontSize: 12, color: '#3C3489' }}>🟣 Récup · {nbEmpRecup} employé{nbEmpRecup > 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 12, color: '#3C3489', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: '#9333EA', display: 'inline-block' }} />
+            Récup · {nbEmpRecup} employé{nbEmpRecup > 1 ? 's' : ''}
+          </span>
           <span style={{ fontSize: 16, fontWeight: 600, color: '#3C3489' }}>{totalJoursRecup.toFixed(2)} j</span>
         </div>
         <div style={{
-          background: '#FCEBEB', padding: 12, borderRadius: 8,
+          background: '#FCEBEB', padding: 12, borderRadius: 12,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          boxShadow: '0 4px 14px rgba(122,42,68,0.05)',
         }}>
-          <span style={{ fontSize: 12, color: '#A32D2D' }}>🔴 Absences · {nbEmpAbsents} employé{nbEmpAbsents > 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 12, color: '#A32D2D', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: '#A32D2D', display: 'inline-block' }} />
+            Absences · {nbEmpAbsents} employé{nbEmpAbsents > 1 ? 's' : ''}
+          </span>
           <span style={{ fontSize: 16, fontWeight: 600, color: '#A32D2D' }}>{totalAbsences} jour{totalAbsences > 1 ? 's' : ''}</span>
         </div>
       </div>
@@ -1193,8 +1227,9 @@ function VueRecup({ data, resultats, mois, annee }) {
       {/* Liste groupée par personnel */}
       {lignes.map(({ emp, jours, totalRecup, nbAbsents }) => (
         <div key={emp.id} style={{
-          background: 'white', borderRadius: 10, border: '1px solid #e5d8c3',
+          background: 'white', borderRadius: 12, border: '1px solid #e5d8c3',
           marginBottom: 12, overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
         }}>
           {/* Header employé */}
           <div style={{
@@ -1210,16 +1245,20 @@ function VueRecup({ data, resultats, mois, annee }) {
                 <span style={{
                   fontSize: 12, fontWeight: 500, color: '#3C3489',
                   background: '#EEEDFE', padding: '4px 10px', borderRadius: 999,
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}>
-                  🟣 {totalRecup.toFixed(2)} j récup
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: '#9333EA', display: 'inline-block' }} />
+                  {totalRecup.toFixed(2)} j récup
                 </span>
               )}
               {nbAbsents > 0 && (
                 <span style={{
                   fontSize: 12, fontWeight: 500, color: '#A32D2D',
                   background: '#FCEBEB', padding: '4px 10px', borderRadius: 999,
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}>
-                  🔴 {nbAbsents} absent{nbAbsents > 1 ? 's' : ''}
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: '#A32D2D', display: 'inline-block' }} />
+                  {nbAbsents} absent{nbAbsents > 1 ? 's' : ''}
                 </span>
               )}
             </div>
@@ -1236,7 +1275,7 @@ function VueRecup({ data, resultats, mois, annee }) {
                 return (
                   <tr key={j.date} style={{ background: bgRow, borderTop: i > 0 ? '1px solid #F4F0EA' : 'none' }}>
                     <td style={{ padding: '7px 14px', width: 30 }}>
-                      {isRecup ? '🟣' : '🔴'}
+                      <span style={{ width: 10, height: 10, borderRadius: 999, background: isRecup ? '#9333EA' : '#A32D2D', display: 'inline-block' }} />
                     </td>
                     <td style={{ padding: '7px 8px', minWidth: 110, fontSize: 12 }}>
                       {dateLabel}
@@ -1273,7 +1312,7 @@ function VueRecup({ data, resultats, mois, annee }) {
 
 function VueGlobale({ data, resultats, mois, annee }) {
   return (
-    <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflowX: 'auto' }}>
+    <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5d8c3', overflowX: 'auto', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
@@ -1339,9 +1378,11 @@ const btnNav = {
 const btnExport = {
   padding: '10px 16px', fontSize: 13, background: '#F4F0EA', color: '#1a0f0a',
   border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer',
+  display: 'inline-flex', alignItems: 'center', gap: 6,
 }
 
 const btnPrimaryGreen = {
   padding: '10px 18px', fontSize: 13, background: '#27500A', color: 'white',
   border: '1px solid #27500A', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+  display: 'inline-flex', alignItems: 'center', gap: 6,
 }

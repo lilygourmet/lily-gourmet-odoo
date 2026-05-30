@@ -67,7 +67,7 @@ export default function ConversationNotifier({ user, onOpen }) {
         <button
           key={t.id}
           onClick={() => handleClick(t)}
-          className="w-72 max-w-[90vw] text-left bg-cream border border-bordeaux/30 rounded-lg shadow-xl px-3 py-2.5 hover:border-bordeaux transition-colors animate-fadeIn"
+          className="w-72 max-w-[90vw] text-left bg-cream border border-bordeaux/30 rounded-xl shadow-xl px-3 py-2.5 hover:border-bordeaux transition-colors animate-fadeIn"
         >
           <div className="flex items-start gap-2">
             <MessageCircle size={16} strokeWidth={1.8} className="flex-shrink-0 text-bordeaux mt-0.5" />

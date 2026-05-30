@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { CheckCircle2, XCircle, Users, AlertTriangle, Clock, Save, Download } from 'lucide-react'
 import { loadEmployes } from '../../lib/hr'
 import { loadBulletinsForPeriod } from '../../lib/bulletins'
 import { supabase } from '../../lib/supabase'
@@ -213,7 +214,7 @@ export default function SalairesTab({ user }) {
       {/* Header avec sélecteur mois + filtre société */}
       <div style={{
         display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap',
-        padding: '12px 14px', background: '#F4F0EA', borderRadius: 10,
+        padding: '12px 14px', background: '#F4F0EA', borderRadius: 12,
       }}>
         <button onClick={prevMonth} style={btnNav}>◀</button>
         <span style={{ fontSize: 16, fontWeight: 500, minWidth: 140 }}>{MOIS_FR[mois - 1]} {annee}</span>
@@ -243,16 +244,17 @@ export default function SalairesTab({ user }) {
         marginBottom: 14, width: 'fit-content',
       }}>
         {[
-          { v: 'declare',     label: `✅ Déclarés (${nbDeclaresSociete})`,        bg: '#27500A' },
-          { v: 'non_declare', label: `❌ Non déclarés (${nbNonDeclaresSociete})`, bg: '#A32D2D' },
-          { v: 'tous',        label: `👥 Tous (${nbDeclaresSociete + nbNonDeclaresSociete})`, bg: '#1a0f0a' },
+          { v: 'declare',     label: `Déclarés (${nbDeclaresSociete})`,        bg: '#27500A', Icon: CheckCircle2 },
+          { v: 'non_declare', label: `Non déclarés (${nbNonDeclaresSociete})`, bg: '#A32D2D', Icon: XCircle },
+          { v: 'tous',        label: `Tous (${nbDeclaresSociete + nbNonDeclaresSociete})`, bg: '#1a0f0a', Icon: Users },
         ].map(t => (
           <button key={t.v} onClick={() => setDeclareFilter(t.v)} style={{
             padding: '7px 14px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer',
             background: declareFilter === t.v ? t.bg : 'transparent',
             color: declareFilter === t.v ? 'white' : '#4a3a30',
             fontWeight: declareFilter === t.v ? 500 : 400,
-          }}>{t.label}</button>
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}><t.Icon size={14} /> {t.label}</button>
         ))}
       </div>
 
@@ -274,7 +276,8 @@ export default function SalairesTab({ user }) {
         gap: 10, marginBottom: 14,
       }}>
         <Carte
-          label={`${declareFilter === 'declare' ? '✅ Déclarés' : declareFilter === 'non_declare' ? '❌ Non déclarés' : '👥 Tous'} ${societeFilter}`}
+          label={`${declareFilter === 'declare' ? 'Déclarés' : declareFilter === 'non_declare' ? 'Non déclarés' : 'Tous'} ${societeFilter}`}
+          Icon={declareFilter === 'declare' ? CheckCircle2 : declareFilter === 'non_declare' ? XCircle : Users}
           val={employesSociete.length}
           unit=""
         />
@@ -287,7 +290,7 @@ export default function SalairesTab({ user }) {
       ) : employesSociete.length === 0 ? (
         <div style={{
           padding: 40, textAlign: 'center', color: '#4a3a30',
-          background: '#F9F6F1', borderRadius: 10, fontSize: 13,
+          background: '#F9F6F1', borderRadius: 12, fontSize: 13,
         }}>
           {declareFilter === 'declare'
             ? `Aucun employé déclaré dans ${societeFilter === 'LG' ? 'LG Traiteur' : 'L&N Gourmet'} 🌸`
@@ -300,7 +303,7 @@ export default function SalairesTab({ user }) {
           </span>
         </div>
       ) : (
-        <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5d8c3', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5d8c3', overflow: 'hidden', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#F4F0EA' }}>
@@ -322,17 +325,19 @@ export default function SalairesTab({ user }) {
                       <span style={{
                         marginLeft: 8, fontSize: 10, padding: '2px 6px', borderRadius: 4,
                         background: '#EAF3DE', color: '#27500A',
-                      }}>✅ Déclaré</span>
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                      }}><CheckCircle2 size={12} /> Déclaré</span>
                     ) : (
                       <span style={{
                         marginLeft: 8, fontSize: 10, padding: '2px 6px', borderRadius: 4,
                         background: '#FCEEE8', color: '#A32D2D',
-                      }}>❌ Non déclaré</span>
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                      }}><XCircle size={12} /> Non déclaré</span>
                     )}
                   </td>
                   <td style={{ padding: '10px 12px', color: '#4a3a30', fontSize: 12 }}>{e.banque || '—'}</td>
                   <td style={{ padding: '10px 12px', color: '#4a3a30', fontSize: 11, fontFamily: 'monospace' }}>
-                    {e.rib || <span style={{ color: '#A32D2D' }}>⚠️ Manquant</span>}
+                    {e.rib || <span style={{ color: '#A32D2D', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={12} /> Manquant</span>}
                   </td>
                   <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                     <input
@@ -367,15 +372,17 @@ export default function SalairesTab({ user }) {
           <button onClick={() => handleSauvegarder()} disabled={saving} style={{
             padding: '10px 18px', fontSize: 13, background: '#F4F0EA', color: '#1a0f0a',
             border: '1px solid #e5d8c3', borderRadius: 8, cursor: saving ? 'wait' : 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
-            {saving ? '⏳ ...' : '💾 Sauvegarder'}
+            {saving ? <><Clock size={14} /> ...</> : <><Save size={14} /> Sauvegarder</>}
           </button>
           <button onClick={handleGenererPDF} disabled={generating} style={{
             padding: '10px 18px', fontSize: 13, background: '#993556', color: 'white',
             border: '1px solid #993556', borderRadius: 8, cursor: generating ? 'wait' : 'pointer',
             fontWeight: 500,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
-            {generating ? '⏳ Génération...' : '📥 Générer ordre de virement (.pdf)'}
+            {generating ? <><Clock size={14} /> Génération...</> : <><Download size={14} /> Générer ordre de virement (.pdf)</>}
           </button>
         </div>
       )}
@@ -383,10 +390,12 @@ export default function SalairesTab({ user }) {
   )
 }
 
-function Carte({ label, val, unit, color = '#1a0f0a' }) {
+function Carte({ label, val, unit, color = '#1a0f0a', Icon = null }) {
   return (
-    <div style={{ background: 'white', padding: 10, borderRadius: 8, border: '1px solid #e5d8c3' }}>
-      <p style={{ fontSize: 11, color: '#4a3a30', margin: 0, marginBottom: 3 }}>{label}</p>
+    <div style={{ background: 'white', padding: 12, borderRadius: 12, border: '1px solid #e5d8c3', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
+      <p style={{ fontSize: 11, color: '#4a3a30', margin: 0, marginBottom: 3, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {Icon && <Icon size={14} />} {label}
+      </p>
       <p style={{ fontSize: 18, fontWeight: 600, color, margin: 0 }}>
         {typeof val === 'number' ? val.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : val}
         {unit && <span style={{ fontSize: 11, color: '#8a7a70', marginLeft: 4 }}>{unit}</span>}

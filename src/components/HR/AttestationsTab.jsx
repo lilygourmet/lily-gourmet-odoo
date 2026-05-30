@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { FileText, FilePen, Building2, Info, Wallet, CheckCircle2, ClipboardList, GraduationCap, Clock, Download } from 'lucide-react'
 import { loadEmployes, generateAttestation, getAllTemplates } from '../../lib/hr'
 
 /**
@@ -142,15 +143,16 @@ export default function AttestationsTab({ user, isAdmin }) {
           marginBottom: 16, width: 'fit-content',
         }}>
           {[
-            { v: 'attestations', label: '📜 Attestations' },
-            { v: 'contrats', label: '📝 Contrats' },
+            { v: 'attestations', label: 'Attestations', Icon: FileText },
+            { v: 'contrats', label: 'Contrats', Icon: FilePen },
           ].map(t => (
             <button key={t.v} type="button" onClick={() => setSubTab(t.v)} style={{
               padding: '7px 14px', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer',
               background: subTab === t.v ? 'white' : 'transparent',
               color: subTab === t.v ? '#1a0f0a' : '#4a3a30',
               fontWeight: subTab === t.v ? 500 : 400,
-            }}>{t.label}</button>
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}><t.Icon size={14} /> {t.label}</button>
           ))}
         </div>
       )}
@@ -178,7 +180,10 @@ export default function AttestationsTab({ user, isAdmin }) {
                   <input type="radio" name="type" value={t.key}
                     checked={active} onChange={() => setType(t.key)}
                     style={{ accentColor: '#993556' }} />
-                  <span>{getEmoji(t.key)} {t.label}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {(() => { const Ico = getTemplateIcon(t.key); return <Ico size={14} /> })()}
+                    {t.label}
+                  </span>
                 </label>
               )
             })}
@@ -201,19 +206,20 @@ export default function AttestationsTab({ user, isAdmin }) {
             <div style={{
               marginTop: 6, padding: '6px 10px',
               background: '#EAF3DE', color: '#27500A',
-              borderRadius: 6, fontSize: 11, display: 'inline-block',
+              borderRadius: 6, fontSize: 11,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
-              🏢 Société : <strong>{societes.find(s => s.id === form.societe_id)?.nom || '—'}</strong>
+              <Building2 size={14} /> Société : <strong>{societes.find(s => s.id === form.societe_id)?.nom || '—'}</strong>
             </div>
           )}
         </div>
 
         {/* Champs dynamiques selon le type */}
         <div style={{
-          background: '#F9F6F1', padding: 16, borderRadius: 10, marginBottom: 16
+          background: '#F9F6F1', padding: 16, borderRadius: 12, marginBottom: 16
         }}>
-          <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 12 }}>
-            ℹ️ Champs requis pour ce type d'attestation (auto-remplis si dispo)
+          <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Info size={14} /> Champs requis pour ce type d'attestation (auto-remplis si dispo)
           </div>
 
           <Row>
@@ -412,24 +418,29 @@ export default function AttestationsTab({ user, isAdmin }) {
         <button type="submit" disabled={generating} style={{
           width: '100%', padding: '14px', fontSize: 14, fontWeight: 500,
           background: '#993556', color: 'white', border: '1px solid #993556',
-          borderRadius: 8, cursor: generating ? 'wait' : 'pointer'
+          borderRadius: 8, cursor: generating ? 'wait' : 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
-          {generating ? '⏳ Génération en cours…' : '⬇️ Générer et télécharger le document Word'}
+          {generating ? (
+            <><Clock size={16} /> Génération en cours…</>
+          ) : (
+            <><Download size={16} /> Générer et télécharger le document Word</>
+          )}
         </button>
       </form>
     </div>
   )
 }
 
-function getEmoji(type) {
+function getTemplateIcon(type) {
   const m = {
-    salaire: '💰',
-    travail_en_poste: '✅',
-    travail_depart: '📋',
-    accuse: '📄',
-    stage: '🎓',
+    salaire: Wallet,
+    travail_en_poste: CheckCircle2,
+    travail_depart: ClipboardList,
+    accuse: FileText,
+    stage: GraduationCap,
   }
-  return m[type] || '📜'
+  return m[type] || FileText
 }
 
 function Row({ children }) {

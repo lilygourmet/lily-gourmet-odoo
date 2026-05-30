@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Cake, Cookie, Snowflake } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { loadEtiquettesArticles, makeQtyKey, buildZplLabels, syncEtiquettesFromOdoo } from '../lib/etiquettes.js'
 
 const TABS = [
-  { id: 'cd', label: 'Entremets', icon: '🎂' },
-  { id: 'gs', label: 'Gâteaux secs', icon: '🍪' },
-  { id: 'su', label: 'Surgelés', icon: '❄️' },
+  { id: 'cd', label: 'Entremets', Icon: Cake },
+  { id: 'gs', label: 'Gâteaux secs', Icon: Cookie },
+  { id: 'su', label: 'Surgelés', Icon: Snowflake },
 ]
 
 const ENTREMETS_SIZES = [5, 10, 15, 20]
@@ -166,19 +167,24 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-white border border-line rounded-full mb-2">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex-1 px-3 py-1.5 text-[12px] rounded-full font-medium transition-colors ${
-                tab === t.id
-                  ? 'bg-bordeaux text-cream'
-                  : 'text-ink-soft hover:bg-cream-warm'
-              }`}
-            >
-              {t.icon} {t.label} <span className="opacity-70">({counts[t.id] || 0})</span>
-            </button>
-          ))}
+          {TABS.map(t => {
+            const Icon = t.Icon
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex-1 px-3 py-1.5 text-[12px] rounded-full font-medium transition-colors inline-flex items-center justify-center gap-1.5 ${
+                  tab === t.id
+                    ? 'bg-bordeaux text-cream'
+                    : 'text-ink-soft hover:bg-cream-warm'
+                }`}
+              >
+                <Icon size={14} strokeWidth={1.8} />
+                <span>{t.label}</span>
+                <span className="opacity-70">({counts[t.id] || 0})</span>
+              </button>
+            )
+          })}
         </div>
 
         {/* Search */}
@@ -187,7 +193,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder={`Rechercher dans ${TABS.find(t => t.id === tab)?.label.toLowerCase()}...`}
-          className="w-full text-[12px] px-3 py-2 border border-line rounded-md bg-white"
+          className="w-full text-[12px] px-3 py-2 border border-line rounded-xl bg-white"
         />
       </div>
 
@@ -216,7 +222,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
 
       {/* Bottom bar */}
       {totalLabels > 0 && (
-        <div className="sticky bottom-0 bg-cream/95 backdrop-blur border border-line rounded-lg p-3 shadow-lg">
+        <div className="sticky bottom-0 bg-cream/95 backdrop-blur border border-line rounded-2xl p-3 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="text-[12px] text-ink flex-1">
               <span className="font-bold text-bordeaux">{totalLabels}</span> étiquette{totalLabels > 1 ? 's' : ''} à imprimer
@@ -259,11 +265,11 @@ function ArticleCard({ article, qtys, setQty, getQty }) {
   const cleanName = article.name.replace(/^\[\d+\]\s*/, '')
 
   return (
-    <div className={`bg-white rounded-lg p-2 transition-colors ${
+    <div className={`bg-white rounded-2xl p-2 transition-colors shadow-sm ${
       hasSelection ? 'border-2 border-bordeaux' : 'border border-line'
     }`}>
       {/* Photo */}
-      <div className="aspect-square rounded-md overflow-hidden bg-cream-warm mb-2">
+      <div className="aspect-square rounded-xl overflow-hidden bg-cream-warm mb-2">
         {article.image_url ? (
           <img
             src={article.image_url}

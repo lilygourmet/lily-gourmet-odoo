@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Paperclip } from 'lucide-react'
 import { loadPaymentsToValidate, validatePayment, rejectPayment, getMediaSignedUrl } from '../../lib/conversations'
 import { canValidatePayments } from '../../lib/auth'
 
@@ -89,17 +90,17 @@ export default function PaymentsView({ user }) {
     const rejected = !!m.payment_rejected_at
     const pending = !validated && !rejected
     return (
-      <div className={`rounded-xl border p-3 flex gap-3 ${pending ? 'bg-cream-warm border-line' : 'bg-cream-warm/50 border-line opacity-80'}`}>
+      <div className={`rounded-2xl border p-3 flex gap-3 shadow-sm ${pending ? 'bg-cream-warm border-line' : 'bg-cream-warm/50 border-line opacity-80'}`}>
         {href ? (
           isImage ? (
             <a href={href} target="_blank" rel="noopener noreferrer" className="flex-shrink-0" title="Ouvrir en grand">
-              <img src={href} alt="" className="w-20 h-20 object-cover rounded-lg border border-line" />
+              <img src={href} alt="" className="w-20 h-20 object-cover rounded-xl border border-line" />
             </a>
           ) : (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-20 h-20 rounded-lg border border-line bg-cream flex items-center justify-center text-[11px] text-ink-soft text-center px-1" title="Ouvrir le document">📎 PDF</a>
+            <a href={href} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-20 h-20 rounded-xl border border-line bg-cream flex flex-col items-center justify-center gap-1 text-[11px] text-ink-soft text-center px-1" title="Ouvrir le document"><Paperclip size={16} strokeWidth={1.8} /> PDF</a>
           )
         ) : (
-          <div className="flex-shrink-0 w-20 h-20 rounded-lg border border-line bg-cream flex items-center justify-center text-[11px] text-ink-mute">…</div>
+          <div className="flex-shrink-0 w-20 h-20 rounded-xl border border-line bg-cream flex items-center justify-center text-[11px] text-ink-mute">…</div>
         )}
         <div className="flex-1 min-w-0">
           <div className="text-[14px] font-medium text-ink truncate">{m.payment_client_name || m.conversation?.client_name || 'Client'}</div>
@@ -143,7 +144,7 @@ export default function PaymentsView({ user }) {
 
       {/* Totaux */}
       <div className="flex flex-wrap gap-2 mb-3">
-        <div className="flex-1 min-w-[140px] rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+        <div className="flex-1 min-w-[140px] rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 shadow-sm">
           <div className="text-[10px] uppercase tracking-wider text-amber-700">À valider</div>
           <div className="text-[16px] font-semibold text-ink">{fmtAmount(sumTodo) || '0 DH'}</div>
         </div>

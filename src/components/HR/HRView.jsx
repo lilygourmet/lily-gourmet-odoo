@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Building2, Users, FileText, Clock, Wallet, Receipt } from 'lucide-react'
 import AttestationsTab from './AttestationsTab'
 import EmployesTab from './EmployesTab'
 import PointageTab from './PointageTab'
@@ -19,8 +20,8 @@ export default function HRView({ user }) {
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.25rem' }}>
 
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a' }}>
-          🏢 Ressources Humaines {!isAdmin && <span style={{ fontSize: 12, color: '#8a7a70', fontWeight: 400, fontStyle: 'normal', fontFamily: 'Geist, sans-serif' }}>(accès limité)</span>}
+        <h2 style={{ margin: 0, fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 400, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Building2 size={22} /> Ressources Humaines {!isAdmin && <span style={{ fontSize: 12, color: '#8a7a70', fontWeight: 400, fontStyle: 'normal', fontFamily: 'Geist, sans-serif' }}>(accès limité)</span>}
         </h2>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: '#4a3a30' }}>
           {isAdmin
@@ -34,22 +35,22 @@ export default function HRView({ user }) {
         display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap',
       }}>
         <TabBtn active={tab === 'employes'} onClick={() => setTab('employes')}>
-          👥 Employés
+          <Users size={14} /> Employés
         </TabBtn>
         <TabBtn active={tab === 'attestations'} onClick={() => setTab('attestations')}>
-          📜 Attestations
+          <FileText size={14} /> Attestations
         </TabBtn>
         <TabBtn active={tab === 'pointage'} onClick={() => setTab('pointage')}>
-          ⏰ Pointage
+          <Clock size={14} /> Pointage
         </TabBtn>
         {isAdmin && (
           <TabBtn active={tab === 'salaires'} onClick={() => setTab('salaires')}>
-            💰 Salaires
+            <Wallet size={14} /> Salaires
           </TabBtn>
         )}
         {isAdmin && (
           <TabBtn active={tab === 'bulletins'} onClick={() => setTab('bulletins')}>
-            🧾 Bulletins de paie
+            <Receipt size={14} /> Bulletins de paie
           </TabBtn>
         )}
       </div>
@@ -70,6 +71,7 @@ function TabBtn({ active, onClick, children }) {
       background: active ? '#993556' : 'white',
       color:      active ? '#faf7f2' : '#1a0f0a',
       border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
+      display: 'inline-flex', alignItems: 'center', gap: 6,
     }}>
       {children}
     </button>

@@ -889,7 +889,7 @@ function SearchResultRow({ order, stepsMap, onClick }) {
   return (
     <div
       onClick={onClick}
-      className={`bg-cream rounded-lg p-3 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all flex items-center gap-3 ${cancelled ? 'opacity-60' : ''}`}
+      className={`bg-cream rounded-xl p-3 border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all flex items-center gap-3 ${cancelled ? 'opacity-60' : ''}`}
     >
       {photoUrl && (
         <img src={photoUrl} alt="" className={`w-12 h-12 rounded-md object-cover flex-shrink-0 ${cancelled ? 'grayscale' : ''}`} />
@@ -1034,7 +1034,7 @@ function AllCapsule({ order, stepsMap }) {
   const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-lg p-2 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
+    <div className={`bg-cream rounded-xl p-2 border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between mb-1.5 gap-1">
         <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
           <span className="truncate">{order.order_num}</span>
@@ -1113,7 +1113,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
   const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-lg p-2 border border-line/60 hover:border-bordeaux hover:shadow-sm cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
+    <div className={`bg-cream rounded-xl p-2 border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between mb-1.5 gap-1">
         <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
           <span className="truncate">{order.order_num}</span>
@@ -1169,7 +1169,7 @@ function GMItemCapsule({ order, item, stepsMap }) {
   const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-lg p-2 border border-line/60 hover:border-gold hover:shadow-sm cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
+    <div className={`bg-cream rounded-xl p-2 border border-line/60 shadow-sm hover:border-gold hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between mb-1.5 gap-1">
         <span className={`font-mono text-[10px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
           <span className="truncate">{order.order_num}</span>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Download, Pencil, Trash2 } from 'lucide-react'
 import { PDFDocument } from 'pdf-lib'
 import * as pdfjsLib from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -149,8 +150,8 @@ export default function BulletinsTab() {
           <input type="month" value={period} onChange={e => setPeriod(e.target.value)}
             className="px-3 py-2 text-[13px] bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux" />
         </div>
-        <label className={`px-4 py-2 text-[12px] font-medium rounded-lg cursor-pointer ${busy ? 'bg-line text-ink-mute' : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'}`}>
-          {busy ? (progress ? `Import… ${progress.done}/${progress.total}` : 'Import…') : '📥 Importer le PDF du mois'}
+        <label className={`px-4 py-2 text-[12px] font-medium rounded-lg cursor-pointer inline-flex items-center gap-2 ${busy ? 'bg-line text-ink-mute' : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'}`}>
+          {busy ? (progress ? `Import… ${progress.done}/${progress.total}` : 'Import…') : (<><Download size={14} /> Importer le PDF du mois</>)}
           <input type="file" accept="application/pdf" onChange={handleFile} disabled={busy} className="hidden" />
         </label>
         {periodsAll.length > 0 && (
@@ -182,10 +183,10 @@ export default function BulletinsTab() {
                 ))}
               </div>
             </div>
-            <button onClick={() => handleRelabel(g)} className="text-[11px] text-ink-soft hover:text-bordeaux px-2" title="Corriger le nom">✎ Nom</button>
+            <button onClick={() => handleRelabel(g)} className="text-[11px] text-ink-soft hover:text-bordeaux px-2 inline-flex items-center gap-1" title="Corriger le nom"><Pencil size={12} /> Nom</button>
             <button onClick={() => handleDownloadEmploye(g)} disabled={busy}
-              className="px-3 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-full hover:bg-bordeaux-deep disabled:opacity-50">
-              📥 3 derniers mois
+              className="px-3 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-full hover:bg-bordeaux-deep disabled:opacity-50 inline-flex items-center gap-1">
+              <Download size={12} /> 3 derniers mois
             </button>
           </div>
         ))}
@@ -199,7 +200,7 @@ export default function BulletinsTab() {
             {periodsAll.map(p => (
               <span key={p} className="inline-flex items-center gap-2 text-[12px] px-3 py-1 rounded-full bg-cream-warm border border-line">
                 {p}
-                <button onClick={() => handleDeletePeriod(p)} className="text-bordeaux" title="Supprimer ce mois">🗑️</button>
+                <button onClick={() => handleDeletePeriod(p)} className="text-bordeaux inline-flex items-center" title="Supprimer ce mois"><Trash2 size={12} /></button>
               </span>
             ))}
           </div>

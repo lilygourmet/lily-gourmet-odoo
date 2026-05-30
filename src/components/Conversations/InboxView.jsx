@@ -219,7 +219,7 @@ export default function InboxView({ user, initialConversationId }) {
                 <button
                   key={c.id}
                   onClick={() => { setSeenAt(prev => ({ ...prev, [c.id]: new Date().toISOString() })); setSelectedId(c.id) }}
-                  className={`w-full text-left rounded-lg border p-3 transition-colors hover:border-bordeaux ${
+                  className={`w-full text-left rounded-xl border p-3 transition-colors shadow-sm hover:border-bordeaux ${
                     isSelected ? 'bg-bordeaux/10 border-bordeaux' : isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'
                   }`}
                 >
