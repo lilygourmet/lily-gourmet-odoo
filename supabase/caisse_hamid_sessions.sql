@@ -27,7 +27,8 @@ CREATE INDEX IF NOT EXISTS caisse_hamid_depenses_session_idx
 -- le reste du module Caisse).
 ALTER TABLE caisse_hamid_sessions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS caisse_hamid_sessions_all
+DROP POLICY IF EXISTS caisse_hamid_sessions_all ON caisse_hamid_sessions;
+CREATE POLICY caisse_hamid_sessions_all
   ON caisse_hamid_sessions
   FOR ALL TO anon, authenticated
   USING (true) WITH CHECK (true);
