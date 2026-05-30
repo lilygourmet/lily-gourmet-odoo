@@ -235,7 +235,12 @@ export default function PointageTab({ user, isAdmin }) {
 
   async function handleExportConges() {
     if (!data) return
-    const rows = [['Employé', 'Jours congé', 'Jours maladie (4+)']]
+    const monthLabel = `${MOIS_FR[mois - 1]} ${annee}`
+    const rows = [
+      [`Congés / Maladie — ${monthLabel}`],
+      [],
+      ['Employé', 'Jours congé', 'Jours maladie (4+)'],
+    ]
     for (const emp of data.employes) {
       const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
       let joursConge = 0

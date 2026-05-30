@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import ConversationDetail from './ConversationDetail'
 import NewConversationModal from './NewConversationModal'
 import QuickRepliesModal from './QuickRepliesModal'
+import ClientAvatar from './ClientAvatar'
 import { Search, Volume2, VolumeX, MessageSquareText } from 'lucide-react'
 
 const FILTERS = [
@@ -223,23 +224,28 @@ export default function InboxView({ user, initialConversationId }) {
                     isSelected ? 'bg-bordeaux/10 border-bordeaux' : isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
-                      {isNew && <span className="w-2 h-2 rounded-full bg-bordeaux flex-shrink-0" />}
-                      {u && <span className="flex-shrink-0">{u.emoji}</span>}
-                      <span className="truncate">{c.client_name || c.client_phone}</span>
-                    </span>
-                    <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
+                  <div className="flex items-start gap-3">
+                    <ClientAvatar conv={c} size={40} variant="light" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
+                          {isNew && <span className="w-2 h-2 rounded-full bg-bordeaux flex-shrink-0" />}
+                          {u && <span className="flex-shrink-0">{u.emoji}</span>}
+                          <span className="truncate">{c.client_name || c.client_phone}</span>
+                        </span>
+                        <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[11px] text-ink-mute">{c.client_phone}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${st.cls}`}>
+                          {st.text}{c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}
+                        </span>
+                      </div>
+                      {u && u.text && (
+                        <div className={`text-[11px] mt-1 ${toneClass}`}>{u.text}</div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[11px] text-ink-mute">{c.client_phone}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${st.cls}`}>
-                      {st.text}{c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}
-                    </span>
-                  </div>
-                  {u && u.text && (
-                    <div className={`text-[11px] mt-1 ${toneClass}`}>{u.text}</div>
-                  )}
                 </button>
               )
             })}
