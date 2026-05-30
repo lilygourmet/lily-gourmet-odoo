@@ -33,6 +33,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [soldes, setSoldes]         = useState({})  // empId -> { dispo, ... }
   const [tab, setTab]               = useState('demandes')  // 'demandes' | 'valides' | 'soldes'
   const [importing, setImporting]   = useState(false)
+  const [filterEmp, setFilterEmp]   = useState('all')   // 'all' | empId
+  const [filterYear, setFilterYear] = useState('all')   // 'all' | YYYY
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
@@ -67,6 +69,36 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
   const demandes = useMemo(() => conges.filter(c => c.statut === 'demande').sort((a, b) => a.date_debut.localeCompare(b.date_debut)), [conges])
   const valides  = useMemo(() => conges.filter(c => c.statut === 'valide').sort((a, b) => b.date_debut.localeCompare(a.date_debut)), [conges])
+
+  // Liste des années présentes dans les congés validés (pour le filtre)
+  const annees = useMemo(() => {
+    const ys = new Set()
+    for (const c of valides) ys.add(c.date_debut.slice(0, 4))
+    return Array.from(ys).sort((a, b) => b.localeCompare(a))
+  }, [valides])
+
+  // Application des filtres + regroupement par mois (clé "YYYY-MM")
+  const validesGroupedByMonth = useMemo(() => {
+    const filtered = valides.filter(c => {
+      if (filterEmp !== 'all' && String(c.employe_id) !== String(filterEmp)) return false
+      if (filterYear !== 'all' && c.date_debut.slice(0, 4) !== String(filterYear)) return false
+      return true
+    })
+    const map = new Map() // YYYY-MM -> [c]
+    for (const c of filtered) {
+      const key = c.date_debut.slice(0, 7)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(c)
+    }
+    // Tri descendant (mois le plus récent en premier)
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+  }, [valides, filterEmp, filterYear])
+
+  function fmtMonthLabel(key) {
+    const [y, m] = key.split('-')
+    const moisLong = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+    return `${moisLong[parseInt(m, 10) - 1]} ${y}`
+  }
 
   const empById = useMemo(() => Object.fromEntries(employes.map(e => [e.id, e])), [employes])
 
@@ -152,16 +184,63 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
         )}
 
         {!loading && tab === 'valides' && (
-          valides.length === 0
-            ? <div style={emptyBox}>Aucun congé validé.</div>
-            : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {valides.map(c => (
-                  <CongeCard
-                    key={c.id} c={c} emp={empById[c.employe_id]}
-                    actions={<button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>}
-                  />
-                ))}
+          <>
+            {/* Barre de filtres */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Employé</div>
+                <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)} style={{ ...ipt, width: 'auto', minWidth: 180 }}>
+                  <option value="all">— Tous les employés —</option>
+                  {employes.map(e => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                </select>
               </div>
+              <div>
+                <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Année</div>
+                <select value={filterYear} onChange={e => setFilterYear(e.target.value)} style={{ ...ipt, width: 'auto', minWidth: 110 }}>
+                  <option value="all">Toutes</option>
+                  {annees.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              {(filterEmp !== 'all' || filterYear !== 'all') && (
+                <button onClick={() => { setFilterEmp('all'); setFilterYear('all') }}
+                  style={{ ...btnSlim, alignSelf: 'flex-end', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <X size={12} /> Réinitialiser
+                </button>
+              )}
+            </div>
+
+            {validesGroupedByMonth.length === 0
+              ? <div style={emptyBox}>Aucun congé validé pour ces filtres.</div>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  {validesGroupedByMonth.map(([monthKey, list]) => {
+                    // Total jours du mois (somme calendrier)
+                    const totalJ = list.reduce((s, c) => s + nbJours(c.date_debut, c.date_fin), 0)
+                    return (
+                      <div key={monthKey}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '6px 10px', background: '#F4F0EA', borderRadius: 8 }}>
+                          <div style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 15, color: '#1a0f0a' }}>
+                            {fmtMonthLabel(monthKey)}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#4a3a30' }}>
+                            {list.length} congé{list.length > 1 ? 's' : ''} · {totalJ} j cumulé{totalJ > 1 ? 's' : ''}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {list.map(c => (
+                            <CongeCard
+                              key={c.id} c={c} emp={empById[c.employe_id]}
+                              actions={<button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            }
+          </>
         )}
 
         {!loading && tab === 'soldes' && (
