@@ -174,7 +174,7 @@ export default function EmployeEditModal({
         const tel = normalizePhoneMA(data.telephone)
         if (tel) {
           try {
-            await supabase.from('users').update({ whatsapp: tel }).eq('employe_id', currentEmploye.id)
+            await supabase.from('profiles').update({ whatsapp: tel }).eq('employe_id', currentEmploye.id)
           } catch (e) {
             console.warn('[propagate-tel-user]', e?.message || e)
           }

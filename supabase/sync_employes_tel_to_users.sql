@@ -1,6 +1,6 @@
 -- ============================================================
--- Propage le téléphone (employes.telephone) → users.whatsapp
--- pour tous les users avec un employe_id lié.
+-- Propage le téléphone (employes.telephone) → profiles.whatsapp
+-- pour tous les profiles avec un employe_id lié.
 -- Normalise au format WATI international : 212XXXXXXXXX.
 --   "06 66 32 84 93" → "212666328493"
 --   "+212 6 12 34 56 78" → "212612345678"
@@ -9,7 +9,7 @@
 -- Idempotent : peut être relancé.
 -- ============================================================
 
-UPDATE users u
+UPDATE profiles p
 SET whatsapp =
   CASE
     WHEN regexp_replace(e.telephone, '\D', '', 'g') LIKE '212%'
@@ -19,6 +19,6 @@ SET whatsapp =
     ELSE regexp_replace(e.telephone, '\D', '', 'g')
   END
 FROM employes e
-WHERE u.employe_id = e.id
+WHERE p.employe_id = e.id
   AND e.telephone IS NOT NULL
   AND btrim(e.telephone) <> '';
