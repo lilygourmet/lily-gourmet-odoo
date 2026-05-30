@@ -242,6 +242,7 @@ export default function PointageTab({ user, isAdmin }) {
       ['Employé', 'Jours congé', 'Jours maladie (4+)'],
     ]
     for (const emp of data.employes) {
+      if (!emp.declare) continue  // n'exporter que le personnel déclaré
       const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
       let joursConge = 0
       let joursMaladie = 0
