@@ -56,6 +56,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     try {
       const allLines = await loadSalesLinesForRange(todayStr, DAYS)
       const filtered = filterLinesForProdCategory(allLines, category)
+        .filter(l => !/vitrine/i.test(l.client_name || ''))   // Exclure clients contenant 'vitrine'
       setLines(filtered)
       const lineIds = filtered.map(l => l.odoo_line_id).filter(Boolean)
       const dones = await loadProdDoneForLines(lineIds)
