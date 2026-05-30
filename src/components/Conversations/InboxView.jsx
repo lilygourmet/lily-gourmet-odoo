@@ -14,6 +14,7 @@ const FILTERS = [
   { key: 'all', label: 'Toutes' },
   { key: 'mine', label: 'À moi' },
   { key: 'unassigned', label: 'Non assignées' },
+  { key: 'unread', label: '📩 Non lues' },
   { key: 'waiting', label: '🔴 En attente' },
   { key: 'followup', label: '🟡 À relancer' },
   { key: 'fermees', label: 'Fermées' },
@@ -113,6 +114,10 @@ export default function InboxView({ user, initialConversationId }) {
   else if (filter === 'waiting') list = list.filter(c => conversationUrgency(c)?.emoji === '🔴')
   else if (filter === 'followup') list = list.filter(c => conversationUrgency(c)?.emoji === '🟡')
   else if (filter === 'fermees') list = list.filter(c => c.status === 'fermee')
+  else if (filter === 'unread') {
+    const lv = user?.last_visited_conversations
+    list = list.filter(c => c.last_inbound_at && (!lv || c.last_inbound_at > lv))
+  }
   if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
   const filtered = !term ? list : list.filter(c =>
     (c.client_name || '').toLowerCase().includes(term) ||

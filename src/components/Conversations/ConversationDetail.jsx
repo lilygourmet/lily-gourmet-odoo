@@ -456,6 +456,20 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     finally { setStatusBusy(false) }
   }
 
+  // Reculer le last_visited à juste avant le dernier message entrant : la
+  // conversation réapparaîtra dans le filtre 'Non lues'. Effet de bord :
+  // d'autres conversations plus récentes peuvent aussi y réapparaître.
+  async function handleMarkUnread() {
+    if (!conv?.last_inbound_at) return
+    try {
+      const newVisited = new Date(new Date(conv.last_inbound_at).getTime() - 1000).toISOString()
+      await supabase.from('profiles').update({ last_visited_conversations: newVisited }).eq('id', user.id)
+      alert("Marquée non lue. Reviens sur la liste Conversations pour la retrouver dans 'Non lues'.")
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
+  }
+
   function openNoteEdit() { setNoteInput(conv?.internal_note || ''); setNoteEditing(true) }
   async function saveNote() {
     setNoteBusy(true)
@@ -589,6 +603,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               {assigning ? '…' : 'Je prends'}
             </button>
           )
+        )}
+        {conv?.last_inbound_at && (
+          <button
+            onClick={handleMarkUnread}
+            className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0"
+            title="Faire réapparaître cette conversation dans 'Non lues'"
+          >📩 Non lu</button>
         )}
         {conv && (
           conv.status === 'fermee' ? (
