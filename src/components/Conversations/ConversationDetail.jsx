@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName } from '../../lib/conversations'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import ClientAvatar from './ClientAvatar'
@@ -456,6 +456,19 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     finally { setStatusBusy(false) }
   }
 
+  async function handleDeleteMessage(m) {
+    if (!confirm("Supprimer ce message ?\n\nL'app va aussi tenter de l'effacer chez la cliente (WhatsApp accepte ~15 min après envoi). Si l'API refuse, le message reste visible chez elle mais marqué supprimé chez toi.")) return
+    try {
+      const r = await deleteMessage(m.id, user.id)
+      setMessages(prev => prev.map(x => x.id === m.id ? { ...x, deleted_at: new Date().toISOString(), deleted_at_wati: !!r.deleted_at_wati } : x))
+      if (!r.deleted_at_wati) {
+        alert("Message marqué supprimé chez toi, mais WATI n'a pas pu l'effacer chez la cliente (fenêtre WhatsApp dépassée ou non supporté).")
+      }
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    }
+  }
+
   // Reculer le last_visited à juste avant le dernier message entrant : la
   // conversation réapparaîtra dans le filtre 'Non lues'. Effet de bord :
   // d'autres conversations plus récentes peuvent aussi y réapparaître.
@@ -693,6 +706,19 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           }
           const isAgent = m.sender_type === 'agent'
           const isNewClient = !isAgent && m.sent_at && (!visitedAtRef.current || m.sent_at > visitedAtRef.current)
+          const isDeleted = !!m.deleted_at
+          if (isDeleted) {
+            return (
+              <div key={m.id} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-lg px-3 py-2 italic text-[12px] opacity-70 ${
+                  isAgent ? 'bg-bordeaux/20 text-bordeaux border border-bordeaux/30' : 'bg-cream-warm text-ink-mute border border-line'
+                }`}>
+                  🚫 Message supprimé{m.deleted_at_wati ? '' : ' (côté Lily uniquement)'}
+                  <div className={`text-[9px] mt-1 ${isAgent ? 'text-bordeaux/70' : 'text-ink-mute'}`}>{fmtTime(m.sent_at)}</div>
+                </div>
+              </div>
+            )
+          }
           return (
             <div key={m.id} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[80%] rounded-lg px-3 py-2 ${
@@ -737,6 +763,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                       className={`text-[11px] leading-none transition-opacity ${m.is_payment_proof ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}
                       title={m.is_payment_proof ? 'Retirer la preuve de paiement' : 'Marquer comme preuve de paiement'}
                     ><Banknote size={13} strokeWidth={1.8} /></button>
+                  )}
+                  {isAgent && (
+                    <button
+                      onClick={() => handleDeleteMessage(m)}
+                      className="text-[11px] leading-none text-cream/70 hover:text-cream"
+                      title="Supprimer ce message (tente aussi chez la cliente, fenêtre WhatsApp ~15 min)"
+                    >🗑</button>
                   )}
                 </div>
               </div>

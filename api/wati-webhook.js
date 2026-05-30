@@ -42,6 +42,7 @@ export default async function handler(req, res) {
   if (action === 'send-template') return handleSendTemplate(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'correct') return handleCorrect(req, res)
+  if (action === 'delete-message') return handleDeleteMessage(req, res)
   if (action === 'fetch-photo') return handleFetchPhoto(req, res)
   if (action === 'conges-notif') return handleCongesNotif(req, res)
   return handleInbound(req, res)
@@ -353,6 +354,65 @@ async function handleSuggest(req, res) {
     console.error('[wati-suggest]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
+}
+
+// ============================================================
+// SUPPRESSION d'un message (action=delete-message)
+// Tente l'API delete WATI pour effacer chez le client (fenêtre 15 min
+// WhatsApp), et marque le message comme supprimé localement.
+// ============================================================
+async function handleDeleteMessage(req, res) {
+  const { messageId, userId } = req.body || {}
+  if (!messageId || !userId) return res.status(400).json({ error: 'messageId et userId requis' })
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const { data: profile } = await supabase
+    .from('profiles').select('role, perm_conversations').eq('id', userId).maybeSingle()
+  if (!profile || (profile.role !== 'admin' && profile.perm_conversations !== true)) {
+    return res.status(403).json({ error: 'non autorisé' })
+  }
+
+  const { data: msg, error: errMsg } = await supabase
+    .from('messages')
+    .select('id, wa_message_id, sender_type, deleted_at')
+    .eq('id', messageId)
+    .maybeSingle()
+  if (errMsg)  return res.status(500).json({ error: errMsg.message })
+  if (!msg)    return res.status(404).json({ error: 'message introuvable' })
+  if (msg.sender_type !== 'agent') return res.status(400).json({ error: "on ne peut supprimer que ses propres messages" })
+
+  // Tentative API WATI (best effort) — fenêtre WhatsApp ≈ 15 min.
+  let watiOk = false
+  const apiToken    = process.env.WATI_API_TOKEN
+  const apiEndpoint = process.env.WATI_API_ENDPOINT
+  if (msg.wa_message_id && apiToken && apiEndpoint) {
+    const base = apiEndpoint.replace(/\/$/, '')
+    const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
+    try {
+      const r = await fetch(`${base}/api/v1/deleteMessage/${msg.wa_message_id}`, {
+        method: 'DELETE',
+        headers: { Authorization: authHeader, Accept: 'application/json' },
+      })
+      const rawBody = await r.text()
+      console.log('[wati-delete] status', r.status, '· body', rawBody)
+      watiOk = r.ok
+    } catch (e) {
+      console.warn('[wati-delete] fetch error:', e?.message || e)
+    }
+  }
+
+  // Marquage local (soft delete) toujours fait.
+  const { error: errUpd } = await supabase
+    .from('messages')
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: userId,
+      deleted_at_wati: watiOk,
+    })
+    .eq('id', messageId)
+  if (errUpd) return res.status(500).json({ error: errUpd.message })
+
+  return res.status(200).json({ ok: true, deleted_at_wati: watiOk })
 }
 
 // ============================================================

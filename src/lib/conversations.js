@@ -348,6 +348,18 @@ export async function suggestReplies(conversationId, userId) {
   return data.suggestions || []
 }
 
+/** Supprime un message (tente WATI + soft delete local). */
+export async function deleteMessage(messageId, userId) {
+  const res = await fetch('/api/wati-webhook?action=delete-message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId, userId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data   // { ok, deleted_at_wati }
+}
+
 /** Corrige orthographe/grammaire d'un message avant envoi. */
 export async function correctText(text, userId) {
   const res = await fetch('/api/wati-webhook?action=correct', {
