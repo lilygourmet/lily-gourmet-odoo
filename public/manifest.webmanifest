@@ -1,0 +1,20 @@
+{
+  "name": "Lily Gourmet — Pâtisserie",
+  "short_name": "Lily Gourmet",
+  "description": "Application interne Lily Gourmet (commandes, caisse, pointage, conversations).",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF6F0",
+  "theme_color": "#993556",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
