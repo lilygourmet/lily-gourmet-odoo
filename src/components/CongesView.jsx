@@ -50,7 +50,7 @@ function formatTypeConge(t) {
   if (s.includes('paid time off'))    return 'Congé annuel'
   if (s.includes('compensatory days')) return 'Récupération'
   if (s.includes('maternity'))         return 'Congé maternité'
-  if (s.includes('sick leave'))        return 'Congé maladie'
+  if (s.includes('sick'))              return 'Congé maladie'
   if (s.includes('unpaid'))            return 'Sans solde'
   return t
 }
