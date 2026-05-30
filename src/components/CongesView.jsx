@@ -410,24 +410,35 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
         {!loading && tab === 'soldes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 11, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              <div>Employé</div><div>Quota/an</div><div>Acquis</div><div>Reliquat</div><div>Pris</div><div style={{ textAlign: 'right' }}>Dispo</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px 70px 70px 90px 100px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <div>Employé</div>
+              <div title="Quota annuel : 18 j + bonus ancienneté">Quota/an</div>
+              <div title="Pro-rata : quota × mois écoulés / 12">Acquis</div>
+              <div title="Report année N-1 (expire le 30 mai)">Reliquat</div>
+              <div title="Jours d'événements applicables à ce jour">Évén.</div>
+              <div title="Jours déjà pris (annuel + événements)">Pris</div>
+              <div style={{ textAlign: 'right' }} title="Acquis + reliquat + récup + événements − pris">Dispo</div>
             </div>
             {employes.map(e => {
               const s = soldes[e.id]
               if (!s) return null
               return (
-                <div key={e.id} style={soldeRow}>
+                <div key={e.id} style={{ ...soldeRow, gridTemplateColumns: '1fr 70px 70px 70px 70px 90px 100px' }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{e.nom}</div>
                     <div style={{ fontSize: 11, color: '#8a7a70' }}>
                       {e.poste || '—'}{!s.peutPrendre && ` · ⚠ pas encore éligible (< 6 mois)`}
+                      {' · '}
+                      <span title="Maladie courte ≤ 3 j : pool séparé de 6 j/an" style={{ color: '#0C447C' }}>
+                        Maladie {s.maladie.pris}/{s.maladie.alloue || 6}
+                      </span>
                     </div>
                   </div>
                   <div style={cellNum}>{s.quotaAnnuel}</div>
                   <div style={cellNum}>{s.acquis.toFixed(1)}</div>
                   <div style={cellNum}>{s.reliquatN1 > 0 ? s.reliquatN1 : '—'}</div>
-                  <div style={cellNum}>{s.pris.toFixed(1)}</div>
+                  <div style={cellNum}>{s.events.applicable > 0 ? s.events.applicable.toFixed(1) : '—'}</div>
+                  <div style={cellNum}>{(s.pris + s.events.pris).toFixed(1)}</div>
                   <div style={{ ...cellNum, textAlign: 'right', fontWeight: 600, color: s.dispo > 0 ? '#085041' : '#A32D2D' }}>
                     {s.dispo.toFixed(1)} j
                   </div>
@@ -435,8 +446,9 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               )
             })}
             <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 8, padding: '0 4px' }}>
-              Calcul : (reliquat N-1 si avant 30 mai) + (quota_annuel × mois écoulés / 12) + (récup gagnés) − (jours pris).
-              Quota = 18 j/an + 1,5 j à 5 ans d'ancienneté + 1,5 j à 10 ans.
+              <strong>Calcul :</strong> (reliquat N-1 si avant 30 mai) + (quota_annuel × mois écoulés / 12) + (récup gagnés) + (événements applicables) − (jours pris annuels et événements).<br />
+              <strong>Quota annuel :</strong> 18 j + 1,5 j à 5 ans d'ancienneté + 1,5 j à 10 ans. Si tu as configuré une allocation "annuel" manuelle, c'est elle qui prime.<br />
+              <strong>Maladie ≤ 3 j</strong> = pool séparé de 6 j/an (compté à part). Maladie &gt; 3 j et sans solde ne consomment pas le solde dispo.
             </div>
           </div>
         )}

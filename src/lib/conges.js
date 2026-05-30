@@ -133,33 +133,132 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
 }
 
 // ------------------------------------------------------------
+// Classification des congés pris par type d'allocation
+//   - 'annuel'         : congés payés
+//   - 'maladie_courte' : maladie ≤ 3 j (consomme le pool 6 j/an)
+//   - 'maladie_longue' : maladie > 3 j (NON payée, hors pool)
+//   - 'mariage' / 'naissance' / 'deces' / 'circoncision' / 'autre' : événements
+// Retourne un objet { type: jours }.
+// ------------------------------------------------------------
+function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
+  const ref = new Date(refDate + 'T00:00:00')
+  const yearStart = `${ref.getFullYear()}-01-01`
+  const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, autre: 0 }
+  for (const c of congesValides) {
+    if (c.employe_id !== emp.id) continue
+    if (c.statut !== 'valide') continue
+    if (c.date_fin < yearStart || c.date_debut > refDate) continue
+    const t = (c.type_conge || '').toLowerCase()
+    if (t.includes('récup') || t.includes('recup')) continue   // les récup s'ajoutent au solde, pas un congé pris
+
+    const debut = c.date_debut < yearStart ? yearStart : c.date_debut
+    const fin   = c.date_fin   > refDate    ? refDate   : c.date_fin
+    const nb = (new Date(fin + 'T00:00:00') - new Date(debut + 'T00:00:00')) / 86400000 + 1
+    if (nb <= 0) continue
+
+    // Classification heuristique sur type_conge
+    let category = 'annuel'
+    if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
+      // Durée totale du congé maladie (pas seulement la partie clippée)
+      const dureeTotale = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
+      category = dureeTotale <= 3 ? 'maladie_courte' : 'maladie_longue'
+    } else if (t.includes('mariage'))       category = 'mariage'
+    else if (t.includes('naissance'))       category = 'naissance'
+    else if (t.includes('deces') || t.includes('décès')) category = 'deces'
+    else if (t.includes('circoncis'))       category = 'circoncision'
+    else if (t.includes('sans solde') || t.includes('unpaid')) category = 'autre'
+
+    // Pour 'annuel' on retire le jour off fixe (règle Layla déjà discutée)
+    const compte = category === 'annuel' ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) : nb
+    out[category] = (out[category] || 0) + compte
+  }
+  return out
+}
+
+// ------------------------------------------------------------
 // PUBLIC : solde dispo d'un employé à la date du jour
+// Source : table conges_allocations (annuel, reliquat, maladie_courte,
+// événements). Si aucune allocation 'annuel' n'existe encore, on tombe
+// sur le quota calculé (18 + ancienneté) en repli.
 // ------------------------------------------------------------
 export async function calculSoldeConges(emp, congesValides = null, refDate = todayYMD()) {
+  const ref = new Date(refDate + 'T00:00:00')
+  const annee = ref.getFullYear()
+
+  // 1) Congés validés (chargés si non fournis)
   if (!congesValides) {
     const { data } = await supabase
-      .from('conges')
-      .select('*')
-      .eq('employe_id', emp.id)
-      .eq('statut', 'valide')
+      .from('conges').select('*')
+      .eq('employe_id', emp.id).eq('statut', 'valide')
     congesValides = data || []
   }
-  const acquis     = joursAcquisDepuisJanv(emp, refDate)
-  const reliquatN1 = reliquatN1Valide(emp, refDate)
-  const recup      = await joursRecupGagnesAnnee(emp, refDate)
-  const pris       = joursPrisAnnee(emp, congesValides, refDate)
 
-  // Verrou des 6 mois : un nouvel employé ne peut pas prendre tant que < 6 mois.
+  // 2) Allocations de l'année (toutes sources : auto, manuel, odoo)
+  const { data: allocsData } = await supabase
+    .from('conges_allocations')
+    .select('*')
+    .eq('employe_id', emp.id)
+    .eq('annee', annee)
+    .eq('statut', 'valide')
+  const allocs = allocsData || []
+
+  const sumByType = {}
+  for (const a of allocs) sumByType[a.type] = (sumByType[a.type] || 0) + Number(a.jours)
+
+  // 3) ANNUEL : pro-rata par mois écoulés (1.5 j à fin de chaque mois).
+  //    Si pas d'allocation 'annuel' configurée → repli sur le quota calculé.
+  const annuelAlloue   = sumByType.annuel || 0
+  const annuelEffectif = annuelAlloue > 0 ? annuelAlloue : quotaAnnuel(emp, refDate)
+  const moisEchus      = Math.max(0, ref.getMonth())   // janvier=0 → 0 mois échus
+  const acquis         = annuelEffectif * moisEchus / 12
+
+  // 4) RELIQUAT : valide jusqu'au 30 mai
+  const reliquatAlloue = sumByType.reliquat || 0
+  const deadline       = new Date(`${annee}-${RELIQUAT_DEADLINE_MM_DD}T23:59:59`)
+  const reliquatN1     = ref <= deadline ? reliquatAlloue : 0
+
+  // 5) ÉVÉNEMENTS : applicable si date_evt absent ou ≤ refDate
+  const eventTypes = ['mariage', 'naissance', 'deces', 'circoncision', 'autre']
+  let eventsApplicable = 0
+  const eventsDetail = []
+  for (const a of allocs) {
+    if (!eventTypes.includes(a.type)) continue
+    const applicable = !a.date_evt || a.date_evt <= refDate
+    if (applicable) eventsApplicable += Number(a.jours)
+    eventsDetail.push({ id: a.id, type: a.type, jours: Number(a.jours), date_evt: a.date_evt, raison: a.raison, applicable })
+  }
+
+  // 6) RÉCUP gagnés
+  const recup = await joursRecupGagnesAnnee(emp, refDate)
+
+  // 7) CONGÉS PRIS par type
+  const prisType = joursPrisParTypeAnnee(emp, congesValides, refDate)
+  const prisAnnuel = prisType.annuel
+  const prisEvents = prisType.mariage + prisType.naissance + prisType.deces + prisType.circoncision + prisType.autre
+
+  // 8) DISPO (annuel + reliquat + récup + événements applicables − pris annuels & événements)
+  const dispo = acquis + reliquatN1 + recup + eventsApplicable - prisAnnuel - prisEvents
+
+  // 9) MALADIE ≤ 3 j : pool séparé (6 j/an par défaut)
+  const maladieAlloue = sumByType.maladie_courte || 0
+  const maladiePris   = prisType.maladie_courte
+  const maladieDispo  = Math.max(0, maladieAlloue - maladiePris)
+
+  // Verrou des 6 mois
   const moisDepuisEntree = emp?.date_entree ? moisEntre(emp.date_entree, refDate) : 999
   const peutPrendre      = moisDepuisEntree >= MOIS_AVANT_PRISE
 
-  const dispo = acquis + reliquatN1 + recup - pris
   return {
-    acquis, reliquatN1, recup, pris,
+    acquis, reliquatN1, recup,
+    pris: prisAnnuel,
     dispo: Math.max(0, dispo),
     peutPrendre,
     moisDepuisEntree,
-    quotaAnnuel: quotaAnnuel(emp, refDate),
+    quotaAnnuel: annuelEffectif,
+    // Détails par catégorie
+    maladie: { alloue: maladieAlloue, pris: maladiePris, dispo: maladieDispo },
+    events:  { applicable: eventsApplicable, pris: prisEvents, detail: eventsDetail },
+    maladieLonguePrise: prisType.maladie_longue, // informatif, n'entre pas dans dispo
   }
 }
 
