@@ -6,7 +6,7 @@ import {
   calculSoldeConges, quotaAnnuel,
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
-  syncCongesAnneeOdoo,
+  syncCongesAnneeOdoo, listAllocationsOdoo,
 } from '../lib/conges'
 
 const TYPES = [
@@ -35,6 +35,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [importing, setImporting]   = useState(false)
   const [filterEmp, setFilterEmp]   = useState('all')   // 'all' | empId
   const [filterYear, setFilterYear] = useState('all')   // 'all' | YYYY
+  const [allocLoading, setAllocLoading] = useState(false)
+  const [allocResult, setAllocResult]   = useState(null) // { par_employe, details, ... }
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
@@ -118,6 +120,18 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     catch (e) { alert('Erreur : ' + e.message) }
   }
 
+  async function handleVoirAllocations() {
+    setAllocLoading(true)
+    try {
+      const r = await listAllocationsOdoo()
+      setAllocResult(r)
+    } catch (e) {
+      alert('Erreur : ' + e.message)
+    } finally {
+      setAllocLoading(false)
+    }
+  }
+
   async function handleImportOdoo() {
     const annee = new Date().getFullYear()
     if (!confirm(`Importer les congés validés depuis Odoo (du 1er janvier ${annee} à aujourd'hui) ?\n\nLes congés Odoo déjà importés seront remplacés ; les congés saisis dans l'app ne seront pas touchés.`)) return
@@ -143,9 +157,14 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           </h1>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {user?.role === 'admin' && (
-              <button onClick={handleImportOdoo} disabled={importing} style={{ ...btnSlim, opacity: importing ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Download size={14} /> {importing ? 'Import…' : 'Importer Odoo (année)'}
-              </button>
+              <>
+                <button onClick={handleVoirAllocations} disabled={allocLoading} style={{ ...btnSlim, opacity: allocLoading ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Download size={14} /> {allocLoading ? 'Chargement…' : 'Voir allocations Odoo'}
+                </button>
+                <button onClick={handleImportOdoo} disabled={importing} style={{ ...btnSlim, opacity: importing ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Download size={14} /> {importing ? 'Import…' : 'Importer Odoo (année)'}
+                </button>
+              </>
             )}
             <button onClick={() => setShowForm(true)} style={btnPrimary}>
               <Plus size={14} /> Nouvelle demande
@@ -286,7 +305,72 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           onSaved={() => { setShowForm(false); reload() }}
         />
       )}
+
+      {allocResult && (
+        <AllocationsModal result={allocResult} onClose={() => setAllocResult(null)} />
+      )}
     </>
+  )
+}
+
+function AllocationsModal({ result, onClose }) {
+  const totalGlobal = result.par_employe.reduce((s, e) => s + e.total_jours, 0)
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={{ ...modal, maxWidth: 720 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+          <div style={{ fontSize: 17, fontWeight: 600 }}>
+            Allocations Odoo · {result.year}
+          </div>
+          <button onClick={onClose} style={btnSlim}>Fermer</button>
+        </div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
+          {result.par_employe.length} employé{result.par_employe.length > 1 ? 's' : ''} ·
+          {' '}{totalGlobal.toFixed(1)} jours alloués au total ·
+          {' '}{result.unmatched > 0 && <span style={{ color: '#A32D2D' }}>{result.unmatched} allocation(s) sans correspondance d'employé</span>}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 8, padding: '8px 12px', fontSize: 11, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5, background: '#F4F0EA', borderRadius: 8 }}>
+          <div>Employé</div>
+          <div style={{ textAlign: 'right' }}>Jours alloués</div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+          {result.par_employe.map(e => (
+            <details key={e.employe_id} style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 10, padding: '8px 12px' }}>
+              <summary style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 8, cursor: 'pointer', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{e.nom}</div>
+                <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#085041' }}>{e.total_jours.toFixed(1)} j</div>
+              </summary>
+              <div style={{ marginTop: 8, fontSize: 11, color: '#4a3a30' }}>
+                {e.lignes.map((l, i) => (
+                  <div key={i} style={{ padding: '4px 0', borderTop: i > 0 ? '0.5px solid #f0e8d5' : 'none' }}>
+                    <strong>{l.jours} j</strong> · {l.type || '(type ?)'} ·
+                    {' '}{l.date_from || '?'} → {l.date_to || '?'}
+                    {l.name && <div style={{ color: '#8a7a70' }}>{l.name}</div>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+
+        {result.unmatched > 0 && (
+          <details style={{ marginTop: 12, background: '#FCEEE8', borderRadius: 8, padding: '8px 12px' }}>
+            <summary style={{ cursor: 'pointer', fontSize: 12, color: '#99201E', fontWeight: 500 }}>
+              {result.unmatched} allocation(s) sans correspondance — voir les noms Odoo
+            </summary>
+            <div style={{ marginTop: 6, fontSize: 11, color: '#4a3a30' }}>
+              {result.details.filter(d => !d.match_employe_id).map((d, i) => (
+                <div key={i} style={{ padding: '3px 0', borderTop: i > 0 ? '0.5px solid #f0e8d5' : 'none' }}>
+                  <strong>{d.odoo_employee || '?'}</strong> · {d.jours} j · {d.type || '?'}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    </div>
   )
 }
 

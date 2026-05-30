@@ -565,6 +565,78 @@ async function actionSyncLeavesYear({ annee }) {
 }
 
 // ============================================================
+// Action : list-allocations — allocations de congés Odoo pour une année.
+// Renvoie l'allocation totale (number_of_days) par employé matché côté app
+// + le détail des allocations Odoo. Permet de voir à quoi chaque employé
+// a eu droit cette année dans Odoo (avant qu'on bascule sur les calculs app).
+// ============================================================
+async function actionListAllocations({ annee } = {}) {
+  const year = annee || new Date().getFullYear()
+  const debut = `${year}-01-01`
+  const fin   = `${year}-12-31`
+  const uid = await odooAuth()
+
+  // États « validate » uniquement (allocations effectivement accordées).
+  // Filtre sur date_from / date_to si présent, sinon on prend l'allocation
+  // qui chevauche l'année.
+  const allocs = await odooExec(uid, 'hr.leave.allocation', 'search_read', [
+    [['state', '=', 'validate']],
+    ['id', 'employee_id', 'holiday_status_id', 'number_of_days', 'date_from', 'date_to', 'state', 'name'],
+  ], { limit: 5000 })
+
+  // Filtre côté serveur léger : on garde celles dont la période chevauche l'année.
+  // date_from est parfois NULL : on garde par défaut.
+  const inYear = allocs.filter(a => {
+    const df = a.date_from ? a.date_from.slice(0, 10) : null
+    const dt = a.date_to   ? a.date_to.slice(0, 10)   : null
+    if (df && df > fin)   return false
+    if (dt && dt < debut) return false
+    return true
+  })
+
+  const { data: employesDb } = await sb
+    .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
+
+  // Agrégat par employé (matché)
+  const byEmp = new Map()
+  let unmatched = 0
+  const details = []
+  for (const a of inYear) {
+    if (!a.employee_id) continue
+    const empNameOdoo = Array.isArray(a.employee_id) ? a.employee_id[1] : null
+    const match = findBestMatch(empNameOdoo, employesDb, 0.70)
+    const typeName = Array.isArray(a.holiday_status_id) ? a.holiday_status_id[1] : null
+    const row = {
+      odoo_alloc_id: a.id,
+      odoo_employee: empNameOdoo,
+      match_employe_id: match ? match.employe.id : null,
+      match_employe_nom: match ? match.employe.nom : null,
+      type: typeName,
+      jours: Number(a.number_of_days || 0),
+      date_from: a.date_from ? a.date_from.slice(0, 10) : null,
+      date_to:   a.date_to   ? a.date_to.slice(0, 10)   : null,
+      name: a.name || null,
+    }
+    details.push(row)
+    if (!match) { unmatched++; continue }
+    const empId = match.employe.id
+    if (!byEmp.has(empId)) byEmp.set(empId, { employe_id: empId, nom: match.employe.nom, total_jours: 0, lignes: [] })
+    const agg = byEmp.get(empId)
+    agg.total_jours += Number(a.number_of_days || 0)
+    agg.lignes.push(row)
+  }
+
+  return {
+    ok: true,
+    year,
+    total_odoo: inYear.length,
+    unmatched,
+    par_employe: Array.from(byEmp.values()).sort((a, b) => a.nom.localeCompare(b.nom)),
+    details,
+  }
+}
+
+// ============================================================
 // Action : list-employees (récupérer tous les employés Odoo)
 // ============================================================
 
@@ -649,6 +721,7 @@ export default async function handler(req, res) {
     if (action === 'sync-attendance')         result = await actionSyncAttendance(params)
     else if (action === 'sync-leaves')        result = await actionSyncLeaves(params)
     else if (action === 'sync-leaves-year')   result = await actionSyncLeavesYear(params)
+    else if (action === 'list-allocations')   result = await actionListAllocations(params)
     else if (action === 'list-employees')     result = await actionListEmployees()
     else if (action === 'debug-attendance')   result = await actionDebugAttendance(params)
     else return res.status(400).json({ error: 'Unknown action: ' + action })

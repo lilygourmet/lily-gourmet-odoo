@@ -277,3 +277,17 @@ export async function syncCongesAnneeOdoo(annee = null) {
   }
   return resp.json()
 }
+
+// Allocations Odoo de l'année (« à quoi chaque employé a eu droit »).
+export async function listAllocationsOdoo(annee = null) {
+  const resp = await fetch('/api/pointage-api?action=list-allocations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ annee: annee || new Date().getFullYear() }),
+  })
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '')
+    throw new Error(txt || `HTTP ${resp.status}`)
+  }
+  return resp.json()
+}
