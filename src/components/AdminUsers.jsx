@@ -742,17 +742,39 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
         </div>
       )}
 
-      {/* Nom complet */}
+      {/* Nom complet — choisi dans la liste des employés (lie aussi le user à l'employé) */}
       <div>
         <label className="block text-[11px] font-medium text-ink-soft mb-1">
-          Nom complet
+          Nom complet (choisir l'employé)
         </label>
+        <select
+          value={formData.employe_id || ''}
+          onChange={e => {
+            const newId = e.target.value ? Number(e.target.value) : ''
+            const emp = employes.find(x => x.id === newId)
+            setFormData(prev => ({
+              ...prev,
+              employe_id: newId === '' ? null : newId,
+              fullName: emp ? emp.nom : prev.fullName,
+              whatsapp: emp?.telephone ? emp.telephone : prev.whatsapp,
+            }))
+          }}
+          className="w-full px-3 py-2 text-[13px] bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+        >
+          <option value="">— Choisir un employé —</option>
+          {employes.map(e => (
+            <option key={e.id} value={e.id}>
+              {e.nom}{e.poste ? ` · ${e.poste}` : ''}{e.telephone ? ` · ${e.telephone}` : ''}
+            </option>
+          ))}
+        </select>
+        {/* Champ texte de repli (si le nom doit différer ou si pas d'employé lié) */}
         <input
           type="text"
           value={formData.fullName}
           onChange={e => update('fullName', e.target.value)}
-          placeholder="ex: Marie Dupont"
-          className="w-full px-3 py-2 text-[13px] bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+          placeholder="Nom complet affiché (modifiable si besoin)"
+          className="w-full mt-2 px-3 py-2 text-[12px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux"
         />
       </div>
 
@@ -1041,32 +1063,6 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <option value="">— Aucune équipe —</option>
             {(teams || []).map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Lien avec un employé (source du numéro de téléphone) */}
-        <div className="mt-3 pt-3 border-t border-line">
-          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Employé lié (source du numéro)</div>
-          <select
-            value={formData.employe_id || ''}
-            onChange={e => {
-              const newId = e.target.value ? Number(e.target.value) : ''
-              const emp = employes.find(x => x.id === newId)
-              setFormData(prev => ({
-                ...prev,
-                employe_id: newId === '' ? null : newId,
-                // Si l'employé a un téléphone, on l'auto-remplit dans WhatsApp.
-                whatsapp: emp?.telephone ? emp.telephone : prev.whatsapp,
-              }))
-            }}
-            className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
-          >
-            <option value="">— Aucun employé lié —</option>
-            {employes.map(e => (
-              <option key={e.id} value={e.id}>
-                {e.nom}{e.poste ? ` · ${e.poste}` : ''}{e.telephone ? ` · ${e.telephone}` : ''}
-              </option>
             ))}
           </select>
         </div>
