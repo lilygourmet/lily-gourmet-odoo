@@ -390,7 +390,8 @@ export default function RapprochementView({ user }) {
   const pdfRef = useRef([])    // lignes PDF accumulées (complément)
 
   // Analyse les lignes accumulées (Excel + complément PDF) contre Odoo, et sauvegarde.
-  async function analyze(names) {
+  // useCache : réutilise les ventes Odoo déjà téléchargées (ouverture rapide, sans réseau).
+  async function analyze(names, { useCache = false } = {}) {
     setBusy(true); setErr('')
     try {
       const no2025 = b => !/\/2025$/.test(b.dateStr) // on ignore les lignes de 2025
@@ -403,10 +404,18 @@ export default function RapprochementView({ user }) {
       const times = bank.map(b => b.t)
       const from = new Date(Math.min(...times) - 3 * 86400e3).toISOString().slice(0, 10)
       const to = new Date(Math.max(...times) + 3 * 86400e3).toISOString().slice(0, 10)
-      const r = await fetch(`/api/caisse-api?action=pos-payments&from=${from}&to=${to}`, { method: 'POST' })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data.error || `Erreur serveur ${r.status}`)
-      setRes(runMatch(bank, data.payments || []))
+      let payments = null
+      if (useCache) {
+        try { const c = JSON.parse(localStorage.getItem('rappro_odoo_v1') || 'null'); if (c && c.from <= from && c.to >= to && Array.isArray(c.payments)) payments = c.payments } catch { /* ignore */ }
+      }
+      if (!payments) {
+        const r = await fetch(`/api/caisse-api?action=pos-payments&from=${from}&to=${to}`, { method: 'POST' })
+        const data = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(data.error || `Erreur serveur ${r.status}`)
+        payments = data.payments || []
+        try { localStorage.setItem('rappro_odoo_v1', JSON.stringify({ payments, from, to })) } catch { /* quota */ }
+      }
+      setRes(runMatch(bank, payments))
       try { localStorage.setItem('rappro_bank_v1', JSON.stringify({ excel: excelRef.current, pdf: pdfRef.current, names })) } catch { /* quota dépassé : on ne sauvegarde pas */ }
     } catch (e) {
       setErr(e.message)
@@ -418,7 +427,7 @@ export default function RapprochementView({ user }) {
   function reset() {
     excelRef.current = []; pdfRef.current = []
     setRes(null); setFileNames([]); setErr(''); setSearch('')
-    try { localStorage.removeItem('rappro_bank_v1') } catch { /* ignore */ }
+    try { localStorage.removeItem('rappro_bank_v1'); localStorage.removeItem('rappro_odoo_v1') } catch { /* ignore */ }
   }
 
   useEffect(() => {
@@ -428,7 +437,7 @@ export default function RapprochementView({ user }) {
     if (saved && ((saved.excel || []).length || (saved.pdf || []).length)) {
       excelRef.current = saved.excel || []
       pdfRef.current = saved.pdf || []
-      Promise.resolve().then(() => { setFileNames(saved.names || []); analyze(saved.names || []) })
+      Promise.resolve().then(() => { setFileNames(saved.names || []); analyze(saved.names || [], { useCache: true }) })
     }
   }, [])
 
@@ -455,7 +464,7 @@ export default function RapprochementView({ user }) {
       for (const p of newPdf) if (!pk.has(p.mergeKey)) { pk.add(p.mergeKey); pdfRef.current.push(p) }
       const names = [...new Set([...fileNames, ...arr.map(f => f.name)])]
       setFileNames(names)
-      await analyze(names)
+      await analyze(names, { useCache: true })
     } catch (e) {
       setErr(e.message); setBusy(false)
     }
@@ -539,7 +548,10 @@ export default function RapprochementView({ user }) {
       {fileNames.length > 0 && (
         <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
           <div className="text-[12px] text-ink-mute">📄 {fileNames.length} fichier{fileNames.length > 1 ? 's' : ''} chargé{fileNames.length > 1 ? 's' : ''} · sauvegardé localement (reste après rafraîchissement)</div>
-          <button onClick={reset} disabled={busy} className="px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-bordeaux hover:text-bordeaux text-[12px] font-semibold disabled:opacity-50">↺ Réinitialiser</button>
+          <div className="flex gap-2">
+            <button onClick={() => analyze(fileNames, { useCache: false })} disabled={busy} className="px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-bordeaux hover:text-bordeaux text-[12px] font-semibold disabled:opacity-50">🔄 Actualiser (Odoo)</button>
+            <button onClick={reset} disabled={busy} className="px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-bordeaux hover:text-bordeaux text-[12px] font-semibold disabled:opacity-50">↺ Réinitialiser</button>
+          </div>
         </div>
       )}
 
