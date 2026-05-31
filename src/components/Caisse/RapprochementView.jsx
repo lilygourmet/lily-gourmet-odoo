@@ -1,10 +1,15 @@
 import { useState, useEffect, Fragment } from 'react'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { loadRapproVerifies, setRapproVerified, unsetRapproVerified } from '../../lib/caisse'
 
-// Rapprochement bancaire : on dépose un ou plusieurs relevés carte (CMI .xlsx),
-// on les compare aux paiements POS d'Odoo (lus en direct via
-// /api/caisse-api?action=pos-payments) et on signale chaque carte enregistrée
-// en caisse autrement qu'en « Carte ».
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+
+// Rapprochement bancaire : on dépose les relevés carte CMI (.xlsx + .pdf).
+// L'Excel sert de base (il a l'heure → matching précis). Le PDF (complet, mais
+// sans heure) sert à compléter les lignes que CMI a oubliées dans l'Excel
+// (repérées par STAN). On compare le tout aux paiements POS d'Odoo et on signale
+// chaque carte enregistrée en caisse autrement qu'en « Carte ».
 
 const LABEL = { e: 'Espèces', k: 'Compte client', q: 'Chèque', v: 'Virement', r: 'Avoir/Crédit', a: 'Autre' }
 const norm = s => (s == null ? '' : s.toString()).toLowerCase().normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
@@ -47,11 +52,43 @@ function parseBank(rows) {
     if (!amt) continue
     const net = ci.net >= 0 ? Math.round(num(r[ci.net]) * 100) / 100 : amt
     const stan = String(r[ci.stan] || '').replace(/\D/g, '')
+    const stanNorm = String(parseInt(stan || '0', 10))
     const dateStr = `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}`
-    bank.push({ t, amt, net, online: stan.length === 6, sys: String(r[ci.sys] || ''), heureStr: heure, dateStr, key: `${dateStr}|${heure}|${amt}|${stan}` })
+    bank.push({ t, amt, net, online: stan.length === 6, sys: String(r[ci.sys] || ''), heureStr: heure, dateStr, hasTime: true, mergeKey: `${stanNorm}|${dateStr}|${amt}`, key: `${dateStr}|${heure}|${amt}|${stan}` })
   }
   if (!bank.length) throw new Error("Aucune ligne de paiement lue dans le fichier.")
   return bank
+}
+
+// Lit un PDF de relevé CMI : renvoie chaque transaction (sans heure).
+// Ligne type : "24/05/26 016236 M L 534971******7372 430.00"
+async function parsePDF(file) {
+  const buf = await file.arrayBuffer()
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf).slice() }).promise
+  let text = ''
+  for (let i = 1; i <= doc.numPages; i++) {
+    const tc = await (await doc.getPage(i)).getTextContent()
+    text += ' ' + tc.items.map(it => it.str).join(' ')
+  }
+  // date STAN(6) type(V/M…) L/I  carte(masquée, parfois découpée)  montant
+  const rx = /(\d{2})\/(\d{2})\/(\d{2})\s+(\d{6})\s+([VMDJCU])\s+[LI]\s+[\d*\s]+?([\d.,]+\.\d{2})/g
+  const out = []; let m
+  while ((m = rx.exec(text))) {
+    const [, dd, mm, yy, stan, type, amtStr] = m
+    const amt = Math.round((parseFloat(amtStr.replace(/,/g, '')) || 0) * 100) / 100
+    if (!amt) continue
+    const dateStr = `${dd}/${mm}/20${yy}`
+    const stanNorm = String(parseInt(stan, 10))
+    out.push({
+      amt, dateStr, online: stanNorm.length === 6,
+      sys: type === 'M' ? 'MASTERCARD' : type === 'V' ? 'VISA' : type,
+      heureStr: '—', hasTime: false,
+      t: Date.parse(`20${yy}-${mm}-${dd}T12:00:00Z`),
+      mergeKey: `${stanNorm}|${dateStr}|${amt}`, key: `pdf|${stanNorm}|${dateStr}|${amt}`,
+    })
+  }
+  if (!out.length) throw new Error('Aucune transaction lue dans le PDF — est-ce bien un relevé CMI ?')
+  return out
 }
 
 function detectOffset(bank, byAmt) {
@@ -74,8 +111,10 @@ function runMatch(bank, raw) {
   const byAmt = new Map()
   for (const p of odoo) { if (!byAmt.has(p.a)) byAmt.set(p.a, []); byAmt.get(p.a).push(p) }
   const OFF = detectOffset(bank, byAmt)
-  const W = 20 * 60e3, D3 = 3 * 86400e3
-  const tpe = bank.filter(b => !b.online), onl = bank.filter(b => b.online)
+  const W = 20 * 60e3, D3 = 3 * 86400e3, D1 = 1.5 * 86400e3
+  const withTime = bank.filter(b => b.hasTime !== false)
+  const noTime = bank.filter(b => b.hasTime === false) // lignes venues du PDF (pas d'heure)
+  const tpe = withTime.filter(b => !b.online), onl = withTime.filter(b => b.online)
 
   let okC = 0; const suspects = [], intro = [], okList = []
   for (const b of tpe) {
@@ -99,6 +138,17 @@ function runMatch(bank, raw) {
     const carte = cands.find(p => p.c === 'c')
     if (carte) { carte.used = true; oOk++; okList.push({ b, p: carte }) }
     else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - OFF) }) } else oNone.push(b) }
+  }
+
+  // Lignes du PDF (complément, sans heure) : matchées par jour ± 1 j, carte d'abord.
+  for (const b of noTime) {
+    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs((p.t - OFF) - b.t) <= D1)
+    const cartes = cands.filter(p => p.c === 'c')
+    const pool = cartes.length ? cartes : cands
+    let best = null
+    for (const p of pool) { const d = Math.abs((p.t - OFF) - b.t); if (!best || d < best.d) best = { p, d } }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - OFF) }) }
+    else intro.push({ ...b, cls: 'none' })
   }
 
   // Résumé par jour : carte relevé vs carte Odoo
@@ -137,11 +187,12 @@ function runMatch(bank, raw) {
   ledger.sort((a, b) => a.t - b.t)
 
   const totalBrut = bank.reduce((s, b) => s + b.amt, 0)
-  const totalNet = bank.reduce((s, b) => s + b.net, 0)
+  const totalNet = bank.reduce((s, b) => s + (b.net ?? b.amt), 0)
 
   const times = bank.map(b => b.t)
   return {
     total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily, reverse, ledger,
+    pdfAdded: noTime.length,
     commission: Math.round((totalBrut - totalNet) * 100) / 100, totalBrut: Math.round(totalBrut),
     from: new Date(Math.min(...times)).toISOString().slice(0, 10),
     to: new Date(Math.max(...times)).toISOString().slice(0, 10),
@@ -269,15 +320,28 @@ export default function RapprochementView({ user }) {
     setErr(''); setRes(null); setBusy(true); setSearch(''); setFileNames(arr.map(f => f.name))
     try {
       const XLSX = await ensureXLSX()
+      const excelFiles = arr.filter(f => /\.(xlsx|xls)$/i.test(f.name))
+      const pdfFiles = arr.filter(f => /\.pdf$/i.test(f.name))
+      // 1) Excel = base (avec heure)
       let bank = []
-      for (const file of arr) {
+      for (const file of excelFiles) {
         const buf = await file.arrayBuffer()
         const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         bank = bank.concat(parseBank(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' })))
       }
-      const seen = new Set()
-      bank = bank.filter(b => { if (seen.has(b.key)) return false; seen.add(b.key); return true })
+      const seenKey = new Set()
+      bank = bank.filter(b => { if (seenKey.has(b.key)) return false; seenKey.add(b.key); return true })
+      // 2) PDF = complément : on ajoute les STAN absents de l'Excel
+      const excelMerge = new Set(bank.map(b => b.mergeKey))
+      let pdfLines = []
+      for (const file of pdfFiles) pdfLines = pdfLines.concat(await parsePDF(file))
+      const seenPdf = new Set()
+      for (const p of pdfLines) {
+        if (excelMerge.has(p.mergeKey) || seenPdf.has(p.mergeKey)) continue
+        seenPdf.add(p.mergeKey); bank.push(p)
+      }
+      if (!bank.length) throw new Error('Aucune transaction lue (ni Excel ni PDF).')
       const times = bank.map(b => b.t)
       const from = new Date(Math.min(...times) - 3 * 86400e3).toISOString().slice(0, 10)
       const to = new Date(Math.max(...times) + 3 * 86400e3).toISOString().slice(0, 10)
@@ -339,7 +403,8 @@ export default function RapprochementView({ user }) {
     <div className="max-w-[920px]">
       <h2 className="font-fraunces italic text-[22px] text-ink mb-1">Rapprochement bancaire</h2>
       <p className="text-[13px] text-ink-mute mb-4">
-        Dépose un ou plusieurs relevés carte (CMI, .xlsx). Ils sont comparés aux ventes de la caisse (Odoo) et chaque carte
+        Dépose les relevés carte CMI : les <b>.xlsx</b> (avec l'heure) <b>et</b> les <b>.pdf</b> (complets). Le PDF sert à rajouter
+        les lignes que CMI oublie parfois dans l'Excel. Le tout est comparé aux ventes de la caisse (Odoo) et chaque carte
         enregistrée autrement qu'en « Carte » (espèces, chèque, compte client, virement…) est signalée.
       </p>
 
@@ -350,11 +415,11 @@ export default function RapprochementView({ user }) {
         className={`block border-2 border-dashed rounded-2xl bg-cream-warm p-9 text-center cursor-pointer transition-colors ${over ? 'border-bordeaux' : 'border-line hover:border-bordeaux'}`}
       >
         <div className="text-[17px] font-semibold text-ink mb-1.5">📂 Glisse tes relevés ici, ou clique pour choisir</div>
-        <div className="text-[13px] text-ink-mute">Un ou plusieurs fichiers .xlsx (ex. relevé -1, -2, -3 du mois)</div>
+        <div className="text-[13px] text-ink-mute">Fichiers .xlsx et .pdf du mois (tu peux tout glisser ensemble)</div>
         <span className="inline-block mt-3.5 bg-bordeaux hover:bg-bordeaux-deep text-white rounded-full px-5 py-2.5 text-[12px] font-semibold tracking-wider uppercase">
           {busy ? 'Analyse…' : 'Choisir des fichiers'}
         </span>
-        <input type="file" accept=".xlsx,.xls" multiple className="hidden" disabled={busy}
+        <input type="file" accept=".xlsx,.xls,.pdf" multiple className="hidden" disabled={busy}
           onChange={e => onFiles(e.target.files)} />
         {fileNames.length > 0 && <div className="text-[12px] text-ink-mute mt-3">📄 {fileNames.join(' · ')}</div>}
       </label>
@@ -383,6 +448,12 @@ export default function RapprochementView({ user }) {
           </div>
 
           <div className="text-[12px] text-ink-mute mb-4">💳 Commissions CMI sur la période : <b className="text-ink">{fmt(res.commission)} dh</b> (sur {fmt(res.totalBrut)} dh encaissés)</div>
+
+          {res.pdfAdded > 0 && (
+            <div className="text-[12px] text-warn-ink bg-warn-bg border border-warn/30 rounded-lg px-3 py-2 mb-4">
+              🧩 <b>{res.pdfAdded}</b> ligne{res.pdfAdded > 1 ? 's' : ''} oubliée{res.pdfAdded > 1 ? 's' : ''} par l'Excel a{res.pdfAdded > 1 ? 'ont' : ''} été récupérée{res.pdfAdded > 1 ? 's' : ''} depuis le PDF (matchée{res.pdfAdded > 1 ? 's' : ''} par jour, sans l'heure).
+            </div>
+          )}
 
           <div className="flex gap-1 mb-4 p-1 bg-cream-deep rounded-lg w-fit">
             {[['synthese', '📊 Synthèse'], ['detail', '📋 Détail (CMI ↔ Odoo)']].map(([v, l]) => (
