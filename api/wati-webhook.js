@@ -503,7 +503,7 @@ async function handleSendTemplate(req, res) {
   if (!apiToken || !apiEndpoint) {
     return res.status(500).json({ error: 'WATI_API_TOKEN / WATI_API_ENDPOINT manquant' })
   }
-  const { clientPhone, templateName, broadcastName, parameters, userId } = req.body || {}
+  const { clientPhone, templateName, broadcastName, parameters, bodyText, userId } = req.body || {}
   if (!clientPhone || !templateName) {
     return res.status(400).json({ error: 'clientPhone et templateName requis' })
   }
@@ -544,7 +544,7 @@ async function handleSendTemplate(req, res) {
       conversation_id: conv.id,
       sender_type: 'agent',
       sender_user_id: userId || null,
-      body: `[Template] ${templateName}`,
+      body: bodyText || `[Template] ${templateName}`,
       sent_at: sentAt,
       wa_message_id: data?.id || data?.messageId || null,
     })

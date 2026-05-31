@@ -44,10 +44,13 @@ export default function NewConversationModal({ user, onClose, onSent }) {
     setErr('')
     try {
       const parameters = vars.map(v => ({ name: v, value: params[v] || '' }))
+      // Texte réel envoyé au client : variables {{1}}… remplacées par ce qui est saisi.
+      const bodyText = body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => params[k] || `{{${k}}}`)
       const r = await sendTemplate({
         clientPhone: phone,
         templateName: selectedName,
         parameters,
+        bodyText,
         userId: user.id,
       })
       onSent?.(r.conversationId)

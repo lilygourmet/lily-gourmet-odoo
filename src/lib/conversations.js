@@ -381,11 +381,11 @@ export async function fetchTemplates() {
 }
 
 /** Envoie un message template (initie une conversation). */
-export async function sendTemplate({ clientPhone, templateName, broadcastName, parameters, userId }) {
+export async function sendTemplate({ clientPhone, templateName, broadcastName, parameters, bodyText, userId }) {
   const res = await fetch('/api/wati-webhook?action=send-template', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientPhone, templateName, broadcastName, parameters, userId }),
+    body: JSON.stringify({ clientPhone, templateName, broadcastName, parameters, bodyText, userId }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
