@@ -335,7 +335,7 @@ const LEDGER_ST = {
   split: ['🔗 Partagé', 'bg-success-bg text-success'],
 }
 function methodLabel(c) { return c === 'c' ? 'Carte' : (LABEL[c] || '—') }
-function LedgerTable({ list }) {
+function LedgerTable({ list, dayGap }) {
   const groups = {}
   for (const r of list) (groups[r.dateStr] = groups[r.dateStr] || []).push(r)
   const days = Object.keys(groups).sort((a, b) => isoOf(a).localeCompare(isoOf(b)))
@@ -354,7 +354,7 @@ function LedgerTable({ list }) {
           const items = groups[day].slice().sort((a, b) => a.t - b.t)
           return (
             <Fragment key={day}>
-              <tr className="bg-cream-deep"><td colSpan={7} className="py-1.5 px-2 text-[12px] font-semibold text-ink">📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''}</span></td></tr>
+              <tr className="bg-cream-deep"><td colSpan={7} className="py-1.5 px-2 text-[12px] font-semibold text-ink">📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''}</span>{dayGap && dayGap[day] != null && <span className={`font-semibold ${dayGap[day] < 0 ? 'text-danger' : 'text-ink-mute'}`}> · écart {dayGap[day] >= 0 ? '+' : ''}{fmt(dayGap[day])} dh</span>}</td></tr>
               {items.map((r, i) => (
                 <tr key={i}>
                   <td className="py-2 px-2 border-b border-cream-deep">{r.heureStr}</td>
@@ -393,11 +393,12 @@ export default function RapprochementView({ user }) {
   async function analyze(names) {
     setBusy(true); setErr('')
     try {
-      const excel = excelRef.current
+      const no2025 = b => !/\/2025$/.test(b.dateStr) // on ignore les lignes de 2025
+      const excel = excelRef.current.filter(no2025)
       const excelMerge = new Set(excel.map(b => b.mergeKey))
       const bank = [...excel]
       const seenPdf = new Set()
-      for (const p of pdfRef.current) { if (excelMerge.has(p.mergeKey) || seenPdf.has(p.mergeKey)) continue; seenPdf.add(p.mergeKey); bank.push(p) }
+      for (const p of pdfRef.current) { if (!no2025(p) || excelMerge.has(p.mergeKey) || seenPdf.has(p.mergeKey)) continue; seenPdf.add(p.mergeKey); bank.push(p) }
       if (!bank.length) { setRes(null); return }
       const times = bank.map(b => b.t)
       const from = new Date(Math.min(...times) - 3 * 86400e3).toISOString().slice(0, 10)
@@ -503,6 +504,7 @@ export default function RapprochementView({ user }) {
   const onlineRows = ledgerCounts.filter(r => r.online)  // détail des paiements en ligne (filtré)
   const splitsF = res ? res.splits.filter(sp => sp.parts.some(p => (!q || String(p.amt).includes(q)) && dateMatch(p))) : []
   const dailyF = res ? res.daily.filter(d => (!day || d.date === day) && (!month || d.date.startsWith(month))) : []
+  const dayGap = res ? Object.fromEntries(res.daily.map(d => [frOf(d.date), Math.round(d.odoo - d.bank)])) : {}
   const months = res ? [...new Set(res.daily.map(d => d.date.slice(0, 7)))] : []
   const dayOptions = res ? res.daily.map(d => d.date).filter(d => !month || d.startsWith(month)) : []
   const suspAmt = suspF.reduce((s, b) => s + b.amt, 0)
@@ -611,7 +613,7 @@ export default function RapprochementView({ user }) {
             <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
               <h3 className="font-fraunces italic text-[20px] text-ink mb-1">📋 Détail ligne par ligne (CMI ↔ Odoo)</h3>
               <p className="text-[13px] text-ink-mute mb-3">Chaque ligne du relevé et chaque vente carte Odoo, côte à côte, triées par jour et heure. Côté vide = pas de correspondance.</p>
-              <LedgerTable list={ledgerF} />
+              <LedgerTable list={ledgerF} dayGap={dayGap} />
             </div>
           )}
 
@@ -671,15 +673,18 @@ export default function RapprochementView({ user }) {
             <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
               <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔗 Paiements partagés ({splitsF.length})</h3>
               <p className="text-[13px] text-ink-mute mb-2">Un ticket payé en plusieurs cartes : Odoo a un seul montant, la banque en a plusieurs qui s'additionnent. Réconciliés automatiquement.</p>
-              <div className="flex flex-col gap-1.5">
-                {splitsF.slice().sort((a, b) => isoOf(a.dateStr).localeCompare(isoOf(b.dateStr))).map((sp, i) => (
-                  <div key={i} className="text-[13px] bg-cream-deep rounded-lg px-3 py-2">
-                    <span className="text-ink-mute">📅 {sp.dateStr} · {sp.odooHeure} — </span>
-                    <b className="text-success">{fmt(sp.amount)} dh</b>
-                    <span className="text-ink"> = {sp.parts.slice().sort((a, b) => b.amt - a.amt).map(p => fmt(p.amt)).join(' + ')}</span>
-                  </div>
-                ))}
-              </div>
+              <details>
+                <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
+                <div className="flex flex-col gap-1.5 mt-2">
+                  {splitsF.slice().sort((a, b) => isoOf(a.dateStr).localeCompare(isoOf(b.dateStr))).map((sp, i) => (
+                    <div key={i} className="text-[13px] bg-cream-deep rounded-lg px-3 py-2">
+                      <span className="text-ink-mute">📅 {sp.dateStr} · {sp.odooHeure} — </span>
+                      <b className="text-success">{fmt(sp.amount)} dh</b>
+                      <span className="text-ink"> = {sp.parts.slice().sort((a, b) => b.amt - a.amt).map(p => fmt(p.amt)).join(' + ')}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
 
