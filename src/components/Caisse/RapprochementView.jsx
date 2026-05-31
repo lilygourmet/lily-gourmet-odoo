@@ -77,14 +77,14 @@ function runMatch(bank, raw) {
   const W = 20 * 60e3, D3 = 3 * 86400e3
   const tpe = bank.filter(b => !b.online), onl = bank.filter(b => b.online)
 
-  let okC = 0; const suspects = [], intro = []
+  let okC = 0; const suspects = [], intro = [], okList = []
   for (const b of tpe) {
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= W)
     const cartes = cands.filter(p => p.c === 'c')
     const pool = cartes.length ? cartes : cands
     let best = null
     for (const p of pool) { const d = Math.abs(p.t - (b.t + OFF)); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') okC++; else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - OFF) }) }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - OFF) }) }
     else {
       // Classement : cherche le même montant à ±3 jours pour comprendre.
       let fc = false, other = null
@@ -97,8 +97,8 @@ function runMatch(bank, raw) {
   for (const b of onl) {
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= D3)
     const carte = cands.find(p => p.c === 'c')
-    if (carte) { carte.used = true; oOk++ }
-    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c }) } else oNone.push(b) }
+    if (carte) { carte.used = true; oOk++; okList.push({ b, p: carte }) }
+    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - OFF) }) } else oNone.push(b) }
   }
 
   // Résumé par jour : carte relevé vs carte Odoo
@@ -120,12 +120,28 @@ function runMatch(bank, raw) {
   }
   reverse.sort((a, b) => a.t - b.t)
 
+  // Grand livre unifié : CMI ↔ Odoo côte à côte (côté vide si pas de correspondance).
+  const ledger = []
+  const cmiRow = (b, status, p) => ({
+    t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online,
+    cmiAmt: b.amt, cmiSys: b.sys,
+    odooAmt: p ? b.amt : null, odooCat: p ? (typeof p === 'string' ? p : p.c) : null,
+    odooHeure: p && typeof p !== 'string' ? hhmm(p.t - OFF) : (typeof p === 'string' ? b.odooHeure : ''),
+    status, amt: b.amt, key: b.key,
+  })
+  for (const o of okList) ledger.push(cmiRow(o.b, 'ok', o.p))
+  for (const s of suspects) ledger.push({ t: s.t, dateStr: s.dateStr, heureStr: s.heureStr, online: false, cmiAmt: s.amt, cmiSys: s.sys, odooAmt: s.amt, odooCat: s.m, odooHeure: s.odooHeure, status: 'mismatch', amt: s.amt, key: s.key })
+  for (const s of oSusp) ledger.push({ t: s.t, dateStr: s.dateStr, heureStr: s.heureStr, online: true, cmiAmt: s.amt, cmiSys: s.sys, odooAmt: s.amt, odooCat: s.m, odooHeure: s.odooHeure, status: 'mismatch', amt: s.amt, key: s.key })
+  for (const b of [...intro, ...oNone]) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: null, odooCat: null, odooHeure: '', status: 'cmi-only', amt: b.amt, key: b.key })
+  for (const r of reverse) ledger.push({ t: r.t, dateStr: r.dateStr, heureStr: r.heureStr, online: false, cmiAmt: null, cmiSys: '', odooAmt: r.amt, odooCat: 'c', odooHeure: r.heureStr, status: 'odoo-only', amt: r.amt, key: r.key })
+  ledger.sort((a, b) => a.t - b.t)
+
   const totalBrut = bank.reduce((s, b) => s + b.amt, 0)
   const totalNet = bank.reduce((s, b) => s + b.net, 0)
 
   const times = bank.map(b => b.t)
   return {
-    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily, reverse,
+    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily, reverse, ledger,
     commission: Math.round((totalBrut - totalNet) * 100) / 100, totalBrut: Math.round(totalBrut),
     from: new Date(Math.min(...times)).toISOString().slice(0, 10),
     to: new Date(Math.max(...times)).toISOString().slice(0, 10),
@@ -185,6 +201,53 @@ function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onToggle }
   )
 }
 
+// Grand livre : CMI et Odoo côte à côte, regroupé par jour.
+const LEDGER_ST = {
+  ok: ['✅ Carte = Carte', 'bg-success-bg text-success'],
+  mismatch: ['🚨 Écart', 'bg-danger-bg text-danger'],
+  'cmi-only': ['❔ Absent d’Odoo', 'bg-warn-bg text-warn-ink'],
+  'odoo-only': ['🔄 Absent du relevé', 'bg-cream-deep text-ink'],
+}
+function methodLabel(c) { return c === 'c' ? 'Carte' : (LABEL[c] || '—') }
+function LedgerTable({ list }) {
+  const groups = {}
+  for (const r of list) (groups[r.dateStr] = groups[r.dateStr] || []).push(r)
+  const days = Object.keys(groups).sort((a, b) => isoOf(a).localeCompare(isoOf(b)))
+  const th = 'text-left font-semibold py-1.5 px-2 border-b border-line'
+  if (!list.length) return <p className="text-[13px] text-ink-mute italic">Aucune ligne pour ce filtre.</p>
+  return (
+    <table className="w-full text-[13px] border-collapse">
+      <thead>
+        <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
+          <th className={th}>Heure</th><th className={th}>CMI</th><th className={th}>Réseau</th>
+          <th className={th}>Odoo</th><th className={th}>Méthode</th><th className={th}>Heure caisse</th><th className={th}>Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        {days.map(day => {
+          const items = groups[day].slice().sort((a, b) => a.t - b.t)
+          return (
+            <Fragment key={day}>
+              <tr className="bg-cream-deep"><td colSpan={7} className="py-1.5 px-2 text-[12px] font-semibold text-ink">📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''}</span></td></tr>
+              {items.map((r, i) => (
+                <tr key={i}>
+                  <td className="py-2 px-2 border-b border-cream-deep">{r.heureStr}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{r.cmiAmt != null ? fmt(r.cmiAmt) + ' dh' : '—'}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep text-ink-mute">{r.cmiSys || '—'}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{r.odooAmt != null ? fmt(r.odooAmt) + ' dh' : '—'}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep">{r.odooCat ? methodLabel(r.odooCat) : '—'}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep text-ink-mute">{r.odooHeure || '—'}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep"><span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${LEDGER_ST[r.status][1]}`}>{LEDGER_ST[r.status][0]}</span></td>
+                </tr>
+              ))}
+            </Fragment>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
 export default function RapprochementView({ user }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -194,6 +257,8 @@ export default function RapprochementView({ user }) {
   const [search, setSearch] = useState('')
   const [month, setMonth] = useState('')
   const [day, setDay] = useState('')
+  const [view, setView] = useState('synthese')
+  const [hideOk, setHideOk] = useState(true)
   const [verified, setVerified] = useState(new Set())
 
   useEffect(() => { loadRapproVerifies().then(setVerified).catch(() => {}) }, [])
@@ -263,6 +328,7 @@ export default function RapprochementView({ user }) {
   const suspF = res ? flt(res.suspects) : []
   const introF = res ? flt(res.intro) : []
   const reverseF = res ? flt(res.reverse) : []
+  const ledgerF = res ? flt(res.ledger).filter(r => !hideOk || r.status !== 'ok') : []
   const months = res ? [...new Set(res.daily.map(d => d.date.slice(0, 7)))] : []
   const dayOptions = res ? res.daily.map(d => d.date).filter(d => !month || d.startsWith(month)) : []
   const suspAmt = res ? res.suspects.reduce((s, b) => s + b.amt, 0) : 0
@@ -318,6 +384,13 @@ export default function RapprochementView({ user }) {
 
           <div className="text-[12px] text-ink-mute mb-4">💳 Commissions CMI sur la période : <b className="text-ink">{fmt(res.commission)} dh</b> (sur {fmt(res.totalBrut)} dh encaissés)</div>
 
+          <div className="flex gap-1 mb-4 p-1 bg-cream-deep rounded-lg w-fit">
+            {[['synthese', '📊 Synthèse'], ['detail', '📋 Détail (CMI ↔ Odoo)']].map(([v, l]) => (
+              <button key={v} onClick={() => setView(v)}
+                className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${view === v ? 'bg-bordeaux text-white' : 'text-ink-soft hover:text-bordeaux'}`}>{l}</button>
+            ))}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <input
               value={search}
@@ -325,6 +398,11 @@ export default function RapprochementView({ user }) {
               placeholder="🔍 Rechercher un montant (ex. 145)"
               className="flex-1 min-w-[180px] px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux"
             />
+            {view === 'detail' && (
+              <label className="flex items-center gap-1.5 text-[12px] text-ink-soft px-2 cursor-pointer select-none">
+                <input type="checkbox" checked={hideOk} onChange={e => setHideOk(e.target.checked)} /> Cacher les correspondances parfaites
+              </label>
+            )}
             {months.length > 1 && (
               <select value={month} onChange={e => { setMonth(e.target.value); setDay('') }}
                 className="px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux">
@@ -342,6 +420,14 @@ export default function RapprochementView({ user }) {
             </button>
           </div>
 
+          {view === 'detail' ? (
+            <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
+              <h3 className="font-fraunces italic text-[20px] text-ink mb-1">📋 Détail ligne par ligne (CMI ↔ Odoo)</h3>
+              <p className="text-[13px] text-ink-mute mb-3">Chaque ligne du relevé et chaque vente carte Odoo, côte à côte, triées par jour et heure. Côté vide = pas de correspondance.</p>
+              <LedgerTable list={ledgerF} />
+            </div>
+          ) : (
+          <>
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
             <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🚨 Payées par carte, mais tapées autrement</h3>
             {res.suspects.length ? (
@@ -419,6 +505,8 @@ export default function RapprochementView({ user }) {
             </div>
             {res.oSusp.length > 0 && <div className="mt-3"><GroupedTable list={res.oSusp} methodCol /></div>}
           </div>
+          </>
+          )}
         </div>
       )}
     </div>
