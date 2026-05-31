@@ -103,6 +103,15 @@ export async function markConversationsVisited(userId) {
   if (error) throw error
 }
 
+/** Pose (true) ou enlève (false) l'étiquette "non lu" sur une conversation précise. */
+export async function setConversationUnread(conversationId, value) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ marked_unread: value })
+    .eq('id', conversationId)
+  if (error) throw error
+}
+
 /**
  * Recherche dans le CONTENU des messages : renvoie les ids de conversations
  * dont au moins un message contient le terme. Limité pour rester rapide.

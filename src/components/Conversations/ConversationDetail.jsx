@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationUnread } from '../../lib/conversations'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import ClientAvatar from './ClientAvatar'
@@ -467,14 +467,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     }
   }
 
-  // Reculer le last_visited à juste avant le dernier message entrant : la
-  // conversation réapparaîtra dans le filtre 'Non lues'. Effet de bord :
-  // d'autres conversations plus récentes peuvent aussi y réapparaître.
+  // Pose l'étiquette "non lu" sur cette conversation précise. Elle réapparaît
+  // dans le filtre 'Non lues' et y reste jusqu'à ce qu'on la rouvre depuis la liste.
   async function handleMarkUnread() {
-    if (!conv?.last_inbound_at) return
     try {
-      const newVisited = new Date(new Date(conv.last_inbound_at).getTime() - 1000).toISOString()
-      await supabase.from('profiles').update({ last_visited_conversations: newVisited }).eq('id', user.id)
+      await setConversationUnread(conversationId, true)
+      setConv(prev => prev ? { ...prev, marked_unread: true } : prev)
       alert("Marquée non lue. Reviens sur la liste Conversations pour la retrouver dans 'Non lues'.")
     } catch (e) {
       alert('Erreur : ' + e.message)

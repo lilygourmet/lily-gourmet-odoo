@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversations, conversationUrgency, searchMessageConversationIds } from '../../lib/conversations'
+import { loadConversations, conversationUrgency, searchMessageConversationIds, setConversationUnread } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
@@ -106,7 +106,7 @@ export default function InboxView({ user, initialConversationId }) {
 
   const waitingCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🔴').length
   const followupCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🟡').length
-  const unreadCount = conversations.filter(c => c.last_inbound_at && (!user?.last_visited_conversations || c.last_inbound_at > user.last_visited_conversations)).length
+  const unreadCount = conversations.filter(c => c.marked_unread || (c.last_inbound_at && (!user?.last_visited_conversations || c.last_inbound_at > user.last_visited_conversations))).length
 
   const term = search.trim().toLowerCase()
   let list = conversations
@@ -117,7 +117,7 @@ export default function InboxView({ user, initialConversationId }) {
   else if (filter === 'fermees') list = list.filter(c => c.status === 'fermee')
   else if (filter === 'unread') {
     const lv = user?.last_visited_conversations
-    list = list.filter(c => c.last_inbound_at && (!lv || c.last_inbound_at > lv))
+    list = list.filter(c => c.marked_unread || (c.last_inbound_at && (!lv || c.last_inbound_at > lv)))
   }
   if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
   const filtered = !term ? list : list.filter(c =>
@@ -228,12 +228,19 @@ export default function InboxView({ user, initialConversationId }) {
                 : c.status === 'fermee' ? 'bg-line/60 text-ink-soft'
                 : st.cls
               const seenRef = seenAt[c.id] || visitedAtRef.current
-              const isNew = c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef)
+              const isNew = c.marked_unread || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))
               const isSelected = c.id === selectedId
               return (
                 <button
                   key={c.id}
-                  onClick={() => { setSeenAt(prev => ({ ...prev, [c.id]: new Date().toISOString() })); setSelectedId(c.id) }}
+                  onClick={() => {
+                    setSeenAt(prev => ({ ...prev, [c.id]: new Date().toISOString() }))
+                    setSelectedId(c.id)
+                    if (c.marked_unread) {
+                      setConversations(prev => prev.map(x => x.id === c.id ? { ...x, marked_unread: false } : x))
+                      setConversationUnread(c.id, false).catch(() => {})
+                    }
+                  }}
                   className={`w-full text-left rounded-xl border p-3 transition-colors shadow-sm hover:border-bordeaux ${
                     isSelected ? 'bg-bordeaux/10 border-bordeaux' : isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'
                   }`}
