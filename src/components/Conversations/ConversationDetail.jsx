@@ -287,21 +287,19 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     const trimmed = text.trim()
     if (!trimmed && !file && !stagedMediaPath) return
 
-    // Étape 1 : si du texte ET pas encore validé → corriger d'abord (preview)
-    if (trimmed && correctedText !== text) {
+    // Étape 1 : si du texte ET l'IA n'est pas encore passée → corriger d'abord (preview)
+    if (trimmed && !corrected) {
       setCorrecting(true)
       setSendError('')
       try {
         const c = await correctText(text, user.id)
+        setCorrected(true)
         if (c && c.trim() && c !== text) {
           setText(c)
-          setCorrectedText(c)
-          setSendError('✨ Texte corrigé — relis puis re-clique « Envoyer » pour confirmer.')
+          setSendError('✨ Texte corrigé — relis, ajuste si besoin, puis re-clique « Envoyer ».')
           setCorrecting(false)
           return
         }
-        // Pas de modif → on enchaîne sur l'envoi direct
-        setCorrectedText(text)
       } catch (_) {
         // Erreur IA silencieuse : on envoie quand même
       } finally {
@@ -324,7 +322,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       })
       setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
       setText('')
-      setCorrectedText(null)
+      setCorrected(false)
       setFile(null)
       setStagedMediaPath(null)
       setStagedPreviewUrl(null)
@@ -542,7 +540,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   const [correcting, setCorrecting] = useState(false)
-  const [correctedText, setCorrectedText] = useState(null)   // dernière version validée par l'IA
+  const [corrected, setCorrected] = useState(false)   // IA déjà passée sur ce brouillon
 
   // Recherche dans le fil : remet à zéro la position quand le terme change
   useEffect(() => { setMatchIndex(0) }, [threadSearch])
@@ -852,7 +850,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             <textarea
               ref={textareaRef}
               value={text}
-              onChange={e => { setText(e.target.value); setCorrectedText(null) }}
+              onChange={e => { const v = e.target.value; setText(v); if (!v.trim()) setCorrected(false) }}
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px' }}
               rows={3}
               placeholder="Écrire une réponse…"
@@ -923,7 +921,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 disabled={sending || correcting || (!text.trim() && !file && !stagedMediaPath)}
                 className="ml-auto px-4 py-2 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50"
               >
-                {correcting ? 'Correction…' : sending ? '…' : (text.trim() && correctedText === text ? 'Confirmer' : 'Envoyer')}
+                {correcting ? 'Correction…' : sending ? '…' : (text.trim() && corrected ? 'Confirmer' : 'Envoyer')}
               </button>
             </div>
           </div>

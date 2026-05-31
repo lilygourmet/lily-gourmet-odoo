@@ -438,6 +438,7 @@ Règles strictes :
 - Corrige les accents manquants (à, é, è, ê, ç…).
 - Garde le sens et le ton (cordial, professionnel).
 - Ne change pas les noms propres, les prix, les dates, les heures, les numéros.
+- Ne modifie JAMAIS les liens / URLs (http://, https://, www., liens raccourcis…) : recopie-les exactement à l'identique, sans rien ajouter ni corriger dedans.
 - Pas d'emoji ajouté ni retiré.
 - Renvoie UNIQUEMENT le texte corrigé, sans préambule, sans guillemets, sans explication.`
 
