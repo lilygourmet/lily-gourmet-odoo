@@ -14,7 +14,7 @@ const FILTERS = [
   { key: 'all', label: 'Toutes' },
   { key: 'mine', label: 'À moi' },
   { key: 'unassigned', label: 'Non assignées' },
-  { key: 'unread', label: '📩 Non lues' },
+  { key: 'unread', label: '✉️ Non lues' },
   { key: 'waiting', label: '🔴 En attente' },
   { key: 'followup', label: '🟡 À relancer' },
   { key: 'fermees', label: 'Fermées' },
@@ -106,6 +106,7 @@ export default function InboxView({ user, initialConversationId }) {
 
   const waitingCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🔴').length
   const followupCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🟡').length
+  const unreadCount = conversations.filter(c => c.last_inbound_at && (!user?.last_visited_conversations || c.last_inbound_at > user.last_visited_conversations)).length
 
   const term = search.trim().toLowerCase()
   let list = conversations
@@ -177,6 +178,7 @@ export default function InboxView({ user, initialConversationId }) {
                 let label = f.label
                 if (f.key === 'waiting' && waitingCount) label = `🔴 En attente (${waitingCount})`
                 else if (f.key === 'followup' && followupCount) label = `🟡 À relancer (${followupCount})`
+                else if (f.key === 'unread' && unreadCount) label = `✉️ Non lues (${unreadCount})`
                 return (
                   <button
                     key={f.key}
