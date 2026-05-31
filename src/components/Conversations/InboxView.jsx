@@ -222,11 +222,11 @@ export default function InboxView({ user, initialConversationId }) {
               const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
               const u = conversationUrgency(c)
               const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'
-              // Étiquette pleine selon l'état : rouge (en attente) / ambre (à relancer) / gris (fermée)
-              const badgeCls = u?.tone === 'urgent' ? 'bg-bordeaux text-cream'
-                : u?.tone === 'warn' ? 'bg-amber-500 text-white'
-                : c.status === 'fermee' ? 'bg-line/60 text-ink-soft'
-                : st.cls
+              // Étiquette à contour épais foncé (pas de couleur pleine, pour ne pas
+              // confondre avec la surbrillance des non lus). Fermée = grisée.
+              const badgeCls = c.status === 'fermee'
+                ? 'border-2 border-line text-ink-mute'
+                : 'border-2 border-ink text-ink'
               const seenRef = seenAt[c.id] || visitedAtRef.current
               const isNew = c.marked_unread || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))
               const isSelected = c.id === selectedId
