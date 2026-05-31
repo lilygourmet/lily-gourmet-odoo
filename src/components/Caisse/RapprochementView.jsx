@@ -109,6 +109,7 @@ function detectOffset(bank, byAmt) {
 // Subset-sum 0/1 : renvoie les indices d'un sous-ensemble de `arr` (entiers) sommant
 // exactement à `target`, ou null. Chaque élément utilisé au plus une fois.
 function subsetSum(arr, target) {
+  if (!Number.isInteger(target) || target <= 0 || target > 2_000_000) return null
   const dp = new Array(target + 1).fill(null)
   dp[0] = { prev: -1, idx: -1 }
   for (let i = 0; i < arr.length; i++) {
@@ -203,7 +204,7 @@ function runMatch(bank, raw) {
     const odooFree = odoo.filter(p => p.c === 'c' && !p.used).sort((a, b) => a.t - b.t)
     for (const p of odooFree) {
       const target = cents(p.a)
-      if (target > 300000) continue
+      if (!Number.isFinite(target) || target <= 0 || target > 300000) continue // ignore remboursements/avoirs (négatifs) et gros montants
       const day = new Date(p.t - offForP(p)).toISOString().slice(0, 10)
       const pool = (byDayFree[day] || []).filter(b => !b._consumed &&
         (b.hasTime === false || Math.abs((b.t + offOf(b)) - p.t) <= 15 * 60e3))
