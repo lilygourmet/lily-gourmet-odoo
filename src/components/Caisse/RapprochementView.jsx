@@ -1,4 +1,5 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
+import { loadRapproVerifies, setRapproVerified, unsetRapproVerified } from '../../lib/caisse'
 
 // Rapprochement bancaire : on dépose un ou plusieurs relevés carte (CMI .xlsx),
 // on les compare aux paiements POS d'Odoo (lus en direct via
@@ -9,6 +10,8 @@ const LABEL = { e: 'Espèces', k: 'Compte client', q: 'Chèque', v: 'Virement', 
 const norm = s => (s == null ? '' : s.toString()).toLowerCase().normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n))
 const isoOf = dstr => { const m = dstr.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : dstr }
+const frOf = iso => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso }
+const hhmm = ms => new Date(ms).toISOString().slice(11, 19)
 
 async function ensureXLSX() {
   if (window.XLSX) return window.XLSX
@@ -28,8 +31,9 @@ function parseBank(rows) {
   const col = kw => H.findIndex(h => h.includes(kw))
   const ci = {
     date: col('date de transaction') >= 0 ? col('date de transaction') : col('transaction'),
-    heure: col('heure'), stan: col('stan'), montant: col('montant brut'), sys: col('systeme'),
+    heure: col('heure'), stan: col('stan'), montant: col('montant brut'), net: col('montant net'), sys: col('systeme'),
   }
+  const num = x => parseFloat(String(x).replace(',', '.')) || 0
   const bank = []
   for (const r of rows.slice(hi + 1)) {
     if (!Array.isArray(r)) continue
@@ -37,11 +41,12 @@ function parseBank(rows) {
     if (!m) continue
     const heure = String(r[ci.heure] || '12:00:00')
     const t = Date.parse(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}T${heure}Z`)
-    const amt = Math.round((parseFloat(String(r[ci.montant]).replace(',', '.')) || 0) * 100) / 100
+    const amt = Math.round(num(r[ci.montant]) * 100) / 100
     if (!amt) continue
+    const net = ci.net >= 0 ? Math.round(num(r[ci.net]) * 100) / 100 : amt
     const stan = String(r[ci.stan] || '').replace(/\D/g, '')
     const dateStr = `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}`
-    bank.push({ t, amt, online: stan.length === 6, sys: String(r[ci.sys] || ''), heureStr: heure, dateStr, key: `${dateStr}|${heure}|${amt}|${stan}` })
+    bank.push({ t, amt, net, online: stan.length === 6, sys: String(r[ci.sys] || ''), heureStr: heure, dateStr, key: `${dateStr}|${heure}|${amt}|${stan}` })
   }
   if (!bank.length) throw new Error("Aucune ligne de paiement lue dans le fichier.")
   return bank
@@ -69,6 +74,7 @@ function runMatch(bank, raw) {
   const OFF = detectOffset(bank, byAmt)
   const W = 20 * 60e3, D3 = 3 * 86400e3
   const tpe = bank.filter(b => !b.online), onl = bank.filter(b => b.online)
+
   let okC = 0; const suspects = [], intro = []
   for (const b of tpe) {
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= W)
@@ -76,9 +82,15 @@ function runMatch(bank, raw) {
     const pool = cartes.length ? cartes : cands
     let best = null
     for (const p of pool) { const d = Math.abs(p.t - (b.t + OFF)); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') okC++; else suspects.push({ ...b, m: best.p.c }) }
-    else intro.push(b)
+    if (best) { best.p.used = true; if (best.p.c === 'c') okC++; else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - OFF) }) }
+    else {
+      // Classement : cherche le même montant à ±3 jours pour comprendre.
+      let fc = false, other = null
+      for (const p of (byAmt.get(b.amt) || [])) { if (Math.abs(p.t - (b.t + OFF)) <= D3) { if (p.c === 'c') fc = true; else if (!other) other = p.c } }
+      intro.push({ ...b, cls: fc ? 'online' : other || 'none' })
+    }
   }
+
   let oOk = 0; const oSusp = [], oNone = []
   for (const b of onl) {
     let fc = false, other = null
@@ -87,28 +99,38 @@ function runMatch(bank, raw) {
     }
     if (fc) oOk++; else if (other) oSusp.push({ ...b, m: other }); else oNone.push(b)
   }
+
+  // Résumé par jour : carte relevé vs carte Odoo
+  const dayBank = {}, dayOdoo = {}
+  for (const b of bank) { const d = isoOf(b.dateStr); dayBank[d] = (dayBank[d] || 0) + b.amt }
+  for (const p of odoo) if (p.c === 'c') { const d = new Date(p.t - OFF).toISOString().slice(0, 10); dayOdoo[d] = (dayOdoo[d] || 0) + p.a }
+  const days = [...new Set(bank.map(b => isoOf(b.dateStr)))].sort()
+  const daily = days.map(d => ({ date: d, bank: dayBank[d] || 0, odoo: dayOdoo[d] || 0 }))
+
+  const totalBrut = bank.reduce((s, b) => s + b.amt, 0)
+  const totalNet = bank.reduce((s, b) => s + b.net, 0)
+
   const times = bank.map(b => b.t)
   return {
-    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone,
+    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily,
+    commission: Math.round((totalBrut - totalNet) * 100) / 100, totalBrut: Math.round(totalBrut),
     from: new Date(Math.min(...times)).toISOString().slice(0, 10),
     to: new Date(Math.max(...times)).toISOString().slice(0, 10),
   }
 }
 
-// Tableau regroupé par jour, avec sous-total par jour.
-function GroupedTable({ list, susp }) {
+// Tableau regroupé par jour, avec sous-total. Colonnes selon le mode.
+function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onToggle }) {
   const groups = {}
   for (const b of list) (groups[b.dateStr] = groups[b.dateStr] || []).push(b)
   const days = Object.keys(groups).sort((a, b) => isoOf(a).localeCompare(isoOf(b)))
-  const cols = susp ? 4 : 3
+  const headers = ['Heure', odooHeure && 'Heure caisse', 'Montant', 'Réseau', methodCol && 'Tapé en caisse comme', clsCol && 'Classement', onToggle && ''].filter(Boolean)
+  const clsLabel = c => c === 'online' ? '🌐 Probable en ligne (jour ≠)' : c === 'none' ? '❓ Aucune trace' : `Tapé ${LABEL[c] || c} (autre jour)`
   return (
     <table className="w-full text-[13px] border-collapse">
       <thead>
         <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
-          <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Heure</th>
-          <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Montant</th>
-          <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Réseau</th>
-          {susp && <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Tapé en caisse comme</th>}
+          {headers.map((h, i) => <th key={i} className="text-left font-semibold py-1.5 px-2 border-b border-line">{h}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -118,18 +140,30 @@ function GroupedTable({ list, susp }) {
           return (
             <Fragment key={day}>
               <tr className="bg-cream-deep">
-                <td colSpan={cols} className="py-1.5 px-2 text-[12px] font-semibold text-ink">
+                <td colSpan={headers.length} className="py-1.5 px-2 text-[12px] font-semibold text-ink">
                   📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''} · {fmt(sum)} dh</span>
                 </td>
               </tr>
-              {items.map((b, i) => (
-                <tr key={day + '-' + i}>
-                  <td className="py-2 px-2 border-b border-cream-deep">{b.heureStr}</td>
-                  <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{fmt(b.amt)} dh</td>
-                  <td className="py-2 px-2 border-b border-cream-deep">{b.sys}</td>
-                  {susp && <td className="py-2 px-2 border-b border-cream-deep"><span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-danger-bg text-danger">{LABEL[b.m] || b.m}</span></td>}
-                </tr>
-              ))}
+              {items.map((b, i) => {
+                const done = verified && verified.has(b.key)
+                return (
+                  <tr key={day + '-' + i} className={done ? 'opacity-50 line-through' : ''}>
+                    <td className="py-2 px-2 border-b border-cream-deep">{b.heureStr}</td>
+                    {odooHeure && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute">{b.odooHeure}</td>}
+                    <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{fmt(b.amt)} dh</td>
+                    <td className="py-2 px-2 border-b border-cream-deep">{b.sys}</td>
+                    {methodCol && <td className="py-2 px-2 border-b border-cream-deep"><span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-danger-bg text-danger">{LABEL[b.m] || b.m}</span></td>}
+                    {clsCol && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{clsLabel(b.cls)}</td>}
+                    {onToggle && (
+                      <td className="py-2 px-2 border-b border-cream-deep">
+                        <button onClick={() => onToggle(b)} className={`px-2 py-1 rounded-md text-[11px] font-semibold no-underline ${done ? 'bg-cream-deep text-ink-mute' : 'bg-success-bg text-success'}`}>
+                          {done ? 'Annuler' : '✓ Vérifié'}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </Fragment>
           )
         })}
@@ -138,13 +172,16 @@ function GroupedTable({ list, susp }) {
   )
 }
 
-export default function RapprochementView() {
+export default function RapprochementView({ user }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)
   const [fileNames, setFileNames] = useState([])
   const [over, setOver] = useState(false)
   const [search, setSearch] = useState('')
+  const [verified, setVerified] = useState(new Set())
+
+  useEffect(() => { loadRapproVerifies().then(setVerified).catch(() => {}) }, [])
 
   async function onFiles(fileList) {
     const arr = Array.from(fileList || [])
@@ -175,16 +212,33 @@ export default function RapprochementView() {
     }
   }
 
+  async function toggleVerified(b) {
+    const has = verified.has(b.key)
+    const next = new Set(verified)
+    if (has) next.delete(b.key); else next.add(b.key)
+    setVerified(next)
+    try {
+      if (has) await unsetRapproVerified(b.key)
+      else await setRapproVerified({ txnKey: b.key, amount: b.amt, txnDate: isoOf(b.dateStr), userId: user?.id })
+    } catch (e) {
+      setVerified(verified)
+      alert('Erreur : ' + e.message + "\n(As-tu lancé la ligne SQL caisse_rappro_verifies ?)")
+    }
+  }
+
   async function exportXlsx() {
     if (!res) return
     const XLSX = await ensureXLSX()
     const wb = XLSX.utils.book_new()
-    const shead = ['Date', 'Heure', 'Montant (dh)', 'Réseau', 'Tapé en caisse comme']
-    const srows = [shead, ...res.suspects.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.amt, b.sys, LABEL[b.m] || b.m])]
+    const srows = [['Date', 'Heure', 'Heure caisse', 'Montant (dh)', 'Réseau', 'Tapé en caisse comme', 'Vérifié'],
+      ...res.suspects.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.odooHeure, b.amt, b.sys, LABEL[b.m] || b.m, verified.has(b.key) ? 'oui' : ''])]
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(srows), 'Suspects')
-    const ihead = ['Date', 'Heure', 'Montant (dh)', 'Réseau']
-    const irows = [ihead, ...res.intro.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.amt, b.sys])]
+    const irows = [['Date', 'Heure', 'Montant (dh)', 'Réseau', 'Classement'],
+      ...res.intro.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.amt, b.sys, b.cls])]
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(irows), 'Introuvables')
+    const drows = [['Jour', 'Carte relevé (dh)', 'Carte caisse Odoo (dh)', 'Écart'],
+      ...res.daily.map(d => [frOf(d.date), Math.round(d.bank), Math.round(d.odoo), Math.round(d.odoo - d.bank)])]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(drows), 'Résumé par jour')
     XLSX.writeFile(wb, `rapprochement_${res.from}_${res.to}.xlsx`)
   }
 
@@ -193,6 +247,7 @@ export default function RapprochementView() {
   const suspF = res ? flt(res.suspects) : []
   const introF = res ? flt(res.intro) : []
   const suspAmt = res ? res.suspects.reduce((s, b) => s + b.amt, 0) : 0
+  const nbVerif = res ? res.suspects.filter(b => verified.has(b.key)).length : 0
   const suspByMethod = res ? res.suspects.reduce((acc, s) => { acc[s.m] = (acc[s.m] || 0) + 1; return acc }, {}) : {}
 
   return (
@@ -223,7 +278,7 @@ export default function RapprochementView() {
 
       {res && (
         <div className="mt-5">
-          <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+          <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
             <div className="bg-cream-warm border border-line rounded-2xl p-4">
               <div className="font-fraunces text-[30px] font-semibold leading-none text-ink">{res.total}</div>
               <div className="text-[12px] text-ink-mute mt-1.5">cartes dans le relevé</div>
@@ -234,13 +289,15 @@ export default function RapprochementView() {
             </div>
             <div className="bg-danger-bg border border-danger/20 rounded-2xl p-4">
               <div className="font-fraunces text-[30px] font-semibold leading-none text-danger">{res.suspects.length}</div>
-              <div className="text-[12px] text-ink-mute mt-1.5">🚨 tapées autrement · ~{fmt(suspAmt)} dh</div>
+              <div className="text-[12px] text-ink-mute mt-1.5">🚨 tapées autrement · ~{fmt(suspAmt)} dh{nbVerif ? ` · ${nbVerif} vérifié${nbVerif > 1 ? 's' : ''}` : ''}</div>
             </div>
             <div className="bg-warn-bg border border-warn/30 rounded-2xl p-4">
               <div className="font-fraunces text-[30px] font-semibold leading-none text-warn-ink">{res.intro.length}</div>
               <div className="text-[12px] text-ink-mute mt-1.5">❔ introuvables ±20 min</div>
             </div>
           </div>
+
+          <div className="text-[12px] text-ink-mute mb-4">💳 Commissions CMI sur la période : <b className="text-ink">{fmt(res.commission)} dh</b> (sur {fmt(res.totalBrut)} dh encaissés)</div>
 
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <input
@@ -258,13 +315,13 @@ export default function RapprochementView() {
             <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🚨 Payées par carte, mais tapées autrement</h3>
             {res.suspects.length ? (
               <>
-                <p className="text-[13px] text-ink-mute mb-3">Une carte est passée à la banque, et au même moment la caisse a enregistré le même montant sous une autre méthode. À vérifier dans Odoo.</p>
+                <p className="text-[13px] text-ink-mute mb-3">Une carte est passée à la banque, et au même moment la caisse a enregistré le même montant sous une autre méthode. Heure caisse = heure du ticket dans Odoo, pour le retrouver vite.</p>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {Object.entries(suspByMethod).map(([k, v]) => (
                     <span key={k} className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold text-ink">{LABEL[k] || k} : {v}</span>
                   ))}
                 </div>
-                {suspF.length ? <GroupedTable list={suspF} susp /> : <p className="text-[13px] text-ink-mute italic">Aucun suspect pour « {q} ».</p>}
+                {suspF.length ? <GroupedTable list={suspF} odooHeure methodCol verified={verified} onToggle={toggleVerified} /> : <p className="text-[13px] text-ink-mute italic">Aucun suspect pour « {q} ».</p>}
               </>
             ) : (
               <p className="text-[13px] text-ink-mute">Aucune carte enregistrée autrement (espèces / chèque / compte client…) sur ce relevé. 🎉</p>
@@ -273,13 +330,41 @@ export default function RapprochementView() {
 
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
             <h3 className="font-fraunces italic text-[20px] text-ink mb-1">❔ Introuvables à ±20 min ({res.intro.length})</h3>
-            <p className="text-[13px] text-ink-mute mb-2">Pas de vente du même montant à l'heure proche : montant tapé différemment, paiement partagé, ou décalage &gt; 20 min.</p>
+            <p className="text-[13px] text-ink-mute mb-2">Pas de vente du même montant à l'heure proche. La colonne « Classement » dit ce qu'on a trouvé en cherchant à ±3 jours.</p>
             {res.intro.length > 0 && (
               <details>
                 <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
-                <div className="mt-2">{introF.length ? <GroupedTable list={introF} /> : <p className="text-[13px] text-ink-mute italic">Rien pour « {q} ».</p>}</div>
+                <div className="mt-2">{introF.length ? <GroupedTable list={introF} clsCol /> : <p className="text-[13px] text-ink-mute italic">Rien pour « {q} ».</p>}</div>
               </details>
             )}
+          </div>
+
+          <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
+            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">📊 Résumé par jour</h3>
+            <p className="text-[13px] text-ink-mute mb-2">Total carte du relevé vs total carte enregistré dans la caisse (Odoo), par journée.</p>
+            <table className="w-full text-[13px] border-collapse">
+              <thead>
+                <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
+                  <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Jour</th>
+                  <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Carte relevé</th>
+                  <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Carte caisse (Odoo)</th>
+                  <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Écart</th>
+                </tr>
+              </thead>
+              <tbody>
+                {res.daily.map(d => {
+                  const gap = d.odoo - d.bank
+                  return (
+                    <tr key={d.date}>
+                      <td className="py-2 px-2 border-b border-cream-deep">{frOf(d.date)}</td>
+                      <td className="py-2 px-2 border-b border-cream-deep text-right tabular-nums">{fmt(d.bank)} dh</td>
+                      <td className="py-2 px-2 border-b border-cream-deep text-right tabular-nums">{fmt(d.odoo)} dh</td>
+                      <td className={`py-2 px-2 border-b border-cream-deep text-right tabular-nums font-semibold ${gap < 0 ? 'text-danger' : 'text-ink-mute'}`}>{gap >= 0 ? '+' : ''}{fmt(gap)} dh</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
 
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
@@ -290,7 +375,7 @@ export default function RapprochementView() {
               <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">🚨 autre méthode : {res.oSusp.length}</span>
               <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">❔ sans trace : {res.oNone.length}</span>
             </div>
-            {res.oSusp.length > 0 && <div className="mt-3"><GroupedTable list={res.oSusp} susp /></div>}
+            {res.oSusp.length > 0 && <div className="mt-3"><GroupedTable list={res.oSusp} methodCol /></div>}
           </div>
         </div>
       )}

@@ -1891,3 +1891,28 @@ export async function searchCaisse(query) {
     queryType: isAmount ? 'amount' : isDate ? 'date' : 'text',
   }
 }
+
+// ============================================================
+// RAPPROCHEMENT BANCAIRE — suspects vérifiés / justifiés
+// ============================================================
+
+/** Charge l'ensemble des clés de transactions déjà vérifiées. */
+export async function loadRapproVerifies() {
+  const { data, error } = await supabase.from('caisse_rappro_verifies').select('txn_key')
+  if (error) throw error
+  return new Set((data || []).map(r => r.txn_key))
+}
+
+/** Marque une ligne du relevé comme vérifiée. */
+export async function setRapproVerified({ txnKey, amount, txnDate, userId }) {
+  const { error } = await supabase.from('caisse_rappro_verifies').upsert({
+    txn_key: txnKey, amount, txn_date: txnDate, verified_by: userId || null,
+  })
+  if (error) throw error
+}
+
+/** Annule la vérification d'une ligne. */
+export async function unsetRapproVerified(txnKey) {
+  const { error } = await supabase.from('caisse_rappro_verifies').delete().eq('txn_key', txnKey)
+  if (error) throw error
+}

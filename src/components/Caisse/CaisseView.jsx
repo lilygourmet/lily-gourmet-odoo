@@ -92,7 +92,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
       )}
       {tab === 'caisses'      && <CaissesGereesView user={user} />}
       {tab === 'salaires'     && <SalairesView user={user} />}
-      {tab === 'rapprochement' && <RapprochementView />}
+      {tab === 'rapprochement' && <RapprochementView user={user} />}
       {tab === 'recherche'    && <RechercheView user={user} />}
       {tab === 'params'       && <ParametresView user={user} />}
       </div>
