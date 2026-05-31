@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { loadRapproVerifies, setRapproVerified, unsetRapproVerified } from '../../lib/caisse'
@@ -386,37 +386,19 @@ export default function RapprochementView({ user }) {
   const [view, setView] = useState('synthese')
   const [hideOk, setHideOk] = useState(true)
   const [verified, setVerified] = useState(new Set())
+  const excelRef = useRef([])  // lignes Excel accumulées (avec heure)
+  const pdfRef = useRef([])    // lignes PDF accumulées (complément)
 
-  useEffect(() => { loadRapproVerifies().then(setVerified).catch(() => {}) }, [])
-
-  async function onFiles(fileList) {
-    const arr = Array.from(fileList || [])
-    if (!arr.length) return
-    setErr(''); setRes(null); setBusy(true); setSearch(''); setFileNames(arr.map(f => f.name))
+  // Analyse les lignes accumulées (Excel + complément PDF) contre Odoo, et sauvegarde.
+  async function analyze(names) {
+    setBusy(true); setErr('')
     try {
-      const XLSX = await ensureXLSX()
-      const excelFiles = arr.filter(f => /\.(xlsx|xls)$/i.test(f.name))
-      const pdfFiles = arr.filter(f => /\.pdf$/i.test(f.name))
-      // 1) Excel = base (avec heure)
-      let bank = []
-      for (const file of excelFiles) {
-        const buf = await file.arrayBuffer()
-        const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        bank = bank.concat(parseBank(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' })))
-      }
-      const seenKey = new Set()
-      bank = bank.filter(b => { if (seenKey.has(b.key)) return false; seenKey.add(b.key); return true })
-      // 2) PDF = complément : on ajoute les STAN absents de l'Excel
-      const excelMerge = new Set(bank.map(b => b.mergeKey))
-      let pdfLines = []
-      for (const file of pdfFiles) pdfLines = pdfLines.concat(await parsePDF(file))
+      const excel = excelRef.current
+      const excelMerge = new Set(excel.map(b => b.mergeKey))
+      const bank = [...excel]
       const seenPdf = new Set()
-      for (const p of pdfLines) {
-        if (excelMerge.has(p.mergeKey) || seenPdf.has(p.mergeKey)) continue
-        seenPdf.add(p.mergeKey); bank.push(p)
-      }
-      if (!bank.length) throw new Error('Aucune transaction lue (ni Excel ni PDF).')
+      for (const p of pdfRef.current) { if (excelMerge.has(p.mergeKey) || seenPdf.has(p.mergeKey)) continue; seenPdf.add(p.mergeKey); bank.push(p) }
+      if (!bank.length) { setRes(null); return }
       const times = bank.map(b => b.t)
       const from = new Date(Math.min(...times) - 3 * 86400e3).toISOString().slice(0, 10)
       const to = new Date(Math.max(...times) + 3 * 86400e3).toISOString().slice(0, 10)
@@ -424,10 +406,57 @@ export default function RapprochementView({ user }) {
       const data = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(data.error || `Erreur serveur ${r.status}`)
       setRes(runMatch(bank, data.payments || []))
+      try { localStorage.setItem('rappro_bank_v1', JSON.stringify({ excel: excelRef.current, pdf: pdfRef.current, names })) } catch { /* quota dépassé : on ne sauvegarde pas */ }
     } catch (e) {
       setErr(e.message)
     } finally {
       setBusy(false)
+    }
+  }
+
+  function reset() {
+    excelRef.current = []; pdfRef.current = []
+    setRes(null); setFileNames([]); setErr(''); setSearch('')
+    try { localStorage.removeItem('rappro_bank_v1') } catch { /* ignore */ }
+  }
+
+  useEffect(() => {
+    loadRapproVerifies().then(setVerified).catch(() => {})
+    let saved = null
+    try { saved = JSON.parse(localStorage.getItem('rappro_bank_v1') || 'null') } catch { /* ignore */ }
+    if (saved && ((saved.excel || []).length || (saved.pdf || []).length)) {
+      excelRef.current = saved.excel || []
+      pdfRef.current = saved.pdf || []
+      Promise.resolve().then(() => { setFileNames(saved.names || []); analyze(saved.names || []) })
+    }
+  }, [])
+
+  async function onFiles(fileList) {
+    const arr = Array.from(fileList || [])
+    if (!arr.length) return
+    setBusy(true); setErr('')
+    try {
+      const XLSX = await ensureXLSX()
+      const excelFiles = arr.filter(f => /\.(xlsx|xls)$/i.test(f.name))
+      const pdfFiles = arr.filter(f => /\.pdf$/i.test(f.name))
+      let newExcel = []
+      for (const file of excelFiles) {
+        const buf = await file.arrayBuffer()
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+        newExcel = newExcel.concat(parseBank(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' })))
+      }
+      let newPdf = []
+      for (const file of pdfFiles) newPdf = newPdf.concat(await parsePDF(file))
+      // Continuité : on AJOUTE aux lignes déjà chargées (dédoublonnées), sans tout effacer.
+      const ek = new Set(excelRef.current.map(b => b.key))
+      for (const b of newExcel) if (!ek.has(b.key)) { ek.add(b.key); excelRef.current.push(b) }
+      const pk = new Set(pdfRef.current.map(p => p.mergeKey))
+      for (const p of newPdf) if (!pk.has(p.mergeKey)) { pk.add(p.mergeKey); pdfRef.current.push(p) }
+      const names = [...new Set([...fileNames, ...arr.map(f => f.name)])]
+      setFileNames(names)
+      await analyze(names)
+    } catch (e) {
+      setErr(e.message); setBusy(false)
     }
   }
 
@@ -467,20 +496,26 @@ export default function RapprochementView({ user }) {
   const suspF = res ? flt(res.suspects) : []
   const introF = res ? flt(res.intro) : []
   const reverseF = res ? flt(res.reverse) : []
-  const ledgerF = res ? flt(res.ledger).filter(r => !hideOk || r.status !== 'ok') : []
+  const ledgerCounts = res ? flt(res.ledger) : []        // filtré (sans hideOk) → sert aux compteurs
+  const ledgerF = ledgerCounts.filter(r => !hideOk || r.status !== 'ok')
+  const okF = ledgerCounts.filter(r => r.status === 'ok').length
+  const totalF = ledgerCounts.filter(r => r.cmiAmt != null).length
+  const onlineRows = ledgerCounts.filter(r => r.online)  // détail des paiements en ligne (filtré)
+  const splitsF = res ? res.splits.filter(sp => sp.parts.some(p => (!q || String(p.amt).includes(q)) && dateMatch(p))) : []
+  const dailyF = res ? res.daily.filter(d => (!day || d.date === day) && (!month || d.date.startsWith(month))) : []
   const months = res ? [...new Set(res.daily.map(d => d.date.slice(0, 7)))] : []
   const dayOptions = res ? res.daily.map(d => d.date).filter(d => !month || d.startsWith(month)) : []
-  const suspAmt = res ? res.suspects.reduce((s, b) => s + b.amt, 0) : 0
-  const nbVerif = res ? res.suspects.filter(b => verified.has(b.key)).length : 0
-  const suspByMethod = res ? res.suspects.reduce((acc, s) => { acc[s.m] = (acc[s.m] || 0) + 1; return acc }, {}) : {}
+  const suspAmt = suspF.reduce((s, b) => s + b.amt, 0)
+  const nbVerif = suspF.filter(b => verified.has(b.key)).length
+  const suspByMethod = suspF.reduce((acc, s) => { acc[s.m] = (acc[s.m] || 0) + 1; return acc }, {})
 
   return (
     <div className="max-w-[920px]">
       <h2 className="font-fraunces italic text-[22px] text-ink mb-1">Rapprochement bancaire</h2>
       <p className="text-[13px] text-ink-mute mb-4">
         Dépose les relevés carte CMI : les <b>.xlsx</b> (avec l'heure) <b>et</b> les <b>.pdf</b> (complets). Le PDF sert à rajouter
-        les lignes que CMI oublie parfois dans l'Excel. Le tout est comparé aux ventes de la caisse (Odoo) et chaque carte
-        enregistrée autrement qu'en « Carte » (espèces, chèque, compte client, virement…) est signalée.
+        les lignes que CMI oublie parfois dans l'Excel. Tu peux déposer en plusieurs fois : ça <b>s'accumule</b> et c'est <b>sauvegardé</b>.
+        Le tout est comparé aux ventes de la caisse (Odoo) et chaque carte enregistrée autrement qu'en « Carte » est signalée.
       </p>
 
       <label
@@ -490,14 +525,20 @@ export default function RapprochementView({ user }) {
         className={`block border-2 border-dashed rounded-2xl bg-cream-warm p-9 text-center cursor-pointer transition-colors ${over ? 'border-bordeaux' : 'border-line hover:border-bordeaux'}`}
       >
         <div className="text-[17px] font-semibold text-ink mb-1.5">📂 Glisse tes relevés ici, ou clique pour choisir</div>
-        <div className="text-[13px] text-ink-mute">Fichiers .xlsx et .pdf du mois (tu peux tout glisser ensemble)</div>
+        <div className="text-[13px] text-ink-mute">Fichiers .xlsx et .pdf — les nouveaux dépôts <b>s'ajoutent</b> aux précédents</div>
         <span className="inline-block mt-3.5 bg-bordeaux hover:bg-bordeaux-deep text-white rounded-full px-5 py-2.5 text-[12px] font-semibold tracking-wider uppercase">
-          {busy ? 'Analyse…' : 'Choisir des fichiers'}
+          {busy ? 'Analyse…' : (fileNames.length ? 'Ajouter des fichiers' : 'Choisir des fichiers')}
         </span>
         <input type="file" accept=".xlsx,.xls,.pdf" multiple className="hidden" disabled={busy}
           onChange={e => onFiles(e.target.files)} />
-        {fileNames.length > 0 && <div className="text-[12px] text-ink-mute mt-3">📄 {fileNames.join(' · ')}</div>}
       </label>
+
+      {fileNames.length > 0 && (
+        <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+          <div className="text-[12px] text-ink-mute">📄 {fileNames.length} fichier{fileNames.length > 1 ? 's' : ''} chargé{fileNames.length > 1 ? 's' : ''} · sauvegardé localement (reste après rafraîchissement)</div>
+          <button onClick={reset} disabled={busy} className="px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-bordeaux hover:text-bordeaux text-[12px] font-semibold disabled:opacity-50">↺ Réinitialiser</button>
+        </div>
+      )}
 
       {err && <div className="mt-4 rounded-xl border border-danger/30 bg-danger-bg text-danger p-3 text-[13px]">⚠️ {err}</div>}
 
@@ -505,19 +546,19 @@ export default function RapprochementView({ user }) {
         <div className="mt-5">
           <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
             <div className="bg-cream-warm border border-line rounded-2xl p-4">
-              <div className="font-fraunces text-[30px] font-semibold leading-none text-ink">{res.total}</div>
+              <div className="font-fraunces text-[30px] font-semibold leading-none text-ink">{totalF}</div>
               <div className="text-[12px] text-ink-mute mt-1.5">cartes dans le relevé</div>
             </div>
             <div className="bg-cream-warm border border-line rounded-2xl p-4">
-              <div className="font-fraunces text-[30px] font-semibold leading-none text-success">{res.okC}</div>
-              <div className="text-[12px] text-ink-mute mt-1.5">✅ retrouvées en carte (magasin)</div>
+              <div className="font-fraunces text-[30px] font-semibold leading-none text-success">{okF}</div>
+              <div className="text-[12px] text-ink-mute mt-1.5">✅ retrouvées en carte</div>
             </div>
             <div className="bg-danger-bg border border-danger/20 rounded-2xl p-4">
-              <div className="font-fraunces text-[30px] font-semibold leading-none text-danger">{res.suspects.length}</div>
+              <div className="font-fraunces text-[30px] font-semibold leading-none text-danger">{suspF.length}</div>
               <div className="text-[12px] text-ink-mute mt-1.5">🚨 tapées autrement · ~{fmt(suspAmt)} dh{nbVerif ? ` · ${nbVerif} vérifié${nbVerif > 1 ? 's' : ''}` : ''}</div>
             </div>
             <div className="bg-warn-bg border border-warn/30 rounded-2xl p-4">
-              <div className="font-fraunces text-[30px] font-semibold leading-none text-warn-ink">{res.intro.length}</div>
+              <div className="font-fraunces text-[30px] font-semibold leading-none text-warn-ink">{introF.length}</div>
               <div className="text-[12px] text-ink-mute mt-1.5">❔ introuvables ±20 min</div>
             </div>
           </div>
@@ -531,7 +572,7 @@ export default function RapprochementView({ user }) {
           )}
 
           <div className="flex gap-1 mb-4 p-1 bg-cream-deep rounded-lg w-fit">
-            {[['synthese', '📊 Synthèse'], ['detail', '📋 Détail (CMI ↔ Odoo)']].map(([v, l]) => (
+            {[['synthese', '🧾 Synthèse'], ['detail', '📋 Détail (CMI ↔ Odoo)'], ['jour', '📊 Résumé par jour']].map(([v, l]) => (
               <button key={v} onClick={() => setView(v)}
                 className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${view === v ? 'bg-bordeaux text-white' : 'text-ink-soft hover:text-bordeaux'}`}>{l}</button>
             ))}
@@ -566,37 +607,72 @@ export default function RapprochementView({ user }) {
             </button>
           </div>
 
-          {view === 'detail' ? (
+          {view === 'detail' && (
             <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
               <h3 className="font-fraunces italic text-[20px] text-ink mb-1">📋 Détail ligne par ligne (CMI ↔ Odoo)</h3>
               <p className="text-[13px] text-ink-mute mb-3">Chaque ligne du relevé et chaque vente carte Odoo, côte à côte, triées par jour et heure. Côté vide = pas de correspondance.</p>
               <LedgerTable list={ledgerF} />
             </div>
-          ) : (
+          )}
+
+          {view === 'jour' && (
+            <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
+              <h3 className="font-fraunces italic text-[20px] text-ink mb-1">📊 Résumé par jour</h3>
+              <p className="text-[13px] text-ink-mute mb-2">Total carte du relevé vs total carte enregistré dans la caisse (Odoo), par journée. Utilise les filtres mois/jour ci-dessus.</p>
+              <table className="w-full text-[13px] border-collapse">
+                <thead>
+                  <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
+                    <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Jour</th>
+                    <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Carte relevé</th>
+                    <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Carte caisse (Odoo)</th>
+                    <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Écart</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyF.map(d => {
+                    const gap = d.odoo - d.bank
+                    return (
+                      <tr key={d.date}>
+                        <td className="py-2 px-2 border-b border-cream-deep">{frOf(d.date)}</td>
+                        <td className="py-2 px-2 border-b border-cream-deep text-right tabular-nums">{fmt(d.bank)} dh</td>
+                        <td className="py-2 px-2 border-b border-cream-deep text-right tabular-nums">{fmt(d.odoo)} dh</td>
+                        <td className={`py-2 px-2 border-b border-cream-deep text-right tabular-nums font-semibold ${gap < 0 ? 'text-danger' : 'text-ink-mute'}`}>{gap >= 0 ? '+' : ''}{fmt(gap)} dh</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {view === 'synthese' && (
           <>
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
-            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🚨 Payées par carte, mais tapées autrement</h3>
-            {res.suspects.length ? (
+            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🚨 Payées par carte, mais tapées autrement ({suspF.length})</h3>
+            {suspF.length ? (
               <>
-                <p className="text-[13px] text-ink-mute mb-3">Une carte est passée à la banque, et au même moment la caisse a enregistré le même montant sous une autre méthode. Heure caisse = heure du ticket dans Odoo, pour le retrouver vite.</p>
+                <p className="text-[13px] text-ink-mute mb-3">Une carte est passée à la banque, et au même moment la caisse a enregistré le même montant sous une autre méthode. Heure caisse = heure du ticket dans Odoo.</p>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {Object.entries(suspByMethod).map(([k, v]) => (
                     <span key={k} className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold text-ink">{LABEL[k] || k} : {v}</span>
                   ))}
                 </div>
-                {suspF.length ? <GroupedTable list={suspF} odooHeure methodCol verified={verified} onToggle={toggleVerified} /> : <p className="text-[13px] text-ink-mute italic">Aucun suspect pour « {q} ».</p>}
+                <details>
+                  <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
+                  <div className="mt-2"><GroupedTable list={suspF} odooHeure methodCol verified={verified} onToggle={toggleVerified} /></div>
+                </details>
               </>
             ) : (
-              <p className="text-[13px] text-ink-mute">Aucune carte enregistrée autrement (espèces / chèque / compte client…) sur ce relevé. 🎉</p>
+              <p className="text-[13px] text-ink-mute">Aucune carte enregistrée autrement (espèces / chèque / compte client…) pour ce filtre. 🎉</p>
             )}
           </div>
 
-          {res.splits.length > 0 && (
+          {splitsF.length > 0 && (
             <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
-              <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔗 Paiements partagés ({res.splits.length})</h3>
-              <p className="text-[13px] text-ink-mute mb-2">Un ticket payé en plusieurs cartes : Odoo a un seul montant, la banque en a plusieurs qui s'additionnent. Réconciliés automatiquement (donc pas de fausse alerte).</p>
+              <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔗 Paiements partagés ({splitsF.length})</h3>
+              <p className="text-[13px] text-ink-mute mb-2">Un ticket payé en plusieurs cartes : Odoo a un seul montant, la banque en a plusieurs qui s'additionnent. Réconciliés automatiquement.</p>
               <div className="flex flex-col gap-1.5">
-                {res.splits.slice().sort((a, b) => isoOf(a.dateStr).localeCompare(isoOf(b.dateStr))).map((sp, i) => (
+                {splitsF.slice().sort((a, b) => isoOf(a.dateStr).localeCompare(isoOf(b.dateStr))).map((sp, i) => (
                   <div key={i} className="text-[13px] bg-cream-deep rounded-lg px-3 py-2">
                     <span className="text-ink-mute">📅 {sp.dateStr} · {sp.odooHeure} — </span>
                     <b className="text-success">{fmt(sp.amount)} dh</b>
@@ -608,64 +684,41 @@ export default function RapprochementView({ user }) {
           )}
 
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
-            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">❔ Introuvables à ±20 min ({res.intro.length})</h3>
+            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">❔ Introuvables à ±20 min ({introF.length})</h3>
             <p className="text-[13px] text-ink-mute mb-2">Pas de vente du même montant à l'heure proche. La colonne « Classement » dit ce qu'on a trouvé en cherchant à ±3 jours.</p>
-            {res.intro.length > 0 && (
+            {introF.length > 0 && (
               <details>
                 <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
-                <div className="mt-2">{introF.length ? <GroupedTable list={introF} clsCol /> : <p className="text-[13px] text-ink-mute italic">Rien pour « {q} ».</p>}</div>
+                <div className="mt-2"><GroupedTable list={introF} clsCol /></div>
               </details>
             )}
           </div>
 
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
-            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔄 Cartes dans Odoo, absentes du relevé ({res.reverse.length})</h3>
-            <p className="text-[13px] text-ink-mute mb-2">Ventes notées « Carte » dans la caisse, sans paiement carte correspondant dans le relevé. ⚠️ Fiable seulement si tu as déposé <b>tous</b> les relevés du mois ; inclut les paiements en ligne s'ils ne sont pas dans le relevé déposé.</p>
-            {res.reverse.length > 0 && (
+            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔄 Cartes dans Odoo, absentes du relevé ({reverseF.length})</h3>
+            <p className="text-[13px] text-ink-mute mb-2">Ventes notées « Carte » dans la caisse, sans paiement carte correspondant dans le relevé. ⚠️ Fiable seulement si tu as déposé <b>tous</b> les relevés du mois ; inclut le en-ligne s'il n'y est pas.</p>
+            {reverseF.length > 0 && (
               <details>
                 <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
-                <div className="mt-2">{reverseF.length ? <GroupedTable list={reverseF} /> : <p className="text-[13px] text-ink-mute italic">Rien pour ce filtre.</p>}</div>
+                <div className="mt-2"><GroupedTable list={reverseF} /></div>
               </details>
             )}
-          </div>
-
-          <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
-            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">📊 Résumé par jour</h3>
-            <p className="text-[13px] text-ink-mute mb-2">Total carte du relevé vs total carte enregistré dans la caisse (Odoo), par journée.</p>
-            <table className="w-full text-[13px] border-collapse">
-              <thead>
-                <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
-                  <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Jour</th>
-                  <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Carte relevé</th>
-                  <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Carte caisse (Odoo)</th>
-                  <th className="text-right font-semibold py-1.5 px-2 border-b border-line">Écart</th>
-                </tr>
-              </thead>
-              <tbody>
-                {res.daily.map(d => {
-                  const gap = d.odoo - d.bank
-                  return (
-                    <tr key={d.date}>
-                      <td className="py-2 px-2 border-b border-cream-deep">{frOf(d.date)}</td>
-                      <td className="py-2 px-2 border-b border-cream-deep text-right tabular-nums">{fmt(d.bank)} dh</td>
-                      <td className="py-2 px-2 border-b border-cream-deep text-right tabular-nums">{fmt(d.odoo)} dh</td>
-                      <td className={`py-2 px-2 border-b border-cream-deep text-right tabular-nums font-semibold ${gap < 0 ? 'text-danger' : 'text-ink-mute'}`}>{gap >= 0 ? '+' : ''}{fmt(gap)} dh</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
           </div>
 
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
-            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🌐 Paiements en ligne (STAN 6 chiffres) — {res.onl.length}</h3>
+            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🌐 Paiements en ligne (STAN 6 chiffres) — {onlineRows.length}</h3>
             <p className="text-[13px] text-ink-mute mb-2">Recherchés à ±3 jours (confirmés en caisse plus tard).</p>
             <div className="flex flex-wrap gap-2">
-              <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">✅ carte : {res.oOk}</span>
-              <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">🚨 autre méthode : {res.oSusp.length}</span>
-              <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">❔ sans trace : {res.oNone.length}</span>
+              <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">✅ carte : {onlineRows.filter(r => r.status === 'ok').length}</span>
+              <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">🚨 autre méthode : {onlineRows.filter(r => r.status === 'mismatch').length}</span>
+              <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">❔ sans trace : {onlineRows.filter(r => r.status === 'cmi-only').length}</span>
             </div>
-            {res.oSusp.length > 0 && <div className="mt-3"><GroupedTable list={res.oSusp} methodCol /></div>}
+            {onlineRows.length > 0 && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail de chaque paiement</summary>
+                <div className="mt-2"><LedgerTable list={onlineRows} /></div>
+              </details>
+            )}
           </div>
           </>
           )}
