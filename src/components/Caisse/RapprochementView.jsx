@@ -74,12 +74,13 @@ function runMatch(bank, raw) {
   const tpe = bank.filter(b => !b.online), onl = bank.filter(b => b.online)
   let okC = 0; const suspects = [], intro = []
   for (const b of tpe) {
+    // Candidats : même montant, dans la fenêtre de temps, pas déjà pris.
+    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= W)
+    // On privilégie une vente "Carte" (gère les paiements partagés 45 espèces + 45 carte).
+    const cartes = cands.filter(p => p.c === 'c')
+    const pool = cartes.length ? cartes : cands
     let best = null
-    for (const p of (byAmt.get(b.amt) || [])) {
-      if (p.used) continue
-      const d = Math.abs(p.t - (b.t + OFF))
-      if (d <= W && (!best || d < best.d)) best = { p, d }
-    }
+    for (const p of pool) { const d = Math.abs(p.t - (b.t + OFF)); if (!best || d < best.d) best = { p, d } }
     if (best) { best.p.used = true; if (best.p.c === 'c') okC++; else suspects.push({ ...b, m: best.p.c }) }
     else intro.push(b)
   }
