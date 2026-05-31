@@ -110,7 +110,23 @@ function runMatch(bank, raw) {
   const odoo = raw.map(a => ({ a: a[0], t: a[1], c: a[2], used: false }))
   const byAmt = new Map()
   for (const p of odoo) { if (!byAmt.has(p.a)) byAmt.set(p.a, []); byAmt.get(p.a).push(p) }
-  const OFF = detectOffset(bank, byAmt)
+  const OFFg = detectOffset(bank, byAmt) // décalage global (secours)
+  // Décalage détecté JOUR PAR JOUR (gère les changements d'heure / Ramadan).
+  const dayOff = {}
+  {
+    const byDay = {}
+    for (const b of bank) { if (b.hasTime === false) continue; const d = isoOf(b.dateStr); (byDay[d] = byDay[d] || []).push(b) }
+    for (const d in byDay) {
+      const deltas = []
+      for (const b of byDay[d]) {
+        let best = null
+        for (const p of (byAmt.get(b.amt) || [])) { const dd = p.t - b.t; if (Math.abs(dd) < 6 * 3600e3 && (best === null || Math.abs(dd) < Math.abs(best))) best = dd }
+        if (best !== null) deltas.push(best)
+      }
+      if (deltas.length >= 3) { deltas.sort((a, b) => a - b); dayOff[d] = Math.round(deltas[Math.floor(deltas.length / 2)] / (60 * 60e3)) * 60 * 60e3 }
+    }
+  }
+  const offOf = b => (dayOff[isoOf(b.dateStr)] ?? OFFg)
   const W = 20 * 60e3, D3 = 3 * 86400e3, D1 = 1.5 * 86400e3
   const withTime = bank.filter(b => b.hasTime !== false)
   const noTime = bank.filter(b => b.hasTime === false) // lignes venues du PDF (pas d'heure)
@@ -118,43 +134,49 @@ function runMatch(bank, raw) {
 
   let okC = 0; const suspects = [], intro = [], okList = []
   for (const b of tpe) {
-    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= W)
+    const off = offOf(b)
+    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + off)) <= W)
     const cartes = cands.filter(p => p.c === 'c')
     const pool = cartes.length ? cartes : cands
     let best = null
-    for (const p of pool) { const d = Math.abs(p.t - (b.t + OFF)); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - OFF) }) }
+    for (const p of pool) { const d = Math.abs(p.t - (b.t + off)); if (!best || d < best.d) best = { p, d } }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off) }) }
     else {
       // Classement : cherche le même montant à ±3 jours pour comprendre.
       let fc = false, other = null
-      for (const p of (byAmt.get(b.amt) || [])) { if (Math.abs(p.t - (b.t + OFF)) <= D3) { if (p.c === 'c') fc = true; else if (!other) other = p.c } }
+      for (const p of (byAmt.get(b.amt) || [])) { if (Math.abs(p.t - (b.t + off)) <= D3) { if (p.c === 'c') fc = true; else if (!other) other = p.c } }
       intro.push({ ...b, cls: fc ? 'online' : other || 'none' })
     }
   }
 
   let oOk = 0; const oSusp = [], oNone = []
   for (const b of onl) {
-    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= D3)
+    const off = offOf(b)
+    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + off)) <= D3)
     const carte = cands.find(p => p.c === 'c')
     if (carte) { carte.used = true; oOk++; okList.push({ b, p: carte }) }
-    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - OFF) }) } else oNone.push(b) }
+    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - off) }) } else oNone.push(b) }
   }
 
   // Lignes du PDF (complément, sans heure) : matchées par jour ± 1 j, carte d'abord.
   for (const b of noTime) {
-    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs((p.t - OFF) - b.t) <= D1)
+    const off = offOf(b)
+    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs((p.t - off) - b.t) <= D1)
     const cartes = cands.filter(p => p.c === 'c')
     const pool = cartes.length ? cartes : cands
     let best = null
-    for (const p of pool) { const d = Math.abs((p.t - OFF) - b.t); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - OFF) }) }
+    for (const p of pool) { const d = Math.abs((p.t - off) - b.t); if (!best || d < best.d) best = { p, d } }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off) }) }
     else intro.push({ ...b, cls: 'none' })
   }
+
+  // Décalage à appliquer à un paiement Odoo (selon son jour) pour l'afficher en heure locale.
+  const offForP = p => { const d = new Date(p.t - OFFg).toISOString().slice(0, 10); return dayOff[d] ?? OFFg }
 
   // Résumé par jour : carte relevé vs carte Odoo
   const dayBank = {}, dayOdoo = {}
   for (const b of bank) { const d = isoOf(b.dateStr); dayBank[d] = (dayBank[d] || 0) + b.amt }
-  for (const p of odoo) if (p.c === 'c') { const d = new Date(p.t - OFF).toISOString().slice(0, 10); dayOdoo[d] = (dayOdoo[d] || 0) + p.a }
+  for (const p of odoo) if (p.c === 'c') { const d = new Date(p.t - offForP(p)).toISOString().slice(0, 10); dayOdoo[d] = (dayOdoo[d] || 0) + p.a }
   const days = [...new Set(bank.map(b => isoOf(b.dateStr)))].sort()
   const daily = days.map(d => ({ date: d, bank: dayBank[d] || 0, odoo: dayOdoo[d] || 0 }))
 
@@ -164,9 +186,10 @@ function runMatch(bank, raw) {
   const reverse = []
   for (const p of odoo) {
     if (p.c !== 'c' || p.used) continue
-    const loc = new Date(p.t - OFF), iso = loc.toISOString().slice(0, 10)
+    const off = offForP(p)
+    const loc = new Date(p.t - off), iso = loc.toISOString().slice(0, 10)
     if (iso < minDay || iso > maxDay) continue
-    reverse.push({ t: p.t - OFF, amt: p.a, sys: 'Carte', heureStr: loc.toISOString().slice(11, 19), dateStr: frOf(iso), key: `odoo|${iso}|${p.t}|${p.a}` })
+    reverse.push({ t: p.t - off, amt: p.a, sys: 'Carte', heureStr: loc.toISOString().slice(11, 19), dateStr: frOf(iso), key: `odoo|${iso}|${p.t}|${p.a}` })
   }
   reverse.sort((a, b) => a.t - b.t)
 
@@ -176,7 +199,7 @@ function runMatch(bank, raw) {
     t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online,
     cmiAmt: b.amt, cmiSys: b.sys,
     odooAmt: p ? b.amt : null, odooCat: p ? (typeof p === 'string' ? p : p.c) : null,
-    odooHeure: p && typeof p !== 'string' ? hhmm(p.t - OFF) : (typeof p === 'string' ? b.odooHeure : ''),
+    odooHeure: p && typeof p !== 'string' ? hhmm(p.t - offOf(b)) : (typeof p === 'string' ? b.odooHeure : ''),
     status, amt: b.amt, key: b.key,
   })
   for (const o of okList) ledger.push(cmiRow(o.b, 'ok', o.p))
