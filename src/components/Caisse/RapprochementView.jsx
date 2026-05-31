@@ -12,6 +12,8 @@ const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n))
 const isoOf = dstr => { const m = dstr.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : dstr }
 const frOf = iso => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso }
 const hhmm = ms => new Date(ms).toISOString().slice(11, 19)
+const MONTHS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+const monthLabel = ym => { const [y, m] = ym.split('-'); return `${MONTHS_FR[+m - 1]} ${y}` }
 
 async function ensureXLSX() {
   if (window.XLSX) return window.XLSX
@@ -93,11 +95,10 @@ function runMatch(bank, raw) {
 
   let oOk = 0; const oSusp = [], oNone = []
   for (const b of onl) {
-    let fc = false, other = null
-    for (const p of (byAmt.get(b.amt) || [])) {
-      if (Math.abs(p.t - (b.t + OFF)) <= D3) { if (p.c === 'c') fc = true; else if (!other) other = p.c }
-    }
-    if (fc) oOk++; else if (other) oSusp.push({ ...b, m: other }); else oNone.push(b)
+    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= D3)
+    const carte = cands.find(p => p.c === 'c')
+    if (carte) { carte.used = true; oOk++ }
+    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c }) } else oNone.push(b) }
   }
 
   // Résumé par jour : carte relevé vs carte Odoo
@@ -107,12 +108,24 @@ function runMatch(bank, raw) {
   const days = [...new Set(bank.map(b => isoOf(b.dateStr)))].sort()
   const daily = days.map(d => ({ date: d, bank: dayBank[d] || 0, odoo: dayOdoo[d] || 0 }))
 
+  // Sens inverse : cartes notées dans Odoo mais sans paiement carte dans le relevé
+  // (sur la plage de jours du relevé seulement).
+  const minDay = days[0], maxDay = days[days.length - 1]
+  const reverse = []
+  for (const p of odoo) {
+    if (p.c !== 'c' || p.used) continue
+    const loc = new Date(p.t - OFF), iso = loc.toISOString().slice(0, 10)
+    if (iso < minDay || iso > maxDay) continue
+    reverse.push({ t: p.t - OFF, amt: p.a, sys: 'Carte', heureStr: loc.toISOString().slice(11, 19), dateStr: frOf(iso), key: `odoo|${iso}|${p.t}|${p.a}` })
+  }
+  reverse.sort((a, b) => a.t - b.t)
+
   const totalBrut = bank.reduce((s, b) => s + b.amt, 0)
   const totalNet = bank.reduce((s, b) => s + b.net, 0)
 
   const times = bank.map(b => b.t)
   return {
-    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily,
+    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily, reverse,
     commission: Math.round((totalBrut - totalNet) * 100) / 100, totalBrut: Math.round(totalBrut),
     from: new Date(Math.min(...times)).toISOString().slice(0, 10),
     to: new Date(Math.max(...times)).toISOString().slice(0, 10),
@@ -179,6 +192,8 @@ export default function RapprochementView({ user }) {
   const [fileNames, setFileNames] = useState([])
   const [over, setOver] = useState(false)
   const [search, setSearch] = useState('')
+  const [month, setMonth] = useState('')
+  const [day, setDay] = useState('')
   const [verified, setVerified] = useState(new Set())
 
   useEffect(() => { loadRapproVerifies().then(setVerified).catch(() => {}) }, [])
@@ -243,9 +258,13 @@ export default function RapprochementView({ user }) {
   }
 
   const q = search.trim()
-  const flt = list => !q ? list : list.filter(b => String(b.amt).includes(q))
+  const dateMatch = b => { const iso = isoOf(b.dateStr); if (day) return iso === day; if (month) return iso.startsWith(month); return true }
+  const flt = list => list.filter(b => (!q || String(b.amt).includes(q)) && dateMatch(b))
   const suspF = res ? flt(res.suspects) : []
   const introF = res ? flt(res.intro) : []
+  const reverseF = res ? flt(res.reverse) : []
+  const months = res ? [...new Set(res.daily.map(d => d.date.slice(0, 7)))] : []
+  const dayOptions = res ? res.daily.map(d => d.date).filter(d => !month || d.startsWith(month)) : []
   const suspAmt = res ? res.suspects.reduce((s, b) => s + b.amt, 0) : 0
   const nbVerif = res ? res.suspects.filter(b => verified.has(b.key)).length : 0
   const suspByMethod = res ? res.suspects.reduce((acc, s) => { acc[s.m] = (acc[s.m] || 0) + 1; return acc }, {}) : {}
@@ -304,8 +323,20 @@ export default function RapprochementView({ user }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="🔍 Rechercher un montant (ex. 145)"
-              className="flex-1 min-w-[200px] px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+              className="flex-1 min-w-[180px] px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux"
             />
+            {months.length > 1 && (
+              <select value={month} onChange={e => { setMonth(e.target.value); setDay('') }}
+                className="px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux">
+                <option value="">Tous les mois</option>
+                {months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+              </select>
+            )}
+            <select value={day} onChange={e => setDay(e.target.value)}
+              className="px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux">
+              <option value="">Tous les jours</option>
+              {dayOptions.map(d => <option key={d} value={d}>{frOf(d)}</option>)}
+            </select>
             <button onClick={exportXlsx} className="px-4 py-2 text-[12px] font-semibold tracking-wider uppercase bg-ink text-white rounded-lg hover:opacity-90">
               ⬇︎ Export Excel
             </button>
@@ -335,6 +366,17 @@ export default function RapprochementView({ user }) {
               <details>
                 <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
                 <div className="mt-2">{introF.length ? <GroupedTable list={introF} clsCol /> : <p className="text-[13px] text-ink-mute italic">Rien pour « {q} ».</p>}</div>
+              </details>
+            )}
+          </div>
+
+          <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
+            <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔄 Cartes dans Odoo, absentes du relevé ({res.reverse.length})</h3>
+            <p className="text-[13px] text-ink-mute mb-2">Ventes notées « Carte » dans la caisse, sans paiement carte correspondant dans le relevé. ⚠️ Fiable seulement si tu as déposé <b>tous</b> les relevés du mois ; inclut les paiements en ligne s'ils ne sont pas dans le relevé déposé.</p>
+            {res.reverse.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
+                <div className="mt-2">{reverseF.length ? <GroupedTable list={reverseF} /> : <p className="text-[13px] text-ink-mute italic">Rien pour ce filtre.</p>}</div>
               </details>
             )}
           </div>
