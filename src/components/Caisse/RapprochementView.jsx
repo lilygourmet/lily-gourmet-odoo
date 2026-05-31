@@ -70,18 +70,18 @@ async function parsePDF(file) {
     const tc = await (await doc.getPage(i)).getTextContent()
     text += ' ' + tc.items.map(it => it.str).join(' ')
   }
-  // date STAN(6) type(V/M…) L/I  carte(masquée, parfois découpée)  montant
-  const rx = /(\d{2})\/(\d{2})\/(\d{2})\s+(\d{6})\s+([VMDJCU])\s+[LI]\s+[\d*\s]+?([\d.,]+\.\d{2})/g
+  // Ordre réel des colonnes dans le flux pdfjs : date STAN carte MONTANT type(V/M) L/I
+  const rx = /(\d{2})\/(\d{2})\/(\d{2})\s+(\d{6})\s+[\d*][\d*\s]*?([\d.,]+\.\d{2})(?:\s+([VMDJCU]))?/g
   const out = []; let m
   while ((m = rx.exec(text))) {
-    const [, dd, mm, yy, stan, type, amtStr] = m
+    const [, dd, mm, yy, stan, amtStr, type] = m
     const amt = Math.round((parseFloat(amtStr.replace(/,/g, '')) || 0) * 100) / 100
     if (!amt) continue
     const dateStr = `${dd}/${mm}/20${yy}`
     const stanNorm = String(parseInt(stan, 10))
     out.push({
       amt, dateStr, online: stanNorm.length === 6,
-      sys: type === 'M' ? 'MASTERCARD' : type === 'V' ? 'VISA' : type,
+      sys: type === 'M' ? 'MASTERCARD' : type === 'V' ? 'VISA' : (type || 'Carte'),
       heureStr: '—', hasTime: false,
       t: Date.parse(`20${yy}-${mm}-${dd}T12:00:00Z`),
       mergeKey: `${stanNorm}|${dateStr}|${amt}`, key: `pdf|${stanNorm}|${dateStr}|${amt}`,
