@@ -505,6 +505,7 @@ export default function RapprochementView({ user }) {
   const splitsF = res ? res.splits.filter(sp => sp.parts.some(p => (!q || String(p.amt).includes(q)) && dateMatch(p))) : []
   const dailyF = res ? res.daily.filter(d => (!day || d.date === day) && (!month || d.date.startsWith(month))) : []
   const dayGap = res ? Object.fromEntries(res.daily.map(d => [frOf(d.date), Math.round(d.odoo - d.bank)])) : {}
+  const gapNow = Math.round(dailyF.reduce((s, d) => s + (d.odoo - d.bank), 0)) // écart carte (caisse − relevé) sur la période filtrée
   const months = res ? [...new Set(res.daily.map(d => d.date.slice(0, 7)))] : []
   const dayOptions = res ? res.daily.map(d => d.date).filter(d => !month || d.startsWith(month)) : []
   const suspAmt = suspF.reduce((s, b) => s + b.amt, 0)
@@ -562,6 +563,10 @@ export default function RapprochementView({ user }) {
             <div className="bg-warn-bg border border-warn/30 rounded-2xl p-4">
               <div className="font-fraunces text-[30px] font-semibold leading-none text-warn-ink">{introF.length}</div>
               <div className="text-[12px] text-ink-mute mt-1.5">❔ introuvables ±20 min</div>
+            </div>
+            <div className="bg-cream-warm border border-line rounded-2xl p-4">
+              <div className={`font-fraunces text-[30px] font-semibold leading-none ${gapNow < 0 ? 'text-danger' : 'text-ink'}`}>{gapNow >= 0 ? '+' : ''}{fmt(gapNow)} dh</div>
+              <div className="text-[12px] text-ink-mute mt-1.5">⚖️ écart carte (caisse − relevé)</div>
             </div>
           </div>
 
