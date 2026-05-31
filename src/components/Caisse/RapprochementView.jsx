@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 
-// Rapprochement bancaire : on dépose le relevé carte (CMI .xlsx), on le compare
-// aux paiements POS d'Odoo (lus en direct via /api/caisse-api?action=pos-payments)
-// et on signale chaque carte enregistrée en caisse autrement qu'en « Carte ».
+// Rapprochement bancaire : on dépose un ou plusieurs relevés carte (CMI .xlsx),
+// on les compare aux paiements POS d'Odoo (lus en direct via
+// /api/caisse-api?action=pos-payments) et on signale chaque carte enregistrée
+// en caisse autrement qu'en « Carte ».
 
 const LABEL = { e: 'Espèces', k: 'Compte client', q: 'Chèque', v: 'Virement', r: 'Avoir/Crédit', a: 'Autre' }
 const norm = s => (s == null ? '' : s.toString()).toLowerCase().normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n))
+const isoOf = dstr => { const m = dstr.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : dstr }
 
-// Charge SheetJS depuis le CDN (comme le module RH), une seule fois.
 async function ensureXLSX() {
   if (window.XLSX) return window.XLSX
   await new Promise((res, rej) => {
@@ -22,7 +23,7 @@ async function ensureXLSX() {
 
 function parseBank(rows) {
   const hi = rows.findIndex(r => Array.isArray(r) && r.some(c => norm(c).includes('montant brut')))
-  if (hi < 0) throw new Error("Colonne « Montant brut TTC » introuvable — est-ce bien le relevé CMI ?")
+  if (hi < 0) throw new Error("Colonne « Montant brut TTC » introuvable — est-ce bien un relevé CMI ?")
   const H = rows[hi].map(norm)
   const col = kw => H.findIndex(h => h.includes(kw))
   const ci = {
@@ -38,17 +39,14 @@ function parseBank(rows) {
     const t = Date.parse(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}T${heure}Z`)
     const amt = Math.round((parseFloat(String(r[ci.montant]).replace(',', '.')) || 0) * 100) / 100
     if (!amt) continue
-    const stanDigits = String(r[ci.stan] || '').replace(/\D/g, '')
-    bank.push({
-      t, amt, online: stanDigits.length === 6, sys: String(r[ci.sys] || ''),
-      heureStr: heure, dateStr: `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}`,
-    })
+    const stan = String(r[ci.stan] || '').replace(/\D/g, '')
+    const dateStr = `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}`
+    bank.push({ t, amt, online: stan.length === 6, sys: String(r[ci.sys] || ''), heureStr: heure, dateStr, key: `${dateStr}|${heure}|${amt}|${stan}` })
   }
   if (!bank.length) throw new Error("Aucune ligne de paiement lue dans le fichier.")
   return bank
 }
 
-// Décalage horaire banque↔Odoo détecté automatiquement (arrondi à l'heure).
 function detectOffset(bank, byAmt) {
   const deltas = []
   for (const b of bank) {
@@ -61,8 +59,7 @@ function detectOffset(bank, byAmt) {
   }
   if (!deltas.length) return -60 * 60e3
   deltas.sort((a, b) => a - b)
-  const med = deltas[Math.floor(deltas.length / 2)]
-  return Math.round(med / (60 * 60e3)) * 60 * 60e3
+  return Math.round(deltas[Math.floor(deltas.length / 2)] / (60 * 60e3)) * 60 * 60e3
 }
 
 function runMatch(bank, raw) {
@@ -74,9 +71,7 @@ function runMatch(bank, raw) {
   const tpe = bank.filter(b => !b.online), onl = bank.filter(b => b.online)
   let okC = 0; const suspects = [], intro = []
   for (const b of tpe) {
-    // Candidats : même montant, dans la fenêtre de temps, pas déjà pris.
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + OFF)) <= W)
-    // On privilégie une vente "Carte" (gère les paiements partagés 45 espèces + 45 carte).
     const cartes = cands.filter(p => p.c === 'c')
     const pool = cartes.length ? cartes : cands
     let best = null
@@ -92,15 +87,24 @@ function runMatch(bank, raw) {
     }
     if (fc) oOk++; else if (other) oSusp.push({ ...b, m: other }); else oNone.push(b)
   }
-  return { total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, offsetH: OFF / 3600e3 }
+  const times = bank.map(b => b.t)
+  return {
+    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone,
+    from: new Date(Math.min(...times)).toISOString().slice(0, 10),
+    to: new Date(Math.max(...times)).toISOString().slice(0, 10),
+  }
 }
 
-function Table({ list, susp }) {
+// Tableau regroupé par jour, avec sous-total par jour.
+function GroupedTable({ list, susp }) {
+  const groups = {}
+  for (const b of list) (groups[b.dateStr] = groups[b.dateStr] || []).push(b)
+  const days = Object.keys(groups).sort((a, b) => isoOf(a).localeCompare(isoOf(b)))
+  const cols = susp ? 4 : 3
   return (
     <table className="w-full text-[13px] border-collapse">
       <thead>
         <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
-          <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Date</th>
           <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Heure</th>
           <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Montant</th>
           <th className="text-left font-semibold py-1.5 px-2 border-b border-line">Réseau</th>
@@ -108,15 +112,27 @@ function Table({ list, susp }) {
         </tr>
       </thead>
       <tbody>
-        {list.slice().sort((a, b) => a.t - b.t).map((b, i) => (
-          <tr key={i}>
-            <td className="py-2 px-2 border-b border-cream-deep">{b.dateStr}</td>
-            <td className="py-2 px-2 border-b border-cream-deep">{b.heureStr}</td>
-            <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{fmt(b.amt)} dh</td>
-            <td className="py-2 px-2 border-b border-cream-deep">{b.sys}</td>
-            {susp && <td className="py-2 px-2 border-b border-cream-deep"><span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-danger-bg text-danger">{LABEL[b.m] || b.m}</span></td>}
-          </tr>
-        ))}
+        {days.map(day => {
+          const items = groups[day].slice().sort((a, b) => a.t - b.t)
+          const sum = items.reduce((s, b) => s + b.amt, 0)
+          return (
+            <Fragment key={day}>
+              <tr className="bg-cream-deep">
+                <td colSpan={cols} className="py-1.5 px-2 text-[12px] font-semibold text-ink">
+                  📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''} · {fmt(sum)} dh</span>
+                </td>
+              </tr>
+              {items.map((b, i) => (
+                <tr key={day + '-' + i}>
+                  <td className="py-2 px-2 border-b border-cream-deep">{b.heureStr}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{fmt(b.amt)} dh</td>
+                  <td className="py-2 px-2 border-b border-cream-deep">{b.sys}</td>
+                  {susp && <td className="py-2 px-2 border-b border-cream-deep"><span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-danger-bg text-danger">{LABEL[b.m] || b.m}</span></td>}
+                </tr>
+              ))}
+            </Fragment>
+          )
+        })}
       </tbody>
     </table>
   )
@@ -126,19 +142,25 @@ export default function RapprochementView() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)
-  const [fileName, setFileName] = useState('')
+  const [fileNames, setFileNames] = useState([])
   const [over, setOver] = useState(false)
+  const [search, setSearch] = useState('')
 
-  async function onFile(file) {
-    if (!file) return
-    setErr(''); setRes(null); setBusy(true); setFileName(file.name)
+  async function onFiles(fileList) {
+    const arr = Array.from(fileList || [])
+    if (!arr.length) return
+    setErr(''); setRes(null); setBusy(true); setSearch(''); setFileNames(arr.map(f => f.name))
     try {
       const XLSX = await ensureXLSX()
-      const buf = await file.arrayBuffer()
-      const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' })
-      const bank = parseBank(rows)
+      let bank = []
+      for (const file of arr) {
+        const buf = await file.arrayBuffer()
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        bank = bank.concat(parseBank(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' })))
+      }
+      const seen = new Set()
+      bank = bank.filter(b => { if (seen.has(b.key)) return false; seen.add(b.key); return true })
       const times = bank.map(b => b.t)
       const from = new Date(Math.min(...times) - 3 * 86400e3).toISOString().slice(0, 10)
       const to = new Date(Math.max(...times) + 3 * 86400e3).toISOString().slice(0, 10)
@@ -153,6 +175,23 @@ export default function RapprochementView() {
     }
   }
 
+  async function exportXlsx() {
+    if (!res) return
+    const XLSX = await ensureXLSX()
+    const wb = XLSX.utils.book_new()
+    const shead = ['Date', 'Heure', 'Montant (dh)', 'Réseau', 'Tapé en caisse comme']
+    const srows = [shead, ...res.suspects.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.amt, b.sys, LABEL[b.m] || b.m])]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(srows), 'Suspects')
+    const ihead = ['Date', 'Heure', 'Montant (dh)', 'Réseau']
+    const irows = [ihead, ...res.intro.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.amt, b.sys])]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(irows), 'Introuvables')
+    XLSX.writeFile(wb, `rapprochement_${res.from}_${res.to}.xlsx`)
+  }
+
+  const q = search.trim()
+  const flt = list => !q ? list : list.filter(b => String(b.amt).includes(q))
+  const suspF = res ? flt(res.suspects) : []
+  const introF = res ? flt(res.intro) : []
   const suspAmt = res ? res.suspects.reduce((s, b) => s + b.amt, 0) : 0
   const suspByMethod = res ? res.suspects.reduce((acc, s) => { acc[s.m] = (acc[s.m] || 0) + 1; return acc }, {}) : {}
 
@@ -160,24 +199,24 @@ export default function RapprochementView() {
     <div className="max-w-[920px]">
       <h2 className="font-fraunces italic text-[22px] text-ink mb-1">Rapprochement bancaire</h2>
       <p className="text-[13px] text-ink-mute mb-4">
-        Dépose ton relevé carte (CMI, .xlsx). Il est comparé aux ventes de la caisse (Odoo) et chaque carte
+        Dépose un ou plusieurs relevés carte (CMI, .xlsx). Ils sont comparés aux ventes de la caisse (Odoo) et chaque carte
         enregistrée autrement qu'en « Carte » (espèces, chèque, compte client, virement…) est signalée.
       </p>
 
       <label
         onDragOver={e => { e.preventDefault(); setOver(true) }}
         onDragLeave={e => { e.preventDefault(); setOver(false) }}
-        onDrop={e => { e.preventDefault(); setOver(false); onFile(e.dataTransfer.files[0]) }}
+        onDrop={e => { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files) }}
         className={`block border-2 border-dashed rounded-2xl bg-cream-warm p-9 text-center cursor-pointer transition-colors ${over ? 'border-bordeaux' : 'border-line hover:border-bordeaux'}`}
       >
-        <div className="text-[17px] font-semibold text-ink mb-1.5">📂 Glisse ton relevé ici, ou clique pour choisir</div>
-        <div className="text-[13px] text-ink-mute">Fichier Excel .xlsx du relevé d'opérations carte</div>
+        <div className="text-[17px] font-semibold text-ink mb-1.5">📂 Glisse tes relevés ici, ou clique pour choisir</div>
+        <div className="text-[13px] text-ink-mute">Un ou plusieurs fichiers .xlsx (ex. relevé -1, -2, -3 du mois)</div>
         <span className="inline-block mt-3.5 bg-bordeaux hover:bg-bordeaux-deep text-white rounded-full px-5 py-2.5 text-[12px] font-semibold tracking-wider uppercase">
-          {busy ? 'Analyse…' : 'Choisir un fichier'}
+          {busy ? 'Analyse…' : 'Choisir des fichiers'}
         </span>
-        <input type="file" accept=".xlsx,.xls" className="hidden" disabled={busy}
-          onChange={e => onFile(e.target.files[0])} />
-        {fileName && <div className="text-[12px] text-ink-mute mt-3">📄 {fileName}</div>}
+        <input type="file" accept=".xlsx,.xls" multiple className="hidden" disabled={busy}
+          onChange={e => onFiles(e.target.files)} />
+        {fileNames.length > 0 && <div className="text-[12px] text-ink-mute mt-3">📄 {fileNames.join(' · ')}</div>}
       </label>
 
       {err && <div className="mt-4 rounded-xl border border-danger/30 bg-danger-bg text-danger p-3 text-[13px]">⚠️ {err}</div>}
@@ -203,6 +242,18 @@ export default function RapprochementView() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 Rechercher un montant (ex. 145)"
+              className="flex-1 min-w-[200px] px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+            />
+            <button onClick={exportXlsx} className="px-4 py-2 text-[12px] font-semibold tracking-wider uppercase bg-ink text-white rounded-lg hover:opacity-90">
+              ⬇︎ Export Excel
+            </button>
+          </div>
+
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
             <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🚨 Payées par carte, mais tapées autrement</h3>
             {res.suspects.length ? (
@@ -213,7 +264,7 @@ export default function RapprochementView() {
                     <span key={k} className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold text-ink">{LABEL[k] || k} : {v}</span>
                   ))}
                 </div>
-                <Table list={res.suspects} susp />
+                {suspF.length ? <GroupedTable list={suspF} susp /> : <p className="text-[13px] text-ink-mute italic">Aucun suspect pour « {q} ».</p>}
               </>
             ) : (
               <p className="text-[13px] text-ink-mute">Aucune carte enregistrée autrement (espèces / chèque / compte client…) sur ce relevé. 🎉</p>
@@ -226,7 +277,7 @@ export default function RapprochementView() {
             {res.intro.length > 0 && (
               <details>
                 <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
-                <div className="mt-2"><Table list={res.intro} /></div>
+                <div className="mt-2">{introF.length ? <GroupedTable list={introF} /> : <p className="text-[13px] text-ink-mute italic">Rien pour « {q} ».</p>}</div>
               </details>
             )}
           </div>
@@ -239,7 +290,7 @@ export default function RapprochementView() {
               <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">🚨 autre méthode : {res.oSusp.length}</span>
               <span className="bg-cream-deep rounded-full px-3 py-1 text-[12px] font-semibold">❔ sans trace : {res.oNone.length}</span>
             </div>
-            {res.oSusp.length > 0 && <div className="mt-3"><Table list={res.oSusp} susp /></div>}
+            {res.oSusp.length > 0 && <div className="mt-3"><GroupedTable list={res.oSusp} susp /></div>}
           </div>
         </div>
       )}
