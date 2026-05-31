@@ -106,6 +106,24 @@ function detectOffset(bank, byAmt) {
   return Math.round(deltas[Math.floor(deltas.length / 2)] / (60 * 60e3)) * 60 * 60e3
 }
 
+// Subset-sum 0/1 : renvoie les indices d'un sous-ensemble de `arr` (entiers) sommant
+// exactement à `target`, ou null. Chaque élément utilisé au plus une fois.
+function subsetSum(arr, target) {
+  const dp = new Array(target + 1).fill(null)
+  dp[0] = { prev: -1, idx: -1 }
+  for (let i = 0; i < arr.length; i++) {
+    const c = arr[i]
+    if (c <= 0 || c > target) continue
+    for (let s = target; s >= c; s--) {
+      if (dp[s] === null && dp[s - c] !== null) dp[s] = { prev: s - c, idx: i }
+    }
+  }
+  if (dp[target] === null) return null
+  const idxs = []; let s = target
+  while (s > 0) { idxs.push(dp[s].idx); s = dp[s].prev }
+  return idxs
+}
+
 function runMatch(bank, raw) {
   const odoo = raw.map(a => ({ a: a[0], t: a[1], c: a[2], used: false }))
   const byAmt = new Map()
@@ -132,7 +150,7 @@ function runMatch(bank, raw) {
   const noTime = bank.filter(b => b.hasTime === false) // lignes venues du PDF (pas d'heure)
   const tpe = withTime.filter(b => !b.online), onl = withTime.filter(b => b.online)
 
-  let okC = 0; const suspects = [], intro = [], okList = []
+  let okC = 0, suspects = [], intro = []; const okList = []
   for (const b of tpe) {
     const off = offOf(b)
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + off)) <= W)
@@ -140,7 +158,7 @@ function runMatch(bank, raw) {
     const pool = cartes.length ? cartes : cands
     let best = null
     for (const p of pool) { const d = Math.abs(p.t - (b.t + off)); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off) }) }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off), _p: best.p }) }
     else {
       // Classement : cherche le même montant à ±3 jours pour comprendre.
       let fc = false, other = null
@@ -149,13 +167,13 @@ function runMatch(bank, raw) {
     }
   }
 
-  let oOk = 0; const oSusp = [], oNone = []
+  let oOk = 0, oNone = []; const oSusp = []
   for (const b of onl) {
     const off = offOf(b)
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + off)) <= D3)
     const carte = cands.find(p => p.c === 'c')
     if (carte) { carte.used = true; oOk++; okList.push({ b, p: carte }) }
-    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - off) }) } else oNone.push(b) }
+    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - off), _p: other }) } else oNone.push(b) }
   }
 
   // Lignes du PDF (complément, sans heure) : matchées par jour ± 1 j, carte d'abord.
@@ -166,12 +184,43 @@ function runMatch(bank, raw) {
     const pool = cartes.length ? cartes : cands
     let best = null
     for (const p of pool) { const d = Math.abs((p.t - off) - b.t); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off) }) }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off), _p: best.p }) }
     else intro.push({ ...b, cls: 'none' })
   }
 
   // Décalage à appliquer à un paiement Odoo (selon son jour) pour l'afficher en heure locale.
   const offForP = p => { const d = new Date(p.t - OFFg).toISOString().slice(0, 10); return dayOff[d] ?? OFFg }
+
+  // 🔗 Paiements partagés : plusieurs cartes banque non-matchées qui s'additionnent
+  // pour faire exactement une carte Odoo non-matchée (même jour, créneau proche).
+  const splits = []
+  {
+    const cents = x => Math.round(x * 100)
+    const freeBank = [...suspects, ...intro, ...oNone]
+    for (const b of freeBank) b._consumed = false
+    const byDayFree = {}
+    for (const b of freeBank) (byDayFree[isoOf(b.dateStr)] = byDayFree[isoOf(b.dateStr)] || []).push(b)
+    const odooFree = odoo.filter(p => p.c === 'c' && !p.used).sort((a, b) => a.t - b.t)
+    for (const p of odooFree) {
+      const target = cents(p.a)
+      if (target > 300000) continue
+      const day = new Date(p.t - offForP(p)).toISOString().slice(0, 10)
+      const pool = (byDayFree[day] || []).filter(b => !b._consumed &&
+        (b.hasTime === false || Math.abs((b.t + offOf(b)) - p.t) <= 15 * 60e3))
+      if (pool.length < 2 || pool.length > 40) continue
+      const poolCents = pool.map(b => cents(b.amt))
+      if (poolCents.reduce((s, c) => s + c, 0) < target) continue // somme insuffisante
+      const idxs = subsetSum(poolCents, target)
+      if (!idxs || idxs.length < 2) continue
+      const parts = idxs.map(i => pool[i])
+      p.used = true
+      for (const b of parts) { b._consumed = true; if (b._p) b._p.used = false } // libère l'espèces faussement matchée
+      splits.push({ amount: p.a, dateStr: frOf(day), odooHeure: hhmm(p.t - offForP(p)), parts })
+    }
+    suspects = suspects.filter(b => !b._consumed)
+    intro = intro.filter(b => !b._consumed)
+    oNone = oNone.filter(b => !b._consumed)
+  }
 
   // Résumé par jour : carte relevé vs carte Odoo
   const dayBank = {}, dayOdoo = {}
@@ -207,6 +256,7 @@ function runMatch(bank, raw) {
   for (const s of oSusp) ledger.push({ t: s.t, dateStr: s.dateStr, heureStr: s.heureStr, online: true, cmiAmt: s.amt, cmiSys: s.sys, odooAmt: s.amt, odooCat: s.m, odooHeure: s.odooHeure, status: 'mismatch', amt: s.amt, key: s.key })
   for (const b of [...intro, ...oNone]) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: null, odooCat: null, odooHeure: '', status: 'cmi-only', amt: b.amt, key: b.key })
   for (const r of reverse) ledger.push({ t: r.t, dateStr: r.dateStr, heureStr: r.heureStr, online: false, cmiAmt: null, cmiSys: '', odooAmt: r.amt, odooCat: 'c', odooHeure: r.heureStr, status: 'odoo-only', amt: r.amt, key: r.key })
+  for (const sp of splits) for (const b of sp.parts) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: sp.amount, odooCat: 'c', odooHeure: sp.odooHeure, status: 'split', amt: b.amt, key: b.key })
   ledger.sort((a, b) => a.t - b.t)
 
   const totalBrut = bank.reduce((s, b) => s + b.amt, 0)
@@ -214,7 +264,7 @@ function runMatch(bank, raw) {
 
   const times = bank.map(b => b.t)
   return {
-    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily, reverse, ledger,
+    total: bank.length, okC, suspects, intro, onl, oOk, oSusp, oNone, daily, reverse, ledger, splits,
     pdfAdded: noTime.length,
     commission: Math.round((totalBrut - totalNet) * 100) / 100, totalBrut: Math.round(totalBrut),
     from: new Date(Math.min(...times)).toISOString().slice(0, 10),
@@ -281,6 +331,7 @@ const LEDGER_ST = {
   mismatch: ['🚨 Écart', 'bg-danger-bg text-danger'],
   'cmi-only': ['❔ Absent d’Odoo', 'bg-warn-bg text-warn-ink'],
   'odoo-only': ['🔄 Absent du relevé', 'bg-cream-deep text-ink'],
+  split: ['🔗 Partagé', 'bg-success-bg text-success'],
 }
 function methodLabel(c) { return c === 'c' ? 'Carte' : (LABEL[c] || '—') }
 function LedgerTable({ list }) {
@@ -538,6 +589,22 @@ export default function RapprochementView({ user }) {
               <p className="text-[13px] text-ink-mute">Aucune carte enregistrée autrement (espèces / chèque / compte client…) sur ce relevé. 🎉</p>
             )}
           </div>
+
+          {res.splits.length > 0 && (
+            <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
+              <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔗 Paiements partagés ({res.splits.length})</h3>
+              <p className="text-[13px] text-ink-mute mb-2">Un ticket payé en plusieurs cartes : Odoo a un seul montant, la banque en a plusieurs qui s'additionnent. Réconciliés automatiquement (donc pas de fausse alerte).</p>
+              <div className="flex flex-col gap-1.5">
+                {res.splits.slice().sort((a, b) => isoOf(a.dateStr).localeCompare(isoOf(b.dateStr))).map((sp, i) => (
+                  <div key={i} className="text-[13px] bg-cream-deep rounded-lg px-3 py-2">
+                    <span className="text-ink-mute">📅 {sp.dateStr} · {sp.odooHeure} — </span>
+                    <b className="text-success">{fmt(sp.amount)} dh</b>
+                    <span className="text-ink"> = {sp.parts.slice().sort((a, b) => b.amt - a.amt).map(p => fmt(p.amt)).join(' + ')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="bg-cream-warm border border-line rounded-2xl p-[18px] mb-4">
             <h3 className="font-fraunces italic text-[20px] text-ink mb-1">❔ Introuvables à ±20 min ({res.intro.length})</h3>
