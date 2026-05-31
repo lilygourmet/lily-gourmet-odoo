@@ -242,7 +242,7 @@ export default function InboxView({ user, initialConversationId }) {
                     }
                   }}
                   className={`w-full text-left rounded-xl border p-3 transition-colors shadow-sm hover:border-bordeaux ${
-                    isSelected ? 'bg-bordeaux/10 border-bordeaux' : isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'
+                    isSelected ? 'bg-line/50 border-ink' : isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'
                   }`}
                 >
                   <div className="flex items-start gap-3">
