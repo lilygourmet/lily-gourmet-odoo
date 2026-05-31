@@ -222,6 +222,11 @@ export default function InboxView({ user, initialConversationId }) {
               const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
               const u = conversationUrgency(c)
               const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'
+              // Étiquette pleine selon l'état : rouge (en attente) / ambre (à relancer) / gris (fermée)
+              const badgeCls = u?.tone === 'urgent' ? 'bg-bordeaux text-cream'
+                : u?.tone === 'warn' ? 'bg-amber-500 text-white'
+                : c.status === 'fermee' ? 'bg-line/60 text-ink-soft'
+                : st.cls
               const seenRef = seenAt[c.id] || visitedAtRef.current
               const isNew = c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef)
               const isSelected = c.id === selectedId
@@ -239,14 +244,13 @@ export default function InboxView({ user, initialConversationId }) {
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
                           {isNew && <span className="w-2 h-2 rounded-full bg-bordeaux flex-shrink-0" />}
-                          {u && <span className="flex-shrink-0">{u.emoji}</span>}
                           <span className="truncate">{c.client_name || c.client_phone}</span>
                         </span>
                         <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-[11px] text-ink-mute">{c.client_phone}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${st.cls}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${badgeCls}`}>
                           {st.text}{c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}
                         </span>
                       </div>
