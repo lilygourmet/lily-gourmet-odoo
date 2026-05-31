@@ -112,6 +112,15 @@ export async function setConversationUnread(conversationId, value) {
   if (error) throw error
 }
 
+/** Marque une conversation comme lue : enlève l'étiquette + remet le compteur à 0. */
+export async function markConversationRead(conversationId) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ marked_unread: false, unread_count: 0 })
+    .eq('id', conversationId)
+  if (error) throw error
+}
+
 /**
  * Recherche dans le CONTENU des messages : renvoie les ids de conversations
  * dont au moins un message contient le terme. Limité pour rester rapide.

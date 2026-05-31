@@ -128,6 +128,8 @@ async function handleInbound(req, res) {
     const patch = { last_message_at: sentAt, updated_at: new Date().toISOString() }
     if (senderType === 'client') {
       patch.last_inbound_at = sentAt
+      // Compteur "non lus" type WhatsApp : +1 à chaque message client.
+      patch.unread_count = (conv.unread_count || 0) + 1
       // Un message client rouvre une conversation fermée → elle redevient
       // "à prendre" (non assignée) pour forcer quelqu'un à la reprendre.
       if (conv.status === 'fermee') { patch.status = 'non_assignee'; patch.assigned_to = null }
@@ -617,7 +619,7 @@ async function rehostWatiMedia(supabase, watiUrl) {
 async function getOrCreateConversation(supabase, phone, name) {
   const { data: existing } = await supabase
     .from('conversations')
-    .select('id, client_name, status, assigned_to')
+    .select('id, client_name, status, assigned_to, unread_count')
     .eq('client_phone', phone)
     .maybeSingle()
   if (existing) return existing
@@ -625,14 +627,14 @@ async function getOrCreateConversation(supabase, phone, name) {
   const { data: created, error } = await supabase
     .from('conversations')
     .insert({ client_phone: phone, client_name: name || null, status: 'non_assignee' })
-    .select('id, client_name, status, assigned_to')
+    .select('id, client_name, status, assigned_to, unread_count')
     .single()
   if (error) {
     // Course possible : un autre webhook a créé le fil au même instant
     if (error.code === '23505') {
       const { data: again } = await supabase
         .from('conversations')
-        .select('id, client_name, status, assigned_to')
+        .select('id, client_name, status, assigned_to, unread_count')
         .eq('client_phone', phone)
         .single()
       return again
