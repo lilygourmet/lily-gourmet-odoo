@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart3, Briefcase, Banknote, Search, Settings, Landmark } from 'lucide-react'
+import { BarChart3, Briefcase, Banknote, Search, Settings, Landmark, Scale } from 'lucide-react'
 import EnveloppesView from './EnveloppesView'
 import SuiviView from './SuiviView'
 import CaissesGereesView from './CaissesGereesView'
@@ -7,14 +7,16 @@ import SalairesView from './SalairesView'
 import ParametresView from './ParametresView'
 import MeriemUserView from './MeriemUserView'
 import RechercheView from './RechercheView'
+import RapprochementView from './RapprochementView'
 import AppHeader from '../AppHeader'
 
 const TABS = [
-  { key: 'enveloppes', label: 'Enveloppes',     Icon: BarChart3 },
-  { key: 'caisses',    label: 'Caisses gérées', Icon: Briefcase },
-  { key: 'salaires',   label: 'Salaires',       Icon: Banknote },
-  { key: 'recherche',  label: 'Recherche',      Icon: Search },
-  { key: 'params',     label: 'Paramètres',     Icon: Settings },
+  { key: 'enveloppes',    label: 'Enveloppes',     Icon: BarChart3 },
+  { key: 'caisses',       label: 'Caisses gérées', Icon: Briefcase },
+  { key: 'salaires',      label: 'Salaires',       Icon: Banknote },
+  { key: 'rapprochement', label: 'Rapprochement',  Icon: Scale },
+  { key: 'recherche',     label: 'Recherche',      Icon: Search },
+  { key: 'params',        label: 'Paramètres',     Icon: Settings },
 ]
 
 const STORAGE_KEY = 'caisse_active_tab'
@@ -88,10 +90,11 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
           {envSub === 'suivi'       && <SuiviView user={user} />}
         </>
       )}
-      {tab === 'caisses'    && <CaissesGereesView user={user} />}
-      {tab === 'salaires'   && <SalairesView user={user} />}
-      {tab === 'recherche'  && <RechercheView user={user} />}
-      {tab === 'params'     && <ParametresView user={user} />}
+      {tab === 'caisses'      && <CaissesGereesView user={user} />}
+      {tab === 'salaires'     && <SalairesView user={user} />}
+      {tab === 'rapprochement' && <RapprochementView />}
+      {tab === 'recherche'    && <RechercheView user={user} />}
+      {tab === 'params'       && <ParametresView user={user} />}
       </div>
     </>
   )

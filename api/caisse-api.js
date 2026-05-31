@@ -232,12 +232,50 @@ async function actionSyncPos() {
 }
 
 // ---- Handler principal ----
+// Catégorise un nom de moyen de paiement Odoo en code court.
+function catOfMethod(name) {
+  if (/carte/i.test(name)) return 'c'           // Carte bancaire
+  if (/esp/i.test(name)) return 'e'             // Espèces
+  if (/customer|compte client/i.test(name)) return 'k' // Customer Account
+  if (/ch[eè]/i.test(name)) return 'q'          // Chèque
+  if (/vir/i.test(name)) return 'v'             // Virement bancaire
+  if (/credit/i.test(name)) return 'r'          // Credit / avoir
+  return 'a'
+}
+
+// ---- Action: pos-payments (lecture seule, pour le rapprochement bancaire) ----
+// Renvoie les paiements POS d'une période sous forme compacte [montant, tMs, cat].
+async function actionPosPayments(req) {
+  const from = req.query?.from || req.body?.from
+  const to   = req.query?.to   || req.body?.to
+  if (!from || !to) throw new Error('Paramètres from et to requis (YYYY-MM-DD)')
+  const uid = await odooAuth()
+  const ids = await odooExec(uid, 'pos.payment', 'search',
+    [[['payment_date', '>=', `${from} 00:00:00`], ['payment_date', '<=', `${to} 23:59:59`]]],
+    { limit: 100000 })
+  const payments = []
+  for (let i = 0; i < ids.length; i += 2000) {
+    const chunk = await odooExec(uid, 'pos.payment', 'read',
+      [ids.slice(i, i + 2000), ['amount', 'payment_method_id', 'payment_date']])
+    for (const p of chunk) {
+      const name = Array.isArray(p.payment_method_id) ? p.payment_method_id[1] : ''
+      payments.push([
+        Math.round((Number(p.amount) || 0) * 100) / 100,
+        Date.parse(p.payment_date.replace(' ', 'T') + 'Z'),
+        catOfMethod(name),
+      ])
+    }
+  }
+  return { payments }
+}
+
 export default async function handler(req, res) {
   try {
     const action = req.query?.action || req.body?.action || 'sync-pos'
     let result
     if (action === 'list-pos') result = await actionListPos()
     else if (action === 'sync-pos') result = await actionSyncPos()
+    else if (action === 'pos-payments') result = await actionPosPayments(req)
     else return res.status(400).json({ error: 'Unknown action: ' + action })
     return res.status(200).json(result)
   } catch (e) {
