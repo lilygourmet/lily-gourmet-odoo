@@ -86,7 +86,7 @@ function dispoTypeConge(solde, type) {
       .reduce((s, e) => s + Number(e.jours), 0)
     const total = (solde.recup || 0) + allocAutre
     if (total <= 0) return undefined            // pas d'allocation ni gain
-    return Math.max(0, total - (solde.prisType?.autre || 0))
+    return Math.max(0, total - (solde.prisType?.autre || 0) - (solde.prisType?.recup || 0))
   }
   // Événements : mariage / naissance / deces / circoncision / maternite
   const alloc = (solde.events?.detail || [])
@@ -1104,8 +1104,7 @@ function joursDecomptesCalcul(c, emp) {
   const nbCal = nbJours(c.date_debut, c.date_fin)
   if (!emp) return nbCal
   const cat = classifierConge(c)
-  if (cat === 'recup') return 0
-  if (cat === 'annuel') return Math.max(0, nbCal - compteJoursOffFixesPeriode(emp, c.date_debut, c.date_fin))
+  if (cat === 'annuel' || cat === 'recup') return Math.max(0, nbCal - compteJoursOffFixesPeriode(emp, c.date_debut, c.date_fin))
   return nbCal
 }
 

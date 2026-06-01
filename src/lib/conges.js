@@ -167,13 +167,12 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
 function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
   const ref = new Date(refDate + 'T00:00:00')
   const yearStart = `${ref.getFullYear()}-01-01`
-  const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, maternite: 0, autre: 0 }
+  const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, maternite: 0, autre: 0, recup: 0 }
   for (const c of congesValides) {
     if (c.employe_id !== emp.id) continue
     if (c.statut !== 'valide') continue
     if (c.date_fin < yearStart || c.date_debut > refDate) continue
     const t = (c.type_conge || '').toLowerCase()
-    if (t.includes('récup') || t.includes('recup')) continue   // les récup s'ajoutent au solde, pas un congé pris
 
     const debut = c.date_debut < yearStart ? yearStart : c.date_debut
     const fin   = c.date_fin   > refDate    ? refDate   : c.date_fin
@@ -186,6 +185,7 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     if (t === 'maladie_courte')             category = 'maladie_courte'
     else if (t === 'maladie_longue')        category = 'maladie_longue'
     else if (t.includes('maternit'))        category = 'maternite'
+    else if (t.includes('récup') || t.includes('recup')) category = 'recup'
     else if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
       // Durée totale du congé maladie (pas seulement la partie clippée)
       const dureeTotale = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
@@ -204,8 +204,8 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     if (conge_entier && c.jours_decomptes !== null && c.jours_decomptes !== undefined) {
       compte = Number(c.jours_decomptes)
     } else {
-      // Pour 'annuel' on retire le jour off fixe (règle Layla déjà discutée)
-      compte = category === 'annuel' ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) : nb
+      // Pour 'annuel' et 'recup' on retire le jour off fixe (règle Layla déjà discutée)
+      compte = (category === 'annuel' || category === 'recup') ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) : nb
     }
     out[category] = (out[category] || 0) + compte
   }
@@ -284,12 +284,12 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
   const prisType = joursPrisParTypeAnnee(emp, congesValides, refDate)
   const prisAnnuel = prisType.annuel
   const prisEvents = prisType.mariage + prisType.naissance + prisType.deces + prisType.circoncision + prisType.maternite + prisType.autre
+  const prisRecup  = prisType.recup || 0   // récup prises : se déduisent du total (la récup gagnée y est ajoutée)
 
   // 8) TOTAL ALLOCATIONS = annuel FULL + reliquat valide + événements applicables.
-  //    DISPO = total + récup − pris (pas de pro-rata mensuel : l'employé
-  //    peut consommer dès le début de l'année).
+  //    DISPO = total + récup gagnée − pris (annuel + événements + récup prises).
   const totalAllocations = annuelEffectif + reliquatN1 + eventsApplicable
-  const dispo = totalAllocations + recup - prisAnnuel - prisEvents
+  const dispo = totalAllocations + recup - prisAnnuel - prisEvents - prisRecup
 
   // 9) MALADIE ≤ 3 j : pool séparé (6 j/an par défaut)
   const maladieAlloue = sumByType.maladie_courte || 0
@@ -303,7 +303,7 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
 
   return {
     acquis, reliquatN1, recup,
-    pris: prisAnnuel + prisEvents,
+    pris: prisAnnuel + prisEvents + prisRecup,
     prisAnnuel,
     prisEvents,
     dispo: Math.max(0, dispo),
