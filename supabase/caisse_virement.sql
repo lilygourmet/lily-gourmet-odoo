@@ -17,3 +17,17 @@ ALTER TABLE caisse_enveloppes DROP CONSTRAINT IF EXISTS caisse_enveloppes_odoo_s
 -- Anti-doublon des virements : 1 enveloppe max par paiement Odoo
 CREATE UNIQUE INDEX IF NOT EXISTS idx_enveloppes_odoo_payment
   ON caisse_enveloppes(odoo_payment_id) WHERE odoo_payment_id IS NOT NULL;
+
+-- Autoriser la valeur 'virement' dans la contrainte payment_method
+-- (la contrainte n'autorisait que cash/cheque — ajoutée à la main en base)
+ALTER TABLE caisse_enveloppes DROP CONSTRAINT IF EXISTS caisse_enveloppes_payment_method_check;
+ALTER TABLE caisse_enveloppes ADD CONSTRAINT caisse_enveloppes_payment_method_check
+  CHECK (payment_method IN ('cash', 'cheque', 'virement'));
+
+-- L'unique (session, moyen) bloquait plusieurs virements par session.
+-- On le remplace par un unique partiel qui ne concerne QUE espèces/chèques
+-- (les virements sont dédoublonnés par odoo_payment_id ci-dessus).
+ALTER TABLE caisse_enveloppes DROP CONSTRAINT IF EXISTS caisse_enveloppes_odoo_session_method_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enveloppes_session_method_cashcheque
+  ON caisse_enveloppes(odoo_session_id, payment_method)
+  WHERE payment_method IN ('cash', 'cheque');
