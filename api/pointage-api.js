@@ -471,6 +471,13 @@ async function actionSyncLeaves({ mois, annee }) {
     .gte('date_fin', debut)
     .not('odoo_id', 'is', null)
 
+  // Anti-doublon : ne pas réinsérer un congé déjà présent (ex. congé verrouillé, odoo_id vidé)
+  const { data: dejaLa } = await sb.from('conges')
+    .select('employe_id, date_debut, date_fin')
+    .lt('date_debut', fin)
+    .gte('date_fin', debut)
+  const clesExistantes = new Set((dejaLa || []).map(c => `${c.employe_id}|${c.date_debut}|${c.date_fin}`))
+
   const rows = []
   let unmatched = 0
   for (const lv of leaves) {
@@ -478,11 +485,14 @@ async function actionSyncLeaves({ mois, annee }) {
     const empNameOdoo = Array.isArray(lv.employee_id) ? lv.employee_id[1] : null
     const match = findBestMatch(empNameOdoo, employesDb, 0.70)
     if (!match) { unmatched++; continue }
+    const dd = (lv.date_from || '').slice(0, 10)
+    const df = (lv.date_to || '').slice(0, 10)
+    if (clesExistantes.has(`${match.employe.id}|${dd}|${df}`)) continue
     const typeName = Array.isArray(lv.holiday_status_id) ? lv.holiday_status_id[1] : null
     rows.push({
       employe_id: match.employe.id,
-      date_debut: (lv.date_from || '').slice(0, 10),
-      date_fin: (lv.date_to || '').slice(0, 10),
+      date_debut: dd,
+      date_fin: df,
       type_conge: typeName,
       odoo_id: lv.id,
       notes: lv.name,
@@ -536,6 +546,13 @@ async function actionSyncLeavesYear({ annee }) {
     .lte('date_debut', fin)
     .not('odoo_id', 'is', null)
 
+  // Anti-doublon : ne pas réinsérer un congé déjà présent (ex. congé verrouillé, odoo_id vidé)
+  const { data: dejaLa } = await sb.from('conges')
+    .select('employe_id, date_debut, date_fin')
+    .gte('date_fin', debut)
+    .lte('date_debut', fin)
+  const clesExistantes = new Set((dejaLa || []).map(c => `${c.employe_id}|${c.date_debut}|${c.date_fin}`))
+
   const rows = []
   let unmatched = 0
   for (const lv of leaves) {
@@ -543,11 +560,14 @@ async function actionSyncLeavesYear({ annee }) {
     const empNameOdoo = Array.isArray(lv.employee_id) ? lv.employee_id[1] : null
     const match = findBestMatch(empNameOdoo, employesDb, 0.70)
     if (!match) { unmatched++; continue }
+    const dd = (lv.date_from || '').slice(0, 10)
+    const df = (lv.date_to   || '').slice(0, 10)
+    if (clesExistantes.has(`${match.employe.id}|${dd}|${df}`)) continue
     const typeName = Array.isArray(lv.holiday_status_id) ? lv.holiday_status_id[1] : null
     rows.push({
       employe_id: match.employe.id,
-      date_debut: (lv.date_from || '').slice(0, 10),
-      date_fin:   (lv.date_to   || '').slice(0, 10),
+      date_debut: dd,
+      date_fin:   df,
       type_conge: typeName,
       odoo_id:    lv.id,
       notes:      lv.name,
