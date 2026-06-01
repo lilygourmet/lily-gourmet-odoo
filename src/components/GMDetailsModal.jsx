@@ -221,14 +221,6 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
               <div className="font-mono text-[10px] tracking-wider uppercase text-ink-mute mb-1.5">Tête</div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setTetePosition('haut')}
-                  className={`flex-1 px-3 py-1.5 rounded-full text-[12px] transition-colors ${
-                    tetePosition === 'haut'
-                      ? 'bg-bordeaux text-cream border border-bordeaux'
-                      : 'bg-cream-warm text-ink-mute border border-line'
-                  }`}
-                >En haut</button>
-                <button
                   onClick={() => setTetePosition('bas')}
                   className={`flex-1 px-3 py-1.5 rounded-full text-[12px] transition-colors ${
                     tetePosition === 'bas'
@@ -236,6 +228,14 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
                       : 'bg-cream-warm text-ink-mute border border-line'
                   }`}
                 >En bas</button>
+                <button
+                  onClick={() => setTetePosition('haut')}
+                  className={`flex-1 px-3 py-1.5 rounded-full text-[12px] transition-colors ${
+                    tetePosition === 'haut'
+                      ? 'bg-bordeaux text-cream border border-bordeaux'
+                      : 'bg-cream-warm text-ink-mute border border-line'
+                  }`}
+                >En haut</button>
               </div>
             </div>
           )}
