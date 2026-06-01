@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { RefreshCw, Banknote, ScrollText, Wallet, Coffee, ShoppingBag, MapPin } from 'lucide-react'
+import { RefreshCw, Banknote, ScrollText, Wallet, Coffee, ShoppingBag, MapPin, ArrowLeftRight } from 'lucide-react'
 import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate, loadSalairesYear } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, envStyle, COLOR_PALETTE } from './_helpers'
 import AttributionModal from './modals/AttributionModal'
@@ -159,6 +159,13 @@ export default function EnveloppesView({ user }) {
         >
           <ScrollText size={15} /> Chèques
         </button>
+        <button
+          type="button"
+          onClick={() => setPaymentMethodFilter('virement')}
+          style={{ ...(paymentMethodFilter === 'virement' ? toggleActiveStyle : toggleInactiveStyle), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        >
+          <ArrowLeftRight size={15} /> Virements
+        </button>
       </div>
 
       {/* Onglets mois */}
@@ -195,7 +202,7 @@ export default function EnveloppesView({ user }) {
 
       {!loading && sources.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>
-          Aucune enveloppe {paymentMethodFilter === 'cheque' ? 'chèque' : 'espèces'} pour {monthDisplay} {year}.<br />
+          Aucune enveloppe {paymentMethodFilter === 'cheque' ? 'chèque' : paymentMethodFilter === 'virement' ? 'virement' : 'espèces'} pour {monthDisplay} {year}.<br />
           Cliquez sur <strong>Synchroniser</strong> pour récupérer les sessions POS fermées d'Odoo.
         </div>
       )}
@@ -279,6 +286,9 @@ function EnveloppeCard({ env, onClick, salaireMap = {} }) {
     }}>
       <div style={{ fontSize: 11, opacity: 0.85 }}>{fmtDateCourte(env.session_date)}</div>
       <div style={{ fontSize: 15, fontWeight: 500, margin: '2px 0 3px' }}>{fmtMoney(env.amount_cash)}</div>
+      {env.virement_client && (
+        <div style={{ fontSize: 11, opacity: 0.95, marginBottom: 3 }}>{env.virement_client}</div>
+      )}
       <div style={{ fontSize: 11, opacity: 0.95, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         {env.destinataire ? env.destinataire.name : salBenef ? <><Wallet size={11} /> Salaire {salBenef}</> : 'À affecter'}
       </div>

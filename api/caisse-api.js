@@ -12,6 +12,7 @@ const SUPA_URL      = process.env.VITE_SUPABASE_URL
 const SUPA_SR_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CASH_METHOD   = process.env.ODOO_POS_CASH_METHOD_NAME || 'Espèces'
 const CHEQUE_METHOD = process.env.ODOO_POS_CHEQUE_METHOD_NAME || 'Chèque'
+const VIREMENT_METHOD = process.env.ODOO_POS_VIREMENT_METHOD_NAME || 'Virement bancaire'
 
 const sb = createClient(SUPA_URL, SUPA_SR_KEY)
 
@@ -155,30 +156,35 @@ async function actionSyncPos() {
 
   let created = 0, skipped = 0
   for (const sess of sessions) {
-    // On charge les enveloppes existantes pour CETTE session (cash + cheque séparément)
+    // On charge les enveloppes existantes pour CETTE session (cash + cheque + virements)
     const { data: existingRows } = await sb
       .from('caisse_enveloppes')
-      .select('id, payment_method')
+      .select('id, payment_method, odoo_payment_id')
       .eq('odoo_session_id', sess.id)
     const existingMethods = new Set((existingRows || []).map(r => r.payment_method))
+    const existingPaymentIds = new Set((existingRows || []).filter(r => r.odoo_payment_id).map(r => r.odoo_payment_id))
 
     const paymentIds = await odooExec(uid, 'pos.payment', 'search', [[['session_id', '=', sess.id]]])
     if (!paymentIds || paymentIds.length === 0) continue
 
-    const payments = await odooExec(uid, 'pos.payment', 'read', [paymentIds, ['amount', 'payment_method_id']])
+    const payments = await odooExec(uid, 'pos.payment', 'read', [paymentIds, ['amount', 'payment_method_id', 'pos_order_id']])
     let cashTotal = 0
     let chequeTotal = 0
+    const virements = [] // { id, amount, orderId } — 1 enveloppe par virement client
     for (const p of payments) {
       const pmName = Array.isArray(p.payment_method_id) ? p.payment_method_id[1] : ''
       if (!pmName) continue
       const pmLower = pmName.toLowerCase()
       const cashLower = CASH_METHOD.toLowerCase()
       const chequeLower = CHEQUE_METHOD.toLowerCase()
+      const virementLower = VIREMENT_METHOD.toLowerCase()
       // Match par début (3 lettres mini) — robuste aux variations Espèces/Especes/Cash/etc.
       if (pmLower.includes(cashLower.slice(0, 3))) {
         cashTotal += Number(p.amount) || 0
       } else if (pmLower.includes(chequeLower.slice(0, 3)) || pmLower.includes('check')) {
         chequeTotal += Number(p.amount) || 0
+      } else if (pmLower.includes(virementLower.slice(0, 3))) {
+        virements.push({ id: p.id, amount: Number(p.amount) || 0, orderId: Array.isArray(p.pos_order_id) ? p.pos_order_id[0] : null })
       }
     }
 
@@ -220,6 +226,36 @@ async function actionSyncPos() {
       else console.error('[sync-pos] cheque insert:', insErr.message)
     } else if (chequeTotal > 0 && existingMethods.has('cheque')) {
       skipped++
+    }
+
+    // VIREMENTS : 1 enveloppe par paiement client (auto-affectée à Banque)
+    const newVirements = virements.filter(v => v.amount > 0 && !existingPaymentIds.has(v.id))
+    if (newVirements.length > 0) {
+      // Récupère le nom du client (partenaire de la commande POS)
+      const orderIds = [...new Set(newVirements.map(v => v.orderId).filter(Boolean))]
+      const nameByOrder = {}
+      if (orderIds.length > 0) {
+        const orders = await odooExec(uid, 'pos.order', 'read', [orderIds, ['partner_id']])
+        for (const o of orders) nameByOrder[o.id] = Array.isArray(o.partner_id) ? o.partner_id[1] : null
+      }
+      for (const v of newVirements) {
+        const insertObj = {
+          odoo_session_id: sess.id,
+          odoo_payment_id: v.id,
+          source,
+          session_date: sessionDate,
+          amount_cash: v.amount,
+          payment_method: 'virement',
+          virement_client: v.orderId ? (nameByOrder[v.orderId] || null) : null,
+        }
+        if (banqueId) {
+          insertObj.destinataire_id = banqueId
+          insertObj.assigned_at = new Date().toISOString()
+        }
+        const { error: insErr } = await sb.from('caisse_enveloppes').insert(insertObj)
+        if (!insErr) created++
+        else console.error('[sync-pos] virement insert:', insErr.message)
+      }
     }
   }
 
