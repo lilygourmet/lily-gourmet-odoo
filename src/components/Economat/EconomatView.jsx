@@ -12,6 +12,9 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const [content, setContent] = useState({ groups: [], ungrouped: [] })
   const [qty, setQty] = useState({})              // { [articleId]: number }
   const [articleInfo, setArticleInfo] = useState({}) // { [id]: { name, unit, catName } }
+  const [customLines, setCustomLines] = useState([]) // articles ajoutés à la main : { name, unit, qty, catName }
+  const [customName, setCustomName] = useState('')
+  const [customUnit, setCustomUnit] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingContent, setLoadingContent] = useState(false)
   const [showRecap, setShowRecap] = useState(false)
@@ -72,22 +75,50 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
     })
   }
 
-  const selectedCount = Object.keys(qty).length
-  const totalUnits = useMemo(() => Object.values(qty).reduce((s, n) => s + n, 0), [qty])
+  function addCustomLine() {
+    const name = customName.trim()
+    if (!name) return
+    const catName = categories.find(x => x.id === activeCat)?.name || ''
+    setCustomLines(prev => [...prev, { name, unit: customUnit.trim(), qty: 1, catName }])
+    setCustomName('')
+    setCustomUnit('')
+  }
+
+  function setCustomQty(idx, n) {
+    setCustomLines(prev => {
+      if (n <= 0) return prev.filter((_, i) => i !== idx)
+      return prev.map((c, i) => (i === idx ? { ...c, qty: n } : c))
+    })
+  }
+
+  const selectedCount = Object.keys(qty).length + customLines.length
+  const totalUnits = useMemo(
+    () => Object.values(qty).reduce((s, n) => s + n, 0) + customLines.reduce((s, c) => s + c.qty, 0),
+    [qty, customLines]
+  )
 
   async function handleSend() {
-    const lines = Object.entries(qty).map(([id, n]) => ({
+    const catalogLines = Object.entries(qty).map(([id, n]) => ({
       articleId: Number(id),
       qty: n,
       name: articleInfo[id]?.name || 'Article',
       unit: articleInfo[id]?.unit || '',
       catName: articleInfo[id]?.catName || '',
     }))
+    const freeLines = customLines.map(c => ({
+      articleId: null,
+      qty: c.qty,
+      name: c.name,
+      unit: c.unit,
+      catName: c.catName,
+    }))
+    const lines = [...catalogLines, ...freeLines]
     if (lines.length === 0) return
     setSending(true)
     try {
       await createDemande({ user, categoryId: activeCat, lines })
       setQty({})
+      setCustomLines([])
       setShowRecap(false)
       setFlash('Demande envoyée à l\'économe')
       setTimeout(() => setFlash(''), 4000)
@@ -199,6 +230,58 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                 </div>
               </div>
             )}
+
+            {/* Ajouter un article qui n'est pas dans la liste (usage unique) */}
+            <div>
+              <div className="lg-mono mb-2" style={{ color: '#8a7a70' }}>Pas dans la liste ?</div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  value={customName}
+                  onChange={e => setCustomName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addCustomLine() }}
+                  placeholder="Nom de l'article"
+                  className="flex-1 min-w-0 bg-white rounded-xl border border-line/70 px-3 py-2 text-[13px] text-ink"
+                />
+                <input
+                  value={customUnit}
+                  onChange={e => setCustomUnit(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addCustomLine() }}
+                  placeholder="Unité"
+                  className="w-20 bg-white rounded-xl border border-line/70 px-2 py-2 text-[13px] text-ink"
+                />
+                <button
+                  onClick={addCustomLine}
+                  disabled={!customName.trim()}
+                  className="w-9 h-9 rounded-full bg-bordeaux text-cream flex items-center justify-center text-[18px] disabled:opacity-30 hover:bg-bordeaux-deep active:scale-95 transition-transform flex-shrink-0"
+                  aria-label="Ajouter"
+                >+</button>
+              </div>
+              {customLines.length > 0 && (
+                <div className="space-y-1.5">
+                  {customLines.map((c, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-white rounded-xl border border-line/70 border-l-4 border-l-bordeaux p-2.5 shadow-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] text-ink leading-tight">{c.name}</div>
+                        {c.unit && <div className="text-[11px] text-ink-mute mt-0.5">{c.unit}</div>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => setCustomQty(i, c.qty - 1)}
+                          className="w-9 h-9 rounded-full border border-line flex items-center justify-center text-[18px] text-ink-soft hover:border-bordeaux active:bg-cream-warm"
+                          aria-label="Retirer"
+                        >−</button>
+                        <span className="min-w-[24px] text-center text-[15px] font-semibold text-bordeaux">{c.qty}</span>
+                        <button
+                          onClick={() => setCustomQty(i, c.qty + 1)}
+                          className="w-9 h-9 rounded-full bg-bordeaux text-cream flex items-center justify-center text-[18px] hover:bg-bordeaux-deep active:scale-95 transition-transform"
+                          aria-label="Ajouter"
+                        >+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -224,7 +307,9 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
         <RecapModal
           qty={qty}
           articleInfo={articleInfo}
+          customLines={customLines}
           onChange={setArticleQty}
+          onRemoveCustom={i => setCustomQty(i, 0)}
           onClose={() => setShowRecap(false)}
           onSend={handleSend}
           sending={sending}
@@ -320,7 +405,7 @@ function ArticleRow({ article, qty, onChange }) {
   )
 }
 
-function RecapModal({ qty, articleInfo, onChange, onClose, onSend, sending }) {
+function RecapModal({ qty, articleInfo, customLines = [], onChange, onRemoveCustom, onClose, onSend, sending }) {
   const lines = Object.entries(qty).map(([id, n]) => ({
     id,
     n,
@@ -334,6 +419,7 @@ function RecapModal({ qty, articleInfo, onChange, onClose, onSend, sending }) {
     if (!byCat[l.catName]) byCat[l.catName] = []
     byCat[l.catName].push(l)
   }
+  const isEmpty = lines.length === 0 && customLines.length === 0
 
   return (
     <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -347,32 +433,50 @@ function RecapModal({ qty, articleInfo, onChange, onClose, onSend, sending }) {
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          {lines.length === 0 ? (
+          {isEmpty ? (
             <div className="text-center text-ink-mute italic py-6">Aucun article sélectionné</div>
           ) : (
-            Object.entries(byCat).map(([catName, items]) => (
-              <div key={catName}>
-                {catName && <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-bordeaux font-bold mb-1.5">{catName}</div>}
-                <div className="space-y-1.5">
-                  {items.map(l => (
-                    <div key={l.id} className="flex items-center gap-2 text-[13px]">
-                      <span className="font-semibold text-bordeaux w-8 text-right">×{l.n}</span>
-                      <span className="flex-1 text-ink">{l.name}</span>
-                      {l.unit && <span className="text-[11px] text-ink-mute">{l.unit}</span>}
-                      <button onClick={() => onChange(l.id, 0)}
-                              className="text-ink-mute hover:text-bordeaux text-[12px] px-1" title="Retirer">✕</button>
-                    </div>
-                  ))}
+            <>
+              {Object.entries(byCat).map(([catName, items]) => (
+                <div key={catName}>
+                  {catName && <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-bordeaux font-bold mb-1.5">{catName}</div>}
+                  <div className="space-y-1.5">
+                    {items.map(l => (
+                      <div key={l.id} className="flex items-center gap-2 text-[13px]">
+                        <span className="font-semibold text-bordeaux w-8 text-right">×{l.n}</span>
+                        <span className="flex-1 text-ink">{l.name}</span>
+                        {l.unit && <span className="text-[11px] text-ink-mute">{l.unit}</span>}
+                        <button onClick={() => onChange(l.id, 0)}
+                                className="text-ink-mute hover:text-bordeaux text-[12px] px-1" title="Retirer">✕</button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+              {customLines.length > 0 && (
+                <div>
+                  <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-bordeaux font-bold mb-1.5">Ajoutés à la main</div>
+                  <div className="space-y-1.5">
+                    {customLines.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[13px]">
+                        <span className="font-semibold text-bordeaux w-8 text-right">×{c.qty}</span>
+                        <span className="flex-1 text-ink">{c.name}</span>
+                        {c.unit && <span className="text-[11px] text-ink-mute">{c.unit}</span>}
+                        <button onClick={() => onRemoveCustom(i)}
+                                className="text-ink-mute hover:text-bordeaux text-[12px] px-1" title="Retirer">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         <div className="sticky bottom-0 bg-cream/95 backdrop-blur-sm border-t border-line px-5 py-3">
           <button
             onClick={onSend}
-            disabled={sending || lines.length === 0}
+            disabled={sending || isEmpty}
             className="lg-btn w-full"
           >
             {sending ? 'Envoi...' : 'Envoyer la demande à l\'économe'}
