@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS caisse_rappro_verifies (
 
 ALTER TABLE caisse_rappro_verifies ENABLE ROW LEVEL SECURITY;
 
-DO $$ BEGIN
-  CREATE POLICY "auth all caisse_rappro_verifies" ON caisse_rappro_verifies FOR ALL TO authenticated USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- L'app utilise une auth maison (connexion en rôle « anon ») → autoriser anon + authenticated.
+DROP POLICY IF EXISTS "auth all caisse_rappro_verifies" ON caisse_rappro_verifies;
+DROP POLICY IF EXISTS "all caisse_rappro_verifies" ON caisse_rappro_verifies;
+CREATE POLICY "all caisse_rappro_verifies" ON caisse_rappro_verifies FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
