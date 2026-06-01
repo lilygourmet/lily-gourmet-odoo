@@ -126,7 +126,8 @@ function subsetSum(arr, target) {
 }
 
 function runMatch(bank, raw) {
-  const odoo = raw.map(a => ({ a: a[0], t: a[1], c: a[2], used: false }))
+  const odoo = raw.map(a => ({ a: a[0], t: a[1], c: a[2], ref: a[3] || '', pos: a[4] || '', used: false }))
+  const dOf = ms => frOf(new Date(ms).toISOString().slice(0, 10)) // date locale (jj/mm/aaaa) d'un instant Odoo
   const byAmt = new Map()
   for (const p of odoo) { if (!byAmt.has(p.a)) byAmt.set(p.a, []); byAmt.get(p.a).push(p) }
   const OFFg = detectOffset(bank, byAmt) // décalage global (secours)
@@ -159,7 +160,7 @@ function runMatch(bank, raw) {
     const pool = cartes.length ? cartes : cands
     let best = null
     for (const p of pool) { const d = Math.abs(p.t - (b.t + off)); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off), _p: best.p }) }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off), odooDate: dOf(best.p.t - off), ref: best.p.ref, pos: best.p.pos, _p: best.p }) }
     else {
       // Classement : cherche le même montant à ±3 jours pour comprendre.
       let fc = false, other = null
@@ -174,7 +175,7 @@ function runMatch(bank, raw) {
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + off)) <= D3)
     const carte = cands.find(p => p.c === 'c')
     if (carte) { carte.used = true; oOk++; okList.push({ b, p: carte }) }
-    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - off), _p: other }) } else oNone.push(b) }
+    else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - off), odooDate: dOf(other.t - off), ref: other.ref, pos: other.pos, _p: other }) } else oNone.push(b) }
   }
 
   // Lignes du PDF (complément, sans heure) : matchées par jour ± 1 j, carte d'abord.
@@ -185,7 +186,7 @@ function runMatch(bank, raw) {
     const pool = cartes.length ? cartes : cands
     let best = null
     for (const p of pool) { const d = Math.abs((p.t - off) - b.t); if (!best || d < best.d) best = { p, d } }
-    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off), _p: best.p }) }
+    if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off), odooDate: dOf(best.p.t - off), ref: best.p.ref, pos: best.p.pos, _p: best.p }) }
     else intro.push({ ...b, cls: 'none' })
   }
 
@@ -239,7 +240,7 @@ function runMatch(bank, raw) {
     const off = offForP(p)
     const loc = new Date(p.t - off), iso = loc.toISOString().slice(0, 10)
     if (iso < minDay || iso > maxDay) continue
-    reverse.push({ t: p.t - off, amt: p.a, sys: 'Carte', heureStr: loc.toISOString().slice(11, 19), dateStr: frOf(iso), key: `odoo|${iso}|${p.t}|${p.a}` })
+    reverse.push({ t: p.t - off, amt: p.a, sys: 'Carte', heureStr: loc.toISOString().slice(11, 19), dateStr: frOf(iso), ref: p.ref, pos: p.pos, key: `odoo|${iso}|${p.t}|${p.a}` })
   }
   reverse.sort((a, b) => a.t - b.t)
 
@@ -250,14 +251,16 @@ function runMatch(bank, raw) {
     cmiAmt: b.amt, cmiSys: b.sys,
     odooAmt: p ? b.amt : null, odooCat: p ? (typeof p === 'string' ? p : p.c) : null,
     odooHeure: p && typeof p !== 'string' ? hhmm(p.t - offOf(b)) : (typeof p === 'string' ? b.odooHeure : ''),
+    odooDate: p && typeof p !== 'string' ? dOf(p.t - offOf(b)) : '',
+    ref: p && typeof p !== 'string' ? p.ref : '', pos: p && typeof p !== 'string' ? p.pos : '',
     status, amt: b.amt, key: b.key,
   })
   for (const o of okList) ledger.push(cmiRow(o.b, 'ok', o.p))
-  for (const s of suspects) ledger.push({ t: s.t, dateStr: s.dateStr, heureStr: s.heureStr, online: false, cmiAmt: s.amt, cmiSys: s.sys, odooAmt: s.amt, odooCat: s.m, odooHeure: s.odooHeure, status: 'mismatch', amt: s.amt, key: s.key })
-  for (const s of oSusp) ledger.push({ t: s.t, dateStr: s.dateStr, heureStr: s.heureStr, online: true, cmiAmt: s.amt, cmiSys: s.sys, odooAmt: s.amt, odooCat: s.m, odooHeure: s.odooHeure, status: 'mismatch', amt: s.amt, key: s.key })
-  for (const b of [...intro, ...oNone]) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: null, odooCat: null, odooHeure: '', status: 'cmi-only', amt: b.amt, key: b.key })
-  for (const r of reverse) ledger.push({ t: r.t, dateStr: r.dateStr, heureStr: r.heureStr, online: false, cmiAmt: null, cmiSys: '', odooAmt: r.amt, odooCat: 'c', odooHeure: r.heureStr, status: 'odoo-only', amt: r.amt, key: r.key })
-  for (const sp of splits) for (const b of sp.parts) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: sp.amount, odooCat: 'c', odooHeure: sp.odooHeure, status: 'split', amt: b.amt, key: b.key })
+  for (const s of suspects) ledger.push({ t: s.t, dateStr: s.dateStr, heureStr: s.heureStr, online: false, cmiAmt: s.amt, cmiSys: s.sys, odooAmt: s.amt, odooCat: s.m, odooHeure: s.odooHeure, odooDate: s.odooDate, ref: s.ref, pos: s.pos, status: 'mismatch', amt: s.amt, key: s.key })
+  for (const s of oSusp) ledger.push({ t: s.t, dateStr: s.dateStr, heureStr: s.heureStr, online: true, cmiAmt: s.amt, cmiSys: s.sys, odooAmt: s.amt, odooCat: s.m, odooHeure: s.odooHeure, odooDate: s.odooDate, ref: s.ref, pos: s.pos, status: 'mismatch', amt: s.amt, key: s.key })
+  for (const b of [...intro, ...oNone]) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: null, odooCat: null, odooHeure: '', odooDate: '', ref: '', pos: '', status: 'cmi-only', amt: b.amt, key: b.key })
+  for (const r of reverse) ledger.push({ t: r.t, dateStr: r.dateStr, heureStr: r.heureStr, online: false, cmiAmt: null, cmiSys: '', odooAmt: r.amt, odooCat: 'c', odooHeure: r.heureStr, odooDate: r.dateStr, ref: r.ref, pos: r.pos, status: 'odoo-only', amt: r.amt, key: r.key })
+  for (const sp of splits) for (const b of sp.parts) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: sp.amount, odooCat: 'c', odooHeure: sp.odooHeure, odooDate: sp.dateStr, ref: '', pos: '', status: 'split', amt: b.amt, key: b.key })
   ledger.sort((a, b) => a.t - b.t)
 
   const totalBrut = bank.reduce((s, b) => s + b.amt, 0)
@@ -278,7 +281,7 @@ function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onToggle }
   const groups = {}
   for (const b of list) (groups[b.dateStr] = groups[b.dateStr] || []).push(b)
   const days = Object.keys(groups).sort((a, b) => isoOf(a).localeCompare(isoOf(b)))
-  const headers = ['Heure', odooHeure && 'Heure caisse', 'Montant', 'Réseau', methodCol && 'Tapé en caisse comme', clsCol && 'Classement', onToggle && ''].filter(Boolean)
+  const headers = ['Heure', odooHeure && 'Heure caisse', 'Montant', 'Réseau', methodCol && 'Tapé en caisse comme', clsCol && 'Classement', methodCol && 'Commande', methodCol && 'Caisse', onToggle && ''].filter(Boolean)
   const clsLabel = c => c === 'online' ? '🌐 Probable en ligne (jour ≠)' : c === 'none' ? '❓ Aucune trace' : `Tapé ${LABEL[c] || c} (autre jour)`
   return (
     <table className="w-full text-[13px] border-collapse">
@@ -303,11 +306,13 @@ function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onToggle }
                 return (
                   <tr key={day + '-' + i} className={done ? 'opacity-50 line-through' : ''}>
                     <td className="py-2 px-2 border-b border-cream-deep">{b.heureStr}</td>
-                    {odooHeure && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute">{b.odooHeure}</td>}
+                    {odooHeure && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute whitespace-nowrap">{b.odooDate ? b.odooDate + ' ' : ''}{b.odooHeure}</td>}
                     <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{fmt(b.amt)} dh</td>
                     <td className="py-2 px-2 border-b border-cream-deep">{b.sys}</td>
                     {methodCol && <td className="py-2 px-2 border-b border-cream-deep"><span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-danger-bg text-danger">{LABEL[b.m] || b.m}</span></td>}
                     {clsCol && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{clsLabel(b.cls)}</td>}
+                    {methodCol && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{b.ref || '—'}</td>}
+                    {methodCol && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{b.pos || '—'}</td>}
                     {onToggle && (
                       <td className="py-2 px-2 border-b border-cream-deep">
                         <button onClick={() => onToggle(b)} className={`px-2 py-1 rounded-md text-[11px] font-semibold no-underline ${done ? 'bg-cream-deep text-ink-mute' : 'bg-success-bg text-success'}`}>
@@ -346,7 +351,7 @@ function LedgerTable({ list, dayGap }) {
       <thead>
         <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
           <th className={th}>Heure</th><th className={th}>CMI</th><th className={th}>Réseau</th>
-          <th className={th}>Odoo</th><th className={th}>Méthode</th><th className={th}>Heure caisse</th><th className={th}>Statut</th>
+          <th className={th}>Odoo</th><th className={th}>Méthode</th><th className={th}>Heure caisse</th><th className={th}>Commande</th><th className={th}>Caisse</th><th className={th}>Statut</th>
         </tr>
       </thead>
       <tbody>
@@ -354,7 +359,7 @@ function LedgerTable({ list, dayGap }) {
           const items = groups[day].slice().sort((a, b) => a.t - b.t)
           return (
             <Fragment key={day}>
-              <tr className="bg-cream-deep"><td colSpan={7} className="py-1.5 px-2 text-[12px] font-semibold text-ink">📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''}</span>{dayGap && dayGap[day] != null && <span className={`font-semibold ${dayGap[day] < 0 ? 'text-danger' : 'text-ink-mute'}`}> · écart {dayGap[day] >= 0 ? '+' : ''}{fmt(dayGap[day])} dh</span>}</td></tr>
+              <tr className="bg-cream-deep"><td colSpan={9} className="py-1.5 px-2 text-[12px] font-semibold text-ink">📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''}</span>{dayGap && dayGap[day] != null && <span className={`font-semibold ${dayGap[day] < 0 ? 'text-danger' : 'text-ink-mute'}`}> · écart {dayGap[day] >= 0 ? '+' : ''}{fmt(dayGap[day])} dh</span>}</td></tr>
               {items.map((r, i) => (
                 <tr key={i}>
                   <td className="py-2 px-2 border-b border-cream-deep">{r.heureStr}</td>
@@ -362,7 +367,9 @@ function LedgerTable({ list, dayGap }) {
                   <td className="py-2 px-2 border-b border-cream-deep text-ink-mute">{r.cmiSys || '—'}</td>
                   <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{r.odooAmt != null ? fmt(r.odooAmt) + ' dh' : '—'}</td>
                   <td className="py-2 px-2 border-b border-cream-deep">{r.odooCat ? methodLabel(r.odooCat) : '—'}</td>
-                  <td className="py-2 px-2 border-b border-cream-deep text-ink-mute">{r.odooHeure || '—'}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep text-ink-mute whitespace-nowrap">{r.odooDate ? r.odooDate + ' ' : ''}{r.odooHeure || (r.odooDate ? '' : '—')}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{r.ref || '—'}</td>
+                  <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{r.pos || '—'}</td>
                   <td className="py-2 px-2 border-b border-cream-deep"><span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${LEDGER_ST[r.status][1]}`}>{LEDGER_ST[r.status][0]}</span></td>
                 </tr>
               ))}
@@ -412,7 +419,7 @@ export default function RapprochementView({ user }) {
       const to = new Date(Math.max(...times) + 3 * 86400e3).toISOString().slice(0, 10)
       let payments = null
       if (useCache) {
-        const c = await idbGet('odoo')
+        const c = await idbGet('odoo2')
         if (c && c.from <= from && c.to >= to && Array.isArray(c.payments)) payments = c.payments
       }
       if (!payments) {
@@ -420,7 +427,7 @@ export default function RapprochementView({ user }) {
         const data = await r.json().catch(() => ({}))
         if (!r.ok) throw new Error(data.error || `Erreur serveur ${r.status}`)
         payments = data.payments || []
-        idbSet('odoo', { payments, from, to })
+        idbSet('odoo2', { payments, from, to })
       }
       setRes(runMatch(bank, payments))
       idbSet('bank', { excel: excelRef.current, pdf: pdfRef.current, names })
@@ -434,7 +441,7 @@ export default function RapprochementView({ user }) {
   function reset() {
     excelRef.current = []; pdfRef.current = []
     setRes(null); setFileNames([]); setErr(''); setSearch('')
-    idbDel('bank'); idbDel('odoo')
+    idbDel('bank'); idbDel('odoo'); idbDel('odoo2')
     try { localStorage.removeItem('rappro_bank_v1'); localStorage.removeItem('rappro_odoo_v1') } catch { /* ancien cache */ }
   }
 

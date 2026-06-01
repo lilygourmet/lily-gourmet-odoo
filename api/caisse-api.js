@@ -244,7 +244,8 @@ function catOfMethod(name) {
 }
 
 // ---- Action: pos-payments (lecture seule, pour le rapprochement bancaire) ----
-// Renvoie les paiements POS d'une période sous forme compacte [montant, tMs, cat].
+// Renvoie les paiements POS d'une période sous forme compacte
+// [montant, tMs, cat, refCommande, pointDeVente].
 async function actionPosPayments(req) {
   const from = req.query?.from || req.body?.from
   const to   = req.query?.to   || req.body?.to
@@ -253,18 +254,30 @@ async function actionPosPayments(req) {
   const ids = await odooExec(uid, 'pos.payment', 'search',
     [[['payment_date', '>=', `${from} 00:00:00`], ['payment_date', '<=', `${to} 23:59:59`]]],
     { limit: 100000 })
-  const payments = []
+  const raw = []
   for (let i = 0; i < ids.length; i += 2000) {
     const chunk = await odooExec(uid, 'pos.payment', 'read',
-      [ids.slice(i, i + 2000), ['amount', 'payment_method_id', 'payment_date']])
-    for (const p of chunk) {
-      const name = Array.isArray(p.payment_method_id) ? p.payment_method_id[1] : ''
-      payments.push([
-        Math.round((Number(p.amount) || 0) * 100) / 100,
-        Date.parse(p.payment_date.replace(' ', 'T') + 'Z'),
-        catOfMethod(name),
-      ])
-    }
+      [ids.slice(i, i + 2000), ['amount', 'payment_method_id', 'payment_date', 'pos_order_id']])
+    raw.push(...chunk)
+  }
+  // Point de vente (caisse) de chaque commande → on lit le config_id des commandes.
+  const orderIds = [...new Set(raw.map(p => Array.isArray(p.pos_order_id) ? p.pos_order_id[0] : null).filter(Boolean))]
+  const posByOrder = {}
+  for (let i = 0; i < orderIds.length; i += 2000) {
+    const orders = await odooExec(uid, 'pos.order', 'read', [orderIds.slice(i, i + 2000), ['id', 'config_id']])
+    for (const o of orders) posByOrder[o.id] = Array.isArray(o.config_id) ? o.config_id[1] : ''
+  }
+  const payments = []
+  for (const p of raw) {
+    const name = Array.isArray(p.payment_method_id) ? p.payment_method_id[1] : ''
+    const ord = Array.isArray(p.pos_order_id) ? p.pos_order_id : null
+    payments.push([
+      Math.round((Number(p.amount) || 0) * 100) / 100,
+      Date.parse(p.payment_date.replace(' ', 'T') + 'Z'),
+      catOfMethod(name),
+      ord ? ord[1] : '',                       // référence de la commande
+      ord ? (posByOrder[ord[0]] || '') : '',   // point de vente (caisse)
+    ])
   }
   return { payments }
 }
