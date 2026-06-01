@@ -40,6 +40,7 @@ export default async function handler(req, res) {
   if (action === 'send') return handleSend(req, res)
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
+  if (action === 'search-orders') return handleSearchOrders(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'correct') return handleCorrect(req, res)
   if (action === 'delete-message') return handleDeleteMessage(req, res)
@@ -558,6 +559,127 @@ async function handleSendTemplate(req, res) {
     return res.status(200).json({ ok: true, conversationId: conv.id })
   } catch (e) {
     console.error('[wati-send-template]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// ============================================================
+// RECHERCHE COMMANDES ODOO — action=search-orders
+// Cherche une commande/devis par n° S, nom client, ou téléphone, et renvoie
+// les infos prêtes à remplir les templates devis_val / message_de_confirmation.
+// ============================================================
+async function odooJsonRpc(service, method, args) {
+  const url = `${process.env.ODOO_URL}/jsonrpc`
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { service, method, args }, id: Date.now() }),
+  })
+  if (!r.ok) throw new Error(`Odoo HTTP ${r.status}`)
+  const data = await r.json()
+  if (data.error) throw new Error(`Odoo error: ${data.error.data?.message || data.error.message}`)
+  return data.result
+}
+async function odooAuthenticate() {
+  const uid = await odooJsonRpc('common', 'authenticate', [
+    process.env.ODOO_DB, process.env.ODOO_USERNAME, process.env.ODOO_PASSWORD, {},
+  ])
+  if (!uid) throw new Error('Odoo authentication failed')
+  return uid
+}
+function odooSearchRead(uid, model, domain, fields, opts = {}) {
+  return odooJsonRpc('object', 'execute_kw', [
+    process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, 'search_read', [domain, fields], opts,
+  ])
+}
+
+// "1 650,00 DH"
+function fmtAmount(n) {
+  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(Number(n) || 0) + ' DH'
+}
+// "24/05/2026 12:00:00" depuis le format Odoo "YYYY-MM-DD HH:MM:SS" (UTC)
+function fmtPickup(s) {
+  if (!s) return ''
+  const d = new Date(String(s).replace(' ', 'T') + 'Z')
+  if (isNaN(d)) return String(s)
+  const p = (x) => String(x).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+// Numéro au format WATI (chiffres, indicatif marocain) : 0661… -> 212661…
+function normalizePhone(raw) {
+  let d = String(raw || '').replace(/\D/g, '')
+  if (!d) return ''
+  if (d.startsWith('212')) return d
+  if (d.startsWith('0')) return '212' + d.slice(1)
+  return d
+}
+
+async function handleSearchOrders(req, res) {
+  const query = (req.body?.query || '').trim()
+  try {
+    const uid = await odooAuthenticate()
+
+    // Recherche vide => dernières commandes. Sinon domaine OR : n° S, nom
+    // client, ou téléphone (avec variante 0… -> 212…).
+    let domain = []
+    if (query.length >= 2) {
+      const digits = query.replace(/\D/g, '')
+      const ors = [['name', 'ilike', query], ['partner_id', 'ilike', query]]
+      if (digits.length >= 6) {
+        const variants = new Set([digits])
+        if (digits.startsWith('0')) variants.add('212' + digits.slice(1))
+        for (const v of variants) {
+          ors.push(['partner_id.phone', 'ilike', v], ['partner_id.mobile', 'ilike', v])
+        }
+      }
+      domain = Array(ors.length - 1).fill('|').concat(ors)
+    }
+
+    const orders = await odooSearchRead(uid, 'sale.order', domain,
+      ['name', 'partner_id', 'commitment_date', 'amount_total', 'order_line', 'state'],
+      { order: 'date_order desc', limit: 15 })
+    if (!orders.length) return res.status(200).json({ orders: [] })
+
+    // Téléphones clients (mobile préféré) en un seul appel
+    const partnerIds = [...new Set(orders.map(o => Array.isArray(o.partner_id) ? o.partner_id[0] : null).filter(Boolean))]
+    const partners = partnerIds.length
+      ? await odooSearchRead(uid, 'res.partner', [['id', 'in', partnerIds]], ['id', 'phone', 'mobile'])
+      : []
+    const phoneById = new Map(partners.map(p => [p.id, normalizePhone(p.mobile || p.phone)]))
+
+    // Lignes de commande (produits réels uniquement)
+    const lineIds = orders.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
+    const lines = lineIds.length
+      ? await odooSearchRead(uid, 'sale.order.line', [['id', 'in', lineIds]],
+          ['order_id', 'name', 'product_uom_qty', 'price_subtotal', 'display_type'])
+      : []
+    const linesByOrder = new Map()
+    for (const l of lines) {
+      if (l.display_type) continue                          // sections / notes
+      const nm = (l.name || '').replace(/\s+/g, ' ').trim() // texte sur une ligne
+      if (/^(Acompte|Down\s+Payment)/i.test(nm)) continue   // acomptes
+      const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id
+      if (!linesByOrder.has(oid)) linesByOrder.set(oid, [])
+      linesByOrder.get(oid).push({ text: nm, qty: String(l.product_uom_qty), price: String(l.price_subtotal) })
+    }
+
+    const result = orders.map(o => {
+      const pid = Array.isArray(o.partner_id) ? o.partner_id[0] : null
+      return {
+        id: o.id,
+        name: o.name,
+        state: o.state,
+        clientName: Array.isArray(o.partner_id) ? o.partner_id[1] : '',
+        clientPhone: pid ? (phoneById.get(pid) || '') : '',
+        amountText: fmtAmount(o.amount_total),
+        pickupText: fmtPickup(o.commitment_date),
+        productLines: linesByOrder.get(o.id) || [],
+      }
+    })
+    return res.status(200).json({ orders: result })
+  } catch (e) {
+    console.error('[wati-search-orders]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

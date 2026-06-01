@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchTemplates, sendTemplate } from '../../lib/conversations'
+import { fetchTemplates, sendTemplate, searchOrders } from '../../lib/conversations'
 
 // Détecte les variables {{1}}, {{2}}… dans le texte d'un template.
 function templateBody(t) {
@@ -14,6 +14,20 @@ function placeholders(body) {
   const found = [...body.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map(m => m[1])
   return [...new Set(found)]
 }
+
+// Compose le bloc détails {{3}} sur UNE seule ligne (WhatsApp interdit les
+// retours à la ligne dans les variables de template).
+function composeDetails(order, tmplName) {
+  const prods = (order.productLines || [])
+    .map(l => `Produit : ${l.text} Qté : ${l.qty} Prix : ${l.price}`)
+    .join(' ; ')
+  if (tmplName === 'devis_val') {
+    return `Montant : ${order.amountText}. ${prods}. Date et heure de retrait souhaitées : ${order.pickupText}`
+  }
+  // message_de_confirmation
+  return `Montant : ${order.amountText}. La date et l'heure de retrait sont ${order.pickupText}. Détails : ${prods}`
+}
+const AUTOFILL_TEMPLATES = new Set(['devis_val', 'message_de_confirmation'])
 
 // Seuls ces templates (usage commercial) sont proposés ; on cache congés/économat/tâches.
 const ALLOWED_TEMPLATES = new Set([
@@ -34,6 +48,13 @@ export default function NewConversationModal({ user, onClose, onSent }) {
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
 
+  // Recherche commande Odoo (pré-remplissage)
+  const [orderQuery, setOrderQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(true)  // true = chargement initial des dernières commandes
+  const [searchErr, setSearchErr] = useState('')
+  const [pickedOrder, setPickedOrder] = useState(null)
+
   useEffect(() => {
     let cancelled = false
     fetchTemplates()
@@ -43,9 +64,41 @@ export default function NewConversationModal({ user, onClose, onSent }) {
     return () => { cancelled = true }
   }, [])
 
+  // Dernières commandes affichées d'office (pour ne rien avoir à taper).
+  useEffect(() => {
+    let cancelled = false
+    searchOrders('')
+      .then(list => { if (!cancelled) setResults(list) })
+      .catch(e => { if (!cancelled) setSearchErr(e.message) })
+      .finally(() => { if (!cancelled) setSearching(false) })
+    return () => { cancelled = true }
+  }, [])
+
   const selected = templates.find(t => templateName(t) === selectedName) || null
   const body = selected ? templateBody(selected) : ''
   const vars = placeholders(body)
+
+  async function handleSearch() {
+    const q = orderQuery.trim()
+    if (q.length < 2) return
+    setSearching(true)
+    setSearchErr('')
+    try {
+      setResults(await searchOrders(q))
+    } catch (e) {
+      setSearchErr(e.message)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  // Remplit le numéro + les variables {{1}}{{2}}{{3}} à partir d'une commande.
+  function fillFromOrder(order, tmplName) {
+    if (order.clientPhone) setPhone(order.clientPhone)
+    if (tmplName && AUTOFILL_TEMPLATES.has(tmplName)) {
+      setParams({ 1: order.clientName, 2: order.name, 3: composeDetails(order, tmplName) })
+    }
+  }
 
   async function handleSend() {
     if (!phone.trim() || !selected) return
@@ -79,6 +132,53 @@ export default function NewConversationModal({ user, onClose, onSent }) {
           <button onClick={onClose} className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0">✕</button>
         </div>
 
+        {/* Pré-remplir depuis une commande Odoo */}
+        <label className="block text-[11px] font-medium text-ink-soft mb-1">Pré-remplir depuis une commande (n° S, nom, ou téléphone)</label>
+        <div className="flex gap-2 mb-2">
+          <input
+            type="text"
+            value={orderQuery}
+            onChange={e => setOrderQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch() } }}
+            placeholder="S48587 · Meryem · 0661…"
+            className="flex-1 px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+          />
+          <button
+            onClick={handleSearch}
+            disabled={searching || orderQuery.trim().length < 2}
+            className="px-3 py-2 text-[11px] font-medium tracking-wider uppercase bg-ink text-cream rounded-lg hover:bg-bordeaux transition-all disabled:opacity-50"
+          >
+            {searching ? '…' : 'Chercher'}
+          </button>
+        </div>
+        {searchErr && <div className="text-[12px] text-bordeaux mb-2">{searchErr}</div>}
+        {results.length > 0 && (
+          <>
+          <div className="text-[10px] uppercase tracking-wider text-ink-mute mb-1">{orderQuery.trim().length >= 2 ? 'Résultats' : 'Commandes récentes'}</div>
+          <div className="border border-line rounded-lg divide-y divide-line mb-4 max-h-48 overflow-y-auto">
+            {results.map(o => (
+              <button
+                key={o.id}
+                onClick={() => { setPickedOrder(o); setResults([]); fillFromOrder(o, selectedName) }}
+                className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-all"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-medium text-ink">{o.name} · {o.clientName}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-ink-mute">{o.state === 'sale' ? 'Confirmée' : 'Devis'}</span>
+                </div>
+                <div className="text-[11px] text-ink-mute">{o.amountText} · retrait {o.pickupText}</div>
+              </button>
+            ))}
+          </div>
+          </>
+        )}
+        {pickedOrder && (
+          <div className="text-[11px] text-ink-soft bg-cream-warm border border-line rounded-lg px-3 py-2 mb-4">
+            Commande sélectionnée : <span className="font-medium">{pickedOrder.name} · {pickedOrder.clientName}</span>
+            {!selectedName && <span className="text-ink-mute"> — choisis un modèle ci-dessous pour remplir le détail.</span>}
+          </div>
+        )}
+
         {/* Numéro */}
         <label className="block text-[11px] font-medium text-ink-soft mb-1">Numéro du client (avec indicatif)</label>
         <input
@@ -100,7 +200,15 @@ export default function NewConversationModal({ user, onClose, onSent }) {
         ) : (
           <select
             value={selectedName}
-            onChange={e => { setSelectedName(e.target.value); setParams({}) }}
+            onChange={e => {
+              const n = e.target.value
+              setSelectedName(n)
+              if (pickedOrder && AUTOFILL_TEMPLATES.has(n)) {
+                setParams({ 1: pickedOrder.clientName, 2: pickedOrder.name, 3: composeDetails(pickedOrder, n) })
+              } else {
+                setParams({})
+              }
+            }}
             className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3"
           >
             <option value="">— Choisir un template —</option>

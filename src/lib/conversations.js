@@ -398,6 +398,18 @@ export async function fetchTemplates() {
   return data.templates || []
 }
 
+/** Recherche une commande/devis Odoo par n° S, nom client ou téléphone. */
+export async function searchOrders(query) {
+  const res = await fetch('/api/wati-webhook?action=search-orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.orders || []
+}
+
 /** Envoie un message template (initie une conversation). */
 export async function sendTemplate({ clientPhone, templateName, broadcastName, parameters, bodyText, userId }) {
   const res = await fetch('/api/wati-webhook?action=send-template', {
