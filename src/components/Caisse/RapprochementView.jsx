@@ -179,8 +179,17 @@ function runMatch(bank, raw) {
   let oOk = 0, oNone = []; const oSusp = []
   for (const b of onl) {
     const off = offOf(b)
+    const bDay = isoOf(b.dateStr)
     const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs(p.t - (b.t + off)) <= D3)
-    const carte = cands.find(p => p.c === 'c')
+    // En ligne : on privilégie une carte le MÊME jour ; on n'élargit à ±3 j que
+    // s'il n'y a aucune carte ce jour-là (saisie caisse en retard), en prenant
+    // alors la plus proche dans le temps.
+    const cartes = cands.filter(p => p.c === 'c')
+    const sameDay = cartes.filter(p => new Date(p.t - off).toISOString().slice(0, 10) === bDay)
+    const pool = sameDay.length ? sameDay : cartes
+    let carte = null
+    for (const p of pool) { const d = Math.abs(p.t - (b.t + off)); if (!carte || d < carte.d) carte = { p, d } }
+    carte = carte && carte.p
     if (carte) { carte.used = true; oOk++; okList.push({ b, p: carte }) }
     else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - off), odooDate: dOf(other.t - off), ref: other.ref, pos: other.pos, _p: other }) } else oNone.push(b) }
   }
