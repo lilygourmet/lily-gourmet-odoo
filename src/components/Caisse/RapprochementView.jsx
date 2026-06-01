@@ -38,7 +38,7 @@ function parseBank(rows) {
   const col = kw => H.findIndex(h => h.includes(kw))
   const ci = {
     date: col('date de transaction') >= 0 ? col('date de transaction') : col('transaction'),
-    heure: col('heure'), stan: col('stan'), montant: col('montant brut'), net: col('montant net'), sys: col('systeme'),
+    heure: col('heure'), stan: col('stan'), montant: col('montant brut'), net: col('montant net'), sys: col('systeme'), pdv: col('pdv'),
   }
   const num = x => parseFloat(String(x).replace(',', '.')) || 0
   const bank = []
@@ -54,7 +54,8 @@ function parseBank(rows) {
     const stan = String(r[ci.stan] || '').replace(/\D/g, '')
     const stanNorm = String(parseInt(stan || '0', 10))
     const dateStr = `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}`
-    bank.push({ t, amt, net, online: stan.length === 6, sys: String(r[ci.sys] || ''), heureStr: heure, dateStr, hasTime: true, mergeKey: `${stanNorm}|${dateStr}|${amt}`, key: `${dateStr}|${heure}|${amt}|${stan}` })
+    const term = ci.pdv >= 0 ? String(r[ci.pdv] || '').replace(/\D/g, '') : ''
+    bank.push({ t, amt, net, online: stan.length === 6, sys: String(r[ci.sys] || ''), heureStr: heure, dateStr, hasTime: true, term, stanN: parseInt(stan || '0', 10), mergeKey: `${stanNorm}|${dateStr}|${amt}`, key: `${dateStr}|${heure}|${amt}|${stan}` })
   }
   if (!bank.length) throw new Error("Aucune ligne de paiement lue dans le fichier.")
   return bank
@@ -70,6 +71,12 @@ async function parsePDF(file) {
     const tc = await (await doc.getPage(i)).getTextContent()
     text += ' ' + tc.items.map(it => it.str).join(' ')
   }
+  // Terminal (point de vente) par position : chaque transaction prend le N° du
+  // dernier en-tête « POINT DE VENTE N° … » qui la précède dans le flux.
+  const venues = []; let vm
+  const vrx = /POINT\s+DE\s+VENTE[^\d]{0,15}(\d{6,})/gi
+  while ((vm = vrx.exec(text))) venues.push({ idx: vm.index, term: vm[1] })
+  const termAt = i => { let t = ''; for (const v of venues) { if (v.idx <= i) t = v.term; else break } return t }
   // Ordre réel des colonnes dans le flux pdfjs : date STAN carte MONTANT type(V/M) L/I
   const rx = /(\d{2})\/(\d{2})\/(\d{2})\s+(\d{6})\s+[\d*][\d*\s]*?([\d.,]+\.\d{2})(?:\s+([VMDJCU]))?/g
   const out = []; let m
@@ -82,7 +89,7 @@ async function parsePDF(file) {
     out.push({
       amt, dateStr, online: stanNorm.length === 6,
       sys: type === 'M' ? 'MASTERCARD' : type === 'V' ? 'VISA' : (type || 'Carte'),
-      heureStr: '—', hasTime: false,
+      heureStr: '—', hasTime: false, term: termAt(m.index), stanN: parseInt(stan, 10),
       t: Date.parse(`20${yy}-${mm}-${dd}T12:00:00Z`),
       mergeKey: `${stanNorm}|${dateStr}|${amt}`, key: `pdf|${stanNorm}|${dateStr}|${amt}`,
     })
@@ -147,7 +154,7 @@ function runMatch(bank, raw) {
     }
   }
   const offOf = b => (dayOff[isoOf(b.dateStr)] ?? OFFg)
-  const W = 20 * 60e3, D3 = 3 * 86400e3, D1 = 1.5 * 86400e3
+  const W = 20 * 60e3, D3 = 3 * 86400e3
   const withTime = bank.filter(b => b.hasTime !== false)
   const noTime = bank.filter(b => b.hasTime === false) // lignes venues du PDF (pas d'heure)
   const tpe = withTime.filter(b => !b.online), onl = withTime.filter(b => b.online)
@@ -178,14 +185,36 @@ function runMatch(bank, raw) {
     else { const other = cands.find(p => p.c !== 'c'); if (other) { other.used = true; oSusp.push({ ...b, m: other.c, odooHeure: hhmm(other.t - off), odooDate: dOf(other.t - off), ref: other.ref, pos: other.pos, _p: other }) } else oNone.push(b) }
   }
 
-  // Lignes du PDF (complément, sans heure) : matchées par jour ± 1 j, carte d'abord.
+  // Lignes Excel (avec heure) groupées par terminal et triées par STAN : servent
+  // à encadrer dans le temps les lignes PDF voisines (le STAN augmente en continu).
+  const byTerm = {}
+  for (const e of withTime) { if (e.term) (byTerm[e.term] = byTerm[e.term] || []).push(e) }
+  for (const k in byTerm) byTerm[k].sort((x, y) => x.stanN - y.stanN)
+
+  // Lignes du PDF (complément, sans heure) : la date PDF = date de transaction.
+  // Magasin (TPE) → fenêtre = la journée, resserrée au créneau [STAN d'avant,
+  // STAN d'après] du même terminal quand on les connaît (Excel) ; en ligne
+  // (saisi en caisse plus tard) → marge ±3 j. Carte d'abord.
   for (const b of noTime) {
     const off = offOf(b)
-    const cands = (byAmt.get(b.amt) || []).filter(p => !p.used && Math.abs((p.t - off) - b.t) <= D1)
+    let lo, hi, target
+    if (b.online) { lo = b.t - D3; hi = b.t + D3; target = b.t }
+    else {
+      lo = b.t - 12 * 3600e3; hi = b.t + 12 * 3600e3 // par défaut : la journée
+      const seq = b.term ? byTerm[b.term] : null
+      if (seq) {
+        let prev = null, next = null
+        for (const e of seq) { if (e.stanN < b.stanN) prev = e; else if (e.stanN > b.stanN) { next = e; break } }
+        if (prev) lo = Math.max(lo, prev.t) // borne basse = STAN précédent (même jour)
+        if (next) hi = Math.min(hi, next.t) // borne haute = STAN suivant
+      }
+      target = (lo + hi) / 2
+    }
+    const cands = (byAmt.get(b.amt) || []).filter(p => { const bl = p.t - off; return !p.used && bl >= lo && bl <= hi })
     const cartes = cands.filter(p => p.c === 'c')
     const pool = cartes.length ? cartes : cands
     let best = null
-    for (const p of pool) { const d = Math.abs((p.t - off) - b.t); if (!best || d < best.d) best = { p, d } }
+    for (const p of pool) { const d = Math.abs((p.t - off) - target); if (!best || d < best.d) best = { p, d } }
     if (best) { best.p.used = true; if (best.p.c === 'c') { okC++; okList.push({ b, p: best.p }) } else suspects.push({ ...b, m: best.p.c, odooHeure: hhmm(best.p.t - off), odooDate: dOf(best.p.t - off), ref: best.p.ref, pos: best.p.pos, _p: best.p }) }
     else intro.push({ ...b, cls: 'none' })
   }
