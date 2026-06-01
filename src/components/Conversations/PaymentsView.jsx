@@ -80,7 +80,6 @@ export default function PaymentsView({ user }) {
   const nbTodo = items.filter(isPending).length
   const nbDone = items.length - nbTodo
   const sumTodo = items.filter(isPending).reduce((s, m) => s + (Number(m.payment_amount) || 0), 0)
-  const sumValid = items.filter(m => m.payment_validated_at).reduce((s, m) => s + (Number(m.payment_amount) || 0), 0)
 
   function Card({ m }) {
     const href = urls[m.id]
@@ -147,10 +146,6 @@ export default function PaymentsView({ user }) {
         <div className="flex-1 min-w-[140px] rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 shadow-sm">
           <div className="text-[10px] uppercase tracking-wider text-amber-700">À valider</div>
           <div className="text-[16px] font-semibold text-ink">{fmtAmount(sumTodo) || '0 DH'}</div>
-        </div>
-        <div className="flex-1 min-w-[140px] rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-emerald-700">Validé</div>
-          <div className="text-[16px] font-semibold text-ink">{fmtAmount(sumValid) || '0 DH'}</div>
         </div>
       </div>
 
