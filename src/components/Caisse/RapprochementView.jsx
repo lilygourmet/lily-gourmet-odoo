@@ -253,26 +253,24 @@ function runMatch(bank, raw) {
     oNone = oNone.filter(b => !b._consumed)
   }
 
-  // Annulations : dans Odoo, un +X Carte et un -X Carte non appariés le MÊME jour
-  // = le caissier s'est trompé puis corrigé. On les neutralise (retirés des
-  // « Absent du relevé ») et on les marque « Annulation ».
+  // Annulations Carte : un « -X » Carte non apparié dans Odoo = un encaissement
+  // carte (présent au relevé banque) que le caissier a remboursé pour ré-encaisser
+  // autrement (souvent en espèces). On apparie ce « -X » avec la ligne carte « +X »
+  // du relevé du MÊME jour (classée « suspect » ou « absent d'Odoo ») : les deux
+  // s'annulent → « 🔁 Annulation », et le ré-encaissement redevient normal (le
+  // suspect espèces disparaît).
   const annulations = []
-  {
-    const negByDay = {}, posByDay = {}
-    for (const p of odoo) {
-      if (p.c !== 'c' || p.used) continue
-      const d = new Date(p.t - offForP(p)).toISOString().slice(0, 10)
-      const bucket = p.a < 0 ? negByDay : posByDay
-      ;(bucket[d] = bucket[d] || []).push(p)
-    }
-    for (const d in negByDay) {
-      for (const neg of negByDay[d]) {
-        const pos = (posByDay[d] || []).find(p => !p.used && Math.abs(p.a + neg.a) < 0.005)
-        if (!pos) continue
-        neg.used = true; pos.used = true
-        annulations.push({ dateStr: frOf(d), pos, neg })
-      }
-    }
+  for (const neg of odoo.filter(p => p.c === 'c' && !p.used && p.a < 0)) {
+    const d = new Date(neg.t - offForP(neg)).toISOString().slice(0, 10)
+    const want = Math.round(-neg.a * 100) / 100
+    const match = b => Math.abs(b.amt - want) < 0.005 && isoOf(b.dateStr) === d
+    let bankLine = null
+    const si = suspects.findIndex(match)
+    if (si >= 0) { bankLine = suspects[si]; if (bankLine._p) bankLine._p.used = false; suspects.splice(si, 1) }
+    else { const ii = intro.findIndex(match); if (ii >= 0) { bankLine = intro[ii]; intro.splice(ii, 1) } }
+    if (!bankLine) continue
+    neg.used = true
+    annulations.push({ bank: bankLine, neg })
   }
 
   // Résumé par jour : carte relevé vs carte Odoo
@@ -312,7 +310,7 @@ function runMatch(bank, raw) {
   for (const b of [...intro, ...oNone]) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: null, odooCat: null, odooHeure: '', odooDate: '', ref: '', pos: '', status: 'cmi-only', amt: b.amt, key: b.key })
   for (const r of reverse) ledger.push({ t: r.t, dateStr: r.dateStr, heureStr: r.heureStr, online: false, cmiAmt: null, cmiSys: '', odooAmt: r.amt, odooCat: 'c', odooHeure: r.heureStr, odooDate: r.dateStr, ref: r.ref, pos: r.pos, status: 'odoo-only', amt: r.amt, key: r.key })
   for (const sp of splits) for (const b of sp.parts) ledger.push({ t: b.t, dateStr: b.dateStr, heureStr: b.heureStr, online: b.online, cmiAmt: b.amt, cmiSys: b.sys, odooAmt: sp.amount, odooCat: 'c', odooHeure: sp.odooHeure, odooDate: sp.dateStr, ref: '', pos: '', status: 'split', amt: b.amt, key: b.key })
-  for (const an of annulations) for (const p of [an.pos, an.neg]) { const off = offForP(p), h = hhmm(p.t - off); ledger.push({ t: p.t - off, dateStr: an.dateStr, heureStr: h, online: false, cmiAmt: null, cmiSys: '', odooAmt: p.a, odooCat: 'c', odooHeure: h, odooDate: an.dateStr, ref: p.ref, pos: p.pos, status: 'annul', amt: p.a, key: `annul|${an.dateStr}|${p.t}|${p.a}` }) }
+  for (const an of annulations) { const off = offForP(an.neg); ledger.push({ t: an.bank.t, dateStr: an.bank.dateStr, heureStr: an.bank.heureStr, online: an.bank.online, cmiAmt: an.bank.amt, cmiSys: an.bank.sys, odooAmt: an.neg.a, odooCat: 'c', odooHeure: hhmm(an.neg.t - off), odooDate: dOf(an.neg.t - off), ref: an.neg.ref, pos: an.neg.pos, status: 'annul', amt: an.bank.amt, key: `annul|${an.bank.key}` }) }
   ledger.sort((a, b) => a.t - b.t)
 
   const totalBrut = bank.reduce((s, b) => s + b.amt, 0)
