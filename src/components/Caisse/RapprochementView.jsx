@@ -374,6 +374,12 @@ function LedgerTable({ list, dayGap }) {
   )
 }
 
+// Cache local via IndexedDB (pas de limite de taille, contrairement à localStorage).
+function idbDB() { return new Promise((res, rej) => { const r = indexedDB.open('rappro', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) }) }
+async function idbSet(key, val) { try { const db = await idbDB(); await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(val, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error) }) } catch { /* ignore */ } }
+async function idbGet(key) { try { const db = await idbDB(); return await new Promise((res, rej) => { const tx = db.transaction('kv', 'readonly'); const rq = tx.objectStore('kv').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error) }) } catch { return null } }
+async function idbDel(key) { try { const db = await idbDB(); await new Promise((res) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(key); tx.oncomplete = res }) } catch { /* ignore */ } }
+
 export default function RapprochementView({ user }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -406,17 +412,18 @@ export default function RapprochementView({ user }) {
       const to = new Date(Math.max(...times) + 3 * 86400e3).toISOString().slice(0, 10)
       let payments = null
       if (useCache) {
-        try { const c = JSON.parse(localStorage.getItem('rappro_odoo_v1') || 'null'); if (c && c.from <= from && c.to >= to && Array.isArray(c.payments)) payments = c.payments } catch { /* ignore */ }
+        const c = await idbGet('odoo')
+        if (c && c.from <= from && c.to >= to && Array.isArray(c.payments)) payments = c.payments
       }
       if (!payments) {
         const r = await fetch(`/api/caisse-api?action=pos-payments&from=${from}&to=${to}`, { method: 'POST' })
         const data = await r.json().catch(() => ({}))
         if (!r.ok) throw new Error(data.error || `Erreur serveur ${r.status}`)
         payments = data.payments || []
-        try { localStorage.setItem('rappro_odoo_v1', JSON.stringify({ payments, from, to })) } catch { /* quota */ }
+        idbSet('odoo', { payments, from, to })
       }
       setRes(runMatch(bank, payments))
-      try { localStorage.setItem('rappro_bank_v1', JSON.stringify({ excel: excelRef.current, pdf: pdfRef.current, names })) } catch { /* quota dépassé : on ne sauvegarde pas */ }
+      idbSet('bank', { excel: excelRef.current, pdf: pdfRef.current, names })
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -427,18 +434,20 @@ export default function RapprochementView({ user }) {
   function reset() {
     excelRef.current = []; pdfRef.current = []
     setRes(null); setFileNames([]); setErr(''); setSearch('')
-    try { localStorage.removeItem('rappro_bank_v1'); localStorage.removeItem('rappro_odoo_v1') } catch { /* ignore */ }
+    idbDel('bank'); idbDel('odoo')
+    try { localStorage.removeItem('rappro_bank_v1'); localStorage.removeItem('rappro_odoo_v1') } catch { /* ancien cache */ }
   }
 
   useEffect(() => {
     loadRapproVerifies().then(setVerified).catch(() => {})
-    let saved = null
-    try { saved = JSON.parse(localStorage.getItem('rappro_bank_v1') || 'null') } catch { /* ignore */ }
-    if (saved && ((saved.excel || []).length || (saved.pdf || []).length)) {
-      excelRef.current = saved.excel || []
-      pdfRef.current = saved.pdf || []
-      Promise.resolve().then(() => { setFileNames(saved.names || []); analyze(saved.names || [], { useCache: true }) })
-    }
+    idbGet('bank').then(saved => {
+      if (saved && ((saved.excel || []).length || (saved.pdf || []).length)) {
+        excelRef.current = saved.excel || []
+        pdfRef.current = saved.pdf || []
+        setFileNames(saved.names || [])
+        analyze(saved.names || [], { useCache: true })
+      }
+    })
   }, [])
 
   async function onFiles(fileList) {
