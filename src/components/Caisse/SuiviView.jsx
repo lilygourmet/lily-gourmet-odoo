@@ -91,7 +91,7 @@ function BanqueSection({ user }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <button onClick={() => setYear(y => y - 1)} style={btnSlim}>←</button>
+        <button onClick={() => setYear(y => Math.max(2026, y - 1))} disabled={year <= 2026} style={{ ...btnSlim, opacity: year <= 2026 ? 0.4 : 1 }}>←</button>
         <div style={{ fontSize: 18, fontWeight: 500 }}>{year}</div>
         <button onClick={() => setYear(y => y + 1)} style={btnSlim}>→</button>
       </div>
@@ -229,7 +229,7 @@ function PersoSection({ user }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <button onClick={() => setYear(y => y - 1)} style={btnSlim}>←</button>
+        <button onClick={() => setYear(y => Math.max(2026, y - 1))} disabled={year <= 2026} style={{ ...btnSlim, opacity: year <= 2026 ? 0.4 : 1 }}>←</button>
         <div style={{ fontSize: 18, fontWeight: 500 }}>{year}</div>
         <button onClick={() => setYear(y => y + 1)} style={btnSlim}>→</button>
       </div>
