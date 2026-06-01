@@ -464,10 +464,11 @@ async function actionSyncLeaves({ mois, annee }) {
   const { data: employesDb } = await sb
     .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
 
-  // Supprimer les congés existants du mois
+  // Supprimer les congés existants du mois (chevauchement réel : début < fin ET fin >= début)
   await sb.from('conges')
     .delete()
-    .or(`date_debut.lte.${fin},date_fin.gte.${debut}`)
+    .lt('date_debut', fin)
+    .gte('date_fin', debut)
     .not('odoo_id', 'is', null)
 
   const rows = []
