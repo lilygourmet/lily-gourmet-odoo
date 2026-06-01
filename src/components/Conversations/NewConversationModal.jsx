@@ -29,6 +29,10 @@ function composeDetails(order, tmplName) {
 }
 const AUTOFILL_TEMPLATES = new Set(['devis_val', 'message_de_confirmation'])
 
+// Commande confirmée (sale/done) -> confirmation ; sinon (brouillon/envoyé) -> devis.
+const isConfirmedOrder = (state) => state === 'sale' || state === 'done'
+const templateForState = (state) => isConfirmedOrder(state) ? 'message_de_confirmation' : 'devis_val'
+
 // Seuls ces templates (usage commercial) sont proposés ; on cache congés/économat/tâches.
 const ALLOWED_TEMPLATES = new Set([
   'devis_val',
@@ -159,12 +163,18 @@ export default function NewConversationModal({ user, onClose, onSent }) {
             {results.map(o => (
               <button
                 key={o.id}
-                onClick={() => { setPickedOrder(o); setResults([]); fillFromOrder(o, selectedName) }}
+                onClick={() => {
+                  const tmpl = templateForState(o.state)
+                  setPickedOrder(o)
+                  setResults([])
+                  setSelectedName(tmpl)
+                  fillFromOrder(o, tmpl)
+                }}
                 className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-all"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[13px] font-medium text-ink">{o.name} · {o.clientName}</span>
-                  <span className="text-[10px] uppercase tracking-wider text-ink-mute">{o.state === 'sale' ? 'Confirmée' : 'Devis'}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-ink-mute">{isConfirmedOrder(o.state) ? 'Confirmée' : 'Devis'}</span>
                 </div>
                 <div className="text-[11px] text-ink-mute">{o.amountText} · retrait {o.pickupText}</div>
               </button>
@@ -175,7 +185,7 @@ export default function NewConversationModal({ user, onClose, onSent }) {
         {pickedOrder && (
           <div className="text-[11px] text-ink-soft bg-cream-warm border border-line rounded-lg px-3 py-2 mb-4">
             Commande sélectionnée : <span className="font-medium">{pickedOrder.name} · {pickedOrder.clientName}</span>
-            {!selectedName && <span className="text-ink-mute"> — choisis un modèle ci-dessous pour remplir le détail.</span>}
+            {' '}→ message <span className="font-medium">{isConfirmedOrder(pickedOrder.state) ? 'de confirmation' : 'de devis'}</span>
           </div>
         )}
 
@@ -191,7 +201,11 @@ export default function NewConversationModal({ user, onClose, onSent }) {
 
         {/* Template */}
         <label className="block text-[11px] font-medium text-ink-soft mb-1">Modèle de message</label>
-        {loadingT ? (
+        {pickedOrder ? (
+          <div className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg mb-3 text-ink font-medium">
+            {isConfirmedOrder(pickedOrder.state) ? 'Confirmation de commande' : 'Devis'}
+          </div>
+        ) : loadingT ? (
           <div className="text-[12px] text-ink-mute italic py-2">Chargement des templates…</div>
         ) : errT ? (
           <div className="text-[12px] text-bordeaux py-2">{errT}</div>
