@@ -15,6 +15,15 @@ function placeholders(body) {
   return [...new Set(found)]
 }
 
+// Seuls ces templates (usage commercial) sont proposés ; on cache congés/économat/tâches.
+const ALLOWED_TEMPLATES = new Set([
+  'devis_val',
+  'message_de_confirmation',
+  'envoi_modele_gateau',
+  'relance_validation_de_devis',
+  'annulation_devis_sans_reponse',
+])
+
 export default function NewConversationModal({ user, onClose, onSent }) {
   const [templates, setTemplates] = useState([])
   const [loadingT, setLoadingT] = useState(true)
@@ -28,7 +37,7 @@ export default function NewConversationModal({ user, onClose, onSent }) {
   useEffect(() => {
     let cancelled = false
     fetchTemplates()
-      .then(list => { if (!cancelled) setTemplates(list) })
+      .then(list => { if (!cancelled) setTemplates(list.filter(t => ALLOWED_TEMPLATES.has(templateName(t)))) })
       .catch(e => { if (!cancelled) setErrT(e.message) })
       .finally(() => { if (!cancelled) setLoadingT(false) })
     return () => { cancelled = true }
