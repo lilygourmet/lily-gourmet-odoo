@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   User, Users, Calendar, RefreshCw, Clock, Lock, Unlock, Building2,
   Pencil, Trash2, Plus, Download, Save, Hand, Eye, EyeOff, Wallet,
@@ -95,7 +95,12 @@ export default function PointageTab({ user, isAdmin }) {
     setLoading(false)
   }, [mois, annee, selectedEmpId])
 
-  useEffect(() => { reload() }, [mois, annee])
+  useEffect(() => {
+    // 1er affichage d'un mois dans la session → synchro auto depuis Odoo ; sinon rechargement simple.
+    if (syncedRef.current.has(`${mois}-${annee}`)) reload()
+    else doSync({ confirmFirst: false, silent: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mois, annee])
 
   // Calculs (mémorisés pour éviter recalcul à chaque render)
   const resultats = useMemo(() => {
@@ -118,15 +123,17 @@ export default function PointageTab({ user, isAdmin }) {
   // Edition globale du mois (pour Tous, Récup)
   const monthAllLocked = (data?.synthese || []).every(s => s.valide)
 
-  // Sync Odoo
-  async function handleSync() {
-    if (!confirm(`Synchroniser les pointages + congés depuis Odoo pour ${MOIS_FR[mois - 1]} ${annee} ?`)) return
-    setSyncing(true); setError(null); setSuccess(null)
+  // Sync Odoo (cœur réutilisé par le bouton manuel ET la synchro auto à l'ouverture)
+  const syncedRef = useRef(new Set())  // mois déjà synchronisés dans cette session
+  const doSync = useCallback(async ({ confirmFirst, silent }) => {
+    if (confirmFirst && !confirm(`Synchroniser les pointages + congés depuis Odoo pour ${MOIS_FR[mois - 1]} ${annee} ?`)) return
+    setSyncing(true); setError(null); if (!silent) setSuccess(null)
     try {
       const r1 = await syncAttendance(mois, annee)
       const r2 = await syncLeaves(mois, annee)
       console.log('[SYNC ATTENDANCE]', r1)
       console.log('[SYNC LEAVES]', r2)
+      syncedRef.current.add(`${mois}-${annee}`)
       let msg = `✅ ${r1.inserted} pointages + ${r2.inserted} congés importés.`
       if (r1.matched_fuzzy && r1.matched_fuzzy.length > 0) {
         msg += `\n🔗 ${r1.matched_fuzzy.length} employé(s) matché(s) par similarité (mémorisés pour les prochaines syncs).`
@@ -134,13 +141,16 @@ export default function PointageTab({ user, isAdmin }) {
       if (r1.unmatched > 0) {
         msg += `\n⚠️ ${r1.unmatched_names?.length || 0} employé(s) Odoo non rattaché(s) :\n  • ${(r1.unmatched_names || []).join('\n  • ')}`
       }
-      setSuccess(msg)
-      await reload()
+      // Bouton manuel : message complet. Auto : on n'affiche que s'il y a un employé non rattaché.
+      if (!silent || r1.unmatched > 0) setSuccess(msg)
     } catch (e) {
       setError('Erreur sync : ' + e.message)
     }
+    await reload()
     setSyncing(false)
-  }
+  }, [mois, annee, reload])
+
+  function handleSync() { doSync({ confirmFirst: true, silent: false }) }
 
   // Édition d'une cellule (heures_travaillees, sup, manquantes, recup, statut)
   async function handleEditCell(dateJour, champ, valeur) {
