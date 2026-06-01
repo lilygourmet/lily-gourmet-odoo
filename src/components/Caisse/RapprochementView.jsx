@@ -348,11 +348,11 @@ function runMatch(bank, raw) {
 }
 
 // Tableau regroupé par jour, avec sous-total. Colonnes selon le mode.
-function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onToggle }) {
+function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onSetStatus }) {
   const groups = {}
   for (const b of list) (groups[b.dateStr] = groups[b.dateStr] || []).push(b)
   const days = Object.keys(groups).sort((a, b) => isoOf(a).localeCompare(isoOf(b)))
-  const headers = ['Heure', odooHeure && 'Heure caisse', 'Montant', 'Réseau', methodCol && 'Tapé en caisse comme', clsCol && 'Classement', methodCol && 'Commande', methodCol && 'Caisse', onToggle && ''].filter(Boolean)
+  const headers = ['Heure', odooHeure && 'Heure caisse', 'Montant', 'Réseau', methodCol && 'Tapé en caisse comme', clsCol && 'Classement', methodCol && 'Commande', methodCol && 'Caisse', onSetStatus && ''].filter(Boolean)
   const clsLabel = c => c === 'online' ? '🌐 Probable en ligne (jour ≠)' : c === 'none' ? '❓ Aucune trace' : `Tapé ${LABEL[c] || c} (autre jour)`
   return (
     <table className="w-full text-[13px] border-collapse">
@@ -373,9 +373,9 @@ function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onToggle }
                 </td>
               </tr>
               {items.map((b, i) => {
-                const done = verified && verified.has(b.key)
+                const st = verified && verified.get(b.key)
                 return (
-                  <tr key={day + '-' + i} className={done ? 'opacity-50 line-through' : ''}>
+                  <tr key={day + '-' + i} className={st === 'justifie' ? 'opacity-50 line-through' : ''}>
                     <td className="py-2 px-2 border-b border-cream-deep">{b.heureStr}</td>
                     {odooHeure && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute whitespace-nowrap">{b.odooDate ? b.odooDate + ' ' : ''}{b.odooHeure}</td>}
                     <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{fmt(b.amt)} dh</td>
@@ -384,11 +384,10 @@ function GroupedTable({ list, odooHeure, methodCol, clsCol, verified, onToggle }
                     {clsCol && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{clsLabel(b.cls)}</td>}
                     {methodCol && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{b.ref || '—'}</td>}
                     {methodCol && <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{b.pos || '—'}</td>}
-                    {onToggle && (
-                      <td className="py-2 px-2 border-b border-cream-deep">
-                        <button onClick={() => onToggle(b)} className={`px-2 py-1 rounded-md text-[11px] font-semibold no-underline ${done ? 'bg-cream-deep text-ink-mute' : 'bg-success-bg text-success'}`}>
-                          {done ? 'Annuler' : '✓ Vérifié'}
-                        </button>
+                    {onSetStatus && (
+                      <td className="py-2 px-2 border-b border-cream-deep whitespace-nowrap no-underline">
+                        <button onClick={() => onSetStatus(b, 'justifie')} title="Justifié : sort de l'écart" className={`px-2 py-1 rounded-md text-[11px] font-semibold no-underline mr-1 ${st === 'justifie' ? 'bg-success text-white' : 'bg-success-bg text-success'}`}>✓ Justifié</button>
+                        <button onClick={() => onSetStatus(b, 'refuse')} title="Refusé : reste compté en écart" className={`px-2 py-1 rounded-md text-[11px] font-semibold no-underline ${st === 'refuse' ? 'bg-danger text-white' : 'bg-danger-bg text-danger'}`}>🚩 Écart</button>
                       </td>
                     )}
                   </tr>
@@ -412,7 +411,8 @@ const LEDGER_ST = {
   annul: ['🔁 Annulation', 'bg-cream-deep text-ink-mute'],
 }
 function methodLabel(c) { return c === 'c' ? 'Carte' : (LABEL[c] || '—') }
-function LedgerTable({ list, dayGap }) {
+const LEDGER_ANOM = { mismatch: 1, 'cmi-only': 1, 'odoo-only': 1 } // lignes qui font un écart
+function LedgerTable({ list, dayGap, verified, onSetStatus }) {
   const groups = {}
   for (const r of list) (groups[r.dateStr] = groups[r.dateStr] || []).push(r)
   const days = Object.keys(groups).sort((a, b) => isoOf(a).localeCompare(isoOf(b)))
@@ -423,7 +423,7 @@ function LedgerTable({ list, dayGap }) {
       <thead>
         <tr className="text-ink-mute text-[11px] uppercase tracking-wider">
           <th className={th}>Heure</th><th className={th}>CMI</th><th className={th}>Réseau</th>
-          <th className={th}>Odoo</th><th className={th}>Méthode</th><th className={th}>Heure caisse</th><th className={th}>Commande</th><th className={th}>Caisse</th><th className={th}>Statut</th>
+          <th className={th}>Odoo</th><th className={th}>Méthode</th><th className={th}>Heure caisse</th><th className={th}>Commande</th><th className={th}>Caisse</th><th className={th}>Statut</th>{onSetStatus && <th className={th}></th>}
         </tr>
       </thead>
       <tbody>
@@ -431,9 +431,11 @@ function LedgerTable({ list, dayGap }) {
           const items = groups[day].slice().sort((a, b) => a.t - b.t)
           return (
             <Fragment key={day}>
-              <tr className="bg-cream-deep"><td colSpan={9} className="py-1.5 px-2 text-[12px] font-semibold text-ink">📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''}</span>{dayGap && dayGap[day] != null && <span className={`font-semibold ${dayGap[day] < 0 ? 'text-danger' : 'text-ink-mute'}`}> · écart {dayGap[day] >= 0 ? '+' : ''}{fmt(dayGap[day])} dh</span>}</td></tr>
-              {items.map((r, i) => (
-                <tr key={i}>
+              <tr className="bg-cream-deep"><td colSpan={onSetStatus ? 10 : 9} className="py-1.5 px-2 text-[12px] font-semibold text-ink">📅 {day} <span className="text-ink-mute font-normal">— {items.length} ligne{items.length > 1 ? 's' : ''}</span>{dayGap && dayGap[day] != null && <span className={`font-semibold ${dayGap[day] < 0 ? 'text-danger' : 'text-ink-mute'}`}> · écart {dayGap[day] >= 0 ? '+' : ''}{fmt(dayGap[day])} dh</span>}</td></tr>
+              {items.map((r, i) => {
+                const st = verified && verified.get(r.key)
+                return (
+                <tr key={i} className={st === 'justifie' ? 'opacity-50 line-through' : ''}>
                   <td className="py-2 px-2 border-b border-cream-deep">{r.heureStr}</td>
                   <td className="py-2 px-2 border-b border-cream-deep font-semibold tabular-nums">{r.cmiAmt != null ? fmt(r.cmiAmt) + ' dh' : '—'}</td>
                   <td className="py-2 px-2 border-b border-cream-deep text-ink-mute">{r.cmiSys || '—'}</td>
@@ -443,8 +445,13 @@ function LedgerTable({ list, dayGap }) {
                   <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{r.ref || '—'}</td>
                   <td className="py-2 px-2 border-b border-cream-deep text-ink-mute text-[12px]">{r.pos || '—'}</td>
                   <td className="py-2 px-2 border-b border-cream-deep"><span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${LEDGER_ST[r.status][1]}`}>{LEDGER_ST[r.status][0]}</span></td>
+                  {onSetStatus && <td className="py-2 px-2 border-b border-cream-deep whitespace-nowrap no-underline">{LEDGER_ANOM[r.status] && (<>
+                    <button onClick={() => onSetStatus(r, 'justifie')} title="Justifié : sort de l'écart" className={`px-2 py-1 rounded-md text-[11px] font-semibold no-underline mr-1 ${st === 'justifie' ? 'bg-success text-white' : 'bg-success-bg text-success'}`}>✓ Justifié</button>
+                    <button onClick={() => onSetStatus(r, 'refuse')} title="Refusé : reste compté en écart" className={`px-2 py-1 rounded-md text-[11px] font-semibold no-underline ${st === 'refuse' ? 'bg-danger text-white' : 'bg-danger-bg text-danger'}`}>🚩 Écart</button>
+                  </>)}</td>}
                 </tr>
-              ))}
+                )
+              })}
             </Fragment>
           )
         })}
@@ -470,7 +477,7 @@ export default function RapprochementView({ user }) {
   const [day, setDay] = useState('')
   const [view, setView] = useState('synthese')
   const [hideOk, setHideOk] = useState(true)
-  const [verified, setVerified] = useState(new Set())
+  const [verified, setVerified] = useState(new Map())
   const excelRef = useRef([])  // lignes Excel accumulées (avec heure)
   const pdfRef = useRef([])    // lignes PDF accumulées (complément)
 
@@ -558,14 +565,14 @@ export default function RapprochementView({ user }) {
     }
   }
 
-  async function toggleVerified(b) {
-    const has = verified.has(b.key)
-    const next = new Set(verified)
-    if (has) next.delete(b.key); else next.add(b.key)
+  async function setStatus(b, status) {
+    const newStatus = verified.get(b.key) === status ? null : status // re-clic = annule
+    const next = new Map(verified)
+    if (newStatus) next.set(b.key, newStatus); else next.delete(b.key)
     setVerified(next)
     try {
-      if (has) await unsetRapproVerified(b.key)
-      else await setRapproVerified({ txnKey: b.key, amount: b.amt, txnDate: isoOf(b.dateStr), userId: user?.id })
+      if (newStatus) await setRapproVerified({ txnKey: b.key, amount: b.amt, txnDate: isoOf(b.dateStr), userId: user?.id, status: newStatus })
+      else await unsetRapproVerified(b.key)
     } catch (e) {
       setVerified(verified)
       alert('Erreur : ' + e.message + "\n(As-tu lancé la ligne SQL caisse_rappro_verifies ?)")
@@ -577,7 +584,7 @@ export default function RapprochementView({ user }) {
     const XLSX = await ensureXLSX()
     const wb = XLSX.utils.book_new()
     const srows = [['Date', 'Heure', 'Heure caisse', 'Montant (dh)', 'Réseau', 'Tapé en caisse comme', 'Vérifié'],
-      ...res.suspects.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.odooHeure, b.amt, b.sys, LABEL[b.m] || b.m, verified.has(b.key) ? 'oui' : ''])]
+      ...res.suspects.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.odooHeure, b.amt, b.sys, LABEL[b.m] || b.m, verified.get(b.key) || ''])]
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(srows), 'Suspects')
     const irows = [['Date', 'Heure', 'Montant (dh)', 'Réseau', 'Classement'],
       ...res.intro.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.amt, b.sys, b.cls])]
@@ -601,12 +608,19 @@ export default function RapprochementView({ user }) {
   const onlineRows = ledgerCounts.filter(r => r.online)  // détail des paiements en ligne (filtré)
   const splitsF = res ? res.splits.filter(sp => sp.parts.some(p => (!q || String(p.amt).includes(q)) && dateMatch(p))) : []
   const dailyF = res ? res.daily.filter(d => (!day || d.date === day) && (!month || d.date.startsWith(month))) : []
-  const dayGap = res ? Object.fromEntries(res.daily.map(d => [frOf(d.date), Math.round(d.gap)])) : {}
-  const gapNow = Math.round(dailyF.reduce((s, d) => s + d.gap, 0)) // écart carte (caisse − relevé) sur la période filtrée
+  // Écart par ligne (caisse − relevé) : une carte Odoo sans relevé = +, une carte
+  // au relevé absente/tapée autrement = −. Les lignes marquées « justifié »
+  // sortent de l'écart ; « refusé » (ou non traité) y reste.
+  const lineGap = r => verified.get(r.key) === 'justifie' ? 0
+    : r.status === 'odoo-only' ? r.odooAmt
+      : (r.status === 'cmi-only' || r.status === 'mismatch') ? -r.cmiAmt : 0
+  const dayGap = {}
+  if (res) for (const r of res.ledger) { const c = lineGap(r); if (c) dayGap[r.dateStr] = Math.round(((dayGap[r.dateStr] || 0) + c) * 100) / 100 }
+  const gapNow = res ? Math.round(res.ledger.reduce((s, r) => dateMatch(r) ? s + lineGap(r) : s, 0)) : 0 // écart carte (caisse − relevé) sur la période filtrée
   const months = res ? [...new Set(res.daily.map(d => d.date.slice(0, 7)))] : []
   const dayOptions = res ? res.daily.map(d => d.date).filter(d => !month || d.startsWith(month)) : []
   const suspAmt = suspF.reduce((s, b) => s + b.amt, 0)
-  const nbVerif = suspF.filter(b => verified.has(b.key)).length
+  const nbVerif = suspF.filter(b => verified.get(b.key)).length
   const suspByMethod = suspF.reduce((acc, s) => { acc[s.m] = (acc[s.m] || 0) + 1; return acc }, {})
 
   return (
@@ -718,7 +732,7 @@ export default function RapprochementView({ user }) {
             <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
               <h3 className="font-fraunces italic text-[20px] text-ink mb-1">📋 Détail ligne par ligne (CMI ↔ Odoo)</h3>
               <p className="text-[13px] text-ink-mute mb-3">Chaque ligne du relevé et chaque vente carte Odoo, côte à côte, triées par jour et heure. Côté vide = pas de correspondance.</p>
-              <LedgerTable list={ledgerF} dayGap={dayGap} />
+              <LedgerTable list={ledgerF} dayGap={dayGap} verified={verified} onSetStatus={setStatus} />
             </div>
           )}
 
@@ -737,7 +751,7 @@ export default function RapprochementView({ user }) {
                 </thead>
                 <tbody>
                   {dailyF.map(d => {
-                    const gap = d.gap
+                    const gap = dayGap[frOf(d.date)] || 0
                     return (
                       <tr key={d.date}>
                         <td className="py-2 px-2 border-b border-cream-deep">{frOf(d.date)}</td>
@@ -766,7 +780,7 @@ export default function RapprochementView({ user }) {
                 </div>
                 <details>
                   <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail</summary>
-                  <div className="mt-2"><GroupedTable list={suspF} odooHeure methodCol verified={verified} onToggle={toggleVerified} /></div>
+                  <div className="mt-2"><GroupedTable list={suspF} odooHeure methodCol verified={verified} onSetStatus={setStatus} /></div>
                 </details>
               </>
             ) : (
@@ -826,7 +840,7 @@ export default function RapprochementView({ user }) {
             {onlineRows.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-bordeaux text-[13px] font-semibold">Voir le détail de chaque paiement</summary>
-                <div className="mt-2"><LedgerTable list={onlineRows} /></div>
+                <div className="mt-2"><LedgerTable list={onlineRows} verified={verified} onSetStatus={setStatus} /></div>
               </details>
             )}
           </div>

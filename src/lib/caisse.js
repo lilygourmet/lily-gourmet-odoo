@@ -1896,17 +1896,17 @@ export async function searchCaisse(query) {
 // RAPPROCHEMENT BANCAIRE — suspects vérifiés / justifiés
 // ============================================================
 
-/** Charge l'ensemble des clés de transactions déjà vérifiées. */
+/** Charge les lignes marquées : Map(txn_key -> 'justifie' | 'refuse'). */
 export async function loadRapproVerifies() {
-  const { data, error } = await supabase.from('caisse_rappro_verifies').select('txn_key')
+  const { data, error } = await supabase.from('caisse_rappro_verifies').select('txn_key, note')
   if (error) throw error
-  return new Set((data || []).map(r => r.txn_key))
+  return new Map((data || []).map(r => [r.txn_key, r.note || 'justifie']))
 }
 
-/** Marque une ligne du relevé comme vérifiée. */
-export async function setRapproVerified({ txnKey, amount, txnDate, userId }) {
+/** Marque une ligne du relevé : status = 'justifie' (sort de l'écart) ou 'refuse' (reste). */
+export async function setRapproVerified({ txnKey, amount, txnDate, userId, status }) {
   const { error } = await supabase.from('caisse_rappro_verifies').upsert({
-    txn_key: txnKey, amount, txn_date: txnDate, verified_by: userId || null,
+    txn_key: txnKey, amount, txn_date: txnDate, verified_by: userId || null, note: status || 'justifie',
   })
   if (error) throw error
 }
