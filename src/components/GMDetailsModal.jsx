@@ -24,7 +24,7 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
 
   // Etat de la fiche
   const [parfumNormal, setParfumNormal] = useState(false)
-  const [tetePosition, setTetePosition] = useState('haut')
+  const [tetePosition, setTetePosition] = useState('bas')
   const [lots, setLots] = useState([])
   const [notePatissier, setNotePatissier] = useState('')
 
@@ -46,7 +46,7 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
 
         if (existing) {
           setParfumNormal(existing.parfum_normal || false)
-          setTetePosition(existing.tete_position || 'haut')
+          setTetePosition(existing.tete_position || 'bas')
           setNotePatissier(existing.note_patissier || '')
           if (Array.isArray(existing.lots) && existing.lots.length > 0) {
             setLots(existing.lots)
