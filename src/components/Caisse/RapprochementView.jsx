@@ -282,12 +282,7 @@ function runMatch(bank, raw) {
     annulations.push({ bank: bankLine, neg })
   }
 
-  // Résumé par jour : carte relevé vs carte Odoo
-  const dayBank = {}, dayOdoo = {}
-  for (const b of bank) { const d = isoOf(b.dateStr); dayBank[d] = (dayBank[d] || 0) + b.amt }
-  for (const p of odoo) if (p.c === 'c') { const d = new Date(p.t - offForP(p)).toISOString().slice(0, 10); dayOdoo[d] = (dayOdoo[d] || 0) + p.a }
   const days = [...new Set(bank.map(b => isoOf(b.dateStr)))].sort()
-  const daily = days.map(d => ({ date: d, bank: dayBank[d] || 0, odoo: dayOdoo[d] || 0 }))
 
   // Sens inverse : cartes notées dans Odoo mais sans paiement carte dans le relevé
   // (sur la plage de jours du relevé seulement).
@@ -301,6 +296,23 @@ function runMatch(bank, raw) {
     reverse.push({ t: p.t - off, amt: p.a, sys: 'Carte', heureStr: loc.toISOString().slice(11, 19), dateStr: frOf(iso), ref: p.ref, pos: p.pos, key: `odoo|${iso}|${p.t}|${p.a}` })
   }
   reverse.sort((a, b) => a.t - b.t)
+
+  // Résumé par jour, vue RÉCONCILIATION : chaque carte est attribuée au jour du
+  // relevé qui lui correspond (et NON aux totaux bruts, qui peuvent s'équilibrer
+  // alors qu'une ligne n'a pas trouvé de match). « relevé » = cartes du relevé,
+  // « caisse » = cartes Odoo correspondantes, écart = caisse − relevé. Une ligne
+  // non appariée fait donc bien apparaître un écart. Annulations exclues (neutres).
+  const dRel = {}, dCai = {}
+  const addRel = (dstr, v) => { const d = isoOf(dstr); dRel[d] = (dRel[d] || 0) + v }
+  const addCai = (dstr, v) => { const d = isoOf(dstr); dCai[d] = (dCai[d] || 0) + v }
+  for (const o of okList) { addRel(o.b.dateStr, o.b.amt); addCai(o.b.dateStr, o.b.amt) } // matché : relevé = caisse
+  for (const sp of splits) for (const b of sp.parts) { addRel(b.dateStr, b.amt); addCai(b.dateStr, b.amt) }
+  for (const b of [...intro, ...oNone]) addRel(b.dateStr, b.amt)            // carte au relevé, absente d'Odoo
+  for (const s of [...suspects, ...oSusp]) addRel(s.dateStr, s.amt)         // carte au relevé, tapée autrement
+  for (const r of reverse) addCai(r.dateStr, r.amt)                         // carte Odoo, absente du relevé
+  const r2 = n => Math.round(n * 100) / 100
+  const days2 = [...new Set([...days, ...reverse.map(r => isoOf(r.dateStr))])].sort()
+  const daily = days2.map(d => ({ date: d, bank: r2(dRel[d] || 0), odoo: r2(dCai[d] || 0), gap: r2((dCai[d] || 0) - (dRel[d] || 0)) }))
 
   // Grand livre unifié : CMI ↔ Odoo côte à côte (côté vide si pas de correspondance).
   const ledger = []
@@ -571,7 +583,7 @@ export default function RapprochementView({ user }) {
       ...res.intro.slice().sort((a, b) => a.t - b.t).map(b => [b.dateStr, b.heureStr, b.amt, b.sys, b.cls])]
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(irows), 'Introuvables')
     const drows = [['Jour', 'Carte relevé (dh)', 'Carte caisse Odoo (dh)', 'Écart'],
-      ...res.daily.map(d => [frOf(d.date), Math.round(d.bank), Math.round(d.odoo), Math.round(d.odoo - d.bank)])]
+      ...res.daily.map(d => [frOf(d.date), Math.round(d.bank), Math.round(d.odoo), Math.round(d.gap)])]
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(drows), 'Résumé par jour')
     XLSX.writeFile(wb, `rapprochement_${res.from}_${res.to}.xlsx`)
   }
@@ -589,8 +601,8 @@ export default function RapprochementView({ user }) {
   const onlineRows = ledgerCounts.filter(r => r.online)  // détail des paiements en ligne (filtré)
   const splitsF = res ? res.splits.filter(sp => sp.parts.some(p => (!q || String(p.amt).includes(q)) && dateMatch(p))) : []
   const dailyF = res ? res.daily.filter(d => (!day || d.date === day) && (!month || d.date.startsWith(month))) : []
-  const dayGap = res ? Object.fromEntries(res.daily.map(d => [frOf(d.date), Math.round(d.odoo - d.bank)])) : {}
-  const gapNow = Math.round(dailyF.reduce((s, d) => s + (d.odoo - d.bank), 0)) // écart carte (caisse − relevé) sur la période filtrée
+  const dayGap = res ? Object.fromEntries(res.daily.map(d => [frOf(d.date), Math.round(d.gap)])) : {}
+  const gapNow = Math.round(dailyF.reduce((s, d) => s + d.gap, 0)) // écart carte (caisse − relevé) sur la période filtrée
   const months = res ? [...new Set(res.daily.map(d => d.date.slice(0, 7)))] : []
   const dayOptions = res ? res.daily.map(d => d.date).filter(d => !month || d.startsWith(month)) : []
   const suspAmt = suspF.reduce((s, b) => s + b.amt, 0)
@@ -725,7 +737,7 @@ export default function RapprochementView({ user }) {
                 </thead>
                 <tbody>
                   {dailyF.map(d => {
-                    const gap = d.odoo - d.bank
+                    const gap = d.gap
                     return (
                       <tr key={d.date}>
                         <td className="py-2 px-2 border-b border-cream-deep">{frOf(d.date)}</td>
