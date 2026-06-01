@@ -511,7 +511,9 @@ async function handleSendTemplate(req, res) {
   if (!clientPhone || !templateName) {
     return res.status(400).json({ error: 'clientPhone et templateName requis' })
   }
-  const number = String(clientPhone).replace(/\D/g, '')
+  // Normalise le numéro au format WhatsApp (0… -> 212…) pour ne pas créer un
+  // faux contact « 06… » à côté du vrai client enregistré en 212…
+  const number = normalizePhone(clientPhone)
   const base = apiEndpoint.replace(/\/$/, '')
   const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
