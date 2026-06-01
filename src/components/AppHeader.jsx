@@ -7,6 +7,7 @@ import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
 import LabelsButton from './LabelsButton'
+import NewConversationModal from './Conversations/NewConversationModal'
 import {
   Calendar, BarChart3, ListTodo, Cake, Croissant, Sandwich, Boxes, Store,
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
@@ -56,6 +57,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [showChangePwd, setShowChangePwd] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
+  const [showQuickSend, setShowQuickSend] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState('')
   const [lastSyncAt, setLastSyncAt] = useState(() => {
@@ -719,6 +721,17 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Actions : sync + roue + logout */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {userCanSeeConv && (
+            <button
+              onClick={() => setShowQuickSend(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0"
+              title="Envoyer un devis ou une confirmation par WhatsApp"
+            >
+              <MessageCircle size={14} strokeWidth={1.8} />
+              <span className="hidden sm:inline">WHATSAPP</span>
+            </button>
+          )}
+
           {!admin && canPrintLabels(user) && <LabelsButton />}
 
           {!admin && lastSyncAt && !syncing && (
@@ -797,6 +810,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       {showChangePwd && <ChangePasswordModal user={user} onClose={() => setShowChangePwd(false)} />}
       {showAdminUsers && <AdminUsers currentUser={user} onClose={() => setShowAdminUsers(false)} />}
       {showPalette && <AdminGmConfig onClose={() => setShowPalette(false)} />}
+      {showQuickSend && (
+        <NewConversationModal
+          user={user}
+          onClose={() => setShowQuickSend(false)}
+          onSent={() => setShowQuickSend(false)}
+        />
+      )}
     </>
   )
 }
