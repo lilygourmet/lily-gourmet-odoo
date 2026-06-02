@@ -210,6 +210,23 @@ export async function deleteTeam(teamId) {
 export const adminUpdateUser = updateUser
 
 // ============================================================
+// Disposition perso de la barre d'onglets (header)
+// config = { order: [...views], hidden: [...views] }  ou  null (= défaut)
+// ============================================================
+export async function saveNavbarConfig(userId, config) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ navbar_config: config })
+    .eq('id', userId)
+    .select('id, navbar_config')
+  if (error) throw error
+  if (!data || data.length === 0) {
+    throw new Error('Disposition non enregistrée (RLS ou ID invalide ?)')
+  }
+  return data[0]
+}
+
+// ============================================================
 // Reset mot de passe (par admin)
 // ============================================================
 

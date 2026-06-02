@@ -6,6 +6,8 @@ import { countConversationBadges, markConversationsVisited } from '../lib/conver
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
+import NavbarConfigModal from './NavbarConfigModal'
+import { saveNavbarConfig } from '../lib/users'
 import LabelsButton from './LabelsButton'
 import NewConversationModal from './Conversations/NewConversationModal'
 import {
@@ -13,6 +15,7 @@ import {
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
   MessageCircle, Wallet, CreditCard, Snowflake, Banknote, Users, Plane, Receipt,
   Settings, RefreshCw, LogOut, KeyRound, Printer, Wrench, Palette, Circle, ChevronDown,
+  Sliders, MoreHorizontal,
 } from 'lucide-react'
 
 // Icône (Lucide) par vue / menu / action — remplace les émoticônes du header.
@@ -25,10 +28,10 @@ const HEADER_ICONS = {
   conversations: MessageCircle, paiements: CreditCard, freezer: Snowflake,
   caisse: Banknote, hr: Users, absences: Plane, economat: Receipt,
   // menus déroulants
-  menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench,
+  menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench, menu_more: MoreHorizontal,
   // actions
   settings: Settings, sync: RefreshCw, logout: LogOut, password: KeyRound,
-  print: Printer, palette: Palette, users: Users,
+  print: Printer, palette: Palette, users: Users, nav_config: Sliders,
 }
 function Ico({ name, size = 16, className = '' }) {
   const C = HEADER_ICONS[name] || Circle
@@ -58,6 +61,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [showAdminUsers, setShowAdminUsers] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
   const [showQuickSend, setShowQuickSend] = useState(false)
+  // Disposition perso des onglets (header) : { order, hidden } ou null = défaut
+  const [showNavConfig, setShowNavConfig] = useState(false)
+  const [navCfg, setNavCfg] = useState(user?.navbar_config || null)
+  useEffect(() => { setNavCfg(user?.navbar_config || null) }, [user?.id, user?.navbar_config])
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState('')
   const [lastSyncAt, setLastSyncAt] = useState(() => {
@@ -465,6 +472,16 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     }
   }
 
+  // Enregistre la disposition perso des onglets et l'applique tout de suite
+  async function handleSaveNavCfg(cfg) {
+    await saveNavbarConfig(user.id, cfg)
+    setNavCfg(cfg)
+    try {
+      const raw = localStorage.getItem('lily_user')
+      if (raw) { const u = JSON.parse(raw); u.navbar_config = cfg; localStorage.setItem('lily_user', JSON.stringify(u)) }
+    } catch (_) { /* cache best-effort */ }
+  }
+
   // ============================================================
   // Determine l'onglet "principal" du role (3eme bouton fixe)
   // Admin : Galerie CD (lien externe Cake Vision)
@@ -526,6 +543,47 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   ].filter(i => i.visible)
 
   // ============================================================
+  // Liste a plat de TOUS les onglets autorises (pour l'affichage perso).
+  // Les permissions priment : seuls les onglets autorises sont dans la liste.
+  // ============================================================
+  const fixedTabs = [
+    (!isLivreur(user) && canSeeCalendar(user)) && { view: 'calendar', emoji: '📅', label: 'Calendrier', badge: 0 },
+    (canRecaps(user) || isLivreur(user)) && { view: 'recap', emoji: '📊', label: 'Récap', badge: 0 },
+    { view: 'tasks', emoji: '✅', label: 'Tâches', badge: tasksBadge },
+    showChecklistBtn && { view: 'checklist', emoji: '📋', label: 'Checklist', badge: checklistBadge },
+  ].filter(Boolean)
+  const adminGallery = (admin && canSeeCakeVision(user))
+    ? [{ view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD', badge: 0, externalUrl: 'https://cake-vision-app.vercel.app' }]
+    : []
+  const allTabs = [...fixedTabs, ...adminGallery, ...menuProduction, ...menuVitrine, ...menuOutils]
+    .filter((t, i, arr) => arr.findIndex(x => x.view === t.view) === i)
+
+  // Construit les entrees a afficher (onglets seuls + dossiers), dans l'ordre choisi.
+  const allTabsMap = Object.fromEntries(allTabs.map(t => [t.view, t]))
+  const customActive = !!navCfg && (Array.isArray(navCfg.items) || Array.isArray(navCfg.order) || Array.isArray(navCfg.hidden))
+  const customEntries = []
+  const placedViews = new Set()
+  if (customActive) {
+    const normItems = Array.isArray(navCfg.items)
+      ? navCfg.items
+      : (navCfg.order || []).filter(v => !(navCfg.hidden || []).includes(v)).map(v => ({ type: 'tab', view: v }))
+    for (const it of normItems) {
+      if (it.type === 'group') {
+        const tabs = (it.tabs || []).map(v => allTabsMap[v]).filter(Boolean)
+        if (tabs.length) {
+          tabs.forEach(t => placedViews.add(t.view))
+          customEntries.push({ kind: 'group', id: it.id, label: it.label || 'Dossier', emoji: it.emoji || '📁', tabs })
+        }
+      } else if (it.type === 'tab') {
+        const t = allTabsMap[it.view]
+        if (t) { placedViews.add(t.view); customEntries.push({ kind: 'tab', tab: t }) }
+      }
+    }
+  }
+  // Onglets autorises mais ranges nulle part -> menu "Plus" (jamais perdus)
+  const plusTabs = allTabs.filter(t => !placedViews.has(t.view))
+
+  // ============================================================
   // Composants helper
   // ============================================================
   function NavButton({ view, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
@@ -551,7 +609,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     )
   }
 
-  function DropdownMenu({ id, label, items, footerSlot = null }) {
+  function DropdownMenu({ id, label, items, footerSlot = null, emoji = null }) {
     const open = openMenu === id
     const menuRef = useRef(null)
     useEffect(() => {
@@ -575,7 +633,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
           }`}
         >
-          <Ico name={`menu_${id}`} size={15} />
+          {emoji ? <span className="text-[15px] leading-none">{emoji}</span> : <Ico name={`menu_${id}`} size={15} />}
           <span>{label}</span>
           <ChevronDown size={13} strokeWidth={1.8} className="opacity-70" />
           {totalBadge > 0 && !hasActive && (
@@ -648,74 +706,117 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Navigation : 3 boutons fixes + 3 menus deroulants */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {!isLivreur(user) && canSeeCalendar(user) && (
-            <NavButton view="calendar" label="Calendrier" isActive={activeView === 'calendar'} onClick={() => onNavigate('calendar')} />
-          )}
-          {(canRecaps(user) || isLivreur(user)) && (
-            <NavButton view="recap" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
-          )}
-          <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
-          {primary && (
-            <NavButton
-              view={primary.view}
-              label={primary.label}
-              isActive={activeView === primary.view}
-              badgeCount={primary.badge}
-              onClick={() => {
-                if (primary.externalUrl) {
-                  window.open(primary.externalUrl, '_blank', 'noopener,noreferrer')
-                } else {
-                  onNavigate(primary.view)
-                }
-              }}
-            />
-          )}
-          {showChecklistBtn && (
-            <NavButton
-              view="checklist"
-              label="Checklist"
-              isActive={activeView === 'checklist'}
-              badgeCount={checklistBadge}
-              onClick={() => onNavigate('checklist')}
-            />
-          )}
-
-          {/* Separateur visuel (admin uniquement, separe les boutons fixes des menus) */}
-          {admin && (menuProduction.length > 0 || menuVitrine.length > 0 || menuOutils.length > 0) && (
-            <div className="w-px h-5 bg-line/60 mx-1" />
-          )}
-
-          {admin ? (
+          {customActive ? (
             <>
-              {/* Mode admin : 3 menus deroulants */}
-              <DropdownMenu id="prod" label="Production" items={menuProduction} />
-              <DropdownMenu id="vitrine" label="Vitrine" items={menuVitrine} />
-              <DropdownMenu id="outils" label="Outils" items={menuOutils} footerSlot={canPrintLabels(user) ? <LabelsButton /> : null} />
+              {/* Mode perso : onglets seuls + dossiers, dans l'ordre choisi */}
+              {customEntries.map(en => en.kind === 'tab' ? (
+                <NavButton
+                  key={'t-' + en.tab.view}
+                  view={en.tab.view}
+                  label={en.tab.label}
+                  isActive={activeView === en.tab.view}
+                  badgeCount={en.tab.badge || 0}
+                  convBadge={en.tab.convBadge}
+                  onClick={() => {
+                    if (en.tab.externalUrl) {
+                      window.open(en.tab.externalUrl, '_blank', 'noopener,noreferrer')
+                    } else {
+                      onNavigate(en.tab.view)
+                    }
+                  }}
+                />
+              ) : (
+                <DropdownMenu key={'g-' + en.id} id={'grp-' + en.id} label={en.label} emoji={en.emoji} items={en.tabs} />
+              ))}
+              {plusTabs.length > 0 && (
+                <DropdownMenu id="more" label="Plus" items={plusTabs} />
+              )}
+              {admin && canPrintLabels(user) && <LabelsButton />}
             </>
           ) : (
             <>
-              {/* Mode user non-admin : boutons à plat. On exclut l'item "primary"
-                  qui est déjà affiché en NavButton fixe au-dessus. */}
-              {[...menuProduction, ...menuVitrine, ...menuOutils]
-                .filter(item => !primary || item.view !== primary.view)
-                .map(item => (
-                  <NavButton
-                    key={item.view}
-                    view={item.view}
-                    label={item.label}
-                    isActive={activeView === item.view}
-                    badgeCount={item.badge || 0}
-                    convBadge={item.convBadge}
-                    onClick={() => {
-                      if (item.externalUrl) {
-                        window.open(item.externalUrl, '_blank', 'noopener,noreferrer')
-                      } else {
-                        onNavigate(item.view)
-                      }
-                    }}
-                  />
-                ))}
+              {!isLivreur(user) && canSeeCalendar(user) && (
+                <NavButton view="calendar" label="Calendrier" isActive={activeView === 'calendar'} onClick={() => onNavigate('calendar')} />
+              )}
+              {(canRecaps(user) || isLivreur(user)) && (
+                <NavButton view="recap" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
+              )}
+              <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
+              {primary && (
+                <NavButton
+                  view={primary.view}
+                  label={primary.label}
+                  isActive={activeView === primary.view}
+                  badgeCount={primary.badge}
+                  onClick={() => {
+                    if (primary.externalUrl) {
+                      window.open(primary.externalUrl, '_blank', 'noopener,noreferrer')
+                    } else {
+                      onNavigate(primary.view)
+                    }
+                  }}
+                />
+              )}
+              {showChecklistBtn && (
+                <NavButton
+                  view="checklist"
+                  label="Checklist"
+                  isActive={activeView === 'checklist'}
+                  badgeCount={checklistBadge}
+                  onClick={() => onNavigate('checklist')}
+                />
+              )}
+
+              {/* Separateur visuel (admin uniquement, separe les boutons fixes des menus) */}
+              {admin && (menuProduction.length > 0 || menuVitrine.length > 0 || menuOutils.length > 0) && (
+                <div className="w-px h-5 bg-line/60 mx-1" />
+              )}
+
+              {admin ? (
+                <>
+                  {/* Mode admin : 3 menus deroulants */}
+                  <DropdownMenu id="prod" label="Production" items={menuProduction} />
+                  <DropdownMenu id="vitrine" label="Vitrine" items={menuVitrine} />
+                  <DropdownMenu id="outils" label="Outils" items={menuOutils} footerSlot={canPrintLabels(user) ? <LabelsButton /> : null} />
+                </>
+              ) : (
+                <>
+                  {/* Mode user non-admin : boutons à plat. On exclut l'item "primary"
+                      qui est déjà affiché en NavButton fixe au-dessus. */}
+                  {[...menuProduction, ...menuVitrine, ...menuOutils]
+                    .filter(item => !primary || item.view !== primary.view)
+                    .map(item => (
+                      <NavButton
+                        key={item.view}
+                        view={item.view}
+                        label={item.label}
+                        isActive={activeView === item.view}
+                        badgeCount={item.badge || 0}
+                        convBadge={item.convBadge}
+                        onClick={() => {
+                          if (item.externalUrl) {
+                            window.open(item.externalUrl, '_blank', 'noopener,noreferrer')
+                          } else {
+                            onNavigate(item.view)
+                          }
+                        }}
+                      />
+                    ))}
+                </>
+              )}
             </>
+          )}
+
+          {/* Bouton : personnaliser mes onglets (admin) */}
+          {admin && (
+            <button
+              onClick={() => setShowNavConfig(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-all flex-shrink-0"
+              title="Choisir quels onglets afficher et leur ordre"
+            >
+              <Ico name="nav_config" size={15} />
+              <span className="hidden sm:inline">Mes onglets</span>
+            </button>
           )}
         </div>
 
@@ -815,6 +916,14 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           user={user}
           onClose={() => setShowQuickSend(false)}
           onSent={() => setShowQuickSend(false)}
+        />
+      )}
+      {showNavConfig && (
+        <NavbarConfigModal
+          tabs={allTabs}
+          config={navCfg}
+          onSave={handleSaveNavCfg}
+          onClose={() => setShowNavConfig(false)}
         />
       )}
     </>
