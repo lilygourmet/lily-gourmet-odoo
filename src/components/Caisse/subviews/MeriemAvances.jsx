@@ -4,9 +4,9 @@ import {
   loadAvances,
   loadAvancesSummary,
   createAvance,
-  markAvanceRefunded,
-  unmarkAvanceRefunded,
   deleteAvance,
+  addAvanceRemboursement,
+  deleteAvanceRemboursement,
 } from '../../../lib/caisse'
 import AuditLogPanel from '../AuditLogPanel'
 import { User, Info, Check, Clock, Trash2, HandCoins } from 'lucide-react'
@@ -19,6 +19,7 @@ export default function MeriemAvances({ user }) {
   const [statusFilter, setStatusFilter] = useState('pending')
   const [benefFilter, setBenefFilter]   = useState('all')
   const [showNew, setShowNew]           = useState(false)
+  const [rbAvance, setRbAvance]         = useState(null) // avance en cours de remboursement
   const [loading, setLoading]           = useState(false)
 
   useEffect(() => { (async () => {
@@ -49,17 +50,16 @@ export default function MeriemAvances({ user }) {
     } catch (e) { alert('Erreur : ' + e.message) }
   }
 
-  async function handleMarkRefunded(id) {
-    const note = window.prompt('Note (optionnel) — cash, virement, etc.', '')
+  async function handleAddRb(payload) {
     try {
-      await markAvanceRefunded(id, note || null, user.id)
-      reload()
+      await addAvanceRemboursement({ ...payload, avanceId: rbAvance.id, userId: user.id })
+      setRbAvance(null); reload()
     } catch (e) { alert('Erreur : ' + e.message) }
   }
 
-  async function handleUnmark(id) {
+  async function handleDeleteRb(rbId) {
     if (!window.confirm('Annuler ce remboursement ?')) return
-    try { await unmarkAvanceRefunded(id); reload() } catch (e) { alert('Erreur : ' + e.message) }
+    try { await deleteAvanceRemboursement(rbId, user.id); reload() } catch (e) { alert('Erreur : ' + e.message) }
   }
 
   async function handleDelete(id) {
@@ -95,7 +95,7 @@ export default function MeriemAvances({ user }) {
       </div>
 
       <div style={{ fontSize: 11, color: '#4a3a30', padding: '8px 12px', background: '#FAF6F0', borderRadius: 10, marginBottom: 12, border: '0.5px solid #e5d8c3', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} /> <span>Chaque avance crée automatiquement une <strong>sortie</strong> dans la caisse Meriem. Au remboursement, une <strong>entrée</strong> est créée.</span>
+        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} /> <span>Chaque avance = une <strong>sortie</strong> dans la caisse Meriem. Remboursement possible en <strong>plusieurs fois</strong> : espèces/virement (→ <strong>entrée</strong> caisse) ou <strong>achat pour LG</strong> (baisse la dette, sans cash).</span>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -120,44 +120,55 @@ export default function MeriemAvances({ user }) {
       )}
 
       {!loading && list.map(a => {
-        const isRefunded = !!a.refunded_at
         const benefName = a.beneficiaire?.name || '?'
         const benefColor = COLOR_PALETTE[a.beneficiaire?.color_key] || COLOR_PALETTE.gris
+        const rbs = a.remboursements || []
+        const paid = rbs.reduce((s, r) => s + Number(r.amount), 0)
+        const remaining = Math.max(0, Number(a.amount) - paid)
+        const isRefunded = !!a.refunded_at || remaining < 0.005
         return (
-          <div key={a.id} style={rowCard}>
-            <div>
-              <div style={{ fontSize: 11, color: '#4a3a30' }}>Date</div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{fmtDateCourte(a.avance_date)}</div>
+          <div key={a.id} style={{ marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 12, boxShadow: '0 2px 8px rgba(122,42,68,0.05)', overflow: 'hidden' }}>
+            <div style={{ ...rowCard, margin: 0, border: 'none', boxShadow: 'none', background: 'transparent' }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>Date</div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{fmtDateCourte(a.avance_date)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>Pour</div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: benefColor.bg, color: benefColor.text, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, marginTop: 2 }}><User size={12} /> {benefName}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>Reste dû</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: isRefunded ? '#085041' : '#99201E' }}>{fmtMoney(remaining)}</div>
+                {paid > 0 && <div style={{ fontSize: 10, color: '#8a7a70' }}>sur {fmtMoney(a.amount)}</div>}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#4a3a30' }}>Motif</div>
+                <div style={{ fontSize: 12, color: '#1a0f0a' }}>{a.motif || '—'}</div>
+              </div>
+              <div>
+                {isRefunded
+                  ? <span style={statusDone}><Check size={12} /> Soldée</span>
+                  : <span style={statusPending}><Clock size={12} /> {paid > 0 ? 'Partiel' : 'En attente'}</span>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {!isRefunded && <button onClick={() => setRbAvance({ ...a, _remaining: remaining })} style={{ ...btnPrimarySmall, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Check size={13} /> Rembourser</button>}
+                <button onClick={() => handleDelete(a.id)} style={{ ...btnDanger, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Supprimer l'avance"><Trash2 size={13} /></button>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#4a3a30' }}>Pour</div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: benefColor.bg, color: benefColor.text, padding: '3px 9px', borderRadius: 999, fontSize: 12, fontWeight: 500, marginTop: 2 }}><User size={12} /> {benefName}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#4a3a30' }}>Montant</div>
-              <div style={{ fontSize: 16, fontWeight: 500 }}>{fmtMoney(a.amount)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#4a3a30' }}>Motif</div>
-              <div style={{ fontSize: 12, color: '#1a0f0a' }}>{a.motif || '—'}</div>
-            </div>
-            <div>
-              {isRefunded ? (
-                <div>
-                  <span style={statusDone}><Check size={12} /> Remboursée</span>
-                  <div style={{ fontSize: 10, color: '#4a3a30', marginTop: 4 }}>
-                    {fmtDateLongue(a.refunded_at.slice(0, 10))}
-                    {a.refunded_note && <div style={{ fontStyle: 'italic' }}>{a.refunded_note}</div>}
+            {rbs.length > 0 && (
+              <div style={{ background: '#FAF6F0', borderTop: '0.5px solid #eee', padding: '8px 15px' }}>
+                {rbs.map(r => (
+                  <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#4a3a30', padding: '2px 0' }}>
+                    <span>{fmtDateCourte(r.rb_date)} · {MODE_LABEL[r.mode] || r.mode}{r.note ? ' — ' + r.note : ''}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <strong>{fmtMoney(r.amount)}</strong>
+                      <button onClick={() => handleDeleteRb(r.id)} style={{ ...btnDanger, padding: '2px 6px' }} title="Annuler ce remboursement"><Trash2 size={11} /></button>
+                    </span>
                   </div>
-                </div>
-              ) : (<span style={statusPending}><Clock size={12} /> En attente</span>)}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {isRefunded
-                ? <button onClick={() => handleUnmark(a.id)} style={btnSlim}>↶ Annuler</button>
-                : <button onClick={() => handleMarkRefunded(a.id)} style={{ ...btnPrimarySmall, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Check size={13} /> Remboursée</button>}
-              <button onClick={() => handleDelete(a.id)} style={{ ...btnDanger, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Supprimer"><Trash2 size={13} /></button>
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )
       })}
@@ -165,6 +176,63 @@ export default function MeriemAvances({ user }) {
 <AuditLogPanel entityType="avance" title="Historique des avances" />
 
       {showNew && <NewAvanceModal persoDests={persoDests} onClose={() => setShowNew(false)} onCreate={handleCreate} />}
+      {rbAvance && <RemboursementModal avance={rbAvance} onClose={() => setRbAvance(null)} onSubmit={handleAddRb} />}
+    </div>
+  )
+}
+
+const MODE_LABEL = { especes: '💵 Espèces', virement: '↔️ Virement', achat_lg: '🛒 Achat pour LG' }
+
+function RemboursementModal({ avance, onClose, onSubmit }) {
+  const remaining = avance._remaining ?? Number(avance.amount)
+  const [amount, setAmount] = useState(String(remaining))
+  const [mode, setMode] = useState('especes')
+  const [note, setNote] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit() {
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) { alert('Montant invalide'); return }
+    setSubmitting(true)
+    await onSubmit({ amount: amt, mode, note: note.trim() || null, date })
+    setSubmitting(false)
+  }
+
+  return (
+    <div onClick={onClose} style={modalOverlay}>
+      <div onClick={e => e.stopPropagation()} style={modalBox}>
+        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}><Check size={18} /> Remboursement</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 16 }}>
+          {avance.beneficiaire?.name} · reste dû <strong>{fmtMoney(remaining)}</strong>
+        </div>
+
+        <label style={fieldLabel}>Comment ?</label>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+          {['especes', 'virement', 'achat_lg'].map(m => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              fontSize: 12, padding: '7px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+              border: mode === m ? '1px solid #993556' : '1px solid #e5d8c3',
+              background: mode === m ? '#993556' : 'white', color: mode === m ? 'white' : '#1a0f0a',
+            }}>{MODE_LABEL[m]}</button>
+          ))}
+        </div>
+        {mode === 'achat_lg' && <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 4 }}>Baisse la dette, sans entrée dans la caisse Meriem.</div>}
+
+        <label style={fieldLabel}>Montant (DH)</label>
+        <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} style={fieldInput} autoFocus />
+
+        <label style={fieldLabel}>Note (ex. ce qui a été acheté)</label>
+        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Farine, emballages…" maxLength={80} style={fieldInput} />
+
+        <label style={fieldLabel}>Date</label>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={fieldInput} />
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={btnSlim}>Annuler</button>
+          <button onClick={submit} disabled={submitting} style={btnPrimary}>{submitting ? '…' : 'Enregistrer'}</button>
+        </div>
+      </div>
     </div>
   )
 }

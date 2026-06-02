@@ -1546,7 +1546,8 @@ export async function loadAvances({ beneficiaryId, status = 'pending' } = {}) {
     .select(`
       *,
       beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key),
-      payer:profiles!caisse_avances_payer_id_fkey(id, username, full_name)
+      payer:profiles!caisse_avances_payer_id_fkey(id, username, full_name),
+      remboursements:caisse_avance_remboursements(id, amount, mode, note, rb_date)
     `)
     .order('avance_date', { ascending: false })
 
@@ -1559,6 +1560,57 @@ export async function loadAvances({ beneficiaryId, status = 'pending' } = {}) {
   return data || []
 }
 
+// Remboursement PARTIEL d'une avance. mode: 'especes' | 'virement' | 'achat_lg'.
+// espèces/virement → crée une ENTRÉE dans la caisse Meriem. achat_lg → baisse juste la dette.
+export async function addAvanceRemboursement({ avanceId, amount, mode, note, date, userId }) {
+  const amt = Number(amount)
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: avance, error: errLoad } = await supabase
+    .from('caisse_avances')
+    .select(`*, beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(name), remboursements:caisse_avance_remboursements(amount)`)
+    .eq('id', avanceId).single()
+  if (errLoad) throw errLoad
+  const paidSoFar = (avance.remboursements || []).reduce((s, r) => s + Number(r.amount), 0)
+  const benefName = avance.beneficiaire?.name || '?'
+
+  let mvtId = null
+  if (mode === 'especes' || mode === 'virement') {
+    const mvt = await addMouvement({
+      caisseOwner: 'meriem', type: 'entree', sourceType: 'avance', amount: amt,
+      category: `Prêt ${benefName}`,
+      label: `💸 Remb. ${benefName} (${mode === 'virement' ? 'virement' : 'espèces'})${note ? ' — ' + note : ''}`,
+      mvtDate: date || today, hasFacture: false, userId,
+    })
+    mvtId = mvt.id
+  }
+
+  const { error } = await supabase.from('caisse_avance_remboursements').insert({
+    avance_id: avanceId, amount: amt, mode, note: note || null, rb_date: date || today,
+    mouvement_id: mvtId, created_by: userId,
+  })
+  if (error) { if (mvtId) { try { await deleteMouvement(mvtId) } catch {} } throw error }
+
+  // Soldée si tout est remboursé
+  if (!avance.refunded_at && paidSoFar + amt >= Number(avance.amount) - 0.005) {
+    await supabase.from('caisse_avances')
+      .update({ refunded_at: new Date().toISOString(), refunded_note: 'Soldée (remboursements)' })
+      .eq('id', avanceId)
+  }
+  await logAction({ entityType: 'avance', entityId: avanceId, action: 'remboursement',
+    description: `Remboursement ${amt} (${mode}) — ${benefName}`, amount: amt, actorId: userId })
+}
+
+// Supprime un remboursement partiel (annule son entrée caisse + ré-ouvre l'avance).
+export async function deleteAvanceRemboursement(rbId, actorId = null) {
+  const { data: rb } = await supabase.from('caisse_avance_remboursements').select('*').eq('id', rbId).single()
+  if (rb?.mouvement_id) { try { await deleteMouvement(rb.mouvement_id) } catch {} }
+  await supabase.from('caisse_avance_remboursements').delete().eq('id', rbId)
+  if (rb?.avance_id) {
+    await supabase.from('caisse_avances').update({ refunded_at: null, refunded_note: null }).eq('id', rb.avance_id)
+  }
+  await logAction({ entityType: 'avance', entityId: rb?.avance_id, action: 'remboursement_suppr', description: 'Remboursement annulé', actorId })
+}
+
 /**
  * Récap par bénéficiaire : combien chacun doit (avances non remboursées)
  */
@@ -1568,7 +1620,8 @@ export async function loadAvancesSummary() {
     .select(`
       amount,
       beneficiary_id,
-      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key)
+      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key),
+      remboursements:caisse_avance_remboursements(amount)
     `)
     .is('refunded_at', null)
 
@@ -1586,7 +1639,8 @@ export async function loadAvancesSummary() {
         count: 0,
       }
     }
-    map[key].total_due += Number(a.amount) || 0
+    const paid = (a.remboursements || []).reduce((s, r) => s + Number(r.amount), 0)
+    map[key].total_due += Math.max(0, (Number(a.amount) || 0) - paid)  // reste dû
     map[key].count += 1
   }
   return Object.values(map)
