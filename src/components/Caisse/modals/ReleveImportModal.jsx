@@ -13,6 +13,7 @@ export default function ReleveImportModal({ onClose, onDone }) {
   const [banks, setBanks] = useState([])
   const [recon, setRecon] = useState(null)
   const [savedCount, setSavedCount] = useState(0)
+  const [unmatchedQuery, setUnmatchedQuery] = useState('')
 
   async function handleFiles(list) {
     const arr = Array.from(list || [])
@@ -115,10 +116,39 @@ export default function ReleveImportModal({ onClose, onDone }) {
                 <div style={{ maxHeight: 120, overflowY: 'auto', fontSize: 12, color: '#4a3a30' }}>
                   {recon.refunds.slice(0, 30).map((r, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                      <span>{r.dateOp} · {r.label.slice(0, 40)}</span>
+                      <span>{r.dateIso} · {r.label.slice(0, 40)}</span>
                       <span style={{ fontWeight: 500 }}>-{fmtMoney(r.debit)}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {recon.unmatched && recon.unmatched.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#5b2a86', marginBottom: 6 }}>
+                  Lignes du relevé non attribuées : {recon.unmatched.length}
+                </div>
+                <input
+                  type="search"
+                  value={unmatchedQuery}
+                  onChange={e => setUnmatchedQuery(e.target.value)}
+                  placeholder="🔍 montant ou nom (ex. 600)…"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', marginBottom: 6, fontSize: 12, border: '1px solid #e5d8c3', borderRadius: 8 }}
+                />
+                <div style={{ maxHeight: 160, overflowY: 'auto', fontSize: 12, color: '#4a3a30' }}>
+                  {recon.unmatched
+                    .filter(u => {
+                      const q = unmatchedQuery.trim().toLowerCase()
+                      return !q || String(u.credit).includes(q) || (u.label || '').toLowerCase().includes(q)
+                    })
+                    .slice(0, 60)
+                    .map((u, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 0' }}>
+                        <span>{u.dateIso} · {(u.label || '—').slice(0, 38)}</span>
+                        <span style={{ fontWeight: 600 }}>{fmtMoney(u.credit)}</span>
+                      </div>
+                    ))}
                 </div>
               </div>
             )}

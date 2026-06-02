@@ -249,10 +249,15 @@ export function reconcileEnvelopes(envelopes, txns) {
     decided.set(env.id, c.length === 0 ? { status: 'absent', line: null, candidates: [] } : { status: 'a_confirmer', line: null, candidates: c })
   }
   const results = pending.map(env => ({ env, ...decided.get(env.id) }))
+  // Lignes du relevé NON attribuées (argent reçu sans enveloppe correspondante)
+  const RELEVANT = new Set(['virement_recu', 'autre', 'versement', 'cheque_depot'])
+  const unmatched = credits
+    .filter(c => !used.has(c) && RELEVANT.has(c.type))
+    .sort((a, b) => (a.dateIso < b.dateIso ? 1 : -1))
   const stats = {
     trouve: results.filter(r => r.status === 'trouve').length,
     a_confirmer: results.filter(r => r.status === 'a_confirmer').length,
     absent: results.filter(r => r.status === 'absent').length,
   }
-  return { results, refunds, period, stats }
+  return { results, refunds, period, stats, unmatched }
 }
