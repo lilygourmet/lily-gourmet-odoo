@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversations, conversationUrgency, searchMessageConversationIds, markConversationRead } from '../../lib/conversations'
+import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationRead } from '../../lib/conversations'
 import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
@@ -126,6 +126,17 @@ export default function InboxView({ user, initialConversationId }) {
     contentMatchIds.has(c.id)
   )
 
+  // Tri "file d'attente" : les clients qui attendent une réponse en premier,
+  // le plus ancien en attente tout en haut ; sinon par activité récente.
+  const sorted = [...filtered].sort((a, b) => {
+    const wa = conversationWaitingSince(a)
+    const wb = conversationWaitingSince(b)
+    if (wa && wb) return wa - wb        // les deux attendent : le plus vieux d'abord
+    if (wa) return -1                    // a attend, pas b -> a devant
+    if (wb) return 1
+    return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0)
+  })
+
   return (
     <div className="md:flex md:items-start" style={{ '--appbar': `${headerTop}px` }}>
       {/* COLONNE LISTE (gauche) — collante en desktop */}
@@ -218,7 +229,7 @@ export default function InboxView({ user, initialConversationId }) {
           )}
 
           <div className="space-y-2">
-            {filtered.map(c => {
+            {sorted.map(c => {
               const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
               const u = conversationUrgency(c)
               const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'

@@ -70,6 +70,21 @@ export function conversationUrgency(conv) {
 }
 
 /**
+ * File d'attente : si le client a parlé en dernier (il attend une réponse),
+ * renvoie le timestamp (ms) de son dernier message ; sinon null.
+ * Sert à trier l'inbox : plus l'attente est ancienne, plus on remonte en haut.
+ * Les conversations fermées ne sont jamais "en attente".
+ */
+export function conversationWaitingSince(conv) {
+  if (conv.status === 'fermee') return null
+  const lastInbound = conv.last_inbound_at ? new Date(conv.last_inbound_at).getTime() : null
+  if (!lastInbound) return null
+  const lastMsg = conv.last_message_at ? new Date(conv.last_message_at).getTime() : null
+  const clientSpokeLast = !lastMsg || lastMsg <= lastInbound
+  return clientSpokeLast ? lastInbound : null
+}
+
+/**
  * Compte pour le badge de l'onglet : { unassigned, unread }.
  * - unassigned = conversations status='non_assignee' (à prendre).
  * - unread = conversations dont last_inbound_at > dernière visite du user.
