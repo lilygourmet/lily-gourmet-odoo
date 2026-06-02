@@ -302,6 +302,42 @@ export async function loadEnveloppesForSuivi({ type, month, year, statusFilter =
 }
 
 // ============================================================
+// RAPPROCHEMENT RELEVÉ BMCI (enveloppes Banque)
+// ============================================================
+
+// Enveloppes affectées à un destinataire "banque", dont la date est dans [dMin, dMax].
+export async function loadBanqueEnvelopesBetween(dMin, dMax) {
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select('*, destinataire:caisse_destinataires(*)')
+    .not('destinataire_id', 'is', null)
+    .gte('session_date', dMin)
+    .lte('session_date', dMax)
+    .order('session_date', { ascending: false })
+  if (error) throw error
+  return (data || []).filter(e => e.destinataire?.type === 'banque')
+}
+
+// Upload du relevé PDF (partagé par toutes les enveloppes rapprochées). Renvoie le chemin.
+export async function uploadReleve(file) {
+  const path = `releves/${Date.now()}.pdf`
+  const { error } = await supabase.storage.from('caisse-preuves').upload(path, file, { cacheControl: '3600', upsert: false })
+  if (error) throw error
+  return path
+}
+
+// Applique le résultat d'un rapprochement sur une enveloppe.
+export async function setEnveloppeReleve(envId, { proofUrl, proofDate, status, libelle }) {
+  const updates = { releve_status: status }
+  if (proofUrl)  updates.proof_url = proofUrl
+  if (proofDate) updates.proof_date = proofDate
+  if (libelle != null) updates.note_proof = libelle
+  if (proofUrl)  updates.proof_uploaded_at = new Date().toISOString()
+  const { error } = await supabase.from('caisse_enveloppes').update(updates).eq('id', envId)
+  if (error) throw error
+}
+
+// ============================================================
 // MOUVEMENTS CAISSE
 // ============================================================
 

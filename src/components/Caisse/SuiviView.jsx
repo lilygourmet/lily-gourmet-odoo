@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload } from 'lucide-react'
+import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
+import ReleveImportModal from './modals/ReleveImportModal'
 
 export default function SuiviView({ user }) {
   const [subTab, setSubTab] = useState('banque')
@@ -30,30 +31,42 @@ function SubTabBtn({ active, onClick, children }) {
   )
 }
 
-// Pastille de méthode de paiement (cash ou cheque)
+// Pastille de méthode de paiement (espèces, chèque ou virement)
 function MethodPill({ method }) {
-  const isCheque = method === 'cheque'
+  const map = {
+    cheque:   { bg: '#DCEBFB', color: '#0C447C', border: '#B5D4F2', icon: <ScrollText size={11} />, label: 'Chèque' },
+    virement: { bg: '#EDE4F6', color: '#5b2a86', border: '#D6C3EA', icon: <ArrowLeftRight size={11} />, label: 'Virement' },
+    cash:     { bg: '#DCF0E2', color: '#085041', border: '#B6E2C8', icon: <Banknote size={11} />, label: 'Espèces' },
+  }
+  const m = map[method] || map.cash
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
       fontSize: 10, padding: '3px 8px', borderRadius: 999, fontWeight: 500,
-      background: isCheque ? '#DCEBFB' : '#DCF0E2',
-      color:      isCheque ? '#0C447C' : '#085041',
-      border: isCheque ? '0.5px solid #B5D4F2' : '0.5px solid #B6E2C8',
+      background: m.bg, color: m.color, border: `0.5px solid ${m.border}`,
     }}>
-      {isCheque ? <><ScrollText size={11} /> Chèque</> : <><Banknote size={11} /> Espèces</>}
+      {m.icon} {m.label}
     </span>
   )
+}
+
+// Étiquette de statut de rapprochement (couleur)
+function ReleveStatus({ env }) {
+  if (env.releve_status === 'trouve') return <span style={statusTrouve}>✓ Rapprochée</span>
+  if (env.releve_status === 'a_confirmer') return <span style={statusConfirmer}>À confirmer</span>
+  if (env.proof_url) return <span style={statusDone}>Versée</span>
+  return <span style={statusPending}>À verser</span>
 }
 
 function BanqueSection({ user }) {
   const [year, setYear]   = useState(currentYear())
   const [month, setMonth] = useState(currentMonth())
   const [statusFilter, setStatusFilter] = useState('pending')
-  const [methodFilter, setMethodFilter] = useState('all') // 'all' | 'cash' | 'cheque'
+  const [methodFilter, setMethodFilter] = useState('all') // 'all' | 'cash' | 'cheque' | 'virement'
   const [list, setList] = useState([])
   const [uploadEnv, setUploadEnv] = useState(null)
   const [editDate, setEditDate] = useState({})
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -73,6 +86,7 @@ function BanqueSection({ user }) {
   // Comptage par méthode (pour afficher dans le filtre)
   const countCash = useMemo(() => list.filter(e => (e.payment_method || 'cash') === 'cash').length, [list])
   const countCheque = useMemo(() => list.filter(e => e.payment_method === 'cheque').length, [list])
+  const countVirement = useMemo(() => list.filter(e => e.payment_method === 'virement').length, [list])
 
   async function handleSaveDate(envId, newDate) {
     await updateEnveloppeDate(envId, newDate)
@@ -113,6 +127,9 @@ function BanqueSection({ user }) {
         <button onClick={() => setMethodFilter('cheque')} style={methodFilterBtn(methodFilter === 'cheque', 'cheque')}>
           <ScrollText size={14} /> Chèques ({countCheque})
         </button>
+        <button onClick={() => setMethodFilter('virement')} style={methodFilterBtn(methodFilter === 'virement', 'virement')}>
+          <ArrowLeftRight size={14} /> Virements ({countVirement})
+        </button>
       </div>
 
       {/* Filtre statut */}
@@ -124,6 +141,12 @@ function BanqueSection({ user }) {
             color:      statusFilter === s ? 'white'   : '#4a3a30',
           }}>{s === 'pending' ? 'En attente' : s === 'done' ? 'Versées' : 'Toutes'}</button>
         ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
+          <FileText size={14} /> Importer relevé BMCI
+        </button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -160,7 +183,7 @@ function BanqueSection({ user }) {
             )}
           </div>
           <div>
-            <span style={env.proof_url ? statusDone : statusPending}>{env.proof_url ? 'Versée' : 'À verser'}</span>
+            <ReleveStatus env={env} />
           </div>
           <div>
             {env.proof_url ? (
@@ -177,6 +200,10 @@ function BanqueSection({ user }) {
       {uploadEnv && (
         <UploadPreuveModal env={uploadEnv} kind="banque"
           onClose={() => setUploadEnv(null)} onUpload={handleUpload} />
+      )}
+
+      {showImport && (
+        <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} />
       )}
     </div>
   )
@@ -307,8 +334,10 @@ const rowCard = {
   padding: '14px 16px', borderRadius: 14, marginBottom: 8, background: 'white', border: '0.5px solid #e5d8c3',
   boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
 }
-const statusPending = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#FCE9E8', color: '#99201E' }
-const statusDone    = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#E1F5EE', color: '#085041' }
+const statusPending   = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#FCE9E8', color: '#99201E' }
+const statusDone      = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 500, background: '#E1F5EE', color: '#085041' }
+const statusTrouve    = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 600, background: '#E6F6EC', color: '#0a7d3d' }
+const statusConfirmer = { fontSize: 11, padding: '4px 10px', borderRadius: 999, fontWeight: 600, background: '#FDF0DF', color: '#a9620a' }
 
 function tabBtn(active) {
   return {
