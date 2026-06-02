@@ -11,9 +11,12 @@ import {
   deleteTeam,
   ROLE_LABELS,
   ROLE_COLORS,
+  saveNavbarConfig,
 } from '../lib/users'
 import { ECONOMAT_PROFILS } from '../lib/economat'
 import { loadEmployes } from '../lib/hr'
+import { navTabsForUser } from '../lib/navTabs'
+import NavbarConfigModal from './NavbarConfigModal'
 
 export default function AdminUsers({ currentUser, onClose }) {
   const [users, setUsers] = useState([])
@@ -27,6 +30,7 @@ export default function AdminUsers({ currentUser, onClose }) {
   const [resetPasswordFor, setResetPasswordFor] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [confirmHardDelete, setConfirmHardDelete] = useState(null)
+  const [showNavbarConfigFor, setShowNavbarConfigFor] = useState(null)
   const [collapsedTeams, setCollapsedTeams] = useState({})  // { teamId: true } = replie
   const [showInactive, setShowInactive] = useState(false)   // masquer les désactivés par défaut
   const [dragOverTeam, setDragOverTeam] = useState(null)
@@ -400,6 +404,7 @@ export default function AdminUsers({ currentUser, onClose }) {
                                   onDelete={() => setConfirmDelete(u)}
                                   onHardDelete={() => setConfirmHardDelete(u)}
                                   onDuplicate={() => { setDuplicateFromUser(u); setShowNewForm(true) }}
+                                  onConfigNavbar={() => setShowNavbarConfigFor(u)}
                                 />
                               )}
                             </div>
@@ -450,6 +455,16 @@ export default function AdminUsers({ currentUser, onClose }) {
           user={confirmHardDelete}
           onClose={() => setConfirmHardDelete(null)}
           onConfirm={() => handleHardDelete(confirmHardDelete.id)}
+        />
+      )}
+
+      {/* Modal disposition des onglets (pour un utilisateur) */}
+      {showNavbarConfigFor && (
+        <NavbarConfigModal
+          tabs={navTabsForUser(showNavbarConfigFor)}
+          config={showNavbarConfigFor.navbar_config}
+          onSave={async (cfg) => { await saveNavbarConfig(showNavbarConfigFor.id, cfg); await refresh() }}
+          onClose={() => setShowNavbarConfigFor(null)}
         />
       )}
 
@@ -547,7 +562,7 @@ function TeamManagerModal({ teams, users, onClose, onCreate, onDelete }) {
 // CARTE UTILISATEUR
 // ==========================================
 
-function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHardDelete, onDuplicate }) {
+function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHardDelete, onDuplicate, onConfigNavbar }) {
   const perms = []
   if (user.perm_sync) perms.push('Sync')
   if (user.perm_check) perms.push('Cocher')
@@ -606,6 +621,13 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHa
           className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded hover:bg-cream-warm transition-all"
         >
           🔑 Reset MDP
+        </button>
+        <button
+          onClick={onConfigNavbar}
+          className="px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded hover:bg-cream-warm transition-all"
+          title="Choisir quels onglets cet utilisateur voit et leur ordre"
+        >
+          ⚙️ Onglets
         </button>
         {onDuplicate && (
           <button
