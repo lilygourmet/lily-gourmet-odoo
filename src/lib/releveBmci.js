@@ -185,20 +185,30 @@ function windowFor(method) {
 
 // Rapproche les enveloppes Banque avec les lignes du relevé.
 // Ne touche pas aux enveloppes déjà 'trouve'. status: 'trouve' | 'a_confirmer' | 'absent'
-export function reconcileEnvelopes(envelopes, txns) {
+export function reconcileEnvelopes(envelopes, txns, opts = {}) {
+  const recompute = !!opts.recompute
   const credits = txns.filter(t => t.credit != null && t.dateIso)
   const refunds = txns.filter(t => t.debit != null && t.type === 'virement_emis')
   const isos = credits.map(c => c.dateIso).sort()
   const period = { min: isos[0] || null, max: isos[isos.length - 1] || null }
 
+  // Moyens « couverts » par ce(s) fichier(s) (sécurité : ne pas toucher un moyen absent du relevé)
+  const covered = {
+    virement: credits.some(c => c.type === 'virement_recu' || c.type === 'autre'),
+    cash: credits.some(c => c.type === 'versement'),
+    cheque: credits.some(c => c.type === 'cheque_depot'),
+  }
+
   // Gros montants d'abord (moins d'ambiguïté)
-  const pending = [...envelopes.filter(e => e.releve_status !== 'trouve')]
+  const pending = [...envelopes.filter(e => recompute
+    ? covered[e.payment_method || 'cash']           // tout recalculer (moyens présents seulement)
+    : e.releve_status !== 'trouve')]                // normal : on ne retouche pas les vertes
     .sort((a, b) => Number(b.amount_cash) - Number(a.amount_cash))
   const used = new Set()
 
   // Pré-marquer comme PRISES les lignes déjà attribuées à des enveloppes vertes
-  // (y compris d'un import précédent) → on ne les reproposera pas.
-  for (const env of envelopes) {
+  // (sauf en mode « tout recalculer » où on repart de zéro).
+  if (!recompute) for (const env of envelopes) {
     if (env.releve_status !== 'trouve' || !env.note_proof) continue
     const sep = env.note_proof.indexOf(' · ')
     if (sep < 0) continue

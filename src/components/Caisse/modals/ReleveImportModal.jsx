@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
 import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
-import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve } from '../../../lib/caisse'
+import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 
 // Import d'un relevé/extrait bancaire (PDF) → rapprochement auto des enveloppes Banque.
@@ -14,11 +14,13 @@ export default function ReleveImportModal({ onClose, onDone }) {
   const [recon, setRecon] = useState(null)
   const [savedCount, setSavedCount] = useState(0)
   const [unmatchedQuery, setUnmatchedQuery] = useState('')
+  const [parsed, setParsed] = useState(null) // { envs, allTx }
+  const [recompute, setRecompute] = useState(false)
 
   async function handleFiles(list) {
     const arr = Array.from(list || [])
     if (!arr.length) return
-    setFiles(arr); setError(''); setStep('working')
+    setFiles(arr); setError(''); setStep('working'); setRecompute(false)
     try {
       const allTx = []
       const banksFound = []
@@ -33,9 +35,15 @@ export default function ReleveImportModal({ onClose, onDone }) {
       // Les espèces/chèques sont déposés APRÈS la vente (parfois > 1 mois) → on remonte 120 j avant.
       const start = new Date(isos[0]); start.setDate(start.getDate() - 120)
       const envs = await loadBanqueEnvelopesBetween(start.toISOString().slice(0, 10), isos[isos.length - 1])
-      setRecon(reconcileEnvelopes(envs, allTx))
+      setParsed({ envs, allTx })
+      setRecon(reconcileEnvelopes(envs, allTx, { recompute: false }))
       setStep('preview')
     } catch (e) { setError(e.message || String(e)); setStep('pick') }
+  }
+
+  function toggleRecompute(flag) {
+    setRecompute(flag)
+    if (parsed) setRecon(reconcileEnvelopes(parsed.envs, parsed.allTx, { recompute: flag }))
   }
 
   async function handleSave() {
@@ -63,6 +71,13 @@ export default function ReleveImportModal({ onClose, onDone }) {
           }) }))
         done += Math.min(15, toWrite.length - i)
         setSavedCount(done)
+      }
+      // En mode « tout recalculer » : effacer les anciens rapprochements devenus « absents »
+      if (recompute) {
+        const toClear = recon.results.filter(r => r.status === 'absent' && r.env.releve_status)
+        for (let i = 0; i < toClear.length; i += 15) {
+          await Promise.all(toClear.slice(i, i + 15).map(r => clearEnveloppeReleve(r.env.id)))
+        }
       }
       setStep('done')
       onDone && onDone()
@@ -153,11 +168,15 @@ export default function ReleveImportModal({ onClose, onDone }) {
               </div>
             )}
 
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: '#4a3a30', marginBottom: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={recompute} onChange={e => toggleRecompute(e.target.checked)} style={{ marginTop: 2 }} />
+              <span><b>Tout recalculer</b> — refait le rapprochement même pour les enveloppes déjà vertes, et efface les anciens matchs devenus faux. ⚠️ Importe <b>tous</b> tes relevés (BMCI + Attijariwafa) ensemble, sinon ça efface les rapprochements de la banque absente.</span>
+            </label>
             <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 12 }}>
               Les « trouvés » (vert) et « à confirmer » (orange) recevront le relevé comme preuve.
               Les remboursements sont affichés à titre indicatif.
             </div>
-            <button onClick={handleSave} disabled={s.trouve + s.a_confirmer === 0} style={{ ...pickBtn, opacity: (s.trouve + s.a_confirmer === 0) ? 0.5 : 1 }}>
+            <button onClick={handleSave} disabled={s.trouve + s.a_confirmer === 0 && !recompute} style={{ ...pickBtn, opacity: (s.trouve + s.a_confirmer === 0 && !recompute) ? 0.5 : 1 }}>
               Enregistrer le rapprochement ({s.trouve + s.a_confirmer})
             </button>
           </div>
