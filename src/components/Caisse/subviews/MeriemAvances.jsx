@@ -7,6 +7,9 @@ import {
   deleteAvance,
   addAvanceRemboursement,
   deleteAvanceRemboursement,
+  addLgPaiementPerso,
+  deleteLgPaiementPerso,
+  loadLgPaiementsPerso,
 } from '../../../lib/caisse'
 import AuditLogPanel from '../AuditLogPanel'
 import { User, Info, Check, Clock, Trash2, HandCoins } from 'lucide-react'
@@ -20,6 +23,8 @@ export default function MeriemAvances({ user }) {
   const [benefFilter, setBenefFilter]   = useState('all')
   const [showNew, setShowNew]           = useState(false)
   const [rbAvance, setRbAvance]         = useState(null) // avance en cours de remboursement
+  const [showPayeLG, setShowPayeLG]     = useState(false)
+  const [lgPaiements, setLgPaiements]   = useState([])
   const [loading, setLoading]           = useState(false)
 
   useEffect(() => { (async () => {
@@ -37,6 +42,7 @@ export default function MeriemAvances({ user }) {
       setList(data)
       const sum = await loadAvancesSummary()
       setSummary(sum)
+      setLgPaiements(await loadLgPaiementsPerso())
     } catch (e) {
       console.error(e); alert('Erreur chargement avances : ' + e.message)
     }
@@ -62,6 +68,16 @@ export default function MeriemAvances({ user }) {
     try { await deleteAvanceRemboursement(rbId, user.id); reload() } catch (e) { alert('Erreur : ' + e.message) }
   }
 
+  async function handleAddPayeLG(payload) {
+    try { await addLgPaiementPerso({ ...payload, userId: user.id }); setShowPayeLG(false); reload() }
+    catch (e) { alert('Erreur : ' + e.message) }
+  }
+
+  async function handleDeletePayeLG(id) {
+    if (!window.confirm('Supprimer ce paiement pour LG ?')) return
+    try { await deleteLgPaiementPerso(id); reload() } catch (e) { alert('Erreur : ' + e.message) }
+  }
+
   async function handleDelete(id) {
     if (!window.confirm('Supprimer cette avance ?')) return
     try { await deleteAvance(id); reload() } catch (e) { alert('Erreur : ' + e.message) }
@@ -79,8 +95,8 @@ export default function MeriemAvances({ user }) {
           const c = COLOR_PALETTE[d.color_key] || COLOR_PALETTE.gris
           return (
             <div key={d.id} style={{ background: c.bg, color: c.text, padding: '14px 16px', borderRadius: 16, border: `0.5px solid ${c.border}`, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
-              <div style={{ fontSize: 12, opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: 5 }}><User size={13} /> {d.name} doit</div>
-              <div style={{ fontSize: 22, fontWeight: 500, marginTop: 4 }}>{fmtMoney(total)}</div>
+              <div style={{ fontSize: 12, opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: 5 }}><User size={13} /> {total >= -0.005 ? `${d.name} doit` : `LG doit ${d.name}`}</div>
+              <div style={{ fontSize: 22, fontWeight: 500, marginTop: 4 }}>{fmtMoney(Math.abs(total))}</div>
               <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>{count} avance{count > 1 ? 's' : ''} en cours</div>
             </div>
           )
@@ -89,9 +105,12 @@ export default function MeriemAvances({ user }) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ fontSize: 13, color: '#4a3a30' }}>
-          Total dû à Meriem : <strong style={{ color: '#1a0f0a' }}>{fmtMoney(totalPending)}</strong>
+          Net dû à Meriem : <strong style={{ color: '#1a0f0a' }}>{fmtMoney(totalPending)}</strong>
         </div>
-        <button onClick={() => setShowNew(true)} style={btnPrimary}>+ Nouvelle avance</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowPayeLG(true)} style={{ ...btnPrimary, background: 'white', color: '#993556', border: '1px solid #993556' }}>🛒 Payé pour LG</button>
+          <button onClick={() => setShowNew(true)} style={btnPrimary}>+ Nouvelle avance</button>
+        </div>
       </div>
 
       <div style={{ fontSize: 11, color: '#4a3a30', padding: '8px 12px', background: '#FAF6F0', borderRadius: 10, marginBottom: 12, border: '0.5px solid #e5d8c3', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
@@ -175,8 +194,76 @@ export default function MeriemAvances({ user }) {
 
 <AuditLogPanel entityType="avance" title="Historique des avances" />
 
+      {lgPaiements.length > 0 && (
+        <div style={{ marginTop: 22 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>🛒 Payé pour LG (crédits)</div>
+          {lgPaiements.map(p => {
+            const bc = COLOR_PALETTE[p.beneficiaire?.color_key] || COLOR_PALETTE.gris
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 10, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3' }}>
+                <span style={{ fontSize: 12, color: '#4a3a30' }}>
+                  {fmtDateCourte(p.paid_date)} · <span style={{ background: bc.bg, color: bc.text, padding: '2px 8px', borderRadius: 999 }}>{p.beneficiaire?.name}</span>{p.note ? ' — ' + p.note : ''}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <strong style={{ color: '#085041' }}>{fmtMoney(p.amount)}</strong>
+                  <button onClick={() => handleDeletePayeLG(p.id)} style={{ ...btnDanger, padding: '2px 6px' }} title="Supprimer"><Trash2 size={11} /></button>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {showNew && <NewAvanceModal persoDests={persoDests} onClose={() => setShowNew(false)} onCreate={handleCreate} />}
       {rbAvance && <RemboursementModal avance={rbAvance} onClose={() => setRbAvance(null)} onSubmit={handleAddRb} />}
+      {showPayeLG && <PayeLGModal persoDests={persoDests} onClose={() => setShowPayeLG(false)} onSubmit={handleAddPayeLG} />}
+    </div>
+  )
+}
+
+function PayeLGModal({ persoDests, onClose, onSubmit }) {
+  const [beneficiaryId, setBeneficiaryId] = useState(persoDests[0]?.id || '')
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit() {
+    if (!beneficiaryId) { alert('Choisis qui'); return }
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) { alert('Montant invalide'); return }
+    setSubmitting(true)
+    await onSubmit({ beneficiaryId, amount: amt, note: note.trim() || null, date })
+    setSubmitting(false)
+  }
+
+  return (
+    <div onClick={onClose} style={modalOverlay}>
+      <div onClick={e => e.stopPropagation()} style={modalBox}>
+        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>🛒 Payé pour LG</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 16 }}>
+          Nezha ou Layla a payé des choses pour Lily Gourmet avec son propre argent. Ça baisse ce qu'elle doit (ou crée un crédit en sa faveur).
+        </div>
+
+        <label style={fieldLabel}>Qui a payé ?</label>
+        <select value={beneficiaryId} onChange={e => setBeneficiaryId(e.target.value)} style={fieldInput}>
+          {persoDests.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
+        </select>
+
+        <label style={fieldLabel}>Montant (DH)</label>
+        <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="50" style={fieldInput} autoFocus />
+
+        <label style={fieldLabel}>Pour quoi ?</label>
+        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Farine, emballages, courses LG…" maxLength={80} style={fieldInput} />
+
+        <label style={fieldLabel}>Date</label>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={fieldInput} />
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={btnSlim}>Annuler</button>
+          <button onClick={submit} disabled={submitting} style={btnPrimary}>{submitting ? '…' : 'Enregistrer'}</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -209,7 +296,7 @@ function RemboursementModal({ avance, onClose, onSubmit }) {
 
         <label style={fieldLabel}>Comment ?</label>
         <div style={{ display: 'flex', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-          {['especes', 'virement', 'achat_lg'].map(m => (
+          {['especes', 'virement'].map(m => (
             <button key={m} onClick={() => setMode(m)} style={{
               fontSize: 12, padding: '7px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
               border: mode === m ? '1px solid #993556' : '1px solid #e5d8c3',
@@ -217,7 +304,7 @@ function RemboursementModal({ avance, onClose, onSubmit }) {
             }}>{MODE_LABEL[m]}</button>
           ))}
         </div>
-        {mode === 'achat_lg' && <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 4 }}>Baisse la dette, sans entrée dans la caisse Meriem.</div>}
+        <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 4 }}>Pour un achat fait pour LG, utilise plutôt le bouton « Payé pour LG ».</div>
 
         <label style={fieldLabel}>Montant (DH)</label>
         <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} style={fieldInput} autoFocus />

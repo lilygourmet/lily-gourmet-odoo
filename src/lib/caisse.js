@@ -1614,34 +1614,56 @@ export async function deleteAvanceRemboursement(rbId, actorId = null) {
 /**
  * Récap par bénéficiaire : combien chacun doit (avances non remboursées)
  */
-export async function loadAvancesSummary() {
-  const { data, error } = await supabase
-    .from('caisse_avances')
-    .select(`
-      amount,
-      beneficiary_id,
-      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key),
-      remboursements:caisse_avance_remboursements(amount)
-    `)
-    .is('refunded_at', null)
-
+// « Payé pour LG » par une perso (Nezha/Layla) : crédit en leur faveur.
+export async function addLgPaiementPerso({ beneficiaryId, amount, note, date, userId }) {
+  const { error } = await supabase.from('caisse_lg_paiements_perso').insert({
+    beneficiary_id: beneficiaryId, amount: Number(amount), note: note || null,
+    paid_date: date || new Date().toISOString().slice(0, 10), created_by: userId,
+  })
   if (error) throw error
+  await logAction({ entityType: 'avance', entityId: beneficiaryId, action: 'paye_lg', description: `Payé pour LG : ${amount}${note ? ' — ' + note : ''}`, amount: Number(amount), actorId: userId })
+}
+
+export async function deleteLgPaiementPerso(id) {
+  const { error } = await supabase.from('caisse_lg_paiements_perso').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function loadLgPaiementsPerso() {
+  const { data, error } = await supabase
+    .from('caisse_lg_paiements_perso')
+    .select('*, beneficiaire:caisse_destinataires!caisse_lg_paiements_perso_beneficiary_id_fkey(id, name, color_key)')
+    .order('paid_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function loadAvancesSummary() {
+  const { data: avs, error: e1 } = await supabase
+    .from('caisse_avances')
+    .select(`amount, beneficiary_id,
+      beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(id, name, color_key),
+      remboursements:caisse_avance_remboursements(amount)`)
+    .is('refunded_at', null)
+  if (e1) throw e1
+  const { data: lgs, error: e2 } = await supabase
+    .from('caisse_lg_paiements_perso')
+    .select('amount, beneficiary_id, beneficiaire:caisse_destinataires!caisse_lg_paiements_perso_beneficiary_id_fkey(id, name, color_key)')
+  if (e2) throw e2
 
   const map = {}
-  for (const a of (data || [])) {
-    const key = a.beneficiary_id
-    if (!map[key]) {
-      map[key] = {
-        beneficiary_id: key,
-        name: a.beneficiaire?.name || '?',
-        color_key: a.beneficiaire?.color_key,
-        total_due: 0,
-        count: 0,
-      }
-    }
+  const ensure = (id, benef) => {
+    if (!map[id]) map[id] = { beneficiary_id: id, name: benef?.name || '?', color_key: benef?.color_key, total_due: 0, count: 0 }
+    return map[id]
+  }
+  for (const a of (avs || [])) {
     const paid = (a.remboursements || []).reduce((s, r) => s + Number(r.amount), 0)
-    map[key].total_due += Math.max(0, (Number(a.amount) || 0) - paid)  // reste dû
-    map[key].count += 1
+    const e = ensure(a.beneficiary_id, a.beneficiaire)
+    e.total_due += Math.max(0, (Number(a.amount) || 0) - paid)
+    e.count += 1
+  }
+  for (const l of (lgs || [])) {
+    ensure(l.beneficiary_id, l.beneficiaire).total_due -= Number(l.amount) || 0  // crédit → net peut être négatif (LG doit)
   }
   return Object.values(map)
 }
