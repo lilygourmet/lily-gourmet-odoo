@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Lock, Clock, Archive, Paperclip, X, Image, Pencil, Coins, Trash2, Check, AlertTriangle, Tags, ChevronDown, ChevronUp, FileText } from 'lucide-react'
-import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof, loadPendingReceptions, validateReception, setMouvementFacture } from '../../../lib/caisse'
+import { Lock, Clock, Archive, Paperclip, X, Image, Pencil, Coins, Trash2, Check, AlertTriangle, Tags, ChevronDown, ChevronUp } from 'lucide-react'
+import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof, loadPendingReceptions, validateReception } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 import AjoutSortieModal from '../modals/AjoutSortieModal'
 import AjoutEntreeModal from '../modals/AjoutEntreeModal'
@@ -82,11 +82,6 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
     const r = await loadPendingReceptions(caisseOwner)
     setPendingReceptions(r)
     return r
-  }
-
-  async function handleToggleFacture(mvt) {
-    await setMouvementFacture(mvt.id, !mvt.has_facture, user?.id)
-    reload()
   }
 
   const filtered = useMemo(() => {
@@ -282,7 +277,6 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
           onViewProof={() => setProofingMvt(mvt)}
           onNoProof={() => handleDeclareNoProof(mvt)}
           onResetProof={() => handleResetProof(mvt)}
-          onToggleFacture={() => handleToggleFacture(mvt)}
         />
       ))}
 
@@ -330,7 +324,7 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
 // ============================================================
 // Ligne d'un mouvement (avec badge preuve + boutons)
 // ============================================================
-function MouvementRow({ mvt, isAdmin, highlight, onEdit, onEditAmount, onDelete, onAddProof, onViewProof, onNoProof, onResetProof, onToggleFacture }) {
+function MouvementRow({ mvt, isAdmin, highlight, onEdit, onEditAmount, onDelete, onAddProof, onViewProof, onNoProof, onResetProof }) {
   const isSortie = mvt.type === 'sortie'
   const isEntree = mvt.type === 'entree'
   const status = mvt.proof_status || 'legacy'
@@ -368,18 +362,6 @@ function MouvementRow({ mvt, isAdmin, highlight, onEdit, onEditAmount, onDelete,
         {mvt.type === 'entree' ? '+ ' : '− '}{fmtMoney(Math.abs(mvt.amount)).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span>
       </div>
       <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        {/* Bouton « facture à récupérer » (ajoute/retire de l'onglet Factures) — même si clôturé */}
-        {isSortie && (
-          <button onClick={onToggleFacture}
-            title={mvt.has_facture ? 'Retirer des factures' : 'Marquer « facture à récupérer »'}
-            style={{
-              ...btnIcon,
-              background: mvt.has_facture ? '#993556' : 'white',
-              color: mvt.has_facture ? 'white' : '#993556',
-              borderColor: '#993556',
-            }}><FileText size={14} /></button>
-        )}
-
         {/* Boutons preuve (sorties) — autorisés MÊME si le mois est clôturé
             (on peut toujours ajouter une facture oubliée) */}
         {isSortie && (status === 'pending' || status === 'legacy') && (
