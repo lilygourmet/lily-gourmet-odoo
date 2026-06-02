@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchTemplates, sendTemplate, searchOrders } from '../../lib/conversations'
+import { loadEmployes } from '../../lib/hr'
 
 // Détecte les variables {{1}}, {{2}}… dans le texte d'un template.
 function templateBody(t) {
@@ -33,7 +34,7 @@ const AUTOFILL_TEMPLATES = new Set(['devis_val', 'message_de_confirmation'])
 const isConfirmedOrder = (state) => state === 'sale' || state === 'done'
 const templateForState = (state) => isConfirmedOrder(state) ? 'message_de_confirmation' : 'devis_val'
 
-// Seuls ces templates (usage commercial) sont proposés ; on cache congés/économat/tâches.
+// Templates proposés en mode CLIENT (usage commercial).
 const ALLOWED_TEMPLATES = new Set([
   'devis_val',
   'message_de_confirmation',
@@ -41,6 +42,17 @@ const ALLOWED_TEMPLATES = new Set([
   'relance_validation_de_devis',
   'annulation_devis_sans_reponse',
 ])
+// Template envoyé au PERSONNEL (mode personnel).
+const STAFF_TEMPLATE = 'nouvelle_demande_economat'
+
+// Numéro au format WhatsApp (0… -> 212…) pour l'affichage ; le serveur normalise aussi.
+function normalizePhoneFr(raw) {
+  let d = String(raw || '').replace(/\D/g, '')
+  if (!d) return ''
+  if (d.startsWith('212')) return d
+  if (d.startsWith('0')) return '212' + d.slice(1)
+  return d
+}
 
 export default function NewConversationModal({ user, onClose, onSent }) {
   const [templates, setTemplates] = useState([])
@@ -52,6 +64,9 @@ export default function NewConversationModal({ user, onClose, onSent }) {
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
 
+  // Mode d'envoi : 'client' (commandes) ou 'personnel' (employés)
+  const [mode, setMode] = useState('client')
+
   // Recherche commande Odoo (pré-remplissage)
   const [orderQuery, setOrderQuery] = useState('')
   const [results, setResults] = useState([])
@@ -59,14 +74,28 @@ export default function NewConversationModal({ user, onClose, onSent }) {
   const [searchErr, setSearchErr] = useState('')
   const [pickedOrder, setPickedOrder] = useState(null)
 
+  // Liste du personnel (mode personnel)
+  const [employes, setEmployes] = useState([])
+  const [empErr, setEmpErr] = useState('')
+
   useEffect(() => {
     let cancelled = false
     fetchTemplates()
-      .then(list => { if (!cancelled) setTemplates(list.filter(t => ALLOWED_TEMPLATES.has(templateName(t)))) })
+      .then(list => { if (!cancelled) setTemplates(list) })
       .catch(e => { if (!cancelled) setErrT(e.message) })
       .finally(() => { if (!cancelled) setLoadingT(false) })
     return () => { cancelled = true }
   }, [])
+
+  // Charge les employés actifs (avec numéro) la 1re fois qu'on ouvre le mode personnel.
+  useEffect(() => {
+    if (mode !== 'personnel' || employes.length > 0) return
+    let cancelled = false
+    loadEmployes(true)
+      .then(list => { if (!cancelled) setEmployes((list || []).filter(e => e.telephone)) })
+      .catch(e => { if (!cancelled) setEmpErr(e.message) })
+    return () => { cancelled = true }
+  }, [mode, employes.length])
 
   // Dernières commandes affichées d'office (pour ne rien avoir à taper).
   useEffect(() => {
@@ -104,6 +133,23 @@ export default function NewConversationModal({ user, onClose, onSent }) {
     }
   }
 
+  // Sélectionne un employé : remplit son numéro et choisit le modèle personnel.
+  function pickEmploye(emp) {
+    setPhone(normalizePhoneFr(emp.telephone))
+    setSelectedName(STAFF_TEMPLATE)
+    setParams({})
+    setPickedOrder(null)
+  }
+
+  // Bascule client/personnel : on repart propre.
+  function switchMode(m) {
+    setMode(m)
+    setPhone('')
+    setSelectedName('')
+    setParams({})
+    setPickedOrder(null)
+  }
+
   async function handleSend() {
     if (!phone.trim() || !selected) return
     setSending(true)
@@ -136,6 +182,19 @@ export default function NewConversationModal({ user, onClose, onSent }) {
           <button onClick={onClose} className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0">✕</button>
         </div>
 
+        {/* Basculeur Client / Personnel */}
+        <div className="flex gap-1.5 mb-4">
+          <button
+            onClick={() => switchMode('client')}
+            className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium tracking-wider uppercase transition-all ${mode === 'client' ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft hover:bg-cream-warm'}`}
+          >Client (commande)</button>
+          <button
+            onClick={() => switchMode('personnel')}
+            className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium tracking-wider uppercase transition-all ${mode === 'personnel' ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft hover:bg-cream-warm'}`}
+          >Personnel</button>
+        </div>
+
+        {mode === 'client' && (<>
         {/* Pré-remplir depuis une commande Odoo */}
         <label className="block text-[11px] font-medium text-ink-soft mb-1">Pré-remplir depuis une commande (n° S, nom, ou téléphone)</label>
         <div className="flex gap-2 mb-2">
@@ -188,9 +247,32 @@ export default function NewConversationModal({ user, onClose, onSent }) {
             {' '}→ message <span className="font-medium">{isConfirmedOrder(pickedOrder.state) ? 'de confirmation' : 'de devis'}</span>
           </div>
         )}
+        </>)}
+
+        {mode === 'personnel' && (<>
+        {/* Liste du personnel */}
+        <label className="block text-[11px] font-medium text-ink-soft mb-1">Choisir un employé (le numéro se remplit tout seul)</label>
+        {empErr && <div className="text-[12px] text-bordeaux mb-2">{empErr}</div>}
+        {employes.length === 0 ? (
+          <div className="text-[12px] text-ink-mute italic py-2 mb-2">{empErr ? '' : 'Chargement du personnel…'}</div>
+        ) : (
+          <div className="border border-line rounded-lg divide-y divide-line mb-4 max-h-56 overflow-y-auto">
+            {employes.map(emp => (
+              <button
+                key={emp.id}
+                onClick={() => pickEmploye(emp)}
+                className="w-full text-left px-3 py-2 hover:bg-cream-warm transition-all"
+              >
+                <span className="text-[13px] font-medium text-ink">{emp.nom}</span>
+                {emp.poste && <span className="text-[11px] text-ink-mute"> · {emp.poste}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+        </>)}
 
         {/* Numéro */}
-        <label className="block text-[11px] font-medium text-ink-soft mb-1">Numéro du client (avec indicatif)</label>
+        <label className="block text-[11px] font-medium text-ink-soft mb-1">Numéro (avec indicatif, ex : 212600000000)</label>
         <input
           type="tel"
           value={phone}
@@ -201,7 +283,11 @@ export default function NewConversationModal({ user, onClose, onSent }) {
 
         {/* Template */}
         <label className="block text-[11px] font-medium text-ink-soft mb-1">Modèle de message</label>
-        {pickedOrder ? (
+        {mode === 'personnel' ? (
+          <div className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg mb-3 text-ink font-medium">
+            Nouvelle demande économat
+          </div>
+        ) : pickedOrder ? (
           <div className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg mb-3 text-ink font-medium">
             {isConfirmedOrder(pickedOrder.state) ? 'Confirmation de commande' : 'Devis'}
           </div>
@@ -226,7 +312,7 @@ export default function NewConversationModal({ user, onClose, onSent }) {
             className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3"
           >
             <option value="">— Choisir un template —</option>
-            {templates.map(t => {
+            {templates.filter(t => ALLOWED_TEMPLATES.has(templateName(t))).map(t => {
               const n = templateName(t)
               return <option key={n} value={n}>{n}</option>
             })}
