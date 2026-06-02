@@ -9,23 +9,30 @@ import { fmtMoney, fmtDateCourte } from '../_helpers'
 export default function ReleveImportModal({ onClose, onDone }) {
   const [step, setStep] = useState('pick') // pick | working | preview | saving | done
   const [error, setError] = useState('')
-  const [file, setFile] = useState(null)
-  const [bankLabel, setBankLabel] = useState('')
+  const [files, setFiles] = useState([])
+  const [banks, setBanks] = useState([])
   const [recon, setRecon] = useState(null)
   const [savedCount, setSavedCount] = useState(0)
 
-  async function handleFile(f) {
-    if (!f) return
-    setFile(f); setError(''); setStep('working')
+  async function handleFiles(list) {
+    const arr = Array.from(list || [])
+    if (!arr.length) return
+    setFiles(arr); setError(''); setStep('working')
     try {
-      const { bankLabel, transactions } = await parseStatement(f)
-      if (!transactions.length) throw new Error('Aucune transaction lue dans ce PDF.')
-      setBankLabel(bankLabel)
-      const isos = transactions.filter(t => t.dateIso).map(t => t.dateIso).sort()
+      const allTx = []
+      const banksFound = []
+      for (let i = 0; i < arr.length; i++) {
+        const { bankLabel, transactions } = await parseStatement(arr[i])
+        if (!transactions.length) throw new Error(`Aucune transaction lue dans « ${arr[i].name} ».`)
+        banksFound.push(bankLabel)
+        for (const t of transactions) { t._fileIdx = i; allTx.push(t) }
+      }
+      setBanks(banksFound)
+      const isos = allTx.filter(t => t.dateIso).map(t => t.dateIso).sort()
       // Les espèces/chèques sont déposés APRÈS la vente (parfois > 1 mois) → on remonte 120 j avant.
       const start = new Date(isos[0]); start.setDate(start.getDate() - 120)
       const envs = await loadBanqueEnvelopesBetween(start.toISOString().slice(0, 10), isos[isos.length - 1])
-      setRecon(reconcileEnvelopes(envs, transactions))
+      setRecon(reconcileEnvelopes(envs, allTx))
       setStep('preview')
     } catch (e) { setError(e.message || String(e)); setStep('pick') }
   }
@@ -33,13 +40,17 @@ export default function ReleveImportModal({ onClose, onDone }) {
   async function handleSave() {
     setStep('saving'); setError('')
     try {
-      const path = await uploadReleve(file)
+      // Upload chaque relevé une fois → un chemin par fichier
+      const paths = []
+      for (const f of files) paths.push(await uploadReleve(f))
       const toWrite = recon.results.filter(r => r.status === 'trouve' || r.status === 'a_confirmer')
       let done = 0
       // Par lots de 15 pour ne pas saturer
       for (let i = 0; i < toWrite.length; i += 15) {
-        await Promise.all(toWrite.slice(i, i + 15).map(r => setEnveloppeReleve(r.env.id, {
-          proofUrl: path,
+        await Promise.all(toWrite.slice(i, i + 15).map(r => {
+          const fileIdx = r.line ? r.line._fileIdx : (r.candidates?.[0]?._fileIdx ?? 0)
+          return setEnveloppeReleve(r.env.id, {
+          proofUrl: paths[fileIdx] || paths[0],
           proofDate: r.line ? r.line.dateIso : r.env.session_date,
           status: r.status,
           libelle: r.line
@@ -48,7 +59,7 @@ export default function ReleveImportModal({ onClose, onDone }) {
           candidates: r.status === 'a_confirmer'
             ? JSON.stringify((r.candidates || []).map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) })))
             : null,
-        })))
+          }) }))
         done += Math.min(15, toWrite.length - i)
         setSavedCount(done)
       }
@@ -71,14 +82,14 @@ export default function ReleveImportModal({ onClose, onDone }) {
         {step === 'pick' && (
           <div style={{ padding: 8 }}>
             <p style={{ fontSize: 13, color: '#4a3a30', marginBottom: 14 }}>
-              Choisis le relevé/extrait en PDF (BMCI ou Attijariwafa, reconnu automatiquement).
-              L'app cherche quels virements / espèces / chèques sont arrivés sur le compte,
-              puis te montre le résultat <b>avant</b> d'enregistrer.
+              Choisis un ou <b>plusieurs</b> relevés/extraits en PDF (BMCI et/ou Attijariwafa, reconnus
+              automatiquement). L'app cherche quels virements / espèces / chèques sont arrivés sur les
+              comptes, puis te montre le résultat <b>avant</b> d'enregistrer.
             </p>
             <label style={pickBtn}>
-              <Upload size={16} /> Choisir le PDF
-              <input type="file" accept="application/pdf" style={{ display: 'none' }}
-                onChange={e => handleFile(e.target.files?.[0])} />
+              <Upload size={16} /> Choisir les PDF
+              <input type="file" accept="application/pdf" multiple style={{ display: 'none' }}
+                onChange={e => handleFiles(e.target.files)} />
             </label>
           </div>
         )}
@@ -88,7 +99,7 @@ export default function ReleveImportModal({ onClose, onDone }) {
         {step === 'preview' && recon && (
           <div style={{ padding: 8 }}>
             <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>
-              Banque : <b style={{ color: '#5b2a86' }}>{bankLabel}</b> · période {recon.period.min} → {recon.period.max}
+              {files.length} fichier{files.length > 1 ? 's' : ''} · <b style={{ color: '#5b2a86' }}>{[...new Set(banks)].join(', ')}</b> · période {recon.period.min} → {recon.period.max}
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <Stat icon={<CheckCircle2 size={16} />} color="#0a7d3d" bg="#e6f6ec" n={s.trouve} label="trouvés" />
