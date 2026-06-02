@@ -326,6 +326,17 @@ export async function uploadReleve(file) {
   return path
 }
 
+// Lignes du relevé déjà attribuées à des enveloppes "trouvées" (pour ne pas les reproposer).
+export async function loadConfirmedReleveLines() {
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select('note_proof')
+    .eq('releve_status', 'trouve')
+    .not('note_proof', 'is', null)
+  if (error) throw error
+  return (data || []).map(r => r.note_proof)
+}
+
 // Applique le résultat d'un rapprochement sur une enveloppe.
 export async function setEnveloppeReleve(envId, { proofUrl, proofDate, status, libelle, candidates }) {
   const updates = { releve_status: status }

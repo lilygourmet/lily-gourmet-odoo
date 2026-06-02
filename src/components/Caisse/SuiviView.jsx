@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -69,12 +69,14 @@ function BanqueSection({ user }) {
   const [showImport, setShowImport] = useState(false)
   const [confirmEnv, setConfirmEnv] = useState(null)
   const [query, setQuery] = useState('')
+  const [takenLines, setTakenLines] = useState([])
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
   async function reload() {
     const data = await loadEnveloppesForSuivi({ type: 'banque', month, year, statusFilter })
     setList(data)
+    try { setTakenLines(await loadConfirmedReleveLines()) } catch { /* ignore */ }
   }
 
   // Filtrer par méthode de paiement + recherche texte (montant, client, source)
@@ -249,16 +251,23 @@ function BanqueSection({ user }) {
       )}
 
       {confirmEnv && (
-        <ConfirmChoiceModal env={confirmEnv} onClose={() => setConfirmEnv(null)} onPick={handlePickLine} />
+        <ConfirmChoiceModal env={confirmEnv} takenLines={takenLines} onClose={() => setConfirmEnv(null)} onPick={handlePickLine} />
       )}
     </div>
   )
 }
 
 // Choix de la bonne ligne du relevé pour une enveloppe « à confirmer »
-function ConfirmChoiceModal({ env, onClose, onPick }) {
+function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
+  const normLine = s => (s || '').replace(/\s+/g, ' ').trim().toUpperCase()
+  const taken = takenLines.map(normLine)
   let candidates = []
   try { candidates = JSON.parse(env.releve_candidates || '[]') } catch { candidates = [] }
+  // Retire les lignes déjà attribuées à une enveloppe verte
+  candidates = candidates.filter(c => {
+    const key = normLine(`${c.d} · ${c.l}`)
+    return !taken.some(t => t.startsWith(key.slice(0, 40)) || key.startsWith(t.slice(0, 40)))
+  })
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
