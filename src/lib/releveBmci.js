@@ -221,7 +221,17 @@ function windowFor(method) {
 // Ne touche pas aux enveloppes déjà 'trouve'. status: 'trouve' | 'a_confirmer' | 'absent'
 export function reconcileEnvelopes(envelopes, txns, opts = {}) {
   const recompute = !!opts.recompute
-  const credits = txns.filter(t => t.credit != null && t.dateIso)
+  // Dédoublonnage : un même dépôt présent dans plusieurs relevés (formats/périodes qui se
+  // recouvrent) → même montant + même référence (le numéro dans le libellé). On garde 1 ligne.
+  const rawCredits = txns.filter(t => t.credit != null && t.dateIso)
+  const seenC = new Set()
+  const credits = []
+  for (const c of rawCredits) {
+    const ref = (c.label || '').match(/\d{5,}/)
+    const key = `${Math.round(c.credit * 100)}|${ref ? ref[0] : (c.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24)}`
+    if (seenC.has(key)) continue
+    seenC.add(key); credits.push(c)
+  }
   const refunds = txns.filter(t => t.debit != null && t.type === 'virement_emis')
   const isos = credits.map(c => c.dateIso).sort()
   const period = { min: isos[0] || null, max: isos[isos.length - 1] || null }
