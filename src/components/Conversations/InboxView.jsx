@@ -271,11 +271,20 @@ export default function InboxView({ user, initialConversationId }) {
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-[11px] text-ink-mute">{c.client_phone}</span>
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${badgeCls}`}>
-                          {st.text}{c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}
+                          {c.status === 'en_cours' && c.assigned?.full_name
+                            ? c.assigned.full_name
+                            : `${st.text}${c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}`}
                         </span>
                       </div>
                       {u && u.text && (
-                        <div className={`text-[11px] mt-1 ${toneClass}`}>{u.text}</div>
+                        u.tone === 'urgent' ? (
+                          <div className="mt-1 text-[13px] font-bold text-red-600 flex items-center gap-1">
+                            <span className="text-[16px]">⏰</span>
+                            <span>{u.text.replace(/^⏰\s*/, '')}</span>
+                          </div>
+                        ) : (
+                          <div className={`text-[11px] mt-1 ${toneClass}`}>{u.text}</div>
+                        )
                       )}
                     </div>
                   </div>
