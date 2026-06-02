@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
-import { parseReleveBmci, reconcileEnvelopes } from '../../../lib/releveBmci'
+import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
 import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 
-// Import d'un relevé BMCI (PDF) → rapprochement automatique des enveloppes Banque.
-// Étapes : choisir le fichier → aperçu (rien n'est écrit) → enregistrer.
+// Import d'un relevé/extrait bancaire (PDF) → rapprochement auto des enveloppes Banque.
+// Reconnaît BMCI (relevé + extrait) et Attijariwafa. Étapes : choisir → aperçu → enregistrer.
 export default function ReleveImportModal({ onClose, onDone }) {
   const [step, setStep] = useState('pick') // pick | working | preview | saving | done
   const [error, setError] = useState('')
   const [file, setFile] = useState(null)
+  const [bankLabel, setBankLabel] = useState('')
   const [recon, setRecon] = useState(null)
   const [savedCount, setSavedCount] = useState(0)
 
@@ -17,11 +18,14 @@ export default function ReleveImportModal({ onClose, onDone }) {
     if (!f) return
     setFile(f); setError(''); setStep('working')
     try {
-      const txns = await parseReleveBmci(f)
-      if (!txns.length) throw new Error('Aucune transaction lue dans ce PDF.')
-      const isos = txns.filter(t => t.dateIso).map(t => t.dateIso).sort()
-      const envs = await loadBanqueEnvelopesBetween(isos[0], isos[isos.length - 1])
-      setRecon(reconcileEnvelopes(envs, txns))
+      const { bankLabel, transactions } = await parseStatement(f)
+      if (!transactions.length) throw new Error('Aucune transaction lue dans ce PDF.')
+      setBankLabel(bankLabel)
+      const isos = transactions.filter(t => t.dateIso).map(t => t.dateIso).sort()
+      // Les espèces/chèques sont déposés APRÈS la vente (parfois > 1 mois) → on remonte 120 j avant.
+      const start = new Date(isos[0]); start.setDate(start.getDate() - 120)
+      const envs = await loadBanqueEnvelopesBetween(start.toISOString().slice(0, 10), isos[isos.length - 1])
+      setRecon(reconcileEnvelopes(envs, transactions))
       setStep('preview')
     } catch (e) { setError(e.message || String(e)); setStep('pick') }
   }
@@ -55,7 +59,7 @@ export default function ReleveImportModal({ onClose, onDone }) {
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={e => e.stopPropagation()}>
         <div style={header}>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>Importer un relevé BMCI</span>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>Importer un relevé bancaire</span>
           <button onClick={onClose} style={closeBtn}><X size={16} /></button>
         </div>
 
@@ -64,8 +68,9 @@ export default function ReleveImportModal({ onClose, onDone }) {
         {step === 'pick' && (
           <div style={{ padding: 8 }}>
             <p style={{ fontSize: 13, color: '#4a3a30', marginBottom: 14 }}>
-              Choisis le relevé bancaire en PDF. L'app va chercher quels virements / versements
-              de la période sont arrivés sur le compte, puis te montrera le résultat <b>avant</b> d'enregistrer.
+              Choisis le relevé/extrait en PDF (BMCI ou Attijariwafa, reconnu automatiquement).
+              L'app cherche quels virements / espèces / chèques sont arrivés sur le compte,
+              puis te montre le résultat <b>avant</b> d'enregistrer.
             </p>
             <label style={pickBtn}>
               <Upload size={16} /> Choisir le PDF
@@ -80,7 +85,7 @@ export default function ReleveImportModal({ onClose, onDone }) {
         {step === 'preview' && recon && (
           <div style={{ padding: 8 }}>
             <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>
-              Période du relevé : {recon.period.min} → {recon.period.max}
+              Banque : <b style={{ color: '#5b2a86' }}>{bankLabel}</b> · période {recon.period.min} → {recon.period.max}
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <Stat icon={<CheckCircle2 size={16} />} color="#0a7d3d" bg="#e6f6ec" n={s.trouve} label="trouvés" />

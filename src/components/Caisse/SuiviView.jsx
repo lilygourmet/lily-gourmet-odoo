@@ -150,7 +150,7 @@ function BanqueSection({ user }) {
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
-          <FileText size={14} /> Importer relevé BMCI
+          <FileText size={14} /> Importer relevé bancaire
         </button>
       </div>
 
