@@ -347,19 +347,20 @@ function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof
         {mvt.type === 'entree' ? '+ ' : '− '}{fmtMoney(Math.abs(mvt.amount)).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span>
       </div>
       <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        {/* Boutons preuve (sorties uniquement, mois non clôturé) */}
-        {isSortie && canEdit && (status === 'pending' || status === 'legacy') && (
+        {/* Boutons preuve/facture (sorties) — autorisés MÊME si le mois est clôturé
+            (on peut toujours ajouter une facture oubliée) */}
+        {isSortie && (status === 'pending' || status === 'legacy') && (
           <>
-            <button onClick={onAddProof} title="Ajouter une preuve" style={btnIconGreen}><Paperclip size={14} /></button>
+            <button onClick={onAddProof} title="Ajouter une preuve / facture" style={btnIconGreen}><Paperclip size={14} /></button>
             {status === 'pending' && (
               <button onClick={onNoProof} title="Déclarer : pas de preuve" style={btnIconGray}><X size={14} /></button>
             )}
           </>
         )}
-        {isSortie && canEdit && status === 'with_proof' && (
+        {isSortie && status === 'with_proof' && (
           <button onClick={onViewProof} title="Voir / changer la preuve" style={btnIconGreen}><Image size={14} /></button>
         )}
-        {isSortie && canEdit && status === 'no_proof_declared' && (
+        {isSortie && status === 'no_proof_declared' && (
           <button onClick={onAddProof} title="Changer d'avis : ajouter une preuve" style={btnIconGray}><Paperclip size={14} /></button>
         )}
 
