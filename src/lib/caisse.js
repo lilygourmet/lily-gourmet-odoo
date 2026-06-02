@@ -326,6 +326,41 @@ export async function uploadReleve(file) {
   return path
 }
 
+// Mémorise les lignes du relevé NON attribuées (pour rattachement manuel ultérieur).
+export async function saveUnmatchedReleveLines(lines) {
+  if (!lines || !lines.length) return
+  const { error } = await supabase
+    .from('caisse_releve_lignes')
+    .upsert(lines, { onConflict: 'key', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+// Lignes du relevé encore libres (non rattachées) d'un montant donné.
+export async function loadFreeReleveLines(amount) {
+  const a = Number(amount)
+  const { data, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('*')
+    .is('used_by', null)
+    .gte('amount', a - 0.005)
+    .lte('amount', a + 0.005)
+    .order('ligne_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Rattache manuellement une ligne du relevé à une enveloppe → enveloppe verte + ligne prise.
+export async function attachReleveLine(env, line) {
+  await setEnveloppeReleve(env.id, {
+    proofUrl: line.releve_url || undefined,
+    proofDate: line.ligne_date || undefined,
+    status: 'trouve',
+    libelle: `${line.ligne_date} · ${line.label}`.slice(0, 220),
+    candidates: null,
+  })
+  await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).eq('key', line.key)
+}
+
 // Lignes du relevé déjà attribuées à des enveloppes "trouvées" (pour ne pas les reproposer).
 export async function loadConfirmedReleveLines() {
   const { data, error } = await supabase

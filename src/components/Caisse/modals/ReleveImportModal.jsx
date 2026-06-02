@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
 import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
-import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve } from '../../../lib/caisse'
+import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 
 // Import d'un relevé/extrait bancaire (PDF) → rapprochement auto des enveloppes Banque.
@@ -79,6 +79,13 @@ export default function ReleveImportModal({ onClose, onDone }) {
           await Promise.all(toClear.slice(i, i + 15).map(r => clearEnveloppeReleve(r.env.id)))
         }
       }
+      // Mémoriser les lignes du relevé non attribuées (pour rattachement manuel)
+      const freeLines = (recon.unmatched || []).map(u => ({
+        key: `${u.dateIso}|${Math.round(u.credit * 100)}|${(u.label || '').slice(0, 50)}`,
+        ligne_date: u.dateIso, amount: u.credit, label: (u.label || '').slice(0, 120), type: u.type,
+        releve_url: paths[u._fileIdx ?? 0] || paths[0],
+      }))
+      await saveUnmatchedReleveLines(freeLines)
       setStep('done')
       onDone && onDone()
     } catch (e) { setError(e.message || String(e)); setStep('preview') }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -68,6 +68,7 @@ function BanqueSection({ user }) {
   const [editDate, setEditDate] = useState({})
   const [showImport, setShowImport] = useState(false)
   const [confirmEnv, setConfirmEnv] = useState(null)
+  const [suggestEnv, setSuggestEnv] = useState(null)
   const [query, setQuery] = useState('')
   const [takenLines, setTakenLines] = useState([])
 
@@ -129,6 +130,13 @@ function BanqueSection({ user }) {
   // Annuler un rapprochement (erreur) → remet en gris
   async function handleClearReleve(envId) {
     await clearEnveloppeReleve(envId)
+    reload()
+  }
+
+  // Rattacher manuellement une ligne libre du relevé à une enveloppe
+  async function handleAttach(env, line) {
+    await attachReleveLine(env, line)
+    setSuggestEnv(null)
     reload()
   }
 
@@ -248,6 +256,11 @@ function BanqueSection({ user }) {
                 ↺ Annuler
               </button>
             )}
+            {!env.releve_status && !env.proof_url && (
+              <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
+                💡 Suggérer
+              </button>
+            )}
           </div>
         </div>
       ))}
@@ -264,6 +277,45 @@ function BanqueSection({ user }) {
       {confirmEnv && (
         <ConfirmChoiceModal env={confirmEnv} takenLines={takenLines} onClose={() => setConfirmEnv(null)} onPick={handlePickLine} />
       )}
+
+      {suggestEnv && (
+        <SuggestModal env={suggestEnv} onClose={() => setSuggestEnv(null)} onAttach={handleAttach} />
+      )}
+    </div>
+  )
+}
+
+// Suggestions de lignes LIBRES du relevé (même montant) pour rattacher une enveloppe grise
+function SuggestModal({ env, onClose, onAttach }) {
+  const [lines, setLines] = useState(null)
+  useEffect(() => {
+    (async () => {
+      try { setLines(await loadFreeReleveLines(env.amount_cash)) } catch { setLines([]) }
+    })()
+  }, [env.id])
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Lignes du relevé de {fmtMoney(env.amount_cash)} encore libres</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
+          {env.virement_client ? `${env.virement_client} · ` : ''}{fmtDateCourte(env.session_date)} — choisis la ligne qui correspond :
+        </div>
+        {lines === null ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Chargement…</div>
+        ) : lines.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Aucune ligne libre de ce montant dans les relevés importés.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {lines.map(l => (
+              <button key={l.key} onClick={() => onAttach(env, l)}
+                style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
+                <b>{l.ligne_date}</b> · {l.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <button onClick={onClose} style={{ ...btnNormal, width: '100%' }}>Fermer</button>
+      </div>
     </div>
   )
 }
