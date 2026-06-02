@@ -19,7 +19,7 @@ const QUERY_TYPE_HINT = {
 function HintIcon({ type }) { const I = (QUERY_TYPE_HINT[type] || QUERY_TYPE_HINT.text).Icon; return <I size={13} /> }
 function KindIcon({ kind }) { const I = (KIND_META[kind] || KIND_META.mouvement).Icon; return <I size={12} /> }
 
-export default function RechercheView({ user }) {
+export default function RechercheView({ user, onGoToSource }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -150,7 +150,7 @@ export default function RechercheView({ user }) {
       {results && results.results.length > 0 && !loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {results.results.map(r => (
-            <ResultRow key={r.id} r={r} />
+            <ResultRow key={r.id} r={r} onClick={onGoToSource ? () => onGoToSource(r) : null} />
           ))}
         </div>
       )}
@@ -158,7 +158,7 @@ export default function RechercheView({ user }) {
   )
 }
 
-function ResultRow({ r }) {
+function ResultRow({ r, onClick }) {
   const meta = KIND_META[r.kind]
   const c = COLOR_PALETTE[r.colorKey] || COLOR_PALETTE.gris
 
@@ -173,6 +173,8 @@ function ResultRow({ r }) {
 
   return (
     <div
+      onClick={onClick || undefined}
+      title={onClick ? 'Aller à la source' : undefined}
       style={{
         display: 'grid',
         gridTemplateColumns: '95px 110px 1fr 110px',
@@ -182,7 +184,7 @@ function ResultRow({ r }) {
         borderRadius: 14,
         background: 'white',
         border: '0.5px solid #e5d8c3',
-        cursor: 'default',
+        cursor: onClick ? 'pointer' : 'default',
         transition: 'background 0.15s',
         boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
       }}

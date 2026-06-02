@@ -52,7 +52,11 @@ export default function MeriemUserView({ user }) {
       {sub === 'avances'   && <MeriemAvances  user={user} />}
       {sub === 'courses'   && <MeriemCourses  user={user} />}
       {sub === 'stats'     && <MeriemStats />}
-      {sub === 'recherche' && <RechercheView  user={user} />}
+      {sub === 'recherche' && <RechercheView  user={user} onGoToSource={(r) => {
+        if (r.kind === 'avance') return setSub('avances')
+        if (r.kind === 'mouvement') return setSub(r.raw?.caisse_owner === 'hamid' ? 'hamid' : 'caisse')
+        setSub('caisse')
+      }} />}
     </div>
   )
 }

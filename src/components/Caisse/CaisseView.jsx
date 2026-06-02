@@ -93,7 +93,11 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
       {tab === 'caisses'      && <CaissesGereesView user={user} />}
       {tab === 'salaires'     && <SalairesView user={user} />}
       {tab === 'rapprochement' && <RapprochementView user={user} />}
-      {tab === 'recherche'    && <RechercheView user={user} />}
+      {tab === 'recherche'    && <RechercheView user={user} onGoToSource={(r) => {
+        const map = { enveloppe: 'enveloppes', salaire: 'salaires', mouvement: 'caisses', avance: 'caisses' }
+        const target = map[r.kind]
+        if (target) setTab(target)
+      }} />}
       {tab === 'params'       && <ParametresView user={user} />}
       </div>
     </>
