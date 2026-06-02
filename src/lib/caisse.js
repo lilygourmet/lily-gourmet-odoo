@@ -335,6 +335,17 @@ export async function saveUnmatchedReleveLines(lines) {
   if (error) throw error
 }
 
+// Toutes les lignes du relevé encore libres (reçues en banque, non liées à Odoo).
+export async function loadAllFreeReleveLines() {
+  const { data, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('*')
+    .is('used_by', null)
+    .order('ligne_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
 // Lignes du relevé encore libres (non rattachées) d'un montant donné.
 export async function loadFreeReleveLines(amount) {
   const a = Number(amount)

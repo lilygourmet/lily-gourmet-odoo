@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -9,12 +9,14 @@ export default function SuiviView({ user }) {
   const [subTab, setSubTab] = useState('banque')
   return (
     <div>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
         <SubTabBtn active={subTab === 'banque'} onClick={() => setSubTab('banque')}><Landmark size={14} /> Banque</SubTabBtn>
         <SubTabBtn active={subTab === 'perso'}  onClick={() => setSubTab('perso')}><User size={14} /> Perso</SubTabBtn>
+        <SubTabBtn active={subTab === 'nonlie'} onClick={() => setSubTab('nonlie')}><ArrowLeftRight size={14} /> Reçus banque non liés</SubTabBtn>
       </div>
       {subTab === 'banque' && <BanqueSection user={user} />}
       {subTab === 'perso'  && <PersoSection  user={user} />}
+      {subTab === 'nonlie' && <NonLieSection />}
     </div>
   )
 }
@@ -281,6 +283,49 @@ function BanqueSection({ user }) {
       {suggestEnv && (
         <SuggestModal env={suggestEnv} onClose={() => setSuggestEnv(null)} onAttach={handleAttach} />
       )}
+    </div>
+  )
+}
+
+// Onglet : virements/dépôts reçus en banque (dans les relevés) non liés à une enveloppe Odoo
+function NonLieSection() {
+  const [lines, setLines] = useState(null)
+  const [q, setQ] = useState('')
+  useEffect(() => { (async () => { try { setLines(await loadAllFreeReleveLines()) } catch { setLines([]) } })() }, [])
+  const list = useMemo(() => {
+    if (!lines) return []
+    const s = q.trim().toLowerCase()
+    if (!s) return lines
+    return lines.filter(l => String(l.amount).includes(s) || (l.label || '').toLowerCase().includes(s) || (l.ligne_date || '').includes(s))
+  }, [lines, q])
+  const total = useMemo(() => list.reduce((s, l) => s + Number(l.amount || 0), 0), [list])
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>
+        Lignes reçues sur les relevés bancaires qui n'ont <b>pas</b> trouvé d'enveloppe Odoo correspondante.
+        Importe tes relevés pour remplir cette liste ; rattache-les via « 💡 Suggérer » sur les enveloppes grises.
+      </div>
+      <input type="search" value={q} onChange={e => setQ(e.target.value)}
+        placeholder="🔍 montant, nom, date…"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: '#EDE4F6', color: '#5b2a86', fontSize: 13 }}>
+        <span>{lines === null ? 'Chargement…' : `${list.length} ligne(s) non liée(s)`}</span>
+        <span>{fmtMoney(total)}</span>
+      </div>
+      {lines !== null && list.length === 0 && (
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>
+          Rien ici. (Ré-importe tes relevés pour remplir cette liste.)
+        </div>
+      )}
+      {list.map(l => (
+        <div key={l.key} style={{ ...rowCard, gridTemplateColumns: '1fr auto' }}>
+          <div>
+            <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.ligne_date}</div>
+            <div style={{ fontSize: 13, color: '#1a0f0a' }}>{l.label || '—'}</div>
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#5b2a86' }}>{fmtMoney(l.amount)}</div>
+        </div>
+      ))}
     </div>
   )
 }
