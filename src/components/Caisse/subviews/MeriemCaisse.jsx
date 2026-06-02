@@ -10,11 +10,11 @@ import PreuveMouvementModal from '../modals/PreuveMouvementModal'
 import ValiderReceptionsModal from '../modals/ValiderReceptionsModal'
 import AuditLogPanel from '../AuditLogPanel'
 
-export default function MeriemCaisse({ user }) {
-  return <CaisseGenericView caisseOwner="meriem" user={user} accent={{ bg: '#EAF3DE', text: '#27500A', border: '#97C459' }} />
+export default function MeriemCaisse({ user, focus }) {
+  return <CaisseGenericView caisseOwner="meriem" user={user} focus={focus} accent={{ bg: '#EAF3DE', text: '#27500A', border: '#97C459' }} />
 }
 
-export function CaisseGenericView({ caisseOwner, user, accent }) {
+export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
   const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
   const [year, setYear] = useState(currentYear())
   const [month, setMonth] = useState(currentMonth())
@@ -33,6 +33,19 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
   const [showReceptionsModal, setShowReceptionsModal] = useState(false)
   const [hasAutoShownReceptions, setHasAutoShownReceptions] = useState(false)
   const [catFilterOpen, setCatFilterOpen] = useState(false)
+  const [highlightId, setHighlightId] = useState(null)
+
+  // Navigation depuis la recherche : aller au bon mois et surligner la ligne
+  useEffect(() => {
+    if (focus && focus.year && focus.month) { setYear(focus.year); setMonth(focus.month); setHighlightId(focus.id) }
+  }, [focus])
+  useEffect(() => {
+    if (highlightId == null) return
+    const el = document.getElementById(`mvt-${highlightId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const t = setTimeout(() => setHighlightId(null), 4500)
+    return () => clearTimeout(t)
+  }, [mouvements, highlightId])
 
   useEffect(() => { (async () => {
     setCategories(await loadCategories(caisseOwner))
@@ -255,6 +268,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
         <MouvementRow
           key={mvt.id}
           mvt={mvt}
+          highlight={mvt.id === highlightId}
           isAdmin={isAdmin}
           onEdit={() => setEditingMvt(mvt)}
           onEditAmount={() => handleEditAmount(mvt)}
@@ -310,7 +324,7 @@ export function CaisseGenericView({ caisseOwner, user, accent }) {
 // ============================================================
 // Ligne d'un mouvement (avec badge preuve + boutons)
 // ============================================================
-function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof, onViewProof, onNoProof, onResetProof }) {
+function MouvementRow({ mvt, isAdmin, highlight, onEdit, onEditAmount, onDelete, onAddProof, onViewProof, onNoProof, onResetProof }) {
   const isSortie = mvt.type === 'sortie'
   const isEntree = mvt.type === 'entree'
   const status = mvt.proof_status || 'legacy'
@@ -318,17 +332,18 @@ function MouvementRow({ mvt, isAdmin, onEdit, onEditAmount, onDelete, onAddProof
   const isPendingReception = isEntree && mvt.reception_status === 'pending'
 
   return (
-    <div style={{
+    <div id={`mvt-${mvt.id}`} style={{
       display: 'grid',
       gridTemplateColumns: 'minmax(80px, 90px) 1fr 140px 110px auto',
       gap: 12, alignItems: 'center',
       padding: '12px 14px', borderRadius: 12, marginBottom: 6,
-      background: isPendingReception ? '#FAFAF8' : 'white',
-      border: '0.5px solid #e5d8c3',
-      borderLeft: `3px solid ${mvt.type === 'entree' ? '#97C459' : '#E5C0B6'}`,
-      boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
+      background: highlight ? '#FFF3D6' : isPendingReception ? '#FAFAF8' : 'white',
+      border: highlight ? '2px solid #E0A93B' : '0.5px solid #e5d8c3',
+      borderLeft: highlight ? '4px solid #E0A93B' : `3px solid ${mvt.type === 'entree' ? '#97C459' : '#E5C0B6'}`,
+      boxShadow: highlight ? '0 0 0 3px rgba(224,169,59,0.2)' : '0 2px 8px rgba(122,42,68,0.05)',
       opacity: isPendingReception ? 0.55 : 1,
       borderStyle: isPendingReception ? 'dashed' : 'solid',
+      transition: 'background 0.4s, box-shadow 0.4s',
     }}>
       <div style={{ fontSize: 11, color: '#4a3a30' }}>{fmtDateCourte(mvt.mvt_date)}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

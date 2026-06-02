@@ -43,6 +43,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
     try { localStorage.setItem(STORAGE_KEY, tab) } catch {}
   }, [tab])
   const [envSub, setEnvSub] = useState('affectation') // sous-onglet d'Enveloppes
+  const [focusMvt, setFocusMvt] = useState(null)      // cible de navigation depuis la recherche
 
   return (
     <>
@@ -90,11 +91,17 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
           {envSub === 'suivi'       && <SuiviView user={user} />}
         </>
       )}
-      {tab === 'caisses'      && <CaissesGereesView user={user} />}
+      {tab === 'caisses'      && <CaissesGereesView user={user} focus={focusMvt} />}
       {tab === 'salaires'     && <SalairesView user={user} />}
       {tab === 'rapprochement' && <RapprochementView user={user} />}
       {tab === 'recherche'    && <RechercheView user={user} onGoToSource={(r) => {
-        const map = { enveloppe: 'enveloppes', salaire: 'salaires', mouvement: 'caisses', avance: 'caisses' }
+        if (r.kind === 'mouvement') {
+          const d = String(r.date || '')
+          setFocusMvt({ owner: r.raw?.caisse_owner || 'meriem', year: +d.slice(0, 4), month: +d.slice(5, 7), id: r.raw?.id, ts: Date.now() })
+          setTab('caisses')
+          return
+        }
+        const map = { enveloppe: 'enveloppes', salaire: 'salaires', avance: 'caisses' }
         const target = map[r.kind]
         if (target) setTab(target)
       }} />}

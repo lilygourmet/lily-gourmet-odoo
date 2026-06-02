@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Briefcase, Wallet, Car, FileText, HandCoins, ShoppingCart, BarChart3 } from 'lucide-react'
 import MeriemCaisse from './subviews/MeriemCaisse'
 import MeriemHamid from './subviews/MeriemHamid'
@@ -8,9 +8,16 @@ import MeriemCourses from './subviews/MeriemCourses'
 import MeriemStats from './subviews/MeriemStats'
 import LaylaLG from './subviews/LaylaLG'
 
-export default function CaissesGereesView({ user }) {
+export default function CaissesGereesView({ user, focus }) {
   const [main, setMain] = useState('meriem')   // 'meriem' | 'layla_lg'
   const [sub, setSub]   = useState('caisse')    // 'caisse' | 'hamid' | 'factures'
+
+  // Navigation depuis la recherche → bonne caisse
+  useEffect(() => {
+    if (!focus) return
+    if (focus.owner === 'layla_lg') setMain('layla_lg')
+    else { setMain('meriem'); setSub('caisse') }
+  }, [focus])
 
   return (
     <div>
@@ -30,7 +37,7 @@ export default function CaissesGereesView({ user }) {
             <SubBtn active={sub === 'courses'}  onClick={() => setSub('courses')}><ShoppingCart size={14} /> Courses</SubBtn>
             <SubBtn active={sub === 'stats'}    onClick={() => setSub('stats')}><BarChart3 size={14} /> Stats</SubBtn>
           </div>
-          {sub === 'caisse'   && <MeriemCaisse user={user} />}
+          {sub === 'caisse'   && <MeriemCaisse user={user} focus={focus && focus.owner !== 'layla_lg' ? focus : null} />}
           {sub === 'hamid'    && <MeriemHamid user={user} />}
           {sub === 'factures' && <MeriemFactures user={user} />}
           {sub === 'avances'  && <MeriemAvances user={user} />}
@@ -38,7 +45,7 @@ export default function CaissesGereesView({ user }) {
           {sub === 'stats'    && <MeriemStats />}
         </>
       )}
-      {main === 'layla_lg' && <LaylaLG user={user} />}
+      {main === 'layla_lg' && <LaylaLG user={user} focus={focus && focus.owner === 'layla_lg' ? focus : null} />}
     </div>
   )
 }
