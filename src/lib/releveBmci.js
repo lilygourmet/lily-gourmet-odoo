@@ -140,7 +140,7 @@ export function reconcileEnvelopes(envelopes, txns, { windowDays = 5 } = {}) {
       else { status = 'a_confirmer' }
     }
     if (line) used.add(line)
-    results.push({ env, status, line })
+    results.push({ env, status, line, candidates: cand })
   }
   const stats = {
     trouve: results.filter(r => r.status === 'trouve').length,

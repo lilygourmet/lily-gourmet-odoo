@@ -38,7 +38,9 @@ export default function ReleveImportModal({ onClose, onDone }) {
           proofUrl: path,
           proofDate: r.line ? r.line.dateIso : r.env.session_date,
           status: r.status,
-          libelle: r.line ? r.line.label.slice(0, 200) : null,
+          libelle: r.line
+            ? `${r.line.dateOp} · ${r.line.label}`.slice(0, 220)
+            : (r.candidates || []).map(c => `${c.dateOp} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300) || null,
         })))
         done += Math.min(15, toWrite.length - i)
         setSavedCount(done)

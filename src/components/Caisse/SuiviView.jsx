@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -102,6 +102,11 @@ function BanqueSection({ user }) {
     reload()
   }
 
+  async function handleConfirm(envId) {
+    await setEnveloppeReleve(envId, { status: 'trouve' })
+    reload()
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -168,7 +173,13 @@ function BanqueSection({ user }) {
               Enveloppe <MethodPill method={env.payment_method || 'cash'} />
             </div>
             <div style={{ fontSize: 16, fontWeight: 500 }}>{fmtMoney(env.amount_cash)}</div>
+            {env.virement_client && <div style={{ fontSize: 11, color: '#5b2a86', marginTop: 2 }}>{env.virement_client}</div>}
             <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 2 }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
+            {env.releve_status && env.note_proof && (
+              <div style={{ fontSize: 10, color: env.releve_status === 'trouve' ? '#0a7d3d' : '#a9620a', marginTop: 4, lineHeight: 1.3 }}>
+                {env.releve_status === 'a_confirmer' ? 'Lignes possibles : ' : 'Relevé : '}{env.note_proof}
+              </div>
+            )}
           </div>
           <div>
             <div style={{ fontSize: 10, color: '#8a7a70' }}>Date du versement</div>
@@ -185,13 +196,18 @@ function BanqueSection({ user }) {
           <div>
             <ReleveStatus env={env} />
           </div>
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {env.proof_url ? (
               <button onClick={async () => {
                 const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank')
               }} style={btnNormal}><Eye size={14} /> Voir preuve</button>
             ) : (
               <button onClick={() => setUploadEnv(env)} style={btnNormal}><Upload size={14} /> Ajouter preuve</button>
+            )}
+            {env.releve_status === 'a_confirmer' && (
+              <button onClick={() => handleConfirm(env.id)} style={{ ...btnNormal, background: '#FDF0DF', color: '#a9620a', border: '1px solid #f0d9b8' }}>
+                ✓ Confirmer
+              </button>
             )}
           </div>
         </div>
