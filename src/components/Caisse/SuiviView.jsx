@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -119,10 +119,16 @@ function BanqueSection({ user }) {
     await setEnveloppeReleve(envId, {
       status: 'trouve',
       proofDate: choice?.d || undefined,
-      libelle: choice ? `${choice.d} · ${choice.l}` : undefined,
+      libelle: choice ? `${choice.d} · ${choice.l}` : 'Confirmé manuellement',
       candidates: null,
     })
     setConfirmEnv(null)
+    reload()
+  }
+
+  // Annuler un rapprochement (erreur) → remet en gris
+  async function handleClearReleve(envId) {
+    await clearEnveloppeReleve(envId)
     reload()
   }
 
@@ -235,6 +241,11 @@ function BanqueSection({ user }) {
             {env.releve_status === 'a_confirmer' && (
               <button onClick={() => setConfirmEnv(env)} style={{ ...btnNormal, background: '#FDF0DF', color: '#a9620a', border: '1px solid #f0d9b8' }}>
                 ✓ Confirmer
+              </button>
+            )}
+            {env.releve_status && (
+              <button onClick={() => handleClearReleve(env.id)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#99201E' }}>
+                ↺ Annuler
               </button>
             )}
           </div>

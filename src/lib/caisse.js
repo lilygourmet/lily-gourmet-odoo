@@ -337,6 +337,15 @@ export async function loadConfirmedReleveLines() {
   return (data || []).map(r => r.note_proof)
 }
 
+// Annule un rapprochement : remet l'enveloppe à zéro (gris / à verser).
+export async function clearEnveloppeReleve(envId) {
+  const { error } = await supabase.from('caisse_enveloppes').update({
+    releve_status: null, releve_candidates: null,
+    proof_url: null, proof_date: null, note_proof: null, proof_uploaded_at: null,
+  }).eq('id', envId)
+  if (error) throw error
+}
+
 // Applique le résultat d'un rapprochement sur une enveloppe.
 export async function setEnveloppeReleve(envId, { proofUrl, proofDate, status, libelle, candidates }) {
   const updates = { releve_status: status }
