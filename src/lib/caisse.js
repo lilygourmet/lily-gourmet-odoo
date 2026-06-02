@@ -588,6 +588,20 @@ export async function addMouvement({ caisseOwner, type, sourceType, amount, cate
   return data
 }
 
+// Marque/démarque un mouvement comme "facture à récupérer" (apparaît dans l'onglet Factures).
+export async function setMouvementFacture(id, hasFacture, actorId = null) {
+  const { error } = await supabase.from('caisse_mouvements')
+    .update({ has_facture: !!hasFacture, facture_status: hasFacture ? 'pending' : null })
+    .eq('id', id)
+  if (error) throw error
+  await logAction({
+    entityType: 'mouvement', entityId: id,
+    action: hasFacture ? 'facture_add' : 'facture_remove',
+    description: hasFacture ? 'Marqué « facture à récupérer »' : 'Retiré des factures',
+    actorId,
+  })
+}
+
 export async function updateMouvement(id, updates, actorId = null) {
   const { data: before } = await supabase.from('caisse_mouvements').select('*').eq('id', id).single()
   const { error } = await supabase.from('caisse_mouvements').update(updates).eq('id', id)
