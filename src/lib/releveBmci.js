@@ -63,6 +63,7 @@ function detectFormat(items) {
   if (/Relevé de vos opérations/i.test(head)) return 'bmci_releve'
   if (/RELEVE DE COMPTE/i.test(head) && /SOLDE PRECEDENT/i.test(all)) return 'bmci_extrait'
   if (/SOLDE DEPART AU/i.test(all)) return 'awb'
+  if (/Libellé Opération/i.test(all) || /Mouvement du compte du/i.test(all)) return 'awb_mvt'
   return 'inconnu'
 }
 
@@ -147,10 +148,42 @@ function parseAwb(items) {
   return out
 }
 
+// Attijariwafa « Mouvement du compte / Relevé des opérations » : colonnes Débit/Crédit
+// séparées ; le libellé est décalé du montant (on rattache au montant le plus proche en Y).
+function parseAwbMvt(items) {
+  let headerY = Infinity
+  for (const it of items) { if (/^Crédit$/i.test(it.str)) { headerY = it.y; break } }
+  const ars = []
+  for (const r of groupRows(items)) {
+    let deb = null, cre = null, dop = null
+    for (const it of r.items) {
+      const m = parseAmount(it.str)
+      if (m != null && it.x > 340) { const v = Math.abs(m); if (v < 0.005) continue; if (it.x < 405) deb = v; else cre = v; continue }
+      if (DR.test(it.str) && it.x < 60 && dop == null) dop = it.str
+    }
+    if (deb != null || cre != null) ars.push({ page: r.page, y: r.y, dop, deb, cre, frags: [] })
+  }
+  const bp = {}
+  for (const ar of ars) (bp[ar.page] || (bp[ar.page] = [])).push(ar)
+  for (const it of items) {
+    if (it.y >= headerY || it.x < 100 || it.x >= 295 || DR.test(it.str) || parseAmount(it.str) != null) continue
+    const c = bp[it.page]; if (!c) continue
+    let b = c[0], bd = Math.abs(it.y - b.y)
+    for (const ar of c) { const d = Math.abs(it.y - ar.y); if (d < bd) { bd = d; b = ar } }
+    b.frags.push({ y: it.y, x: it.x, s: it.str })
+  }
+  return ars.map(ar => {
+    const label = ar.frags.sort((p, q) => q.y - p.y || p.x - q.x).map(f => f.s).join(' ').replace(/\s+/g, ' ').trim()
+    const mm = (ar.dop || '').match(/(\d{2})\/(\d{2})\/(\d{4})/)
+    return { dateIso: mm ? isoDate(mm[1], mm[2], mm[3]) : null, label, debit: ar.deb, credit: ar.cre, type: classify(label) }
+  })
+}
+
 const BANK_LABEL = {
   bmci_releve: 'BMCI (relevé)',
   bmci_extrait: 'BMCI (extrait)',
   awb: 'Attijariwafa',
+  awb_mvt: 'Attijariwafa (mouvement)',
 }
 
 // Lit le PDF et renvoie { format, bankLabel, transactions }
@@ -161,6 +194,7 @@ export async function parseStatement(file) {
   if (format === 'bmci_releve') transactions = parseBmciReleve(items)
   else if (format === 'bmci_extrait') transactions = parseBmciExtrait(items)
   else if (format === 'awb') transactions = parseAwb(items)
+  else if (format === 'awb_mvt') transactions = parseAwbMvt(items)
   else throw new Error("Banque non reconnue (ni BMCI ni Attijariwafa). Vérifie que c'est bien un relevé/extrait PDF.")
   return { format, bankLabel: BANK_LABEL[format] || format, transactions }
 }
