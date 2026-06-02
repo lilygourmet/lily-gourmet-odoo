@@ -91,6 +91,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const showReceptionBtn = !isLivreur(user) && canStockCafe(user)
   const showChecklistBtn = !isLivreur(user) && canSeeChecklist(user)
   const userCanSeeConv = canSeeConversations(user)
+  // Étiquettes CD : maintenant dans le Calendrier. On le garde dans le header
+  // UNIQUEMENT pour ceux qui peuvent imprimer mais ne voient pas le calendrier.
+  const showHeaderLabels = canPrintLabels(user) && !canSeeCalendar(user)
 
   // Refresh affichage relatif chaque minute
   useEffect(() => {
@@ -731,7 +734,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               {plusTabs.length > 0 && (
                 <DropdownMenu id="more" label="Plus" items={plusTabs} />
               )}
-              {admin && canPrintLabels(user) && <LabelsButton />}
             </>
           ) : (
             <>
@@ -777,7 +779,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                   {/* Mode admin : 3 menus deroulants */}
                   <DropdownMenu id="prod" label="Production" items={menuProduction} />
                   <DropdownMenu id="vitrine" label="Vitrine" items={menuVitrine} />
-                  <DropdownMenu id="outils" label="Outils" items={menuOutils} footerSlot={canPrintLabels(user) ? <LabelsButton /> : null} />
+                  <DropdownMenu id="outils" label="Outils" items={menuOutils} footerSlot={showHeaderLabels ? <LabelsButton /> : null} />
                 </>
               ) : (
                 <>
@@ -833,7 +835,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </button>
           )}
 
-          {!admin && canPrintLabels(user) && <LabelsButton />}
+          {showHeaderLabels && <LabelsButton />}
 
           {!admin && lastSyncAt && !syncing && (
             <span className="font-mono text-[9px] text-ink-mute hidden md:inline" title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}>

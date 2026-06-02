@@ -7,7 +7,8 @@ import {
   cleanupOldOrders,
   loadAllProfiles,
 } from '../lib/orders'
-import { logout, canSync, canManageUsers, canPatissier, isPatissierOnly, canPrintBatch, canRecaps, isAdmin } from '../lib/auth'
+import { logout, canSync, canManageUsers, canPatissier, isPatissierOnly, canPrintBatch, canPrintLabels, canRecaps, isAdmin } from '../lib/auth'
+import LabelsButton from './LabelsButton'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
@@ -680,7 +681,8 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
               <span>↻ {lastBatchInfo.count}</span>
             </button>
           )}
-          {/* Bouton Etiquettes Zebra deplace dans AppHeader */}
+          {/* Bouton Étiquettes CD (impression Zebra) — dans le calendrier */}
+          {canPrintLabels(user) && !isPatissierMode && <LabelsButton />}
         </div>
 
       </header>
