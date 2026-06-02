@@ -196,6 +196,20 @@ export function reconcileEnvelopes(envelopes, txns) {
     .sort((a, b) => Number(b.amount_cash) - Number(a.amount_cash))
   const used = new Set()
 
+  // Pré-marquer comme PRISES les lignes déjà attribuées à des enveloppes vertes
+  // (y compris d'un import précédent) → on ne les reproposera pas.
+  for (const env of envelopes) {
+    if (env.releve_status !== 'trouve' || !env.note_proof) continue
+    const sep = env.note_proof.indexOf(' · ')
+    if (sep < 0) continue
+    const npDate = env.note_proof.slice(0, sep)
+    const npLabel = env.note_proof.slice(sep + 3, sep + 33)
+    const amt = Number(env.amount_cash)
+    const m = credits.find(c => !used.has(c) && Math.abs(c.credit - amt) < 0.005 && c.dateIso === npDate &&
+      (c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30))))
+    if (m) used.add(m)
+  }
+
   // Lignes disponibles pour une enveloppe (montant + fenêtre date, hors lignes déjà prises,
   // affinées par le nom du client pour les virements).
   const avail = (env) => {
