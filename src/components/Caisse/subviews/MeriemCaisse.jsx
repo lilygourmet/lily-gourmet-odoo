@@ -299,6 +299,7 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
           categories={categories}
           onClose={() => setEditingMvt(null)}
           onSubmit={handleSaveEdit}
+          onOpenProof={() => { const m = editingMvt; setEditingMvt(null); setProofingMvt(m) }}
         />
       )}
       {proofingMvt && (

@@ -11,7 +11,7 @@ import { Pencil } from 'lucide-react'
  *  - onClose() : fermer le modal
  *  - onSubmit({ label, mvt_date, category }) : sauver les modifications
  */
-export default function EditMouvementModal({ mvt, categories = [], onClose, onSubmit }) {
+export default function EditMouvementModal({ mvt, categories = [], onClose, onSubmit, onOpenProof }) {
   const [label, setLabel] = useState(mvt?.label || '')
   const [mvtDate, setMvtDate] = useState(mvt?.mvt_date || '')
   const [category, setCategory] = useState(mvt?.category || '')
@@ -100,6 +100,13 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
               style={inputStyle}
             />
           </label>
+
+          {isSortie && onOpenProof && (
+            <button type="button" onClick={onOpenProof}
+              style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #97C459', background: '#EAF3DE', color: '#27500A', fontSize: 13, fontWeight: 500, cursor: 'pointer', marginBottom: 4 }}>
+              📎 Facture / preuve d'achat
+            </button>
+          )}
 
           {error && (
             <div style={{ padding: '8px 12px', background: '#FCE9E8', color: '#99201E', borderRadius: 6, fontSize: 12, marginTop: 4, marginBottom: 12 }}>
