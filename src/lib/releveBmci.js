@@ -191,36 +191,48 @@ export function reconcileEnvelopes(envelopes, txns) {
   const isos = credits.map(c => c.dateIso).sort()
   const period = { min: isos[0] || null, max: isos[isos.length - 1] || null }
 
-  const pending = envelopes.filter(e => e.releve_status !== 'trouve')
-  const used = new Set()
-  const results = []
   // Gros montants d'abord (moins d'ambiguïté)
-  const sorted = [...pending].sort((a, b) => Number(b.amount_cash) - Number(a.amount_cash))
-  for (const env of sorted) {
+  const pending = [...envelopes.filter(e => e.releve_status !== 'trouve')]
+    .sort((a, b) => Number(b.amount_cash) - Number(a.amount_cash))
+  const used = new Set()
+
+  // Lignes disponibles pour une enveloppe (montant + fenêtre date, hors lignes déjà prises,
+  // affinées par le nom du client pour les virements).
+  const avail = (env) => {
     const method = env.payment_method || 'cash'
     const amt = Number(env.amount_cash)
     const w = windowFor(method)
-    let cand = candidatesFor(method, credits).filter(c =>
-      !used.has(c) && Math.abs(c.credit - amt) < 0.005 &&
-      signedDays(c.dateIso, env.session_date) >= w.min && signedDays(c.dateIso, env.session_date) <= w.max)
-    // dépôt le plus proche en premier
-    cand = cand.sort((a, b) => Math.abs(signedDays(a.dateIso, env.session_date)) - Math.abs(signedDays(b.dateIso, env.session_date)))
-    let status = 'absent', line = null
-    if (cand.length === 1) { status = 'trouve'; line = cand[0] }
-    else if (cand.length > 1) {
-      if (method === 'virement') {
-        const toks = nameTokens(env.virement_client)
-        const named = toks.length ? cand.filter(c => { const L = norm(c.label); return toks.some(t => L.includes(t)) }) : []
-        if (named.length === 1) { status = 'trouve'; line = named[0] }
-        else status = 'a_confirmer'
-      } else {
-        // espèces/chèques : montant exact suffit, on prend le plus proche
-        status = 'a_confirmer'
-      }
+    let c = candidatesFor(method, credits).filter(x =>
+      !used.has(x) && Math.abs(x.credit - amt) < 0.005 &&
+      signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
+    c.sort((a, b) => Math.abs(signedDays(a.dateIso, env.session_date)) - Math.abs(signedDays(b.dateIso, env.session_date)))
+    if (method === 'virement' && c.length > 1) {
+      const toks = nameTokens(env.virement_client)
+      const named = toks.length ? c.filter(x => { const L = norm(x.label); return toks.some(t => L.includes(t)) }) : []
+      if (named.length >= 1) c = named
     }
-    if (line) used.add(line)
-    results.push({ env, status, line, candidates: cand })
+    return c
   }
+
+  // 1) Propagation : on attribue les enveloppes qui n'ont qu'UNE seule ligne possible,
+  //    en boucle (attribuer une ligne en libère d'autres / en exclut pour les voisines).
+  const decided = new Map()
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const env of pending) {
+      if (decided.has(env.id)) continue
+      const c = avail(env)
+      if (c.length === 1) { used.add(c[0]); decided.set(env.id, { status: 'trouve', line: c[0], candidates: [] }); changed = true }
+    }
+  }
+  // 2) Le reste : 0 ligne dispo → absent ; sinon → à confirmer (lignes restantes, hors déjà prises)
+  for (const env of pending) {
+    if (decided.has(env.id)) continue
+    const c = avail(env)
+    decided.set(env.id, c.length === 0 ? { status: 'absent', line: null, candidates: [] } : { status: 'a_confirmer', line: null, candidates: c })
+  }
+  const results = pending.map(env => ({ env, ...decided.get(env.id) }))
   const stats = {
     trouve: results.filter(r => r.status === 'trouve').length,
     a_confirmer: results.filter(r => r.status === 'a_confirmer').length,
