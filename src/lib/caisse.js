@@ -383,8 +383,33 @@ export async function loadConfirmedReleveLines() {
   return (data || []).map(r => r.note_proof)
 }
 
-// Annule un rapprochement : remet l'enveloppe à zéro (gris / à verser).
+// Annule un rapprochement : remet l'enveloppe à zéro ET libère la ligne du relevé
+// (elle retourne dans « non liés » et redevient suggérable).
 export async function clearEnveloppeReleve(envId) {
+  const { data: env } = await supabase.from('caisse_enveloppes')
+    .select('amount_cash, note_proof, proof_url, payment_method').eq('id', envId).single()
+
+  // 1) Libérer une ligne déjà mémorisée et rattachée à cette enveloppe
+  await supabase.from('caisse_releve_lignes').update({ used_by: null }).eq('used_by', envId)
+
+  // 2) Si la ligne n'était pas mémorisée (match auto à l'import), la (ré)insérer comme LIBRE
+  const np = env?.note_proof || ''
+  if (np.includes(' · ') && !np.includes(' | ') && np !== 'Confirmé manuellement') {
+    const sep = np.indexOf(' · ')
+    const d = np.slice(0, sep)
+    const label = np.slice(sep + 3)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      const amt = Number(env.amount_cash)
+      const type = env.payment_method === 'cash' ? 'versement' : env.payment_method === 'cheque' ? 'cheque_depot' : 'virement_recu'
+      await supabase.from('caisse_releve_lignes').upsert([{
+        key: `${d}|${Math.round(amt * 100)}|${label.slice(0, 50)}`,
+        ligne_date: d, amount: amt, label: label.slice(0, 120), type,
+        releve_url: env.proof_url, used_by: null,
+      }], { onConflict: 'key' })
+    }
+  }
+
+  // 3) Remettre l'enveloppe à zéro
   const { error } = await supabase.from('caisse_enveloppes').update({
     releve_status: null, releve_candidates: null,
     proof_url: null, proof_date: null, note_proof: null, proof_uploaded_at: null,
