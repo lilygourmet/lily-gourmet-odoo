@@ -167,14 +167,15 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
       <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-cream-warm/40 mb-1">
         {handleProps
           ? <span {...handleProps} className="text-ink-mute flex-shrink-0"><GripVertical size={16} /></span>
-          : location === 'hidden'
-            ? <button
-                onClick={() => moveTab(view, 'top')}
-                className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-bordeaux/40 text-bordeaux text-[11px] hover:bg-bordeaux hover:text-cream transition-all"
-                title="Mettre cet onglet dans la barre"
-              >⬆ Barre</button>
-            : <span className="w-4 flex-shrink-0" />}
+          : <span className="w-4 flex-shrink-0" />}
         <span className="flex-1 text-[13px] text-ink truncate"><span className="mr-1.5">{t.emoji || '•'}</span>{t.label}</span>
+        {location !== 'top' && (
+          <button
+            onClick={() => moveTab(view, 'top')}
+            className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-bordeaux/40 text-bordeaux text-[11px] hover:bg-bordeaux hover:text-cream transition-all"
+            title="Mettre cet onglet dans la barre"
+          >⬆ Barre</button>
+        )}
         <MoveSelect view={view} location={location} />
       </div>
     )
