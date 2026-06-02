@@ -230,10 +230,10 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       !used.has(x) && Math.abs(x.credit - amt) < 0.005 &&
       signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
     c.sort((a, b) => Math.abs(signedDays(a.dateIso, env.session_date)) - Math.abs(signedDays(b.dateIso, env.session_date)))
-    // Virement : on connaît le nom du client → on ne garde QUE les lignes qui portent ce nom.
-    // Si aucune ne le porte (et qu'il y a plusieurs lignes), c'est que le virement n'est pas
-    // identifiable dans ce relevé → on ne propose pas les transferts d'autres clients.
-    if (method === 'virement' && c.length > 1) {
+    // Virement : on connaît le nom du client → un virement ne s'attribue QUE si une ligne
+    // porte ce nom (même s'il n'y a qu'une seule ligne du bon montant). Sinon l'enveloppe
+    // reste grise et la ligne reste LIBRE (visible dans « non liés », rattachable à la main).
+    if (method === 'virement') {
       const toks = nameTokens(env.virement_client)
       if (toks.length) c = c.filter(x => { const L = norm(x.label); return toks.some(t => L.includes(t)) })
     }
