@@ -809,17 +809,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </>
           )}
 
-          {/* Bouton : personnaliser mes onglets (admin) */}
-          {admin && (
-            <button
-              onClick={() => setShowNavConfig(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux transition-all flex-shrink-0"
-              title="Choisir quels onglets afficher et leur ordre"
-            >
-              <Ico name="nav_config" size={15} />
-              <span className="hidden sm:inline">Mes onglets</span>
-            </button>
-          )}
+          {/* « Mes onglets » est désormais dans la roue ⚙️ (plus de bouton ici). */}
         </div>
 
         {/* Actions : sync + roue + logout */}
@@ -876,6 +866,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               {showCog && (
                 <>
                   <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
+                    {admin && <CogItem name="nav_config" label="Mes onglets" onClick={() => { setShowNavConfig(true); setShowCog(false) }} />}
                     <CogItem name="password" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
                     <CogItem name="users" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
                     {admin && <CogItem name="palette" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
