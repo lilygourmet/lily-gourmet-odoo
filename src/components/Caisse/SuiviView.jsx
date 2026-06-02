@@ -291,19 +291,33 @@ function BanqueSection({ user }) {
 function NonLieSection() {
   const [lines, setLines] = useState(null)
   const [q, setQ] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all') // all | cash | cheque | virement
   useEffect(() => { (async () => { try { setLines(await loadAllFreeReleveLines()) } catch { setLines([]) } })() }, [])
+  const TYPE_GROUP = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
+  const count = useMemo(() => {
+    const c = { cash: 0, cheque: 0, virement: 0 }
+    for (const l of (lines || [])) { const g = TYPE_GROUP[l.type] || 'virement'; c[g]++ }
+    return c
+  }, [lines])
   const list = useMemo(() => {
     if (!lines) return []
+    let l = typeFilter === 'all' ? lines : lines.filter(x => (TYPE_GROUP[x.type] || 'virement') === typeFilter)
     const s = q.trim().toLowerCase()
-    if (!s) return lines
-    return lines.filter(l => String(l.amount).includes(s) || (l.label || '').toLowerCase().includes(s) || (l.ligne_date || '').includes(s))
-  }, [lines, q])
+    if (s) l = l.filter(x => String(x.amount).includes(s) || (x.label || '').toLowerCase().includes(s) || (x.ligne_date || '').includes(s))
+    return l
+  }, [lines, q, typeFilter])
   const total = useMemo(() => list.reduce((s, l) => s + Number(l.amount || 0), 0), [list])
   return (
     <div>
       <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>
         Lignes reçues sur les relevés bancaires qui n'ont <b>pas</b> trouvé d'enveloppe Odoo correspondante.
         Importe tes relevés pour remplir cette liste ; rattache-les via « 💡 Suggérer » sur les enveloppes grises.
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+        <button onClick={() => setTypeFilter('all')} style={methodFilterBtn(typeFilter === 'all')}>Tout ({(lines || []).length})</button>
+        <button onClick={() => setTypeFilter('cash')} style={methodFilterBtn(typeFilter === 'cash')}><Banknote size={14} /> Espèces ({count.cash})</button>
+        <button onClick={() => setTypeFilter('cheque')} style={methodFilterBtn(typeFilter === 'cheque')}><ScrollText size={14} /> Chèques ({count.cheque})</button>
+        <button onClick={() => setTypeFilter('virement')} style={methodFilterBtn(typeFilter === 'virement')}><ArrowLeftRight size={14} /> Virements ({count.virement})</button>
       </div>
       <input type="search" value={q} onChange={e => setQ(e.target.value)}
         placeholder="🔍 montant, nom, date…"
