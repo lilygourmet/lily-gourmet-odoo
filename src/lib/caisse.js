@@ -1823,7 +1823,7 @@ export async function searchCaisse(query) {
       date: e.assigned_date || e.session_date,
       amount: Number(e.amount_cash || 0),
       type: null,
-      label: `Enveloppe ${e.source || ''} · ${e.payment_method === 'cheque' ? 'Chèque' : 'Espèces'}`,
+      label: `Enveloppe ${e.source || ''} · ${e.payment_method === 'cheque' ? 'Chèque' : e.payment_method === 'virement' ? 'Virement' : 'Espèces'}${e.virement_client ? ' (' + e.virement_client + ')' : ''}`,
       sublabel: e.destinataire?.name ? `→ ${e.destinataire.name}` : '⏳ À affecter',
       colorKey: e.destinataire?.color_key || 'gris',
       raw: e,

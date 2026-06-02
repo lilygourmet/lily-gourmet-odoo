@@ -68,6 +68,7 @@ function BanqueSection({ user }) {
   const [editDate, setEditDate] = useState({})
   const [showImport, setShowImport] = useState(false)
   const [confirmEnv, setConfirmEnv] = useState(null)
+  const [query, setQuery] = useState('')
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -76,11 +77,19 @@ function BanqueSection({ user }) {
     setList(data)
   }
 
-  // Filtrer par méthode de paiement côté client
+  // Filtrer par méthode de paiement + recherche texte (montant, client, source)
   const filteredList = useMemo(() => {
-    if (methodFilter === 'all') return list
-    return list.filter(e => (e.payment_method || 'cash') === methodFilter)
-  }, [list, methodFilter])
+    let l = methodFilter === 'all' ? list : list.filter(e => (e.payment_method || 'cash') === methodFilter)
+    const q = query.trim().toLowerCase()
+    if (q) {
+      l = l.filter(e =>
+        String(e.amount_cash).includes(q) ||
+        (e.virement_client || '').toLowerCase().includes(q) ||
+        (e.source || '').toLowerCase().includes(q) ||
+        (e.note_proof || '').toLowerCase().includes(q))
+    }
+    return l
+  }, [list, methodFilter, query])
 
   const total = useMemo(() => filteredList.reduce((s, e) => s + Number(e.amount_cash), 0), [filteredList])
 
@@ -144,6 +153,15 @@ function BanqueSection({ user }) {
           <ArrowLeftRight size={14} /> Virements ({countVirement})
         </button>
       </div>
+
+      {/* Recherche (montant, client, source) */}
+      <input
+        type="search"
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="🔍 Chercher un montant, un client, une source…"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }}
+      />
 
       {/* Filtre statut */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
