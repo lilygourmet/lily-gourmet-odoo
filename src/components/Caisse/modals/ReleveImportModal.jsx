@@ -43,8 +43,11 @@ export default function ReleveImportModal({ onClose, onDone }) {
           proofDate: r.line ? r.line.dateIso : r.env.session_date,
           status: r.status,
           libelle: r.line
-            ? `${r.line.dateOp} · ${r.line.label}`.slice(0, 220)
-            : (r.candidates || []).map(c => `${c.dateOp} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300) || null,
+            ? `${r.line.dateIso} · ${r.line.label}`.slice(0, 220)
+            : (r.candidates || []).map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300) || null,
+          candidates: r.status === 'a_confirmer'
+            ? JSON.stringify((r.candidates || []).map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) })))
+            : null,
         })))
         done += Math.min(15, toWrite.length - i)
         setSavedCount(done)

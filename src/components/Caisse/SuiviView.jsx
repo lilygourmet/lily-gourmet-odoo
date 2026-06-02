@@ -67,6 +67,7 @@ function BanqueSection({ user }) {
   const [uploadEnv, setUploadEnv] = useState(null)
   const [editDate, setEditDate] = useState({})
   const [showImport, setShowImport] = useState(false)
+  const [confirmEnv, setConfirmEnv] = useState(null)
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -102,8 +103,15 @@ function BanqueSection({ user }) {
     reload()
   }
 
-  async function handleConfirm(envId) {
-    await setEnveloppeReleve(envId, { status: 'trouve' })
+  // Confirmer une enveloppe orange en choisissant la bonne ligne du relevé
+  async function handlePickLine(envId, choice) {
+    await setEnveloppeReleve(envId, {
+      status: 'trouve',
+      proofDate: choice?.d || undefined,
+      libelle: choice ? `${choice.d} · ${choice.l}` : undefined,
+      candidates: null,
+    })
+    setConfirmEnv(null)
     reload()
   }
 
@@ -205,7 +213,7 @@ function BanqueSection({ user }) {
               <button onClick={() => setUploadEnv(env)} style={btnNormal}><Upload size={14} /> Ajouter preuve</button>
             )}
             {env.releve_status === 'a_confirmer' && (
-              <button onClick={() => handleConfirm(env.id)} style={{ ...btnNormal, background: '#FDF0DF', color: '#a9620a', border: '1px solid #f0d9b8' }}>
+              <button onClick={() => setConfirmEnv(env)} style={{ ...btnNormal, background: '#FDF0DF', color: '#a9620a', border: '1px solid #f0d9b8' }}>
                 ✓ Confirmer
               </button>
             )}
@@ -221,6 +229,42 @@ function BanqueSection({ user }) {
       {showImport && (
         <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} />
       )}
+
+      {confirmEnv && (
+        <ConfirmChoiceModal env={confirmEnv} onClose={() => setConfirmEnv(null)} onPick={handlePickLine} />
+      )}
+    </div>
+  )
+}
+
+// Choix de la bonne ligne du relevé pour une enveloppe « à confirmer »
+function ConfirmChoiceModal({ env, onClose, onPick }) {
+  let candidates = []
+  try { candidates = JSON.parse(env.releve_candidates || '[]') } catch { candidates = [] }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Quelle ligne du relevé ?</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
+          {fmtMoney(env.amount_cash)}{env.virement_client ? ` · ${env.virement_client}` : ''} — choisis la ligne qui correspond :
+        </div>
+        {candidates.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucune ligne mémorisée. Tu peux confirmer sans choisir.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {candidates.map((c, i) => (
+              <button key={i} onClick={() => onPick(env.id, c)}
+                style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
+                <b>{c.d}</b> · {c.l}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => onPick(env.id, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
+          <button onClick={onClose} style={{ ...btnNormal, flex: 1 }}>Annuler</button>
+        </div>
+      </div>
     </div>
   )
 }

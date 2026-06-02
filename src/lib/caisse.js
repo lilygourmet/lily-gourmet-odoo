@@ -327,11 +327,12 @@ export async function uploadReleve(file) {
 }
 
 // Applique le résultat d'un rapprochement sur une enveloppe.
-export async function setEnveloppeReleve(envId, { proofUrl, proofDate, status, libelle }) {
+export async function setEnveloppeReleve(envId, { proofUrl, proofDate, status, libelle, candidates }) {
   const updates = { releve_status: status }
   if (proofUrl)  updates.proof_url = proofUrl
   if (proofDate) updates.proof_date = proofDate
   if (libelle != null) updates.note_proof = libelle
+  if (candidates !== undefined) updates.releve_candidates = candidates
   if (proofUrl)  updates.proof_uploaded_at = new Date().toISOString()
   const { error } = await supabase.from('caisse_enveloppes').update(updates).eq('id', envId)
   if (error) throw error
