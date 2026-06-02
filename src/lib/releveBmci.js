@@ -106,11 +106,13 @@ export async function parseReleveBmci(file) {
 const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ')
 const nameTokens = s => norm(s).split(/\s+/).filter(t => t.length >= 4)
 
-// Quelles lignes du relevé sont candidates pour quel moyen de paiement
+// Quelles lignes du relevé sont candidates pour quel moyen de paiement.
+// Les lignes "credit_autre" (sans libellé clair) sont ouvertes aux virements ET
+// aux chèques (un dépôt de chèque n'a souvent pas de libellé distinctif).
 function candidatesFor(method, credits) {
-  if (method === 'virement') return credits.filter(t => t.type !== 'tpe' && t.type !== 'versement')
+  if (method === 'virement') return credits.filter(t => t.type === 'virement_recu' || t.type === 'credit_autre')
+  if (method === 'cheque')   return credits.filter(t => t.type === 'cheque' || t.type === 'credit_autre')
   if (method === 'cash')     return credits.filter(t => t.type === 'versement')
-  if (method === 'cheque')   return credits.filter(t => t.type === 'cheque')
   return []
 }
 
