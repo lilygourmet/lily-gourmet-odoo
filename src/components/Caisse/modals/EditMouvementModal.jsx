@@ -15,6 +15,7 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
   const [label, setLabel] = useState(mvt?.label || '')
   const [mvtDate, setMvtDate] = useState(mvt?.mvt_date || '')
   const [category, setCategory] = useState(mvt?.category || '')
+  const [isFacture, setIsFacture] = useState(!!mvt?.has_facture)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -28,9 +29,11 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
     setSaving(true); setError(null)
     try {
       const updates = { label: label.trim(), mvt_date: mvtDate }
-      // Seules les sorties ont une catégorie
+      // Seules les sorties ont une catégorie + le marquage facture
       if (isSortie) {
         updates.category = category || null
+        updates.has_facture = isFacture
+        updates.facture_status = isFacture ? (mvt?.facture_status === 'recovered' ? 'recovered' : 'pending') : null
       }
       await onSubmit(updates)
     } catch (e) {
@@ -100,6 +103,13 @@ export default function EditMouvementModal({ mvt, categories = [], onClose, onSu
               style={inputStyle}
             />
           </label>
+
+          {isSortie && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#1a0f0a', marginBottom: 12, cursor: 'pointer', padding: '8px 10px', background: isFacture ? '#F6E9EE' : '#F9F6F1', borderRadius: 8, border: `1px solid ${isFacture ? '#993556' : '#e5d8c3'}` }}>
+              <input type="checkbox" checked={isFacture} onChange={e => setIsFacture(e.target.checked)} />
+              📄 Facture à récupérer <span style={{ fontSize: 11, color: '#8a7a70' }}>(apparaît dans l'onglet Factures)</span>
+            </label>
+          )}
 
           {error && (
             <div style={{ padding: '8px 12px', background: '#FCE9E8', color: '#99201E', borderRadius: 6, fontSize: 12, marginTop: 4, marginBottom: 12 }}>
