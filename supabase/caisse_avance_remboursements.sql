@@ -7,7 +7,7 @@
 
 CREATE TABLE IF NOT EXISTS caisse_avance_remboursements (
   id            BIGSERIAL PRIMARY KEY,
-  avance_id     BIGINT NOT NULL REFERENCES caisse_avances(id) ON DELETE CASCADE,
+  avance_id     UUID NOT NULL REFERENCES caisse_avances(id) ON DELETE CASCADE,
   amount        NUMERIC(10,2) NOT NULL,
   mode          TEXT NOT NULL CHECK (mode IN ('especes', 'virement', 'achat_lg')),
   note          TEXT,
