@@ -101,7 +101,7 @@ export default function SalairesView({ user }) {
         const c = SALAIRE_COLORS[sal.beneficiaire]
         return (
           <div key={sal.id} style={{
-            display: 'grid', gridTemplateColumns: '90px 110px 1fr 130px 100px 32px', gap: 14, alignItems: 'center',
+            display: 'grid', gridTemplateColumns: '90px 100px 1fr 110px 90px auto', gap: 12, alignItems: 'center',
             padding: '13px 16px', borderRadius: 14, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3',
             boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
           }}>
@@ -112,7 +112,11 @@ export default function SalairesView({ user }) {
             </div>
             <div><span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, background: statusObj.bg, color: statusObj.text, fontWeight: 500 }}>{statusObj.label}</span></div>
             <div style={{ fontWeight: 500, textAlign: 'right' }}>{fmtMoney(sal.target_amount)}</div>
-            <div></div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              {sal.status === 'brouillon' && <button onClick={() => setComposing(sal)} style={{ ...btnSlim, display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Composer / modifier"><Pencil size={13} /></button>}
+              {sal.status === 'pret' && <button onClick={() => handlePay(sal.id)} style={{ ...btnPrimary, padding: '6px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Marquer payé"><Check size={14} /></button>}
+              {sal.status !== 'paye' && <button onClick={() => handleDelete(sal.id)} style={{ ...btnSlim, color: '#99201E' }} title="Supprimer"><Trash2 size={13} /></button>}
+            </div>
           </div>
         )
       })}
