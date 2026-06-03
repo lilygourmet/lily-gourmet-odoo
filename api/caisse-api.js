@@ -192,8 +192,8 @@ async function actionSyncPos() {
     const source = cfgNameById[cfgId] || (Array.isArray(sess.config_id) ? sess.config_id[1] : 'POS')
     const sessionDate = (sess.stop_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
 
-    // Créer l'enveloppe ESPÈCES si pas déjà créée et montant > 0
-    if (cashTotal > 0 && !existingMethods.has('cash')) {
+    // Créer l'enveloppe ESPÈCES si pas déjà créée et montant ≠ 0 (caisses négatives acceptées)
+    if (cashTotal !== 0 && !existingMethods.has('cash')) {
       const { error: insErr } = await sb.from('caisse_enveloppes').insert({
         odoo_session_id: sess.id,
         source,
@@ -203,12 +203,12 @@ async function actionSyncPos() {
       })
       if (!insErr) created++
       else console.error('[sync-pos] cash insert:', insErr.message)
-    } else if (cashTotal > 0 && existingMethods.has('cash')) {
+    } else if (cashTotal !== 0 && existingMethods.has('cash')) {
       skipped++
     }
 
-    // Créer l'enveloppe CHÈQUE si pas déjà créée et montant > 0 (auto-affectée à Banque)
-    if (chequeTotal > 0 && !existingMethods.has('cheque')) {
+    // Créer l'enveloppe CHÈQUE si pas déjà créée et montant ≠ 0 (auto-affectée à Banque)
+    if (chequeTotal !== 0 && !existingMethods.has('cheque')) {
       const insertObj = {
         odoo_session_id: sess.id,
         source,
@@ -224,12 +224,12 @@ async function actionSyncPos() {
       const { error: insErr } = await sb.from('caisse_enveloppes').insert(insertObj)
       if (!insErr) created++
       else console.error('[sync-pos] cheque insert:', insErr.message)
-    } else if (chequeTotal > 0 && existingMethods.has('cheque')) {
+    } else if (chequeTotal !== 0 && existingMethods.has('cheque')) {
       skipped++
     }
 
     // VIREMENTS : 1 enveloppe par paiement client (auto-affectée à Banque)
-    const newVirements = virements.filter(v => v.amount > 0 && !existingPaymentIds.has(v.id))
+    const newVirements = virements.filter(v => v.amount !== 0 && !existingPaymentIds.has(v.id))
     if (newVirements.length > 0) {
       // Récupère le nom du client (partenaire de la commande POS)
       const orderIds = [...new Set(newVirements.map(v => v.orderId).filter(Boolean))]
