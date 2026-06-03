@@ -83,6 +83,7 @@ export default function SalairesView({ user }) {
               <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
                 {!sal && <button onClick={() => ensureSalaireMonth(ben)} style={btnPrimary}>+ Créer le salaire</button>}
                 {sal && sal.status === 'brouillon' && <button onClick={() => setComposing(sal)} style={{ ...btnPrimary, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Pencil size={14} /> Continuer la composition</button>}
+                {sal && sal.status === 'pret' && <button onClick={() => setComposing(sal)} style={{ ...btnSlim, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Pencil size={14} /> Modifier</button>}
                 {sal && sal.status === 'pret' && <button onClick={() => handlePay(sal.id)} style={{ ...btnPrimary, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={15} /> Marquer payé</button>}
                 {sal && sal.status !== 'paye' && <button onClick={() => handleDelete(sal.id)} style={{ ...btnSlim, color: '#99201E', display: 'inline-flex', alignItems: 'center' }} title="Supprimer"><Trash2 size={14} /></button>}
               </div>
@@ -114,6 +115,7 @@ export default function SalairesView({ user }) {
             <div style={{ fontWeight: 500, textAlign: 'right' }}>{fmtMoney(sal.target_amount)}</div>
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               {sal.status === 'brouillon' && <button onClick={() => setComposing(sal)} style={{ ...btnSlim, display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Composer / modifier"><Pencil size={13} /></button>}
+              {sal.status === 'pret' && <button onClick={() => setComposing(sal)} style={{ ...btnSlim, display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Modifier la composition"><Pencil size={13} /></button>}
               {sal.status === 'pret' && <button onClick={() => handlePay(sal.id)} style={{ ...btnPrimary, padding: '6px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Marquer payé"><Check size={14} /></button>}
               {sal.status !== 'paye' && <button onClick={() => handleDelete(sal.id)} style={{ ...btnSlim, color: '#99201E' }} title="Supprimer"><Trash2 size={13} /></button>}
             </div>
