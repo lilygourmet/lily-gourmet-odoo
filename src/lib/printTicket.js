@@ -130,6 +130,9 @@ export function buildTicketTextA({ deliveryAt, orderNum, clientName, productName
     lines.push('\x1ba\x00')                          // realigner gauche
   }
 
+  // Marge en bas : evite que la decoupe coupe la fin du ticket (num 1/2, article)
+  lines.push('', '', '', '')
+
   return lines.join('\n')
 }
 
@@ -138,10 +141,13 @@ export function buildTicketTextA({ deliveryAt, orderNum, clientName, productName
 // Envoie un ticket et resout en cas de succes. Throw sinon.
 export async function sendTicket(ticketText) {
   const url = `${PRINTER_HELPER_URL}/print`
+  // L'imprimante ne gere pas l'UTF-8 : on retire les accents (é->e, è->e, à->a,
+  // ç->c...) pour eviter les caracteres bizarres sur le ticket.
+  const safeText = ticketText.normalize('NFD').replace(/[̀-ͯ]/g, '')
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: ticketText, cut: true }),
+    body: JSON.stringify({ text: safeText, cut: true }),
   })
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '')
