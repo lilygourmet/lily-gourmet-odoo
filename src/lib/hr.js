@@ -148,7 +148,7 @@ const TEMPLATES = {
   cdi_salaire: {
     file: '/hr_modeles/cdi_salaire_template.docx',
     label: 'Contrat CDI - Salaire > SMIG',
-    required: ['nom_famille', 'prenom', 'cin', 'salaire', 'date_effet'],
+    required: ['nom_famille', 'prenom', 'cin', 'salaire', 'date_entree'],
     category: 'contrat',
   },
   cdd_smig: {
@@ -230,7 +230,7 @@ export async function generateAttestation(type, data) {
     DATE_EMISSION: fmtDateFR(data.date_emission || new Date()),
     DATE: today,
     // Variables du modèle CDI (libellés avec espaces) :
-    'DATE DEBUT DE TRAVAIL': fmtDateFR(data.date_effet),
+    'DATE DEBUT DE TRAVAIL': fmtDateFR(data.date_entree),
     'DATE AUJOURD’HUI': today,
     // Abandon de poste : par défaut aujourd'hui −4 j (départ) et −2 j (mise en demeure)
     DATE_DEPART: fmtDateFR(data.date_depart || new Date(Date.now() - 4 * 86400000)),
