@@ -65,10 +65,10 @@ export default function SalairesTab({ user }) {
             if (k) byName[k] = b.net_amount
           }
         } catch (_) { /* pas bloquant */ }
-        // Pré-remplissage UNIQUEMENT depuis les bulletins du mois (CNSS puis nom).
-        // Sinon vide (pas de pré-remplissage par le salaire de la fiche).
+        // Le bulletin du mois fait foi : s'il existe un net pour l'employé (par
+        // CNSS puis par nom), il REMPLACE le montant déjà saisi. Sinon on garde
+        // ce qui est en base (employé sans bulletin).
         for (const e of all) {
-          if (mObj[e.id]) continue
           const fromBulletin = byCnss[normCnss(e.cnss)] ?? byName[nameKey(e.nom)]
           if (fromBulletin != null) mObj[e.id] = String(fromBulletin)
         }
