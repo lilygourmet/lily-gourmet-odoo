@@ -229,9 +229,17 @@ export async function generateAttestation(type, data) {
     DATE_REDACTION: today,
     DATE_EMISSION: fmtDateFR(data.date_emission || new Date()),
     DATE: today,
+    // Variables du modèle CDI (libellés avec espaces) :
+    'DATE DEBUT DE TRAVAIL': fmtDateFR(data.date_effet),
+    'DATE AUJOURD’HUI': today,
     // Abandon de poste : par défaut aujourd'hui −4 j (départ) et −2 j (mise en demeure)
     DATE_DEPART: fmtDateFR(data.date_depart || new Date(Date.now() - 4 * 86400000)),
     DATE_MED: fmtDateFR(data.date_med || new Date(Date.now() - 2 * 86400000)),
+  }
+
+  // Contrats : {NOM} = nom de famille (les contrats séparent nom et prénom).
+  if (info.category === 'contrat') {
+    templateValues.NOM = data.nom_famille || templateValues.NOM
   }
 
   // 6. Rendu
