@@ -236,6 +236,19 @@ async function handleSend(req, res) {
       .update({ last_message_at: sentAt, updated_at: sentAt })
       .eq('id', conversationId)
 
+    // Clôture automatique : si le message contient la phrase de confirmation
+    // de commande ("...commande numéro XXXX a bien été confirmée..."), on ferme
+    // la conversation. Insensible aux accents/majuscules ; le numéro est libre.
+    const norm = (text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    if (/commande\s+numero\s+\S+\s+a\s+bien\s+ete\s+confirme/.test(norm)) {
+      await supabase.from('conversations')
+        .update({ status: 'fermee', assigned_to: null, updated_at: sentAt })
+        .eq('id', conversationId)
+      await supabase.from('conversation_events').insert({
+        conversation_id: conversationId, type: 'closed', by_user_id: userId,
+      })
+    }
+
     return res.status(200).json({ ok: true, message: msg })
   } catch (e) {
     console.error('[wati-send]', e?.message || e)
@@ -568,7 +581,7 @@ async function handleSendTemplate(req, res) {
 // ============================================================
 // RECHERCHE COMMANDES ODOO — action=search-orders
 // Cherche une commande/devis par n° S, nom client, ou téléphone, et renvoie
-// les infos prêtes à remplir les templates devis_val / message_de_confirmation.
+// les infos prêtes à remplir les templates devis_validation / message_de_confirmation.
 // ============================================================
 async function odooJsonRpc(service, method, args) {
   const url = `${process.env.ODOO_URL}/jsonrpc`
@@ -654,7 +667,7 @@ async function handleSearchOrders(req, res) {
     const lineIds = orders.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
     const lines = lineIds.length
       ? await odooSearchRead(uid, 'sale.order.line', [['id', 'in', lineIds]],
-          ['order_id', 'name', 'product_uom_qty', 'price_subtotal', 'display_type'])
+          ['order_id', 'name', 'product_uom_qty', 'price_total', 'display_type'])
       : []
     const linesByOrder = new Map()
     for (const l of lines) {
@@ -663,7 +676,7 @@ async function handleSearchOrders(req, res) {
       if (/^(Acompte|Down\s+Payment)/i.test(nm)) continue   // acomptes
       const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id
       if (!linesByOrder.has(oid)) linesByOrder.set(oid, [])
-      linesByOrder.get(oid).push({ text: nm, qty: String(l.product_uom_qty), price: String(l.price_subtotal) })
+      linesByOrder.get(oid).push({ text: nm, qty: String(l.product_uom_qty), price: String(l.price_total) })
     }
 
     const result = orders.map(o => {
@@ -825,7 +838,7 @@ async function handleTaskReminders(req, res) {
         const { phone, nom } = await getEmployePhone(supabase, c.employe_id)
         if (!phone) continue
         const text = buildCongeMessage('rappel_retour', c, nom)
-        const ok = await sendReminderWhatsapp(supabase, phone, text)
+        const ok = await sendReminderWhatsapp(supabase, phone, text, congeTemplate('rappel_retour', c, nom))
         if (ok) {
           await supabase.from('conges')
             .update({ wati_notif_rappel_retour_sent_at: new Date().toISOString() })
@@ -845,7 +858,9 @@ async function handleTaskReminders(req, res) {
 }
 
 // Envoi WhatsApp serveur : message de session d'abord (fenêtre 24 h), sinon modèle.
-async function sendReminderWhatsapp(supabase, rawPhone, text) {
+// template (optionnel) = { name, parameters } : modèle approuvé à utiliser hors
+// fenêtre 24 h (sinon repli sur 'nouvelle_tache').
+async function sendReminderWhatsapp(supabase, rawPhone, text, template = null) {
   const apiToken = process.env.WATI_API_TOKEN
   const apiEndpoint = process.env.WATI_API_ENDPOINT
   if (!apiToken || !apiEndpoint) return false
@@ -871,11 +886,10 @@ async function sendReminderWhatsapp(supabase, rawPhone, text) {
     const r = await fetch(`${base}/api/v1/sendTemplateMessage?whatsappNumber=${number}`, {
       method: 'POST',
       headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        template_name: 'nouvelle_tache',
-        broadcast_name: `rappel_${Date.now()}`,
-        parameters: [{ name: '1', value: text.replace(/\n/g, ' ').slice(0, 250) }],
-      }),
+      body: JSON.stringify(template
+        ? { template_name: template.name, broadcast_name: `conge_${Date.now()}`, parameters: template.parameters }
+        : { template_name: 'nouvelle_tache', broadcast_name: `rappel_${Date.now()}`, parameters: [{ name: '1', value: text.replace(/\n/g, ' ').slice(0, 250) }] }
+      ),
     })
     const d = await r.json().catch(() => ({}))
     if (r.ok && d?.result !== false) {
@@ -1003,6 +1017,34 @@ function buildCongeMessage(type, conge, nom) {
   return `Bonjour ${prenom}, notification congés.`
 }
 
+// Modèle WhatsApp approuvé à utiliser hors fenêtre 24 h, selon le type.
+// rappel_retour -> rappel_reprise_conge ({{1}}=prénom, {{2}}=date reprise)
+// validation    -> notification_conge   ({{1}}=prénom, {{2}}=début, {{3}}=fin)
+// rejet         -> pas de modèle approuvé (repli session uniquement)
+function congeTemplate(type, conge, nom) {
+  const prenom = (nom || '').split(' ')[0] || ''
+  if (type === 'rappel_retour') {
+    return {
+      name: 'rappel_reprise_conge',
+      parameters: [
+        { name: '1', value: prenom },
+        { name: '2', value: fmtDateFR(jourSuivantYMD(conge.date_fin)) },
+      ],
+    }
+  }
+  if (type === 'validation') {
+    return {
+      name: 'notification_conge',
+      parameters: [
+        { name: '1', value: prenom },
+        { name: '2', value: fmtDateFR(conge.date_debut) },
+        { name: '3', value: fmtDateFR(conge.date_fin) },
+      ],
+    }
+  }
+  return null
+}
+
 async function handleCongesNotif(req, res) {
   const congeId = req.query?.congeId
   const type = req.query?.type || 'validation'   // 'validation' | 'rejet' | 'rappel_retour'
@@ -1022,7 +1064,7 @@ async function handleCongesNotif(req, res) {
   if (!phone) return res.status(200).json({ ok: false, reason: 'pas de numéro téléphone pour cet employé' })
 
   const text = buildCongeMessage(type, conge, nom)
-  const ok = await sendReminderWhatsapp(supabase, phone, text)
+  const ok = await sendReminderWhatsapp(supabase, phone, text, congeTemplate(type, conge, nom))
 
   // Anti-doublon : on note la date d'envoi sur la colonne correspondante.
   const patch = {}
