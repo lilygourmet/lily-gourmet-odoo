@@ -2,7 +2,7 @@ import AuditLogPanel from './AuditLogPanel'
 import { useState, useEffect } from 'react'
 import { User, Pencil, Check, Trash2 } from 'lucide-react'
 import { loadSalairesYear, loadSalaireMonth, createSalaire, markSalairePaye, loadSalairesDefaut, deleteSalaire, loadSalaireEnveloppes } from '../../lib/caisse'
-import { currentYear, currentMonth, fmtMoney, fmtMois, SALAIRE_STATUS_LABELS, SALAIRE_COLORS } from './_helpers'
+import { currentYear, currentMonth, fmtMoney, fmtMois, SALAIRE_STATUS_LABELS, SALAIRE_COLORS, reliquatDestLabel } from './_helpers'
 import CompositionSalaireModal from './modals/CompositionSalaireModal'
 
 export default function SalairesView({ user }) {
@@ -108,7 +108,7 @@ export default function SalairesView({ user }) {
             <div style={{ fontSize: 12, color: '#4a3a30' }}>{fmtMois(sal.month - 1)} {sal.year}</div>
             <div><span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 999, background: c.bg, color: c.text, display: 'inline-flex', alignItems: 'center', gap: 4 }}><User size={12} /> {sal.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'}</span></div>
             <div style={{ fontSize: 12, color: '#4a3a30' }}>
-              {sal.reliquat_amount > 0 ? `reliquat ${fmtMoney(sal.reliquat_amount)} → ${sal.reliquat_destination || '—'}` : 'sans reliquat'}
+              {sal.reliquat_amount > 0 ? `reliquat ${fmtMoney(sal.reliquat_amount)} → ${reliquatDestLabel(sal.reliquat_destination)}` : 'sans reliquat'}
             </div>
             <div><span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, background: statusObj.bg, color: statusObj.text, fontWeight: 500 }}>{statusObj.label}</span></div>
             <div style={{ fontWeight: 500, textAlign: 'right' }}>{fmtMoney(sal.target_amount)}</div>

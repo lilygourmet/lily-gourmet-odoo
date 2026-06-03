@@ -1358,9 +1358,27 @@ export async function setSalaireDefaut(beneficiaire, amount) {
 }
 
 export async function createSalaire({ beneficiaire, month, year, target_amount }) {
+  // Report du mois précédent : si le salaire du mois d'avant a un reliquat marqué
+  // « report_mois_suivant », on le DÉDUIT du salaire cible de ce mois (et on le
+  // marque consommé pour ne pas le déduire deux fois).
+  let finalTarget = Number(target_amount) || 0
+  const prevMonth = month === 1 ? 12 : month - 1
+  const prevYear = month === 1 ? year - 1 : year
+  const { data: prev } = await supabase
+    .from('caisse_salaires')
+    .select('id, reliquat_amount')
+    .eq('beneficiaire', beneficiaire).eq('month', prevMonth).eq('year', prevYear)
+    .eq('reliquat_destination', 'report_mois_suivant')
+    .maybeSingle()
+  if (prev && Number(prev.reliquat_amount) > 0) {
+    finalTarget -= Number(prev.reliquat_amount)
+    await supabase.from('caisse_salaires')
+      .update({ reliquat_destination: 'report_applique' })
+      .eq('id', prev.id)
+  }
   const { data, error } = await supabase
     .from('caisse_salaires')
-    .insert({ beneficiaire, month, year, target_amount, status: 'brouillon' })
+    .insert({ beneficiaire, month, year, target_amount: finalTarget, status: 'brouillon' })
     .select().single()
   if (error) throw error
   return data

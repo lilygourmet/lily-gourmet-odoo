@@ -83,7 +83,14 @@ export const RELIQUAT_DESTINATIONS = [
   { key: 'caisse_layla_lg', label: 'Caisse Layla LG', color: 'vert_teal'  },
   { key: 'nezha_perso',     label: 'Nezha perso',     color: 'orange'     },
   { key: 'layla_perso',     label: 'Layla perso',     color: 'corail'     },
+  { key: 'report_mois_suivant', label: 'Report mois suivant', color: 'bleu' },
 ]
+
+// Libellé d'affichage d'une destination de reliquat (gère le marqueur « consommé »).
+export function reliquatDestLabel(key) {
+  if (key === 'report_applique') return 'Reporté (déduit du mois suivant) ✓'
+  return RELIQUAT_DESTINATIONS.find(d => d.key === key)?.label || key || '—'
+}
 
 // Caisses-gérées (clés techniques)
 export const CAISSES_GEREES = [
