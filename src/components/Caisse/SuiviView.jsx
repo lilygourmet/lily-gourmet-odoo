@@ -376,15 +376,13 @@ function SuggestModal({ env, onClose, onAttach }) {
     (async () => {
       let ls
       try { ls = await loadFreeReleveLines(env.amount_cash, env.payment_method) } catch { ls = [] }
-      // Auto : une SEULE ligne, "VIR INST RECU", même date que l'enveloppe
-      // -> on l'attache et on l'accorde directement (pas de clic).
-      if (ls.length === 1) {
-        const l = ls[0]
-        const instRecu = l.type === 'virement_recu' && /\bINST\b/i.test(l.label || '')
-        if (instRecu && l.ligne_date === env.session_date) {
-          onAttach(env, l)
-          return
-        }
+      // Auto : parmi les lignes du même montant, une SEULE "VIR INST RECU" à la
+      // même date que l'enveloppe -> on l'attache et on l'accorde directement.
+      const sameDayInst = ls.filter(l => l.type === 'virement_recu'
+        && /\bINST\b/i.test(l.label || '') && l.ligne_date === env.session_date)
+      if (sameDayInst.length === 1) {
+        onAttach(env, sameDayInst[0])
+        return
       }
       setLines(ls)
     })()
