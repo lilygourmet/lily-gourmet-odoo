@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Guide — Conversations WhatsApp · Lily Gourmet</title>
+<style>
+  :root{ --bordeaux:#993556; --bordeaux-deep:#7a2a44; --cream:#faf7f2; --cream2:#F4F0EA; --ink:#1a0f0a; --soft:#4a3a30; --line:#e5d8c3; --green:#085041; }
+  *{ box-sizing:border-box; }
+  body{ font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink); margin:0; background:#fff; line-height:1.5; }
+  .page{ max-width:820px; margin:0 auto; padding:34px 40px; }
+  h1{ font-size:30px; margin:0 0 4px; color:var(--bordeaux); }
+  h2{ font-size:21px; margin:34px 0 10px; color:var(--bordeaux-deep); border-bottom:2px solid var(--line); padding-bottom:6px; }
+  h3{ font-size:16px; margin:18px 0 6px; color:var(--ink); }
+  p,li{ font-size:14px; color:var(--soft); }
+  .lead{ font-size:15px; color:var(--soft); }
+  .step{ display:flex; gap:14px; align-items:flex-start; margin:10px 0; }
+  .num{ flex:0 0 26px; height:26px; border-radius:999px; background:var(--bordeaux); color:#fff; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; }
+  .tip{ background:#FAF6F0; border:1px solid var(--line); border-left:4px solid var(--bordeaux); border-radius:8px; padding:10px 14px; font-size:13px; margin:12px 0; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  .cap{ font-size:11px; color:#8a7a70; text-align:center; margin-top:6px; font-style:italic; }
+  /* écran simulé */
+  .screen{ border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 6px 20px rgba(122,42,68,.08); background:#fff; }
+  .schead{ background:var(--bordeaux); color:#fff; padding:10px 12px; font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:space-between; }
+  .schead .btns{ display:flex; gap:6px; }
+  .pill{ background:#fff; color:var(--bordeaux); border-radius:999px; padding:3px 9px; font-size:11px; font-weight:600; }
+  .pill.ghost{ background:transparent; color:#fff; border:1px solid rgba(255,255,255,.6); }
+  .scbody{ padding:10px 12px; }
+  .searchbar{ background:var(--cream2); border-radius:8px; padding:7px 10px; font-size:12px; color:#8a7a70; margin-bottom:8px; }
+  .filters{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
+  .chip{ font-size:10px; padding:3px 9px; border-radius:999px; background:var(--cream2); color:var(--soft); }
+  .chip.on{ background:var(--ink); color:#fff; }
+  .conv{ display:flex; gap:9px; padding:9px; border-radius:10px; border:1px solid var(--line); margin-bottom:6px; align-items:center; }
+  .conv.unread{ background:#FBEFF3; }
+  .av{ flex:0 0 34px; height:34px; border-radius:999px; background:var(--bordeaux); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+  .conv .nm{ font-size:13px; font-weight:600; }
+  .conv .mt{ font-size:11px; color:#8a7a70; }
+  .badge{ font-size:9px; padding:2px 7px; border-radius:999px; font-weight:600; }
+  .b-green{ background:#E1F5EE; color:var(--green); }
+  .b-amber{ background:#FAEEDA; color:#7a5510; }
+  .b-red{ background:#FCE9E8; color:#99201E; }
+  .cnt{ margin-left:auto; background:#1D9E75; color:#fff; border-radius:999px; min-width:18px; height:18px; font-size:10px; display:flex; align-items:center; justify-content:center; padding:0 5px; }
+  .bubble{ max-width:78%; padding:8px 11px; border-radius:12px; font-size:12px; margin:5px 0; }
+  .b-client{ background:var(--cream); border:1px solid var(--line); color:var(--ink); }
+  .b-agent{ background:var(--bordeaux); color:#fff; margin-left:auto; }
+  .sys{ text-align:center; font-size:10px; color:#8a7a70; font-style:italic; margin:6px 0; }
+  .toolbar{ display:flex; gap:6px; align-items:center; margin-top:8px; border-top:1px solid var(--line); padding-top:8px; flex-wrap:wrap; }
+  .tbtn{ width:30px; height:30px; border-radius:8px; background:var(--cream2); display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .send{ margin-left:auto; background:var(--bordeaux); color:#fff; border-radius:8px; padding:7px 14px; font-size:12px; font-weight:600; }
+  .keycard{ background:var(--cream2); border-radius:10px; padding:12px 14px; }
+  .keycard b{ color:var(--bordeaux-deep); }
+  ul{ margin:6px 0; padding-left:20px; }
+  @media print{ .page{ padding:0; } h2{ break-after:avoid; } .screen,.keycard,.tip{ break-inside:avoid; } body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>📱 Guide — Conversations WhatsApp</h1>
+  <p class="lead">Comment discuter avec les clientes de Lily Gourmet depuis l'app : répondre, envoyer photos/vocaux, utiliser les phrases types, gérer les paiements. <em>(Les écrans ci-dessous sont des illustrations.)</em></p>
+
+  <!-- 1 -->
+  <h2>1. La liste des conversations</h2>
+  <div class="grid2">
+    <div>
+      <p>C'est ta « boîte de réception ». Chaque ligne = une discussion avec une cliente.</p>
+      <div class="step"><div class="num">1</div><div><b>Recherche</b> : tape un nom, un numéro ou un mot d'un message.</div></div>
+      <div class="step"><div class="num">2</div><div><b>Filtres</b> : <i>Toutes · À moi · Non assignées · ✉️ Non lues · 🔴 En attente · 🟡 À relancer · Fermées</i>.</div></div>
+      <div class="step"><div class="num">3</div><div>Le <b>rond vert</b> avec un chiffre = nombre de messages non lus.</div></div>
+      <div class="step"><div class="num">4</div><div><b>🔴 En attente</b> = la cliente attend une réponse depuis +30 min. <b>🟡 À relancer</b> = silence +3 jours.</div></div>
+      <div class="tip">🔊 Le bouton son (en haut) active/coupe le « ding » quand un nouveau message arrive.</div>
+    </div>
+    <div>
+      <div class="screen">
+        <div class="schead"><span>Conversations</span><span class="btns"><span class="pill">+ Nouveau</span><span class="pill ghost">🗣️ Phrases</span></span></div>
+        <div class="scbody">
+          <div class="searchbar">🔍 Rechercher (nom, numéro, message…)</div>
+          <div class="filters"><span class="chip on">Toutes</span><span class="chip">À moi</span><span class="chip">✉️ Non lues (5)</span><span class="chip">🔴 En attente (3)</span><span class="chip">🟡 À relancer</span></div>
+          <div class="conv unread"><div class="av">MA</div><div><div class="nm">Maryam · <span class="badge b-red">🔴 attend 45 min</span></div><div class="mt">212661…  ·  10 min</div></div><div class="cnt">2</div></div>
+          <div class="conv"><div class="av">SE</div><div><div class="nm">Selma <span class="badge b-green">EN COURS · Meryem</span></div><div class="mt">212662…  ·  2 h</div></div></div>
+          <div class="conv"><div class="av">+9</div><div><div class="nm">212663… <span class="badge b-amber">NON ASSIGNÉE</span></div><div class="mt">212663…  ·  hier</div></div></div>
+        </div>
+      </div>
+      <div class="cap">La liste : filtres, badges et messages non lus</div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <h2>2. Ouvrir une conversation &amp; répondre</h2>
+  <div class="grid2">
+    <div>
+      <div class="screen">
+        <div class="schead"><span>← Maryam</span><span class="btns"><span class="pill">Je prends</span><span class="pill ghost">📩 Non lu</span><span class="pill ghost">Clôturer</span></span></div>
+        <div class="scbody">
+          <div class="sys">— Conversation assignée à Meryem —</div>
+          <div class="bubble b-client">Bonjour, c'est prêt pour samedi ?</div>
+          <div class="bubble b-agent">Oui 🙂 retrait samedi 11h. Merci !</div>
+          <div class="toolbar">
+            <div class="tbtn">📎</div><div class="tbtn">😊</div><div class="tbtn">💬</div><div class="tbtn">✨</div><div class="tbtn">🎤</div>
+            <div class="send">Envoyer</div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">Le fil de discussion et la barre d'envoi</div>
+    </div>
+    <div>
+      <div class="step"><div class="num">1</div><div><b>« Je prends »</b> : pour répondre, tu dois d'abord prendre la conversation (sinon tu ne peux pas écrire).</div></div>
+      <div class="step"><div class="num">2</div><div>Tu écris, puis <b>Envoyer</b>. <i>(Si l'IA corrige le texte, relis et re-clique pour confirmer.)</i></div></div>
+      <div class="step"><div class="num">3</div><div><b>📩 Non lu</b> : remet la conversation dans « Non lues » (pour y revenir plus tard).</div></div>
+      <div class="step"><div class="num">4</div><div><b>Clôturer / Rouvrir</b> : ferme la discussion quand c'est réglé (un nouveau message la rouvre).</div></div>
+      <div class="step"><div class="num">5</div><div>Tu peux <b>renommer la cliente</b> (crayon à côté du nom) et écrire une <b>note interne</b> (jaune, visible que par l'équipe).</div></div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <h2>3. Les boutons d'envoi</h2>
+  <div class="keycard">
+    <p style="margin-top:0"><b>📎 Joindre</b> — une image ou un PDF (max 5 Mo). · <b>😊 Emojis</b>. · <b>💬 Phrases types</b> — insérer une réponse pré-écrite. · <b>✨ Suggérer</b> — l'IA propose 3 réponses, tu choisis. · <b>🎤 Vocal</b> — enregistrer un message audio (✓ envoyer / ✕ annuler).</p>
+  </div>
+  <div class="tip">🎤 Si l'app prévient que l'audio n'est pas compatible WhatsApp, ré-enregistre — sinon la cliente risque de ne pas l'entendre.</div>
+
+  <!-- 4 -->
+  <h2>4. Les phrases types (réponses rapides)</h2>
+  <div class="grid2">
+    <div>
+      <p>Des messages tout prêts (RIB, modes de paiement, etc.) pour répondre en 1 clic.</p>
+      <div class="step"><div class="num">1</div><div>Bouton <b>🗣️ Phrases</b> (en haut de la liste) pour les <b>créer/modifier</b>.</div></div>
+      <div class="step"><div class="num">2</div><div>Donne un <b>nom court</b> (ex. « RIB ») + le <b>texte</b> (+ une photo si besoin).</div></div>
+      <div class="step"><div class="num">3</div><div>Dans une conversation, bouton <b>💬</b> → choisis la phrase → elle s'insère.</div></div>
+    </div>
+    <div>
+      <div class="screen">
+        <div class="schead"><span>🗣️ Phrases types</span></div>
+        <div class="scbody">
+          <div class="searchbar">Nom court : <b style="color:var(--ink)">RIB</b></div>
+          <div class="searchbar" style="margin-bottom:6px">Texte : Voici notre RIB : 0XX…</div>
+          <div style="display:flex;gap:6px"><span class="pill" style="background:var(--bordeaux);color:#fff">Enregistrer</span><span class="chip">+ Ajouter une photo</span></div>
+          <div style="margin-top:10px" class="conv"><div><div class="nm">RIB</div><div class="mt">Voici notre RIB : 0XX…</div></div><span class="chip" style="margin-left:auto">Modifier</span></div>
+          <div class="conv"><div><div class="nm">Modes de paiement</div><div class="mt">Espèces, virement ou chèque…</div></div><span class="chip" style="margin-left:auto">Modifier</span></div>
+        </div>
+      </div>
+      <div class="cap">Créer / réutiliser une phrase type</div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <h2>5. Démarrer un nouveau message (modèles)</h2>
+  <p>Bouton <b>+ Nouveau message</b>. Tu cherches une <b>commande</b> (n° S…, nom, téléphone) → l'app pré-remplit le numéro et choisit le bon <b>modèle WhatsApp</b> (confirmation, devis, relance…). Tu vérifies, puis <b>Envoyer</b>.</p>
+  <div class="tip">📅 <b>Fenêtre 24 h</b> : WhatsApp n'autorise un message « modèle » que si la cliente a écrit dans les dernières 24 h. Au-delà, passe par un <b>modèle</b> (pas un message simple) pour relancer.</div>
+
+  <!-- 6 -->
+  <h2>6. Les paiements (preuves de virement)</h2>
+  <div class="grid2">
+    <div>
+      <div class="step"><div class="num">1</div><div>Quand une cliente envoie une <b>preuve</b> (capture/PDF de virement), clique le bouton <b>💰</b> sur ce message.</div></div>
+      <div class="step"><div class="num">2</div><div>Remplis <b>n° de commande</b>, <b>nom</b>, <b>montant</b> → « Transférer aux paiements ».</div></div>
+      <div class="step"><div class="num">3</div><div>Dans l'onglet <b>💰 Paiements</b> → « À valider » : tu cliques <b>Valider</b> ✅ ou <b>Refuser</b> ❌ (avec motif).</div></div>
+    </div>
+    <div>
+      <div class="screen">
+        <div class="schead"><span>💰 Paiements à valider</span><span class="pill">2 350 DH</span></div>
+        <div class="scbody">
+          <div class="filters"><span class="chip on">À valider (2)</span><span class="chip">Traités</span></div>
+          <div class="conv"><div class="av" style="background:#085041">📄</div><div><div class="nm">Selma — 450 DH</div><div class="mt">Commande S-1042 · reçu 14:30</div></div></div>
+          <div style="display:flex;gap:6px;margin-top:6px"><span class="pill" style="background:#085041;color:#fff">Valider</span><span class="pill" style="background:#FCE9E8;color:#99201E">Refuser</span></div>
+        </div>
+      </div>
+      <div class="cap">Valider une preuve de paiement</div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <h2>7. Bon à savoir</h2>
+  <ul>
+    <li><b>Transférer un message</b> 🔗 : renvoyer un message à une autre cliente.</li>
+    <li><b>Supprimer un message</b> 🗑 : l'app tente aussi de l'effacer chez la cliente (possible ~15 min après l'envoi).</li>
+    <li><b>Notifications</b> : un petit bandeau apparaît en haut quand une cliente écrit ; clique dessus pour ouvrir la discussion.</li>
+    <li><b>Qui peut quoi</b> : voir Conversations, marquer une preuve, voir les paiements, valider les paiements — chaque droit se règle par l'admin dans <i>Utilisateurs</i>.</li>
+  </ul>
+
+  <p style="margin-top:30px;font-size:12px;color:#8a7a70;text-align:center">Lily Gourmet — Guide Conversations · à imprimer en PDF (Fichier → Imprimer → Enregistrer en PDF)</p>
+
+</div>
+</body>
+</html>
