@@ -350,7 +350,19 @@ function SuggestModal({ env, onClose, onAttach }) {
   const [lines, setLines] = useState(null)
   useEffect(() => {
     (async () => {
-      try { setLines(await loadFreeReleveLines(env.amount_cash, env.payment_method)) } catch { setLines([]) }
+      let ls
+      try { ls = await loadFreeReleveLines(env.amount_cash, env.payment_method) } catch { ls = [] }
+      // Auto : une SEULE ligne, "VIR INST RECU", même date que l'enveloppe
+      // -> on l'attache et on l'accorde directement (pas de clic).
+      if (ls.length === 1) {
+        const l = ls[0]
+        const instRecu = l.type === 'virement_recu' && /\bINST\b/i.test(l.label || '')
+        if (instRecu && l.ligne_date === env.session_date) {
+          onAttach(env, l)
+          return
+        }
+      }
+      setLines(ls)
     })()
   }, [env.id])
   return (
