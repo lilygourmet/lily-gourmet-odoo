@@ -23,6 +23,7 @@ import AbsencesView from './components/AbsencesView'
 import CongesView from './components/CongesView'
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
+import UpdateBanner from './components/UpdateBanner'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
 
 function App() {
@@ -245,6 +246,7 @@ function App() {
 
   return (
     <>
+      <UpdateBanner />
       {canSeeConversations(user) && (
         <ConversationNotifier user={user} onOpen={openConversation} />
       )}
