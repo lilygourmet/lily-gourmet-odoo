@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Info, CreditCard, FileText } from 'lucide-react'
-import { loadFacturesAll, loadCourseFacturesAll, loadHamidFacturesAll, recupererFacturesParCheque } from '../../../lib/caisse'
+import { Info, CreditCard, FileText, X } from 'lucide-react'
+import { loadFacturesAll, loadCourseFacturesAll, loadHamidFacturesAll, recupererFacturesParCheque, retirerFacture } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 
 export default function MeriemFactures({ user }) {
@@ -43,6 +43,17 @@ export default function MeriemFactures({ user }) {
   }
   const selectedFactures = pending.filter(f => selected.has(f.key))
   const selectedTotal = sum(selectedFactures)
+
+  // Décocher une ligne : ce n'est finalement pas une facture
+  async function removeFacture(f) {
+    if (!window.confirm(`Retirer « ${f.label} » des factures ?\n(Ce n'est pas une facture à récupérer.)`)) return
+    setBusy(true); setError('')
+    try {
+      await retirerFacture({ kind: f.kind, id: f.id, userId: user.id })
+      await reload()
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
+  }
 
   async function confirmCheque() {
     if (selectedFactures.length === 0) return
@@ -88,7 +99,7 @@ export default function MeriemFactures({ user }) {
           {pending.length === 0 && <div style={emptyBox}>Aucune facture à récupérer.</div>}
           {pending.map(f => (
             <label key={f.key} style={{
-              display: 'grid', gridTemplateColumns: '30px 90px 1fr 110px', gap: 12, alignItems: 'center', cursor: 'pointer',
+              display: 'grid', gridTemplateColumns: '30px 84px 1fr 100px 34px', gap: 12, alignItems: 'center', cursor: 'pointer',
               padding: '13px 16px', borderRadius: 12, marginBottom: 6, background: 'white',
               border: selected.has(f.key) ? '1.5px solid #378ADD' : '0.5px solid #e5d8c3',
               boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
@@ -100,6 +111,17 @@ export default function MeriemFactures({ user }) {
                 <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 2 }}>{f.category}</div>
               </div>
               <div style={{ fontSize: 15, fontWeight: 500, textAlign: 'right' }}>{fmtMoney(f.amount)}</div>
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFacture(f) }}
+                disabled={busy}
+                title="Ce n'est pas une facture — retirer"
+                style={{
+                  width: 30, height: 30, borderRadius: 8, border: '1px solid #E5BFB6', background: '#FCE9E8',
+                  color: '#99201E', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <X size={15} />
+              </button>
             </label>
           ))}
 

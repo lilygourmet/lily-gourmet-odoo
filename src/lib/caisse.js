@@ -1294,6 +1294,30 @@ export async function recupererFacturesParCheque({ items, cheque, date, userId }
   })
 }
 
+// Retire le marquage « facture » d'une ligne (kind = 'mvt' | 'course' | 'hamid').
+// Sert à décocher un achat marqué facture par erreur.
+export async function retirerFacture({ kind, id, userId = null }) {
+  if (kind === 'mvt') {
+    const { error } = await supabase.from('caisse_mouvements')
+      .update({ has_facture: false, facture_status: null }).eq('id', id)
+    if (error) throw error
+  } else if (kind === 'course') {
+    const { error } = await supabase.from('caisse_courses_depenses')
+      .update({ is_facture: false, facture_status: null }).eq('id', id)
+    if (error) throw error
+  } else if (kind === 'hamid') {
+    const { error } = await supabase.from('caisse_hamid_depenses')
+      .update({ is_facture: false, facture_status: null }).eq('id', id)
+    if (error) throw error
+  } else {
+    throw new Error('Type de facture inconnu')
+  }
+  await logAction({
+    entityType: kind === 'mvt' ? 'mouvement' : kind, entityId: id,
+    action: 'facture_remove', description: 'Retiré des factures (pas une facture)', actorId: userId,
+  })
+}
+
 // ============================================================
 // SALAIRES
 // ============================================================
