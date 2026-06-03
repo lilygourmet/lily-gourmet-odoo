@@ -128,6 +128,16 @@ const TEMPLATES = {
     label: 'Attestation de stage',
     required: ['nom', 'cin', 'date_debut', 'date_fin'],
   },
+  mise_en_demeure: {
+    file: '/hr_modeles/mise_en_demeure_template.docx',
+    label: 'Mise en demeure (absence)',
+    required: ['nom'],
+  },
+  abandon_poste: {
+    file: '/hr_modeles/abandon_poste_template.docx',
+    label: 'Abandon de poste',
+    required: ['nom'],
+  },
   cdi_smig: {
     file: '/hr_modeles/cdi_smig_template.docx',
     label: 'Contrat CDI - SMIG (sans montant)',
@@ -219,6 +229,9 @@ export async function generateAttestation(type, data) {
     DATE_REDACTION: today,
     DATE_EMISSION: fmtDateFR(data.date_emission || new Date()),
     DATE: today,
+    // Abandon de poste : par défaut aujourd'hui −4 j (départ) et −2 j (mise en demeure)
+    DATE_DEPART: fmtDateFR(data.date_depart || new Date(Date.now() - 4 * 86400000)),
+    DATE_MED: fmtDateFR(data.date_med || new Date(Date.now() - 2 * 86400000)),
   }
 
   // 6. Rendu
@@ -261,6 +274,8 @@ function formatFilename(type, nom) {
     travail_depart: 'Certificat_Travail_Depart',
     accuse: 'Accuse_Remise_Documents',
     stage: 'Attestation_Stage',
+    mise_en_demeure: 'Mise_En_Demeure',
+    abandon_poste: 'Abandon_De_Poste',
     cdi_smig: 'Contrat_CDI_SMIG',
     cdi_salaire: 'Contrat_CDI_Salaire',
     cdd_smig: 'Contrat_CDD_SMIG',

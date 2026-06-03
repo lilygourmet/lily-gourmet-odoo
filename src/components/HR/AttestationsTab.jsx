@@ -23,6 +23,7 @@ export default function AttestationsTab({ user, isAdmin }) {
     salaire: '', adresse: '', date_entree: '', date_sortie: '',
     date_debut: '', date_fin: '', date_emission: '', date_effet: '',
     nationalite: 'مغربي', duree: '',
+    date_depart: '', date_med: '',
   })
 
   const allTemplates = useMemo(() => getAllTemplates(), [])
@@ -333,6 +334,24 @@ export default function AttestationsTab({ user, isAdmin }) {
                 <Field label="Date de sortie *" type="date"
                   value={form.date_sortie} onChange={v => handleChange('date_sortie', v)} />
               )}
+            </Row>
+          )}
+
+          {/* Champs Mise en demeure / Abandon de poste */}
+          {(type === 'mise_en_demeure' || type === 'abandon_poste') && (
+            <Row>
+              <Field label="Adresse de l'employé"
+                value={form.adresse} onChange={v => handleChange('adresse', v)}
+                placeholder="Ex : 12 rue X, Quartier Y, Rabat" />
+              <div />
+            </Row>
+          )}
+          {type === 'abandon_poste' && (
+            <Row>
+              <Field label="Quitté le poste depuis (vide = il y a 4 jours)" type="date"
+                value={form.date_depart} onChange={v => handleChange('date_depart', v)} />
+              <Field label="Date de la mise en demeure (vide = il y a 2 jours)" type="date"
+                value={form.date_med} onChange={v => handleChange('date_med', v)} />
             </Row>
           )}
 
