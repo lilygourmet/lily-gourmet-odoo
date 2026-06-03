@@ -127,8 +127,9 @@ export function currentYear() {
   return new Date().getFullYear()
 }
 
-// Bornes de mois pour les queries (gte / lt)
+// Bornes de mois pour les queries (gte / lt). month = 0 -> toute l'année.
 export function monthBounds(year, month) {
+  if (!month) return { start: `${year}-01-01`, end: `${year + 1}-01-01` }
   const start = `${year}-${String(month).padStart(2, '0')}-01`
   const nextMonth = month === 12 ? 1 : month + 1
   const nextYear = month === 12 ? year + 1 : year

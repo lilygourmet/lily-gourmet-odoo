@@ -151,6 +151,7 @@ function BanqueSection({ user }) {
       </div>
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 14, overflowX: 'auto' }}>
+        <button onClick={() => setMonth(0)} style={tabBtn(month === 0, '#E6F1FB', '#0C447C', '#378ADD')}>Année</button>
         {MOIS_TABS.map(m => (
           <button key={m.idx} onClick={() => setMonth(m.idx)} style={tabBtn(month === m.idx, '#E6F1FB', '#0C447C', '#378ADD')}>{m.label}</button>
         ))}
@@ -471,6 +472,7 @@ function PersoSection({ user }) {
       </div>
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 14, overflowX: 'auto' }}>
+        <button onClick={() => setMonth(0)} style={tabBtn(month === 0, '#993556', 'white', '#993556')}>Année</button>
         {MOIS_TABS.map(m => (
           <button key={m.idx} onClick={() => setMonth(m.idx)} style={tabBtn(month === m.idx, '#993556', 'white', '#993556')}>{m.label}</button>
         ))}

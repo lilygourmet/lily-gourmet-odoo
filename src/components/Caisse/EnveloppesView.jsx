@@ -127,7 +127,7 @@ export default function EnveloppesView({ user }) {
     } catch (e) { alert(e.message) }
   }
 
-  const monthDisplay = MOIS_TABS.find(m => m.idx === month)?.label || ''
+  const monthDisplay = month === 0 ? "toute l'année" : (MOIS_TABS.find(m => m.idx === month)?.label || '')
 
   return (
     <div>
@@ -170,6 +170,14 @@ export default function EnveloppesView({ user }) {
 
       {/* Onglets mois */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
+        <button onClick={() => setMonth(0)}
+          style={{
+            padding: '8px 16px', borderRadius: 999,
+            border: month === 0 ? '1px solid #993556' : '1px solid #e5d8c3',
+            background: month === 0 ? '#993556' : 'white',
+            color:      month === 0 ? '#faf7f2'  : '#1a0f0a',
+            fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>Année</button>
         {MOIS_TABS.map(m => (
           <button key={m.idx} onClick={() => setMonth(m.idx)}
             style={{
