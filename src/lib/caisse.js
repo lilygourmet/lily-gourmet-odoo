@@ -346,15 +346,21 @@ export async function loadAllFreeReleveLines() {
   return data || []
 }
 
-// Lignes du relevé encore libres (non rattachées) d'un montant donné.
-export async function loadFreeReleveLines(amount) {
+// Lignes du relevé encore libres (non rattachées) d'un montant donné, du MÊME
+// type que l'enveloppe : chèque↔remise chèque, virement↔virement reçu, espèces↔versement.
+// (même correspondance que le rapprochement auto, candidatesFor)
+export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
   const a = Number(amount)
+  const types = paymentMethod === 'cheque' ? ['cheque_depot']
+    : paymentMethod === 'virement' ? ['virement_recu', 'autre']
+    : ['versement']
   const { data, error } = await supabase
     .from('caisse_releve_lignes')
     .select('*')
     .is('used_by', null)
     .gte('amount', a - 0.005)
     .lte('amount', a + 0.005)
+    .in('type', types)
     .order('ligne_date', { ascending: false })
   if (error) throw error
   return data || []

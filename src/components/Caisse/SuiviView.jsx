@@ -349,7 +349,7 @@ function SuggestModal({ env, onClose, onAttach }) {
   const [lines, setLines] = useState(null)
   useEffect(() => {
     (async () => {
-      try { setLines(await loadFreeReleveLines(env.amount_cash)) } catch { setLines([]) }
+      try { setLines(await loadFreeReleveLines(env.amount_cash, env.payment_method)) } catch { setLines([]) }
     })()
   }, [env.id])
   return (
