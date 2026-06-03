@@ -4,6 +4,7 @@ import { loadCoursesMonth, donnerCourse, reglerCourse, deleteCourse, loadCategor
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 
 export default function MeriemCourses({ user }) {
+  const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
   const [year, setYear] = useState(currentYear())
   const [month, setMonth] = useState(currentMonth())
   const [courses, setCourses] = useState([])
@@ -110,7 +111,7 @@ export default function MeriemCourses({ user }) {
           </div>
           <div style={{ fontSize: 15, fontWeight: 500 }}>{fmtMoney(c.amount_given)}</div>
           <button onClick={() => openSettle(c)} style={btnPri}>Régler</button>
-          <button onClick={() => handleDelete(c)} style={{ ...btnIcon, display: 'inline-flex', alignItems: 'center', color: '#A32D2D' }} title="Supprimer"><Trash2 size={14} /></button>
+          {isAdmin && <button onClick={() => handleDelete(c)} style={{ ...btnIcon, display: 'inline-flex', alignItems: 'center', color: '#A32D2D' }} title="Supprimer"><Trash2 size={14} /></button>}
         </div>
       ))}
 
@@ -130,7 +131,7 @@ export default function MeriemCourses({ user }) {
               <div style={{ fontSize: 12, color: '#4a3a30', textAlign: 'right' }}>
                 donné <b>{fmtMoney(c.amount_given)}</b> · dépensé <b>{fmtMoney(spent)}</b> · rendu <b>{fmtMoney(rendu)}</b>
               </div>
-              <button onClick={() => handleDelete(c)} style={{ ...btnIcon, display: 'inline-flex', alignItems: 'center', color: '#A32D2D' }} title="Supprimer"><Trash2 size={14} /></button>
+              {isAdmin && <button onClick={() => handleDelete(c)} style={{ ...btnIcon, display: 'inline-flex', alignItems: 'center', color: '#A32D2D' }} title="Supprimer"><Trash2 size={14} /></button>}
             </div>
             {(c.depenses || []).length > 0 && (
               <div style={{ marginTop: 8, borderTop: '0.5px solid #e5d8c3', paddingTop: 6 }}>

@@ -16,6 +16,7 @@ import { User, Info, Check, Clock, Trash2, HandCoins } from 'lucide-react'
 import { fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
 
 export default function MeriemAvances({ user }) {
+  const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
   const [list, setList]                 = useState([])
   const [summary, setSummary]           = useState([])
   const [persoDests, setPersoDests]     = useState([])
@@ -172,7 +173,7 @@ export default function MeriemAvances({ user }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {!isRefunded && <button onClick={() => setRbAvance({ ...a, _remaining: remaining })} style={{ ...btnPrimarySmall, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Check size={13} /> Rembourser</button>}
-                <button onClick={() => handleDelete(a.id)} style={{ ...btnDanger, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Supprimer l'avance"><Trash2 size={13} /></button>
+                {isAdmin && <button onClick={() => handleDelete(a.id)} style={{ ...btnDanger, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Supprimer l'avance"><Trash2 size={13} /></button>}
               </div>
             </div>
             {rbs.length > 0 && (
@@ -182,7 +183,7 @@ export default function MeriemAvances({ user }) {
                     <span>{fmtDateCourte(r.rb_date)} · {MODE_LABEL[r.mode] || r.mode}{r.note ? ' — ' + r.note : ''}</span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                       <strong>{fmtMoney(r.amount)}</strong>
-                      <button onClick={() => handleDeleteRb(r.id)} style={{ ...btnDanger, padding: '2px 6px' }} title="Annuler ce remboursement"><Trash2 size={11} /></button>
+                      {isAdmin && <button onClick={() => handleDeleteRb(r.id)} style={{ ...btnDanger, padding: '2px 6px' }} title="Annuler ce remboursement"><Trash2 size={11} /></button>}
                     </span>
                   </div>
                 ))}
@@ -206,7 +207,7 @@ export default function MeriemAvances({ user }) {
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <strong style={{ color: '#085041' }}>{fmtMoney(p.amount)}</strong>
-                  <button onClick={() => handleDeletePayeLG(p.id)} style={{ ...btnDanger, padding: '2px 6px' }} title="Supprimer"><Trash2 size={11} /></button>
+                  {isAdmin && <button onClick={() => handleDeletePayeLG(p.id)} style={{ ...btnDanger, padding: '2px 6px' }} title="Supprimer"><Trash2 size={11} /></button>}
                 </span>
               </div>
             )
