@@ -73,6 +73,7 @@ function BanqueSection({ user }) {
   const [suggestEnv, setSuggestEnv] = useState(null)
   const [query, setQuery] = useState('')
   const [takenLines, setTakenLines] = useState([])
+  const [freeLines, setFreeLines] = useState([])
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -80,6 +81,23 @@ function BanqueSection({ user }) {
     const data = await loadEnveloppesForSuivi({ type: 'banque', month, year, statusFilter })
     setList(data)
     try { setTakenLines(await loadConfirmedReleveLines()) } catch { /* ignore */ }
+    try { setFreeLines(await loadAllFreeReleveLines()) } catch { /* ignore */ }
+  }
+
+  // Montants disponibles dans le relevé par type (pour savoir si « Suggérer » servira)
+  const availByMethod = useMemo(() => {
+    const cash = new Set(), cheque = new Set(), virement = new Set()
+    for (const l of freeLines) {
+      const a = Math.round(Number(l.amount) * 100) / 100
+      if (l.type === 'versement') cash.add(a)
+      else if (l.type === 'cheque_depot') cheque.add(a)
+      else if (l.type === 'virement_recu' || l.type === 'autre') virement.add(a)
+    }
+    return { cash, cheque, virement }
+  }, [freeLines])
+  function hasSuggestion(env) {
+    const a = Math.round(Number(env.amount_cash) * 100) / 100
+    return (availByMethod[env.payment_method || 'cash'] || availByMethod.cash).has(a)
   }
 
   // Filtrer par méthode de paiement + recherche texte (montant, client, source)
@@ -260,9 +278,15 @@ function BanqueSection({ user }) {
               </button>
             )}
             {!env.releve_status && !env.proof_url && (
-              <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
-                💡 Suggérer
-              </button>
+              hasSuggestion(env) ? (
+                <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
+                  💡 Suggérer
+                </button>
+              ) : (
+                <button disabled style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#9a8f86', border: '1px solid #e5d8c3', background: '#f3efe9', cursor: 'default', opacity: 0.75 }}>
+                  Sans suggestion
+                </button>
+              )
             )}
           </div>
         </div>
