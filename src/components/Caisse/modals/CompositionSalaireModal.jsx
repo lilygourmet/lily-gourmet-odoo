@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Zap } from 'lucide-react'
 import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement } from '../../../lib/caisse'
-import { fmtMoney, fmtDateCourte, currentYear, SALAIRE_COLORS } from '../_helpers'
+import { fmtMoney, fmtDateCourte, currentYear, SALAIRE_COLORS, REPORT_DESTINATIONS, COLOR_PALETTE } from '../_helpers'
 import { supabase } from '../../../lib/supabase'
 
 export default function CompositionSalaireModal({ salaire, onClose, userId }) {
   const [available, setAvailable] = useState([])
   const [attached, setAttached] = useState([])
   const [target, setTarget] = useState(salaire.target_amount)
-  // Le reliquat est TOUJOURS reporté sur le salaire du mois suivant du même bénéficiaire.
-  const reliquatDest = 'report_mois_suivant'
+  // Reliquat reporté sur le salaire du mois suivant — au choix : Nezha ou Layla.
+  // Par défaut : le même bénéficiaire que ce salaire.
+  const [reliquatDest, setReliquatDest] = useState(`report_${salaire.beneficiaire}`)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => { reload() }, [])
@@ -138,8 +139,20 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
 
         {reliquat > 0 && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: '0.5px solid #e5d8c3' }}>
-            <div style={{ fontSize: 13, padding: 12, borderRadius: 8, background: '#E6F1FB', color: '#0C447C', border: '0.5px solid #378ADD' }}>
-              Reliquat de <strong>{fmtMoney(reliquat)}</strong> → reporté sur le salaire du mois suivant de <strong>{salaire.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'}</strong> (déduit automatiquement).
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Reporter le reliquat de {fmtMoney(reliquat)} sur le salaire du mois suivant de :</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {REPORT_DESTINATIONS.map(d => {
+                const c = COLOR_PALETTE[d.color] || COLOR_PALETTE.gris
+                const sel = reliquatDest === d.key
+                return (
+                  <button key={d.key} onClick={() => setReliquatDest(d.key)} style={{
+                    background: c.bg, color: c.text, border: `${sel ? 1.5 : 0.5}px solid ${c.border}`,
+                    padding: 12, borderRadius: 8, cursor: 'pointer', fontSize: 12,
+                    fontWeight: sel ? 500 : 'normal',
+                    boxShadow: sel ? `0 0 0 2px ${c.border}33` : 'none',
+                  }}>{d.label}</button>
+                )
+              })}
             </div>
           </div>
         )}

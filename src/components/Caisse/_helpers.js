@@ -77,13 +77,20 @@ export const SALAIRE_COLORS = {
   layla: COLOR_PALETTE.corail,
 }
 
-// Destinations possibles pour le reliquat salaire
+// Choix de report du reliquat (proposés dans la composition du salaire)
+export const REPORT_DESTINATIONS = [
+  { key: 'report_nezha', label: 'Report → salaire Nezha', color: 'bleu'   },
+  { key: 'report_layla', label: 'Report → salaire Layla', color: 'violet' },
+]
+
+// Liste complète (avec anciennes destinations) pour les libellés d'historique.
 export const RELIQUAT_DESTINATIONS = [
+  ...REPORT_DESTINATIONS,
+  { key: 'report_mois_suivant', label: 'Report mois suivant', color: 'bleu' },
   { key: 'caisse_meriem',   label: 'Caisse Meriem',  color: 'vert_clair' },
   { key: 'caisse_layla_lg', label: 'Caisse Layla LG', color: 'vert_teal'  },
   { key: 'nezha_perso',     label: 'Nezha perso',     color: 'orange'     },
   { key: 'layla_perso',     label: 'Layla perso',     color: 'corail'     },
-  { key: 'report_mois_suivant', label: 'Report mois suivant', color: 'bleu' },
 ]
 
 // Libellé d'affichage d'une destination de reliquat (gère le marqueur « consommé »).

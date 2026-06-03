@@ -1364,17 +1364,23 @@ export async function createSalaire({ beneficiaire, month, year, target_amount }
   let finalTarget = Number(target_amount) || 0
   const prevMonth = month === 1 ? 12 : month - 1
   const prevYear = month === 1 ? year - 1 : year
-  const { data: prev } = await supabase
+  const reportKey = `report_${beneficiaire}`   // report_nezha / report_layla
+  // Reliquats du mois précédent destinés à CE bénéficiaire (report_<ben>),
+  // + ancien format report_mois_suivant (même bénéficiaire). On les déduit et marque consommés.
+  const { data: prevs } = await supabase
     .from('caisse_salaires')
-    .select('id, reliquat_amount')
-    .eq('beneficiaire', beneficiaire).eq('month', prevMonth).eq('year', prevYear)
-    .eq('reliquat_destination', 'report_mois_suivant')
-    .maybeSingle()
-  if (prev && Number(prev.reliquat_amount) > 0) {
-    finalTarget -= Number(prev.reliquat_amount)
-    await supabase.from('caisse_salaires')
-      .update({ reliquat_destination: 'report_applique' })
-      .eq('id', prev.id)
+    .select('id, beneficiaire, reliquat_amount, reliquat_destination')
+    .eq('month', prevMonth).eq('year', prevYear)
+    .in('reliquat_destination', [reportKey, 'report_mois_suivant'])
+  for (const p of (prevs || [])) {
+    const matches = p.reliquat_destination === reportKey
+      || (p.reliquat_destination === 'report_mois_suivant' && p.beneficiaire === beneficiaire)
+    if (matches && Number(p.reliquat_amount) > 0) {
+      finalTarget -= Number(p.reliquat_amount)
+      await supabase.from('caisse_salaires')
+        .update({ reliquat_destination: 'report_applique' })
+        .eq('id', p.id)
+    }
   }
   const { data, error } = await supabase
     .from('caisse_salaires')
