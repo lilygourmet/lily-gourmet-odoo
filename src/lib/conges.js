@@ -358,6 +358,17 @@ export async function loadCongesEmploye(employeId) {
 export async function createDemandeConge({ employe_id, date_debut, date_fin, type_conge = 'annuel', motif = null, demande_par }) {
   if (!employe_id || !date_debut || !date_fin) throw new Error('employé, date_debut et date_fin requis')
   if (date_fin < date_debut) throw new Error('La date de fin doit être ≥ date de début')
+  // Bloque le chevauchement avec un congé existant (demande ou validé) du même employé.
+  const { data: existants } = await supabase
+    .from('conges')
+    .select('date_debut, date_fin')
+    .eq('employe_id', employe_id)
+    .in('statut', ['demande', 'valide'])
+  const fmtJ = ymd => (ymd ? ymd.split('-').reverse().join('/') : '')
+  const chevauche = (existants || []).find(c => !(c.date_fin < date_debut || c.date_debut > date_fin))
+  if (chevauche) {
+    throw new Error(`Chevauchement : un congé existe déjà du ${fmtJ(chevauche.date_debut)} au ${fmtJ(chevauche.date_fin)} pour cet employé.`)
+  }
   const { data, error } = await supabase
     .from('conges')
     .insert({

@@ -33,6 +33,7 @@ export default function AdminUsers({ currentUser, onClose }) {
   const [showNavbarConfigFor, setShowNavbarConfigFor] = useState(null)
   const [collapsedTeams, setCollapsedTeams] = useState({})  // { teamId: true } = replie
   const [showInactive, setShowInactive] = useState(false)   // masquer les désactivés par défaut
+  const [userSearch, setUserSearch] = useState('')          // filtre de recherche d'utilisateur
   const [dragOverTeam, setDragOverTeam] = useState(null)
   const [draggedUser, setDraggedUser] = useState(null)
 
@@ -313,6 +314,14 @@ export default function AdminUsers({ currentUser, onClose }) {
           {/* Liste users groupes par equipe */}
           {!loading && !showNewForm && (
             <div className="space-y-4">
+              {/* Recherche d'utilisateur (par nom ou identifiant) */}
+              <input
+                type="text"
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                placeholder="🔍 Chercher un utilisateur (nom ou identifiant)…"
+                className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+              />
               {users.some(u => u.active === false) && (
                 <button
                   onClick={() => setShowInactive(v => !v)}
@@ -326,10 +335,14 @@ export default function AdminUsers({ currentUser, onClose }) {
               {(() => {
                 // Si le viewer n'est pas admin (donc perm_admin_users), masquer les admins
                 const isCurrentSuperAdmin = currentUser?.role === 'admin'
+                const q = userSearch.trim().toLowerCase()
                 const visibleUsers = (isCurrentSuperAdmin
                   ? users
                   : users.filter(u => u.role !== 'admin')
                 ).filter(u => showInactive || u.active !== false)
+                  .filter(u => !q
+                    || (u.full_name || '').toLowerCase().includes(q)
+                    || (u.username || '').toLowerCase().includes(q))
                 // Grouper users par team_id
                 const groups = new Map()
                 for (const u of visibleUsers) {
@@ -350,6 +363,8 @@ export default function AdminUsers({ currentUser, onClose }) {
                   sections.push({ team: { id: '__none__', name: 'Sans équipe' }, users: [] })
                 }
                 return sections.map(({ team, users: teamUsers }) => {
+                  // Pendant une recherche : on cache les équipes sans résultat.
+                  if (q && teamUsers.length === 0) return null
                   const isCollapsed = collapsedTeams[team.id]
                   const isDragOver = dragOverTeam === team.id
                   return (
