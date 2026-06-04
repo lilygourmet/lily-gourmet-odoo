@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Phone, MapPin, Cake, Truck, Cookie, User, Croissant } from 'lucide-react'
-import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper } from '../lib/salesLines'
+import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix } from '../lib/salesLines'
 
 const CAT_ICONS = { CD: Cake, LIVR: Truck, PROD: Cookie, CLT: User, RAHN: Croissant }
 function CatIcon({ catId, size = 16, className = '' }) {
@@ -507,6 +507,10 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
   const orderTotal = typeof entry.orderTotal === 'number' ? entry.orderTotal : null
   const orderAcompte = typeof entry.orderAcompte === 'number' ? entry.orderAcompte : null
 
+  // Quartier de livraison = ligne LIVR de la commande (ex: "Souissi", "Agdal")
+  const zoneRaw = (entry.items || []).find(it => it.category === 'LIVR')?.product_name
+  const zone = zoneRaw ? stripOdooPrefix(zoneRaw).replace(/^livr[-\s]*/i, '').trim() : ''
+
   // Detection d'URL Google Maps dans la note
   const mapsUrl = orderNote ? extractMapsUrl(orderNote) : null
 
@@ -530,6 +534,11 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
           </span>
         )}
         <span className="text-ink">— {clientName}</span>
+        {showContact && zone && (
+          <span className="text-[10px] font-semibold text-bordeaux bg-bordeaux/10 rounded-full px-2 py-0.5 inline-flex items-center gap-1">
+            <MapPin size={10} strokeWidth={2} /> {zone}
+          </span>
+        )}
       </div>
 
       {/* Telephone + note : seulement en mode livraison */}

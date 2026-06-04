@@ -129,8 +129,16 @@ export default function InboxView({ user, initialConversationId }) {
   // Tri "file d'attente" : les clients qui attendent une réponse en premier,
   // le plus ancien en attente tout en haut ; sinon par activité récente.
   const sorted = [...filtered].sort((a, b) => {
+    // Les conversations fermées toujours regroupées en bas de la liste
+    const ca = a.status === 'fermee' ? 1 : 0
+    const cb = b.status === 'fermee' ? 1 : 0
+    if (ca !== cb) return ca - cb
     const wa = conversationWaitingSince(a)
     const wb = conversationWaitingSince(b)
+    // En haut : client en attente OU conversation marquée "non lue"
+    const topA = (wa || a.marked_unread) ? 1 : 0
+    const topB = (wb || b.marked_unread) ? 1 : 0
+    if (topA !== topB) return topB - topA
     if (wa && wb) return wa - wb        // les deux attendent : le plus vieux d'abord
     if (wa) return -1                    // a attend, pas b -> a devant
     if (wb) return 1
@@ -239,7 +247,9 @@ export default function InboxView({ user, initialConversationId }) {
                 ? 'border-2 border-line text-ink-mute'
                 : 'border-2 border-ink text-ink'
               const seenRef = seenAt[c.id] || visitedAtRef.current
-              const isNew = c.marked_unread || c.unread_count > 0 || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))
+              // En avant aussi tant que le client attend une réponse (même déjà ouverte),
+              // jusqu'à ce qu'un agent réponde (conversationWaitingSince repasse à null).
+              const isNew = c.marked_unread || c.unread_count > 0 || conversationWaitingSince(c) || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))
               const isSelected = c.id === selectedId
               return (
                 <button

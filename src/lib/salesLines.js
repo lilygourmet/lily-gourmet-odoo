@@ -56,6 +56,23 @@ export async function loadSalesLinesForRange(fromDate, daysCount) {
   return data || []
 }
 
+// Charge TOUTES les lignes de commandes données (par n° de commande), quelle que
+// soit leur date. Sert à afficher le détail complet d'une livraison même si les
+// produits ont une date différente de la ligne « Livraison ».
+export async function loadSalesLinesForOrders(orderNums) {
+  const nums = [...new Set((orderNums || []).filter(Boolean))]
+  if (!nums.length) return []
+  const { data, error } = await supabase
+    .from('sales_lines')
+    .select('*')
+    .in('order_num', nums)
+  if (error) {
+    console.error('[loadSalesLinesForOrders] erreur:', error)
+    return []
+  }
+  return data || []
+}
+
 // ============================================================
 // VUES PROD / SALES (rules de filtrage)
 // ============================================================

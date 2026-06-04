@@ -3,6 +3,19 @@ import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 import { saveAs } from 'file-saver'
 
+// Groupes/catégories d'employé (menu déroulant). Simple étiquette de classement :
+// n'active aucune permission (le dispatch des perms reste manuel).
+export const EMPLOYE_GROUPES = [
+  'Pâtisserie',
+  'Café / Boutique',
+  'Caisse',
+  'Commercial / WhatsApp',
+  'Livreur',
+  'Production',
+  'RH / Admin',
+  'Aucun',
+]
+
 // ============================================================
 // CRUD EMPLOYÉS
 // ============================================================

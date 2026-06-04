@@ -35,18 +35,14 @@ export async function loadDeliveryStates(orderNums) {
 
 // Notifie TOUTES les personnes ayant accès aux Livraisons (admin / récap / livreurs),
 // sauf l'auteur de l'action.
-async function notifyLivraisonTeam(actorId, title, isUrgent) {
-  const { data } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('active', true)
-    .or('role.eq.admin,role.eq.livreur,perm_recaps.eq.true')
-  const ids = [...new Set((data || []).map(p => p.id))].filter(id => id && id !== actorId)
-  for (const toId of ids) {
-    try {
-      await createTask({ title, fromUserId: actorId, toUserId: toId, isUrgent: !!isUrgent })
-    } catch { /* notif non bloquante */ }
-  }
+// Prévient UNIQUEMENT la personne qui a assigné la livraison (champ assigned_by).
+async function notifyAssigner(orderNum, actorId, title, isUrgent) {
+  const { data: row } = await supabase.from('livraisons').select('assigned_by').eq('order_num', orderNum).maybeSingle()
+  const target = row?.assigned_by
+  if (!target || target === actorId) return
+  try {
+    await createTask({ title, fromUserId: actorId, toUserId: target, isUrgent: !!isUrgent })
+  } catch { /* notif non bloquante */ }
 }
 
 // Assigne une livraison. Le livreur PAR DÉFAUT accepte d'office (statut 'acceptee').
@@ -75,7 +71,7 @@ export async function acceptDelivery({ orderNum, byUserId, label, livreurName })
     .from('livraisons')
     .upsert({ order_num: orderNum, livreur_id: byUserId, statut: 'acceptee', updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
-  await notifyLivraisonTeam(byUserId, `✅ ${livreurName} a accepté la livraison · ${label}`, false)
+  await notifyAssigner(orderNum, byUserId, `✅ ${livreurName} a accepté la livraison · ${label}`, false)
 }
 
 // Le livreur refuse (pas dispo) -> à réassigner + notif URGENTE à toute l'équipe Livraisons.
@@ -84,7 +80,7 @@ export async function refuseDelivery({ orderNum, byUserId, label, livreurName })
     .from('livraisons')
     .upsert({ order_num: orderNum, livreur_id: null, statut: 'refusee', updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
-  await notifyLivraisonTeam(byUserId, `⚠️ ${livreurName} PAS DISPO · ${label} — à réassigner`, true)
+  await notifyAssigner(orderNum, byUserId, `⚠️ ${livreurName} PAS DISPO · ${label} — à réassigner`, true)
 }
 
 // Nombre de livraisons refusées en attente de réassignation (badge onglet).

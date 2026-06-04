@@ -22,16 +22,19 @@ export default function ChangePasswordModal({ user, onClose }) {
     }
 
     setSaving(true)
-    const result = await changeMyPassword(user.id, oldPwd, newPwd)
-    setSaving(false)
-
-    if (!result.success) {
-      setError(result.error)
-      return
+    try {
+      const result = await changeMyPassword(user.id, oldPwd, newPwd)
+      if (!result?.success) {
+        setError(result?.error || 'Le changement de mot de passe a échoué')
+        return
+      }
+      alert('Mot de passe changé ✅')
+      onClose()
+    } catch (err) {
+      setError(err?.message || 'Erreur lors du changement de mot de passe')
+    } finally {
+      setSaving(false)
     }
-
-    alert('Mot de passe changé ✅')
-    onClose()
   }
 
   return (

@@ -39,6 +39,7 @@ INSERT INTO jours_feries (date, nom, type) VALUES
   ('2026-08-14', 'Allégeance Oued Eddahab',         'fixe'),
   ('2026-08-20', 'Révolution du Roi et du Peuple',  'fixe'),
   ('2026-08-21', 'Fête de la Jeunesse',             'fixe'),
+  ('2026-10-31', 'Aïd Al Wahda (Fête de l''Unité)', 'fixe'),
   ('2026-11-06', 'Marche Verte',                    'fixe'),
   ('2026-11-18', 'Fête de l''Indépendance',         'fixe')
 ON CONFLICT (date) DO NOTHING;

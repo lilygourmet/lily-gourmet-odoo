@@ -174,30 +174,6 @@ export async function createUserForEmploye(employe) {
 }
 
 /**
- * Envoie le login + mot de passe par WhatsApp (template acces_application).
- * La conversation reste fermée (notif interne).
- */
-export async function sendAccessCredentials({ phone, prenom, username, actorUserId }) {
-  if (!phone) return { ok: false, reason: 'pas de téléphone' }
-  const res = await fetch('/api/wati-webhook?action=send-template', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      clientPhone: phone,
-      templateName: 'lily_gourmet_access',
-      parameters: [
-        { name: '1', value: prenom },
-        { name: '2', value: username },
-      ],
-      userId: actorUserId || null,
-    }),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) return { ok: false, reason: data.error || `Erreur ${res.status}` }
-  return { ok: true }
-}
-
-/**
  * Désactive le user lié à un employé (login bloqué). On garde l'historique.
  */
 export async function deactivateUserForEmploye(employeId) {
@@ -206,10 +182,11 @@ export async function deactivateUserForEmploye(employeId) {
 }
 
 /**
- * Crée les users manquants pour tous les employés actifs (et envoie le WhatsApp).
+ * Crée les users manquants pour tous les employés actifs.
+ * Les accès (login + mot de passe) sont à communiquer manuellement.
  * Retourne { created:[...], skipped:[...], errors:[...] }.
  */
-export async function createMissingEmployeUsers(employes, actorUserId) {
+export async function createMissingEmployeUsers(employes) {
   const { data: linked } = await supabase.from('profiles').select('employe_id').not('employe_id', 'is', null)
   const hasUser = new Set((linked || []).map(p => p.employe_id))
 
@@ -220,8 +197,7 @@ export async function createMissingEmployeUsers(employes, actorUserId) {
     try {
       const r = await createUserForEmploye(e)
       if (!r.ok) { skipped.push({ nom: e.nom, reason: r.reason }); continue }
-      const sent = await sendAccessCredentials({ phone: r.whatsapp, prenom: r.prenom, username: r.username, actorUserId })
-      created.push({ nom: e.nom, username: r.username, password: r.password, waSent: sent.ok, waReason: sent.reason })
+      created.push({ nom: e.nom, username: r.username, password: r.password })
     } catch (err) {
       errors.push({ nom: e.nom, reason: err?.message || 'erreur' })
     }

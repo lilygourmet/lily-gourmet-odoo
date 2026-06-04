@@ -22,21 +22,21 @@ function composeDetails(order, tmplName) {
   const prods = (order.productLines || [])
     .map(l => `Produit : ${l.text} Qté : ${l.qty} Prix : ${l.price}`)
     .join(' ; ')
-  if (tmplName === 'devis_val') {
+  if (tmplName === 'devis_validation') {
     return `Montant : ${order.amountText}. ${prods}. Date et heure de retrait souhaitées : ${order.pickupText}`
   }
   // message_de_confirmation
   return `Montant : ${order.amountText}. La date et l'heure de retrait sont ${order.pickupText}. Détails : ${prods}`
 }
-const AUTOFILL_TEMPLATES = new Set(['devis_val', 'message_de_confirmation'])
+const AUTOFILL_TEMPLATES = new Set(['devis_validation', 'message_de_confirmation'])
 
 // Commande confirmée (sale/done) -> confirmation ; sinon (brouillon/envoyé) -> devis.
 const isConfirmedOrder = (state) => state === 'sale' || state === 'done'
-const templateForState = (state) => isConfirmedOrder(state) ? 'message_de_confirmation' : 'devis_val'
+const templateForState = (state) => isConfirmedOrder(state) ? 'message_de_confirmation' : 'devis_validation'
 
 // Templates proposés en mode CLIENT (usage commercial).
 const ALLOWED_TEMPLATES = new Set([
-  'devis_val',
+  'devis_validation',
   'message_de_confirmation',
   'envoi_modele_gateau',
   'relance_validation_de_devis',

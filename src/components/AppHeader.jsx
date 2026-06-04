@@ -595,8 +595,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // ============================================================
   const fixedTabs = [
     (!isLivreur(user) && canSeeCalendar(user)) && { view: 'calendar', emoji: '📅', label: 'Calendrier', badge: 0 },
-    (canRecaps(user) || isLivreur(user)) && { view: 'recap', emoji: '📊', label: 'Récap', badge: 0 },
-    { view: 'tasks', emoji: '✅', label: 'Tâches', badge: tasksBadge },
+    canRecaps(user) && { view: 'recap', emoji: '📊', label: 'Récap', badge: 0 },
+    isLivreur(user) && { view: 'livraisons', emoji: '🚚', label: 'Livraisons', badge: livraisonsBadge },
+    !isLivreur(user) && { view: 'tasks', emoji: '✅', label: 'Tâches', badge: tasksBadge },
     showChecklistBtn && { view: 'checklist', emoji: '📋', label: 'Checklist', badge: checklistBadge },
   ].filter(Boolean)
   const adminGallery = (admin && canSeeCakeVision(user))
@@ -784,10 +785,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               {!isLivreur(user) && canSeeCalendar(user) && (
                 <NavButton view="calendar" label="Calendrier" isActive={activeView === 'calendar'} onClick={() => onNavigate('calendar')} />
               )}
-              {(canRecaps(user) || isLivreur(user)) && (
+              {canRecaps(user) && (
                 <NavButton view="recap" label="Récap" isActive={activeView === 'recap'} onClick={() => onNavigate('recap')} />
               )}
-              <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
+              {isLivreur(user) && (
+                <NavButton view="livraisons" label="Livraisons" isActive={activeView === 'livraisons'} badgeCount={livraisonsBadge} onClick={() => onNavigate('livraisons')} />
+              )}
+              {!isLivreur(user) && (
+                <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
+              )}
               {primary && (
                 <NavButton
                   view={primary.view}

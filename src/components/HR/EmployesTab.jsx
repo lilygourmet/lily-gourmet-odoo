@@ -2,12 +2,14 @@ import { useState, useEffect, useMemo } from 'react'
 import { Search, Building2, Plus, Calendar, Pencil, Trash2, PartyPopper, Palmtree, CheckCircle2, Moon, Eye, EyeOff } from 'lucide-react'
 import { loadEmployes, deleteEmploye } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
+import { createMissingEmployeUsers, deactivateUserForEmploye } from '../../lib/users'
 import EmployeEditModal from './EmployeEditModal'
 
 const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
 export default function EmployesTab({ user, isAdmin }) {
   const [employes, setEmployes] = useState([])
+  const [creatingUsers, setCreatingUsers] = useState(false)
   const [conges, setConges] = useState([])
   const [joursFeries, setJoursFeries] = useState([])
   const [loading, setLoading] = useState(false)
@@ -131,10 +133,31 @@ export default function EmployesTab({ user, isAdmin }) {
     e.stopPropagation()  // ne pas ouvrir le modal
     if (!confirm(`Supprimer ${emp.nom} ? Cette action est définitive.`)) return
     try {
+      // On bloque d'abord l'accès du user lié (login désactivé) avant de supprimer.
+      await deactivateUserForEmploye(emp.id).catch(() => {})
       await deleteEmploye(emp.id)
       reload()
     } catch (err) {
       alert('Erreur : ' + err.message)
+    }
+  }
+
+  async function handleCreateMissingUsers() {
+    if (!confirm('Créer les users manquants pour tous les employés actifs ?\n(Login + mot de passe générés ; accès envoyés par WhatsApp.)')) return
+    setCreatingUsers(true)
+    try {
+      const all = await loadEmployes(true) // actifs uniquement
+      const res = await createMissingEmployeUsers(all)
+      const parts = [`✅ ${res.created.length} user(s) créé(s)`]
+      if (res.created.length) parts.push(res.created.map(c => `· ${c.nom} → ${c.username} / ${c.password}`).join('\n'))
+      if (res.skipped.length) parts.push(`\n⏭️ ${res.skipped.length} ignoré(s) :\n` + res.skipped.map(s => `· ${s.nom} (${s.reason})`).join('\n'))
+      if (res.errors.length) parts.push(`\n⚠️ ${res.errors.length} erreur(s) :\n` + res.errors.map(s => `· ${s.nom} (${s.reason})`).join('\n'))
+      alert(parts.join('\n'))
+      reload()
+    } catch (e) {
+      alert('Erreur : ' + (e?.message || ''))
+    } finally {
+      setCreatingUsers(false)
     }
   }
 
@@ -197,14 +220,25 @@ export default function EmployesTab({ user, isAdmin }) {
             </button>
           ))}
         </div>
-        <button onClick={() => setEditingEmp({})} style={{
-          padding: '9px 14px', fontSize: 13, background: '#993556',
-          color: 'white', border: '1px solid #993556', borderRadius: 8,
-          cursor: 'pointer', fontWeight: 500,
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-        }}>
-          <Plus size={14} /> Nouvel employé
-        </button>
+        <div style={{ display: 'inline-flex', gap: 8 }}>
+          {isAdmin && (
+            <button onClick={handleCreateMissingUsers} disabled={creatingUsers} style={{
+              padding: '9px 14px', fontSize: 13, background: 'transparent',
+              color: '#993556', border: '1px solid #993556', borderRadius: 8,
+              cursor: creatingUsers ? 'default' : 'pointer', fontWeight: 500, opacity: creatingUsers ? 0.6 : 1,
+            }} title="Crée un compte (login + mot de passe) pour chaque employé actif qui n'en a pas encore">
+              {creatingUsers ? 'Création…' : 'Créer les users manquants'}
+            </button>
+          )}
+          <button onClick={() => setEditingEmp({})} style={{
+            padding: '9px 14px', fontSize: 13, background: '#993556',
+            color: 'white', border: '1px solid #993556', borderRadius: 8,
+            cursor: 'pointer', fontWeight: 500,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            <Plus size={14} /> Nouvel employé
+          </button>
+        </div>
       </div>
 
       {/* Info du jour */}

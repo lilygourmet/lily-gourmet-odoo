@@ -57,7 +57,7 @@ function App() {
   // Choisit la vue par defaut en fonction du user
   function pickDefaultView(u) {
     if (!u) return 'calendar'
-    if (isLivreur(u)) return 'recap'
+    if (isLivreur(u)) return 'livraisons'
     if (u.role === 'recap') return 'recap'
     if (u.role === 'admin') return 'calendar'
     // Stock granulaire : si user a UNIQUEMENT une perm stock, on l'oriente sur SON onglet
@@ -217,6 +217,8 @@ function App() {
   }
 
   function renderActiveView() {
+    // Livreur : accès limité à Livraisons (jamais Récap ni Tâches, même via onglet mémorisé).
+    if (isLivreur(user)) return <LivraisonsWrapper {...navProps} />
     if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
     if (activeView === 'patissier') return <PatissierView {...navProps} />
     if (activeView === 'prod') return <ProdView {...navProps} forcedCategory="prod" />
@@ -241,10 +243,10 @@ function App() {
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
     if (activeView === 'economat') return <EconomatView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
-    // Sinon repli sûr (livreur -> Récap, autres -> Tâches) pour ne jamais
+    // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
     // exposer le calendrier à un user sans perm_calendar.
     if (canSeeCalendar(user)) return <Calendar {...navProps} />
-    if (isLivreur(user)) return <RecapVentes {...navProps} fullscreen />
+    if (isLivreur(user)) return <LivraisonsWrapper {...navProps} />
     return <TasksWrapper {...navProps} />
   }
 

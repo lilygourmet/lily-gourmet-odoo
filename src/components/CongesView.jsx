@@ -16,7 +16,7 @@ function useIsMobile(maxWidth = 640) {
   return isMobile
 }
 
-import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Pencil, ChevronRight, Flag } from 'lucide-react'
+import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Pencil, ChevronRight, Flag, Lock } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { supabase } from '../lib/supabase'
 import { loadEmployes } from '../lib/hr'
@@ -743,15 +743,23 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                             </span>
                           </div>
                         )}
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => { setEditFerie(f); setShowFerieForm(true) }} title="Modifier"
-                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => handleDeleteFerie(f)} title="Supprimer"
-                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
-                            <Trash2 size={14} />
-                          </button>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
+                          {f.type === 'lunaire' ? (
+                            <>
+                              <button onClick={() => { setEditFerie(f); setShowFerieForm(true) }} title="Modifier"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => handleDeleteFerie(f)} title="Supprimer"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <span title="Férié fixe (verrouillé)" style={{ color: '#b8ad9e', display: 'inline-flex', padding: 4 }}>
+                              <Lock size={14} />
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}

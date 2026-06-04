@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Clock, Lock, CheckCircle2 } from 'lucide-react'
-import { createEmploye, updateEmploye, loadEmployes } from '../../lib/hr'
+import { createEmploye, updateEmploye, loadEmployes, EMPLOYE_GROUPES } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
+import { createUserForEmploye, deactivateUserForEmploye } from '../../lib/users'
 
 // Normalise un numéro marocain en format international WATI (212XXXXXXXXX)
 // Ex : "06 66 32 84 93" → "212666328493"
@@ -133,6 +134,7 @@ export default function EmployeEditModal({
         cnss: form.cnss.trim() || null,
         cin: form.cin.trim() || null,
         poste: form.poste.trim() || null,
+        groupe: form.groupe || null,
         type_contrat: form.type_contrat,
         date_entree: form.date_entree || null,
         date_anciennete: form.date_anciennete || null,
@@ -166,7 +168,18 @@ export default function EmployeEditModal({
         lieu_urgence_nom: form.lieu_urgence_nom.trim() || null,
       }
       if (isNew) {
-        await createEmploye(data, user.id)
+        const created = await createEmploye(data, user.id)
+        // Création auto du user (sans permission) + envoi des accès par WhatsApp.
+        try {
+          const r = await createUserForEmploye(created)
+          if (r.ok) {
+            alert(`Employé et user créés ✅\n\nLogin : ${r.username}\nMot de passe : ${r.password}\n\n(À communiquer à l'employé.)`)
+          } else {
+            alert(`Employé créé, mais user NON créé : ${r.reason}.\n(Tu pourras réessayer via « Créer les users manquants ».)`)
+          }
+        } catch (e) {
+          alert('Employé créé, mais erreur création user : ' + (e?.message || ''))
+        }
       } else {
         await updateEmploye(currentEmploye.id, data, user.id)
         // Propagation du téléphone vers le user lié (s'il existe).
@@ -178,6 +191,10 @@ export default function EmployeEditModal({
           } catch (e) {
             console.warn('[propagate-tel-user]', e?.message || e)
           }
+        }
+        // Départ employé (inactif ou date de sortie) → on désactive son user.
+        if (data.actif === false || data.date_sortie) {
+          try { await deactivateUserForEmploye(currentEmploye.id) } catch (e) { console.warn('[deactivate-user]', e?.message || e) }
         }
       }
       onSaved?.()
@@ -247,6 +264,16 @@ export default function EmployeEditModal({
           <Row>
             <Field label="Nom complet *" value={form.nom} onChange={v => setF('nom', v)} required autoFocus />
             <Field label="Poste" value={form.poste} onChange={v => setF('poste', v)} placeholder="Pâtissière" />
+          </Row>
+          <Row>
+            <div>
+              <label style={lblStyle}>Groupe</label>
+              <select value={form.groupe || ''} onChange={e => setF('groupe', e.target.value)} style={inputStyle}>
+                <option value="">— Choisir un groupe —</option>
+                {EMPLOYE_GROUPES.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div />
           </Row>
           <Row>
             <Field label="N° CNSS" value={form.cnss} onChange={v => setF('cnss', v)} placeholder="182572887" />
@@ -494,6 +521,7 @@ function initForm(employe) {
     cnss: employe?.cnss || '',
     cin: employe?.cin || '',
     poste: employe?.poste || '',
+    groupe: employe?.groupe || '',
     type_contrat: employe?.type_contrat || 'CDI',
     date_entree: employe?.date_entree || '',
     date_anciennete: employe?.date_anciennete || '',

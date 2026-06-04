@@ -9,6 +9,7 @@ export const FERIES_FIXES = [
   { md: '08-14', nom: 'Allégeance Oued Eddahab' },
   { md: '08-20', nom: 'Révolution du Roi et du Peuple' },
   { md: '08-21', nom: 'Fête de la Jeunesse' },
+  { md: '10-31', nom: 'Aïd Al Wahda (Fête de l\'Unité)' },
   { md: '11-06', nom: 'Marche Verte' },
   { md: '11-18', nom: "Fête de l'Indépendance" },
 ]
