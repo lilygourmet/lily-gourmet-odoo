@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createTask, loadAllUsers, uploadTaskAttachment } from '../../lib/tasks'
+import SearchSelect from '../SearchSelect'
 
 /**
  * Modal pour créer une nouvelle tâche.
@@ -74,6 +75,13 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
     }
   }
 
+  const userOptions = [...users]
+    .sort((a, b) => (a.full_name || a.username || '').localeCompare(b.full_name || b.username || ''))
+    .map(u => ({
+      value: u.id,
+      label: `👤 ${u.full_name || u.username || u.id.slice(0, 8)}${u.id === currentUser?.id ? ' (moi)' : ''}`,
+    }))
+
   return (
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={e => e.stopPropagation()}>
@@ -87,24 +95,14 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
         <form onSubmit={handleSubmit}>
           <label style={lblStyle}>
             À qui ?
-            <select
+            <SearchSelect
+              options={userOptions}
               value={toUserId}
-              onChange={e => setToUserId(e.target.value)}
-              style={inputStyle}
+              onChange={setToUserId}
+              placeholder="Tape un nom…"
               autoFocus
-            >
-              {[...users]
-                .sort((a, b) => (a.full_name || a.username || '').localeCompare(b.full_name || b.username || ''))
-                .map(u => {
-                  const isMe = u.id === currentUser?.id
-                  const name = u.full_name || u.username || u.id.slice(0, 8)
-                  return (
-                    <option key={u.id} value={u.id}>
-                      👤 {name}{isMe ? ' (moi)' : ''}
-                    </option>
-                  )
-                })}
-            </select>
+              inputStyle={{ ...inputStyle }}
+            />
           </label>
 
           <label style={lblStyle}>
