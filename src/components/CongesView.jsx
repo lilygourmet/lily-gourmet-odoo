@@ -950,8 +950,18 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
       : ''
   )
   const existingRecup = Array.isArray(conge.recup_detail) ? conge.recup_detail : []
-  const [recupCount, setRecupCount]     = useState(existingRecup.length)
-  const [recupRaisons, setRecupRaisons] = useState(existingRecup.map(r => r.raison || 'travaille'))
+  // Pour un congé de type récup sans détail saisi, on pré-remplit tous les jours
+  // (par défaut « jour travaillé ») pour que l'admin n'ait qu'à ajuster la raison.
+  const initRecup = (() => {
+    if (existingRecup.length) return existingRecup.map(r => r.raison || 'travaille')
+    if (classifierConge(conge) === 'recup') {
+      const set = new Set((joursFeries || []).map(f => f.date))
+      return joursDecomptesDates(emp, set, conge.date_debut, conge.date_fin).map(() => 'travaille')
+    }
+    return []
+  })()
+  const [recupCount, setRecupCount]     = useState(initRecup.length)
+  const [recupRaisons, setRecupRaisons] = useState(initRecup)
   const [busy, setBusy]           = useState(false)
   const [err, setErr]             = useState('')
 
