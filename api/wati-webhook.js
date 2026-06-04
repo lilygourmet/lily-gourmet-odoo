@@ -621,13 +621,17 @@ function fmtAmount(n) {
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     .format(Number(n) || 0) + ' DH'
 }
-// "24/05/2026 12:00:00" depuis le format Odoo "YYYY-MM-DD HH:MM:SS" (UTC)
+// "24/05/2026 15:00" depuis le format Odoo "YYYY-MM-DD HH:MM:SS" (stocké en UTC).
+// Converti à l'heure du Maroc (Africa/Casablanca gère aussi le Ramadan/UTC+0).
 function fmtPickup(s) {
   if (!s) return ''
   const d = new Date(String(s).replace(' ', 'T') + 'Z')
   if (isNaN(d)) return String(s)
-  const p = (x) => String(x).padStart(2, '0')
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  return d.toLocaleString('fr-FR', {
+    timeZone: 'Africa/Casablanca',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
 }
 // Numéro au format WATI (chiffres, indicatif marocain) : 0661… -> 212661…
 function normalizePhone(raw) {
@@ -1007,13 +1011,18 @@ async function getEmployePhone(supabase, employeId) {
   return { phone: prof?.whatsapp || null, nom: emp.nom }
 }
 
-function buildCongeMessage(type, conge, nom) {
+function buildCongeMessage(type, conge, nom, solde = null) {
   const debut = fmtDateFR(conge.date_debut)
   const fin   = fmtDateFR(conge.date_fin)
   const nbJ   = joursEntre(conge.date_debut, conge.date_fin)
   const prenom = (nom || '').split(' ')[0] || ''
   if (type === 'validation') {
-    return `Bonjour ${prenom},\nVotre congé du ${debut} au ${fin} (${nbJ} jour${nbJ > 1 ? 's' : ''}) a été validé.\nBon repos !`
+    let msg = `Bonjour ${prenom},\nVotre congé du ${debut} au ${fin} (${nbJ} jour${nbJ > 1 ? 's' : ''}) a été validé.`
+    if (solde && solde.pris != null && solde.pris !== '' && solde.dispo != null && solde.dispo !== '') {
+      const f = v => { const n = Number(v); return (Number.isInteger(n) ? String(n) : n.toFixed(1)).replace('.', ',') }
+      msg += `\nVous avez pris ${f(solde.pris)} jour(s) de congé cette année, il vous reste ${f(solde.dispo)} jour(s) (récupération incluse).`
+    }
+    return msg + `\nBon repos !`
   }
   if (type === 'rejet') {
     return `Bonjour ${prenom},\nVotre demande de congé du ${debut} au ${fin} n'a pas été validée.\nMerci de te rapprocher de l'administration.`
@@ -1071,7 +1080,7 @@ async function handleCongesNotif(req, res) {
   const { phone, nom } = await getEmployePhone(supabase, conge.employe_id)
   if (!phone) return res.status(200).json({ ok: false, reason: 'pas de numéro téléphone pour cet employé' })
 
-  const text = buildCongeMessage(type, conge, nom)
+  const text = buildCongeMessage(type, conge, nom, { pris: req.query?.pris, dispo: req.query?.dispo })
   const ok = await sendReminderWhatsapp(supabase, phone, text, congeTemplate(type, conge, nom))
 
   // Anti-doublon : on note la date d'envoi sur la colonne correspondante.

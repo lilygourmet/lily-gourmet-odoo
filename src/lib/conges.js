@@ -412,8 +412,17 @@ export async function validerConge(congeId, userId, joursDecomptes = null) {
     .eq('id', congeId)
     .select().single()
   if (error) throw error
+  // Solde (récup incluse) pour l'afficher dans le message de validation
+  let extra = ''
+  try {
+    const { data: emp } = await supabase.from('employes').select('*').eq('id', data.employe_id).maybeSingle()
+    if (emp) {
+      const s = await calculSoldeConges(emp)
+      extra = `&pris=${encodeURIComponent(s.pris)}&dispo=${encodeURIComponent(s.dispo)}`
+    }
+  } catch (e) { console.warn('[solde notif]', e.message) }
   // Tire la notif WATI (best-effort, ne bloque pas en cas d'échec)
-  try { await notifierWATI(congeId, 'validation') } catch (e) { console.warn('[notif validation]', e.message) }
+  try { await notifierWATI(congeId, 'validation', extra) } catch (e) { console.warn('[notif validation]', e.message) }
   return data
 }
 
@@ -442,9 +451,9 @@ export async function annulerConge(congeId, userId) {
 // ------------------------------------------------------------
 // NOTIFICATIONS WATI — appel à l'endpoint serveur
 // ------------------------------------------------------------
-async function notifierWATI(congeId, type) {
+async function notifierWATI(congeId, type, extra = '') {
   // type : 'validation' | 'rejet' | 'rappel_retour'
-  const r = await fetch(`/api/wati-webhook?action=conges-notif&congeId=${congeId}&type=${type}`)
+  const r = await fetch(`/api/wati-webhook?action=conges-notif&congeId=${congeId}&type=${type}${extra}`)
   if (!r.ok) {
     const txt = await r.text().catch(() => '')
     throw new Error(txt || `HTTP ${r.status}`)
