@@ -46,13 +46,16 @@ export async function loadATraiter() {
         .filter(a => a.champ === 'recup_raison')
         .map(a => `${a.employe_id}|${a.date_jour}`)
     )
+    // Employés qui POINTENT réellement ce mois (au moins 1 pointage). Ceux qui ne
+    // pointent jamais (ex: Badea Bahri, Rachida Haimer) ne sont PAS comptés absents.
+    const aPointe = new Set((data.pointages || []).map(p => p.employe_id))
     for (const emp of data.employes) {
       const { journal } = calculerMois(emp, mois, annee, data)
       for (const d of journal) {
         if (d.date > today) continue   // on ne traite pas le futur
         if (d.statut === 'absent') {
-          if (!couvertParDemande(emp.id, d.date)) {
-            absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine })
+          if (aPointe.has(emp.id) && !couvertParDemande(emp.id, d.date)) {
+            absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues })
           }
         } else if (Number(d.jours_recup) > 0) {
           if (!recupTraite.has(`${emp.id}|${d.date}`)) {
@@ -94,6 +97,16 @@ export async function traiterAbsence({ employe_id, date, classification, raison,
     motif: raison || null,
     demande_par: userId,
   })
+}
+
+/**
+ * Oubli de pointage : la personne était bien présente mais a oublié de pointer.
+ * On marque le jour PRÉSENT (heures prévues comptées comme travaillées) — comme
+ * le bouton « Marquer présent » du pointage.
+ */
+export async function traiterOubliPointage({ employe_id, date, heures_prevues, userId }) {
+  await setAjustement(employe_id, date, 'heures_travaillees', String(heures_prevues ?? 8.5), userId)
+  await setAjustement(employe_id, date, 'statut', 'present', userId)
 }
 
 /**

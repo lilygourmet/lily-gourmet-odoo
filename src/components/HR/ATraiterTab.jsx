@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react'
-import { loadATraiter, traiterAbsence, validerRecup, refuserRecup } from '../../lib/aTraiter'
+import { loadATraiter, traiterAbsence, traiterOubliPointage, validerRecup, refuserRecup } from '../../lib/aTraiter'
 
 const CLASSIFS = [
   { v: 'annuel',     label: 'Congé annuel' },
   { v: 'maladie',    label: 'Maladie' },
   { v: 'sans_solde', label: 'Sans solde' },
+  { v: 'oubli',      label: 'Oubli de pointage (présent)' },
 ]
 
 const fmtJour = ymd => (ymd ? ymd.split('-').reverse().join('/') : '')
@@ -47,7 +48,11 @@ export default function ATraiterTab({ user, onChange }) {
     const classification = f.classification || 'annuel'
     setBusyKey(key); setErr('')
     try {
-      await traiterAbsence({ employe_id: a.employe_id, date: a.date, classification, raison: f.raison || null, userId: user.id })
+      if (classification === 'oubli') {
+        await traiterOubliPointage({ employe_id: a.employe_id, date: a.date, heures_prevues: a.heures_prevues, userId: user.id })
+      } else {
+        await traiterAbsence({ employe_id: a.employe_id, date: a.date, classification, raison: f.raison || null, userId: user.id })
+      }
       await reload()
     } catch (e) { setErr(e.message) }
     finally { setBusyKey('') }
@@ -107,7 +112,7 @@ export default function ATraiterTab({ user, onChange }) {
                   style={{ flex: 1, minWidth: 140, padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
                 <button onClick={() => handleAbsence(a)} disabled={busyKey === key}
                   style={{ padding: '8px 14px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Send size={13} /> {busyKey === key ? '…' : 'Envoyer en validation'}
+                  <Send size={13} /> {busyKey === key ? '…' : (f.classification === 'oubli' ? 'Marquer présent' : 'Envoyer en validation')}
                 </button>
               </div>
             )
