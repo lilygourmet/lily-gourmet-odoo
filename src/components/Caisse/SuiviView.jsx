@@ -117,6 +117,11 @@ function BanqueSection({ user }) {
   }, [list, methodFilter, query, hideNoSugg, availByMethod])
 
   const total = useMemo(() => filteredList.reduce((s, e) => s + Number(e.amount_cash), 0), [filteredList])
+  const totalEcart = useMemo(() => filteredList.reduce((s, e) => {
+    if (e.amount_proof == null) return s
+    const dd = Number(e.amount_proof) - Number(e.amount_cash)
+    return Math.abs(dd) >= 0.005 ? s + dd : s
+  }, 0), [filteredList])
 
   // Comptage par méthode (pour afficher dans le filtre)
   const countCash = useMemo(() => list.filter(e => (e.payment_method || 'cash') === 'cash').length, [list])
@@ -226,7 +231,7 @@ function BanqueSection({ user }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 16px', borderRadius: 8, marginBottom: 14, background: '#E6F1FB', color: '#0C447C' }}>
         <div style={{ fontSize: 15, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Landmark size={16} /> Versements bancaires</div>
-        <div style={{ fontSize: 13 }}>{filteredList.length} {statusFilter === 'pending' ? 'en attente' : ''} · {fmtMoney(total)}</div>
+        <div style={{ fontSize: 13 }}>{filteredList.length} {statusFilter === 'pending' ? 'en attente' : ''} · {fmtMoney(total)}{Math.abs(totalEcart) >= 0.005 ? <span style={{ color: '#99201E', fontWeight: 600 }}> · écart {totalEcart > 0 ? '+' : ''}{fmtMoney(totalEcart)}</span> : ''}</div>
       </div>
 
       {filteredList.length === 0 && (
@@ -247,6 +252,11 @@ function BanqueSection({ user }) {
             {env.releve_status && env.note_proof && (
               <div style={{ fontSize: 10, color: env.releve_status === 'trouve' ? '#0a7d3d' : '#a9620a', marginTop: 4, lineHeight: 1.3 }}>
                 {env.releve_status === 'a_confirmer' ? 'Lignes possibles : ' : 'Relevé : '}{env.note_proof}
+              </div>
+            )}
+            {env.amount_proof != null && Math.abs(Number(env.amount_proof) - Number(env.amount_cash)) >= 0.005 && (
+              <div style={{ fontSize: 11, color: '#99201E', fontWeight: 600, marginTop: 4 }}>
+                ⚠️ Écart : relevé {fmtMoney(env.amount_proof)} ({Number(env.amount_proof) - Number(env.amount_cash) > 0 ? '+' : ''}{fmtMoney(Number(env.amount_proof) - Number(env.amount_cash))})
               </div>
             )}
           </div>
