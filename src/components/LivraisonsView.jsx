@@ -16,7 +16,8 @@ export default function LivraisonsView({ user }) {
   const [date, setDate] = useState(todayISO())
   const [deliveries, setDeliveries] = useState([])
   const [livreurs, setLivreurs] = useState([])
-  const [states, setStates] = useState({})   // order_num -> {livreur_id, livraison_faite}
+  const [states, setStates] = useState({})   // order_num -> {livreur_id, livraison_faite, statut, assigned_by}
+  const [sel, setSel] = useState({})          // order_num -> livreur_id choisi (avant d'assigner)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
@@ -166,12 +167,16 @@ export default function LivraisonsView({ user }) {
                   {!livreur && (
                     <>
                       <span style={{ fontSize: 11, color: '#8a7a70' }}>Livreur :</span>
-                      <select value={effLivreur(d) || ''} disabled={busy === d.orderNum}
-                        onChange={e => handleAssign(d, e.target.value)}
+                      <select value={sel[d.orderNum] ?? (effLivreur(d) || '')} disabled={busy === d.orderNum}
+                        onChange={e => setSel(m => ({ ...m, [d.orderNum]: e.target.value }))}
                         style={{ padding: '6px 8px', fontSize: 12, border: '1px solid #e5d8c3', borderRadius: 8 }}>
                         <option value="">— non assigné —</option>
                         {livreurs.map(l => <option key={l.id} value={l.id}>{l.full_name || l.username}{l.livreur_defaut ? ' (défaut)' : ''}</option>)}
                       </select>
+                      <button onClick={() => handleAssign(d, sel[d.orderNum] ?? effLivreur(d) ?? '')} disabled={busy === d.orderNum}
+                        style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: '#993556', color: 'white', border: 'none' }}>
+                        {statut ? 'Réassigner' : 'Assigner'}
+                      </button>
                       {statut === 'assignee' && <span style={{ fontSize: 11, color: '#8a6d3b', background: '#FBF1D8', padding: '3px 8px', borderRadius: 20 }}>🕐 À confirmer</span>}
                       {statut === 'acceptee' && <span style={{ fontSize: 11, color: '#27500A', background: '#EAF3DE', padding: '3px 8px', borderRadius: 20 }}>✅ Acceptée</span>}
                       {statut === 'refusee' && <span style={{ fontSize: 11, fontWeight: 600, color: '#A32D2D', background: '#FBD9D0', padding: '3px 8px', borderRadius: 20 }}>⚠️ Refusée — à réassigner</span>}
