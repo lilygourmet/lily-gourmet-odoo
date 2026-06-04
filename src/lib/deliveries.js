@@ -33,14 +33,31 @@ export async function loadDeliveryStates(orderNums) {
   return map
 }
 
-// Assigne une livraison à un livreur (statut 'assignee') + le notifie par une tâche.
-export async function assignDelivery({ orderNum, livreurId, byUserId, titre, description, dueDate }) {
+// Notifie TOUTES les personnes ayant accès aux Livraisons (admin / récap / livreurs),
+// sauf l'auteur de l'action.
+async function notifyLivraisonTeam(actorId, title, isUrgent) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('active', true)
+    .or('role.eq.admin,role.eq.livreur,perm_recaps.eq.true')
+  const ids = [...new Set((data || []).map(p => p.id))].filter(id => id && id !== actorId)
+  for (const toId of ids) {
+    try {
+      await createTask({ title, fromUserId: actorId, toUserId: toId, isUrgent: !!isUrgent })
+    } catch { /* notif non bloquante */ }
+  }
+}
+
+// Assigne une livraison. Le livreur PAR DÉFAUT accepte d'office (statut 'acceptee').
+// Un autre livreur doit confirmer (statut 'assignee').
+export async function assignDelivery({ orderNum, livreurId, byUserId, titre, description, dueDate, autoAccept }) {
   const { error } = await supabase
     .from('livraisons')
     .upsert({
       order_num: orderNum,
       livreur_id: livreurId || null,
-      statut: livreurId ? 'assignee' : null,
+      statut: livreurId ? (autoAccept ? 'acceptee' : 'assignee') : null,
       assigned_by: livreurId ? byUserId : null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'order_num' })
@@ -52,34 +69,32 @@ export async function assignDelivery({ orderNum, livreurId, byUserId, titre, des
   }
 }
 
-// Le livreur accepte la livraison -> notifie celui qui l'a assignée.
+// Le livreur accepte -> notifie toute l'équipe Livraisons.
 export async function acceptDelivery({ orderNum, byUserId, label, livreurName }) {
-  const { data: before } = await supabase.from('livraisons').select('assigned_by').eq('order_num', orderNum).maybeSingle()
   const { error } = await supabase
     .from('livraisons')
     .upsert({ order_num: orderNum, livreur_id: byUserId, statut: 'acceptee', updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
-  const notifyId = before?.assigned_by
-  if (notifyId && notifyId !== byUserId) {
-    try {
-      await createTask({ title: `✅ ${livreurName} a accepté la livraison · ${label}`, fromUserId: byUserId, toUserId: notifyId })
-    } catch { /* notif non bloquante */ }
-  }
+  await notifyLivraisonTeam(byUserId, `✅ ${livreurName} a accepté la livraison · ${label}`, false)
 }
 
-// Le livreur refuse (pas dispo) -> livraison à réassigner + notifie celui qui l'a assignée.
+// Le livreur refuse (pas dispo) -> à réassigner + notif URGENTE à toute l'équipe Livraisons.
 export async function refuseDelivery({ orderNum, byUserId, label, livreurName }) {
-  const { data: before } = await supabase.from('livraisons').select('assigned_by').eq('order_num', orderNum).maybeSingle()
   const { error } = await supabase
     .from('livraisons')
     .upsert({ order_num: orderNum, livreur_id: null, statut: 'refusee', updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
-  const notifyId = before?.assigned_by
-  if (notifyId && notifyId !== byUserId) {
-    try {
-      await createTask({ title: `⚠️ ${livreurName} PAS DISPO · ${label} — à réassigner`, fromUserId: byUserId, toUserId: notifyId, isUrgent: true })
-    } catch { /* notif non bloquante */ }
-  }
+  await notifyLivraisonTeam(byUserId, `⚠️ ${livreurName} PAS DISPO · ${label} — à réassigner`, true)
+}
+
+// Nombre de livraisons refusées en attente de réassignation (badge onglet).
+export async function countLivraisonsARelancer() {
+  const { count, error } = await supabase
+    .from('livraisons')
+    .select('order_num', { count: 'exact', head: true })
+    .eq('statut', 'refusee')
+  if (error) return 0
+  return count || 0
 }
 
 export async function setLivraisonFaite(orderNum, faite) {

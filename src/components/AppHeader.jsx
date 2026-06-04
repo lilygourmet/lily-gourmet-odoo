@@ -4,6 +4,7 @@ import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFree
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
+import { countLivraisonsARelancer } from '../lib/deliveries'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -88,6 +89,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const lastVisitedConvRef = useRef(user?.last_visited_conversations || null)
   // Badge Modifications à traiter
   const [modifBadge, setModifBadge] = useState(0)
+  // Badge Livraisons refusées à réassigner
+  const [livraisonsBadge, setLivraisonsBadge] = useState(0)
   // Menus deroulants ouverts (un seul a la fois)
   const [openMenu, setOpenMenu] = useState(null) // 'prod' | 'vitrine' | 'outils' | null
 
@@ -95,6 +98,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const showChecklistBtn = !isLivreur(user) && canSeeChecklist(user)
   const userCanSeeConv = canSeeConversations(user)
   const userCanSeeModif = canSeeModifications(user)
+  const userCanSeeLivraisons = canSeeLivraisons(user)
   // Étiquettes CD : maintenant dans le Calendrier. On le garde dans le header
   // UNIQUEMENT pour ceux qui peuvent imprimer mais ne voient pas le calendrier.
   const showHeaderLabels = canPrintLabels(user) && !canSeeCalendar(user)
@@ -427,6 +431,23 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeModif, user?.id])
 
+  // Badge Livraisons : compte les livraisons refusées à réassigner (temps réel)
+  useEffect(() => {
+    if (!userCanSeeLivraisons) return
+    let cancelled = false
+    let channel = null
+    const refresh = () => countLivraisonsARelancer()
+      .then(n => { if (!cancelled) setLivraisonsBadge(n) }).catch(() => {})
+    refresh()
+    channel = supabase
+      .channel('livraisons-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'livraisons' }, refresh)
+      .subscribe()
+    const interval = setInterval(refresh, 60000)
+    return () => { cancelled = true; clearInterval(interval); if (channel) supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userCanSeeLivraisons, user?.id])
+
   // À l'ouverture de l'onglet Conversations : marque la visite + remet "non lus" à 0
   useEffect(() => {
     if (activeView === 'conversations' && userCanSeeConv && user?.id) {
@@ -559,7 +580,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user), badge: convBadge.unassigned + convBadge.unread, convBadge },
     { view: 'modifications',    emoji: '✏️', label: 'Modifications',    visible: !isLivreur(user) && canSeeModifications(user), badge: modifBadge },
-    { view: 'livraisons',       emoji: '🚚', label: 'Livraisons',       visible: canSeeLivraisons(user) },
+    { view: 'livraisons',       emoji: '🚚', label: 'Livraisons',       visible: canSeeLivraisons(user), badge: livraisonsBadge },
     { view: 'paiements',        emoji: '💰', label: 'Paiements',         visible: !isLivreur(user) && canViewPayments(user), badge: paiementsBadge },
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },

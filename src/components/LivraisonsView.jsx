@@ -62,8 +62,9 @@ export default function LivraisonsView({ user }) {
         reste !== null ? `💵 Reste à encaisser : ${reste.toLocaleString('fr-FR')} dh` : null,
         d.orderNum ? `N° ${d.orderNum}` : null,
       ].filter(Boolean).join('\n')
-      await assignDelivery({ orderNum: d.orderNum, livreurId: livreurId || null, byUserId: user.id, titre, description: desc, dueDate: date })
-      setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: livreurId || null } }))
+      const autoAccept = !!livreurId && livreurId === defaultLivreurId
+      await assignDelivery({ orderNum: d.orderNum, livreurId: livreurId || null, byUserId: user.id, titre, description: desc, dueDate: date, autoAccept })
+      setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: livreurId || null, statut: livreurId ? (autoAccept ? 'acceptee' : 'assignee') : null } }))
     } catch (e) { setErr(e.message) }
     finally { setBusy('') }
   }
@@ -183,7 +184,7 @@ export default function LivraisonsView({ user }) {
                     </>
                   )}
 
-                  {livreur && statut !== 'acceptee' ? (
+                  {livreur && statut === 'assignee' ? (
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                       <button onClick={() => handleAccept(d)} disabled={busy === d.orderNum}
                         style={{ padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: '#27500A', color: 'white', border: 'none' }}>
