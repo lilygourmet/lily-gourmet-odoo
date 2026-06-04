@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react'
 import { loadATraiter, traiterAbsence, traiterOubliPointage, validerRecup, refuserRecup } from '../../lib/aTraiter'
+import { uploadJustificatif } from '../../lib/conges'
 
 const CLASSIFS = [
   { v: 'annuel',     label: 'Congé annuel' },
@@ -18,6 +19,8 @@ export default function ATraiterTab({ user, onChange }) {
   const [busyKey, setBusyKey] = useState('')
   // état par ligne : { 'empId|date': { classification, raison } }
   const [form, setForm] = useState({})
+  // fichier justificatif par ligne : { 'empId|date': File }
+  const [files, setFiles] = useState({})
 
   async function reload() {
     setLoading(true); setErr('')
@@ -54,7 +57,9 @@ export default function ATraiterTab({ user, onChange }) {
         const date_debut = f.date_debut || a.date
         const date_fin = f.date_fin || a.date
         if (date_fin < date_debut) { setErr('La date de fin est avant la date de début.'); setBusyKey(''); return }
-        await traiterAbsence({ employe_id: a.employe_id, date_debut, date_fin, classification, raison: f.raison || null, userId: user.id })
+        let justificatif_path = null
+        if (files[key]) justificatif_path = await uploadJustificatif(files[key], user.id)
+        await traiterAbsence({ employe_id: a.employe_id, date_debut, date_fin, classification, raison: f.raison || null, userId: user.id, justificatif_path })
       }
       await reload()
     } catch (e) { setErr(e.message) }
@@ -121,6 +126,14 @@ export default function ATraiterTab({ user, onChange }) {
                 <input value={f.raison || ''} onChange={e => setField(key, 'raison', e.target.value)}
                   placeholder="Raison (optionnel)"
                   style={{ flex: 1, minWidth: 120, padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
+                {f.classification !== 'oubli' && (
+                  <label style={{ fontSize: 11, color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: '1px solid #e5d8c3', borderRadius: 8, padding: '6px 8px', background: files[key] ? '#EAF3DE' : 'white' }}
+                    title="Joindre un certificat médical / justificatif (PDF ou photo)">
+                    📎 {files[key] ? files[key].name.slice(0, 14) : 'Justificatif'}
+                    <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
+                      onChange={e => setFiles(fl => ({ ...fl, [key]: e.target.files?.[0] || null }))} />
+                  </label>
+                )}
                 <button onClick={() => handleAbsence(a)} disabled={busyKey === key}
                   style={{ padding: '8px 14px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <Send size={13} /> {busyKey === key ? '…' : (f.classification === 'oubli' ? 'Marquer présent' : 'Envoyer en validation')}

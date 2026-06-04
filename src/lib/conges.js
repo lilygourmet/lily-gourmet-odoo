@@ -355,7 +355,25 @@ export async function loadCongesEmploye(employeId) {
 
 // Crée une demande de congé pour le compte d'un employé (saisie RH).
 // type_conge : 'annuel' (par défaut) / 'maladie' / 'sans solde' / 'recup' / etc.
-export async function createDemandeConge({ employe_id, date_debut, date_fin, type_conge = 'annuel', motif = null, demande_par }) {
+// Bucket des justificatifs (certificat médical, preuve d'absence).
+const JUSTIF_BUCKET = 'justificatifs'
+export async function uploadJustificatif(file, userId) {
+  if (!file) return null
+  const ts = Date.now()
+  const clean = (file.name || 'justificatif').replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `${userId || 'x'}/${ts}_${clean}`
+  const { error } = await supabase.storage.from(JUSTIF_BUCKET).upload(path, file, { upsert: false })
+  if (error) throw error
+  return path
+}
+export async function getJustificatifUrl(path) {
+  if (!path) return null
+  const { data, error } = await supabase.storage.from(JUSTIF_BUCKET).createSignedUrl(path, 3600)
+  if (error) return null
+  return data?.signedUrl || null
+}
+
+export async function createDemandeConge({ employe_id, date_debut, date_fin, type_conge = 'annuel', motif = null, demande_par, justificatif_path = null }) {
   if (!employe_id || !date_debut || !date_fin) throw new Error('employé, date_debut et date_fin requis')
   if (date_fin < date_debut) throw new Error('La date de fin doit être ≥ date de début')
   // Bloque le chevauchement avec un congé existant (demande ou validé) du même employé.
@@ -375,7 +393,7 @@ export async function createDemandeConge({ employe_id, date_debut, date_fin, typ
       employe_id, date_debut, date_fin, type_conge,
       motif, statut: 'demande',
       demande_par, demande_le: new Date().toISOString(),
-      source: 'app',
+      source: 'app', justificatif_path,
     })
     .select().single()
   if (error) throw error

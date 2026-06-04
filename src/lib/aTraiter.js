@@ -111,7 +111,7 @@ const CLASSIF_TO_TYPE = {
  * Traite une absence : crée une DEMANDE de congé sur ce jour (sans solde /
  * annuel / maladie). Elle repart dans le parcours de validation des congés.
  */
-export async function traiterAbsence({ employe_id, date_debut, date_fin, classification, raison, userId }) {
+export async function traiterAbsence({ employe_id, date_debut, date_fin, classification, raison, userId, justificatif_path = null }) {
   const type_conge = CLASSIF_TO_TYPE[classification]
   if (!type_conge) throw new Error('Classification invalide')
   return createDemandeConge({
@@ -121,6 +121,7 @@ export async function traiterAbsence({ employe_id, date_debut, date_fin, classif
     type_conge,
     motif: raison || null,
     demande_par: userId,
+    justificatif_path,
   })
 }
 

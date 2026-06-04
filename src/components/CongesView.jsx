@@ -27,6 +27,7 @@ import {
   validerAllocation, rejeterAllocation,
   ALLOC_TYPES,
   updateAllocation, updateConge,
+  uploadJustificatif, getJustificatifUrl,
 } from '../lib/conges'
 
 const TYPES = [
@@ -1130,6 +1131,12 @@ function CongeCard({ c, emp, actions }) {
           <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>
             {typeLabel}{c.motif ? ` · ${c.motif}` : ''}
           </div>
+          {c.justificatif_path && (
+            <button onClick={async () => { const u = await getJustificatifUrl(c.justificatif_path); if (u) window.open(u, '_blank') }}
+              style={{ marginTop: 4, fontSize: 11, color: '#993556', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+              📎 Voir le justificatif
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>{actions}</div>
       </div>
@@ -1143,6 +1150,7 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
   const [dateFin, setDateFin]     = useState('')
   const [typeConge, setTypeConge] = useState('annuel')
   const [motif, setMotif]         = useState('')
+  const [justif, setJustif]       = useState(null)
   const [busy, setBusy]           = useState(false)
   const [errMsg, setErrMsg]       = useState('')
 
@@ -1185,6 +1193,8 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
     }
     setBusy(true)
     try {
+      let justificatif_path = null
+      if (justif) justificatif_path = await uploadJustificatif(justif, user.id)
       await createDemandeConge({
         employe_id: Number(employeId),
         date_debut: dateDebut,
@@ -1192,6 +1202,7 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
         type_conge: typeConge,
         motif: motif.trim() || null,
         demande_par: user.id,
+        justificatif_path,
       })
       onSaved()
     } catch (e) {
@@ -1250,6 +1261,9 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
 
         <label style={{ ...lbl, marginTop: 10 }}>Motif (optionnel)</label>
         <input type="text" value={motif} onChange={e => setMotif(e.target.value)} placeholder="ex : voyage familial" style={ipt} />
+
+        <label style={{ ...lbl, marginTop: 10 }}>Justificatif / certificat médical (optionnel)</label>
+        <input type="file" accept="image/*,.pdf" onChange={e => setJustif(e.target.files?.[0] || null)} style={{ fontSize: 12 }} />
 
         {errMsg && <div style={errBox}>{errMsg}</div>}
 
