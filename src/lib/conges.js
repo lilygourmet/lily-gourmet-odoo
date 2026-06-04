@@ -574,7 +574,7 @@ export async function updateAllocation(id, patch) {
 
 // Met à jour les champs modifiables d'un congé.
 export async function updateConge(id, patch) {
-  const allowed = ['date_debut', 'date_fin', 'type_conge', 'motif', 'statut']
+  const allowed = ['date_debut', 'date_fin', 'type_conge', 'motif', 'statut', 'recup_detail']
   const clean = {}
   for (const k of allowed) if (patch[k] !== undefined) clean[k] = patch[k]
   const { data, error } = await supabase

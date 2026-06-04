@@ -33,7 +33,7 @@ import {
 } from '../lib/conges'
 import {
   loadJoursFeries, createJourFerie, updateJourFerie,
-  genererFeriesFixes, compteFeriesHorsOff, feriesListePeriode,
+  genererFeriesFixes, compteFeriesHorsOff, feriesListePeriode, joursDecomptesDates,
 } from '../lib/joursFeries'
 import { imprimerFeuilleConge } from '../lib/feuilleConge'
 
@@ -811,6 +811,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
         <EditCongeModal
           conge={editConge}
           emp={empById[editConge.employe_id]}
+          joursFeries={joursFeries}
           onClose={() => setEditConge(null)}
           onSave={patch => handleUpdateConge(editConge.id, patch)}
         />
@@ -937,7 +938,7 @@ function EditAllocationModal({ alloc, emp, onClose, onSave }) {
   )
 }
 
-function EditCongeModal({ conge, emp, onClose, onSave }) {
+function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
   const [dateDebut, setDateDebut] = useState(conge.date_debut)
   const [dateFin, setDateFin]     = useState(conge.date_fin)
   const [typeConge, setTypeConge] = useState(conge.type_conge || 'annuel')
@@ -948,8 +949,27 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
       ? String(conge.jours_decomptes)
       : ''
   )
+  const existingRecup = Array.isArray(conge.recup_detail) ? conge.recup_detail : []
+  const [recupCount, setRecupCount]     = useState(existingRecup.length)
+  const [recupRaisons, setRecupRaisons] = useState(existingRecup.map(r => r.raison || 'travaille'))
   const [busy, setBusy]           = useState(false)
   const [err, setErr]             = useState('')
+
+  const feriesSet      = useMemo(() => new Set((joursFeries || []).map(f => f.date)), [joursFeries])
+  const decomptedDates = useMemo(() => joursDecomptesDates(emp, feriesSet, dateDebut, dateFin), [emp, feriesSet, dateDebut, dateFin])
+  const maxRecup = decomptedDates.length
+  const recupEff = Math.min(recupCount, maxRecup)
+
+  function setCount(n) {
+    n = Math.max(0, Math.min(maxRecup, Math.floor(Number(n) || 0)))
+    setRecupCount(n)
+    setRecupRaisons(prev => {
+      const a = prev.slice(0, n)
+      while (a.length < n) a.push('travaille')
+      return a
+    })
+  }
+  function setRaison(i, v) { setRecupRaisons(prev => { const a = [...prev]; a[i] = v; return a }) }
 
   async function submit() {
     setErr('')
@@ -957,6 +977,9 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
     if (dateFin < dateDebut) { setErr('La date de fin est avant la date de début.'); return }
     setBusy(true)
     try {
+      const recup_detail = recupEff > 0
+        ? decomptedDates.slice(0, recupEff).map((d, i) => ({ date: d, raison: recupRaisons[i] || 'travaille' }))
+        : null
       await onSave({
         date_debut: dateDebut,
         date_fin: dateFin,
@@ -964,6 +987,7 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
         motif: motif.trim() || null,
         statut,
         jours_decomptes: joursDecomptes === '' ? null : Number(joursDecomptes),
+        recup_detail,
       })
     } catch (e) { setErr(e.message) }
     finally { setBusy(false) }
@@ -1012,6 +1036,29 @@ function EditCongeModal({ conge, emp, onClose, onSave }) {
 
         <label style={{ ...lbl, marginTop: 10 }}>Motif (optionnel)</label>
         <input type="text" value={motif} onChange={e => setMotif(e.target.value)} style={ipt} />
+
+        {maxRecup > 0 && (
+          <div style={{ marginTop: 12, padding: '10px 12px', background: '#F1F8F3', border: '0.5px solid #cfe8d6', borderRadius: 10 }}>
+            <label style={{ ...lbl, color: '#1c7a35' }}>Jours de récupération compris (au début du congé)</label>
+            <input type="number" min="0" max={maxRecup} value={recupCount} onChange={e => setCount(e.target.value)} style={ipt} />
+            <div style={{ fontSize: 10, color: '#5a7a60', marginTop: 2 }}>
+              Sur {maxRecup} jour{maxRecup > 1 ? 's' : ''} décompté{maxRecup > 1 ? 's' : ''}. Le reste = congé annuel. (Apparaît sur la feuille de congé.)
+            </div>
+            {recupEff > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {decomptedDates.slice(0, recupEff).map((d, i) => (
+                  <div key={d} style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, color: '#1c7a35', fontWeight: 600 }}>{fmt(d)} <span style={{ fontWeight: 400, color: '#8a7a70' }}>({jourSemaine(d)})</span></div>
+                    <select value={recupRaisons[i] || 'travaille'} onChange={e => setRaison(i, e.target.value)} style={{ ...ipt, padding: '6px 8px' }}>
+                      <option value="travaille">Récup d'un jour travaillé</option>
+                      <option value="ferie">Récup d'un jour férié</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {err && <div style={errBox}>{err}</div>}
 

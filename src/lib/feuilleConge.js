@@ -57,6 +57,16 @@ function typeLabelAR(t) {
   if (isRecup(t)) return 'استرجاع'
   return 'إجازة سنوية'
 }
+function raisonLabelFR(r) {
+  if (r === 'travaille') return "Récup d'un jour travaillé"
+  if (r === 'ferie')     return "Récup d'un jour férié"
+  return 'Récupération'
+}
+function raisonLabelAR(r) {
+  if (r === 'travaille') return 'استرجاع يوم عمل'
+  if (r === 'ferie')     return 'استرجاع يوم عطلة'
+  return 'استرجاع'
+}
 
 // Calcule tout ce qui sert à la feuille à partir des données brutes.
 function calcule({ conge, emp, solde, joursFeries }) {
@@ -69,15 +79,34 @@ function calcule({ conge, emp, solde, joursFeries }) {
   const ferieDates = tous.filter(d => ferieSet.has(d))
   const decomptes  = tous.filter(d => !offDates.includes(d) && !ferieDates.includes(d))
 
-  const recup = isRecup(conge.type_conge)
   const nbDec = decomptes.length
+
+  // Répartition récup / annuel.
+  //  - si recup_detail est saisi (dates+raison) on l'utilise (récup au début) ;
+  //  - sinon, repli sur le type : récup → tout récup, autre → tout annuel.
+  const recupDetail = Array.isArray(conge.recup_detail) ? conge.recup_detail.filter(r => r && r.date) : []
+  let recupList, annuelDates
+  if (recupDetail.length > 0) {
+    const rset = new Set(recupDetail.map(r => r.date))
+    recupList   = recupDetail.map(r => ({ date: r.date, raison: r.raison || null }))
+    annuelDates = decomptes.filter(d => !rset.has(d))
+  } else if (isRecup(conge.type_conge)) {
+    recupList   = decomptes.map(d => ({ date: d, raison: null }))
+    annuelDates = []
+  } else {
+    recupList   = []
+    annuelDates = decomptes.slice()
+  }
+  const recupCount  = recupList.length
+  const annuelCount = annuelDates.length
+  const annuelPlage = annuelCount ? { debut: annuelDates[0], fin: annuelDates[annuelCount - 1] } : null
 
   // Solde combiné (récup incluse) : "après" = dispo actuel ; "avant" = après + décompté.
   const dispo = solde && solde.dispo != null ? Number(solde.dispo) : null
   const soldeApres = dispo
   const soldeAvant = dispo != null ? dispo + nbDec : null
 
-  return { tous, offDates, ferieDates, decomptes, ferieNom, reposNom, recup, nbDec, soldeAvant, soldeApres }
+  return { tous, offDates, ferieDates, decomptes, ferieNom, reposNom, nbDec, recupCount, annuelCount, recupList, annuelPlage, soldeAvant, soldeApres }
 }
 
 function ligneOff(dates, JOURS) {
@@ -90,9 +119,7 @@ function ligneFerie(dates, ferieNom, JOURS) {
 }
 
 function pageFR({ conge, emp, c, dateDoc }) {
-  const recupRows = c.recup
-    ? c.decomptes.map(d => `<div class="r"><span class="d">${frDate(d)}</span><span class="ra">Récupération</span></div>`).join('')
-    : ''
+  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelFR(r.raison)}</span></div>`).join('')
   return `
   <div class="page">
     <div class="contenu">
@@ -117,11 +144,8 @@ function pageFR({ conge, emp, c, dateDoc }) {
         <tr><td class="lab">Jour de repos non décompté</td><td class="val">${ligneOff(c.offDates, JOURS_FR)}</td></tr>
         <tr><td class="lab">Jour férié non décompté</td><td class="val">${ligneFerie(c.ferieDates, c.ferieNom, JOURS_FR)}</td></tr>
         <tr><td class="lab">Nombre de jours décomptés</td><td class="val">${c.nbDec} jour${c.nbDec > 1 ? 's' : ''}</td></tr>
-        ${c.recup
-          ? `<tr><td class="lab"><span class="tag-recup">Dont récupération</span></td><td class="val">${c.nbDec} jour${c.nbDec > 1 ? 's' : ''}<div class="sous-recup">${recupRows}</div></td></tr>
-             <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">0 jour</td></tr>`
-          : `<tr><td class="lab"><span class="tag-recup">Dont récupération</span></td><td class="val">0 jour</td></tr>
-             <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">${c.nbDec} jour${c.nbDec > 1 ? 's' : ''} &nbsp;·&nbsp; du ${frDate(conge.date_debut)} au ${frDate(conge.date_fin)}</td></tr>`}
+        <tr><td class="lab"><span class="tag-recup">Dont récupération</span></td><td class="val">${c.recupCount} jour${c.recupCount > 1 ? 's' : ''}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
+        <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">${c.annuelCount} jour${c.annuelCount > 1 ? 's' : ''}${c.annuelPlage ? ` &nbsp;·&nbsp; du ${frDate(c.annuelPlage.debut)} au ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>
         <tr><td class="lab">Solde avant congé</td><td class="val">${fmtJours(c.soldeAvant)} jour${Number(c.soldeAvant) > 1 ? 's' : ''}</td></tr>
         <tr><td class="lab">Solde après congé</td><td class="val">${fmtJours(c.soldeApres)} jour${Number(c.soldeApres) > 1 ? 's' : ''} <span style="font-weight:400;color:#666;">(récupération incluse)</span></td></tr>
       </table>
@@ -141,10 +165,9 @@ function pageFR({ conge, emp, c, dateDoc }) {
 }
 
 function pageAR({ conge, emp, c, dateDoc }) {
-  const recupRows = c.recup
-    ? c.decomptes.map(d => `<div class="r"><span class="d">${frDate(d)}</span><span class="ra">استرجاع</span></div>`).join('')
-    : ''
-  const nbTxt = c.nbDec > 1 ? `${c.nbDec} أيام` : `${c.nbDec} يوم`
+  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelAR(r.raison)}</span></div>`).join('')
+  const arNb = n => (n > 1 ? `${n} أيام` : `${n} يوم`)
+  const nbTxt = arNb(c.nbDec)
   return `
   <div class="page ar" dir="rtl" lang="ar">
     <div class="contenu">
@@ -169,11 +192,8 @@ function pageAR({ conge, emp, c, dateDoc }) {
         <tr><td class="lab">يوم الراحة غير المحتسب</td><td class="val">${ligneOff(c.offDates, JOURS_AR)}</td></tr>
         <tr><td class="lab">يوم عطلة غير محتسب</td><td class="val">${ligneFerie(c.ferieDates, c.ferieNom, JOURS_AR)}</td></tr>
         <tr><td class="lab">عدد الأيام المحتسبة</td><td class="val">${nbTxt}</td></tr>
-        ${c.recup
-          ? `<tr><td class="lab"><span class="tag-recup">منها استرجاع</span></td><td class="val">${nbTxt}<div class="sous-recup">${recupRows}</div></td></tr>
-             <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">0 يوم</td></tr>`
-          : `<tr><td class="lab"><span class="tag-recup">منها استرجاع</span></td><td class="val">0 يوم</td></tr>
-             <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">${nbTxt} &nbsp;·&nbsp; من ${frDate(conge.date_debut)} إلى ${frDate(conge.date_fin)}</td></tr>`}
+        <tr><td class="lab"><span class="tag-recup">منها استرجاع</span></td><td class="val">${arNb(c.recupCount)}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
+        <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">${arNb(c.annuelCount)}${c.annuelPlage ? ` &nbsp;·&nbsp; من ${frDate(c.annuelPlage.debut)} إلى ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>
         <tr><td class="lab">الرصيد قبل الإجازة</td><td class="val">${fmtJours(c.soldeAvant)}</td></tr>
         <tr><td class="lab">الرصيد بعد الإجازة</td><td class="val">${fmtJours(c.soldeApres)} <span style="font-weight:400;color:#666;">(يشمل الاسترجاع)</span></td></tr>
       </table>

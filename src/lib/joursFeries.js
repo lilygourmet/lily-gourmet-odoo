@@ -95,6 +95,25 @@ export function joursOffFixeNom(emp) {
 
 const _JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
+// Liste des jours RÉELLEMENT décomptés d'un congé (hors jour de repos et hors
+// jour férié), dans l'ordre chronologique. Sert à placer la récup « au début ».
+export function joursDecomptesDates(emp, feriesSet, debutYMD, finYMD) {
+  if (!debutYMD || !finYMD) return []
+  const off = joursOffFixeNom(emp)
+  const out = []
+  const d = new Date(debutYMD + 'T00:00:00')
+  const f = new Date(finYMD + 'T00:00:00')
+  while (d <= f) {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), j = String(d.getDate()).padStart(2, '0')
+    const ymd = `${y}-${m}-${j}`
+    const isOff = off && _JOURS[d.getDay()] === off
+    const isFerie = feriesSet && feriesSet.has(ymd)
+    if (!isOff && !isFerie) out.push(ymd)
+    d.setDate(d.getDate() + 1)
+  }
+  return out
+}
+
 // Nombre de jours fériés dans [debut, fin] qui NE tombent PAS déjà sur le jour
 // de repos de l'employé (pour ne pas les décompter deux fois).
 export function compteFeriesHorsOff(emp, feriesSet, debutYMD, finYMD) {

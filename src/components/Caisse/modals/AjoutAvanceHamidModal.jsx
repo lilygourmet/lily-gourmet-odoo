@@ -9,8 +9,9 @@ export default function AjoutAvanceHamidModal({ onClose, onSubmit }) {
   const [mvtDate, setMvtDate] = useState(todayISO())
 
   async function submit() {
-    if (!amount) { alert('Montant requis'); return }
-    await onSubmit({ amount: Number(amount), label: label || 'avance', mvtDate })
+    const n = Number(amount)
+    if (!amount || isNaN(n) || n <= 0) { alert('Montant invalide : entre un nombre positif.'); return }
+    await onSubmit({ amount: n, label: label || 'avance', mvtDate })
   }
 
   return (
