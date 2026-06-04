@@ -74,3 +74,40 @@ export function feriesDansPeriode(feries, debutYMD, finYMD) {
       .filter(d => d >= debutYMD && d <= finYMD)
   )
 }
+
+// Liste des jours fériés (objets {date, nom, type}) tombant dans [debut, fin].
+export function feriesListePeriode(feries, debutYMD, finYMD) {
+  return (feries || []).filter(f => f.date >= debutYMD && f.date <= finYMD)
+}
+
+// Jour de repos fixe (hebdomadaire) de l'employé, ou null.
+//   fixe → planning_jour_off ; alterné → jour commun aux deux semaines.
+export function joursOffFixeNom(emp) {
+  if (!emp) return null
+  if (emp.planning_type === 'fixe') return emp.planning_jour_off || null
+  if (emp.planning_type === 'alt') {
+    const p = [emp.planning_paire_off_1, emp.planning_paire_off_2].filter(Boolean)
+    const i = [emp.planning_impaire_off_1, emp.planning_impaire_off_2].filter(Boolean)
+    return p.find(x => i.includes(x)) || null
+  }
+  return null
+}
+
+const _JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+
+// Nombre de jours fériés dans [debut, fin] qui NE tombent PAS déjà sur le jour
+// de repos de l'employé (pour ne pas les décompter deux fois).
+export function compteFeriesHorsOff(emp, feriesSet, debutYMD, finYMD) {
+  if (!feriesSet || feriesSet.size === 0 || !debutYMD || !finYMD) return 0
+  const off = joursOffFixeNom(emp)
+  let n = 0
+  const d = new Date(debutYMD + 'T00:00:00')
+  const f = new Date(finYMD + 'T00:00:00')
+  while (d <= f) {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), j = String(d.getDate()).padStart(2, '0')
+    const ymd = `${y}-${m}-${j}`
+    if (feriesSet.has(ymd) && (!off || _JOURS[d.getDay()] !== off)) n++
+    d.setDate(d.getDate() + 1)
+  }
+  return n
+}

@@ -33,7 +33,7 @@ import {
 } from '../lib/conges'
 import {
   loadJoursFeries, createJourFerie, updateJourFerie,
-  genererFeriesFixes,
+  genererFeriesFixes, compteFeriesHorsOff, feriesListePeriode,
 } from '../lib/joursFeries'
 import { imprimerFeuilleConge } from '../lib/feuilleConge'
 
@@ -155,6 +155,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       setConges(all)
       setAllocations(allocs)
       setJoursFeries(feries)
+      const feriesSetLocal = new Set(feries.map(f => f.date))
 
       // Backfill : on calcule jours_decomptes en mémoire IMMÉDIATEMENT (utilisé
       // pour le rendu), puis on persiste en BDD en arrière-plan (non bloquant).
@@ -165,7 +166,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
         if (c.jours_decomptes !== null && c.jours_decomptes !== undefined) continue
         const emp = empMap.get(c.employe_id)
         if (!emp) continue
-        const jd = joursDecomptesCalcul(c, emp)
+        const jd = joursDecomptesCalcul(c, emp, feriesSetLocal)
         c.jours_decomptes = jd                        // immédiat en mémoire
         aFigerPayload.push({ id: c.id, jd })
       }
@@ -200,7 +201,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       for (const r of (recupRows?.data || [])) {
         recupByEmp.set(r.employe_id, (recupByEmp.get(r.employe_id) || 0) + Number(r.jours_recup || 0))
       }
-      const prefetched = { allocsByEmp, recupByEmp }
+      const prefetched = { allocsByEmp, recupByEmp, feriesSet: feriesSetLocal }
 
       // Calcul des soldes en parallèle (toutes les données déjà en mémoire)
       const soldesArr = await Promise.all(empsActifs.map(emp =>
@@ -252,11 +253,12 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   }
 
   const empById = useMemo(() => Object.fromEntries(employes.map(e => [e.id, e])), [employes])
+  const feriesSet = useMemo(() => new Set(joursFeries.map(f => f.date)), [joursFeries])
 
   async function handleValider(c) {
     if (!confirm(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.`)) return
     try {
-      const jd = joursDecomptesCalcul(c, empById[c.employe_id])
+      const jd = joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
       await validerConge(c.id, user.id, jd); await reload()
     }
     catch (e) { alert('Erreur : ' + e.message) }
@@ -371,7 +373,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {demandes.map(c => (
                   <CongeCard
-                    key={c.id} c={c} emp={empById[c.employe_id]}
+                    key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
                     actions={isAdmin ? (
                       <>
                         <button onClick={() => imprimerFeuilleConge({ conge: c, emp: empById[c.employe_id], solde: soldes[c.employe_id], joursFeries })} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
@@ -414,7 +416,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                   {validesGroupedByMonth.map(([monthKey, list]) => {
                     // Total jours décomptés du mois (= ce qui sera décompté du quota)
-                    const totalJ = list.reduce((s, c) => s + joursDecomptesConge(c, empById[c.employe_id]), 0)
+                    const totalJ = list.reduce((s, c) => s + joursDecomptesConge(c, empById[c.employe_id], feriesSet), 0)
                     return (
                       <div key={monthKey}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '6px 10px', background: '#F4F0EA', borderRadius: 8 }}>
@@ -428,7 +430,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {list.map(c => (
                             <CongeCard
-                              key={c.id} c={c} emp={empById[c.employe_id]}
+                              key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
                               actions={isAdmin ? <>
                       <button onClick={() => imprimerFeuilleConge({ conge: c, emp: empById[c.employe_id], solde: soldes[c.employe_id], joursFeries })} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                       <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>
@@ -773,6 +775,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           employes={employes}
           soldes={soldes}
           user={user}
+          joursFeries={joursFeries}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); reload() }}
         />
@@ -1256,24 +1259,30 @@ function NouvelleAllocationModal({ employes, onClose, onSubmit }) {
 // Si c.jours_decomptes est défini (figé à la validation ou édité manuellement),
 // on le respecte. Sinon, recalcul dynamique (annuel : exclut jour off fixe ;
 // récup : 0 ; maladie/événement : calendaire).
-function joursDecomptesConge(c, emp) {
+function joursDecomptesConge(c, emp, feriesSet = null) {
   if (c.jours_decomptes !== null && c.jours_decomptes !== undefined) {
     return Number(c.jours_decomptes)
   }
-  return joursDecomptesCalcul(c, emp)
+  return joursDecomptesCalcul(c, emp, feriesSet)
 }
 
-function joursDecomptesCalcul(c, emp) {
+function joursDecomptesCalcul(c, emp, feriesSet = null) {
   const nbCal = nbJours(c.date_debut, c.date_fin)
   if (!emp) return nbCal
   const cat = classifierConge(c)
-  if (cat === 'annuel' || cat === 'recup') return Math.max(0, nbCal - compteJoursOffFixesPeriode(emp, c.date_debut, c.date_fin))
+  if (cat === 'annuel' || cat === 'recup') {
+    const off   = compteJoursOffFixesPeriode(emp, c.date_debut, c.date_fin)
+    const feries = compteFeriesHorsOff(emp, feriesSet, c.date_debut, c.date_fin)
+    return Math.max(0, nbCal - off - feries)
+  }
   return nbCal
 }
 
-function CongeCard({ c, emp, actions }) {
+function CongeCard({ c, emp, actions, joursFeries = [] }) {
   const nbCal = nbJours(c.date_debut, c.date_fin)
-  const nbDec = joursDecomptesConge(c, emp)
+  const feriesSet = useMemo(() => new Set((joursFeries || []).map(f => f.date)), [joursFeries])
+  const nbDec = joursDecomptesConge(c, emp, feriesSet)
+  const feriesPeriode = feriesListePeriode(joursFeries, c.date_debut, c.date_fin)
   const typeLabel = formatTypeConge(c.type_conge) || 'Congé'
   return (
     <div style={card}>
@@ -1285,11 +1294,16 @@ function CongeCard({ c, emp, actions }) {
             {' · '}
             <strong style={{ color: '#993556' }}>{nbDec} jour{nbDec > 1 ? 's' : ''} décompté{nbDec > 1 ? 's' : ''}</strong>
             {nbCal !== nbDec && (
-              <span style={{ fontSize: 11, color: '#8a7a70' }} title={`Calendaire = ${nbCal} j, dont ${nbCal - nbDec} jour(s) off non décompté(s)`}>
+              <span style={{ fontSize: 11, color: '#8a7a70' }} title={`Calendaire = ${nbCal} j, dont ${nbCal - nbDec} jour(s) non décompté(s) (repos + férié)`}>
                 ({nbCal} cal.)
               </span>
             )}
           </div>
+          {feriesPeriode.length > 0 && (
+            <div style={{ fontSize: 11, color: '#0C447C', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              <Flag size={11} /> Jour férié non décompté : {feriesPeriode.map(f => `${fmt(f.date)} (${f.nom})`).join(' · ')}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>
             {typeLabel}{c.motif ? ` · ${c.motif}` : ''}
           </div>
@@ -1306,7 +1320,7 @@ function CongeCard({ c, emp, actions }) {
   )
 }
 
-function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
+function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved, joursFeries = [] }) {
   const [employeId, setEmployeId] = useState(employes[0]?.id || '')
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin, setDateFin]     = useState('')
@@ -1319,9 +1333,13 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
   const emp   = employes.find(e => e.id === Number(employeId))
   const solde = emp ? soldes[emp.id] : null
   const nbCal = nbJours(dateDebut, dateFin)
-  // Le jour off (repos) de l'employé ne se décompte pas (comme pour le solde).
+  // Ni le jour de repos ni un jour férié ne se décomptent (comme pour le solde).
   const excludeOff = !!emp && !!dateDebut && !!dateFin && (typeConge === 'annuel' || typeConge === 'recup')
-  const nbDemande = excludeOff ? Math.max(0, nbCal - compteJoursOffFixesPeriode(emp, dateDebut, dateFin)) : nbCal
+  const feriesSet = useMemo(() => new Set((joursFeries || []).map(f => f.date)), [joursFeries])
+  const offDemande   = excludeOff ? compteJoursOffFixesPeriode(emp, dateDebut, dateFin) : 0
+  const ferieDemande = excludeOff ? compteFeriesHorsOff(emp, feriesSet, dateDebut, dateFin) : 0
+  const feriesPeriode = (dateDebut && dateFin) ? feriesListePeriode(joursFeries, dateDebut, dateFin) : []
+  const nbDemande = excludeOff ? Math.max(0, nbCal - offDemande - ferieDemande) : nbCal
 
   // Types disponibles : on filtre ceux qui ont une allocation événementielle
   // (mariage / naissance / deces / circoncision / maternite / recup).
@@ -1405,7 +1423,12 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
         {nbCal > 0 && (
           <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 4 }}>
             {nbDemande} jour{nbDemande > 1 ? 's' : ''} décompté{nbDemande > 1 ? 's' : ''}
-            {nbCal !== nbDemande ? ` (${nbCal} calendaires · ${nbCal - nbDemande} jour off non décompté)` : ''}
+            {nbCal !== nbDemande ? ` (${nbCal} calendaires${offDemande > 0 ? ` · ${offDemande} repos` : ''}${ferieDemande > 0 ? ` · ${ferieDemande} férié` : ''} non décompté${nbCal - nbDemande > 1 ? 's' : ''})` : ''}
+          </div>
+        )}
+        {feriesPeriode.length > 0 && excludeOff && (
+          <div style={{ fontSize: 11, color: '#0C447C', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+            <Flag size={11} /> Jour férié non décompté : {feriesPeriode.map(f => `${fmt(f.date)} (${f.nom})`).join(' · ')}
           </div>
         )}
         {depassement && (

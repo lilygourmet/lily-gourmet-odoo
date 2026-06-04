@@ -4,6 +4,7 @@
 // ============================================================
 
 import { supabase } from './supabase'
+import { compteFeriesHorsOff } from './joursFeries'
 
 // ------------------------------------------------------------
 // CONSTANTES — règles métier
@@ -164,7 +165,7 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
 //   - 'mariage' / 'naissance' / 'deces' / 'circoncision' / 'autre' : événements
 // Retourne un objet { type: jours }.
 // ------------------------------------------------------------
-function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
+function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD(), feriesSet = null) {
   const ref = new Date(refDate + 'T00:00:00')
   const yearStart = `${ref.getFullYear()}-01-01`
   const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, maternite: 0, autre: 0, recup: 0 }
@@ -205,8 +206,11 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     if (conge_entier && c.jours_decomptes !== null && c.jours_decomptes !== undefined) {
       compte = Number(c.jours_decomptes)
     } else {
-      // Pour 'annuel' et 'recup' on retire le jour off fixe (règle Layla déjà discutée)
-      compte = (category === 'annuel' || category === 'recup') ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) : nb
+      // Pour 'annuel' et 'recup' on retire le jour off fixe ET les jours fériés
+      // (règles Layla : ni le jour de repos ni un férié ne sont décomptés).
+      compte = (category === 'annuel' || category === 'recup')
+        ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) - compteFeriesHorsOff(emp, feriesSet, debut, fin)
+        : nb
     }
     out[category] = (out[category] || 0) + compte
   }
@@ -282,7 +286,14 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
     : await joursRecupGagnesAnnee(emp, refDate)
 
   // 7) CONGÉS PRIS par type
-  const prisType = joursPrisParTypeAnnee(emp, congesValides, refDate)
+  //    On charge les jours fériés (préchargés si fournis) pour ne pas les
+  //    décompter dans les congés annuel/récup.
+  let feriesSet = prefetched?.feriesSet
+  if (!feriesSet) {
+    const { data: fData } = await supabase.from('jours_feries').select('date')
+    feriesSet = new Set((fData || []).map(f => f.date))
+  }
+  const prisType = joursPrisParTypeAnnee(emp, congesValides, refDate, feriesSet)
   const prisAnnuel = prisType.annuel
   const prisEvents = prisType.mariage + prisType.naissance + prisType.deces + prisType.circoncision + prisType.maternite + prisType.autre
   const prisRecup  = prisType.recup || 0   // récup prises : se déduisent du total (la récup gagnée y est ajoutée)
