@@ -53,6 +53,9 @@ export async function loadATraiter() {
       const { journal } = calculerMois(emp, mois, annee, data)
       for (const d of journal) {
         if (d.date > today) continue   // on ne traite pas le futur
+        // Employé parti (date de sortie) ou pas encore entré → on ignore.
+        if (emp.date_sortie && d.date > emp.date_sortie) continue
+        if (emp.date_entree && d.date < emp.date_entree) continue
         if (d.statut === 'absent') {
           if (aPointe.has(emp.id) && !couvertParDemande(emp.id, d.date)) {
             absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues })
