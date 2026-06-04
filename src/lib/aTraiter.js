@@ -26,6 +26,9 @@ function periodsToScan() {
  */
 export async function loadATraiter() {
   const today = todayYMD()
+  // On ne déclare PAS une absence du jour même avant 13h (l'employé peut encore
+  // arriver / le pointage peut se synchroniser). heure locale (navigateur).
+  const avant13 = new Date().getHours() < 13
   const periods = periodsToScan()
   const minDate = firstDay(periods[0].mois, periods[0].annee)
 
@@ -74,6 +77,7 @@ export async function loadATraiter() {
         if (emp.date_entree && d.date < emp.date_entree) continue
         if (d.statut === 'absent') {
           const aPointeCeJour = pointeCeJour.has(`${emp.id}|${d.date}`)
+          if (d.date === today && avant13) continue   // jour même avant 13h → on attend
           if (aPointe.has(emp.id) && !aPointeCeJour && !couvertParDemande(emp.id, d.date)) {
             absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues })
           }
