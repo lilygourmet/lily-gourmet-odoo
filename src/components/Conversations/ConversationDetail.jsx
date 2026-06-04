@@ -762,9 +762,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           }
           return (
             <div key={m.id} id={`msg-${m.id}`} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-lg px-3 py-2 ${
+              <div className={`relative max-w-[80%] rounded-lg px-3 py-2 pr-8 ${
                 isAgent ? 'bg-bordeaux text-cream' : isNewClient ? 'bg-amber-100 text-ink border border-amber-300' : 'bg-cream-warm text-ink border border-line'
               }`}>
+                <button
+                  onClick={() => setForwardMsg(m)}
+                  title="Transférer ce message"
+                  className={`absolute top-1 right-1 rounded-full p-1 ${isAgent ? 'text-cream/70 hover:text-cream hover:bg-black/15' : 'text-ink-mute hover:text-bordeaux hover:bg-line/50'}`}
+                ><Forward size={15} strokeWidth={1.8} /></button>
                 {m.is_payment_proof && (
                   <div className={`flex items-center gap-1 text-[10px] font-medium mb-1 ${isAgent ? 'text-amber-200' : 'text-amber-700'}`}>
                     <Banknote size={12} strokeWidth={1.8} /> Preuve de paiement{m.payment_order_ref ? ` · Cmd ${m.payment_order_ref}` : ''}{m.payment_amount != null ? ` · ${m.payment_amount} DH` : ''}{m.payment_rejected_at ? ' · refusé' : m.payment_validated_at ? ' · validé' : ''}
@@ -793,17 +798,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   <span className={`text-[9px] ${isAgent ? 'text-cream/70' : 'text-ink-mute'}`}>
                     {isAgent && m.sender?.full_name ? `${m.sender.full_name} · ` : ''}{fmtTime(m.sent_at)}
                   </span>
-                  <button
-                    onClick={() => setForwardMsg(m)}
-                    className={`text-[11px] leading-none ${isAgent ? 'text-cream/70 hover:text-cream' : 'text-ink-mute hover:text-bordeaux'}`}
-                    title="Transférer ce message"
-                  ><Forward size={13} strokeWidth={1.8} /></button>
                   {canMarkPaymentProof(user) && m.media_url && (
                     <button
                       onClick={() => m.is_payment_proof ? handleUnmarkPayment(m) : openPaymentModal(m)}
-                      className={`text-[11px] leading-none transition-opacity ${m.is_payment_proof ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}
+                      className={`leading-none transition-opacity ${m.is_payment_proof ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
                       title={m.is_payment_proof ? 'Retirer la preuve de paiement' : 'Marquer comme preuve de paiement'}
-                    ><Banknote size={13} strokeWidth={1.8} /></button>
+                    ><Banknote size={26} strokeWidth={1.8} /></button>
                   )}
                   {isAgent && (
                     <button
