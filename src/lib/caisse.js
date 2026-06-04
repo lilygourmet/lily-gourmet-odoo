@@ -378,6 +378,32 @@ export async function attachReleveLine(env, line) {
   await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).eq('key', line.key)
 }
 
+// Lie une ligne de relevé (depuis « Reçus non liés ») à une enveloppe choisie.
+// Enregistre amount_proof = montant réel du relevé -> écart si ≠ du montant Odoo.
+export async function linkReleveLineToEnv(env, line) {
+  await setEnveloppeReleve(env.id, {
+    proofUrl: line.releve_url || undefined,
+    proofDate: line.ligne_date || undefined,
+    status: 'trouve',
+    libelle: `${line.ligne_date} · ${line.label}`.slice(0, 220),
+    candidates: null,
+  })
+  await supabase.from('caisse_enveloppes').update({ amount_proof: Number(line.amount) }).eq('id', env.id)
+  await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).eq('key', line.key)
+}
+
+// Enveloppes affectées à la Banque, encore en attente (sans preuve) — toutes dates.
+export async function loadPendingBanqueEnvelopes() {
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select('*, destinataire:caisse_destinataires(*)')
+    .not('destinataire_id', 'is', null)
+    .is('proof_url', null)
+    .order('session_date', { ascending: false })
+  if (error) throw error
+  return (data || []).filter(e => e.destinataire?.type === 'banque')
+}
+
 // Lignes du relevé déjà attribuées à des enveloppes "trouvées" (pour ne pas les reproposer).
 export async function loadConfirmedReleveLines() {
   const { data, error } = await supabase

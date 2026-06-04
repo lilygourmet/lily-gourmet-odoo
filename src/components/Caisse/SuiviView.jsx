@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -321,9 +321,20 @@ function BanqueSection({ user }) {
 // Onglet : virements/dépôts reçus en banque (dans les relevés) non liés à une enveloppe Odoo
 function NonLieSection() {
   const [lines, setLines] = useState(null)
+  const [pendingEnvs, setPendingEnvs] = useState([])
+  const [linkLine, setLinkLine] = useState(null)
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useState('all') // all | cash | cheque | virement
-  useEffect(() => { (async () => { try { setLines(await loadAllFreeReleveLines()) } catch { setLines([]) } })() }, [])
+  async function reload() {
+    try { setLines(await loadAllFreeReleveLines()) } catch { setLines([]) }
+    try { setPendingEnvs(await loadPendingBanqueEnvelopes()) } catch { setPendingEnvs([]) }
+  }
+  useEffect(() => { reload() }, [])
+  async function handleLink(env, line) {
+    await linkReleveLineToEnv(env, line)
+    setLinkLine(null)
+    reload()
+  }
   const TYPE_GROUP = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
   const count = useMemo(() => {
     const c = { cash: 0, cheque: 0, virement: 0 }
@@ -363,14 +374,63 @@ function NonLieSection() {
         </div>
       )}
       {list.map(l => (
-        <div key={l.key} style={{ ...rowCard, gridTemplateColumns: '1fr auto' }}>
+        <div key={l.key} style={{ ...rowCard, gridTemplateColumns: '1fr auto auto', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.ligne_date}</div>
             <div style={{ fontSize: 13, color: '#1a0f0a' }}>{l.label || '—'}</div>
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#5b2a86' }}>{fmtMoney(l.amount)}</div>
+          <button onClick={() => setLinkLine(l)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA', marginLeft: 8 }}>
+            🔗 Lier
+          </button>
         </div>
       ))}
+
+      {linkLine && (
+        <LinkLineModal line={linkLine} envs={pendingEnvs} onClose={() => setLinkLine(null)} onLink={handleLink} />
+      )}
+    </div>
+  )
+}
+
+// Lier une ligne du relevé (non liée) à l'enveloppe choisie ; écart si montants ≠.
+function LinkLineModal({ line, envs, onClose, onLink }) {
+  const [q, setQ] = useState('')
+  const method = ({ versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' })[line.type] || 'virement'
+  const methodLabel = method === 'cash' ? 'espèces' : method === 'cheque' ? 'chèque' : 'virement'
+  const list = useMemo(() => {
+    let l = envs.filter(e => (e.payment_method || 'cash') === method)
+    const s = q.trim().toLowerCase()
+    if (s) l = l.filter(e => String(e.amount_cash).includes(s) || (e.virement_client || '').toLowerCase().includes(s) || (e.source || '').toLowerCase().includes(s))
+    return l.sort((a, b) => Math.abs(Number(a.amount_cash) - Number(line.amount)) - Math.abs(Number(b.amount_cash) - Number(line.amount)))
+  }, [envs, q, method, line.amount])
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>Lier ce reçu de {fmtMoney(line.amount)}</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 4 }}>{line.ligne_date} · {line.label}</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>Choisis l'enveloppe <b>{methodLabel}</b> à qui appartient ce montant :</div>
+        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 nom du client, montant…" autoFocus
+          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />
+        {list.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Aucune enveloppe {methodLabel} en attente. (Essaie un autre mot.)</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {list.slice(0, 60).map(e => {
+              const diff = Number(line.amount) - Number(e.amount_cash)
+              const hasGap = Math.abs(diff) >= 0.005
+              return (
+                <button key={e.id} onClick={() => onLink(e, line)}
+                  style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <span>{(e.virement_client || e.source || 'Enveloppe').trim()} · {fmtDateCourte(e.session_date)}</span>
+                  <span style={{ fontWeight: 600 }}>{fmtMoney(e.amount_cash)}{hasGap ? <span style={{ color: '#99201E', fontWeight: 600 }}> · écart {diff > 0 ? '+' : ''}{fmtMoney(diff)}</span> : ''}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+        <button onClick={onClose} style={{ ...btnNormal, width: '100%' }}>Fermer</button>
+      </div>
     </div>
   )
 }
