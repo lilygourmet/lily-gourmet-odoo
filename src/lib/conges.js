@@ -146,14 +146,14 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
   const annee = ref.getFullYear()
   const { data, error } = await supabase
     .from('pointages_mois')
-    .select('jours_recuperation')
+    .select('jours_recup')
     .eq('employe_id', emp.id)
     .eq('annee', annee)
   if (error) {
     console.warn('[joursRecupGagnesAnnee]', error.message)
     return 0
   }
-  return (data || []).reduce((s, r) => s + Number(r.jours_recuperation || 0), 0)
+  return (data || []).reduce((s, r) => s + Number(r.jours_recup || 0), 0)
 }
 
 // ------------------------------------------------------------
