@@ -33,7 +33,7 @@ export default function LivraisonsView({ user }) {
       const list = []
       for (const [hour, clientMap] of grouped.entries())
         for (const [, e] of clientMap.entries())
-          list.push({ hour, clientName: e.clientName, clientPhone: e.clientPhone, orderNote: e.orderNote, orderTotal: e.orderTotal, orderNum: e.orderNum })
+          list.push({ hour, clientName: e.clientName, clientPhone: e.clientPhone, orderNote: e.orderNote, orderTotal: e.orderTotal, orderAcompte: e.orderAcompte, orderNum: e.orderNum })
       list.sort((a, b) => a.hour.localeCompare(b.hour))
       setStates(await loadDeliveryStates(list.map(d => d.orderNum)))
       setDeliveries(list)
@@ -112,9 +112,22 @@ export default function LivraisonsView({ user }) {
                     {d.orderNum && <span style={{ fontSize: 11, color: '#8a7a70', marginLeft: 6 }}>{d.orderNum}</span>}
                     {d.clientPhone && <div style={{ fontSize: 12, color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={11} /> <a href={`tel:${d.clientPhone}`} style={{ color: '#4a3a30' }}>{d.clientPhone}</a></div>}
                   </div>
-                  {typeof d.orderTotal === 'number' && <span style={{ fontWeight: 600, color: '#27500A' }}>{d.orderTotal.toLocaleString('fr-FR')} dh</span>}
                 </div>
                 {d.orderNote && <div style={{ fontSize: 12, color: '#4a3a30', marginTop: 4, display: 'flex', alignItems: 'flex-start', gap: 4 }}><MapPin size={12} style={{ flexShrink: 0, marginTop: 2 }} /> {d.orderNote}</div>}
+
+                {typeof d.orderTotal === 'number' && (() => {
+                  const avance = typeof d.orderAcompte === 'number' ? d.orderAcompte : 0
+                  const reste = Math.max(0, d.orderTotal - avance)
+                  return (
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, padding: '8px 10px', background: '#FAF7F2', borderRadius: 8, fontSize: 13 }}>
+                      <span style={{ color: '#4a3a30' }}>Total : <strong>{d.orderTotal.toLocaleString('fr-FR')} dh</strong></span>
+                      <span style={{ color: '#4a3a30' }}>Avance : <strong>{avance.toLocaleString('fr-FR')} dh</strong></span>
+                      <span style={{ marginLeft: 'auto', fontWeight: 700, color: reste > 0 ? '#A32D2D' : '#27500A' }}>
+                        Reste à encaisser : {reste.toLocaleString('fr-FR')} dh
+                      </span>
+                    </div>
+                  )
+                })()}
 
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
                   {!livreur && (
