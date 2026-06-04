@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, groupDeliveriesWithFullOrder } from '../lib/salesLines'
-import { loadLivreurs, loadDeliveryStates, assignDelivery, setLivraisonFaite } from '../lib/deliveries'
+import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite } from '../lib/deliveries'
 import { isLivreur } from '../lib/auth'
 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -67,6 +67,27 @@ export default function LivraisonsView({ user }) {
     finally { setBusy('') }
   }
 
+  const livreurNom = user.full_name || user.username || ''
+  const labelLivraison = d => `${date.split('-').reverse().slice(0, 2).join('/')} ${d.hour} · ${d.clientName}`
+
+  async function handleAccept(d) {
+    setBusy(d.orderNum); setErr('')
+    try {
+      await acceptDelivery({ orderNum: d.orderNum, byUserId: user.id, label: labelLivraison(d), livreurName: livreurNom })
+      setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: user.id, statut: 'acceptee' } }))
+    } catch (e) { setErr(e.message) }
+    finally { setBusy('') }
+  }
+
+  async function handleRefuse(d) {
+    setBusy(d.orderNum); setErr('')
+    try {
+      await refuseDelivery({ orderNum: d.orderNum, byUserId: user.id, label: labelLivraison(d), livreurName: livreurNom })
+      setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: null, statut: 'refusee' } }))
+    } catch (e) { setErr(e.message) }
+    finally { setBusy('') }
+  }
+
   async function handleFaite(d, faite) {
     setBusy(d.orderNum); setErr('')
     try {
@@ -113,8 +134,10 @@ export default function LivraisonsView({ user }) {
           {visible.map(d => {
             const s = states[d.orderNum] || {}
             const faite = !!s.livraison_faite
+            const statut = s.statut
+            const bg = faite ? '#EAF3DE' : statut === 'refusee' ? '#FCEEE8' : 'white'
             return (
-              <div key={d.orderNum} style={{ background: faite ? '#EAF3DE' : 'white', border: '1px solid #e5d8c3', borderRadius: 12, padding: '12px 14px' }}>
+              <div key={d.orderNum} style={{ background: bg, border: '1px solid #e5d8c3', borderRadius: 12, padding: '12px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                   <div>
                     <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#993556', marginRight: 8 }}>{d.hour}</span>
@@ -149,13 +172,30 @@ export default function LivraisonsView({ user }) {
                         <option value="">— non assigné —</option>
                         {livreurs.map(l => <option key={l.id} value={l.id}>{l.full_name || l.username}{l.livreur_defaut ? ' (défaut)' : ''}</option>)}
                       </select>
+                      {statut === 'assignee' && <span style={{ fontSize: 11, color: '#8a6d3b', background: '#FBF1D8', padding: '3px 8px', borderRadius: 20 }}>🕐 À confirmer</span>}
+                      {statut === 'acceptee' && <span style={{ fontSize: 11, color: '#27500A', background: '#EAF3DE', padding: '3px 8px', borderRadius: 20 }}>✅ Acceptée</span>}
+                      {statut === 'refusee' && <span style={{ fontSize: 11, fontWeight: 600, color: '#A32D2D', background: '#FBD9D0', padding: '3px 8px', borderRadius: 20 }}>⚠️ Refusée — à réassigner</span>}
                     </>
                   )}
-                  <button onClick={() => handleFaite(d, !faite)} disabled={busy === d.orderNum}
-                    style={{ marginLeft: 'auto', padding: '7px 12px', fontSize: 12, borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
-                      background: faite ? '#27500A' : 'white', color: faite ? 'white' : '#27500A', border: '1px solid #27500A' }}>
-                    <CheckCircle2 size={14} /> {faite ? 'Livré ✓' : 'Marquer livré'}
-                  </button>
+
+                  {livreur && statut !== 'acceptee' ? (
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                      <button onClick={() => handleAccept(d)} disabled={busy === d.orderNum}
+                        style={{ padding: '8px 14px', fontSize: 13, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: '#27500A', color: 'white', border: 'none' }}>
+                        ✅ J'accepte
+                      </button>
+                      <button onClick={() => handleRefuse(d)} disabled={busy === d.orderNum}
+                        style={{ padding: '8px 14px', fontSize: 13, borderRadius: 8, cursor: 'pointer', background: 'white', color: '#A32D2D', border: '1px solid #A32D2D' }}>
+                        🚫 Pas disponible
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => handleFaite(d, !faite)} disabled={busy === d.orderNum}
+                      style={{ marginLeft: 'auto', padding: '7px 12px', fontSize: 12, borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+                        background: faite ? '#27500A' : 'white', color: faite ? 'white' : '#27500A', border: '1px solid #27500A' }}>
+                      <CheckCircle2 size={14} /> {faite ? 'Livré ✓' : 'Marquer livré'}
+                    </button>
+                  )}
                 </div>
               </div>
             )
