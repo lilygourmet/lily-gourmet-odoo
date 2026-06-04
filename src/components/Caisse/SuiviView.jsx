@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -75,6 +75,7 @@ function BanqueSection({ user }) {
   const [takenLines, setTakenLines] = useState([])
   const [freeLines, setFreeLines] = useState([])
   const [hideNoSugg, setHideNoSugg] = useState(false)
+  const [ecartList, setEcartList] = useState([])
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -83,6 +84,7 @@ function BanqueSection({ user }) {
     setList(data)
     try { setTakenLines(await loadConfirmedReleveLines()) } catch { /* ignore */ }
     try { setFreeLines(await loadAllFreeReleveLines()) } catch { /* ignore */ }
+    try { setEcartList(await loadBanqueEnvelopesWithEcart()) } catch { /* ignore */ }
   }
 
   // Montants disponibles dans le relevé par type (pour savoir si « Suggérer » servira)
@@ -103,7 +105,9 @@ function BanqueSection({ user }) {
 
   // Filtrer par méthode de paiement + recherche texte (montant, client, source)
   const filteredList = useMemo(() => {
-    let l = methodFilter === 'all' ? list : list.filter(e => (e.payment_method || 'cash') === methodFilter)
+    let l = methodFilter === 'ecart' ? ecartList
+      : methodFilter === 'all' ? list
+      : list.filter(e => (e.payment_method || 'cash') === methodFilter)
     const q = query.trim().toLowerCase()
     if (q) {
       l = l.filter(e =>
@@ -112,9 +116,9 @@ function BanqueSection({ user }) {
         (e.source || '').toLowerCase().includes(q) ||
         (e.note_proof || '').toLowerCase().includes(q))
     }
-    if (hideNoSugg) l = l.filter(e => e.releve_status || e.proof_url || hasSuggestion(e))
+    if (hideNoSugg && methodFilter !== 'ecart') l = l.filter(e => e.releve_status || e.proof_url || hasSuggestion(e))
     return l
-  }, [list, methodFilter, query, hideNoSugg, availByMethod])
+  }, [list, ecartList, methodFilter, query, hideNoSugg, availByMethod])
 
   const total = useMemo(() => filteredList.reduce((s, e) => s + Number(e.amount_cash), 0), [filteredList])
   const totalEcart = useMemo(() => filteredList.reduce((s, e) => {
@@ -195,6 +199,9 @@ function BanqueSection({ user }) {
         </button>
         <button onClick={() => setMethodFilter('virement')} style={methodFilterBtn(methodFilter === 'virement', 'virement')}>
           <ArrowLeftRight size={14} /> Virements ({countVirement})
+        </button>
+        <button onClick={() => setMethodFilter('ecart')} style={methodFilterBtn(methodFilter === 'ecart')}>
+          ⚠️ Écart ({ecartList.length})
         </button>
       </div>
 

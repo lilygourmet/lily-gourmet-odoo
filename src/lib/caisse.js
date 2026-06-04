@@ -404,6 +404,20 @@ export async function loadPendingBanqueEnvelopes() {
   return (data || []).filter(e => e.destinataire?.type === 'banque')
 }
 
+// Enveloppes Banque ayant un ÉCART : montant réel du relevé (amount_proof) ≠ montant Odoo.
+export async function loadBanqueEnvelopesWithEcart() {
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select('*, destinataire:caisse_destinataires(*)')
+    .not('destinataire_id', 'is', null)
+    .not('amount_proof', 'is', null)
+    .order('session_date', { ascending: false })
+  if (error) throw error
+  return (data || []).filter(e =>
+    e.destinataire?.type === 'banque' &&
+    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= 0.005)
+}
+
 // Lignes du relevé déjà attribuées à des enveloppes "trouvées" (pour ne pas les reproposer).
 export async function loadConfirmedReleveLines() {
   const { data, error } = await supabase
