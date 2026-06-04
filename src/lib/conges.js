@@ -101,7 +101,7 @@ function joursPrisAnnee(emp, congesValides, refDate = todayYMD()) {
     if (c.date_fin < yearStart || c.date_debut > refDate) continue
     const t = (c.type_conge || '').toLowerCase()
     const isMaladie = t.includes('maladie') || t.includes('sick')
-    const isRecup   = t.includes('récup') || t.includes('recup')
+    const isRecup   = t.includes('récup') || t.includes('recup') || t.includes('compensatory')
     if (isRecup) continue   // les récup n'entament pas le solde de congés annuels
     // Bornes du congé clippées à l'année courante et au refDate
     const debut = c.date_debut < yearStart ? yearStart : c.date_debut
@@ -146,14 +146,14 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
   const annee = ref.getFullYear()
   const { data, error } = await supabase
     .from('pointages_mois')
-    .select('jours_recup')
+    .select('jours_recuperation')
     .eq('employe_id', emp.id)
     .eq('annee', annee)
   if (error) {
     console.warn('[joursRecupGagnesAnnee]', error.message)
     return 0
   }
-  return (data || []).reduce((s, r) => s + Number(r.jours_recup || 0), 0)
+  return (data || []).reduce((s, r) => s + Number(r.jours_recuperation || 0), 0)
 }
 
 // ------------------------------------------------------------
@@ -185,7 +185,7 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     if (t === 'maladie_courte')             category = 'maladie_courte'
     else if (t === 'maladie_longue')        category = 'maladie_longue'
     else if (t.includes('maternit'))        category = 'maternite'
-    else if (t.includes('récup') || t.includes('recup')) category = 'recup'
+    else if (t.includes('récup') || t.includes('recup') || t.includes('compensatory')) category = 'recup'
     else if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
       // Durée totale du congé maladie (pas seulement la partie clippée)
       const dureeTotale = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1

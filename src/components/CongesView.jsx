@@ -134,7 +134,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
         loadEmployes(true),
         loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule']),
         loadAllocations({ annee, statut: ['valide', 'attente'] }),
-        supabase.from('pointages_mois').select('employe_id, jours_recup').eq('annee', annee),
+        supabase.from('pointages_mois').select('employe_id, jours_recuperation').eq('annee', annee),
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
       setEmployes(empsActifs)
@@ -183,7 +183,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       }
       const recupByEmp = new Map()
       for (const r of (recupRows?.data || [])) {
-        recupByEmp.set(r.employe_id, (recupByEmp.get(r.employe_id) || 0) + Number(r.jours_recup || 0))
+        recupByEmp.set(r.employe_id, (recupByEmp.get(r.employe_id) || 0) + Number(r.jours_recuperation || 0))
       }
       const prefetched = { allocsByEmp, recupByEmp }
 
@@ -861,7 +861,7 @@ function classifierConge(c) {
   if (t === 'maladie_courte') return 'maladie_courte'
   if (t === 'maladie_longue') return 'maladie_longue'
   if (t.includes('maternit')) return 'maternite'
-  if (t.includes('récup') || t.includes('recup')) return 'recup'
+  if (t.includes('récup') || t.includes('recup') || t.includes('compensatory')) return 'recup'
   if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
     const duree = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
     return duree <= 3 ? 'maladie_courte' : 'maladie_longue'
