@@ -11,7 +11,7 @@ import { createTask } from './tasks'
 export async function loadLivreurs() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, username, livreur_defaut')
+    .select('id, full_name, username, livreur_defaut, whatsapp')
     .eq('role', 'livreur')
     .eq('active', true)
     .order('full_name', { ascending: true })

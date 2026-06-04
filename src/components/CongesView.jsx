@@ -134,6 +134,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [feriesYear, setFeriesYear]       = useState(new Date().getFullYear())
   const [showFerieForm, setShowFerieForm] = useState(false)
   const [editFerie, setEditFerie]         = useState(null)  // jour férié en cours d'édition
+  const [confirmFerieId, setConfirmFerieId] = useState(null)  // férié en attente de confirmation de suppression
   const isMobile = useIsMobile()
 
   const reload = useCallback(async () => {
@@ -319,8 +320,11 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     } catch (e) { alert('Erreur : ' + e.message) }
   }
   async function handleDeleteFerie(f) {
-    if (!confirm(`Supprimer ce jour férié ?\n\n${fmt(f.date)} · ${f.nom}`)) return
-    try { await deleteJourFerie(f.id); await reload() }
+    try {
+      await deleteJourFerie(f.id)
+      setJoursFeries(prev => prev.filter(x => x.id !== f.id))  // retrait immédiat de l'écran
+      setConfirmFerieId(null)
+    }
     catch (e) { alert('Erreur : ' + e.message) }
   }
   async function handleGenererFixes() {
@@ -745,16 +749,25 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                         )}
                         <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
                           {f.type === 'lunaire' ? (
-                            <>
-                              <button onClick={() => { setEditFerie(f); setShowFerieForm(true) }} title="Modifier"
-                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
-                                <Pencil size={14} />
-                              </button>
-                              <button onClick={() => handleDeleteFerie(f)} title="Supprimer"
-                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
-                                <Trash2 size={14} />
-                              </button>
-                            </>
+                            confirmFerieId === f.id ? (
+                              <>
+                                <button onClick={() => handleDeleteFerie(f)}
+                                  style={{ ...btnRejeter, padding: '4px 10px', fontSize: 11 }}>Confirmer</button>
+                                <button onClick={() => setConfirmFerieId(null)}
+                                  style={{ ...btnSlim, padding: '4px 10px', fontSize: 11 }}>Annuler</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => { setEditFerie(f); setShowFerieForm(true) }} title="Modifier"
+                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                                  <Pencil size={14} />
+                                </button>
+                                <button onClick={() => setConfirmFerieId(f.id)} title="Supprimer"
+                                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )
                           ) : (
                             <span title="Férié fixe (verrouillé)" style={{ color: '#b8ad9e', display: 'inline-flex', padding: 4 }}>
                               <Lock size={14} />

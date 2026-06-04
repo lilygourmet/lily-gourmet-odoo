@@ -89,6 +89,13 @@ export default function LivraisonsView({ user }) {
       const autoAccept = !!livreurId && livreurId === defaultLivreurId
       await assignDelivery({ orderNum: d.orderNum, livreurId: livreurId || null, byUserId: user.id, titre, description: desc, dueDate: date, autoAccept })
       setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: livreurId || null, statut: livreurId ? (autoAccept ? 'acceptee' : 'assignee') : null } }))
+      // Avertit si le livreur choisi n'a pas de WhatsApp (il ne sera prévenu que dans l'app).
+      if (livreurId) {
+        const l = livreurs.find(x => x.id === livreurId)
+        if (l && !l.whatsapp) {
+          alert(`⚠️ ${l.full_name || l.username} n'a pas de numéro WhatsApp.\nIl verra la livraison dans l'app, mais ne recevra pas de message WhatsApp.\n(Ajoute son numéro dans Admin → Users.)`)
+        }
+      }
     } catch (e) { setErr(e.message) }
     finally { setBusy('') }
   }

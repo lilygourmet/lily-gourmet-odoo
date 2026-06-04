@@ -9,8 +9,10 @@ export default function AjoutSortieModal({ categories, caisseOwner, onClose, onS
   const [hasFacture, setHasFacture] = useState(false)
 
   async function submit() {
-    if (!amount || !label || !category) { alert('Tous les champs sont requis'); return }
-    await onSubmit({ amount: Number(amount), label, category, mvtDate, hasFacture: caisseOwner === 'meriem' ? hasFacture : false })
+    const n = Number(amount)
+    if (!label.trim() || !category) { alert('Tous les champs sont requis'); return }
+    if (!amount || isNaN(n) || n <= 0) { alert('Montant invalide : entre un nombre positif.'); return }
+    await onSubmit({ amount: n, label: label.trim(), category, mvtDate, hasFacture: caisseOwner === 'meriem' ? hasFacture : false })
   }
 
   return (

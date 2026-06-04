@@ -166,11 +166,19 @@ export function filterLinesForProdCategory(lines, category) {
 // GROUPEMENTS POUR L'AFFICHAGE
 // ============================================================
 
+// "10h-11h" à l'heure du Maroc, depuis un delivery_at (stocké en UTC).
+// Évite le décalage si le navigateur n'est pas réglé sur l'heure du Maroc.
+function hourRangeKey(dateLike) {
+  const d = dateLike instanceof Date ? dateLike : new Date(dateLike)
+  const h = isNaN(d) ? 0 : Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Casablanca', hour: '2-digit', hour12: false }).format(d)) % 24
+  return `${String(h).padStart(2, '0')}h-${String(h + 1).padStart(2, '0')}h`
+}
+
 export function groupByHourThenClient(lines) {
   const result = new Map()
   for (const line of lines) {
     const dt = new Date(line.delivery_at)
-    const hourKey = `${String(dt.getHours()).padStart(2, '0')}h-${String(dt.getHours() + 1).padStart(2, '0')}h`
+    const hourKey = hourRangeKey(dt)
     const orderNum = line.order_num || ''
     const clientName = line.client_name || 'Sans nom'
     const clientKey = `${orderNum}|${clientName}`
@@ -201,7 +209,7 @@ export function groupDeliveriesWithFullOrder(livrLines, allLines) {
     seenOrders.add(orderNum)
 
     const dt = new Date(livr.delivery_at)
-    const hourKey = `${String(dt.getHours()).padStart(2, '0')}h-${String(dt.getHours() + 1).padStart(2, '0')}h`
+    const hourKey = hourRangeKey(dt)
     const clientName = livr.client_name || 'Sans nom'
     const clientKey = `${orderNum}|${clientName}`
 
@@ -335,7 +343,7 @@ export function groupAllOrdersByHour(allLines) {
   const result = new Map()
   for (const [orderNum, { firstLine, lines }] of byOrder.entries()) {
     const dt = new Date(firstLine.delivery_at)
-    const hourKey = `${String(dt.getHours()).padStart(2, '0')}h-${String(dt.getHours() + 1).padStart(2, '0')}h`
+    const hourKey = hourRangeKey(dt)
     const clientName = firstLine.client_name || 'Sans nom'
     const clientKey = `${orderNum}|${clientName}`
 

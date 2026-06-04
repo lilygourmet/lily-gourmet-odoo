@@ -8,8 +8,10 @@ export default function AjoutEntreeModal({ onClose, onSubmit }) {
   const [mvtDate, setMvtDate] = useState(todayISO())
 
   async function submit() {
-    if (!amount || !label) { alert('Montant et libellé requis'); return }
-    await onSubmit({ amount: Number(amount), label, mvtDate })
+    const n = Number(amount)
+    if (!label.trim()) { alert('Libellé requis'); return }
+    if (!amount || isNaN(n) || n <= 0) { alert('Montant invalide : entre un nombre positif.'); return }
+    await onSubmit({ amount: n, label: label.trim(), mvtDate })
   }
 
   return (
