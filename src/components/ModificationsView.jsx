@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle2, Pencil } from 'lucide-react'
 import { loadModificationsATraiter, markModificationFaite } from '../lib/modifications'
+import { getJustificatifUrl } from '../lib/conges'
 
 const fmtDT = ts => ts ? new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
 
@@ -59,6 +60,16 @@ export default function ModificationsView({ user }) {
                 </div>
                 <span className="text-[11px] text-ink-mute">Demandé le {fmtDT(m.requested_at)}</span>
               </div>
+              {m.description && (
+                <div className="text-[13px] text-ink bg-cream border border-line rounded-lg px-3 py-2 mb-2 whitespace-pre-wrap">
+                  <span className="text-[10px] uppercase tracking-wider text-ink-mute block mb-0.5">À modifier</span>
+                  {m.description}
+                </div>
+              )}
+              {m.justificatif_path && (
+                <button onClick={async () => { const u = await getJustificatifUrl(m.justificatif_path); if (u) window.open(u, '_blank') }}
+                  className="text-[12px] text-bordeaux underline mb-2 inline-block">📎 Voir le justificatif</button>
+              )}
               <textarea
                 value={notes[m.id] || ''}
                 onChange={e => setNotes(n => ({ ...n, [m.id]: e.target.value }))}

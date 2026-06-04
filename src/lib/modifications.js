@@ -6,10 +6,10 @@ import { supabase } from './supabase'
 // L'équipe perm_modification les traite dans l'onglet « Modifications ».
 // ============================================================
 
-export async function createModification({ order_ref, client_name, client_phone, conversation_id, requested_by }) {
+export async function createModification({ order_ref, client_name, client_phone, conversation_id, requested_by, description = null, justificatif_path = null }) {
   const { data, error } = await supabase
     .from('modifications')
-    .insert({ order_ref, client_name, client_phone, conversation_id, requested_by, status: 'a_traiter' })
+    .insert({ order_ref, client_name, client_phone, conversation_id, requested_by, status: 'a_traiter', description, justificatif_path })
     .select().single()
   if (error) throw error
   return data

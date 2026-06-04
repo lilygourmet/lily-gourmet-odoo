@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS modifications (
   client_name     TEXT,
   client_phone    TEXT,
   conversation_id BIGINT,                      -- conversations.id est un BIGINT
+  description     TEXT,                        -- ce que le commercial demande de modifier
+  justificatif_path TEXT,                      -- fichier joint (bucket justificatifs)
   note            TEXT,                        -- ce que la personne Modification a fait
   status          TEXT DEFAULT 'a_traiter',    -- 'a_traiter' | 'fait'
   requested_by    UUID,

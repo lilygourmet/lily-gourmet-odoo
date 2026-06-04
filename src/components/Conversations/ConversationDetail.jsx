@@ -4,6 +4,7 @@ import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import ClientAvatar from './ClientAvatar'
 import { createModification } from '../../lib/modifications'
+import { uploadJustificatif } from '../../lib/conges'
 import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Search, Pin, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
 
@@ -87,6 +88,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [showReplies, setShowReplies] = useState(false)
   const [quickReplies, setQuickReplies] = useState([])
   const [forwardMsg, setForwardMsg] = useState(null)
+  // Demande de modification de commande
+  const [modifOpen, setModifOpen] = useState(false)
+  const [modifRef, setModifRef] = useState('')
+  const [modifDesc, setModifDesc] = useState('')
+  const [modifFile, setModifFile] = useState(null)
+  const [modifBusy, setModifBusy] = useState(false)
   // Preuve de paiement : message en cours de marquage + n° commande saisi
   const [paymentMsg, setPaymentMsg] = useState(null)
   const [orderRefInput, setOrderRefInput] = useState('')
@@ -522,25 +529,36 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   function openNameEdit() { setNameInput(conv?.client_name || ''); setNameEditing(true) }
 
-  // Demande de modification : prend le DERNIER n° S du fil et l'envoie à l'équipe Modification.
-  async function handleModification() {
+  // Demande de modification : prend le DERNIER n° S du fil et ouvre la fenêtre
+  // (description + justificatif) avant d'envoyer à l'équipe Modification.
+  function handleModification() {
     let ref = ''
     for (let i = messages.length - 1; i >= 0; i--) {
       const mS = (messages[i].body || '').match(/\bS\d{4,}\b/i)
       if (mS) { ref = mS[0].toUpperCase(); break }
     }
     if (!ref) { alert('Aucun n° de commande (S…) trouvé dans cette conversation.'); return }
-    if (!confirm(`Envoyer une demande de MODIFICATION pour la commande ${ref} (${conv?.client_name || conv?.client_phone || ''}) ?`)) return
+    setModifRef(ref); setModifDesc(''); setModifFile(null); setModifOpen(true)
+  }
+
+  async function confirmModification() {
+    setModifBusy(true)
     try {
+      let jp = null
+      if (modifFile) jp = await uploadJustificatif(modifFile, user.id)
       await createModification({
-        order_ref: ref,
+        order_ref: modifRef,
         client_name: conv?.client_name || null,
         client_phone: conv?.client_phone || null,
         conversation_id: conversationId,
         requested_by: user.id,
+        description: modifDesc.trim() || null,
+        justificatif_path: jp,
       })
-      alert(`✅ Demande de modification envoyée pour ${ref}.`)
+      setModifOpen(false)
+      alert(`✅ Demande de modification envoyée pour ${modifRef}.`)
     } catch (e) { alert('Erreur : ' + e.message) }
+    finally { setModifBusy(false) }
   }
   async function saveName() {
     setNameBusy(true)
@@ -1005,6 +1023,27 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           user={user}
           onClose={() => setForwardMsg(null)}
         />
+      )}
+
+      {modifOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => !modifBusy && setModifOpen(false)}>
+          <div className="bg-cream rounded-2xl w-full max-w-sm shadow-2xl border border-line p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Demande de modification</h3>
+            <p className="text-[12px] text-ink-soft mb-3">Commande <strong>{modifRef}</strong> · {conv?.client_name || conv?.client_phone || ''}</p>
+            <label className="block text-[11px] font-medium text-ink-soft mb-1">Que faut-il modifier ?</label>
+            <textarea value={modifDesc} onChange={e => setModifDesc(e.target.value)} rows={3}
+              placeholder="ex : changer la date de retrait au 12/06, ajouter un message sur le gâteau…"
+              className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3" />
+            <label className="inline-flex items-center gap-2 text-[12px] text-ink-soft cursor-pointer mb-4 border border-line rounded-lg px-3 py-2" style={{ background: modifFile ? '#EAF3DE' : undefined }}>
+              📎 {modifFile ? modifFile.name.slice(0, 22) : 'Joindre un justificatif (optionnel)'}
+              <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => setModifFile(e.target.files?.[0] || null)} />
+            </label>
+            <div className="flex gap-2">
+              <button onClick={() => setModifOpen(false)} disabled={modifBusy} className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded-lg hover:bg-cream-warm transition-all">Annuler</button>
+              <button onClick={confirmModification} disabled={modifBusy} className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50">{modifBusy ? 'Envoi…' : 'Envoyer'}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {paymentMsg && (
