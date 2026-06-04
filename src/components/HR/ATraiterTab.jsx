@@ -51,7 +51,10 @@ export default function ATraiterTab({ user, onChange }) {
       if (classification === 'oubli') {
         await traiterOubliPointage({ employe_id: a.employe_id, date: a.date, heures_prevues: a.heures_prevues, userId: user.id })
       } else {
-        await traiterAbsence({ employe_id: a.employe_id, date: a.date, classification, raison: f.raison || null, userId: user.id })
+        const date_debut = f.date_debut || a.date
+        const date_fin = f.date_fin || a.date
+        if (date_fin < date_debut) { setErr('La date de fin est avant la date de début.'); setBusyKey(''); return }
+        await traiterAbsence({ employe_id: a.employe_id, date_debut, date_fin, classification, raison: f.raison || null, userId: user.id })
       }
       await reload()
     } catch (e) { setErr(e.message) }
@@ -107,9 +110,17 @@ export default function ATraiterTab({ user, onChange }) {
                   style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }}>
                   {CLASSIFS.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
                 </select>
+                {f.classification !== 'oubli' && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#4a3a30' }}>
+                    du <input type="date" value={f.date_debut || a.date} onChange={e => setField(key, 'date_debut', e.target.value)}
+                      style={{ padding: '6px 8px', fontSize: 12, border: '1px solid #e5d8c3', borderRadius: 8 }} />
+                    au <input type="date" value={f.date_fin || a.date} min={f.date_debut || a.date} onChange={e => setField(key, 'date_fin', e.target.value)}
+                      style={{ padding: '6px 8px', fontSize: 12, border: '1px solid #e5d8c3', borderRadius: 8 }} />
+                  </span>
+                )}
                 <input value={f.raison || ''} onChange={e => setField(key, 'raison', e.target.value)}
                   placeholder="Raison (optionnel)"
-                  style={{ flex: 1, minWidth: 140, padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
+                  style={{ flex: 1, minWidth: 120, padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
                 <button onClick={() => handleAbsence(a)} disabled={busyKey === key}
                   style={{ padding: '8px 14px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <Send size={13} /> {busyKey === key ? '…' : (f.classification === 'oubli' ? 'Marquer présent' : 'Envoyer en validation')}

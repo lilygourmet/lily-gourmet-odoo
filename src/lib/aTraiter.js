@@ -60,6 +60,11 @@ export async function loadATraiter() {
     // Employés qui POINTENT réellement ce mois (au moins 1 pointage). Ceux qui ne
     // pointent jamais (ex: Badea Bahri, Rachida Haimer) ne sont PAS comptés absents.
     const aPointe = new Set((data.pointages || []).map(p => p.employe_id))
+    // Jours où l'employé a pointé quelque chose (même le matin / pointage incomplet)
+    // → ces jours ne sont JAMAIS comptés absents.
+    const pointeCeJour = new Set(
+      (data.pointages || []).filter(p => p.date_pointage).map(p => `${p.employe_id}|${p.date_pointage}`)
+    )
     for (const emp of data.employes) {
       const { journal } = calculerMois(emp, mois, annee, data)
       for (const d of journal) {
@@ -68,7 +73,8 @@ export async function loadATraiter() {
         if (emp.date_sortie && d.date > emp.date_sortie) continue
         if (emp.date_entree && d.date < emp.date_entree) continue
         if (d.statut === 'absent') {
-          if (aPointe.has(emp.id) && !couvertParDemande(emp.id, d.date)) {
+          const aPointeCeJour = pointeCeJour.has(`${emp.id}|${d.date}`)
+          if (aPointe.has(emp.id) && !aPointeCeJour && !couvertParDemande(emp.id, d.date)) {
             absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues })
           }
         } else if (Number(d.jours_recup) > 0) {
@@ -101,13 +107,13 @@ const CLASSIF_TO_TYPE = {
  * Traite une absence : crée une DEMANDE de congé sur ce jour (sans solde /
  * annuel / maladie). Elle repart dans le parcours de validation des congés.
  */
-export async function traiterAbsence({ employe_id, date, classification, raison, userId }) {
+export async function traiterAbsence({ employe_id, date_debut, date_fin, classification, raison, userId }) {
   const type_conge = CLASSIF_TO_TYPE[classification]
   if (!type_conge) throw new Error('Classification invalide')
   return createDemandeConge({
     employe_id,
-    date_debut: date,
-    date_fin: date,
+    date_debut,
+    date_fin: date_fin || date_debut,   // l'absence peut couvrir plusieurs jours
     type_conge,
     motif: raison || null,
     demande_par: userId,
