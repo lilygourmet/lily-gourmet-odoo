@@ -74,6 +74,7 @@ function BanqueSection({ user }) {
   const [query, setQuery] = useState('')
   const [takenLines, setTakenLines] = useState([])
   const [freeLines, setFreeLines] = useState([])
+  const [hideNoSugg, setHideNoSugg] = useState(false)
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -111,8 +112,9 @@ function BanqueSection({ user }) {
         (e.source || '').toLowerCase().includes(q) ||
         (e.note_proof || '').toLowerCase().includes(q))
     }
+    if (hideNoSugg) l = l.filter(e => e.releve_status || e.proof_url || hasSuggestion(e))
     return l
-  }, [list, methodFilter, query])
+  }, [list, methodFilter, query, hideNoSugg, availByMethod])
 
   const total = useMemo(() => filteredList.reduce((s, e) => s + Number(e.amount_cash), 0), [filteredList])
 
@@ -209,6 +211,10 @@ function BanqueSection({ user }) {
             color:      statusFilter === s ? 'white'   : '#4a3a30',
           }}>{s === 'pending' ? 'En attente' : s === 'done' ? 'Versées' : 'Toutes'}</button>
         ))}
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#4a3a30', cursor: 'pointer', marginLeft: 'auto' }}>
+          <input type="checkbox" checked={hideNoSugg} onChange={e => setHideNoSugg(e.target.checked)} />
+          Masquer « sans suggestion »
+        </label>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
