@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS modifications (
   order_ref       TEXT,                       -- n° de commande (Sxxxx)
   client_name     TEXT,
   client_phone    TEXT,
-  conversation_id UUID,
+  conversation_id BIGINT,                      -- conversations.id est un BIGINT
   note            TEXT,                        -- ce que la personne Modification a fait
   status          TEXT DEFAULT 'a_traiter',    -- 'a_traiter' | 'fait'
   requested_by    UUID,
