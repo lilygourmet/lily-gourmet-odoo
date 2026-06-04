@@ -188,20 +188,30 @@ async function actionSyncPos() {
       }
     }
 
-    // Annulation des virements erreur : une paire +X / -X de même montant dans
-    // la même session s'annule (correction caissier) -> on ne crée ni l'un ni l'autre.
+    // Nom du client (partenaire) de chaque commande virement (annulation + libellé)
+    const virOrderIds = [...new Set(virements.map(v => v.orderId).filter(Boolean))]
+    const nameByOrder = {}
+    if (virOrderIds.length > 0) {
+      const ords = await odooExec(uid, 'pos.order', 'read', [virOrderIds, ['partner_id']])
+      for (const o of ords) nameByOrder[o.id] = Array.isArray(o.partner_id) ? o.partner_id[1] : null
+    }
+
+    // Annulation des virements erreur : une paire +X / -X de même montant ET
+    // MÊME CLIENT (même commande) s'annule (correction caissier) -> aucune des deux.
     const virCancelled = new Set()
     {
-      const byAmt = {}
+      const byKey = {}
       for (const v of virements) {
         if (Math.abs(v.amount) < 0.005) continue
-        const k = Math.abs(v.amount).toFixed(2)
-        const slot = (byAmt[k] = byAmt[k] || { pos: [], neg: [] })
+        const client = v.orderId ? nameByOrder[v.orderId] : null
+        if (!client) continue // pas de client connu -> on n'annule pas
+        const k = client + '|' + Math.abs(v.amount).toFixed(2)
+        const slot = (byKey[k] = byKey[k] || { pos: [], neg: [] })
         slot[v.amount > 0 ? 'pos' : 'neg'].push(v)
       }
-      for (const k in byAmt) {
-        const n = Math.min(byAmt[k].pos.length, byAmt[k].neg.length)
-        for (let i = 0; i < n; i++) { virCancelled.add(byAmt[k].pos[i].id); virCancelled.add(byAmt[k].neg[i].id) }
+      for (const k in byKey) {
+        const n = Math.min(byKey[k].pos.length, byKey[k].neg.length)
+        for (let i = 0; i < n; i++) { virCancelled.add(byKey[k].pos[i].id); virCancelled.add(byKey[k].neg[i].id) }
       }
     }
 
@@ -248,13 +258,6 @@ async function actionSyncPos() {
     // VIREMENTS : 1 enveloppe par paiement client (auto-affectée à Banque)
     const newVirements = virements.filter(v => v.amount !== 0 && !virCancelled.has(v.id) && !existingPaymentIds.has(v.id))
     if (newVirements.length > 0) {
-      // Récupère le nom du client (partenaire de la commande POS)
-      const orderIds = [...new Set(newVirements.map(v => v.orderId).filter(Boolean))]
-      const nameByOrder = {}
-      if (orderIds.length > 0) {
-        const orders = await odooExec(uid, 'pos.order', 'read', [orderIds, ['partner_id']])
-        for (const o of orders) nameByOrder[o.id] = Array.isArray(o.partner_id) ? o.partner_id[1] : null
-      }
       for (const v of newVirements) {
         const insertObj = {
           odoo_session_id: sess.id,
