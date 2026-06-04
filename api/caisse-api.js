@@ -188,6 +188,23 @@ async function actionSyncPos() {
       }
     }
 
+    // Annulation des virements erreur : une paire +X / -X de même montant dans
+    // la même session s'annule (correction caissier) -> on ne crée ni l'un ni l'autre.
+    const virCancelled = new Set()
+    {
+      const byAmt = {}
+      for (const v of virements) {
+        if (Math.abs(v.amount) < 0.005) continue
+        const k = Math.abs(v.amount).toFixed(2)
+        const slot = (byAmt[k] = byAmt[k] || { pos: [], neg: [] })
+        slot[v.amount > 0 ? 'pos' : 'neg'].push(v)
+      }
+      for (const k in byAmt) {
+        const n = Math.min(byAmt[k].pos.length, byAmt[k].neg.length)
+        for (let i = 0; i < n; i++) { virCancelled.add(byAmt[k].pos[i].id); virCancelled.add(byAmt[k].neg[i].id) }
+      }
+    }
+
     const cfgId = Array.isArray(sess.config_id) ? sess.config_id[0] : null
     const source = cfgNameById[cfgId] || (Array.isArray(sess.config_id) ? sess.config_id[1] : 'POS')
     const sessionDate = (sess.stop_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
@@ -229,7 +246,7 @@ async function actionSyncPos() {
     }
 
     // VIREMENTS : 1 enveloppe par paiement client (auto-affectée à Banque)
-    const newVirements = virements.filter(v => v.amount !== 0 && !existingPaymentIds.has(v.id))
+    const newVirements = virements.filter(v => v.amount !== 0 && !virCancelled.has(v.id) && !existingPaymentIds.has(v.id))
     if (newVirements.length > 0) {
       // Récupère le nom du client (partenaire de la commande POS)
       const orderIds = [...new Set(newVirements.map(v => v.orderId).filter(Boolean))]
