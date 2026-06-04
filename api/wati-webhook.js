@@ -849,6 +849,20 @@ async function handleTaskReminders(req, res) {
       for (const c of (congesFinAujourdHui || [])) {
         const { phone, nom } = await getEmployePhone(supabase, c.employe_id)
         if (!phone) continue
+        // Congé "splité" mais continu : si un autre congé validé enchaîne juste
+        // après (jours intermédiaires = jours de repos), on n'envoie PAS le rappel
+        // maintenant -> il partira à la fin du vrai bloc continu.
+        const { data: nexts } = await supabase.from('conges')
+          .select('date_debut')
+          .eq('employe_id', c.employe_id).eq('statut', 'valide')
+          .gt('date_debut', c.date_fin)
+          .order('date_debut', { ascending: true }).limit(1)
+        if (nexts && nexts[0]) {
+          const { data: emp } = await supabase.from('employes')
+            .select('planning_type, planning_jour_off, planning_paire_off_1, planning_paire_off_2, planning_impaire_off_1, planning_impaire_off_2')
+            .eq('id', c.employe_id).maybeSingle()
+          if (congesContinus(emp, c.date_fin, nexts[0].date_debut)) continue
+        }
         const text = buildCongeMessage('rappel_retour', c, nom)
         const ok = await sendReminderWhatsapp(supabase, phone, text, congeTemplate('rappel_retour', c, nom))
         if (ok) {
@@ -1009,6 +1023,31 @@ async function getEmployePhone(supabase, employeId) {
     .eq('employe_id', employeId)
     .maybeSingle()
   return { phone: prof?.whatsapp || null, nom: emp.nom }
+}
+
+// Jour de repos COMPLET de l'employé (la demi-journée compte comme travaillée).
+function _jourReposEmp(emp) {
+  if (!emp) return null
+  if (emp.planning_type === 'fixe') return emp.planning_jour_off || null
+  if (emp.planning_type === 'alt') {
+    const paire   = [emp.planning_paire_off_1,   emp.planning_paire_off_2  ].filter(Boolean)
+    const impaire = [emp.planning_impaire_off_1, emp.planning_impaire_off_2].filter(Boolean)
+    return paire.find(d => impaire.includes(d)) || null
+  }
+  return null
+}
+// Deux congés sont "continus" si tous les jours strictement entre la fin de l'un
+// et le début de l'autre sont des jours de repos (ou s'il n'y a aucun jour entre).
+function congesContinus(emp, finYMD, nextDebutYMD) {
+  const J = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+  const off = _jourReposEmp(emp)
+  const d = new Date(finYMD + 'T00:00:00'); d.setDate(d.getDate() + 1)
+  const end = new Date(nextDebutYMD + 'T00:00:00')
+  while (d < end) {
+    if (J[d.getDay()] !== off) return false   // un jour travaillé au milieu -> pas continu
+    d.setDate(d.getDate() + 1)
+  }
+  return true
 }
 
 function buildCongeMessage(type, conge, nom, solde = null) {
