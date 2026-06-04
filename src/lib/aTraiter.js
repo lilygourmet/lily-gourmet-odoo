@@ -36,6 +36,17 @@ export async function loadATraiter() {
   const couvertParDemande = (empId, ymd) =>
     (congesDemande || []).some(c => c.employe_id === empId && c.date_debut <= ymd && c.date_fin >= ymd)
 
+  // Récup DÉJÀ allouées (allocation type 'autre'/'recup' = Récupération, par date_evt)
+  // → on ne re-suggère pas ce jour-là (sinon doublon).
+  const { data: recupAllocs } = await supabase
+    .from('conges_allocations').select('employe_id,date_evt,statut,type')
+    .in('type', ['autre', 'recup']).gte('date_evt', minDate)
+  const recupDejaAllouee = new Set(
+    (recupAllocs || [])
+      .filter(a => a.statut !== 'annule' && a.date_evt)
+      .map(a => `${a.employe_id}|${a.date_evt}`)
+  )
+
   const absences = []
   const recups = []
   for (const { mois, annee } of periods) {
@@ -61,7 +72,8 @@ export async function loadATraiter() {
             absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues })
           }
         } else if (Number(d.jours_recup) > 0) {
-          if (!recupTraite.has(`${emp.id}|${d.date}`)) {
+          const k = `${emp.id}|${d.date}`
+          if (!recupTraite.has(k) && !recupDejaAllouee.has(k)) {
             recups.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, label: d.label })
           }
         }
