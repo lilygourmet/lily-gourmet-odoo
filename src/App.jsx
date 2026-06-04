@@ -19,6 +19,7 @@ import TasksView from './components/Tasks/TasksView'
 import HRView from './components/HR/HRView'
 import InboxView from './components/Conversations/InboxView'
 import ModificationsView from './components/ModificationsView'
+import LivraisonsView from './components/LivraisonsView'
 import PaymentsView from './components/Conversations/PaymentsView'
 import AbsencesView from './components/AbsencesView'
 import CongesView from './components/CongesView'
@@ -233,6 +234,7 @@ function App() {
     if (activeView === 'hr') return <HRWrapper {...navProps} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
     if (activeView === 'modifications') return <ModificationsWrapper {...navProps} />
+    if (activeView === 'livraisons') return <LivraisonsWrapper {...navProps} />
     if (activeView === 'paiements') return <PaymentsWrapper {...navProps} />
     if (activeView === 'absences') return <AbsencesWrapper {...navProps} />
     if (activeView === 'caisse') return <CaisseView {...navProps} />
@@ -307,6 +309,16 @@ function ModificationsWrapper(props) {
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <ModificationsView user={user} />
+    </div>
+  )
+}
+
+function LivraisonsWrapper(props) {
+  const { user, onLogout, onNavigate, activeView } = props
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <LivraisonsView user={user} />
     </div>
   )
 }

@@ -38,7 +38,7 @@ export async function assignDelivery({ orderId, livreurId, byUserId, titre }) {
   if (livreurId && byUserId) {
     try {
       await createTask({ title: titre || '🚚 Nouvelle livraison', description: null, fromUserId: byUserId, toUserId: livreurId })
-    } catch (_) { /* la notif ne doit pas bloquer l'assignation */ }
+    } catch { /* la notif ne doit pas bloquer l'assignation */ }
   }
 }
 

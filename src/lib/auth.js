@@ -304,6 +304,12 @@ export function canSeeModifications(user) {
   return user.role === 'admin' || user.perm_modification === true
 }
 
+// User peut voir l'onglet Livraisons du jour (admin, livreur, ou perm_recaps)
+export function canSeeLivraisons(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.role === 'livreur' || user.perm_recaps === true
+}
+
 // =====================================================================
 // PAIEMENTS — permissions (preuves de virement transférées en interne)
 // =====================================================================
