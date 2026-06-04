@@ -97,10 +97,18 @@ export async function traiterAbsence({ employe_id, date, classification, raison,
 }
 
 /**
- * Traite une récup : enregistre la raison (pourquoi la personne a travaillé son
- * jour de repos). Le jour de récup est déjà compté par le pointage — on ne crée
- * donc PAS d'allocation en plus (sinon double comptage).
+ * VALIDE une récup : on garde le jour de récup (déjà compté par le pointage —
+ * source unique, donc PAS de double comptage) et on enregistre la raison.
  */
-export async function traiterRecup({ employe_id, date, raison, userId }) {
+export async function validerRecup({ employe_id, date, raison, userId }) {
   await setAjustement(employe_id, date, 'recup_raison', raison || '', userId)
+}
+
+/**
+ * REFUSE une récup : on annule le jour de récup (ajustement jours_recup = 0 →
+ * il ne sera pas compté dans le solde). La raison du refus est notée.
+ */
+export async function refuserRecup({ employe_id, date, raison, userId }) {
+  await setAjustement(employe_id, date, 'jours_recup', '0', userId)
+  await setAjustement(employe_id, date, 'recup_raison', raison ? `Refusé : ${raison}` : 'Refusé', userId)
 }

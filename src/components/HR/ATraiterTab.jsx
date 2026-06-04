@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, Send } from 'lucide-react'
-import { loadATraiter, traiterAbsence, traiterRecup } from '../../lib/aTraiter'
+import { AlertTriangle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react'
+import { loadATraiter, traiterAbsence, validerRecup, refuserRecup } from '../../lib/aTraiter'
 
 const CLASSIFS = [
   { v: 'annuel',     label: 'Congé annuel' },
@@ -53,13 +53,17 @@ export default function ATraiterTab({ user, onChange }) {
     finally { setBusyKey('') }
   }
 
-  async function handleRecup(r) {
+  async function handleRecup(r, action) {
     const key = `${r.employe_id}|${r.date}`
     const f = form[key] || {}
-    if (!f.raison || !f.raison.trim()) { setErr('Indique la raison pour la récup de ' + r.nom + '.'); return }
+    if (action === 'valider' && (!f.raison || !f.raison.trim())) {
+      setErr('Indique la raison pour valider la récup de ' + r.nom + '.'); return
+    }
     setBusyKey(key); setErr('')
     try {
-      await traiterRecup({ employe_id: r.employe_id, date: r.date, raison: f.raison.trim(), userId: user.id })
+      const args = { employe_id: r.employe_id, date: r.date, raison: (f.raison || '').trim() || null, userId: user.id }
+      if (action === 'valider') await validerRecup(args)
+      else await refuserRecup(args)
       await reload()
     } catch (e) { setErr(e.message) }
     finally { setBusyKey('') }
@@ -127,11 +131,15 @@ export default function ATraiterTab({ user, onChange }) {
                   <div style={{ fontSize: 12, color: '#3C3489' }}>{r.label} travaillé le {r.jour} {fmtJour(r.date)} → +1 récup</div>
                 </div>
                 <input value={f.raison || ''} onChange={e => setField(key, 'raison', e.target.value)}
-                  placeholder="Pourquoi a-t-il travaillé ? *"
+                  placeholder="Pourquoi a-t-il travaillé ?"
                   style={{ flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
-                <button onClick={() => handleRecup(r)} disabled={busyKey === key}
-                  style={{ padding: '8px 14px', fontSize: 13, background: '#3C3489', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <CheckCircle2 size={13} /> {busyKey === key ? '…' : 'Valider la récup'}
+                <button onClick={() => handleRecup(r, 'valider')} disabled={busyKey === key}
+                  style={{ padding: '8px 12px', fontSize: 13, background: '#27500A', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <CheckCircle2 size={13} /> {busyKey === key ? '…' : 'Valider'}
+                </button>
+                <button onClick={() => handleRecup(r, 'refuser')} disabled={busyKey === key}
+                  style={{ padding: '8px 12px', fontSize: 13, background: 'white', color: '#A32D2D', border: '1px solid #e5b0a4', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <XCircle size={13} /> Refuser
                 </button>
               </div>
             )
