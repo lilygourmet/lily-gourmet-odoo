@@ -881,17 +881,13 @@ function compteJoursOffFixesPeriode(emp, debutYMD, finYMD) {
     const impaireOffs = [emp.planning_impaire_off_1, emp.planning_impaire_off_2].filter(Boolean)
     jourFixe = paireOffs.find(d => impaireOffs.includes(d)) || null
   }
-  // Demi-journée off (ex: Jeudi) -> ne décompte que 0,5 j
-  const demiJour = emp.planning_type === 'fixe' ? (emp.planning_demi_off || null) : null
-  if (!jourFixe && !demiJour) return 0
+  if (!jourFixe) return 0
   const J = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi']
   let n = 0
   const d = new Date(debutYMD + 'T00:00:00')
   const f = new Date(finYMD + 'T00:00:00')
   while (d <= f) {
-    const jn = J[d.getDay()]
-    if (jourFixe && jn === jourFixe) n += 1
-    else if (demiJour && jn === demiJour) n += 0.5
+    if (J[d.getDay()] === jourFixe) n++
     d.setDate(d.getDate() + 1)
   }
   return n
