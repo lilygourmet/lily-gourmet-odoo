@@ -197,9 +197,10 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD()) {
     else if (t.includes('sans solde') || t.includes('unpaid')) category = 'autre'
 
     // Si jours_decomptes est figé (validation ou édition), on l'utilise tel quel
-    // (uniquement pour les congés entièrement dans la période [yearStart, refDate],
-    // sinon on retombe sur le calcul clippé).
-    const conge_entier = (c.date_debut >= yearStart && c.date_fin <= refDate)
+    // pour tout congé entièrement dans l'ANNÉE — même s'il se termine après
+    // aujourd'hui : un congé validé compte EN ENTIER (pas seulement jusqu'à ce jour).
+    const yearEnd = `${ref.getFullYear()}-12-31`
+    const conge_entier = (c.date_debut >= yearStart && c.date_fin <= yearEnd)
     let compte
     if (conge_entier && c.jours_decomptes !== null && c.jours_decomptes !== undefined) {
       compte = Number(c.jours_decomptes)
