@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, whatsapp, employe_id, created_at, navbar_config, groupe')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -36,6 +36,7 @@ export async function createUser({
   perm_admin_users = false,
   perm_conversations = false,
   perm_modification = false,
+  livreur_defaut = false,
   perm_mark_payment_proof = false, perm_view_payments = false, perm_validate_payments = false,
   economat_profil = null, perm_econome = false, whatsapp = null,
   perm_vitrine_sale = false,
@@ -74,6 +75,7 @@ export async function createUser({
           perm_admin_users,
           perm_conversations,
           perm_modification,
+          livreur_defaut,
           perm_mark_payment_proof,
           perm_view_payments,
           perm_validate_payments,
@@ -246,6 +248,7 @@ export async function updateUser(userId, {
   perm_admin_users,
   perm_conversations,
   perm_modification,
+  livreur_defaut,
   perm_mark_payment_proof, perm_view_payments, perm_validate_payments,
   economat_profil, perm_econome, whatsapp,
   perm_vitrine_sale,
@@ -288,6 +291,7 @@ export async function updateUser(userId, {
   if (perm_hr !== undefined) updates.perm_hr = perm_hr
   if (perm_conversations !== undefined) updates.perm_conversations = perm_conversations
   if (perm_modification !== undefined) updates.perm_modification = perm_modification
+  if (livreur_defaut !== undefined) updates.livreur_defaut = livreur_defaut
   if (perm_mark_payment_proof !== undefined) updates.perm_mark_payment_proof = perm_mark_payment_proof
   if (perm_view_payments !== undefined) updates.perm_view_payments = perm_view_payments
   if (perm_validate_payments !== undefined) updates.perm_validate_payments = perm_validate_payments

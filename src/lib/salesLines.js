@@ -205,6 +205,7 @@ export function groupDeliveriesWithFullOrder(livrLines, allLines) {
       orderTotal: typeof livr.order_total === 'number' ? livr.order_total : (livr.order_total ? parseFloat(livr.order_total) : null),
       orderAcompte: typeof livr.order_acompte === 'number' ? livr.order_acompte : (livr.order_acompte ? parseFloat(livr.order_acompte) : null),
       orderNum,
+      order_id: livr.order_id || null,
       items: sortedLines,
     })
   }
