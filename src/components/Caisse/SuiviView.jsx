@@ -582,6 +582,12 @@ function PersoSection({ user }) {
     setUploadEnv(null); reload()
   }
 
+  async function handleClearProof(envId) {
+    if (!window.confirm('Retirer la preuve de ce remboursement ? Il repassera « à rembourser ».')) return
+    await clearEnveloppeProof(envId)
+    reload()
+  }
+
   // Perso = espèces uniquement (les chèques vont tous à la Banque)
   const cashOnly = useMemo(() => list.filter(e => (e.payment_method || 'cash') === 'cash'), [list])
 
@@ -649,7 +655,10 @@ function PersoSection({ user }) {
                   )}
                   <div>
                     {env.proof_url ? (
-                      <button onClick={async () => { const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank') }} style={{ ...btnNormal, width: '100%' }}><Eye size={14} /> Voir preuve</button>
+                      <>
+                        <button onClick={async () => { const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank') }} style={{ ...btnNormal, width: '100%' }}><Eye size={14} /> Voir preuve</button>
+                        <button onClick={() => handleClearProof(env.id)} style={{ ...btnNormal, width: '100%', fontSize: 11, color: '#99201E' }}>🗑️ Retirer preuve</button>
+                      </>
                     ) : (
                       <button onClick={() => setUploadEnv(env)} style={{ ...btnNormal, width: '100%' }}><Upload size={14} /> Preuve remboursement</button>
                     )}
