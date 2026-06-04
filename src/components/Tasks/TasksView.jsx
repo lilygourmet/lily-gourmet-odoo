@@ -351,8 +351,8 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
   const isOverdue = task.due_date && !isDone && task.due_date < new Date().toISOString().slice(0, 10)
   const dueLabel = task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''
 
-  const fromName = task.from_user?.username || task.from_user?.full_name || '?'
-  const toName   = task.to_user?.username   || task.to_user?.full_name   || '?'
+  const fromName = task.from_user?.full_name || task.from_user?.username || '?'
+  const toName   = task.to_user?.full_name   || task.to_user?.username   || '?'
 
   let borderColor = '#E5C0B6', leftColor = '#993556'
   if (isSent && !isSentToSelf) { borderColor = '#B5D4F4'; leftColor = '#378ADD' }

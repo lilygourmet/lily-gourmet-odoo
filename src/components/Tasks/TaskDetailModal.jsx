@@ -28,8 +28,8 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
   const canEdit = !isDone && task.from_user_id === currentUserId
   const wasEdited = (task.edited_count || 0) > 0
 
-  const fromName = task.from_user?.username || task.from_user?.full_name || '?'
-  const toName   = task.to_user?.username   || task.to_user?.full_name   || '?'
+  const fromName = task.from_user?.full_name || task.from_user?.username || '?'
+  const toName   = task.to_user?.full_name   || task.to_user?.username   || '?'
 
   async function handleDone() {
     setSaving(true); setError(null)

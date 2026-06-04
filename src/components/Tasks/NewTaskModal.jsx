@@ -93,15 +93,17 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
               style={inputStyle}
               autoFocus
             >
-              {users.map(u => {
-                const isMe = u.id === currentUser?.id
-                const name = u.username || u.full_name || u.id.slice(0, 8)
-                return (
-                  <option key={u.id} value={u.id}>
-                    👤 {name}{isMe ? ' (moi)' : ''}
-                  </option>
-                )
-              })}
+              {[...users]
+                .sort((a, b) => (a.full_name || a.username || '').localeCompare(b.full_name || b.username || ''))
+                .map(u => {
+                  const isMe = u.id === currentUser?.id
+                  const name = u.full_name || u.username || u.id.slice(0, 8)
+                  return (
+                    <option key={u.id} value={u.id}>
+                      👤 {name}{isMe ? ' (moi)' : ''}
+                    </option>
+                  )
+                })}
             </select>
           </label>
 
