@@ -542,6 +542,29 @@ function ProductGroup({ product, palette, currentUserId, onChange, expandedKey, 
         <span className="text-[12px] font-medium text-ink">{product.label}</span>
       </div>
 
+      {(() => {
+        // Notes pâtissier (dédupliquées par commande) pour ce produit
+        const seen = new Set(); const notes = []
+        for (const [, entries] of visibleParfums) {
+          for (const entry of entries) {
+            for (const s of (entry.sources || [])) {
+              if (s.note && !seen.has(s.itemId)) { seen.add(s.itemId); notes.push(s) }
+            }
+          }
+        }
+        if (notes.length === 0) return null
+        return (
+          <div className="mb-1.5 space-y-0.5">
+            {notes.map((s, i) => (
+              <div key={i} className="text-[10px] text-amber-700 italic flex gap-1">
+                <span>📝</span>
+                <span><span className="font-mono not-italic text-amber-800">{s.clientName}</span> — {s.note}</span>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
       <div className="space-y-1.5">
         {visibleParfums.map(([parfum, entries]) => (
           <div key={parfum} className="bg-white rounded border border-line/40 p-1.5">

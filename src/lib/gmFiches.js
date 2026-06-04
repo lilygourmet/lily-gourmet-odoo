@@ -603,7 +603,7 @@ export function aggregateByProduct(ordersWithFiches) {
         tree[typeGm][parfum][key] = {
           qty: getRealQuantity(item),
           lot: { parfum: 'Parfum normal', qty: getRealQuantity(item) },
-          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name }],
+          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, note: fiche.note_patissier || null }],
           doneCount: dones.length > 0 ? 1 : 0,
           totalSources: 1,
         }
@@ -634,6 +634,7 @@ export function aggregateByProduct(ordersWithFiches) {
           orderNum: order.order_num,
           clientName: order.client_name,
           qty: parseFloat(lot.qty) || 0,
+          note: fiche.note_patissier || null,
         })
         if (isLotDone(dones, lotIdx)) entry.doneCount += 1
       })
