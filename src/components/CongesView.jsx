@@ -34,6 +34,7 @@ import {
   loadJoursFeries, createJourFerie, updateJourFerie,
   deleteJourFerie, genererFeriesFixes,
 } from '../lib/joursFeries'
+import { imprimerFeuilleConge } from '../lib/feuilleConge'
 
 const TYPES = [
   { v: 'annuel',           label: 'Congé annuel' },
@@ -381,6 +382,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                     key={c.id} c={c} emp={empById[c.employe_id]}
                     actions={isAdmin ? (
                       <>
+                        <button onClick={() => imprimerFeuilleConge({ conge: c, emp: empById[c.employe_id], solde: soldes[c.employe_id], joursFeries })} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                         <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>
                         <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>
                       </>
@@ -436,6 +438,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                             <CongeCard
                               key={c.id} c={c} emp={empById[c.employe_id]}
                               actions={isAdmin ? <>
+                      <button onClick={() => imprimerFeuilleConge({ conge: c, emp: empById[c.employe_id], solde: soldes[c.employe_id], joursFeries })} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                       <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>
                       <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>
                     </> : null}
