@@ -567,8 +567,16 @@ async function handleSendTemplate(req, res) {
       sent_at: sentAt,
       wa_message_id: data?.id || data?.messageId || null,
     })
+    // Notifs internes au personnel (tâches, congés, économat) : la conversation
+    // doit rester FERMÉE pour ne pas encombrer l'inbox des commerciaux. Les vrais
+    // échanges client (devis, confirmation...) restent "en_cours".
+    const INTERNAL_NOTIF = new Set(['nouvelle_tache', 'notification_conge', 'rappel_reprise_conge', 'economat_demande', 'nouvelle_demande_economat', 'lily_gourmet_access'])
+    // Confirmation de commande = plus rien en attente -> on ferme aussi.
+    // (Le devis reste "en_cours" car on attend la réponse du client.)
+    const fermerApresEnvoi = INTERNAL_NOTIF.has(templateName) || templateName === 'message_de_confirmation'
+    const newStatus = fermerApresEnvoi ? 'fermee' : 'en_cours'
     await supabase.from('conversations')
-      .update({ last_message_at: sentAt, updated_at: sentAt, status: 'en_cours' })
+      .update({ last_message_at: sentAt, updated_at: sentAt, status: newStatus })
       .eq('id', conv.id)
 
     return res.status(200).json({ ok: true, conversationId: conv.id })
@@ -908,9 +916,9 @@ async function traceOutgoing(supabase, number, body) {
     await supabase.from('messages').insert({
       conversation_id: conv.id, sender_type: 'agent', body, sent_at: sentAt,
     })
-    // On NE change PAS le statut : si la conv était fermée, elle reste fermée.
-    // (Envoyer une tâche ne doit pas faire réapparaître la conv pour les commerciaux.)
-    await supabase.from('conversations').update({ last_message_at: sentAt, updated_at: sentAt }).eq('id', conv.id)
+    // Notif interne (tâche/congé/rappel) : la conversation reste FERMÉE pour ne
+    // pas encombrer l'inbox. Si l'employé répond, un message entrant la rouvrira.
+    await supabase.from('conversations').update({ last_message_at: sentAt, updated_at: sentAt, status: 'fermee' }).eq('id', conv.id)
   } catch { /* trace best-effort */ }
 }
 
