@@ -298,6 +298,12 @@ export function canSeeConversations(user) {
   return user.role === 'admin' || user.perm_conversations === true
 }
 
+// User peut voir l'onglet Modifications de commande (admin ou perm_modification=true)
+export function canSeeModifications(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_modification === true
+}
+
 // =====================================================================
 // PAIEMENTS — permissions (preuves de virement transférées en interne)
 // =====================================================================

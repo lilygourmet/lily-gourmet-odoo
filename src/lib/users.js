@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, whatsapp, employe_id, created_at, navbar_config')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, whatsapp, employe_id, created_at, navbar_config, groupe')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -35,6 +35,7 @@ export async function createUser({
   perm_hr = false,
   perm_admin_users = false,
   perm_conversations = false,
+  perm_modification = false,
   perm_mark_payment_proof = false, perm_view_payments = false, perm_validate_payments = false,
   economat_profil = null, perm_econome = false, whatsapp = null,
   perm_vitrine_sale = false,
@@ -72,6 +73,7 @@ export async function createUser({
           perm_hr,
           perm_admin_users,
           perm_conversations,
+          perm_modification,
           perm_mark_payment_proof,
           perm_view_payments,
           perm_validate_payments,
@@ -94,6 +96,138 @@ export async function createUser({
 export const adminCreateUser = createUser
 
 // ============================================================
+// Création automatique d'un user à partir d'un employé
+// ============================================================
+
+// Minuscules, sans accents, sans espaces ni caractères spéciaux.
+function slugify(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // enlève les accents
+    .replace(/[^a-z0-9]/g, '')                  // garde lettres + chiffres
+}
+
+// Découpe le nom complet : 1er mot = prénom, dernier mot = nom de famille.
+function splitNom(nomComplet) {
+  const parts = (nomComplet || '').trim().split(/\s+/).filter(Boolean)
+  return { prenom: parts[0] || '', famille: parts.length > 1 ? parts[parts.length - 1] : '' }
+}
+
+// Login = prénom + 3 premières lettres du nom de famille.
+export function buildLogin(nomComplet) {
+  const { prenom, famille } = splitNom(nomComplet)
+  return slugify(prenom) + slugify(famille).slice(0, 3)
+}
+
+// Mot de passe = prénom + année d'entrée (ex: "asmae2023").
+export function buildPassword(nomComplet, dateEntree) {
+  const { prenom } = splitNom(nomComplet)
+  const annee = dateEntree ? String(new Date(dateEntree).getFullYear()) : ''
+  return slugify(prenom) + annee
+}
+
+// Téléphone marocain → format WATI international 212XXXXXXXXX.
+function normalizePhone(tel) {
+  const d = String(tel || '').replace(/\D/g, '')
+  if (!d) return null
+  if (d.startsWith('212')) return d
+  if (d.startsWith('0')) return '212' + d.slice(1)
+  return d
+}
+
+// Trouve un login libre : ajoute un chiffre si le login de base est déjà pris.
+async function uniqueLogin(base) {
+  const { data } = await supabase.from('profiles').select('username').ilike('username', base + '%')
+  const taken = new Set((data || []).map(u => (u.username || '').toLowerCase()))
+  if (!taken.has(base)) return base
+  let i = 1
+  while (taken.has(base + i)) i++
+  return base + i
+}
+
+/**
+ * Crée le user d'un employé (sans aucune permission, sauf tâches qui sont libres).
+ * Ne change PAS le mot de passe d'un user existant.
+ * Retourne { ok, username, password, prenom, whatsapp, userId } ou { ok:false, reason }.
+ */
+export async function createUserForEmploye(employe) {
+  const { prenom } = splitNom(employe.nom)
+  if (!prenom) return { ok: false, reason: 'nom vide' }
+  if (!employe.date_entree) return { ok: false, reason: "date d'entrée manquante" }
+
+  const username = await uniqueLogin(buildLogin(employe.nom))
+  const password = buildPassword(employe.nom, employe.date_entree)
+  const whatsapp = normalizePhone(employe.telephone)
+
+  const created = await createUser({
+    username, password, full_name: employe.nom, role: 'user',
+    whatsapp, employe_id: employe.id,
+  })
+  if (!created?.id) return { ok: false, reason: created?.error || 'échec création' }
+
+  // Recopie le groupe sur le user (classement)
+  await supabase.from('profiles').update({ groupe: employe.groupe || null }).eq('id', created.id)
+
+  return { ok: true, userId: created.id, username, password, prenom, whatsapp }
+}
+
+/**
+ * Envoie le login + mot de passe par WhatsApp (template acces_application).
+ * La conversation reste fermée (notif interne).
+ */
+export async function sendAccessCredentials({ phone, prenom, username, actorUserId }) {
+  if (!phone) return { ok: false, reason: 'pas de téléphone' }
+  const res = await fetch('/api/wati-webhook?action=send-template', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientPhone: phone,
+      templateName: 'lily_gourmet_access',
+      parameters: [
+        { name: '1', value: prenom },
+        { name: '2', value: username },
+      ],
+      userId: actorUserId || null,
+    }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) return { ok: false, reason: data.error || `Erreur ${res.status}` }
+  return { ok: true }
+}
+
+/**
+ * Désactive le user lié à un employé (login bloqué). On garde l'historique.
+ */
+export async function deactivateUserForEmploye(employeId) {
+  const { error } = await supabase.from('profiles').update({ active: false }).eq('employe_id', employeId)
+  if (error) throw error
+}
+
+/**
+ * Crée les users manquants pour tous les employés actifs (et envoie le WhatsApp).
+ * Retourne { created:[...], skipped:[...], errors:[...] }.
+ */
+export async function createMissingEmployeUsers(employes, actorUserId) {
+  const { data: linked } = await supabase.from('profiles').select('employe_id').not('employe_id', 'is', null)
+  const hasUser = new Set((linked || []).map(p => p.employe_id))
+
+  const created = [], skipped = [], errors = []
+  for (const e of employes) {
+    if (!e.actif) continue
+    if (hasUser.has(e.id)) continue
+    try {
+      const r = await createUserForEmploye(e)
+      if (!r.ok) { skipped.push({ nom: e.nom, reason: r.reason }); continue }
+      const sent = await sendAccessCredentials({ phone: r.whatsapp, prenom: r.prenom, username: r.username, actorUserId })
+      created.push({ nom: e.nom, username: r.username, password: r.password, waSent: sent.ok, waReason: sent.reason })
+    } catch (err) {
+      errors.push({ nom: e.nom, reason: err?.message || 'erreur' })
+    }
+  }
+  return { created, skipped, errors }
+}
+
+// ============================================================
 // Mise a jour
 // ============================================================
 
@@ -111,6 +245,7 @@ export async function updateUser(userId, {
   perm_hr,
   perm_admin_users,
   perm_conversations,
+  perm_modification,
   perm_mark_payment_proof, perm_view_payments, perm_validate_payments,
   economat_profil, perm_econome, whatsapp,
   perm_vitrine_sale,
@@ -152,6 +287,7 @@ export async function updateUser(userId, {
   if (perm_admin_users !== undefined) updates.perm_admin_users = perm_admin_users
   if (perm_hr !== undefined) updates.perm_hr = perm_hr
   if (perm_conversations !== undefined) updates.perm_conversations = perm_conversations
+  if (perm_modification !== undefined) updates.perm_modification = perm_modification
   if (perm_mark_payment_proof !== undefined) updates.perm_mark_payment_proof = perm_mark_payment_proof
   if (perm_view_payments !== undefined) updates.perm_view_payments = perm_view_payments
   if (perm_validate_payments !== undefined) updates.perm_validate_payments = perm_validate_payments

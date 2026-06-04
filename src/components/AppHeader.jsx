@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canViewPayments} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeModifications, canViewPayments} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited } from '../lib/conversations'
+import { countModificationsATraiter } from '../lib/modifications'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -15,7 +16,7 @@ import {
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
   MessageCircle, Wallet, CreditCard, Snowflake, Banknote, Users, Plane, Receipt,
   Settings, RefreshCw, LogOut, KeyRound, Printer, Wrench, Palette, Circle, ChevronDown,
-  Sliders, MoreHorizontal,
+  Sliders, MoreHorizontal, Pencil,
 } from 'lucide-react'
 
 // Icône (Lucide) par vue / menu / action — remplace les émoticônes du header.
@@ -25,7 +26,7 @@ const HEADER_ICONS = {
   vitrine: Store, 'vitrine-sale': Store, 'reception-vitrine': PackageCheck,
   'fin-journee': Moon, stock: ClipboardList, checklist: ListChecks,
   etiquettes: Tag, 'cake-vision-link': Camera, messages: MessageSquare,
-  conversations: MessageCircle, paiements: CreditCard, freezer: Snowflake,
+  conversations: MessageCircle, modifications: Pencil, paiements: CreditCard, freezer: Snowflake,
   caisse: Banknote, hr: Users, absences: Plane, economat: Receipt,
   // menus déroulants
   menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench, menu_more: MoreHorizontal,
@@ -85,12 +86,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // Badge double Conversations : { unassigned (à prendre), unread (non lus) }
   const [convBadge, setConvBadge] = useState({ unassigned: 0, unread: 0 })
   const lastVisitedConvRef = useRef(user?.last_visited_conversations || null)
+  // Badge Modifications à traiter
+  const [modifBadge, setModifBadge] = useState(0)
   // Menus deroulants ouverts (un seul a la fois)
   const [openMenu, setOpenMenu] = useState(null) // 'prod' | 'vitrine' | 'outils' | null
 
   const showReceptionBtn = !isLivreur(user) && canStockCafe(user)
   const showChecklistBtn = !isLivreur(user) && canSeeChecklist(user)
   const userCanSeeConv = canSeeConversations(user)
+  const userCanSeeModif = canSeeModifications(user)
   // Étiquettes CD : maintenant dans le Calendrier. On le garde dans le header
   // UNIQUEMENT pour ceux qui peuvent imprimer mais ne voient pas le calendrier.
   const showHeaderLabels = canPrintLabels(user) && !canSeeCalendar(user)
@@ -406,6 +410,23 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeConv, user?.id])
 
+  // Badge Modifications à traiter (temps réel)
+  useEffect(() => {
+    if (!userCanSeeModif) return
+    let cancelled = false
+    let channel = null
+    const refresh = () => countModificationsATraiter()
+      .then(n => { if (!cancelled) setModifBadge(n) }).catch(() => {})
+    refresh()
+    channel = supabase
+      .channel('modif-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'modifications' }, refresh)
+      .subscribe()
+    const interval = setInterval(refresh, 60000)
+    return () => { cancelled = true; clearInterval(interval); if (channel) supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userCanSeeModif, user?.id])
+
   // À l'ouverture de l'onglet Conversations : marque la visite + remet "non lus" à 0
   useEffect(() => {
     if (activeView === 'conversations' && userCanSeeConv && user?.id) {
@@ -537,6 +558,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && !admin && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user), badge: convBadge.unassigned + convBadge.unread, convBadge },
+    { view: 'modifications',    emoji: '✏️', label: 'Modifications',    visible: !isLivreur(user) && canSeeModifications(user), badge: modifBadge },
     { view: 'paiements',        emoji: '💰', label: 'Paiements',         visible: !isLivreur(user) && canViewPayments(user), badge: paiementsBadge },
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },

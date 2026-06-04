@@ -3,6 +3,7 @@ import { loadConversation, loadMessages, assignConversation, sendMessage, upload
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import ClientAvatar from './ClientAvatar'
+import { createModification } from '../../lib/modifications'
 import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Search, Pin, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
 
@@ -520,6 +521,27 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   function openNameEdit() { setNameInput(conv?.client_name || ''); setNameEditing(true) }
+
+  // Demande de modification : prend le DERNIER n° S du fil et l'envoie à l'équipe Modification.
+  async function handleModification() {
+    let ref = ''
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const mS = (messages[i].body || '').match(/\bS\d{4,}\b/i)
+      if (mS) { ref = mS[0].toUpperCase(); break }
+    }
+    if (!ref) { alert('Aucun n° de commande (S…) trouvé dans cette conversation.'); return }
+    if (!confirm(`Envoyer une demande de MODIFICATION pour la commande ${ref} (${conv?.client_name || conv?.client_phone || ''}) ?`)) return
+    try {
+      await createModification({
+        order_ref: ref,
+        client_name: conv?.client_name || null,
+        client_phone: conv?.client_phone || null,
+        conversation_id: conversationId,
+        requested_by: user.id,
+      })
+      alert(`✅ Demande de modification envoyée pour ${ref}.`)
+    } catch (e) { alert('Erreur : ' + e.message) }
+  }
   async function saveName() {
     setNameBusy(true)
     try { setConv(await updateConversationClientName(conversationId, nameInput)); setNameEditing(false) }
@@ -638,6 +660,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               <div className="text-[16px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
               {conv && (
                 <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
+              )}
+              {conv && (
+                <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-cream/15 text-cream hover:bg-cream/30 flex-shrink-0 transition-all">✏️ Modif</button>
               )}
             </div>
           )}
