@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { usePersistedState } from '../lib/usePersistedState'
 import { Cake, Cookie, Snowflake } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { loadEtiquettesArticles, makeQtyKey, buildZplLabels, syncEtiquettesFromOdoo } from '../lib/etiquettes.js'
@@ -12,7 +13,7 @@ const TABS = [
 const ENTREMETS_SIZES = [5, 10, 15, 20]
 
 export default function EtiquettesView({ user, activeView, onNavigate, onLogout }) {
-  const [tab, setTab] = useState('cd')
+  const [tab, setTab] = usePersistedState('lily.etiquettes.tab', 'cd')
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')

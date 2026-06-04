@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { usePersistedState } from '../lib/usePersistedState'
 import { MessageSquareText, Cake, Croissant, Printer } from 'lucide-react'
 import AppHeader from './AppHeader'
 import {
@@ -46,7 +47,7 @@ const ARABIC_FONT_OPTIONS = [
 export default function MessagesView({ user, activeView, onNavigate, onLogout }) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('cd')   // 'cd' | 'prod'
+  const [activeTab, setActiveTab] = usePersistedState('lily.messages.tab', 'cd')   // 'cd' | 'prod'
   const [selected, setSelected] = useState(new Set())
   const [doubleSize, setDoubleSize] = useState(new Set())
   const [editing, setEditing] = useState({})

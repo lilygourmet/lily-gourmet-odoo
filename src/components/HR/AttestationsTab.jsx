@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { usePersistedState } from '../../lib/usePersistedState'
 import { FileText, FilePen, Building2, Info, Wallet, CheckCircle2, ClipboardList, GraduationCap, Clock, Download } from 'lucide-react'
 import { loadEmployes, generateAttestation, getAllTemplates } from '../../lib/hr'
 import SearchSelect from '../SearchSelect'
@@ -14,7 +15,7 @@ export default function AttestationsTab({ user, isAdmin }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
-  const [subTab, setSubTab] = useState('attestations')  // 'attestations' | 'contrats'
+  const [subTab, setSubTab] = usePersistedState('lily.attestations.subTab', 'attestations')  // 'attestations' | 'contrats'
   const [type, setType] = useState(isAdmin ? 'salaire' : 'stage')
   const [empId, setEmpId] = useState('')
   // Données formulaire (saisies/auto-remplies)

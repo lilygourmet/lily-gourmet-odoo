@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { usePersistedState } from '../../lib/usePersistedState'
 import { BarChart3, Briefcase, Banknote, Search, Settings, Landmark, Scale } from 'lucide-react'
 import EnveloppesView from './EnveloppesView'
 import SuiviView from './SuiviView'
@@ -42,7 +43,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, tab) } catch {}
   }, [tab])
-  const [envSub, setEnvSub] = useState('affectation') // sous-onglet d'Enveloppes
+  const [envSub, setEnvSub] = usePersistedState('lily.caisse.envSub', 'affectation') // sous-onglet d'Enveloppes
   const [focusMvt, setFocusMvt] = useState(null)      // cible de navigation depuis la recherche
 
   return (

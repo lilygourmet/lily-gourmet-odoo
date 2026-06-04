@@ -17,6 +17,7 @@
 // =============================================================
 
 import { useEffect, useMemo, useState } from 'react'
+import { usePersistedState } from '../lib/usePersistedState'
 import AppHeader from './AppHeader'
 import { supabase } from '../lib/supabase'
 import { loadSalesLinesForRange } from '../lib/salesLines'
@@ -151,7 +152,7 @@ function isItemRanged(item, steps) {
 
 export default function ChecklistView({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('todo') // 'todo' | 'done'
+  const [tab, setTab] = usePersistedState('lily.checklist.tab', 'todo') // 'todo' | 'done'
 
   // Section VITRINE
   const [vitrineItems, setVitrineItems] = useState([])

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { usePersistedState } from '../../lib/usePersistedState'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
@@ -6,7 +7,7 @@ import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
 
 export default function SuiviView({ user }) {
-  const [subTab, setSubTab] = useState('banque')
+  const [subTab, setSubTab] = usePersistedState('lily.suivi.subTab', 'banque')
   return (
     <div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>

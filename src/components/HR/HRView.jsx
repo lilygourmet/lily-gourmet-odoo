@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { usePersistedState } from '../../lib/usePersistedState'
 import { Building2, Users, FileText, Clock, Wallet, Receipt, AlertTriangle } from 'lucide-react'
 import AttestationsTab from './AttestationsTab'
 import EmployesTab from './EmployesTab'
@@ -16,7 +17,7 @@ import { countATraiter } from '../../lib/aTraiter'
 export default function HRView({ user }) {
   const isAdmin = user?.role === 'admin'
   // Onglet Employés par défaut pour tous
-  const [tab, setTab] = useState('employes')
+  const [tab, setTab] = usePersistedState('lily.hr.tab', 'employes')
   // Compteur "à traiter" (absences + récup) pour le badge
   const [aTraiter, setATraiter] = useState(0)
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { usePersistedState } from '../../lib/usePersistedState'
 import { Paperclip } from 'lucide-react'
 import { loadPaymentsToValidate, validatePayment, rejectPayment, getMediaSignedUrl } from '../../lib/conversations'
 import { canValidatePayments } from '../../lib/auth'
@@ -20,7 +21,7 @@ export default function PaymentsView({ user }) {
   const [error, setError] = useState('')
   const [urls, setUrls] = useState({}) // messageId -> URL affichable
   const [busyId, setBusyId] = useState(null)
-  const [tab, setTab] = useState('todo') // 'todo' = à valider | 'done' = déjà validés
+  const [tab, setTab] = usePersistedState('lily.payments.tab', 'todo') // 'todo' = à valider | 'done' = déjà validés
   const [q, setQ] = useState('')
 
   const canValidate = canValidatePayments(user)

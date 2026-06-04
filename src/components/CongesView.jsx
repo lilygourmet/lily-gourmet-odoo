@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { usePersistedState } from '../lib/usePersistedState'
 import SearchSelect from './SearchSelect'
 
 // Hook : retourne true si l'écran est ≤ 640px (mobile)
@@ -123,7 +124,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [error, setError]           = useState('')
   const [showForm, setShowForm]     = useState(false)
   const [soldes, setSoldes]         = useState({})  // empId -> { dispo, ... }
-  const [tab, setTab]               = useState('demandes')  // 'demandes' | 'valides' | 'soldes'
+  const [tab, setTab]               = usePersistedState('lily.conges.tab', 'demandes')  // 'demandes' | 'valides' | 'soldes'
   const [filterEmp, setFilterEmp]   = useState('all')   // 'all' | empId
   const [filterYear, setFilterYear] = useState('all')   // 'all' | YYYY
   const [allocations, setAllocations]   = useState([])    // table conges_allocations
