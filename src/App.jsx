@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy } from 'react'
 import Login from './components/Login'
 import Calendar from './components/Calendar'
 import RecapVentes from './components/RecapVentes'
@@ -14,9 +14,9 @@ import StockAudit from './components/StockBoutique/StockAudit'
 import StockGS from './components/StockBoutique/StockGS'
 import ChecklistView from './components/ChecklistView'
 import EconomatView from './components/Economat/EconomatView'
-import CaisseView from './components/Caisse/CaisseView'
+const CaisseView = lazy(() => import('./components/Caisse/CaisseView'))
 import TasksView from './components/Tasks/TasksView'
-import HRView from './components/HR/HRView'
+const HRView = lazy(() => import('./components/HR/HRView'))
 import InboxView from './components/Conversations/InboxView'
 import ModificationsView from './components/ModificationsView'
 import LivraisonsView from './components/LivraisonsView'
@@ -26,6 +26,7 @@ import CongesView from './components/CongesView'
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
+import LazyBoundary from './components/LazyBoundary'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
 
 function App() {
@@ -256,7 +257,7 @@ function App() {
       {canSeeConversations(user) && (
         <ConversationNotifier user={user} onOpen={openConversation} />
       )}
-      {renderActiveView()}
+      <LazyBoundary>{renderActiveView()}</LazyBoundary>
     </>
   )
 }
