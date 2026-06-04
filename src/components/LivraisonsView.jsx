@@ -51,7 +51,17 @@ export default function LivraisonsView({ user }) {
   async function handleAssign(d, livreurId) {
     setBusy(d.orderNum); setErr('')
     try {
-      await assignDelivery({ orderNum: d.orderNum, livreurId: livreurId || null, byUserId: user.id, titre: `🚚 Livraison ${d.orderNum || ''} · ${d.clientName} · ${d.hour}` })
+      const dateCourte = date.split('-').reverse().slice(0, 2).join('/')   // "04/06"
+      const titre = `🚚 Livraison ${dateCourte} ${d.hour} · ${d.clientName}`
+      const reste = typeof d.orderTotal === 'number' ? Math.max(0, d.orderTotal - (d.orderAcompte || 0)) : null
+      const desc = [
+        `📅 ${labelDate(date)} · ${d.hour}`,
+        `👤 ${d.clientName}${d.clientPhone ? ' · ' + d.clientPhone : ''}`,
+        d.orderNote ? `📍 ${d.orderNote}` : null,
+        reste !== null ? `💵 Reste à encaisser : ${reste.toLocaleString('fr-FR')} dh` : null,
+        d.orderNum ? `N° ${d.orderNum}` : null,
+      ].filter(Boolean).join('\n')
+      await assignDelivery({ orderNum: d.orderNum, livreurId: livreurId || null, byUserId: user.id, titre, description: desc, dueDate: date })
       setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: livreurId || null } }))
     } catch (e) { setErr(e.message) }
     finally { setBusy('') }

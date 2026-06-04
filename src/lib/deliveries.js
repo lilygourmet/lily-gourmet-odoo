@@ -34,14 +34,14 @@ export async function loadDeliveryStates(orderNums) {
 }
 
 // Assigne une livraison à un livreur + le notifie par une tâche.
-export async function assignDelivery({ orderNum, livreurId, byUserId, titre }) {
+export async function assignDelivery({ orderNum, livreurId, byUserId, titre, description, dueDate }) {
   const { error } = await supabase
     .from('livraisons')
     .upsert({ order_num: orderNum, livreur_id: livreurId, updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
   if (livreurId && byUserId) {
     try {
-      await createTask({ title: titre || '🚚 Nouvelle livraison', description: null, fromUserId: byUserId, toUserId: livreurId })
+      await createTask({ title: titre || '🚚 Nouvelle livraison', description: description || null, fromUserId: byUserId, toUserId: livreurId, dueDate: dueDate || null })
     } catch { /* la notif ne doit pas bloquer l'assignation */ }
   }
 }
