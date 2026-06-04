@@ -104,6 +104,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
   const textareaRef = useRef(null)
   const threadRef = useRef(null)
+  // Positionnement initial du fil : 1er message non lu (client) sinon tout en bas
+  const initialDoneRef = useRef(false)
+  const scrollModeRef = useRef('bottom')
   const emojiContainerRef = useRef(null)
   const [recording, setRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
@@ -180,12 +183,41 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     return () => { window.removeEventListener('resize', measure); ro?.disconnect() }
   }, [])
 
-  // Affiche les derniers messages en bas (comme WhatsApp). On remonte pour
-  // voir les anciens. On ne scrolle pas pendant une recherche dans le fil.
+  // Réinitialise le positionnement quand on change de conversation
+  useEffect(() => { initialDoneRef.current = false; scrollModeRef.current = 'bottom' }, [conversationId])
+
+  // Positionnement du fil. Au 1er affichage : si le client a des messages non
+  // lus, on se place sur le 1er ; sinon (ex : c'est nous qui avons écrit en
+  // dernier) on va tout en bas. Ensuite, les nouveaux messages ramènent en bas.
   useEffect(() => {
     if (threadSearch.trim() || messages.length === 0) return
-    requestAnimationFrame(() => { const el = threadRef.current; if (el) el.scrollTop = el.scrollHeight })
+    const el = threadRef.current
+    if (!el) return
+    const toBottom = () => requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+    if (initialDoneRef.current) { toBottom(); return }
+    initialDoneRef.current = true
+    const firstUnread = messages.find(m =>
+      m.sender_type !== 'agent' && m.sender_type !== 'system' && !m.deleted_at &&
+      m.sent_at && (!visitedAtRef.current || m.sent_at > visitedAtRef.current))
+    if (firstUnread) {
+      scrollModeRef.current = 'unread'
+      requestAnimationFrame(() => {
+        const node = document.getElementById(`msg-${firstUnread.id}`)
+        if (node) node.scrollIntoView({ block: 'start' })
+        else el.scrollTop = el.scrollHeight
+      })
+    } else {
+      toBottom()
+    }
   }, [messages, threadSearch])
+
+  // Quand les images/audio finissent de charger, le contenu s'agrandit : on se
+  // recolle en bas (mode bas uniquement, pour ne pas déplacer une lecture en cours).
+  useEffect(() => {
+    if (threadSearch.trim() || scrollModeRef.current !== 'bottom') return
+    const el = threadRef.current
+    if (el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+  }, [mediaUrls, threadSearch])
 
   // Génère les URL signées pour les pièces jointes stockées (chemin = pas une URL http)
   useEffect(() => {
@@ -497,8 +529,21 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   function openPaymentModal(m) {
     setPaymentMsg(m)
-    setOrderRefInput(m.payment_order_ref || '')
-    setClientNameInput(m.payment_client_name || '')
+    // Auto-remplissage : n° de commande (S…) + nom depuis un message de
+    // confirmation du fil (ex: « Bonjour Meryem, Votre commande numéro S48587… »).
+    let autoRef = '', autoName = ''
+    for (const msg of messages) {
+      const b = msg.body || ''
+      const mS = b.match(/\bS\d{4,}\b/i)
+      if (mS) {
+        autoRef = mS[0].toUpperCase()
+        const mName = b.match(/Bonjour\s+\*?([^,*\n]+?)\*?\s*,/i)
+        if (mName) autoName = mName[1].trim()
+        break
+      }
+    }
+    setOrderRefInput(m.payment_order_ref || autoRef || '')
+    setClientNameInput(m.payment_client_name || autoName || '')
     setAmountInput(m.payment_amount != null ? String(m.payment_amount) : '')
   }
 
@@ -716,7 +761,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             )
           }
           return (
-            <div key={m.id} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
+            <div key={m.id} id={`msg-${m.id}`} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[80%] rounded-lg px-3 py-2 ${
                 isAgent ? 'bg-bordeaux text-cream' : isNewClient ? 'bg-amber-100 text-ink border border-amber-300' : 'bg-cream-warm text-ink border border-line'
               }`}>
@@ -734,7 +779,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   if (isAudio) return <audio controls src={href} className="block max-w-full mb-1" />
                   if (isImage) return (
                     <a href={href} target="_blank" rel="noopener noreferrer" title="Ouvrir en grand">
-                      <img src={href} alt="" className="block max-w-[160px] max-h-[160px] object-cover rounded mb-1" />
+                      <img src={href} alt="" onLoad={() => { if (scrollModeRef.current === 'bottom' && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight }} className="block max-w-[160px] max-h-[160px] object-cover rounded mb-1" />
                     </a>
                   )
                   return (
