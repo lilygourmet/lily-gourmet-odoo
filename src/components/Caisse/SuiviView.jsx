@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -164,6 +164,13 @@ function BanqueSection({ user }) {
     reload()
   }
 
+  // Retirer la preuve manuelle (photo/PDF) → repasse en attente
+  async function handleClearProof(envId) {
+    if (!window.confirm('Retirer la preuve de ce versement ? Il repassera « en attente ».')) return
+    await clearEnveloppeProof(envId)
+    reload()
+  }
+
   // Rattacher manuellement une ligne libre du relevé à une enveloppe
   async function handleAttach(env, line) {
     await attachReleveLine(env, line)
@@ -284,9 +291,16 @@ function BanqueSection({ user }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {env.proof_url ? (
-              <button onClick={async () => {
-                const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank')
-              }} style={btnNormal}><Eye size={14} /> Voir preuve</button>
+              <>
+                <button onClick={async () => {
+                  const url = await getPreuveSignedUrl(env.proof_url); window.open(url, '_blank')
+                }} style={btnNormal}><Eye size={14} /> Voir preuve</button>
+                {!env.releve_status && (
+                  <button onClick={() => handleClearProof(env.id)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#99201E' }}>
+                    🗑️ Retirer preuve
+                  </button>
+                )}
+              </>
             ) : (
               <button onClick={() => setUploadEnv(env)} style={btnNormal}><Upload size={14} /> Ajouter preuve</button>
             )}

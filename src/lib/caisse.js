@@ -392,6 +392,14 @@ export async function linkReleveLineToEnv(env, line) {
   await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).eq('key', line.key)
 }
 
+// Retire la preuve manuelle d'une enveloppe (photo/PDF uploadée) -> repasse en attente.
+export async function clearEnveloppeProof(envId) {
+  const { error } = await supabase.from('caisse_enveloppes')
+    .update({ proof_url: null, amount_proof: null, note_proof: null, proof_uploaded_at: null })
+    .eq('id', envId)
+  if (error) throw error
+}
+
 // Enveloppes affectées à la Banque, encore en attente (sans preuve) — toutes dates.
 export async function loadPendingBanqueEnvelopes() {
   const { data, error } = await supabase
