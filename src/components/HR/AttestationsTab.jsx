@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { FileText, FilePen, Building2, Info, Wallet, CheckCircle2, ClipboardList, GraduationCap, Clock, Download } from 'lucide-react'
 import { loadEmployes, generateAttestation, getAllTemplates } from '../../lib/hr'
+import SearchSelect from '../SearchSelect'
 
 /**
  * Onglet Attestations : choix du type + employé + champs + génération.
@@ -194,15 +195,13 @@ export default function AttestationsTab({ user, isAdmin }) {
         {/* Sélecteur d'employé */}
         <div style={{ marginBottom: 14 }}>
           <label style={lblStyle}>Sélectionner un employé</label>
-          <select value={empId} onChange={e => handleSelectEmploye(e.target.value)}
-            style={inputStyle} disabled={loading}>
-            <option value="">— {loading ? 'Chargement…' : `Choisir parmi ${employes.length} employés`} —</option>
-            {employes.map(e => (
-              <option key={e.id} value={e.id}>
-                {e.nom}{e.poste ? ` · ${e.poste}` : ''}
-              </option>
-            ))}
-          </select>
+          <SearchSelect
+            value={empId ? String(empId) : ''}
+            onChange={v => handleSelectEmploye(v)}
+            placeholder={loading ? 'Chargement…' : `Chercher parmi ${employes.length} employés…`}
+            inputStyle={inputStyle}
+            options={employes.map(e => ({ value: String(e.id), label: `${e.nom}${e.poste ? ' · ' + e.poste : ''}` }))}
+          />
           {form.societe_id && (
             <div style={{
               marginTop: 6, padding: '6px 10px',

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import SearchSelect from '../SearchSelect'
 import {
   User, Users, Calendar, RefreshCw, Clock, Lock, Unlock, Building2,
   Pencil, Trash2, Plus, Download, Save, Hand, Eye, EyeOff, Wallet,
@@ -590,12 +591,15 @@ export default function PointageTab({ user, isAdmin }) {
         {(vue === 'single' || vue === 'annee') && (
           <div style={{ display: 'flex', gap: 4, flex: 1, minWidth: 200, alignItems: 'center' }}>
             <button onClick={prevEmp} style={btnNav} title="Employé précédent (←)">◀</button>
-            <select value={selectedEmpId || ''} onChange={e => setSelectedEmpId(Number(e.target.value))}
-                    style={{ flex: 1, padding: '8px 11px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, cursor: 'pointer' }}>
-              {(data?.employes || []).map(e => (
-                <option key={e.id} value={e.id}>{e.nom}{e.poste ? ' · ' + e.poste : ''}</option>
-              ))}
-            </select>
+            <div style={{ flex: 1 }}>
+              <SearchSelect
+                value={selectedEmpId ? String(selectedEmpId) : ''}
+                onChange={v => setSelectedEmpId(Number(v))}
+                placeholder="Chercher un employé…"
+                inputStyle={{ width: '100%', padding: '8px 11px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, boxSizing: 'border-box', background: 'white' }}
+                options={(data?.employes || []).map(e => ({ value: String(e.id), label: `${e.nom}${e.poste ? ' · ' + e.poste : ''}` }))}
+              />
+            </div>
             <button onClick={nextEmp} style={btnNav} title="Employé suivant (→)">▶</button>
           </div>
         )}

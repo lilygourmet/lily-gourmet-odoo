@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import SearchSelect from './SearchSelect'
 
 // Hook : retourne true si l'écran est ≤ 640px (mobile)
 function useIsMobile(maxWidth = 640) {
@@ -351,10 +352,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Employé</div>
-                <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)} style={{ ...ipt, width: 'auto', minWidth: 180 }}>
-                  <option value="all">— Tous les employés —</option>
-                  {employes.map(e => <option key={e.id} value={e.id}>{e.nom}</option>)}
-                </select>
+                <SearchSelect value={filterEmp} onChange={v => setFilterEmp(v)} placeholder="Tous les employés" inputStyle={{ ...ipt, minWidth: 180 }}
+                  options={[{ value: 'all', label: 'Tous les employés' }, ...employes.map(e => ({ value: String(e.id), label: e.nom }))]} />
               </div>
               <div>
                 <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Année</div>
@@ -417,10 +416,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
               <div style={{ flex: 1 }} />
               <div>
                 <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Filtrer employé</div>
-                <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)} style={{ ...ipt, width: 'auto', minWidth: 180 }}>
-                  <option value="all">— Tous les employés —</option>
-                  {employes.map(e => <option key={e.id} value={e.id}>{e.nom}</option>)}
-                </select>
+                <SearchSelect value={filterEmp} onChange={v => setFilterEmp(v)} placeholder="Tous les employés" inputStyle={{ ...ipt, minWidth: 180 }}
+                  options={[{ value: 'all', label: 'Tous les employés' }, ...employes.map(e => ({ value: String(e.id), label: e.nom }))]} />
               </div>
             </div>
 
@@ -1053,9 +1050,8 @@ function NouvelleAllocationModal({ employes, onClose, onSubmit }) {
         </div>
 
         <label style={lbl}>Employé</label>
-        <select value={employeId} onChange={e => setEmployeId(e.target.value)} style={ipt}>
-          {employes.map(e => <option key={e.id} value={e.id}>{e.nom}</option>)}
-        </select>
+        <SearchSelect value={employeId ? String(employeId) : ''} onChange={v => setEmployeId(v)} placeholder="Chercher un employé…" inputStyle={ipt}
+          options={employes.map(e => ({ value: String(e.id), label: e.nom }))} />
 
         <label style={{ ...lbl, marginTop: 10 }}>Type d'allocation</label>
         <select value={type} onChange={e => onChangeType(e.target.value)} style={ipt}>
@@ -1220,9 +1216,8 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
         </div>
 
         <label style={lbl}>Employé</label>
-        <select value={employeId} onChange={e => setEmployeId(e.target.value)} style={ipt}>
-          {employes.map(e => <option key={e.id} value={e.id}>{e.nom}{e.poste ? ` · ${e.poste}` : ''}</option>)}
-        </select>
+        <SearchSelect value={employeId ? String(employeId) : ''} onChange={v => setEmployeId(v)} placeholder="Chercher un employé…" inputStyle={ipt}
+          options={employes.map(e => ({ value: String(e.id), label: `${e.nom}${e.poste ? ' · ' + e.poste : ''}` }))} />
 
         {solde && (
           <div style={{ background: '#FAF6F0', padding: '8px 10px', borderRadius: 8, marginTop: 8, fontSize: 12, color: '#4a3a30', display: 'flex', justifyContent: 'space-between' }}>

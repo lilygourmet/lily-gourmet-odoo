@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import SearchSelect from '../SearchSelect'
 import {
   loadTasksReceived, loadTasksSent, countUnreadTasks,
   markTaskRead, deleteTask, loadTeamTasks
@@ -303,11 +304,11 @@ function TeamPanel({ teamTasks, teamStatus, setTeamStatus, teamPerson, setTeamPe
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-        <select value={teamPerson} onChange={e => setTeamPerson(e.target.value)}
-                style={{ padding: '8px 11px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8, background: 'white', cursor: 'pointer' }}>
-          <option value="all">Tout le monde</option>
-          {people.map(p => <option key={p.id} value={p.id}>{p.name} ({p.todo} à faire)</option>)}
-        </select>
+        <div style={{ minWidth: 210 }}>
+          <SearchSelect value={teamPerson} onChange={v => setTeamPerson(v)} placeholder="Tout le monde"
+            inputStyle={{ width: '100%', padding: '8px 11px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8, background: 'white', boxSizing: 'border-box' }}
+            options={[{ value: 'all', label: 'Tout le monde' }, ...people.map(p => ({ value: String(p.id), label: `${p.name} (${p.todo} à faire)` }))]} />
+        </div>
         <div style={{ display: 'flex', gap: 4 }}>
           <Chip active={teamStatus === 'todo'} onClick={() => setTeamStatus('todo')}>À faire</Chip>
           <Chip active={teamStatus === 'done'} onClick={() => setTeamStatus('done')}>Faites</Chip>

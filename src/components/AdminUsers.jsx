@@ -17,6 +17,7 @@ import { ECONOMAT_PROFILS } from '../lib/economat'
 import { loadEmployes } from '../lib/hr'
 import { navTabsForUser } from '../lib/navTabs'
 import NavbarConfigModal from './NavbarConfigModal'
+import SearchSelect from './SearchSelect'
 
 export default function AdminUsers({ currentUser, onClose }) {
   const [users, setUsers] = useState([])
@@ -790,10 +791,10 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
         <label className="block text-[11px] font-medium text-ink-soft mb-1">
           Nom complet (choisir l'employé)
         </label>
-        <select
-          value={formData.employe_id || ''}
-          onChange={e => {
-            const newId = e.target.value ? Number(e.target.value) : ''
+        <SearchSelect
+          value={formData.employe_id ? String(formData.employe_id) : ''}
+          onChange={(val) => {
+            const newId = val ? Number(val) : ''
             const emp = employes.find(x => x.id === newId)
             setFormData(prev => ({
               ...prev,
@@ -802,15 +803,10 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
               whatsapp: emp?.telephone ? emp.telephone : prev.whatsapp,
             }))
           }}
-          className="w-full px-3 py-2 text-[13px] bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux"
-        >
-          <option value="">— Choisir un employé —</option>
-          {employes.map(e => (
-            <option key={e.id} value={e.id}>
-              {e.nom}{e.poste ? ` · ${e.poste}` : ''}{e.telephone ? ` · ${e.telephone}` : ''}
-            </option>
-          ))}
-        </select>
+          placeholder="Chercher un employé…"
+          inputStyle={{ width: '100%', padding: '8px 12px', fontSize: 13, background: '#faf7f2', border: '1px solid #e5d8c3', borderRadius: 8, boxSizing: 'border-box' }}
+          options={employes.map(e => ({ value: String(e.id), label: `${e.nom}${e.poste ? ' · ' + e.poste : ''}${e.telephone ? ' · ' + e.telephone : ''}` }))}
+        />
         {/* Champ texte de repli (si le nom doit différer ou si pas d'employé lié) */}
         <input
           type="text"
@@ -1110,16 +1106,13 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
         {/* Equipe (dropdown) */}
         <div className="mt-3 pt-3 border-t border-line">
           <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Équipe</div>
-          <select
-            value={formData.teamId || ''}
-            onChange={e => update('teamId', e.target.value || null)}
-            className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux"
-          >
-            <option value="">— Aucune équipe —</option>
-            {(teams || []).map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+          <SearchSelect
+            value={formData.teamId ? String(formData.teamId) : ''}
+            onChange={v => update('teamId', v || null)}
+            placeholder="Aucune équipe"
+            inputStyle={{ width: '100%', padding: '8px 12px', fontSize: 12, background: '#F4F0EA', border: '1px solid #e5d8c3', borderRadius: 8, boxSizing: 'border-box' }}
+            options={[{ value: '', label: '— Aucune équipe —' }, ...(teams || []).map(t => ({ value: String(t.id), label: t.name }))]}
+          />
         </div>
 
         {/* Numéro WhatsApp (pour recevoir les notifs de tâches) */}

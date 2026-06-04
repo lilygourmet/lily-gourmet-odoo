@@ -6,6 +6,7 @@ import {
   loadOdooProducts, syncWithOdoo,
 } from '../../lib/economat'
 import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff } from 'lucide-react'
+import SearchSelect from '../SearchSelect'
 
 // Gestion de l'économat (admin + économe) : catégories, groupes, articles (depuis Odoo).
 export default function EconomatManageModal({ onClose, onChanged }) {
@@ -132,10 +133,11 @@ export default function EconomatManageModal({ onClose, onChanged }) {
             <div>
               <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Catégorie</div>
               <div className="flex items-center gap-2">
-                <select value={catId || ''} onChange={e => setCatId(Number(e.target.value))}
-                        className="flex-1 px-3 py-2 border border-line rounded-lg text-[13px] bg-white focus:outline-none focus:border-bordeaux">
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div className="flex-1">
+                  <SearchSelect value={catId ? String(catId) : ''} onChange={v => setCatId(Number(v))} placeholder="Chercher une catégorie…"
+                    inputStyle={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'white', border: '1px solid #e5d8c3', borderRadius: 8, boxSizing: 'border-box' }}
+                    options={categories.map(c => ({ value: String(c.id), label: c.name }))} />
+                </div>
                 <button onClick={addCategory} disabled={busy} title="Nouvelle catégorie" className="px-3 py-2 rounded-lg border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream flex items-center"><Plus size={15} strokeWidth={1.8} /></button>
                 {catId && <button onClick={removeCategory} disabled={busy} title="Supprimer la catégorie" className="px-3 py-2 rounded-lg border border-line text-ink-mute hover:bg-red-600 hover:text-white hover:border-red-600 flex items-center"><Trash2 size={14} strokeWidth={1.8} /></button>}
               </div>
@@ -163,11 +165,10 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                   </button>
                   {showAdd && (
                     <div className="mt-2 space-y-2">
-                      <select value={addGroupId || ''} onChange={e => setAddGroupId(e.target.value ? Number(e.target.value) : null)}
-                              className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-white focus:outline-none focus:border-bordeaux">
-                        <option value="">— Sans groupe —</option>
-                        {manage.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                      </select>
+                      <SearchSelect value={addGroupId ? String(addGroupId) : ''} onChange={v => setAddGroupId(v ? Number(v) : null)} placeholder="Sans groupe"
+                        inputStyle={{ width: '100%', padding: '8px 12px', fontSize: 12, background: 'white', border: '1px solid #e5d8c3', borderRadius: 8, boxSizing: 'border-box' }}
+                        options={[{ value: '', label: '— Sans groupe —' }, ...manage.groups.map(g => ({ value: String(g.id), label: g.name }))]} />
+
                       <div className="flex gap-2">
                         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && runSearch()}
                                placeholder="Chercher un produit Odoo (ex. amande)"
