@@ -1175,9 +1175,6 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
     if (!employeId)               { setErrMsg('Choisis un employé.'); return }
     if (!dateDebut || !dateFin)   { setErrMsg('Indique les dates.'); return }
     if (dateFin < dateDebut)      { setErrMsg('La date de fin est avant la date de début.'); return }
-    if (solde && !solde.peutPrendre && typeConge === 'annuel') {
-      setErrMsg('Cet employé n\'a pas encore 6 mois d\'ancienneté.'); return
-    }
     if (depassement) {
       const label = TYPES.find(t => t.v === typeConge)?.label || typeConge
       setErrMsg(`Le nombre demandé (${nbDemande} j) dépasse le solde « ${label} » (${dispoType} j).`); return
