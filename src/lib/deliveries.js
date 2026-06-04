@@ -3,7 +3,8 @@ import { createTask } from './tasks'
 
 // ============================================================
 // DISPATCH DES LIVRAISONS AUX LIVREURS
-// orders.livreur_id = livreur assigné ; orders.livraison_faite = livré.
+// Assignation par NUMÉRO de commande (Sxxxx) -> table `livraisons`.
+// (Certaines commandes n'ont pas d'order_id interne, mais TOUTES ont un n° S.)
 // profiles.livreur_defaut = livreur par défaut (reçoit les non-assignées).
 // ============================================================
 
@@ -18,22 +19,25 @@ export async function loadLivreurs() {
   return data || []
 }
 
-// État livraison (livreur_id + livraison_faite) pour une liste de commandes.
-export async function loadDeliveryStates(orderIds) {
-  if (!orderIds || orderIds.length === 0) return {}
+// État (livreur_id + livraison_faite) pour une liste de n° de commande.
+export async function loadDeliveryStates(orderNums) {
+  const nums = (orderNums || []).filter(Boolean)
+  if (nums.length === 0) return {}
   const { data, error } = await supabase
-    .from('orders')
-    .select('id, livreur_id, livraison_faite')
-    .in('id', orderIds)
+    .from('livraisons')
+    .select('order_num, livreur_id, livraison_faite')
+    .in('order_num', nums)
   if (error) throw error
   const map = {}
-  for (const o of (data || [])) map[o.id] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite }
+  for (const o of (data || [])) map[o.order_num] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite }
   return map
 }
 
 // Assigne une livraison à un livreur + le notifie par une tâche.
-export async function assignDelivery({ orderId, livreurId, byUserId, titre }) {
-  const { error } = await supabase.from('orders').update({ livreur_id: livreurId }).eq('id', orderId)
+export async function assignDelivery({ orderNum, livreurId, byUserId, titre }) {
+  const { error } = await supabase
+    .from('livraisons')
+    .upsert({ order_num: orderNum, livreur_id: livreurId, updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
   if (livreurId && byUserId) {
     try {
@@ -42,7 +46,9 @@ export async function assignDelivery({ orderId, livreurId, byUserId, titre }) {
   }
 }
 
-export async function setLivraisonFaite(orderId, faite) {
-  const { error } = await supabase.from('orders').update({ livraison_faite: faite }).eq('id', orderId)
+export async function setLivraisonFaite(orderNum, faite) {
+  const { error } = await supabase
+    .from('livraisons')
+    .upsert({ order_num: orderNum, livraison_faite: faite, updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
 }
