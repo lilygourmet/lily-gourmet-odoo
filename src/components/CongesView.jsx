@@ -1152,7 +1152,10 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
 
   const emp   = employes.find(e => e.id === Number(employeId))
   const solde = emp ? soldes[emp.id] : null
-  const nbDemande = nbJours(dateDebut, dateFin)
+  const nbCal = nbJours(dateDebut, dateFin)
+  // Le jour off (repos) de l'employé ne se décompte pas (comme pour le solde).
+  const excludeOff = !!emp && !!dateDebut && !!dateFin && (typeConge === 'annuel' || typeConge === 'recup')
+  const nbDemande = excludeOff ? Math.max(0, nbCal - compteJoursOffFixesPeriode(emp, dateDebut, dateFin)) : nbCal
 
   // Types disponibles : on filtre ceux qui ont une allocation événementielle
   // (mariage / naissance / deces / circoncision / maternite / recup).
@@ -1233,8 +1236,11 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved }) {
             <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} style={ipt} />
           </div>
         </div>
-        {nbDemande > 0 && (
-          <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 4 }}>{nbDemande} jour{nbDemande > 1 ? 's' : ''} demandé{nbDemande > 1 ? 's' : ''}</div>
+        {nbCal > 0 && (
+          <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 4 }}>
+            {nbDemande} jour{nbDemande > 1 ? 's' : ''} décompté{nbDemande > 1 ? 's' : ''}
+            {nbCal !== nbDemande ? ` (${nbCal} calendaires · ${nbCal - nbDemande} jour off non décompté)` : ''}
+          </div>
         )}
         {depassement && (
           <div style={{ background: '#FCE9E8', color: '#99201E', padding: '8px 10px', borderRadius: 8, marginTop: 8, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
