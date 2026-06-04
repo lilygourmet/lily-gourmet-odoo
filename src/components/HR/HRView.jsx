@@ -1,10 +1,12 @@
-import { useState } from 'react'
-import { Building2, Users, FileText, Clock, Wallet, Receipt } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Building2, Users, FileText, Clock, Wallet, Receipt, AlertTriangle } from 'lucide-react'
 import AttestationsTab from './AttestationsTab'
 import EmployesTab from './EmployesTab'
 import PointageTab from './PointageTab'
 import SalairesTab from './SalairesTab'
 import BulletinsTab from './BulletinsTab'
+import ATraiterTab from './ATraiterTab'
+import { countATraiter } from '../../lib/aTraiter'
 
 /**
  * Vue principale HR.
@@ -15,6 +17,13 @@ export default function HRView({ user }) {
   const isAdmin = user?.role === 'admin'
   // Onglet Employés par défaut pour tous
   const [tab, setTab] = useState('employes')
+  // Compteur "à traiter" (absences + récup) pour le badge
+  const [aTraiter, setATraiter] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    countATraiter().then(n => { if (!cancelled) setATraiter(n) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.25rem' }}>
@@ -43,6 +52,12 @@ export default function HRView({ user }) {
         <TabBtn active={tab === 'pointage'} onClick={() => setTab('pointage')}>
           <Clock size={14} /> Pointage
         </TabBtn>
+        <TabBtn active={tab === 'a_traiter'} onClick={() => setTab('a_traiter')}>
+          <AlertTriangle size={14} /> À traiter
+          {aTraiter > 0 && (
+            <span style={{ background: '#A32D2D', color: 'white', borderRadius: 999, fontSize: 11, fontWeight: 700, padding: '1px 7px', marginLeft: 2 }}>{aTraiter}</span>
+          )}
+        </TabBtn>
         {isAdmin && (
           <TabBtn active={tab === 'salaires'} onClick={() => setTab('salaires')}>
             <Wallet size={14} /> Salaires
@@ -58,6 +73,7 @@ export default function HRView({ user }) {
       {tab === 'attestations' && <AttestationsTab user={user} isAdmin={isAdmin} />}
       {tab === 'employes' && <EmployesTab user={user} isAdmin={isAdmin} />}
       {tab === 'pointage' && <PointageTab user={user} isAdmin={isAdmin} />}
+      {tab === 'a_traiter' && <ATraiterTab user={user} onChange={setATraiter} />}
       {tab === 'salaires' && isAdmin && <SalairesTab user={user} />}
       {tab === 'bulletins' && isAdmin && <BulletinsTab />}
     </div>
