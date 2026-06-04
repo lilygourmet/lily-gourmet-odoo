@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demande de congé — exemples</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background:#e9e9e9; margin:0; padding:20px; color:#222; }
+  .barre { max-width:780px; margin:0 auto 16px; background:#fff3cd; border:1px solid #ffe08a; border-radius:8px; padding:12px 16px; font-size:14px; }
+  .barre b { color:#8a6d00; }
+
+  .page {
+    max-width:780px; margin:0 auto 28px; background:#fff; padding:38px 44px 26px;
+    box-shadow:0 2px 10px rgba(0,0,0,.12); border-radius:3px;
+    display:flex; flex-direction:column; min-height:1000px;
+  }
+  .contenu { flex:1; }
+
+  /* En-tête */
+  .entete { display:flex; align-items:center; gap:16px; border-bottom:2px solid #1a1a1a; padding-bottom:14px; }
+  .entete img.logo { height:64px; width:auto; }
+  .entete .marque .n1 { font-size:20px; font-weight:800; letter-spacing:1px; color:#000; line-height:1.1; }
+  .entete .marque .n2 { font-size:11px; color:#666; margin-top:3px; }
+
+  h1.titre { text-align:center; font-size:19px; font-weight:800; letter-spacing:1px; margin:26px 0 18px; }
+
+  .infos { font-size:14px; line-height:1.9; }
+  .infos b { display:inline-block; min-width:140px; }
+
+  .preambule { font-style:italic; color:#555; font-size:13px; line-height:1.6; margin:14px 0 18px; }
+
+  /* Tableau récap */
+  table.recap { width:100%; border-collapse:collapse; font-size:14px; margin-bottom:8px; }
+  table.recap td { border:1px solid #cfcfcf; padding:9px 14px; vertical-align:top; }
+  table.recap td.lab { background:#fafafa; width:48%; color:#333; }
+  table.recap td.val { font-weight:700; color:#111; }
+  .sous-recup { margin-top:6px; font-weight:400; }
+  .sous-recup .r { display:flex; font-size:12.5px; padding:2px 0; }
+  .sous-recup .r .d { font-weight:700; color:#1c7a35; min-width:108px; }
+  .sous-recup .r .ra { color:#555; }
+  .tag-recup { color:#1c7a35; } .tag-annuel { color:#1456a0; }
+
+  /* Signatures */
+  h2.sig-titre { font-size:14px; font-weight:800; margin:24px 0 10px; }
+  table.sign { width:100%; border-collapse:collapse; font-size:13px; }
+  table.sign th { background:#222; color:#fff; text-align:left; padding:8px 12px; font-weight:600; font-size:12px; }
+  table.sign td { border:1px solid #cfcfcf; padding:10px 12px; height:62px; vertical-align:top; }
+  table.sign td.fonction { width:34%; color:#333; }
+  table.sign td.nom { width:36%; }
+
+  .nb { font-style:italic; color:#777; font-size:11.5px; line-height:1.5; margin-top:18px; }
+
+  /* Pied de page */
+  .pied { border-top:1px solid #ccc; margin-top:22px; padding-top:10px; text-align:center; font-size:10px; color:#999; line-height:1.5; }
+  .pied .gros { color:#666; font-weight:600; }
+
+  /* Version arabe (droite → gauche) */
+  .page.ar { direction:rtl; font-family:'Segoe UI','Tahoma',Arial,sans-serif; }
+  .page.ar .entete { flex-direction:row-reverse; }
+  .page.ar .infos b { min-width:150px; }
+  .page.ar table.sign th { text-align:right; }
+  .page.ar .sous-recup .r { flex-direction:row; }
+  .page.ar .sous-recup .r .d { min-width:120px; }
+
+  @media print {
+    body { background:#fff; padding:0; }
+    .barre { display:none; }
+    .page { box-shadow:none; margin:0; page-break-after:always; min-height:auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barre">
+  👀 <b>Aperçu</b> — inspiré de ton modèle (Ibn Rochd), avec ton logo, tes infos et le bas de page. 3 exemples : mélange / tout annuel / tout récup. Dis-moi ce que tu veux changer, rien n'est encore branché dans l'app.
+</div>
+
+<!-- ============================ EXEMPLE 1 : MÉLANGE ============================ -->
+<div class="page">
+  <div class="contenu">
+    <div class="entete">
+      <img class="logo" src="../public/Logo_LG.jpg" alt="Lily Gourmet">
+      <div class="marque">
+        <div class="n1">LILY GOURMET</div>
+        <div class="n2">L &amp; N Gourmet SARL</div>
+      </div>
+    </div>
+
+    <h1 class="titre">DEMANDE DE CONGÉ</h1>
+
+    <div class="infos">
+      <div><b>Date :</b> Rabat, le 04/06/2026</div>
+      <div><b>Nom et Prénom :</b> ABOU EL FARAJ Meryem</div>
+      <div><b>Numéro CNSS :</b> 9725039</div>
+      <div><b>Fonction :</b> Contrôleur interne</div>
+    </div>
+
+    <div class="preambule">
+      Je soussigné(e), sollicite par la présente l'autorisation de bénéficier d'un congé,
+      conformément aux dispositions et procédures en vigueur au sein de l'entreprise.
+    </div>
+
+    <table class="recap">
+      <tr><td class="lab">Type de congé</td><td class="val">Congé annuel + récupération</td></tr>
+      <tr><td class="lab">Période demandée</td><td class="val">du 10/06/2026 au 15/06/2026</td></tr>
+      <tr><td class="lab">Jour de repos non décompté</td><td class="val">14/06/2026 (Dimanche)</td></tr>
+      <tr><td class="lab">Jour férié non décompté</td><td class="val">—</td></tr>
+      <tr><td class="lab">Nombre de jours décomptés</td><td class="val">5 jours</td></tr>
+      <tr>
+        <td class="lab"><span class="tag-recup">Dont récupération</span></td>
+        <td class="val">2 jours
+          <div class="sous-recup">
+            <div class="r"><span class="d">10/06/2026</span><span class="ra">Récup d'un jour travaillé</span></div>
+            <div class="r"><span class="d">11/06/2026</span><span class="ra">Récup d'un jour férié</span></div>
+          </div>
+        </td>
+      </tr>
+      <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">3 jours &nbsp;·&nbsp; du 12/06/2026 au 15/06/2026</td></tr>
+      <tr><td class="lab">Solde avant congé</td><td class="val">5,5 jours</td></tr>
+      <tr><td class="lab">Solde après congé</td><td class="val">0,5 jour &nbsp;<span style="font-weight:400;color:#666;">(annuel 0 · récup 0,5)</span></td></tr>
+    </table>
+
+    <h2 class="sig-titre">Signatures et validation</h2>
+    <table class="sign">
+      <tr><th>Fonction</th><th>Nom</th><th>Signature &amp; Date</th></tr>
+      <tr><td class="fonction">Employé(e)</td><td class="nom">ABOU EL FARAJ Meryem</td><td></td></tr>
+      <tr><td class="fonction">Direction</td><td class="nom">&nbsp;</td><td></td></tr>
+    </table>
+
+    <div class="nb">
+      NB : Toute demande de congé doit être validée par : Employé(e) – Direction, et signée avant la prise du congé.
+    </div>
+  </div>
+
+  <div class="pied">
+    <div class="gros">L &amp; N Gourmet SARL au capital de 200.000 DH</div>
+    6 rue Soumaya, Agdal – Rabat, Maroc · RC : 99941 · Patente : 70185234 · IF : 3367629 · CNSS : 9725039 · ICE : 001701634000029
+  </div>
+</div>
+
+<!-- ============================ EXEMPLE 2 : TOUT ANNUEL ============================ -->
+<div class="page">
+  <div class="contenu">
+    <div class="entete">
+      <img class="logo" src="../public/Logo_LG.jpg" alt="Lily Gourmet">
+      <div class="marque">
+        <div class="n1">LILY GOURMET</div>
+        <div class="n2">L &amp; N Gourmet SARL</div>
+      </div>
+    </div>
+
+    <h1 class="titre">DEMANDE DE CONGÉ</h1>
+
+    <div class="infos">
+      <div><b>Date :</b> Rabat, le 04/06/2026</div>
+      <div><b>Nom et Prénom :</b> BENOMAR Salma</div>
+      <div><b>Numéro CNSS :</b> 8451023</div>
+      <div><b>Fonction :</b> Vendeuse</div>
+    </div>
+
+    <div class="preambule">
+      Je soussigné(e), sollicite par la présente l'autorisation de bénéficier d'un congé,
+      conformément aux dispositions et procédures en vigueur au sein de l'entreprise.
+    </div>
+
+    <table class="recap">
+      <tr><td class="lab">Type de congé</td><td class="val">Congé annuel</td></tr>
+      <tr><td class="lab">Période demandée</td><td class="val">du 15/06/2026 au 20/06/2026</td></tr>
+      <tr><td class="lab">Jour de repos non décompté</td><td class="val">19/06/2026 (Vendredi)</td></tr>
+      <tr><td class="lab">Jour férié non décompté</td><td class="val">—</td></tr>
+      <tr><td class="lab">Nombre de jours décomptés</td><td class="val">5 jours</td></tr>
+      <tr><td class="lab"><span class="tag-recup">Dont récupération</span></td><td class="val">0 jour</td></tr>
+      <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">5 jours &nbsp;·&nbsp; du 15/06/2026 au 20/06/2026</td></tr>
+      <tr><td class="lab">Solde avant congé</td><td class="val">14 jours</td></tr>
+      <tr><td class="lab">Solde après congé</td><td class="val">9 jours &nbsp;<span style="font-weight:400;color:#666;">(annuel 9 · récup 2)</span></td></tr>
+    </table>
+
+    <h2 class="sig-titre">Signatures et validation</h2>
+    <table class="sign">
+      <tr><th>Fonction</th><th>Nom</th><th>Signature &amp; Date</th></tr>
+      <tr><td class="fonction">Employé(e)</td><td class="nom">BENOMAR Salma</td><td></td></tr>
+      <tr><td class="fonction">Direction</td><td class="nom">&nbsp;</td><td></td></tr>
+    </table>
+
+    <div class="nb">
+      NB : Toute demande de congé doit être validée par : Employé(e) – Direction, et signée avant la prise du congé.
+    </div>
+  </div>
+
+  <div class="pied">
+    <div class="gros">L &amp; N Gourmet SARL au capital de 200.000 DH</div>
+    6 rue Soumaya, Agdal – Rabat, Maroc · RC : 99941 · Patente : 70185234 · IF : 3367629 · CNSS : 9725039 · ICE : 001701634000029
+  </div>
+</div>
+
+<!-- ============================ EXEMPLE 3 : TOUT RÉCUP ============================ -->
+<div class="page">
+  <div class="contenu">
+    <div class="entete">
+      <img class="logo" src="../public/Logo_LG.jpg" alt="Lily Gourmet">
+      <div class="marque">
+        <div class="n1">LILY GOURMET</div>
+        <div class="n2">L &amp; N Gourmet SARL</div>
+      </div>
+    </div>
+
+    <h1 class="titre">DEMANDE DE CONGÉ</h1>
+
+    <div class="infos">
+      <div><b>Date :</b> Rabat, le 04/06/2026</div>
+      <div><b>Nom et Prénom :</b> BERBICH Hamza</div>
+      <div><b>Numéro CNSS :</b> 7732891</div>
+      <div><b>Fonction :</b> Livreur</div>
+    </div>
+
+    <div class="preambule">
+      Je soussigné(e), sollicite par la présente l'autorisation de bénéficier d'un congé,
+      conformément aux dispositions et procédures en vigueur au sein de l'entreprise.
+    </div>
+
+    <table class="recap">
+      <tr><td class="lab">Type de congé</td><td class="val">Récupération</td></tr>
+      <tr><td class="lab">Période demandée</td><td class="val">du 10/06/2026 au 11/06/2026</td></tr>
+      <tr><td class="lab">Jour de repos non décompté</td><td class="val">— (aucun dans la période)</td></tr>
+      <tr><td class="lab">Jour férié non décompté</td><td class="val">—</td></tr>
+      <tr><td class="lab">Nombre de jours décomptés</td><td class="val">2 jours</td></tr>
+      <tr>
+        <td class="lab"><span class="tag-recup">Dont récupération</span></td>
+        <td class="val">2 jours
+          <div class="sous-recup">
+            <div class="r"><span class="d">10/06/2026</span><span class="ra">Récup d'un jour férié</span></div>
+            <div class="r"><span class="d">11/06/2026</span><span class="ra">Récup d'un jour travaillé</span></div>
+          </div>
+        </td>
+      </tr>
+      <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">0 jour</td></tr>
+      <tr><td class="lab">Solde avant congé</td><td class="val">18,5 jours</td></tr>
+      <tr><td class="lab">Solde après congé</td><td class="val">18,5 jours &nbsp;<span style="font-weight:400;color:#666;">(annuel 18 · récup 0,5)</span></td></tr>
+    </table>
+
+    <h2 class="sig-titre">Signatures et validation</h2>
+    <table class="sign">
+      <tr><th>Fonction</th><th>Nom</th><th>Signature &amp; Date</th></tr>
+      <tr><td class="fonction">Employé(e)</td><td class="nom">BERBICH Hamza</td><td></td></tr>
+      <tr><td class="fonction">Direction</td><td class="nom">&nbsp;</td><td></td></tr>
+    </table>
+
+    <div class="nb">
+      NB : Toute demande de congé doit être validée par : Employé(e) – Direction, et signée avant la prise du congé.
+    </div>
+  </div>
+
+  <div class="pied">
+    <div class="gros">L &amp; N Gourmet SARL au capital de 200.000 DH</div>
+    6 rue Soumaya, Agdal – Rabat, Maroc · RC : 99941 · Patente : 70185234 · IF : 3367629 · CNSS : 9725039 · ICE : 001701634000029
+  </div>
+</div>
+
+<!-- ============================ EXEMPLE ARABE (MÉLANGE) ============================ -->
+<div class="page ar" dir="rtl" lang="ar">
+  <div class="contenu">
+    <div class="entete">
+      <img class="logo" src="../public/Logo_LG.jpg" alt="Lily Gourmet">
+      <div class="marque">
+        <div class="n1">LILY GOURMET</div>
+        <div class="n2">ل &amp; ن غورمي ش.م.م</div>
+      </div>
+    </div>
+
+    <h1 class="titre">طلب إجازة</h1>
+
+    <div class="infos">
+      <div><b>التاريخ :</b> الرباط، في 04/06/2026</div>
+      <div><b>الاسم الكامل :</b> أبو الفرج مريم</div>
+      <div><b>رقم الضمان الاجتماعي :</b> 9725039</div>
+      <div><b>الوظيفة :</b> مراقبة داخلية</div>
+    </div>
+
+    <div class="preambule">
+      أصرّح أنا الموقّع(ة) أدناه، بأنني أطلب بموجب هذا الإذن للاستفادة من إجازة،
+      وفقًا للأحكام والإجراءات المعمول بها داخل المؤسسة.
+    </div>
+
+    <table class="recap">
+      <tr><td class="lab">نوع الإجازة</td><td class="val">إجازة سنوية + استرجاع</td></tr>
+      <tr><td class="lab">الفترة المطلوبة</td><td class="val">من 10/06/2026 إلى 15/06/2026</td></tr>
+      <tr><td class="lab">يوم الراحة غير المحتسب</td><td class="val">14/06/2026 (الأحد)</td></tr>
+      <tr><td class="lab">يوم عطلة غير محتسب</td><td class="val">—</td></tr>
+      <tr><td class="lab">عدد الأيام المحتسبة</td><td class="val">5 أيام</td></tr>
+      <tr>
+        <td class="lab"><span class="tag-recup">منها استرجاع</span></td>
+        <td class="val">يومان
+          <div class="sous-recup">
+            <div class="r"><span class="d">10/06/2026</span><span class="ra">استرجاع يوم عمل</span></div>
+            <div class="r"><span class="d">11/06/2026</span><span class="ra">استرجاع يوم عطلة</span></div>
+          </div>
+        </td>
+      </tr>
+      <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">3 أيام &nbsp;·&nbsp; من 12/06/2026 إلى 15/06/2026</td></tr>
+      <tr><td class="lab">الرصيد قبل الإجازة</td><td class="val">5,5 أيام</td></tr>
+      <tr><td class="lab">الرصيد بعد الإجازة</td><td class="val">0,5 يوم &nbsp;<span style="font-weight:400;color:#666;">(سنوية 0 · استرجاع 0,5)</span></td></tr>
+    </table>
+
+    <h2 class="sig-titre">التوقيعات والمصادقة</h2>
+    <table class="sign">
+      <tr><th>الصفة</th><th>الاسم</th><th>التوقيع والتاريخ</th></tr>
+      <tr><td class="fonction">الموظف(ة)</td><td class="nom">أبو الفرج مريم</td><td></td></tr>
+      <tr><td class="fonction">الإدارة</td><td class="nom">&nbsp;</td><td></td></tr>
+    </table>
+
+    <div class="nb">
+      ملاحظة : يجب أن يُصادَق على كل طلب إجازة من طرف : الموظف(ة) – الإدارة، وأن يُوقَّع قبل الاستفادة من الإجازة.
+    </div>
+  </div>
+
+  <div class="pied">
+    <div class="gros">L &amp; N Gourmet SARL au capital de 200.000 DH</div>
+    6 rue Soumaya, Agdal – Rabat, Maroc · RC : 99941 · Patente : 70185234 · IF : 3367629 · CNSS : 9725039 · ICE : 001701634000029
+  </div>
+</div>
+
+</body>
+</html>

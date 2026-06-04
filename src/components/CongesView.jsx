@@ -16,7 +16,7 @@ function useIsMobile(maxWidth = 640) {
   return isMobile
 }
 
-import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Pencil, ChevronRight } from 'lucide-react'
+import { Plus, Check, X, Trash2, Calendar, Palmtree, AlertCircle, Pencil, ChevronRight, Flag } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { supabase } from '../lib/supabase'
 import { loadEmployes } from '../lib/hr'
@@ -30,6 +30,10 @@ import {
   updateAllocation, updateConge,
   uploadJustificatif, getJustificatifUrl,
 } from '../lib/conges'
+import {
+  loadJoursFeries, createJourFerie, updateJourFerie,
+  deleteJourFerie, genererFeriesFixes,
+} from '../lib/joursFeries'
 
 const TYPES = [
   { v: 'annuel',           label: 'Congé annuel' },
@@ -106,6 +110,9 @@ function nbJours(start, end) {
   if (!start || !end) return 0
   return Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86400000) + 1
 }
+function jourSemaine(d) {
+  return d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : ''
+}
 
 export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const isAdmin = user?.role === 'admin'
@@ -123,6 +130,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [detailEmp, setDetailEmp]         = useState(null)  // employé sélectionné pour voir le détail
   const [editAlloc, setEditAlloc]         = useState(null)  // allocation en cours d'édition
   const [editConge, setEditConge]         = useState(null)  // congé en cours d'édition
+  const [joursFeries, setJoursFeries]     = useState([])    // table jours_feries
+  const [feriesYear, setFeriesYear]       = useState(new Date().getFullYear())
+  const [showFerieForm, setShowFerieForm] = useState(false)
+  const [editFerie, setEditFerie]         = useState(null)  // jour férié en cours d'édition
   const isMobile = useIsMobile()
 
   const reload = useCallback(async () => {
@@ -130,16 +141,18 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     try {
       const annee = new Date().getFullYear()
       // 4 requêtes batchées au lieu de 2 par employé.
-      const [emps, all, allocs, recupRows] = await Promise.all([
+      const [emps, all, allocs, recupRows, feries] = await Promise.all([
         loadEmployes(true),
         loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule']),
         loadAllocations({ annee, statut: ['valide', 'attente'] }),
         supabase.from('pointages_mois').select('employe_id, jours_recup').eq('annee', annee),
+        loadJoursFeries(),
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
       setEmployes(empsActifs)
       setConges(all)
       setAllocations(allocs)
+      setJoursFeries(feries)
 
       // Backfill : on calcule jours_decomptes en mémoire IMMÉDIATEMENT (utilisé
       // pour le rendu), puis on persiste en BDD en arrière-plan (non bloquant).
@@ -298,6 +311,28 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     catch (e) { alert('Erreur : ' + e.message) }
   }
 
+  async function handleSaveFerie(payload) {
+    try {
+      if (editFerie) await updateJourFerie(editFerie.id, payload)
+      else           await createJourFerie(payload)
+      setShowFerieForm(false); setEditFerie(null); await reload()
+    } catch (e) { alert('Erreur : ' + e.message) }
+  }
+  async function handleDeleteFerie(f) {
+    if (!confirm(`Supprimer ce jour férié ?\n\n${fmt(f.date)} · ${f.nom}`)) return
+    try { await deleteJourFerie(f.id); await reload() }
+    catch (e) { alert('Erreur : ' + e.message) }
+  }
+  async function handleGenererFixes() {
+    try {
+      const n = await genererFeriesFixes(feriesYear)
+      await reload()
+      alert(n > 0
+        ? `${n} jour(s) férié(s) fixe(s) ajouté(s) pour ${feriesYear}.`
+        : `Tous les fériés fixes de ${feriesYear} sont déjà présents.`)
+    } catch (e) { alert('Erreur : ' + e.message) }
+  }
+
   return (
     <>
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
@@ -323,6 +358,11 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             Allocations {allocations.filter(a => a.statut === 'attente').length > 0 && <span style={badge}>{allocations.filter(a => a.statut === 'attente').length}</span>}
           </Tab>
           <Tab active={tab === 'soldes'} onClick={() => setTab('soldes')}>Soldes employés</Tab>
+          {isAdmin && (
+            <Tab active={tab === 'feries'} onClick={() => setTab('feries')}>
+              <Flag size={13} /> Jours fériés
+            </Tab>
+          )}
         </div>
 
         {error && <div style={errBox}>{error}</div>}
@@ -655,6 +695,76 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             </div>
           </div>
         )}
+
+        {!loading && tab === 'feries' && isAdmin && (() => {
+          const nowY = new Date().getFullYear()
+          const yearsRange = Array.from(new Set([
+            nowY - 1, nowY, nowY + 1, nowY + 2,
+            ...joursFeries.map(f => Number(f.date.slice(0, 4))),
+          ])).sort((a, b) => a - b)
+          const feriesOfYear = joursFeries
+            .filter(f => f.date.slice(0, 4) === String(feriesYear))
+            .sort((a, b) => a.date.localeCompare(b.date))
+          return (
+            <>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Année</div>
+                  <select value={feriesYear} onChange={e => setFeriesYear(Number(e.target.value))} style={{ ...ipt, width: 'auto', minWidth: 100 }}>
+                    {yearsRange.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }} />
+                <button onClick={handleGenererFixes} style={btnSlim}>Générer les fériés fixes {feriesYear}</button>
+                <button onClick={() => { setEditFerie(null); setShowFerieForm(true) }} style={btnPrimary}><Plus size={14} /> Ajouter</button>
+              </div>
+
+              {feriesOfYear.length === 0
+                ? <div style={emptyBox}>Aucun jour férié pour {feriesYear}. Clique « Générer les fériés fixes » pour ajouter les fériés officiels, ou « Ajouter » pour un férié lunaire (Aïd, Mouloud…).</div>
+                : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {feriesOfYear.map(f => (
+                      <div key={f.id} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : '210px 1fr 90px auto', gap: 10, alignItems: 'center', padding: '9px 14px', background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 12, boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#1a0f0a' }}>
+                          {fmt(f.date)} <span style={{ fontWeight: 400, color: '#8a7a70' }}>({jourSemaine(f.date)})</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: '#1a0f0a' }}>
+                          {f.nom}
+                          {isMobile && (
+                            <span style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px', borderRadius: 999, background: f.type === 'lunaire' ? '#FFF3D6' : '#E6F1FB', color: f.type === 'lunaire' ? '#8a6d00' : '#0C447C' }}>
+                              {f.type === 'lunaire' ? 'Lunaire' : 'Fixe'}
+                            </span>
+                          )}
+                        </div>
+                        {!isMobile && (
+                          <div>
+                            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: f.type === 'lunaire' ? '#FFF3D6' : '#E6F1FB', color: f.type === 'lunaire' ? '#8a6d00' : '#0C447C', fontWeight: 500 }}>
+                              {f.type === 'lunaire' ? 'Lunaire' : 'Fixe'}
+                            </span>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => { setEditFerie(f); setShowFerieForm(true) }} title="Modifier"
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#4a3a30', padding: 4 }}>
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => handleDeleteFerie(f)} title="Supprimer"
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              <div style={{ marginTop: 14, padding: '10px 12px', background: '#FAF6F0', borderRadius: 10, fontSize: 12, color: '#4a3a30' }}>
+                <strong>Fixe</strong> = même date chaque année (Fête du Trône, 1er mai…). Le bouton « Générer » les ajoute d'un coup.<br />
+                <strong>Lunaire</strong> = dépend de la lune (Aïd, Mouloud, 1er Moharram) : les dates changent chaque année, <strong>à confirmer / ajuster manuellement</strong>.
+              </div>
+            </>
+          )
+        })()}
       </div>
 
       {showForm && (
@@ -701,7 +811,62 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           onSave={patch => handleUpdateConge(editConge.id, patch)}
         />
       )}
+
+      {showFerieForm && (
+        <FerieModal
+          ferie={editFerie}
+          onClose={() => { setShowFerieForm(false); setEditFerie(null) }}
+          onSave={handleSaveFerie}
+        />
+      )}
     </>
+  )
+}
+
+function FerieModal({ ferie, onClose, onSave }) {
+  const [date, setDate] = useState(ferie?.date || '')
+  const [nom, setNom]   = useState(ferie?.nom || '')
+  const [type, setType] = useState(ferie?.type || 'fixe')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr]   = useState('')
+
+  async function submit() {
+    setErr('')
+    if (!date)        { setErr('Indique la date.'); return }
+    if (!nom.trim())  { setErr('Indique le nom du jour férié.'); return }
+    setBusy(true)
+    try { await onSave({ date, nom: nom.trim(), type }) }
+    catch (e) { setErr(e.message); setBusy(false) }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Flag size={18} /> {ferie ? 'Modifier le jour férié' : 'Ajouter un jour férié'}
+        </div>
+
+        <label style={lbl}>Date</label>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={ipt} />
+        {date && <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{jourSemaine(date)}</div>}
+
+        <label style={{ ...lbl, marginTop: 10 }}>Nom</label>
+        <input type="text" value={nom} onChange={e => setNom(e.target.value)} placeholder="ex : Aïd al-Fitr, Fête du Trône…" style={ipt} />
+
+        <label style={{ ...lbl, marginTop: 10 }}>Type</label>
+        <select value={type} onChange={e => setType(e.target.value)} style={ipt}>
+          <option value="fixe">Fixe (même date chaque année)</option>
+          <option value="lunaire">Lunaire (date variable : Aïd, Mouloud…)</option>
+        </select>
+
+        {err && <div style={errBox}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={onClose} disabled={busy} style={btnSlim}>Annuler</button>
+          <button onClick={submit} disabled={busy} style={btnPrimary}>{busy ? '…' : (ferie ? 'Enregistrer' : 'Ajouter')}</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
