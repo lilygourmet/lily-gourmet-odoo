@@ -662,7 +662,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
               )}
               {conv && (
-                <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-cream/15 text-cream hover:bg-cream/30 flex-shrink-0 transition-all">✏️ Modif</button>
+                <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-4 py-1.5 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0">MODIFICATION</button>
               )}
             </div>
           )}
