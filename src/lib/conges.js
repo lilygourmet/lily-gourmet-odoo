@@ -212,7 +212,17 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD(), feriesS
         ? nb - compteJoursOffFixesDansPeriode(emp, debut, fin) - compteFeriesHorsOff(emp, feriesSet, debut, fin)
         : nb
     }
-    out[category] = (out[category] || 0) + compte
+    // Si le congé annuel contient une part de récup saisie (recup_detail),
+    // on attribue ces jours à 'recup' (le reste à 'annuel'). Le total décompté
+    // ne change pas → le solde combiné reste identique, mais le détail est juste.
+    const recupDansConge = Array.isArray(c.recup_detail) ? c.recup_detail.length : 0
+    if (category === 'annuel' && recupDansConge > 0) {
+      const k = Math.min(recupDansConge, compte)
+      out.recup  = (out.recup  || 0) + k
+      out.annuel = (out.annuel || 0) + (compte - k)
+    } else {
+      out[category] = (out[category] || 0) + compte
+    }
   }
   return out
 }

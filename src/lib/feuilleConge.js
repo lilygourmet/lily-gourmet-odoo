@@ -67,9 +67,21 @@ function raisonLabelAR(r) {
   if (r === 'ferie')     return 'استرجاع يوم عطلة'
   return 'استرجاع'
 }
+function soldeSplitFR(total, annuel, recup) {
+  if (total == null) return '—'
+  const base = `${fmtJours(total)} jour${Number(total) > 1 ? 's' : ''}`
+  if (annuel == null || recup == null) return `${base} <span style="font-weight:400;color:#666;">(récupération incluse)</span>`
+  return `${base} <span style="font-weight:400;color:#666;">(annuel ${fmtJours(annuel)} · récup ${fmtJours(recup)})</span>`
+}
+function soldeSplitAR(total, annuel, recup) {
+  if (total == null) return '—'
+  if (annuel == null || recup == null) return `${fmtJours(total)} <span style="font-weight:400;color:#666;">(يشمل الاسترجاع)</span>`
+  return `${fmtJours(total)} <span style="font-weight:400;color:#666;">(سنوية ${fmtJours(annuel)} · استرجاع ${fmtJours(recup)})</span>`
+}
 
 // Calcule tout ce qui sert à la feuille à partir des données brutes.
-function calcule({ conge, emp, solde, joursFeries }) {
+// Exporté pour les tests internes.
+export function calcule({ conge, emp, solde, joursFeries }) {
   const ferieSet = new Set((joursFeries || []).map(f => f.date))
   const ferieNom = new Map((joursFeries || []).map(f => [f.date, f.nom]))
   const reposNom = jourReposNom(emp)
@@ -106,7 +118,28 @@ function calcule({ conge, emp, solde, joursFeries }) {
   const soldeApres = dispo
   const soldeAvant = dispo != null ? dispo + nbDec : null
 
-  return { tous, offDates, ferieDates, decomptes, ferieNom, reposNom, nbDec, recupCount, annuelCount, recupList, annuelPlage, soldeAvant, soldeApres }
+  // Split annuel / récup du solde restant.
+  //  récup gagnée = allocations 'autre' applicables + récup pointage ;
+  //  récup restante = gagnée − (récup + autre) pris ;  annuel restant = dispo − récup restante.
+  let recupRestApres = null, annuelRestApres = null, recupRestAvant = null, annuelRestAvant = null
+  if (solde && dispo != null) {
+    const allocAutre = Array.isArray(solde.events?.detail)
+      ? solde.events.detail.filter(d => d.type === 'autre' && d.applicable).reduce((s, e) => s + Number(e.jours || 0), 0)
+      : 0
+    const recupGagne = allocAutre + Number(solde.recup || 0)
+    const recupPris  = solde.prisType ? (Number(solde.prisType.recup || 0) + Number(solde.prisType.autre || 0)) : 0
+    recupRestApres  = Math.max(0, Math.min(dispo, recupGagne - recupPris))
+    annuelRestApres = Math.max(0, dispo - recupRestApres)
+    recupRestAvant  = recupRestApres + recupCount
+    annuelRestAvant = annuelRestApres + annuelCount
+  }
+
+  return {
+    tous, offDates, ferieDates, decomptes, ferieNom, reposNom, nbDec,
+    recupCount, annuelCount, recupList, annuelPlage,
+    soldeAvant, soldeApres,
+    recupRestApres, annuelRestApres, recupRestAvant, annuelRestAvant,
+  }
 }
 
 function ligneOff(dates, JOURS) {
@@ -146,8 +179,8 @@ function pageFR({ conge, emp, c, dateDoc }) {
         <tr><td class="lab">Nombre de jours décomptés</td><td class="val">${c.nbDec} jour${c.nbDec > 1 ? 's' : ''}</td></tr>
         <tr><td class="lab"><span class="tag-recup">Dont récupération</span></td><td class="val">${c.recupCount} jour${c.recupCount > 1 ? 's' : ''}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
         <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">${c.annuelCount} jour${c.annuelCount > 1 ? 's' : ''}${c.annuelPlage ? ` &nbsp;·&nbsp; du ${frDate(c.annuelPlage.debut)} au ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>
-        <tr><td class="lab">Solde avant congé</td><td class="val">${fmtJours(c.soldeAvant)} jour${Number(c.soldeAvant) > 1 ? 's' : ''}</td></tr>
-        <tr><td class="lab">Solde après congé</td><td class="val">${fmtJours(c.soldeApres)} jour${Number(c.soldeApres) > 1 ? 's' : ''} <span style="font-weight:400;color:#666;">(récupération incluse)</span></td></tr>
+        <tr><td class="lab">Solde avant congé</td><td class="val">${soldeSplitFR(c.soldeAvant, c.annuelRestAvant, c.recupRestAvant)}</td></tr>
+        <tr><td class="lab">Solde après congé</td><td class="val">${soldeSplitFR(c.soldeApres, c.annuelRestApres, c.recupRestApres)}</td></tr>
       </table>
       <h2 class="sig-titre">Signatures et validation</h2>
       <table class="sign">
@@ -194,8 +227,8 @@ function pageAR({ conge, emp, c, dateDoc }) {
         <tr><td class="lab">عدد الأيام المحتسبة</td><td class="val">${nbTxt}</td></tr>
         <tr><td class="lab"><span class="tag-recup">منها استرجاع</span></td><td class="val">${arNb(c.recupCount)}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
         <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">${arNb(c.annuelCount)}${c.annuelPlage ? ` &nbsp;·&nbsp; من ${frDate(c.annuelPlage.debut)} إلى ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>
-        <tr><td class="lab">الرصيد قبل الإجازة</td><td class="val">${fmtJours(c.soldeAvant)}</td></tr>
-        <tr><td class="lab">الرصيد بعد الإجازة</td><td class="val">${fmtJours(c.soldeApres)} <span style="font-weight:400;color:#666;">(يشمل الاسترجاع)</span></td></tr>
+        <tr><td class="lab">الرصيد قبل الإجازة</td><td class="val">${soldeSplitAR(c.soldeAvant, c.annuelRestAvant, c.recupRestAvant)}</td></tr>
+        <tr><td class="lab">الرصيد بعد الإجازة</td><td class="val">${soldeSplitAR(c.soldeApres, c.annuelRestApres, c.recupRestApres)}</td></tr>
       </table>
       <h2 class="sig-titre">التوقيعات والمصادقة</h2>
       <table class="sign">
