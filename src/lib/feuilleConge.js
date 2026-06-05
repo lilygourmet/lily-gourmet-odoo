@@ -47,14 +47,36 @@ function isRecup(t) {
   t = (t || '').toLowerCase()
   return t.includes('récup') || t.includes('recup') || t.includes('compensatory')
 }
+function estMaladie(t) {
+  const s = (t || '').toLowerCase()
+  return s.includes('maladie') || s.includes('sick') || s.includes('malade')
+}
+function estEvenement(t) {
+  const s = (t || '').toLowerCase()
+  return ['mariage', 'naissance', 'deces', 'décès', 'circoncis', 'maternit', 'sans solde', 'unpaid'].some(k => s.includes(k))
+}
 function typeLabelFR(t) {
   if (isRecup(t)) return 'Récupération'
   const s = (t || '').toLowerCase()
-  if (s === 'annuel' || s.includes('paid time off') || s.includes('annuel')) return 'Congé annuel'
-  return t || 'Congé'
+  if (estMaladie(t))            return 'Congé maladie'
+  if (s.includes('maternit'))   return 'Congé maternité'
+  if (s.includes('mariage'))    return 'Mariage'
+  if (s.includes('naissance'))  return 'Naissance'
+  if (s.includes('deces') || s.includes('décès')) return 'Décès'
+  if (s.includes('circoncis'))  return 'Circoncision'
+  if (s.includes('sans solde') || s.includes('unpaid')) return 'Congé sans solde'
+  return 'Congé annuel'
 }
 function typeLabelAR(t) {
   if (isRecup(t)) return 'استرجاع'
+  const s = (t || '').toLowerCase()
+  if (estMaladie(t))            return 'إجازة مرضية'
+  if (s.includes('maternit'))   return 'إجازة أمومة'
+  if (s.includes('mariage'))    return 'زواج'
+  if (s.includes('naissance'))  return 'ازدياد مولود'
+  if (s.includes('deces') || s.includes('décès')) return 'وفاة'
+  if (s.includes('circoncis'))  return 'ختان'
+  if (s.includes('sans solde') || s.includes('unpaid')) return 'إجازة بدون أجر'
   return 'إجازة سنوية'
 }
 function raisonLabelFR(r) {
@@ -112,6 +134,9 @@ export function calcule({ conge, emp, solde, joursFeries }) {
   const recupCount  = recupList.length
   const annuelCount = annuelDates.length
   const annuelPlage = annuelCount ? { debut: annuelDates[0], fin: annuelDates[annuelCount - 1] } : null
+  // Le détail récup/annuel ne s'applique qu'aux congés annuel/récup
+  // (la maladie et les événements ne sont pas pris du congé annuel).
+  const splitApplicable = !estMaladie(conge.type_conge) && !estEvenement(conge.type_conge)
 
   // Solde combiné (récup incluse) : "après" = dispo actuel ; "avant" = après + décompté.
   const dispo = solde && solde.dispo != null ? Number(solde.dispo) : null
@@ -136,7 +161,7 @@ export function calcule({ conge, emp, solde, joursFeries }) {
 
   return {
     tous, offDates, ferieDates, decomptes, ferieNom, reposNom, nbDec,
-    recupCount, annuelCount, recupList, annuelPlage,
+    recupCount, annuelCount, recupList, annuelPlage, splitApplicable,
     soldeAvant, soldeApres,
     recupRestApres, annuelRestApres, recupRestAvant, annuelRestAvant,
   }
@@ -177,8 +202,8 @@ function pageFR({ conge, emp, c, dateDoc }) {
         <tr><td class="lab">Jour de repos non décompté</td><td class="val">${ligneOff(c.offDates, JOURS_FR)}</td></tr>
         <tr><td class="lab">Jour férié non décompté</td><td class="val">${ligneFerie(c.ferieDates, c.ferieNom, JOURS_FR)}</td></tr>
         <tr><td class="lab">Nombre de jours décomptés</td><td class="val">${c.nbDec} jour${c.nbDec > 1 ? 's' : ''}</td></tr>
-        <tr><td class="lab"><span class="tag-recup">Dont récupération</span></td><td class="val">${c.recupCount} jour${c.recupCount > 1 ? 's' : ''}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
-        <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">${c.annuelCount} jour${c.annuelCount > 1 ? 's' : ''}${c.annuelPlage ? ` &nbsp;·&nbsp; du ${frDate(c.annuelPlage.debut)} au ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>
+        ${c.splitApplicable ? `<tr><td class="lab"><span class="tag-recup">Dont récupération</span></td><td class="val">${c.recupCount} jour${c.recupCount > 1 ? 's' : ''}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
+        <tr><td class="lab"><span class="tag-annuel">Dont congé annuel</span></td><td class="val">${c.annuelCount} jour${c.annuelCount > 1 ? 's' : ''}${c.annuelPlage ? ` &nbsp;·&nbsp; du ${frDate(c.annuelPlage.debut)} au ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>` : ''}
         <tr><td class="lab">Solde avant congé</td><td class="val">${soldeSplitFR(c.soldeAvant, c.annuelRestAvant, c.recupRestAvant)}</td></tr>
         <tr><td class="lab">Solde après congé</td><td class="val">${soldeSplitFR(c.soldeApres, c.annuelRestApres, c.recupRestApres)}</td></tr>
       </table>
@@ -225,8 +250,8 @@ function pageAR({ conge, emp, c, dateDoc }) {
         <tr><td class="lab">يوم الراحة غير المحتسب</td><td class="val">${ligneOff(c.offDates, JOURS_AR)}</td></tr>
         <tr><td class="lab">يوم عطلة غير محتسب</td><td class="val">${ligneFerie(c.ferieDates, c.ferieNom, JOURS_AR)}</td></tr>
         <tr><td class="lab">عدد الأيام المحتسبة</td><td class="val">${nbTxt}</td></tr>
-        <tr><td class="lab"><span class="tag-recup">منها استرجاع</span></td><td class="val">${arNb(c.recupCount)}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
-        <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">${arNb(c.annuelCount)}${c.annuelPlage ? ` &nbsp;·&nbsp; من ${frDate(c.annuelPlage.debut)} إلى ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>
+        ${c.splitApplicable ? `<tr><td class="lab"><span class="tag-recup">منها استرجاع</span></td><td class="val">${arNb(c.recupCount)}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
+        <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">${arNb(c.annuelCount)}${c.annuelPlage ? ` &nbsp;·&nbsp; من ${frDate(c.annuelPlage.debut)} إلى ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>` : ''}
         <tr><td class="lab">الرصيد قبل الإجازة</td><td class="val">${soldeSplitAR(c.soldeAvant, c.annuelRestAvant, c.recupRestAvant)}</td></tr>
         <tr><td class="lab">الرصيد بعد الإجازة</td><td class="val">${soldeSplitAR(c.soldeApres, c.annuelRestApres, c.recupRestApres)}</td></tr>
       </table>

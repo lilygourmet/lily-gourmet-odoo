@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Car } from 'lucide-react'
 import { todayISO, fmtMoney } from '../_helpers'
+import { toast } from '../../../lib/toast'
 import { ModalBox } from './AjoutSortieModal'
 
 export default function AjoutAvanceHamidModal({ onClose, onSubmit }) {
@@ -10,7 +11,7 @@ export default function AjoutAvanceHamidModal({ onClose, onSubmit }) {
 
   async function submit() {
     const n = Number(amount)
-    if (!amount || isNaN(n) || n <= 0) { alert('Montant invalide : entre un nombre positif.'); return }
+    if (!amount || isNaN(n) || n <= 0) { toast.error('Montant invalide : entre un nombre positif.'); return }
     await onSubmit({ amount: n, label: label || 'avance', mvtDate })
   }
 

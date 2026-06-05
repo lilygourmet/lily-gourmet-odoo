@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { todayISO } from '../_helpers'
+import { toast } from '../../../lib/toast'
 
 export default function AjoutSortieModal({ categories, caisseOwner, onClose, onSubmit }) {
   const [amount, setAmount] = useState('')
@@ -10,8 +11,8 @@ export default function AjoutSortieModal({ categories, caisseOwner, onClose, onS
 
   async function submit() {
     const n = Number(amount)
-    if (!label.trim() || !category) { alert('Tous les champs sont requis'); return }
-    if (!amount || isNaN(n) || n <= 0) { alert('Montant invalide : entre un nombre positif.'); return }
+    if (!label.trim() || !category) { toast.error('Tous les champs sont requis'); return }
+    if (!amount || isNaN(n) || n <= 0) { toast.error('Montant invalide : entre un nombre positif.'); return }
     await onSubmit({ amount: n, label: label.trim(), category, mvtDate, hasFacture: caisseOwner === 'meriem' ? hasFacture : false })
   }
 

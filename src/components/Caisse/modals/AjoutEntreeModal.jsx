@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { todayISO } from '../_helpers'
 import { ModalBox } from './AjoutSortieModal'
+import { toast } from '../../../lib/toast'
 
 export default function AjoutEntreeModal({ onClose, onSubmit }) {
   const [amount, setAmount] = useState('')
@@ -9,8 +10,8 @@ export default function AjoutEntreeModal({ onClose, onSubmit }) {
 
   async function submit() {
     const n = Number(amount)
-    if (!label.trim()) { alert('Libellé requis'); return }
-    if (!amount || isNaN(n) || n <= 0) { alert('Montant invalide : entre un nombre positif.'); return }
+    if (!label.trim()) { toast.error('Libellé requis'); return }
+    if (!amount || isNaN(n) || n <= 0) { toast.error('Montant invalide : entre un nombre positif.'); return }
     await onSubmit({ amount: n, label: label.trim(), mvtDate })
   }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { todayISO, fmtMoney } from '../_helpers'
 import { ModalBox } from './AjoutSortieModal'
+import { toast } from '../../../lib/toast'
 
 export default function HamidRendModal({ balance, onClose, onSubmit }) {
   const [amount, setAmount] = useState(balance > 0 ? String(balance) : '')
@@ -8,7 +9,7 @@ export default function HamidRendModal({ balance, onClose, onSubmit }) {
 
   async function submit() {
     const n = Number(amount)
-    if (!amount || isNaN(n) || n <= 0) { alert('Montant invalide : entre un nombre positif.'); return }
+    if (!amount || isNaN(n) || n <= 0) { toast.error('Montant invalide : entre un nombre positif.'); return }
     await onSubmit({ amount: n, label: 'Hamid rend l\'argent', mvtDate })
   }
 

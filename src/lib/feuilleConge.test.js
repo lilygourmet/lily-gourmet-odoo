@@ -73,6 +73,37 @@ describe('feuilleConge.calcule — mélange récup + annuel', () => {
   })
 })
 
+describe('feuilleConge.calcule — règles maladie / férié', () => {
+  const empSansOff = { nom: 'X', poste: 'P', cnss: '1' } // pas de planning → aucun jour off
+
+  it('un férié dans un congé récup n\'enlève PAS un jour de récup', () => {
+    const c = calcule({
+      conge: { date_debut: '2026-04-30', date_fin: '2026-05-02', type_conge: 'recup' },
+      emp: empSansOff, solde: null,
+      joursFeries: [{ date: '2026-05-01', nom: 'Fête du Travail', type: 'fixe' }],
+    })
+    expect(c.ferieDates).toContain('2026-05-01')
+    expect(c.nbDec).toBe(2)        // 01/05 sauté
+    expect(c.recupCount).toBe(2)   // le férié n'est pas un jour de récup
+  })
+
+  it('congé maladie : pas de split récup/annuel sur la feuille', () => {
+    const c = calcule({
+      conge: { date_debut: '2026-06-08', date_fin: '2026-06-10', type_conge: 'maladie_courte' },
+      emp: empSansOff, solde: null, joursFeries: [],
+    })
+    expect(c.splitApplicable).toBe(false)
+  })
+
+  it('congé annuel : split applicable', () => {
+    const c = calcule({
+      conge: { date_debut: '2026-06-08', date_fin: '2026-06-10', type_conge: 'annuel' },
+      emp: empSansOff, solde: null, joursFeries: [],
+    })
+    expect(c.splitApplicable).toBe(true)
+  })
+})
+
 describe('feuilleConge.calcule — split du solde', () => {
   const solde = { dispo: 10, recup: 3, prisType: { recup: 0, autre: 0 }, events: { detail: [] } }
 
