@@ -264,7 +264,7 @@ function pageAR({ conge, emp, c, dateDoc }) {
         <img class="logo" src="/Logo_LG.jpg" alt="Lily Gourmet">
         <div class="marque"><div class="n1">LILY GOURMET</div><div class="n2">ل &amp; ن غورمي ش.م.م</div></div>
       </div>
-      <h1 class="titre">طلب إجازة</h1>
+      <h1 class="titre">طلب الاستفادة من العطلة السنوية</h1>
       <div class="infos">
         <div><b>التاريخ :</b> الرباط، في ${dateDoc}</div>
         <div><b>الاسم الكامل :</b> ${esc(emp?.nom || '—')}</div>
@@ -272,19 +272,19 @@ function pageAR({ conge, emp, c, dateDoc }) {
         <div><b>الوظيفة :</b> ${esc(emp?.poste || '—')}</div>
       </div>
       <div class="preambule">
-        أصرّح أنا الموقّع(ة) أدناه، بأنني أطلب بموجب هذا الإذن للاستفادة من إجازة،
-        وفقًا للأحكام والإجراءات المعمول بها داخل المؤسسة.
+        اصرح انا الموقع(ة) أدناه بأنني ألتمس بموجب هذا الطلب الاستفادة من الاجازة
+        وفقا للقانون الداخلي للمؤسسة .
       </div>
       <table class="recap">
         <tr><td class="lab">نوع الإجازة</td><td class="val">${esc(typeLabelAR(conge.type_conge))}</td></tr>
-        <tr><td class="lab">الفترة المطلوبة</td><td class="val">من ${frDate(conge.date_debut)} إلى ${frDate(conge.date_fin)}</td></tr>
-        <tr><td class="lab">يوم الراحة غير المحتسب</td><td class="val">${ligneOff(c.offDates, JOURS_AR)}</td></tr>
-        <tr><td class="lab">يوم عطلة غير محتسب</td><td class="val">${ligneFerie(c.ferieDates, c.ferieNom, JOURS_AR)}</td></tr>
+        <tr><td class="lab">فترة العطلة المطلوبة</td><td class="val">من ${frDate(conge.date_debut)} إلى ${frDate(conge.date_fin)}</td></tr>
+        <tr><td class="lab">يوم عطلة أسبوعية (غير محتسب )</td><td class="val">${ligneOff(c.offDates, JOURS_AR)}</td></tr>
+        <tr><td class="lab">يوم عطلة رسمية أو تعويضية</td><td class="val">${ligneFerie(c.ferieDates, c.ferieNom, JOURS_AR)}</td></tr>
         <tr><td class="lab">عدد الأيام المحتسبة</td><td class="val">${nbTxt}</td></tr>
-        ${c.splitApplicable ? `<tr><td class="lab"><span class="tag-recup">منها استرجاع</span></td><td class="val">${arNb(c.recupCount)}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
+        ${c.splitApplicable ? `<tr><td class="lab"><span class="tag-recup">منها يوم عطلة تعويضي أو رسمي</span></td><td class="val">${arNb(c.recupCount)}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
         <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">${arNb(c.annuelCount)}${c.annuelPlage ? ` &nbsp;·&nbsp; من ${frDate(c.annuelPlage.debut)} إلى ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>` : ''}
-        <tr><td class="lab">الرصيد قبل الإجازة</td><td class="val">${soldeSplitAR(c.soldeAvant, c.annuelRestAvant, c.recupRestAvant)}</td></tr>
-        <tr><td class="lab">الرصيد بعد الإجازة</td><td class="val">${soldeSplitAR(c.soldeApres, c.annuelRestApres, c.recupRestApres)}</td></tr>
+        <tr><td class="lab">رصيد العطلة السنوية الحالي</td><td class="val">${soldeSplitAR(c.soldeAvant, c.annuelRestAvant, c.recupRestAvant)}</td></tr>
+        <tr><td class="lab">الرصيد المتبقي بعد العطلة</td><td class="val">${soldeSplitAR(c.soldeApres, c.annuelRestApres, c.recupRestApres)}</td></tr>
       </table>
       <h2 class="sig-titre">التوقيعات والمصادقة</h2>
       <table class="sign">

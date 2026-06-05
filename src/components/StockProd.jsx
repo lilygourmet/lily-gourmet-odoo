@@ -36,6 +36,13 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
 
   useEffect(() => { load() }, [load])
 
+  // Rafraîchit le stock au retour sur l'onglet / l'app (sans minuteur).
+  useEffect(() => {
+    function onVis() { if (document.visibilityState === 'visible') load(true) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [load])
+
   // Fusion article Odoo + catalogue.
   // stock_min effectif = valeur du catalogue si elle existe, sinon le min Odoo (pré-rempli).
   const merged = useMemo(() => {

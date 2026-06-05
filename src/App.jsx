@@ -97,6 +97,13 @@ function App() {
       setLoading(false)
       return
     }
+    // Sécurité : une session sans jeton valide (ancienne session) doit se
+    // reconnecter proprement, sinon elle perdra l'accès une fois la RLS resserrée.
+    if (!hasValidJwt()) {
+      logout()
+      setLoading(false)
+      return
+    }
     setUser(stored)
     // Priorite : on essaie de restaurer la derniere vue depuis localStorage.
     // Sinon fallback sur la vue par defaut du user.
