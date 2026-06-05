@@ -3,6 +3,7 @@ import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders, groupDeliveriesWithFullOrder, stripOdooPrefix } from '../lib/salesLines'
 import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite } from '../lib/deliveries'
 import { isLivreur } from '../lib/auth'
+import { buildMapsHref } from '../lib/maps'
 import { toast } from '../lib/toast'
 import Skeleton from './Skeleton'
 
@@ -194,7 +195,7 @@ export default function LivraisonsView({ user }) {
                     {d.clientPhone && <div style={{ fontSize: 12, color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={11} /> <a href={`tel:${d.clientPhone}`} style={{ color: '#4a3a30' }}>{d.clientPhone}</a></div>}
                   </div>
                 </div>
-                {d.orderNote && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.orderNote)}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#1a5fb4', marginTop: 4, display: 'flex', alignItems: 'flex-start', gap: 4, textDecoration: 'underline' }}><MapPin size={12} style={{ flexShrink: 0, marginTop: 2 }} /> {d.orderNote}</a>}
+                {d.orderNote && <a href={buildMapsHref(d.orderNote)} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#1a5fb4', marginTop: 4, display: 'flex', alignItems: 'flex-start', gap: 4, textDecoration: 'underline' }}><MapPin size={12} style={{ flexShrink: 0, marginTop: 2 }} /> {d.orderNote}</a>}
 
                 {Array.isArray(d.items) && d.items.filter(it => it.category !== 'LIVR').length > 0 && (
                   <div style={{ marginTop: 8, padding: '8px 10px', background: '#FAF7F2', borderRadius: 8, fontSize: 13, color: '#4a3a30' }}>

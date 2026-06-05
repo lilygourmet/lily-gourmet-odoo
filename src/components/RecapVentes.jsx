@@ -9,6 +9,7 @@ function CatIcon({ catId, size = 16, className = '' }) {
   return <I size={size} className={className} />
 }
 import { isLivreur } from '../lib/auth'
+import { buildMapsHref } from '../lib/maps'
 import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
@@ -56,14 +57,6 @@ function sumIndivQty(items) {
 // Categories ou les lignes sont cliquables pour generer une etiquette
 function isClickableCategory(cat) {
   return cat?.viewMode === 'hour-client' || cat?.viewMode === 'delivery-all'
-}
-
-// Extrait une URL Google Maps / Maps.app.goo / OpenStreetMap d'un texte
-function extractMapsUrl(text) {
-  if (!text) return null
-  const re = /(https?:\/\/(?:www\.)?(?:google\.[a-z.]+\/maps[^\s<>"]+|maps\.app\.goo\.gl\/[^\s<>"]+|maps\.google\.[a-z.]+\/[^\s<>"]+|goo\.gl\/maps\/[^\s<>"]+|openstreetmap\.org\/[^\s<>"]+|waze\.com\/[^\s<>"]+))/i
-  const m = text.match(re)
-  return m ? m[1] : null
 }
 
 // ============================================================
@@ -513,8 +506,9 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
   const zoneRaw = (entry.items || []).find(it => it.category === 'LIVR')?.product_name
   const zone = zoneRaw ? stripOdooPrefix(zoneRaw).replace(/^livr[-\s]*/i, '').trim() : ''
 
-  // Detection d'URL Google Maps dans la note
-  const mapsUrl = orderNote ? extractMapsUrl(orderNote) : null
+  // Lien Maps fiable depuis la note (coordonnées GPS ou lien Maps). Pas de lien
+  // si la note est juste du texte (on affiche alors la note telle quelle).
+  const mapsUrl = orderNote ? buildMapsHref(orderNote, { textFallback: false }) : null
 
   // Format montant en DH sans centimes inutiles (1 900 DH au lieu de 1 900,00 DH)
   function fmtMad(v) {
