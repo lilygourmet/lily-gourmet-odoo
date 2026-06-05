@@ -13,6 +13,7 @@ const StockReception = lazy(() => import('./components/StockBoutique/StockRecept
 const StockEvening = lazy(() => import('./components/StockBoutique/StockEvening'))
 const StockAudit = lazy(() => import('./components/StockBoutique/StockAudit'))
 const StockGS = lazy(() => import('./components/StockBoutique/StockGS'))
+const StockProd = lazy(() => import('./components/StockProd'))
 const ChecklistView = lazy(() => import('./components/ChecklistView'))
 const EconomatView = lazy(() => import('./components/Economat/EconomatView'))
 const CaisseView = lazy(() => import('./components/Caisse/CaisseView'))
@@ -30,6 +31,7 @@ import UpdateBanner from './components/UpdateBanner'
 import LazyBoundary from './components/LazyBoundary'
 import ToastHost from './components/ToastHost'
 import ConfirmHost from './components/ConfirmHost'
+import MobileBottomNav from './components/MobileBottomNav'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
 
 function App() {
@@ -170,6 +172,38 @@ function App() {
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [user?.id])
 
+  // Précharge en arrière-plan les écrans "à la demande" ~1,2 s après l'ouverture,
+  // pour que la navigation soit instantanée (plus de "Chargement…"), tout en
+  // gardant un démarrage rapide. Les livreurs (un seul écran) ne préchargent rien.
+  useEffect(() => {
+    if (!user || isLivreur(user)) return
+    const id = setTimeout(() => {
+      const warm = [
+        () => import('./components/Caisse/CaisseView'),
+        () => import('./components/HR/HRView'),
+        () => import('./components/PatissierView'),
+        () => import('./components/ProdView'),
+        () => import('./components/FreezerView'),
+        () => import('./components/MessagesView'),
+        () => import('./components/EtiquettesView'),
+        () => import('./components/StockBoutique/StockMorning'),
+        () => import('./components/StockBoutique/StockReception'),
+        () => import('./components/StockBoutique/StockEvening'),
+        () => import('./components/StockBoutique/StockAudit'),
+        () => import('./components/StockBoutique/StockGS'),
+        () => import('./components/ChecklistView'),
+        () => import('./components/Economat/EconomatView'),
+        () => import('./components/Conversations/InboxView'),
+        () => import('./components/ModificationsView'),
+        () => import('./components/Conversations/PaymentsView'),
+        () => import('./components/AbsencesView'),
+        () => import('./components/CongesView'),
+      ]
+      warm.forEach(fn => fn().catch(() => {}))
+    }, 1200)
+    return () => clearTimeout(id)
+  }, [user?.id])
+
   function handleLoginSuccess(u) {
     setUser(u)
     setActiveView(pickDefaultView(u))
@@ -239,6 +273,8 @@ function App() {
     if (activeView === 'fin-journee') return <StockEvening {...navProps} />
     if (activeView === 'stock') return <StockAudit {...navProps} />
     if (activeView === 'stock-gs') return <StockGS {...navProps} />
+    if (activeView === 'stock-prod-vitrine') return <StockProd {...navProps} lieu="vitrine" />
+    if (activeView === 'stock-prod-annexe') return <StockProd {...navProps} lieu="annexe" />
     if (activeView === 'tasks') return <TasksWrapper {...navProps} />
     if (activeView === 'hr') return <HRWrapper {...navProps} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
@@ -254,7 +290,7 @@ function App() {
     // exposer le calendrier à un user sans perm_calendar.
     if (canSeeCalendar(user)) return <Calendar {...navProps} />
     if (isLivreur(user)) return <LivraisonsWrapper {...navProps} />
-    return <TasksWrapper {...navProps} />
+    return <TasksWrapper {...navProps} welcome />
   }
 
   return (
@@ -266,6 +302,7 @@ function App() {
         <ConversationNotifier user={user} onOpen={openConversation} />
       )}
       <LazyBoundary>{renderActiveView()}</LazyBoundary>
+      <MobileBottomNav user={user} activeView={activeView} onNavigate={handleNavigate} />
     </>
   )
 }
@@ -275,10 +312,18 @@ function App() {
 // (TasksView ne gere pas le header lui-meme)
 // ============================================================
 function TasksWrapper(props) {
-  const { user, onLogout, onNavigate, activeView } = props
+  const { user, onLogout, onNavigate, activeView, welcome } = props
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      {welcome && (
+        <div className="max-w-3xl mx-auto mt-4 px-4">
+          <div className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-4 text-[14px] text-ink">
+            <div className="font-semibold text-bordeaux mb-1">👋 Bienvenue {user.full_name || user.username} !</div>
+            Ton compte est créé. Tes accès seront activés par l'administration. En attendant, tu peux consulter tes <strong>tâches</strong> ci-dessous.
+          </div>
+        </div>
+      )}
       <TasksView user={user} />
     </div>
   )

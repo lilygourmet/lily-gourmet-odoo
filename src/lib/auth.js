@@ -45,7 +45,7 @@ export async function loadFreshUser(userId) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, employe_id, last_visited_conversations, navbar_config')
+      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, employe_id, last_visited_conversations, navbar_config')
       .eq('id', userId)
       .maybeSingle()
     if (error) {
@@ -273,6 +273,16 @@ export function canSeeStock(user) {
 export function canSeeVitrineSale(user) {
   if (!user) return false
   return user.role === 'admin' || user.perm_vitrine_sale === true
+}
+
+// Stock Prod Vitrine / Annexe (articles SM- par lieu Odoo)
+export function canStockProdVitrine(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_prod_vitrine === true
+}
+export function canStockProdAnnexe(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_stock_prod_annexe === true
 }
 
 // =====================================================================

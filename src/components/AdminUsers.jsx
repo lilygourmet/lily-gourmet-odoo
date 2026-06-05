@@ -133,6 +133,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
+        perm_stock_prod_vitrine: formData.permStockProdVitrine,
+        perm_stock_prod_annexe: formData.permStockProdAnnexe,
         perm_vitrine_sale: formData.permVitrineSale,
         perm_caisse: formData.permCaisse,
         perm_caisse_admin: formData.permCaisseAdmin,
@@ -187,6 +189,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
         perm_stock_gs: formData.permStockGS,
+        perm_stock_prod_vitrine: formData.permStockProdVitrine,
+        perm_stock_prod_annexe: formData.permStockProdAnnexe,
         perm_vitrine_sale: formData.permVitrineSale,
         perm_caisse: formData.permCaisse,
         perm_caisse_admin: formData.permCaisseAdmin,
@@ -723,6 +727,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permStockCafe: initialData?.perm_stock_cafe !== undefined ? initialData.perm_stock_cafe : false,
     permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
     permStockGS: initialData?.perm_stock_gs !== undefined ? initialData.perm_stock_gs : false,
+    permStockProdVitrine: initialData?.perm_stock_prod_vitrine !== undefined ? initialData.perm_stock_prod_vitrine : false,
+    permStockProdAnnexe: initialData?.perm_stock_prod_annexe !== undefined ? initialData.perm_stock_prod_annexe : false,
     permVitrineSale: initialData?.perm_vitrine_sale !== undefined ? initialData.perm_vitrine_sale : false,
     permCaisse: initialData?.perm_caisse !== undefined ? initialData.perm_caisse : false,
     permCaisseAdmin: initialData?.perm_caisse_admin !== undefined ? initialData.perm_caisse_admin : false,
@@ -1039,6 +1045,18 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             label="🥪 Voir l'onglet Stock GS- (sous-vue salés)"
             checked={isAdmin || formData.permStockGS}
             onChange={v => update('permStockGS', v)}
+          />
+          <PermCheckbox
+            id="perm-stock-prod-vitrine"
+            label="🛍️ Voir l'onglet Stock Prod Vitrine (SM-)"
+            checked={isAdmin || formData.permStockProdVitrine}
+            onChange={v => update('permStockProdVitrine', v)}
+          />
+          <PermCheckbox
+            id="perm-stock-prod-annexe"
+            label="🏭 Voir l'onglet Stock Prod Annexe (SM-)"
+            checked={isAdmin || formData.permStockProdAnnexe}
+            onChange={v => update('permStockProdAnnexe', v)}
           />
           {currentUser?.role === 'admin' && (
             <PermCheckbox

@@ -4,6 +4,7 @@ import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders,
 import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite } from '../lib/deliveries'
 import { isLivreur } from '../lib/auth'
 import { toast } from '../lib/toast'
+import Skeleton from './Skeleton'
 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const todayISO = () => ymd(new Date())
@@ -164,7 +165,7 @@ export default function LivraisonsView({ user }) {
       {err && <div style={{ background: '#FCEEE8', color: '#A32D2D', padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{err}</div>}
 
       {loading ? (
-        <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
+        <Skeleton rows={4} />
       ) : visible.length === 0 ? (
         <div style={{ padding: 36, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 14 }}>{multiDay ? 'Aucune livraison à venir.' : 'Aucune livraison ce jour.'}</div>
       ) : (

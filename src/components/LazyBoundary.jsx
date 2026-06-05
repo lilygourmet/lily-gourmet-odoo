@@ -1,4 +1,15 @@
-import { Component, Suspense } from 'react'
+import { Component, Suspense, useState, useEffect } from 'react'
+
+// N'affiche "Chargement…" qu'après 250ms : un chargement rapide ne clignote pas.
+function DelayedFallback() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 250)
+    return () => clearTimeout(t)
+  }, [])
+  if (!show) return null
+  return <div style={{ padding: 30, textAlign: 'center', color: '#8a7a70' }}>Chargement…</div>
+}
 
 // Entoure les écrans chargés à la demande (lazy).
 // - Affiche "Chargement…" pendant le téléchargement du morceau.
@@ -41,7 +52,7 @@ export default class LazyBoundary extends Component {
       )
     }
     return (
-      <Suspense fallback={<div style={{ padding: 30, textAlign: 'center', color: '#8a7a70' }}>Chargement…</div>}>
+      <Suspense fallback={<DelayedFallback />}>
         {this.props.children}
       </Suspense>
     )

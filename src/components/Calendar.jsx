@@ -218,6 +218,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
   const [stepsMap, setStepsMap] = useState({})
   const [mobileDayIdx, setMobileDayIdx] = useState(0) // jour affiché sur téléphone
   const touchStartXRef = useRef(null)
+  const touchStartYRef = useRef(null)
   const [profiles, setProfiles] = useState({})
 
   const [syncing, setSyncing] = useState(false)
@@ -772,13 +773,18 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
             {/* Jour courant */}
             <div
               className="flex-1 overflow-y-auto p-3"
-              onTouchStart={e => { touchStartXRef.current = e.touches[0].clientX }}
+              onTouchStart={e => { touchStartXRef.current = e.touches[0].clientX; touchStartYRef.current = e.touches[0].clientY }}
               onTouchEnd={e => {
                 if (touchStartXRef.current == null) return
                 const dx = e.changedTouches[0].clientX - touchStartXRef.current
+                const dy = e.changedTouches[0].clientY - (touchStartYRef.current ?? 0)
                 touchStartXRef.current = null
-                if (dx < -50) setMobileDayIdx(i => Math.min(i + 1, days.length - 1))
-                else if (dx > 50) setMobileDayIdx(i => Math.max(i - 1, 0))
+                touchStartYRef.current = null
+                // Ne change de jour que si le geste est franchement HORIZONTAL
+                // (sinon un simple défilement vertical faisait "sauter" les pages).
+                if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+                if (dx < 0) setMobileDayIdx(i => Math.min(i + 1, days.length - 1))
+                else setMobileDayIdx(i => Math.max(i - 1, 0))
               }}
             >
               {days[mobileDayIdx] && (() => {

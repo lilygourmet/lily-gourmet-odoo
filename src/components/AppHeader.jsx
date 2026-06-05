@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeModifications, canSeeLivraisons, canViewPayments} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeModifications, canSeeLivraisons, canViewPayments} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -18,13 +18,13 @@ import {
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
   MessageCircle, Wallet, CreditCard, Snowflake, Banknote, Users, Plane, Receipt,
   Settings, RefreshCw, LogOut, KeyRound, Printer, Wrench, Palette, Circle, ChevronDown,
-  Sliders, MoreHorizontal, Pencil, Truck,
+  Sliders, MoreHorizontal, Pencil, Truck, Bell,
 } from 'lucide-react'
 
 // Icône (Lucide) par vue / menu / action — remplace les émoticônes du header.
 const HEADER_ICONS = {
   calendar: Calendar, recap: BarChart3, tasks: ListTodo, patissier: Cake,
-  prod: Croissant, sales: Sandwich, 'stock-gs': Boxes,
+  prod: Croissant, sales: Sandwich, 'stock-gs': Boxes, 'stock-prod-vitrine': Boxes, 'stock-prod-annexe': Boxes,
   vitrine: Store, 'vitrine-sale': Store, 'reception-vitrine': PackageCheck,
   'fin-journee': Moon, stock: ClipboardList, checklist: ListChecks,
   etiquettes: Tag, 'cake-vision-link': Camera, messages: MessageSquare,
@@ -60,6 +60,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [showCog])
+  // Centre de notifications (cloche)
+  const [showBell, setShowBell] = useState(false)
+  const bellRef = useRef(null)
+  useEffect(() => {
+    if (!showBell) return
+    function onDown(e) { if (bellRef.current && !bellRef.current.contains(e.target)) setShowBell(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showBell])
   const [showChangePwd, setShowChangePwd] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
@@ -562,6 +571,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'prod',       emoji: '🥐', label: 'Prod',        visible: !isLivreur(user) && (admin || (isProdUser && user.perm_prod)) },
     { view: 'sales',      emoji: '🥪', label: 'Salés',       visible: !isLivreur(user) && (admin || (isProdUser && user.perm_sales)) },
     { view: 'stock-gs',   emoji: '🥪', label: 'Stock GS-',   visible: !isLivreur(user) && canStockGS(user) },
+    { view: 'stock-prod-vitrine', emoji: '🛍️', label: 'Stock Prod Vitrine', visible: !isLivreur(user) && canStockProdVitrine(user) },
+    { view: 'stock-prod-annexe',  emoji: '🏭', label: 'Stock Prod Annexe',  visible: !isLivreur(user) && canStockProdAnnexe(user) },
     { view: 'patissier',  emoji: '🧁', label: 'Accessoires', visible: !isLivreur(user) && (admin || isPatissierUser) },
   ].filter(i => i.visible)
 
@@ -902,6 +913,37 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               )}
             </button>
           )}
+
+          {!isLivreur(user) && (() => {
+            const items = [
+              tasksBadge > 0 && { emoji: '✅', label: `${tasksBadge} tâche(s) non lue(s)`, view: 'tasks' },
+              (convBadge.unassigned + convBadge.unread) > 0 && { emoji: '📱', label: `${convBadge.unassigned + convBadge.unread} conversation(s)`, view: 'conversations' },
+              livraisonsBadge > 0 && { emoji: '🚚', label: `${livraisonsBadge} livraison(s) à réassigner`, view: 'livraisons' },
+              congesBadge > 0 && { emoji: '🌴', label: `${congesBadge} congé(s) à traiter`, view: 'absences' },
+              modifBadge > 0 && { emoji: '✏️', label: `${modifBadge} modification(s)`, view: 'modifications' },
+              paiementsBadge > 0 && { emoji: '💰', label: `${paiementsBadge} paiement(s) à valider`, view: 'paiements' },
+            ].filter(Boolean)
+            const total = tasksBadge + convBadge.unassigned + convBadge.unread + livraisonsBadge + congesBadge + modifBadge + paiementsBadge
+            return (
+              <div className="relative" ref={bellRef}>
+                <button onClick={() => setShowBell(!showBell)} className="relative w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all" title="Notifications">
+                  <Bell size={17} strokeWidth={1.8} />
+                  {total > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-bordeaux text-cream text-[9px] font-semibold flex items-center justify-center leading-none">{total > 99 ? '99+' : total}</span>}
+                </button>
+                {showBell && (
+                  <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[240px] py-1">
+                    {items.length === 0 ? (
+                      <div className="px-4 py-3 text-[13px] text-ink-mute">Rien à signaler 🎉</div>
+                    ) : items.map((it, i) => (
+                      <button key={i} onClick={() => { onNavigate(it.view); setShowBell(false) }} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-bordeaux/5 flex items-center gap-2">
+                        <span>{it.emoji}</span> {it.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {(admin || user?.perm_admin_users) && (
             <div className="relative" ref={cogRef}>

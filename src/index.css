@@ -4,6 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Réserve l'espace en bas sur téléphone pour la barre de navigation mobile (≈56px). */
+@media (max-width: 640px) {
+  body { padding-bottom: 56px; }
+}
+
 body {
   font-family: 'Geist', -apple-system, sans-serif;
   background: #faf7f2;

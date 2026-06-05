@@ -4,6 +4,7 @@ import { formatRelativeTime } from '../../lib/auth'
 import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
 import { supabase } from '../../lib/supabase'
+import Skeleton from '../Skeleton'
 import ConversationDetail from './ConversationDetail'
 import NewConversationModal from './NewConversationModal'
 import QuickRepliesModal from './QuickRepliesModal'
@@ -227,7 +228,7 @@ export default function InboxView({ user, initialConversationId }) {
         {/* Liste défilante */}
         <div className="px-4 py-3">
 
-          {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
+          {loading && <Skeleton rows={5} />}
           {error && <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded">{error}</div>}
           {!loading && !error && conversations.length === 0 && (
             <div className="text-center py-8 text-ink-mute italic">Aucune conversation.</div>
