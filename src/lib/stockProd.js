@@ -10,7 +10,7 @@ export const STOCK_PROD_LIEUX = {
 
 // Articles SM- + stock actuel à un lieu (live Odoo).
 export async function fetchStockProdOdoo(lieu) {
-  const res = await fetch(`/api/stock-prod-odoo?lieu=${encodeURIComponent(lieu)}`)
+  const res = await fetch(`/api/catalog-from-odoo?stockProd=${encodeURIComponent(lieu)}`)
   if (!res.ok) throw new Error(`Odoo HTTP ${res.status}`)
   const d = await res.json()
   if (d.error) throw new Error(d.error)

@@ -84,6 +84,10 @@ export default async function handler(req, res) {
   // limite de fonctions Vercel). GET /api/catalog-from-odoo?economat=1[&q=][&ids=]
   if (req.query.economat) return handleEconomat(req, res)
 
+  // Mode stock prod : articles SM- + stock à un lieu donné (vitrine/annexe).
+  // GET /api/catalog-from-odoo?stockProd=vitrine|annexe
+  if (req.query.stockProd) return handleStockProd(req, res)
+
   try {
     if (!process.env.ODOO_URL || !process.env.ODOO_USERNAME) {
       return res.status(500).json({ error: 'Server misconfigured (Odoo env vars manquantes)' })
@@ -235,6 +239,49 @@ function cleanEconomatName(name) {
   let s = String(name).replace(/^\[\d+\]\s*/, '').trim()  // retire le code [447]
   s = s.replace(/^(MP-|P-)\s*/i, '').trim()               // retire le préfixe MP-/P-
   return s
+}
+
+// ============================================================
+// STOCK PROD — articles SM- + stock à un lieu Odoo (vitrine/annexe)
+// ============================================================
+const STOCK_PROD_LIEUX = {
+  vitrine: 'WHLVP/Stock/Stock Prod',
+  annexe:  'WHPDX/Stock Prod annexe',
+}
+async function handleStockProd(req, res) {
+  try {
+    const lieu = String(req.query.stockProd || '').toLowerCase()
+    const locationName = STOCK_PROD_LIEUX[lieu]
+    if (!locationName) return res.status(400).json({ error: 'lieu invalide (vitrine|annexe)' })
+
+    const uid = await odooAuthenticate()
+    const variants = await odooSearchRead(uid, 'product.product',
+      [['active', '=', true], ['name', '=ilike', 'SM-%']],
+      ['id', 'name'], { limit: 2000 })
+    if (!variants.length) return res.status(200).json({ lieu, location: locationName, articles: [] })
+
+    const quants = await odooSearchRead(uid, 'stock.quant',
+      [['location_id.complete_name', '=', locationName], ['product_id', 'in', variants.map(v => v.id)]],
+      ['product_id', 'quantity'])
+    const qtyByVariant = new Map()
+    for (const q of quants) {
+      const vid = Array.isArray(q.product_id) ? q.product_id[0] : null
+      if (vid) qtyByVariant.set(vid, (qtyByVariant.get(vid) || 0) + (parseFloat(q.quantity) || 0))
+    }
+    const byName = new Map()
+    for (const v of variants) {
+      const name = cleanName(v.name)
+      if (!name) continue
+      byName.set(name, (byName.get(name) || 0) + (qtyByVariant.get(v.id) || 0))
+    }
+    const articles = [...byName.entries()]
+      .map(([name, qty]) => ({ name, qty: Math.round(qty * 100) / 100 }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    return res.status(200).json({ lieu, location: locationName, articles })
+  } catch (e) {
+    console.error('[catalog-from-odoo stockProd] Erreur:', e)
+    return res.status(500).json({ error: e.message || 'Erreur serveur' })
+  }
 }
 
 async function handleEconomat(req, res) {
