@@ -219,15 +219,40 @@ export async function closeConversation(conversationId, userId) {
   return data
 }
 
-/** Renomme le client d'une conversation (utile quand on n'a que le numéro). */
+/** Renomme le client d'une conversation à la MAIN (marque name_manual=true → ne sera plus écrasé par Odoo). */
 export async function updateConversationClientName(conversationId, name) {
   const { data, error } = await supabase
     .from('conversations')
-    .update({ client_name: name?.trim() || null, updated_at: new Date().toISOString() })
+    .update({ client_name: name?.trim() || null, name_manual: true, updated_at: new Date().toISOString() })
     .eq('id', conversationId)
     .select(CONV_SEL)
     .single()
   if (error) throw error
+  return data
+}
+
+/** Met le nom de la conversation depuis Odoo (devis/commande). N'écrase JAMAIS un
+ * nom saisi à la main (name_manual). Renvoie la conv mise à jour, ou null si rien fait. */
+export async function setConversationNameFromOdoo(conversationId, clientPhone, currentName, nameManual) {
+  if (nameManual) return null
+  if (!clientPhone) return null
+  let orders = []
+  try { orders = await searchOrders(clientPhone) } catch { return null }
+  // On ne garde que les commandes/devis dont le téléphone correspond vraiment.
+  const num = String(clientPhone).replace(/\D/g, '')
+  const match = (orders || []).find(o => {
+    const op = String(o.clientPhone || '').replace(/\D/g, '')
+    return op && (op.endsWith(num.slice(-9)) || num.endsWith(op.slice(-9)))
+  })
+  const realName = match?.clientName?.trim()
+  if (!realName || realName === (currentName || '').trim()) return null
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ client_name: realName, updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .select(CONV_SEL)
+    .single()
+  if (error) return null
   return data
 }
 

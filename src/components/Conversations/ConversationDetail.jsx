@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationUnread } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread } from '../../lib/conversations'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
@@ -137,6 +137,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       ])
       setConv(c)
       setMessages(msgs)
+      // Récupère le vrai nom depuis Odoo (devis/commande) si pas saisi à la main — non bloquant.
+      if (c && !c.name_manual && c.client_phone) {
+        setConversationNameFromOdoo(c.id, c.client_phone, c.client_name, c.name_manual)
+          .then(updated => { if (updated) setConv(prev => (prev && prev.id === updated.id) ? updated : prev) })
+          .catch(() => {})
+      }
     } catch (e) {
       setError(e.message)
     } finally {
