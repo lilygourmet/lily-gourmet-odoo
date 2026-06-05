@@ -100,10 +100,10 @@ export function calcule({ conge, emp, solde, joursFeries }) {
   let recupList, annuelDates
   if (recupDetail.length > 0) {
     const rset = new Set(recupDetail.map(r => r.date))
-    recupList   = recupDetail.map(r => ({ date: r.date, raison: r.raison || null }))
+    recupList   = recupDetail.map(r => ({ date: r.date, raison: r.raison || null, source: r.date_source || null }))
     annuelDates = decomptes.filter(d => !rset.has(d))
   } else if (isRecup(conge.type_conge)) {
-    recupList   = decomptes.map(d => ({ date: d, raison: null }))
+    recupList   = decomptes.map(d => ({ date: d, raison: null, source: null }))
     annuelDates = []
   } else {
     recupList   = []
@@ -152,7 +152,7 @@ function ligneFerie(dates, ferieNom, JOURS) {
 }
 
 function pageFR({ conge, emp, c, dateDoc }) {
-  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelFR(r.raison)}</span></div>`).join('')
+  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelFR(r.raison)}${r.source ? ` du ${frDate(r.source)}` : ''}</span></div>`).join('')
   return `
   <div class="page">
     <div class="contenu">
@@ -198,7 +198,7 @@ function pageFR({ conge, emp, c, dateDoc }) {
 }
 
 function pageAR({ conge, emp, c, dateDoc }) {
-  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelAR(r.raison)}</span></div>`).join('')
+  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelAR(r.raison)}${r.source ? ` بتاريخ ${frDate(r.source)}` : ''}</span></div>`).join('')
   const arNb = n => (n > 1 ? `${n} أيام` : `${n} يوم`)
   const nbTxt = arNb(c.nbDec)
   return `

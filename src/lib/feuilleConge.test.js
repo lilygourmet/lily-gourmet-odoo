@@ -51,6 +51,17 @@ describe('feuilleConge.calcule — mélange récup + annuel', () => {
     expect(c.annuelPlage).toEqual({ debut: '2026-06-10', fin: '2026-06-12' })
   })
 
+  it('garde la date du jour travaillé (date_source)', () => {
+    const c = calcule({
+      conge: {
+        date_debut: '2026-06-08', date_fin: '2026-06-12', type_conge: 'annuel',
+        recup_detail: [{ date: '2026-06-08', raison: 'travaille', date_source: '2026-05-25' }],
+      }, emp, solde: null, joursFeries: [],
+    })
+    expect(c.recupList[0].source).toBe('2026-05-25')
+    expect(c.recupList[0].raison).toBe('travaille')
+  })
+
   it('récup + annuel = total décompté (cohérence)', () => {
     const c = calcule({
       conge: {

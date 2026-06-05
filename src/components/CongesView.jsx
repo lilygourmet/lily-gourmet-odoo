@@ -952,16 +952,17 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
   const existingRecup = Array.isArray(conge.recup_detail) ? conge.recup_detail : []
   // Pour un congé de type récup sans détail saisi, on pré-remplit tous les jours
   // (par défaut « jour travaillé ») pour que l'admin n'ait qu'à ajuster la raison.
-  const initRecup = (() => {
-    if (existingRecup.length) return existingRecup.map(r => r.raison || 'travaille')
+  const initData = (() => {
+    if (existingRecup.length) return existingRecup.map(r => ({ raison: r.raison || 'travaille', source: r.date_source || '' }))
     if (classifierConge(conge) === 'recup') {
       const set = new Set((joursFeries || []).map(f => f.date))
-      return joursDecomptesDates(emp, set, conge.date_debut, conge.date_fin).map(() => 'travaille')
+      return joursDecomptesDates(emp, set, conge.date_debut, conge.date_fin).map(() => ({ raison: 'travaille', source: '' }))
     }
     return []
   })()
-  const [recupCount, setRecupCount]     = useState(initRecup.length)
-  const [recupRaisons, setRecupRaisons] = useState(initRecup)
+  const [recupCount, setRecupCount]     = useState(initData.length)
+  const [recupRaisons, setRecupRaisons] = useState(initData.map(x => x.raison))
+  const [recupSources, setRecupSources] = useState(initData.map(x => x.source))
   const [busy, setBusy]           = useState(false)
   const [err, setErr]             = useState('')
 
@@ -973,13 +974,11 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
   function setCount(n) {
     n = Math.max(0, Math.min(maxRecup, Math.floor(Number(n) || 0)))
     setRecupCount(n)
-    setRecupRaisons(prev => {
-      const a = prev.slice(0, n)
-      while (a.length < n) a.push('travaille')
-      return a
-    })
+    setRecupRaisons(prev => { const a = prev.slice(0, n); while (a.length < n) a.push('travaille'); return a })
+    setRecupSources(prev => { const a = prev.slice(0, n); while (a.length < n) a.push(''); return a })
   }
   function setRaison(i, v) { setRecupRaisons(prev => { const a = [...prev]; a[i] = v; return a }) }
+  function setSource(i, v) { setRecupSources(prev => { const a = [...prev]; a[i] = v; return a }) }
 
   async function submit() {
     setErr('')
@@ -988,7 +987,7 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
     setBusy(true)
     try {
       const recup_detail = recupEff > 0
-        ? decomptedDates.slice(0, recupEff).map((d, i) => ({ date: d, raison: recupRaisons[i] || 'travaille' }))
+        ? decomptedDates.slice(0, recupEff).map((d, i) => ({ date: d, raison: recupRaisons[i] || 'travaille', date_source: recupSources[i] || null }))
         : null
       await onSave({
         date_debut: dateDebut,
@@ -1055,14 +1054,25 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
               Sur {maxRecup} jour{maxRecup > 1 ? 's' : ''} décompté{maxRecup > 1 ? 's' : ''}. Le reste = congé annuel. (Apparaît sur la feuille de congé.)
             </div>
             {recupEff > 0 && (
-              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {decomptedDates.slice(0, recupEff).map((d, i) => (
-                  <div key={d} style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 8, alignItems: 'center' }}>
-                    <div style={{ fontSize: 12, color: '#1c7a35', fontWeight: 600 }}>{fmt(d)} <span style={{ fontWeight: 400, color: '#8a7a70' }}>({jourSemaine(d)})</span></div>
-                    <select value={recupRaisons[i] || 'travaille'} onChange={e => setRaison(i, e.target.value)} style={{ ...ipt, padding: '6px 8px' }}>
-                      <option value="travaille">Récup d'un jour travaillé</option>
-                      <option value="ferie">Récup d'un jour férié</option>
-                    </select>
+                  <div key={d} style={{ padding: '8px 10px', background: 'white', border: '0.5px solid #cfe8d6', borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: '#1c7a35', fontWeight: 600, marginBottom: 6 }}>
+                      Récup prise le {fmt(d)} <span style={{ fontWeight: 400, color: '#8a7a70' }}>({jourSemaine(d)})</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#5a7a60', marginBottom: 2 }}>Nature</div>
+                        <select value={recupRaisons[i] || 'travaille'} onChange={e => setRaison(i, e.target.value)} style={{ ...ipt, padding: '6px 8px' }}>
+                          <option value="travaille">Jour travaillé</option>
+                          <option value="ferie">Jour férié</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#5a7a60', marginBottom: 2 }}>Date du jour {recupRaisons[i] === 'ferie' ? 'férié' : 'travaillé'} (optionnel)</div>
+                        <input type="date" value={recupSources[i] || ''} onChange={e => setSource(i, e.target.value)} style={{ ...ipt, padding: '6px 8px' }} />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
