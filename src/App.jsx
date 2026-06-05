@@ -2,31 +2,33 @@ import { useState, useEffect, lazy } from 'react'
 import Login from './components/Login'
 import Calendar from './components/Calendar'
 import RecapVentes from './components/RecapVentes'
-import PatissierView from './components/PatissierView'
-import ProdView from './components/ProdView'
-import FreezerView from './components/FreezerView'
-import MessagesView from './components/MessagesView'
-import EtiquettesView from './components/EtiquettesView'
-import StockMorning from './components/StockBoutique/StockMorning'
-import StockReception from './components/StockBoutique/StockReception'
-import StockEvening from './components/StockBoutique/StockEvening'
-import StockAudit from './components/StockBoutique/StockAudit'
-import StockGS from './components/StockBoutique/StockGS'
-import ChecklistView from './components/ChecklistView'
-import EconomatView from './components/Economat/EconomatView'
+// Écrans rares/lourds : chargés à la demande (réduit le poids au démarrage).
+const PatissierView = lazy(() => import('./components/PatissierView'))
+const ProdView = lazy(() => import('./components/ProdView'))
+const FreezerView = lazy(() => import('./components/FreezerView'))
+const MessagesView = lazy(() => import('./components/MessagesView'))
+const EtiquettesView = lazy(() => import('./components/EtiquettesView'))
+const StockMorning = lazy(() => import('./components/StockBoutique/StockMorning'))
+const StockReception = lazy(() => import('./components/StockBoutique/StockReception'))
+const StockEvening = lazy(() => import('./components/StockBoutique/StockEvening'))
+const StockAudit = lazy(() => import('./components/StockBoutique/StockAudit'))
+const StockGS = lazy(() => import('./components/StockBoutique/StockGS'))
+const ChecklistView = lazy(() => import('./components/ChecklistView'))
+const EconomatView = lazy(() => import('./components/Economat/EconomatView'))
 const CaisseView = lazy(() => import('./components/Caisse/CaisseView'))
 import TasksView from './components/Tasks/TasksView'
 const HRView = lazy(() => import('./components/HR/HRView'))
-import InboxView from './components/Conversations/InboxView'
-import ModificationsView from './components/ModificationsView'
+const InboxView = lazy(() => import('./components/Conversations/InboxView'))
+const ModificationsView = lazy(() => import('./components/ModificationsView'))
 import LivraisonsView from './components/LivraisonsView'
-import PaymentsView from './components/Conversations/PaymentsView'
-import AbsencesView from './components/AbsencesView'
-import CongesView from './components/CongesView'
+const PaymentsView = lazy(() => import('./components/Conversations/PaymentsView'))
+const AbsencesView = lazy(() => import('./components/AbsencesView'))
+const CongesView = lazy(() => import('./components/CongesView'))
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
 import LazyBoundary from './components/LazyBoundary'
+import ToastHost from './components/ToastHost'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
 
 function App() {
@@ -254,6 +256,7 @@ function App() {
   return (
     <>
       <UpdateBanner />
+      <ToastHost />
       {canSeeConversations(user) && (
         <ConversationNotifier user={user} onOpen={openConversation} />
       )}

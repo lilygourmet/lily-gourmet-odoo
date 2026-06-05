@@ -3,6 +3,7 @@ import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders, groupDeliveriesWithFullOrder, stripOdooPrefix } from '../lib/salesLines'
 import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite } from '../lib/deliveries'
 import { isLivreur } from '../lib/auth'
+import { toast } from '../lib/toast'
 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const todayISO = () => ymd(new Date())
@@ -93,7 +94,7 @@ export default function LivraisonsView({ user }) {
       if (livreurId) {
         const l = livreurs.find(x => x.id === livreurId)
         if (l && !l.whatsapp) {
-          alert(`⚠️ ${l.full_name || l.username} n'a pas de numéro WhatsApp.\nIl verra la livraison dans l'app, mais ne recevra pas de message WhatsApp.\n(Ajoute son numéro dans Admin → Users.)`)
+          toast.info(`${l.full_name || l.username} n'a pas de WhatsApp : il verra la livraison dans l'app, mais pas de message. (Ajoute son numéro dans Admin → Users.)`, { duration: 6000 })
         }
       }
     } catch (e) { setErr(e.message) }

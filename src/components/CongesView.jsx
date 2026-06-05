@@ -812,6 +812,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           conge={editConge}
           emp={empById[editConge.employe_id]}
           joursFeries={joursFeries}
+          recupAllocs={allocations.filter(a => a.employe_id === editConge.employe_id && a.type === 'autre' && a.statut === 'valide')}
           onClose={() => setEditConge(null)}
           onSave={patch => handleUpdateConge(editConge.id, patch)}
         />
@@ -938,7 +939,19 @@ function EditAllocationModal({ alloc, emp, onClose, onSave }) {
   )
 }
 
-function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
+// Déplie les allocations de récup en une liste de dates « jour travaillé/férié »
+// (date_evt), de la plus ancienne à la plus récente, une entrée par jour gagné.
+function buildRecupSourceDates(recupAllocs) {
+  const out = []
+  const sorted = (recupAllocs || []).filter(a => a.date_evt).slice().sort((a, b) => a.date_evt.localeCompare(b.date_evt))
+  for (const a of sorted) {
+    const n = Math.max(1, Math.round(Number(a.jours) || 0))
+    for (let k = 0; k < n; k++) out.push(a.date_evt)
+  }
+  return out
+}
+
+function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [], recupAllocs = [] }) {
   const [dateDebut, setDateDebut] = useState(conge.date_debut)
   const [dateFin, setDateFin]     = useState(conge.date_fin)
   const [typeConge, setTypeConge] = useState(conge.type_conge || 'annuel')
@@ -952,11 +965,19 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
   const existingRecup = Array.isArray(conge.recup_detail) ? conge.recup_detail : []
   // Pour un congé de type récup sans détail saisi, on pré-remplit tous les jours
   // (par défaut « jour travaillé ») pour que l'admin n'ait qu'à ajuster la raison.
+  // Dates « jour travaillé/férié » déduites des allocations de récup (auto-remplissage).
+  const sourceDates = buildRecupSourceDates(recupAllocs)
+  const feriesDatesSet = new Set((joursFeries || []).map(f => f.date))
+  // Nature auto : si la date source est un jour férié → 'ferie', sinon 'travaille'.
+  const autoRaison = src => (src && feriesDatesSet.has(src) ? 'ferie' : 'travaille')
+
   const initData = (() => {
     if (existingRecup.length) return existingRecup.map(r => ({ raison: r.raison || 'travaille', source: r.date_source || '' }))
     if (classifierConge(conge) === 'recup') {
-      const set = new Set((joursFeries || []).map(f => f.date))
-      return joursDecomptesDates(emp, set, conge.date_debut, conge.date_fin).map(() => ({ raison: 'travaille', source: '' }))
+      return joursDecomptesDates(emp, feriesDatesSet, conge.date_debut, conge.date_fin).map((d, i) => {
+        const source = sourceDates[i] || ''
+        return { raison: autoRaison(source), source }
+      })
     }
     return []
   })()
@@ -966,7 +987,7 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
   const [busy, setBusy]           = useState(false)
   const [err, setErr]             = useState('')
 
-  const feriesSet      = useMemo(() => new Set((joursFeries || []).map(f => f.date)), [joursFeries])
+  const feriesSet      = feriesDatesSet
   const decomptedDates = useMemo(() => joursDecomptesDates(emp, feriesSet, dateDebut, dateFin), [emp, feriesSet, dateDebut, dateFin])
   const maxRecup = decomptedDates.length
   const recupEff = Math.min(recupCount, maxRecup)
@@ -974,8 +995,8 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
   function setCount(n) {
     n = Math.max(0, Math.min(maxRecup, Math.floor(Number(n) || 0)))
     setRecupCount(n)
-    setRecupRaisons(prev => { const a = prev.slice(0, n); while (a.length < n) a.push('travaille'); return a })
-    setRecupSources(prev => { const a = prev.slice(0, n); while (a.length < n) a.push(''); return a })
+    setRecupSources(prev => { const a = prev.slice(0, n); for (let i = a.length; i < n; i++) a.push(sourceDates[i] || ''); return a })
+    setRecupRaisons(prev => { const a = prev.slice(0, n); for (let i = a.length; i < n; i++) a.push(autoRaison(sourceDates[i] || '')); return a })
   }
   function setRaison(i, v) { setRecupRaisons(prev => { const a = [...prev]; a[i] = v; return a }) }
   function setSource(i, v) { setRecupSources(prev => { const a = [...prev]; a[i] = v; return a }) }
@@ -1051,7 +1072,7 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
             <label style={{ ...lbl, color: '#1c7a35' }}>Jours de récupération compris (au début du congé)</label>
             <input type="number" min="0" max={maxRecup} value={recupCount} onChange={e => setCount(e.target.value)} style={ipt} />
             <div style={{ fontSize: 10, color: '#5a7a60', marginTop: 2 }}>
-              Sur {maxRecup} jour{maxRecup > 1 ? 's' : ''} décompté{maxRecup > 1 ? 's' : ''}. Le reste = congé annuel. (Apparaît sur la feuille de congé.)
+              Sur {maxRecup} jour{maxRecup > 1 ? 's' : ''} décompté{maxRecup > 1 ? 's' : ''}. Le reste = congé annuel. Les dates « jour travaillé/férié » sont <strong>pré-remplies</strong> depuis les allocations de récup (modifiables).
             </div>
             {recupEff > 0 && (
               <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1069,7 +1090,7 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [] }) {
                         </select>
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, color: '#5a7a60', marginBottom: 2 }}>Date du jour {recupRaisons[i] === 'ferie' ? 'férié' : 'travaillé'} (optionnel)</div>
+                        <div style={{ fontSize: 10, color: '#5a7a60', marginBottom: 2 }}>Date du jour {recupRaisons[i] === 'ferie' ? 'férié' : 'travaillé'} (auto, modifiable)</div>
                         <input type="date" value={recupSources[i] || ''} onChange={e => setSource(i, e.target.value)} style={{ ...ipt, padding: '6px 8px' }} />
                       </div>
                     </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { changeMyPassword } from '../lib/users'
+import { toast } from '../lib/toast'
 
 export default function ChangePasswordModal({ user, onClose }) {
   const [oldPwd, setOldPwd] = useState('')
@@ -28,7 +29,7 @@ export default function ChangePasswordModal({ user, onClose }) {
         setError(result?.error || 'Le changement de mot de passe a échoué')
         return
       }
-      alert('Mot de passe changé ✅')
+      toast.success('Mot de passe changé')
       onClose()
     } catch (err) {
       setError(err?.message || 'Erreur lors du changement de mot de passe')
