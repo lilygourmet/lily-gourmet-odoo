@@ -268,8 +268,11 @@ async function handleStockProd(req, res) {
       const vid = Array.isArray(q.product_id) ? q.product_id[0] : null
       if (vid) qtyByVariant.set(vid, (qtyByVariant.get(vid) || 0) + (parseFloat(q.quantity) || 0))
     }
+    // On ne garde QUE les articles réellement présents à ce lieu (qui ont une
+    // ligne de stock — quant — à cette location), pas tout le catalogue SM-.
     const byName = new Map()
     for (const v of variants) {
+      if (!qtyByVariant.has(v.id)) continue
       const name = cleanName(v.name)
       if (!name) continue
       byName.set(name, (byName.get(name) || 0) + (qtyByVariant.get(v.id) || 0))

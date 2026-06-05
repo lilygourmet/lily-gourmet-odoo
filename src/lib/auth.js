@@ -5,17 +5,20 @@ const STORAGE_KEY = 'lily_user'
 // Login - retourne { user, error } pour compat avec Login.jsx
 export async function loginWithUsername(username, password) {
   try {
-    const { data, error } = await supabase.rpc('verify_login', {
-      p_username: username.trim().toLowerCase(),
-      p_password: password,
+    // Connexion sécurisée : vérifie les identifiants côté serveur ET renvoie un
+    // JWT signé, qu'on stocke pour s'identifier auprès de la base (RLS).
+    const res = await fetch('/api/wati-webhook?action=login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username.trim().toLowerCase(), password }),
     })
-    if (error) return { user: null, error: error.message }
-    if (!data || data.length === 0) {
-      return { user: null, error: 'Identifiants incorrects' }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.user) {
+      return { user: null, error: data.error || 'Identifiants incorrects' }
     }
-    const user = data[0]
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-    return { user, error: null }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user))
+    if (data.token) { try { localStorage.setItem('lily_jwt', data.token) } catch { /* ignore */ } }
+    return { user: data.user, error: null }
   } catch (e) {
     return { user: null, error: e.message }
   }
@@ -26,6 +29,7 @@ export const login = loginWithUsername
 
 export function logout() {
   localStorage.removeItem(STORAGE_KEY)
+  try { localStorage.removeItem('lily_jwt') } catch { /* ignore */ }
 }
 
 export function getCurrentUser() {

@@ -20,6 +20,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { sendPushToTargets } from './push.js'
+import crypto from 'crypto'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
 
   // Aiguillage selon ?action= ; sans action = réception entrante (appel de Wati)
   const action = req.query?.action
+  if (action === 'login') return handleLogin(req, res)
   if (action === 'send') return handleSend(req, res)
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
@@ -47,6 +49,50 @@ export default async function handler(req, res) {
   if (action === 'fetch-photo') return handleFetchPhoto(req, res)
   if (action === 'conges-notif') return handleCongesNotif(req, res)
   return handleInbound(req, res)
+}
+
+// ============================================================
+// CONNEXION SÉCURISÉE (?action=login) — vérifie les identifiants (verify_login)
+// puis renvoie un JWT signé avec le secret JWT du projet (pour resserrer la RLS).
+// ============================================================
+function b64url(input) {
+  return Buffer.from(input).toString('base64').replace(/=+$/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+}
+function signJwt(payload, secret) {
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const body = b64url(JSON.stringify(payload))
+  const data = `${header}.${body}`
+  const sig = crypto.createHmac('sha256', secret).update(data).digest()
+  return `${data}.${b64url(sig)}`
+}
+async function handleLogin(req, res) {
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET
+  if (!jwtSecret) return res.status(500).json({ error: 'SUPABASE_JWT_SECRET manquant' })
+  const { username, password } = req.body || {}
+  if (!username || !password) return res.status(400).json({ error: 'username et password requis' })
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
+    const { data, error } = await supabase.rpc('verify_login', {
+      p_username: String(username).trim().toLowerCase(),
+      p_password: password,
+    })
+    if (error) throw error
+    if (!data || data.length === 0) return res.status(401).json({ error: 'Identifiants incorrects' })
+    const user = data[0]
+    const now = Math.floor(Date.now() / 1000)
+    const token = signJwt({
+      sub: user.id,
+      aud: 'authenticated',
+      role: 'authenticated',
+      app_role: user.role || null,
+      iat: now,
+      exp: now + 60 * 60 * 12,
+    }, jwtSecret)
+    return res.status(200).json({ user, token })
+  } catch (e) {
+    console.error('[login]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
 }
 
 // ============================================================
