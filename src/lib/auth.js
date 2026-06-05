@@ -32,6 +32,21 @@ export function logout() {
   try { localStorage.removeItem('lily_jwt') } catch { /* ignore */ }
 }
 
+// Vrai si un jeton de connexion valide (non expiré) est présent.
+// Sert à forcer une reconnexion propre pour les sessions sans jeton.
+export function hasValidJwt() {
+  try {
+    const t = localStorage.getItem('lily_jwt')
+    if (!t) return false
+    const parts = t.split('.')
+    if (parts.length !== 3) return false
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return !(payload.exp && payload.exp < Math.floor(Date.now() / 1000))
+  } catch {
+    return false
+  }
+}
+
 export function getCurrentUser() {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return null

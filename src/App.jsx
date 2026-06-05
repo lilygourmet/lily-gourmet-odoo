@@ -32,7 +32,7 @@ import LazyBoundary from './components/LazyBoundary'
 import ToastHost from './components/ToastHost'
 import ConfirmHost from './components/ConfirmHost'
 import MobileBottomNav from './components/MobileBottomNav'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
+import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, hasValidJwt } from './lib/auth'
 
 function App() {
   const [user, setUser] = useState(null)

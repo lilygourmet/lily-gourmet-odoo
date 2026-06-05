@@ -36,11 +36,13 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
 
   useEffect(() => { load() }, [load])
 
-  // Fusion article Odoo + catalogue
+  // Fusion article Odoo + catalogue.
+  // stock_min effectif = valeur du catalogue si elle existe, sinon le min Odoo (pré-rempli).
   const merged = useMemo(() => {
     return articles.map(a => {
-      const c = catalog[a.name] || {}
-      return { name: a.name, qty: a.qty, actif: !!c.actif, stock_min: Number(c.stock_min) || 0 }
+      const c = catalog[a.name]
+      const stock_min = c ? (Number(c.stock_min) || 0) : (a.odoo_min != null ? a.odoo_min : 0)
+      return { name: a.name, qty: a.qty, odoo_min: a.odoo_min ?? null, odoo_max: a.odoo_max ?? null, actif: !!(c && c.actif), stock_min }
     })
   }, [articles, catalog])
 
@@ -52,11 +54,16 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
     return [...list].sort((a, b) => (a.qty - b.qty) || a.name.localeCompare(b.name, 'fr'))
   }, [merged, adminMode, q])
 
-  // Admin : (dé)activer un article
-  async function toggleActif(name, actif) {
-    setCatalog(prev => ({ ...prev, [name]: { ...(prev[name] || { stock_min: 0 }), actif } }))
-    try { await upsertStockProdCatalog(lieu, name, { actif }) }
-    catch (e) { toast.error('Erreur : ' + e.message); load() }
+  // Admin : (dé)activer un article. À la 1ère activation, on pré-remplit le
+  // stock mini avec celui d'Odoo (s'il existe) ; ensuite l'admin peut le corriger.
+  async function toggleActif(name, actif, odooMin) {
+    const existed = !!catalog[name]
+    setCatalog(prev => ({ ...prev, [name]: { actif, stock_min: prev[name]?.stock_min ?? (odooMin != null ? odooMin : 0) } }))
+    try {
+      const patch = { actif }
+      if (actif && !existed) patch.stock_min = odooMin != null ? odooMin : 0
+      await upsertStockProdCatalog(lieu, name, patch)
+    } catch (e) { toast.error('Erreur : ' + e.message); load() }
   }
   // Admin : régler le stock mini
   async function setMin(name, val) {
@@ -142,7 +149,7 @@ function ViewRow({ m }) {
     <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${box}`}>
       <div className="flex-1 min-w-0">
         <div className="text-[14px] font-medium text-ink flex items-center"><span className="truncate">{m.name}</span>{badge}</div>
-        <div className="text-[11px] text-ink-mute mt-0.5">Stock mini : {m.stock_min}</div>
+        <div className="text-[11px] text-ink-mute mt-0.5">Stock mini : {m.stock_min}{m.odoo_max != null ? ` · max ${m.odoo_max}` : ''}</div>
       </div>
       <div className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[15px] font-bold tabular-nums ${pill}`}>{m.qty}</div>
     </div>
@@ -155,14 +162,17 @@ function AdminRow({ m, onToggle, onMin }) {
   useEffect(() => { setMinLocal(String(m.stock_min)) }, [m.stock_min])
   return (
     <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${m.actif ? 'bg-white border-emerald-200' : 'bg-ink-mute/5 border-line/60'}`}>
-      <button onClick={() => onToggle(m.name, !m.actif)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+      <button onClick={() => onToggle(m.name, !m.actif, m.odoo_min)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
         <span className={`w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center border ${m.actif ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-line'}`}>
           {m.actif && <Check size={13} strokeWidth={3} />}
         </span>
-        <span className={`text-[14px] font-medium truncate ${m.actif ? 'text-ink' : 'text-ink-mute'}`}>{m.name}</span>
+        <span className="min-w-0">
+          <span className={`block text-[14px] font-medium truncate ${m.actif ? 'text-ink' : 'text-ink-mute'}`}>{m.name}</span>
+          {m.odoo_min != null && <span className="block text-[10px] text-ink-mute">Odoo : min {m.odoo_min} · max {m.odoo_max}</span>}
+        </span>
       </button>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="text-[11px] text-ink-mute">Stock Odoo : <b className="tabular-nums">{m.qty}</b></span>
+        <span className="text-[11px] text-ink-mute">Stock : <b className="tabular-nums">{m.qty}</b></span>
         <label className="text-[11px] text-ink-mute flex items-center gap-1">mini
           <input type="number" min="0" step="1" value={min}
             onChange={e => setMinLocal(e.target.value)} onBlur={() => onMin(m.name, min)}
