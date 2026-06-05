@@ -52,8 +52,14 @@ export async function loadMonthData(mois, annee) {
     .from('pointages_mois').select('employe_id, solde_mois')
     .eq('mois', prevMois).eq('annee', prevAnnee)
 
+  // Le salaire net vit dans une table séparée (admin-only). On le rattache pour
+  // le calcul de coût (réservé à l'admin) ; vide pour un non-admin (RLS).
+  const { data: remu } = await supabase.from('employes_remuneration').select('employe_id, salaire_net')
+  const salById = new Map((remu || []).map(r => [r.employe_id, r.salaire_net]))
+  const employesAvecSalaire = (employes || []).map(e => ({ ...e, salaire_net: salById.has(e.id) ? salById.get(e.id) : null }))
+
   return {
-    employes: employes || [],
+    employes: employesAvecSalaire,
     feries: feries || [],
     pointages: pointages || [],
     conges: conges || [],

@@ -139,7 +139,6 @@ export default function EmployeEditModal({
         date_entree: form.date_entree || null,
         date_anciennete: form.date_anciennete || null,
         date_sortie: form.date_sortie || null,
-        salaire_net: form.salaire_net ? parseFloat(form.salaire_net) : null,
         adresse: form.adresse.trim() || null,
         rib: form.rib.trim() || null,
         banque: form.banque.trim() || null,
@@ -166,6 +165,11 @@ export default function EmployeEditModal({
         contact_urgence_2_telephone: form.contact_urgence_2_telephone.trim() || null,
         lieu_urgence: form.lieu_urgence || null,
         lieu_urgence_nom: form.lieu_urgence_nom.trim() || null,
+      }
+      // Salaire net : réservé aux admins (table protégée). Un non-admin n'envoie
+      // pas ce champ → impossible d'écraser le salaire par accident.
+      if (isAdmin) {
+        data.salaire_net = form.salaire_net ? parseFloat(form.salaire_net) : null
       }
       if (isNew) {
         const created = await createEmploye(data, user.id)

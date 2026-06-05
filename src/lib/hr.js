@@ -34,19 +34,32 @@ export async function loadEmployes(filterActif = null) {
 
   const { data, error } = await query
   if (error) throw error
-  return data || []
+  const employes = data || []
+  // Le salaire net vit dans une table séparée (admin-only). On le rattache ici.
+  // Pour un non-admin, la requête renvoie [] (RLS) → salaire_net reste null.
+  const { data: remu } = await supabase.from('employes_remuneration').select('employe_id, salaire_net')
+  const salById = new Map((remu || []).map(r => [r.employe_id, r.salaire_net]))
+  return employes.map(e => ({ ...e, salaire_net: salById.has(e.id) ? salById.get(e.id) : null }))
 }
 
 /**
  * Crée un employé.
  */
 export async function createEmploye(emp, userId) {
+  // Le salaire net est stocké à part (table admin-only) : on l'isole du reste.
+  const { salaire_net, ...rest } = emp
   const { data, error } = await supabase
     .from('employes')
-    .insert({ ...emp, created_by: userId, updated_by: userId })
+    .insert({ ...rest, created_by: userId, updated_by: userId })
     .select()
     .single()
   if (error) throw error
+  if (salaire_net !== undefined) {
+    const { error: e2 } = await supabase
+      .from('employes_remuneration')
+      .upsert({ employe_id: data.id, salaire_net })
+    if (e2) throw e2
+  }
   return data
 }
 
@@ -54,13 +67,21 @@ export async function createEmploye(emp, userId) {
  * Modifie un employé.
  */
 export async function updateEmploye(id, updates, userId) {
+  // Le salaire net est stocké à part (table admin-only) : on l'isole du reste.
+  const { salaire_net, ...rest } = updates
   const { data, error } = await supabase
     .from('employes')
-    .update({ ...updates, updated_by: userId })
+    .update({ ...rest, updated_by: userId })
     .eq('id', id)
     .select()
     .single()
   if (error) throw error
+  if (salaire_net !== undefined) {
+    const { error: e2 } = await supabase
+      .from('employes_remuneration')
+      .upsert({ employe_id: id, salaire_net })
+    if (e2) throw e2
+  }
   return data
 }
 

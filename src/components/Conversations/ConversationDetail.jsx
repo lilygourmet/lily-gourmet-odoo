@@ -544,12 +544,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   async function confirmModification() {
+    if (!modifRef.trim()) { toast.error('Indique le n° de commande (S…).'); return }
     setModifBusy(true)
     try {
       let jp = null
       if (modifFile) jp = await uploadJustificatif(modifFile, user.id)
       await createModification({
-        order_ref: modifRef,
+        order_ref: modifRef.trim(),
         client_name: conv?.client_name || null,
         client_phone: conv?.client_phone || null,
         conversation_id: conversationId,
@@ -1031,7 +1032,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => !modifBusy && setModifOpen(false)}>
           <div className="bg-cream rounded-2xl w-full max-w-sm shadow-2xl border border-line p-5" onClick={e => e.stopPropagation()}>
             <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Demande de modification</h3>
-            <p className="text-[12px] text-ink-soft mb-3">Commande <strong>{modifRef}</strong> · {conv?.client_name || conv?.client_phone || ''}</p>
+            <p className="text-[12px] text-ink-soft mb-2">Client : {conv?.client_name || conv?.client_phone || ''}</p>
+            <label className="block text-[11px] font-medium text-ink-soft mb-1">N° de commande (modifiable si c'en est une autre)</label>
+            <input type="text" value={modifRef} onChange={e => setModifRef(e.target.value)} placeholder="ex : S49251"
+              className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3 font-mono" />
             <label className="block text-[11px] font-medium text-ink-soft mb-1">Que faut-il modifier ?</label>
             <textarea value={modifDesc} onChange={e => setModifDesc(e.target.value)} rows={3}
               placeholder="ex : changer la date de retrait au 12/06, ajouter un message sur le gâteau…"
