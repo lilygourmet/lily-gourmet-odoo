@@ -173,8 +173,9 @@ const AUTO_RULES = [
   { quickReplyId: 19, test: /\b(localisation|localis|adresse|maps?|o[uù]\s+(êtes|etes)|vous\s+(êtes|etes)\s+o[uù]|fin\s+kayn|win\s+kayn)\b/i, exclude: /\b(ma|mon|notre)\s+(localisation|adresse)\b|voici\s+ma\s+localis|je\s+vous\s+(donne|envoie)\s+(ma|mon)/i },
   // [27] Livraison (zones validées)
   { quickReplyId: 27, test: /\b(livraison|livrer|livrez|livr[ée]e?|tawsil|tawssil|توصيل)\b/i },
-  // [28] Horaires d'ouverture (mot "ferme" du gâteau-ferme exclu : on exige fermé/fermez)
-  { quickReplyId: 28, test: /\bhoraire|\bouvert|\bouvrez|\bferm(é|ée|és|ez)|مفتوح|الوقت/i },
+  // [28] Horaires d'ouverture. "ferme" seul (gâteau ferme) exclu : on exige une
+  // forme conjuguée (fermez/fermer/fermes/fermé/fermés...), pas le nom "ferme".
+  { quickReplyId: 28, test: /\bhoraire|\bouvert|\bouvr|\bferm(é|ée|ées|és|ez|er|es|ent)|مفتوح|الوقت/i },
 ]
 
 async function maybeAutoReply(supabase, conv, phone, body) {
