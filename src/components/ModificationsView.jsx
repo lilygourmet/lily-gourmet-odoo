@@ -41,7 +41,7 @@ export default function ModificationsView({ user }) {
       <h1 className="font-fraunces italic text-[26px] text-ink mb-1 flex items-center gap-2">
         <Pencil size={22} /> Modifications
       </h1>
-      <p className="text-[12px] text-ink-soft mb-4">Demandes envoyées par les commerciaux. Fais la modif, note ce que tu as fait, puis « Fait ».</p>
+      <p className="text-[12px] text-ink-soft mb-4">Demandes envoyées par les commerciaux. Fais la modif, pas besoin de noter ce que tu as fait, puis « Fait ».</p>
 
       <div className="flex gap-2 mb-5">
         <button onClick={() => setTab('a_traiter')} className={tabBtn(tab === 'a_traiter')}>
