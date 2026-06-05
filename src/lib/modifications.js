@@ -42,3 +42,15 @@ export async function countModificationsATraiter() {
   if (error) return 0
   return count || 0
 }
+
+// Historique : les modifications déjà traitées (les plus récentes d'abord).
+export async function loadModificationsFaites(limit = 100) {
+  const { data, error } = await supabase
+    .from('modifications')
+    .select('*')
+    .eq('status', 'fait')
+    .order('done_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data || []
+}
