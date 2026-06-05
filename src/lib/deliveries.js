@@ -36,9 +36,15 @@ export async function loadDeliveryStates(orderNums) {
 // Notifie TOUTES les personnes ayant accès aux Livraisons (admin / récap / livreurs),
 // sauf l'auteur de l'action.
 // Prévient UNIQUEMENT la personne qui a assigné la livraison (champ assigned_by).
-async function notifyAssigner(orderNum, actorId, title, isUrgent) {
-  const { data: row } = await supabase.from('livraisons').select('assigned_by').eq('order_num', orderNum).maybeSingle()
-  const target = row?.assigned_by
+async function notifyAssigner(orderNum, actorId, title, isUrgent, assignedBy = undefined) {
+  // On privilégie l'assignateur fourni par l'appelant (déjà chargé à l'écran) pour
+  // ne pas dépendre d'une relecture en base (qui peut être bloquée par les RLS du
+  // livreur connecté → assigned_by revenait vide → aucune notif). Repli : relecture.
+  let target = assignedBy
+  if (target === undefined) {
+    const { data: row } = await supabase.from('livraisons').select('assigned_by').eq('order_num', orderNum).maybeSingle()
+    target = row?.assigned_by
+  }
   if (!target || target === actorId) return
   try {
     await createTask({ title, fromUserId: actorId, toUserId: target, isUrgent: !!isUrgent })
@@ -65,22 +71,22 @@ export async function assignDelivery({ orderNum, livreurId, byUserId, titre, des
   }
 }
 
-// Le livreur accepte -> notifie toute l'équipe Livraisons.
-export async function acceptDelivery({ orderNum, byUserId, label, livreurName }) {
+// Le livreur accepte -> notifie l'assignateur de la livraison.
+export async function acceptDelivery({ orderNum, byUserId, label, livreurName, assignedBy }) {
   const { error } = await supabase
     .from('livraisons')
     .upsert({ order_num: orderNum, livreur_id: byUserId, statut: 'acceptee', updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
-  await notifyAssigner(orderNum, byUserId, `✅ ${livreurName} a accepté la livraison · ${label}`, false)
+  await notifyAssigner(orderNum, byUserId, `✅ ${livreurName} a accepté la livraison · ${label}`, false, assignedBy)
 }
 
-// Le livreur refuse (pas dispo) -> à réassigner + notif URGENTE à toute l'équipe Livraisons.
-export async function refuseDelivery({ orderNum, byUserId, label, livreurName }) {
+// Le livreur refuse (pas dispo) -> à réassigner + notif URGENTE à l'assignateur.
+export async function refuseDelivery({ orderNum, byUserId, label, livreurName, assignedBy }) {
   const { error } = await supabase
     .from('livraisons')
     .upsert({ order_num: orderNum, livreur_id: null, statut: 'refusee', updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
-  await notifyAssigner(orderNum, byUserId, `⚠️ ${livreurName} PAS DISPO · ${label} — à réassigner`, true)
+  await notifyAssigner(orderNum, byUserId, `⚠️ ${livreurName} PAS DISPO · ${label} — à réassigner`, true, assignedBy)
 }
 
 // Nombre de livraisons refusées en attente de réassignation (badge onglet).

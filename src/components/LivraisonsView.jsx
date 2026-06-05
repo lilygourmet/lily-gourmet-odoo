@@ -109,7 +109,7 @@ export default function LivraisonsView({ user }) {
   async function handleAccept(d) {
     setBusy(d.orderNum); setErr('')
     try {
-      await acceptDelivery({ orderNum: d.orderNum, byUserId: user.id, label: labelLivraison(d), livreurName: livreurNom })
+      await acceptDelivery({ orderNum: d.orderNum, byUserId: user.id, label: labelLivraison(d), livreurName: livreurNom, assignedBy: states[d.orderNum]?.assigned_by })
       setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: user.id, statut: 'acceptee' } }))
     } catch (e) { setErr(e.message) }
     finally { setBusy('') }
@@ -118,7 +118,7 @@ export default function LivraisonsView({ user }) {
   async function handleRefuse(d) {
     setBusy(d.orderNum); setErr('')
     try {
-      await refuseDelivery({ orderNum: d.orderNum, byUserId: user.id, label: labelLivraison(d), livreurName: livreurNom })
+      await refuseDelivery({ orderNum: d.orderNum, byUserId: user.id, label: labelLivraison(d), livreurName: livreurNom, assignedBy: states[d.orderNum]?.assigned_by })
       setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: null, statut: 'refusee' } }))
     } catch (e) { setErr(e.message) }
     finally { setBusy('') }
