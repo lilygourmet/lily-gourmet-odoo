@@ -260,14 +260,28 @@ async function handleStockProd(req, res) {
       ['id', 'name'], { limit: 2000 })
     if (!variants.length) return res.status(200).json({ lieu, location: locationName, articles: [] })
 
+    const variantIds = variants.map(v => v.id)
     const quants = await odooSearchRead(uid, 'stock.quant',
-      [['location_id.complete_name', '=', locationName], ['product_id', 'in', variants.map(v => v.id)]],
+      [['location_id.complete_name', '=', locationName], ['product_id', 'in', variantIds]],
       ['product_id', 'quantity'])
     const qtyByVariant = new Map()
     for (const q of quants) {
       const vid = Array.isArray(q.product_id) ? q.product_id[0] : null
       if (vid) qtyByVariant.set(vid, (qtyByVariant.get(vid) || 0) + (parseFloat(q.quantity) || 0))
     }
+
+    // Règles de réapprovisionnement Odoo (min/max) à ce lieu, si elles existent.
+    let minByVariant = new Map(), maxByVariant = new Map()
+    try {
+      const orderpoints = await odooSearchRead(uid, 'stock.warehouse.orderpoint',
+        [['location_id.complete_name', '=', locationName], ['product_id', 'in', variantIds]],
+        ['product_id', 'product_min_qty', 'product_max_qty'])
+      for (const o of orderpoints) {
+        const vid = Array.isArray(o.product_id) ? o.product_id[0] : null
+        if (vid) { minByVariant.set(vid, parseFloat(o.product_min_qty) || 0); maxByVariant.set(vid, parseFloat(o.product_max_qty) || 0) }
+      }
+    } catch (e) { console.warn('[stockProd orderpoint]', e.message) }
+
     // On ne garde QUE les articles réellement présents à ce lieu (qui ont une
     // ligne de stock — quant — à cette location), pas tout le catalogue SM-.
     const byName = new Map()
@@ -275,10 +289,14 @@ async function handleStockProd(req, res) {
       if (!qtyByVariant.has(v.id)) continue
       const name = cleanName(v.name)
       if (!name) continue
-      byName.set(name, (byName.get(name) || 0) + (qtyByVariant.get(v.id) || 0))
+      const cur = byName.get(name) || { qty: 0, odoo_min: null, odoo_max: null }
+      cur.qty += qtyByVariant.get(v.id) || 0
+      if (minByVariant.has(v.id)) cur.odoo_min = minByVariant.get(v.id)
+      if (maxByVariant.has(v.id)) cur.odoo_max = maxByVariant.get(v.id)
+      byName.set(name, cur)
     }
     const articles = [...byName.entries()]
-      .map(([name, qty]) => ({ name, qty: Math.round(qty * 100) / 100 }))
+      .map(([name, o]) => ({ name, qty: Math.round(o.qty * 100) / 100, odoo_min: o.odoo_min, odoo_max: o.odoo_max }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
     return res.status(200).json({ lieu, location: locationName, articles })
   } catch (e) {
