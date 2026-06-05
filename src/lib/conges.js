@@ -596,6 +596,16 @@ export async function updateConge(id, patch) {
   return data
 }
 
+// Supprime un congé. Sécurité : on n'autorise que les congés NON validés
+// (statut 'demande' / 'rejete' / 'annule'), jamais un congé 'valide'.
+export async function deleteConge(id) {
+  const { data: row, error: e1 } = await supabase.from('conges').select('statut').eq('id', id).maybeSingle()
+  if (e1) throw e1
+  if (row?.statut === 'valide') throw new Error('Un congé validé ne peut pas être supprimé (seul un admin peut l\'annuler).')
+  const { error } = await supabase.from('conges').delete().eq('id', id)
+  if (error) throw error
+}
+
 // Reporte les soldes dispo d'une année N en allocations type='reliquat'
 // pour l'année N+1. Idempotent : annule les reliquats auto existants pour
 // N+1 puis recrée à partir du dispo actuel au 31/12 de N.

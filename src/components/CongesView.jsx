@@ -30,7 +30,7 @@ import {
   loadAllocations, createAllocation, cancelAllocation,
   validerAllocation, rejeterAllocation,
   ALLOC_TYPES,
-  updateAllocation, updateConge,
+  updateAllocation, updateConge, deleteConge,
   uploadJustificatif, getJustificatifUrl,
 } from '../lib/conges'
 import {
@@ -122,6 +122,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const isAdmin = user?.role === 'admin'
   // RH (perm_hr) : peut voir et IMPRIMER les congés, mais pas modifier/supprimer/valider.
   const canImprimerFeuille = isAdmin || !!user?.perm_hr
+  // RH (perm_hr) : peut modifier/supprimer un congé TANT QU'IL N'EST PAS VALIDÉ.
+  const canManagePending = isAdmin || !!user?.perm_hr
   const [employes, setEmployes]     = useState([])
   const [conges, setConges]         = useState([])
   const [loading, setLoading]       = useState(true)
@@ -290,6 +292,12 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     try { await annulerConge(c.id, user.id); await reload() }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
+  // Supprime une demande NON validée (perm_hr ou admin).
+  async function handleDeletePending(c) {
+    if (!await confirmDialog(`Supprimer cette demande de congé ?\n\n${empById[c.employe_id]?.nom || ''} · du ${fmt(c.date_debut)} au ${fmt(c.date_fin)}`, { danger: true, confirmLabel: 'Supprimer' })) return
+    try { await deleteConge(c.id); await reload() }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+  }
 
   async function handleAddAllocation(payload) {
     try {
@@ -394,8 +402,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                     actions={canImprimerFeuille ? (
                       <>
                         <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
+                        {canManagePending && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier (non validé)"><Pencil size={13} /></button>}
                         {isAdmin && <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>}
                         {isAdmin && <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>}
+                        {canManagePending && <button onClick={() => handleDeletePending(c)} style={btnRejeter} title="Supprimer la demande"><Trash2 size={14} /></button>}
                       </>
                     ) : null}
                   />
@@ -829,6 +839,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           conge={editConge}
           emp={empById[editConge.employe_id]}
           joursFeries={joursFeries}
+          canEditStatut={isAdmin}
           recupAllocs={allocations.filter(a => a.employe_id === editConge.employe_id && a.type === 'autre' && a.statut === 'valide')}
           onClose={() => setEditConge(null)}
           onSave={patch => handleUpdateConge(editConge.id, patch)}
@@ -968,7 +979,7 @@ function buildRecupSourceDates(recupAllocs) {
   return out
 }
 
-function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [], recupAllocs = [] }) {
+function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [], recupAllocs = [], canEditStatut = true }) {
   const [dateDebut, setDateDebut] = useState(conge.date_debut)
   const [dateFin, setDateFin]     = useState(conge.date_fin)
   const [typeConge, setTypeConge] = useState(conge.type_conge || 'annuel')
@@ -1032,7 +1043,7 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [], recupAl
         date_fin: dateFin,
         type_conge: typeConge,
         motif: motif.trim() || null,
-        statut,
+        statut: canEditStatut ? statut : conge.statut,
         jours_decomptes: joursDecomptes === '' ? null : Number(joursDecomptes),
         recup_detail,
       })
@@ -1066,13 +1077,17 @@ function EditCongeModal({ conge, emp, onClose, onSave, joursFeries = [], recupAl
           maladie / mariage / naissance / décès / circoncision / récup / sans solde.
         </div>
 
-        <label style={{ ...lbl, marginTop: 10 }}>Statut</label>
-        <select value={statut} onChange={e => setStatut(e.target.value)} style={ipt}>
-          <option value="demande">Demande</option>
-          <option value="valide">Validé</option>
-          <option value="rejete">Rejeté</option>
-          <option value="annule">Annulé</option>
-        </select>
+        {canEditStatut && (
+          <>
+            <label style={{ ...lbl, marginTop: 10 }}>Statut</label>
+            <select value={statut} onChange={e => setStatut(e.target.value)} style={ipt}>
+              <option value="demande">Demande</option>
+              <option value="valide">Validé</option>
+              <option value="rejete">Rejeté</option>
+              <option value="annule">Annulé</option>
+            </select>
+          </>
+        )}
 
         <label style={{ ...lbl, marginTop: 10 }}>Jours décomptés (laisser vide = calcul auto)</label>
         <input type="number" step="0.5" value={joursDecomptes} onChange={e => setJoursDecomptes(e.target.value)} placeholder="ex : 4" style={ipt} />

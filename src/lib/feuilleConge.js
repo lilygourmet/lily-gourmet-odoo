@@ -282,7 +282,7 @@ function pageAR({ conge, emp, c, dateDoc }) {
         <tr><td class="lab">يوم عطلة رسمية أو تعويضية</td><td class="val">${ligneFerie(c.ferieDates, c.ferieNom, JOURS_AR)}</td></tr>
         <tr><td class="lab">عدد الأيام المحتسبة</td><td class="val">${nbTxt}</td></tr>
         ${c.splitApplicable ? `<tr><td class="lab"><span class="tag-recup">منها يوم عطلة تعويضي أو رسمي</span></td><td class="val">${arNb(c.recupCount)}${c.recupCount > 0 ? `<div class="sous-recup">${recupRows}</div>` : ''}</td></tr>
-        <tr><td class="lab"><span class="tag-annuel">منها إجازة سنوية</span></td><td class="val">${arNb(c.annuelCount)}${c.annuelPlage ? ` &nbsp;·&nbsp; من ${frDate(c.annuelPlage.debut)} إلى ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>` : ''}
+        <tr><td class="lab"><span class="tag-annuel">منها عطلة سنوية</span></td><td class="val">${arNb(c.annuelCount)}${c.annuelPlage ? ` &nbsp;·&nbsp; من ${frDate(c.annuelPlage.debut)} إلى ${frDate(c.annuelPlage.fin)}` : ''}</td></tr>` : ''}
         <tr><td class="lab">رصيد العطلة السنوية الحالي</td><td class="val">${soldeSplitAR(c.soldeAvant, c.annuelRestAvant, c.recupRestAvant)}</td></tr>
         <tr><td class="lab">الرصيد المتبقي بعد العطلة</td><td class="val">${soldeSplitAR(c.soldeApres, c.annuelRestApres, c.recupRestApres)}</td></tr>
       </table>
