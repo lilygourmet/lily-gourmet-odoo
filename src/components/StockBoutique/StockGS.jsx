@@ -8,7 +8,7 @@
 // pour le refill (nom + stock vitrine actuel + indication de bas stock).
 // =============================================================
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 import AppHeader from '../AppHeader'
 import {
@@ -135,6 +135,21 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
       setRefreshingOdoo(false)
     }
   }
+
+  // Rafraîchit le stock Odoo au retour sur l'onglet (throttle 2 min pour ménager le CPU)
+  const lastVisSyncRef = useRef(0)
+  useEffect(() => {
+    function onVis() {
+      if (document.visibilityState !== 'visible' || !stockDay) return
+      const now = Date.now()
+      if (now - lastVisSyncRef.current < 120000) return
+      lastVisSyncRef.current = now
+      handleRefreshOdoo()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockDay, user?.id])
 
   // Filtre les lignes : uniquement GS- salues
   const gsLines = useMemo(() => {

@@ -145,18 +145,22 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
   )
 }
 
-// Carte vue (perm) : stock + badge à refill
+// Carte vue (perm) : stock + badge à refill + objectif max à atteindre
 function ViewRow({ m }) {
-  const low = m.qty <= m.stock_min
+  const besoin = m.qty <= m.stock_min            // à refill
   const zero = m.qty <= 0
+  const aProduire = m.odoo_max != null ? Math.max(0, Math.round((m.odoo_max - m.qty) * 100) / 100) : null
   let box = 'bg-white border-line/60', pill = 'bg-emerald-600 text-white', badge = null
   if (zero) { box = 'bg-red-50 border-red-300'; pill = 'bg-red-600 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded-full ml-2">Rupture</span> }
-  else if (low) { box = 'bg-amber-50 border-amber-300'; pill = 'bg-amber-500 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full ml-2">À refill</span> }
+  else if (besoin) { box = 'bg-amber-50 border-amber-300'; pill = 'bg-amber-500 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full ml-2">À refill</span> }
   return (
     <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${box}`}>
       <div className="flex-1 min-w-0">
         <div className="text-[14px] font-medium text-ink flex items-center"><span className="truncate">{m.name}</span>{badge}</div>
         <div className="text-[11px] text-ink-mute mt-0.5">Stock mini : {m.stock_min}{m.odoo_max != null ? ` · max ${m.odoo_max}` : ''}</div>
+        {besoin && m.odoo_max != null && (
+          <div className="text-[11px] font-semibold text-amber-800 mt-0.5">🎯 Remplir jusqu'à {m.odoo_max} — à produire : {aProduire}</div>
+        )}
       </div>
       <div className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[15px] font-bold tabular-nums ${pill}`}>{m.qty}</div>
     </div>
