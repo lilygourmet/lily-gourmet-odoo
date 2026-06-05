@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../lib/toast'
 import { loadAbsences, createAbsence, deleteAbsence } from '../lib/absences'
 import { Trash2 } from 'lucide-react'
 
@@ -58,7 +59,7 @@ export default function AbsencesView({ user }) {
     try {
       await deleteAbsence(a.id)
       setItems(prev => prev.filter(x => x.id !== a.id))
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   const term = q.trim().toLowerCase()

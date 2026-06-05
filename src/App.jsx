@@ -29,6 +29,7 @@ import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
 import LazyBoundary from './components/LazyBoundary'
 import ToastHost from './components/ToastHost'
+import ConfirmHost from './components/ConfirmHost'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments } from './lib/auth'
 
 function App() {
@@ -257,6 +258,7 @@ function App() {
     <>
       <UpdateBanner />
       <ToastHost />
+      <ConfirmHost />
       {canSeeConversations(user) && (
         <ConversationNotifier user={user} onOpen={openConversation} />
       )}

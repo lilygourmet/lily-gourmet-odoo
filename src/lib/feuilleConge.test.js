@@ -1,5 +1,34 @@
 import { describe, it, expect } from 'vitest'
-import { calcule } from './feuilleConge'
+import { calcule, buildRecupSource } from './feuilleConge'
+
+describe('buildRecupSource — allocations récup FIFO', () => {
+  const allocs = [
+    { date_evt: '2026-01-11', jours: 1.0, raison: 'Manifeste' },
+    { date_evt: '2026-01-13', jours: 0.5, raison: 'récup' },
+    { date_evt: '2026-01-20', jours: 0.5, raison: 'récup' },
+    { date_evt: '2026-01-27', jours: 0.5, raison: 'récup' },
+    { date_evt: '2026-02-03', jours: 0.5, raison: 'récup' },
+  ]
+  it('1er congé récup (1 j) → consomme la 1ère allocation', () => {
+    const r = buildRecupSource(allocs, 0, 1)
+    expect(r.pieces).toEqual([{ date: '2026-01-11', raison: 'Manifeste', montant: 1 }])
+    expect(r.manque).toBe(0)
+  })
+  it('2e congé (2 j) après 1 j déjà consommé → 4 demi-journées suivantes', () => {
+    const r = buildRecupSource(allocs, 1, 2)
+    expect(r.pieces.map(p => p.date)).toEqual(['2026-01-13', '2026-01-20', '2026-01-27', '2026-02-03'])
+    expect(r.pieces.every(p => p.montant === 0.5)).toBe(true)
+    expect(r.manque).toBe(0)
+  })
+  it('sur-consommation (besoin > alloué) → manque signalé', () => {
+    const r = buildRecupSource(allocs.slice(0, 2), 0, 2) // total 1.5, besoin 2
+    expect(r.manque).toBe(0.5)
+  })
+  it('trie par date même si allocations désordonnées', () => {
+    const r = buildRecupSource([allocs[2], allocs[0]], 0, 1)
+    expect(r.pieces[0].date).toBe('2026-01-11')
+  })
+})
 
 const emp = { nom: 'Test', poste: 'Pâtissier', cnss: '123', planning_type: 'fixe', planning_jour_off: 'Dimanche' }
 // 2026-06-08 = Lundi … 2026-06-12 = Vendredi ; 2026-06-14 = Dimanche

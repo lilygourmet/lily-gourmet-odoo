@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../lib/toast'
 
 export default function LabelsButton() {
   const [open, setOpen] = useState(false)
@@ -35,7 +36,7 @@ export default function LabelsButton() {
       setCounts(map)
     } catch (e) {
       console.error('[labels] count error:', e)
-      alert('Erreur au comptage : ' + e.message)
+      toast.error('Erreur au comptage : ' + e.message)
     } finally {
       setLoadingCounts(false)
     }
@@ -44,7 +45,7 @@ export default function LabelsButton() {
   async function downloadSelected() {
     const dates = Object.keys(selected).filter(d => selected[d])
     if (dates.length === 0) {
-      alert('Sélectionne au moins un jour')
+      toast.error('Sélectionne au moins un jour')
       return
     }
     setDownloading(true)
@@ -68,7 +69,7 @@ export default function LabelsButton() {
       URL.revokeObjectURL(url)
       setOpen(false)
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     } finally {
       setDownloading(false)
     }

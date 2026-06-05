@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { toast } from '../lib/toast'
 import { usePersistedState } from '../lib/usePersistedState'
 import { Cake, Cookie, Snowflake } from 'lucide-react'
 import AppHeader from './AppHeader'
@@ -111,7 +112,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (e) {
-      alert('Erreur generation ZPL : ' + e.message)
+      toast.error('Erreur génération ZPL : ' + e.message)
     } finally {
       setDownloading(false)
     }
@@ -123,12 +124,12 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
     setSyncing(true)
     try {
       const result = await syncEtiquettesFromOdoo(token)
-      alert(`Sync OK\n${result.upserted} articles\n${result.images_count} images\nDuree: ${(result.duration_ms / 1000).toFixed(1)}s`)
+      toast.success(`Sync OK · ${result.upserted} articles · ${result.images_count} images · ${(result.duration_ms / 1000).toFixed(1)}s`)
       // Reload
       const fresh = await loadEtiquettesArticles()
       setArticles(fresh)
     } catch (e) {
-      alert('Erreur sync : ' + e.message)
+      toast.error('Erreur sync : ' + e.message)
     } finally {
       setSyncing(false)
     }

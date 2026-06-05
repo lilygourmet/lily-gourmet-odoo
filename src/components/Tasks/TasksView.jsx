@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import SearchSelect from '../SearchSelect'
+import { confirmDialog } from '../../lib/confirmDialog'
 import {
   loadTasksReceived, loadTasksSent, countUnreadTasks,
   markTaskRead, deleteTask, loadTeamTasks

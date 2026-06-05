@@ -101,9 +101,32 @@ function soldeSplitAR(total, annuel, recup) {
   return `${fmtJours(total)} <span style="font-weight:400;color:#666;">(سنوية ${fmtJours(annuel)} · استرجاع ${fmtJours(recup)})</span>`
 }
 
+// À partir des allocations de récup (triées par date_evt), des jours déjà
+// consommés par les congés récup antérieurs (dejaConsomme) et du besoin de CE
+// congé, renvoie la liste des allocations consommées (date + raison + montant)
+// + le manque éventuel (récup prise sans allocation).
+// Exporté pour les tests internes.
+export function buildRecupSource(recupAllocs, dejaConsomme, besoin) {
+  const pieces = []
+  const sorted = [...(recupAllocs || [])].filter(a => a.date_evt).sort((a, b) => a.date_evt.localeCompare(b.date_evt))
+  const start = dejaConsomme || 0
+  const end = start + (besoin || 0)
+  let cum = 0
+  for (const a of sorted) {
+    const aStart = cum, aEnd = cum + Number(a.jours || 0)
+    cum = aEnd
+    const montant = Math.min(aEnd, end) - Math.max(aStart, start)
+    if (montant > 0.001) pieces.push({ date: a.date_evt, raison: a.raison || null, montant: Math.round(montant * 100) / 100 })
+    if (cum >= end) break
+  }
+  const couvert = pieces.reduce((s, p) => s + p.montant, 0)
+  const manque = Math.round((besoin - couvert) * 100) / 100
+  return { pieces, manque: manque > 0.001 ? manque : 0 }
+}
+
 // Calcule tout ce qui sert à la feuille à partir des données brutes.
 // Exporté pour les tests internes.
-export function calcule({ conge, emp, solde, joursFeries }) {
+export function calcule({ conge, emp, solde, joursFeries, recupAllocs, recupDejaConsomme }) {
   const ferieSet = new Set((joursFeries || []).map(f => f.date))
   const ferieNom = new Map((joursFeries || []).map(f => [f.date, f.nom]))
   const reposNom = jourReposNom(emp)
@@ -134,6 +157,8 @@ export function calcule({ conge, emp, solde, joursFeries }) {
   const recupCount  = recupList.length
   const annuelCount = annuelDates.length
   const annuelPlage = annuelCount ? { debut: annuelDates[0], fin: annuelDates[annuelCount - 1] } : null
+  // Source des jours de récup : allocations réellement consommées (FIFO).
+  const recupSource = buildRecupSource(recupAllocs, recupDejaConsomme, recupCount)
   // Le détail récup/annuel ne s'applique qu'aux congés annuel/récup
   // (la maladie et les événements ne sont pas pris du congé annuel).
   const splitApplicable = !estMaladie(conge.type_conge) && !estEvenement(conge.type_conge)
@@ -161,7 +186,7 @@ export function calcule({ conge, emp, solde, joursFeries }) {
 
   return {
     tous, offDates, ferieDates, decomptes, ferieNom, reposNom, nbDec,
-    recupCount, annuelCount, recupList, annuelPlage, splitApplicable,
+    recupCount, annuelCount, recupList, recupSource, annuelPlage, splitApplicable,
     soldeAvant, soldeApres,
     recupRestApres, annuelRestApres, recupRestAvant, annuelRestAvant,
   }
@@ -177,7 +202,9 @@ function ligneFerie(dates, ferieNom, JOURS) {
 }
 
 function pageFR({ conge, emp, c, dateDoc }) {
-  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelFR(r.raison)}${r.source ? ` du ${frDate(r.source)}` : ''}</span></div>`).join('')
+  const recupRows = c.recupSource.pieces.map(p =>
+    `<div class="r"><span class="d">${frDate(p.date)}</span><span class="ra">${esc(p.raison || 'Récupération')} (${fmtJours(p.montant)} j)</span></div>`).join('')
+    + (c.recupSource.manque > 0 ? `<div class="r"><span class="d">—</span><span class="ra" style="color:#a33">${fmtJours(c.recupSource.manque)} j sans allocation de récup</span></div>` : '')
   return `
   <div class="page">
     <div class="contenu">
@@ -223,7 +250,9 @@ function pageFR({ conge, emp, c, dateDoc }) {
 }
 
 function pageAR({ conge, emp, c, dateDoc }) {
-  const recupRows = c.recupList.map(r => `<div class="r"><span class="d">${frDate(r.date)}</span><span class="ra">${raisonLabelAR(r.raison)}${r.source ? ` بتاريخ ${frDate(r.source)}` : ''}</span></div>`).join('')
+  const recupRows = c.recupSource.pieces.map(p =>
+    `<div class="r"><span class="d">${frDate(p.date)}</span><span class="ra">${esc(p.raison || 'استرجاع')} (${fmtJours(p.montant)} ي)</span></div>`).join('')
+    + (c.recupSource.manque > 0 ? `<div class="r"><span class="d">—</span><span class="ra" style="color:#a33">${fmtJours(c.recupSource.manque)} ي بدون رصيد استرجاع</span></div>` : '')
   const arNb = n => (n > 1 ? `${n} أيام` : `${n} يوم`)
   const nbTxt = arNb(c.nbDec)
   return `
@@ -320,9 +349,9 @@ ${pageAR(ctx)}
 </body></html>`
 }
 
-export function imprimerFeuilleConge({ conge, emp, solde, joursFeries }) {
+export function imprimerFeuilleConge({ conge, emp, solde, joursFeries, recupAllocs, recupDejaConsomme }) {
   if (!conge || !emp) { alert('Données manquantes pour la feuille.'); return }
-  const html = buildHTML({ conge, emp, solde, joursFeries })
+  const html = buildHTML({ conge, emp, solde, joursFeries, recupAllocs, recupDejaConsomme })
   const w = window.open('', '_blank')
   if (!w) { alert("Autorise les fenêtres pop-up pour imprimer la feuille de congé."); return }
   w.document.write(html)

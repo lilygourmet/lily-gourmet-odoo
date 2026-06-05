@@ -255,6 +255,19 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const empById = useMemo(() => Object.fromEntries(employes.map(e => [e.id, e])), [employes])
   const feriesSet = useMemo(() => new Set(joursFeries.map(f => f.date)), [joursFeries])
 
+  // Imprime la feuille de congé : calcule les allocations de récup de l'employé
+  // et la récup déjà consommée par ses congés récup ANTÉRIEURS (FIFO).
+  function imprimerFeuille(c) {
+    const emp = empById[c.employe_id]
+    const recupAllocs = allocations.filter(a => a.employe_id === c.employe_id && (a.type === 'autre' || a.type === 'recup') && a.statut === 'valide')
+    const yearStart = c.date_debut.slice(0, 4) + '-01-01'
+    const recupDejaConsomme = conges
+      .filter(x => x.employe_id === c.employe_id && x.statut === 'valide' && classifierConge(x) === 'recup'
+        && x.date_debut >= yearStart && x.date_debut < c.date_debut)
+      .reduce((s, x) => s + joursDecomptesConge(x, emp, feriesSet), 0)
+    imprimerFeuilleConge({ conge: c, emp, solde: soldes[c.employe_id], joursFeries, recupAllocs, recupDejaConsomme })
+  }
+
   async function handleValider(c) {
     if (!confirm(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.`)) return
     try {
@@ -376,7 +389,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                     key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
                     actions={isAdmin ? (
                       <>
-                        <button onClick={() => imprimerFeuilleConge({ conge: c, emp: empById[c.employe_id], solde: soldes[c.employe_id], joursFeries })} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
+                        <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                         <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>
                         <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>
                       </>
@@ -432,7 +445,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                             <CongeCard
                               key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
                               actions={isAdmin ? <>
-                      <button onClick={() => imprimerFeuilleConge({ conge: c, emp: empById[c.employe_id], solde: soldes[c.employe_id], joursFeries })} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
+                      <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                       <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>
                       <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>
                     </> : null}
