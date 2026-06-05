@@ -136,7 +136,7 @@ function ViewRow({ m }) {
   const low = m.qty <= m.stock_min
   const zero = m.qty <= 0
   let box = 'bg-white border-line/60', pill = 'bg-emerald-600 text-white', badge = null
-  if (zero) { box = 'bg-ink-mute/5 border-ink-mute/20'; pill = 'bg-ink-mute/20 text-ink-mute'; badge = <span className="text-[9px] font-bold uppercase bg-ink-mute/10 text-ink-mute px-2 py-0.5 rounded-full ml-2">Rupture</span> }
+  if (zero) { box = 'bg-red-50 border-red-300'; pill = 'bg-red-600 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded-full ml-2">Rupture</span> }
   else if (low) { box = 'bg-amber-50 border-amber-300'; pill = 'bg-amber-500 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full ml-2">À refill</span> }
   return (
     <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${box}`}>

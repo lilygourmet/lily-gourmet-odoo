@@ -278,10 +278,10 @@ function StockGSCard({ line }) {
   let badge = null
 
   if (isZero) {
-    containerCls = 'bg-ink-mute/5 border-ink-mute/20'
-    qtyCls = 'bg-ink-mute/20 text-ink-mute'
+    containerCls = 'bg-red-50 border-red-300'
+    qtyCls = 'bg-red-600 text-white'
     qtyLabel = '0'
-    badge = <span className="text-[9px] font-bold tracking-wider uppercase bg-ink-mute/10 text-ink-mute px-2 py-0.5 rounded-full ml-2">Rupture</span>
+    badge = <span className="text-[9px] font-bold tracking-wider uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded-full ml-2">Rupture</span>
   } else if (isLow) {
     containerCls = 'bg-amber-50 border-amber-300'
     qtyCls = 'bg-amber-500 text-white'
