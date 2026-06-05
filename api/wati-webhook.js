@@ -163,13 +163,21 @@ async function handleInbound(req, res) {
 // Ajouter une règle = une ligne { quickReplyId, test }.
 // `test` = regex ; \b...\b = mot entier (donc "votre rib" OK, "terrible" non).
 // ============================================================
+// `test` = déclenche ; `exclude` (optionnel) = empêche si le client parle d'AUTRE chose
+// (ex : « je vous envoie MON rib » -> on ne renvoie pas notre RIB).
 const AUTO_RULES = [
-  { quickReplyId: 1, test: /\b(rib|iban)\b/i },   // [1] RIB
+  // [1] RIB — seulement si le client DEMANDE notre RIB.
+  { quickReplyId: 1,  test: /\b(rib|iban)\b/i, exclude: /\bmon\s+(rib|iban|compte)\b/i },
+  // [19] Localisation / adresse — pas si le client envoie LA SIENNE.
+  { quickReplyId: 19, test: /\b(localisation|localis|adresse|maps?|o[uù]\s+(êtes|etes)|vous\s+(êtes|etes)\s+o[uù]|fin\s+kayn|win\s+kayn)\b/i, exclude: /\b(ma|mon|notre)\s+(localisation|adresse)\b|voici\s+ma\s+localis|je\s+vous\s+(donne|envoie)\s+(ma|mon)/i },
+  // [27] Livraison (zones validées)
+  { quickReplyId: 27, test: /\b(livraison|livrer|livrez|livr[ée]e?|tawsil|tawssil|توصيل)\b/i },
 ]
 
 async function maybeAutoReply(supabase, conv, phone, body) {
   for (const rule of AUTO_RULES) {
     if (!rule.test.test(body)) continue
+    if (rule.exclude && rule.exclude.test(body)) continue
     const { data: qr } = await supabase
       .from('quick_replies').select('body').eq('id', rule.quickReplyId).maybeSingle()
     if (!qr?.body) return
