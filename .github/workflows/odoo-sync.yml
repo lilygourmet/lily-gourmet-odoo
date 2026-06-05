@@ -1,0 +1,24 @@
+name: Synchro Odoo auto
+
+# Déclenche la synchro Odoo automatiquement (contourne la limite de cron Vercel).
+# - Toutes les 30 min entre 6h et 19h UTC (≈ 7h-20h au Maroc).
+# - Bouton "Run workflow" pour lancer à la main aussi.
+# Le jeton est lu depuis le secret GitHub SYNC_SECRET_TOKEN (à ajouter dans
+# Settings → Secrets and variables → Actions). Doit valoir la même chose que
+# la variable SYNC_SECRET_TOKEN côté Vercel.
+
+on:
+  schedule:
+    - cron: '*/30 6-19 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclencher /api/sync-odoo
+        run: |
+          curl -sS --fail-with-body -X POST \
+            "https://lily-gourmet-odoo.vercel.app/api/sync-odoo" \
+            -H "Authorization: Bearer ${{ secrets.SYNC_SECRET_TOKEN }}" \
+            -H "Content-Type: application/json"
