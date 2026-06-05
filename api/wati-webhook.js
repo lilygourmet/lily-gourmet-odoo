@@ -166,8 +166,9 @@ async function handleInbound(req, res) {
 // `test` = déclenche ; `exclude` (optionnel) = empêche si le client parle d'AUTRE chose
 // (ex : « je vous envoie MON rib » -> on ne renvoie pas notre RIB).
 const AUTO_RULES = [
-  // [1] RIB — seulement si le client DEMANDE notre RIB.
-  { quickReplyId: 1,  test: /\b(rib|iban)\b/i, exclude: /\bmon\s+(rib|iban|compte)\b/i },
+  // [1] RIB / virement — si le client veut payer par virement.
+  // Exclut : son propre rib ("mon rib") + virement DÉJÀ effectué ("j'ai fait le virement").
+  { quickReplyId: 1,  test: /\b(rib|iban|virement)\b/i, exclude: /\bmon\s+(rib|iban|compte)\b|(virement|paiement)\s+(fait|effectu|envoy|valid|pass|re[çc]u)|\b(ai|avons|a)\s+(fait|effectu|envoy|pay|valid|re[çc]u)|d[ée]j[àa]\s+(fait|pay|envoy)/i },
   // [19] Localisation / adresse — pas si le client envoie LA SIENNE.
   { quickReplyId: 19, test: /\b(localisation|localis|adresse|maps?|o[uù]\s+(êtes|etes)|vous\s+(êtes|etes)\s+o[uù]|fin\s+kayn|win\s+kayn)\b/i, exclude: /\b(ma|mon|notre)\s+(localisation|adresse)\b|voici\s+ma\s+localis|je\s+vous\s+(donne|envoie)\s+(ma|mon)/i },
   // [27] Livraison (zones validées)
