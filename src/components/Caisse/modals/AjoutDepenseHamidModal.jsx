@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Receipt, Plus, Trash2, Paperclip } from 'lucide-react'
 import { todayISO, fmtMoney } from '../_helpers'
 import { ModalBox } from './AjoutSortieModal'
+import { toast } from '../../../lib/toast'
 
 // Saisie groupée des dépenses Hamid : une « session » = plusieurs lignes
 // (chacune avec son montant, sa catégorie, son libellé et son toggle facture)
@@ -33,12 +34,12 @@ export default function AjoutDepenseHamidModal({ categories, onClose, onSubmit }
   const total = validLignes.reduce((s, l) => s + Number(l.amount), 0)
 
   async function submit() {
-    if (validLignes.length === 0) { alert('Ajoute au moins une ligne avec un montant.'); return }
+    if (validLignes.length === 0) { toast.error('Ajoute au moins une ligne avec un montant.'); return }
     setBusy(true)
     try {
       await onSubmit({ sessionDate, lignes: validLignes, proofFile })
     } catch (e) {
-      alert('Erreur : ' + (e?.message || e))
+      toast.error('Erreur : ' + (e?.message || e))
     } finally {
       setBusy(false)
     }

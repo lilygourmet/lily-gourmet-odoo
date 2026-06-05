@@ -5,6 +5,8 @@ import { loadDestinataires, createDestinataire, updateDestinataire, deleteDestin
          loadSalairesDefaut, setSalaireDefaut,
          loadPosConfigs, togglePosConfig } from '../../lib/caisse'
 import { COLOR_PALETTE, COLORS_BY_TYPE } from './_helpers'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 // Palette d'emojis pré-sélectionnés pour les catégories
 const EMOJI_PICKER = [
@@ -56,7 +58,7 @@ function DestinatairesSection() {
     setAdding(false); setForm({ name: '', type: 'caisse_geree', color_key: 'vert_clair' }); reload()
   }
   async function handleDelete(id) {
-    if (!confirm('Désactiver ce destinataire ?')) return
+    if (!await confirmDialog('Désactiver ce destinataire ?', { danger: true, confirmLabel: 'Désactiver' })) return
     await deleteDestinataire(id); reload()
   }
   async function handleToggleActive(d) {
@@ -164,7 +166,7 @@ function CategoryColumn({ caisseOwner, label, color }) {
     setAdding(false); setNewName(''); setNewEmoji('❓'); reload()
   }
   async function handleDeactivate(id) {
-    if (!confirm('Désactiver cette catégorie ?')) return
+    if (!await confirmDialog('Désactiver cette catégorie ?', { danger: true, confirmLabel: 'Désactiver' })) return
     await updateCategorie(id, { active: false }); reload()
   }
   function startEdit(cat) {
@@ -265,15 +267,15 @@ function PosSessionsSection() {
       const json = await res.json()
       console.log('[detect-pos]', json)
       if (json.error) {
-        alert('Erreur : ' + json.error)
+        toast.error('Erreur : ' + json.error)
       } else {
         if (json.configs && json.configs.length > 0) {
-          alert(`✓ ${json.configs.length} session(s) POS détectée(s)`)
+          toast.success(`✓ ${json.configs.length} session(s) POS détectée(s)`)
         }
         // Force le reload via changement de key
         setRefreshKey(k => k + 1)
       }
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
     setSyncing(false)
   }
 

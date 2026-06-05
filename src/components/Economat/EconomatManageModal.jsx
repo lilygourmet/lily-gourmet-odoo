@@ -5,6 +5,8 @@ import {
   loadCategoryManage, addArticleFromOdoo, setArticleActive, deleteArticle,
   loadOdooProducts, syncWithOdoo,
 } from '../../lib/economat'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff } from 'lucide-react'
 import SearchSelect from '../SearchSelect'
 
@@ -47,54 +49,54 @@ export default function EconomatManageModal({ onClose, onChanged }) {
     if (!name?.trim()) return
     setBusy(true)
     try { const c = await createCategory(name); await reloadCats(c.id); notifyChanged() }
-    catch (e) { alert('Erreur : ' + e.message) } finally { setBusy(false) }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
   async function removeCategory() {
     const cat = categories.find(c => c.id === catId)
     if (!cat) return
-    if (!window.confirm(`Supprimer la catégorie « ${cat.name} » et tous ses groupes/articles ?`)) return
+    if (!await confirmDialog(`Supprimer la catégorie « ${cat.name} » et tous ses groupes/articles ?`, { danger: true, confirmLabel: 'Supprimer' })) return
     setBusy(true)
     try { await deleteCategory(catId); await reloadCats(); notifyChanged() }
-    catch (e) { alert('Erreur : ' + e.message) } finally { setBusy(false) }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
   async function toggleProfil(p) {
     const next = profils.includes(p) ? profils.filter(x => x !== p) : [...profils, p]
     setProfils(next)
     try { await setCategoryProfils(catId, next); notifyChanged() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function addGroup() {
     const name = window.prompt('Nom du nouveau groupe (ex. Épicerie) :')
     if (!name?.trim()) return
     setBusy(true)
     try { await createGroup(catId, name); await reloadManage(); notifyChanged() }
-    catch (e) { alert('Erreur : ' + e.message) } finally { setBusy(false) }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
   async function removeGroup(g) {
-    if (!window.confirm(`Supprimer le groupe « ${g.name} » ? (ses articles passeront en « sans groupe »)`)) return
+    if (!await confirmDialog(`Supprimer le groupe « ${g.name} » ? (ses articles passeront en « sans groupe »)`, { danger: true, confirmLabel: 'Supprimer' })) return
     setBusy(true)
     try { await deleteGroup(g.id); await reloadManage(); notifyChanged() }
-    catch (e) { alert('Erreur : ' + e.message) } finally { setBusy(false) }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
   async function runSearch() {
     if (!q.trim()) { setResults([]); return }
     setSearching(true)
     try { setResults(await loadOdooProducts({ q: q.trim() })) }
-    catch (e) { alert('Erreur Odoo : ' + e.message) } finally { setSearching(false) }
+    catch (e) { toast.error('Erreur Odoo : ' + e.message) } finally { setSearching(false) }
   }
   async function pickProduct(p) {
     setBusy(true)
     try { await addArticleFromOdoo({ categoryId: catId, groupId: addGroupId, odoo: p }); await reloadManage(); notifyChanged() }
-    catch (e) { alert('Erreur : ' + e.message) } finally { setBusy(false) }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
   async function toggleArticle(a) {
     try { await setArticleActive(a.id, !a.active); await reloadManage() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function removeArticle(a) {
-    if (!window.confirm(`Supprimer l'article « ${a.name} » ?`)) return
+    if (!await confirmDialog(`Supprimer l'article « ${a.name} » ?`, { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deleteArticle(a.id); await reloadManage(); notifyChanged() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function runSync() {
     setBusy(true); setSyncMsg('')
@@ -102,7 +104,7 @@ export default function EconomatManageModal({ onClose, onChanged }) {
       const r = await syncWithOdoo()
       setSyncMsg(`✅ ${r.linked} rattaché(s), ${r.updated} mis à jour${r.ambiguous ? `, ${r.ambiguous} à vérifier (noms ambigus)` : ''}.`)
       await reloadManage(); notifyChanged()
-    } catch (e) { alert('Erreur synchro : ' + e.message) } finally { setBusy(false) }
+    } catch (e) { toast.error('Erreur synchro : ' + e.message) } finally { setBusy(false) }
   }
 
   const groupName = (id) => manage.groups.find(g => g.id === id)?.name

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { usePersistedState } from '../lib/usePersistedState'
 import { MessageSquareText, Cake, Croissant, Printer } from 'lucide-react'
 import AppHeader from './AppHeader'
+import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 import {
   loadMessagesToday,
   markMessagePrinted,
@@ -155,7 +157,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
   async function handleUnmarkPrinted(msg) {
     if (!msg.printedAt) return
-    if (!confirm(`Marquer "${msg.text}" comme NON imprimé ?`)) return
+    if (!await confirmDialog(`Marquer "${msg.text}" comme NON imprimé ?`, { confirmLabel: 'Confirmer' })) return
     // Messages libres : ils ne sont pas en base, donc on mute juste le state local
     if (msg.type === 'free') {
       setFreeMessages(prev => prev.map(m =>
@@ -167,7 +169,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
       await unmarkMessagePrinted(msg.sourceKey)
       refresh()
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -193,12 +195,12 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
   async function handlePrint() {
     if (pages.length === 0) {
-      alert('Aucun message selectionne')
+      toast.error('Aucun message selectionne')
       return
     }
     const html = buildPrintHtml(pages)
     const w = window.open('', '_blank', 'width=600,height=900')
-    if (!w) { alert('Popup bloquee'); return }
+    if (!w) { toast.error('Popup bloquee'); return }
     w.document.write(html)
     w.document.close()
     w.focus()

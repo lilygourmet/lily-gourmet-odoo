@@ -9,6 +9,7 @@ import EditMouvementModal from '../modals/EditMouvementModal'
 import PreuveMouvementModal from '../modals/PreuveMouvementModal'
 import ValiderReceptionsModal from '../modals/ValiderReceptionsModal'
 import AuditLogPanel from '../AuditLogPanel'
+import { confirmDialog } from '../../../lib/confirmDialog'
 
 export default function MeriemCaisse({ user, focus }) {
   return <CaisseGenericView caisseOwner="meriem" user={user} focus={focus} accent={{ bg: '#EAF3DE', text: '#27500A', border: '#97C459' }} />
@@ -115,7 +116,7 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
     setShowCloture(false); reload()
   }
   async function handleDeleteMvt(id) {
-    if (!confirm('Supprimer ce mouvement ? (l\'action sera enregistrée dans l\'historique)')) return
+    if (!await confirmDialog('Supprimer ce mouvement ? (l\'action sera enregistrée dans l\'historique)', { danger: true, confirmLabel: 'Supprimer' })) return
     await deleteMouvement(id, user.id); reload()
   }
   async function handleEditAmount(mvt) {
@@ -135,11 +136,11 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
     setProofingMvt(null); reload()
   }
   async function handleDeclareNoProof(mvt) {
-    if (!confirm(`Confirmer "Pas de preuve" pour : ${mvt.label} ?`)) return
+    if (!await confirmDialog(`Confirmer "Pas de preuve" pour : ${mvt.label} ?`, { confirmLabel: 'Confirmer' })) return
     await declareMouvementNoProof(mvt.id, user.id); reload()
   }
   async function handleResetProof(mvt) {
-    if (!confirm('Réinitialiser le statut de preuve pour ce mouvement ?')) return
+    if (!await confirmDialog('Réinitialiser le statut de preuve pour ce mouvement ?', { confirmLabel: 'Réinitialiser' })) return
     await resetMouvementProof(mvt.id, user.id); reload()
   }
   async function handleValidateReception(mvtId) {

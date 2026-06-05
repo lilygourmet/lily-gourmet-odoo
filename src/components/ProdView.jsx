@@ -3,6 +3,7 @@ import { loadSalesLinesForRange, PROD_VIEW_CATEGORIES, filterLinesForProdCategor
 import { loadProdDoneForLines, markProdLineDone, unmarkProdLineDone, loadProdLogs } from '../lib/prodDone'
 import { isAdmin } from '../lib/auth'
 import AppHeader from './AppHeader'
+import { toast } from '../lib/toast'
 import ActivityLog, { relativeTime } from './ActivityLog'
 
 export default function ProdView({ user, onLogout, onNavigate, activeView, forcedCategory }) {
@@ -111,7 +112,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
       await refresh()
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -124,7 +125,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
       await refresh()
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -142,7 +143,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
       await refresh()
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -154,12 +155,12 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     // On imprime uniquement les lignes "a faire" (ni done ni cancelled)
     const dayLines = (byDate.get(date) || []).filter(l => getStatus(l.odoo_line_id) === null)
     if (dayLines.length === 0) {
-      alert('Rien à imprimer pour ce jour')
+      toast.error('Rien à imprimer pour ce jour')
       return
     }
     const html = buildPrintHtml(date, dayLines, def, viewMode)
     const w = window.open('', '_blank')
-    if (!w) return alert('Bloquez les popups ?')
+    if (!w) return toast.error('Bloquez les popups ?')
     w.document.write(html)
     w.document.close()
     w.focus()

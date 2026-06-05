@@ -120,6 +120,8 @@ function jourSemaine(d) {
 
 export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const isAdmin = user?.role === 'admin'
+  // RH (perm_hr) : peut voir et IMPRIMER les congés, mais pas modifier/supprimer/valider.
+  const canImprimerFeuille = isAdmin || !!user?.perm_hr
   const [employes, setEmployes]     = useState([])
   const [conges, setConges]         = useState([])
   const [loading, setLoading]       = useState(true)
@@ -389,11 +391,11 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                 {demandes.map(c => (
                   <CongeCard
                     key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
-                    actions={isAdmin ? (
+                    actions={canImprimerFeuille ? (
                       <>
                         <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
-                        <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>
-                        <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>
+                        {isAdmin && <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>}
+                        {isAdmin && <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>}
                       </>
                     ) : null}
                   />
@@ -446,10 +448,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                           {list.map(c => (
                             <CongeCard
                               key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
-                              actions={isAdmin ? <>
+                              actions={canImprimerFeuille ? <>
                       <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
-                      <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>
-                      <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>
+                      {isAdmin && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>}
+                      {isAdmin && <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>}
                     </> : null}
                             />
                           ))}

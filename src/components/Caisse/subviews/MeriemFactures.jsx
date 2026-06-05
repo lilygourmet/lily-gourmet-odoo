@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Info, CreditCard, FileText, X } from 'lucide-react'
 import { loadFacturesAll, loadCourseFacturesAll, loadHamidFacturesAll, recupererFacturesParCheque, retirerFacture } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
+import { confirmDialog } from '../../../lib/confirmDialog'
 
 export default function MeriemFactures({ user }) {
   const [filter, setFilter] = useState('pending')
@@ -46,7 +47,7 @@ export default function MeriemFactures({ user }) {
 
   // Décocher une ligne : ce n'est finalement pas une facture
   async function removeFacture(f) {
-    if (!window.confirm(`Retirer « ${f.label} » des factures ?\n(Ce n'est pas une facture à récupérer.)`)) return
+    if (!await confirmDialog(`Retirer « ${f.label} » des factures ?\n(Ce n'est pas une facture à récupérer.)`, { danger: true, confirmLabel: 'Retirer' })) return
     setBusy(true); setError('')
     try {
       await retirerFacture({ kind: f.kind, id: f.id, userId: user.id })

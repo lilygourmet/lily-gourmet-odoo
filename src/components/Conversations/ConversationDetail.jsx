@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationUnread } from '../../lib/conversations'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import ClientAvatar from './ClientAvatar'
@@ -387,7 +389,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     if (!conv) return
     // Avertir si le format n'est pas compatible WhatsApp (webm)
     if (/webm/i.test(audioFile.type)) {
-      if (!confirm("⚠️ Ton navigateur a enregistré en WebM, format que WhatsApp ne lit pas toujours. Le client risque de ne pas recevoir l'audio.\n\nAstuce : utilise Safari (iPhone/Mac) ou Firefox pour des vocaux fiables.\n\nEnvoyer quand même ?")) {
+      if (!await confirmDialog("⚠️ Ton navigateur a enregistré en WebM, format que WhatsApp ne lit pas toujours. Le client risque de ne pas recevoir l'audio.\n\nAstuce : utilise Safari (iPhone/Mac) ou Firefox pour des vocaux fiables.\n\nEnvoyer quand même ?", { confirmLabel: 'Envoyer' })) {
         return
       }
     }
@@ -410,7 +412,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       }
     } catch (e) {
       setSendError(e.message)
-      alert("Échec d'envoi de l'audio : " + e.message)
+      toast.error("Échec d'envoi de l'audio : " + e.message)
     } finally {
       setSending(false)
     }
@@ -474,7 +476,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       const updated = await assignConversation(conversationId, user.id)
       setConv(updated)
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     } finally {
       setAssigning(false)
     }
@@ -483,27 +485,27 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   async function handleClose() {
     setStatusBusy(true)
     try { setConv(await closeConversation(conversationId, user.id)) }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setStatusBusy(false) }
   }
 
   async function handleReopen() {
     setStatusBusy(true)
     try { setConv(await reopenConversation(conversationId, user.id)) }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setStatusBusy(false) }
   }
 
   async function handleDeleteMessage(m) {
-    if (!confirm("Supprimer ce message ?\n\nL'app va aussi tenter de l'effacer chez la cliente (WhatsApp accepte ~15 min après envoi). Si l'API refuse, le message reste visible chez elle mais marqué supprimé chez toi.")) return
+    if (!await confirmDialog("Supprimer ce message ?\n\nL'app va aussi tenter de l'effacer chez la cliente (WhatsApp accepte ~15 min après envoi). Si l'API refuse, le message reste visible chez elle mais marqué supprimé chez toi.", { danger: true, confirmLabel: 'Supprimer' })) return
     try {
       const r = await deleteMessage(m.id, user.id)
       setMessages(prev => prev.map(x => x.id === m.id ? { ...x, deleted_at: new Date().toISOString(), deleted_at_wati: !!r.deleted_at_wati } : x))
       if (!r.deleted_at_wati) {
-        alert("Message marqué supprimé chez toi, mais WATI n'a pas pu l'effacer chez la cliente (fenêtre WhatsApp dépassée ou non supporté).")
+        toast.error("Message marqué supprimé chez toi, mais WATI n'a pas pu l'effacer chez la cliente (fenêtre WhatsApp dépassée ou non supporté).")
       }
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -513,9 +515,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     try {
       await setConversationUnread(conversationId, true)
       setConv(prev => prev ? { ...prev, marked_unread: true } : prev)
-      alert("Marquée non lue. Reviens sur la liste Conversations pour la retrouver dans 'Non lues'.")
+      toast.info("Marquée non lue. Reviens sur la liste Conversations pour la retrouver dans 'Non lues'.")
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -523,7 +525,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   async function saveNote() {
     setNoteBusy(true)
     try { setConv(await updateConversationNote(conversationId, noteInput)); setNoteEditing(false) }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setNoteBusy(false) }
   }
 
@@ -537,7 +539,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       const mS = (messages[i].body || '').match(/\bS\d{4,}\b/i)
       if (mS) { ref = mS[0].toUpperCase(); break }
     }
-    if (!ref) { alert('Aucun n° de commande (S…) trouvé dans cette conversation.'); return }
+    if (!ref) { toast.error('Aucun n° de commande (S…) trouvé dans cette conversation.'); return }
     setModifRef(ref); setModifDesc(''); setModifFile(null); setModifOpen(true)
   }
 
@@ -556,14 +558,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         justificatif_path: jp,
       })
       setModifOpen(false)
-      alert(`✅ Demande de modification envoyée pour ${modifRef}.`)
-    } catch (e) { alert('Erreur : ' + e.message) }
+      toast.success(`✅ Demande de modification envoyée pour ${modifRef}.`)
+    } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setModifBusy(false) }
   }
   async function saveName() {
     setNameBusy(true)
     try { setConv(await updateConversationClientName(conversationId, nameInput)); setNameEditing(false) }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setNameBusy(false) }
   }
 
@@ -595,16 +597,16 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       const updated = await markPaymentProof(paymentMsg.id, orderRefInput, clientNameInput, Number.isFinite(amount) ? amount : null)
       setMessages(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
       setPaymentMsg(null); setOrderRefInput(''); setClientNameInput(''); setAmountInput('')
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setMarkBusy(false) }
   }
 
   async function handleUnmarkPayment(m) {
-    if (!confirm('Retirer cette preuve de paiement ?')) return
+    if (!await confirmDialog('Retirer cette preuve de paiement ?', { danger: true, confirmLabel: 'Retirer' })) return
     try {
       const updated = await unmarkPaymentProof(m.id)
       setMessages(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleSuggest() {

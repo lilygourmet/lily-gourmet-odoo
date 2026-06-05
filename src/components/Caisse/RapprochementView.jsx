@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { loadRapproVerifies, setRapproVerified, unsetRapproVerified } from '../../lib/caisse'
+import { toast } from '../../lib/toast'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -575,7 +576,7 @@ export default function RapprochementView({ user }) {
       else await unsetRapproVerified(b.key)
     } catch (e) {
       setVerified(verified)
-      alert('Erreur : ' + e.message + "\n(As-tu lancé la ligne SQL caisse_rappro_verifies ?)")
+      toast.error('Erreur : ' + e.message + "\n(As-tu lancé la ligne SQL caisse_rappro_verifies ?)")
     }
   }
 

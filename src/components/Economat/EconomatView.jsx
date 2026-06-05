@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
 import { loadCategoriesForUser, loadCategoryContent, createDemande, loadMyDemandes } from '../../lib/economat'
 import EconomatManageModal from './EconomatManageModal'
+import { toast } from '../../lib/toast'
 
 // Écran employé : demande d'articles à l'économat.
 // L'employé entre directement sur les articles de sa catégorie (switch si plusieurs).
@@ -123,7 +124,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       setFlash('Demande envoyée à l\'économe')
       setTimeout(() => setFlash(''), 4000)
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     } finally {
       setSending(false)
     }

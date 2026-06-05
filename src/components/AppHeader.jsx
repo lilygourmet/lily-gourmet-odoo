@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { toast } from '../lib/toast'
 import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeModifications, canSeeLivraisons, canViewPayments} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited } from '../lib/conversations'
@@ -510,7 +511,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     } catch (e) {
       console.error('[sync]', e)
       setSyncStatus('Erreur')
-      alert(`Erreur sync : ${e.message}`)
+      toast.error(`Erreur sync : ${e.message}`)
       setTimeout(() => setSyncStatus(''), 2500)
     } finally {
       setSyncing(false)

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadQuickReplies, createQuickReply, updateQuickReply, deleteQuickReply, uploadConversationMedia, getMediaSignedUrl } from '../../lib/conversations'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 // Écran de gestion des phrases types (communes à l'équipe).
 export default function QuickRepliesModal({ onClose }) {
@@ -61,7 +62,7 @@ export default function QuickRepliesModal({ onClose }) {
   }
 
   async function handleDelete(id) {
-    if (!confirm('Supprimer cette phrase ?')) return
+    if (!await confirmDialog('Supprimer cette phrase ?', { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deleteQuickReply(id); if (editingId === id) resetForm(); await refresh() }
     catch (e) { setError(e.message) }
   }

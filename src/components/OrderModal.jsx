@@ -22,6 +22,7 @@ import {
   canDeleteOrder,
   formatRelativeTime,
 } from '../lib/auth'
+import { toast } from '../lib/toast'
 
 const DAY_NAMES_FULL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
 const MONTH_NAMES = [
@@ -182,7 +183,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
       }
     } catch (e) {
       console.error('[done] erreur:', e)
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -313,7 +314,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
 
     if (alreadyChecked) {
       if (!canUncheck) {
-        alert('Vous n\'avez pas la permission de décocher une étape.')
+        toast.error('Vous n\'avez pas la permission de décocher une étape.')
         return
       }
 
@@ -325,7 +326,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
             .slice(idx + 1)
             .find(s => isStepChecked(item.id, s))
           if (nextCheckedStep) {
-            alert(`Décochez d'abord "${STEP_LABELS[nextCheckedStep]}" avant de décocher cette étape.`)
+            toast.error(`Décochez d'abord "${STEP_LABELS[nextCheckedStep]}" avant de décocher cette étape.`)
             return
           }
         }
@@ -339,7 +340,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
       const ok = await uncheckItemStep(item.id, stepKey)
       if (!ok) {
         setCheckedSteps(prev => ({ ...prev, [key]: { done_by: user.id, done_at: new Date().toISOString() } }))
-        alert('Erreur lors du décochage')
+        toast.error('Erreur lors du décochage')
         return
       }
       notifyParent(item.id, stepKey, false)
@@ -352,7 +353,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
       if (idx > 0) {
         const previousStep = sequence[idx - 1]
         if (!isStepChecked(item.id, previousStep)) {
-          alert(`Cochez d'abord "${STEP_LABELS[previousStep]}" avant de cocher cette étape.`)
+          toast.error(`Cochez d'abord "${STEP_LABELS[previousStep]}" avant de cocher cette étape.`)
           return
         }
       }
@@ -369,7 +370,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
         delete next[key]
         return next
       })
-      alert('Erreur lors du cochage')
+      toast.error('Erreur lors du cochage')
       return
     }
     notifyParent(item.id, stepKey, true)
@@ -398,7 +399,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     const ok = await updateItemPolys(item.id, newPolys)
     if (!ok) {
       setPolysMap(prev => ({ ...prev, [item.id]: oldPolys }))
-      alert('Erreur lors de la sauvegarde des polys')
+      toast.error('Erreur lors de la sauvegarde des polys')
       return
     }
 
@@ -410,7 +411,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     const ok = await deleteOrder(order.id)
     setDeleting(false)
     if (!ok) {
-      alert('Erreur lors de la suppression')
+      toast.error('Erreur lors de la suppression')
       return
     }
     if (onOrderDeleted) onOrderDeleted(order.id)

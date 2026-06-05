@@ -23,6 +23,8 @@ import {
   auditResolveInFavorOf,
   todayISO,
 } from '../../lib/stockBoutique'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 const STATUS_LABELS = {
   open: { label: '… En cours', color: 'bg-amber-100 text-amber-900' },
@@ -162,7 +164,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 
   async function handleForceClose() {
     if (!stockDay) return
-    if (!confirm("Forcer la clôture sans que le café ait fini de compter ?\n\nLe rapport sera généré avec les données disponibles. Cette action est réservée aux admins.")) return
+    if (!await confirmDialog("Forcer la clôture sans que le café ait fini de compter ?\n\nLe rapport sera généré avec les données disponibles. Cette action est réservée aux admins.", { danger: true, confirmLabel: 'Forcer' })) return
     try {
       setAuditing(true)
       await submitStockDay(stockDay.id, user.id)
@@ -171,7 +173,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
       const r = await buildAuditReport(sd.id)
       setReport(r)
     } catch (e) {
-      alert('Erreur forçage clôture : ' + (e.message || e))
+      toast.error('Erreur forçage clôture : ' + (e.message || e))
     } finally {
       setAuditing(false)
     }
@@ -179,14 +181,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 
   async function handleAudit() {
     if (!stockDay) return
-    if (!confirm("Valider définitivement la journée ?\n\nAprès validation, plus aucune modification du comptage ne sera possible.\nTu pourras toujours rafraîchir le stock Odoo pour comparer.")) return
+    if (!await confirmDialog("Valider définitivement la journée ?\n\nAprès validation, plus aucune modification du comptage ne sera possible.\nTu pourras toujours rafraîchir le stock Odoo pour comparer.", { confirmLabel: 'Valider' })) return
     try {
       setAuditing(true)
       await auditStockDay(stockDay.id, user.id, auditNotes.trim() || null)
       const sd = await loadStockDay(day)
       setStockDay(sd)
     } catch (e) {
-      alert('Erreur validation : ' + (e.message || e))
+      toast.error('Erreur validation : ' + (e.message || e))
     } finally {
       setAuditing(false)
     }

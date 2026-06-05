@@ -19,6 +19,7 @@ import {
   triggerOdooSnapshot,
   todayISO,
 } from '../../lib/stockBoutique'
+import { toast } from '../../lib/toast'
 
 // Patterns qui doivent etre exclus de la vue Stock GS- car ce sont
 // soit des produits "Prod" deguises avec un prefixe GS-, soit des plateaux
@@ -129,7 +130,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
       setReport(r)
     } catch (e) {
       console.error('[StockGS] refreshOdoo', e)
-      alert('Erreur lors du refresh Odoo : ' + (e?.message || e))
+      toast.error('Erreur lors du refresh Odoo : ' + (e?.message || e))
     } finally {
       setRefreshingOdoo(false)
     }

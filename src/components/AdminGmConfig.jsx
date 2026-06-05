@@ -6,6 +6,7 @@ import {
   deleteColor,
   FAMILLES,
 } from '../lib/palette'
+import { confirmDialog } from '../lib/confirmDialog'
 
 export default function AdminGmConfig({ onClose }) {
   const [colors, setColors] = useState([])
@@ -94,7 +95,7 @@ export default function AdminGmConfig({ onClose }) {
   }
 
   async function handleDelete(c) {
-    if (!confirm(`Supprimer la couleur "${c.nom}" ?`)) return
+    if (!await confirmDialog(`Supprimer la couleur "${c.nom}" ?`, { danger: true, confirmLabel: 'Supprimer' })) return
     try {
       await deleteColor(c.id)
       refresh()

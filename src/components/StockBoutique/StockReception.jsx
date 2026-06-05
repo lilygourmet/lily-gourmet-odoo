@@ -20,6 +20,7 @@ import {
   cafeMaintainCount,
   todayISO,
 } from '../../lib/stockBoutique'
+import { toast } from '../../lib/toast'
 
 const DISCREPANCY_REASONS = [
   "La vitrine s'est trompée",
@@ -179,7 +180,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
       setEditingQtyId(null)
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -198,7 +199,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
       setDiscrepancyModal(null)
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -213,7 +214,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
       setSurpriseCart({})
     } catch (e) {
       console.error(e)
-      alert('Erreur ajout : ' + (e.message || e))
+      toast.error('Erreur ajout : ' + (e.message || e))
     }
   }
 
@@ -227,7 +228,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
       const updated = await cafeAcceptPatissierQty(itemId, user.id)
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
     } catch (e) {
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -236,7 +237,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
       const updated = await cafeMaintainCount(itemId, user.id)
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
     } catch (e) {
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 

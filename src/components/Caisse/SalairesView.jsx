@@ -2,6 +2,7 @@ import AuditLogPanel from './AuditLogPanel'
 import { useState, useEffect } from 'react'
 import { User, Pencil, Check, Trash2 } from 'lucide-react'
 import { loadSalairesYear, loadSalaireMonth, createSalaire, markSalairePaye, loadSalairesDefaut, deleteSalaire, loadSalaireEnveloppes } from '../../lib/caisse'
+import { confirmDialog } from '../../lib/confirmDialog'
 import { currentYear, currentMonth, fmtMoney, fmtMois, SALAIRE_STATUS_LABELS, SALAIRE_COLORS, reliquatDestLabel } from './_helpers'
 import CompositionSalaireModal from './modals/CompositionSalaireModal'
 
@@ -29,13 +30,13 @@ export default function SalairesView({ user }) {
   }
 
   async function handlePay(salaireId) {
-    if (!confirm('Marquer ce salaire comme PAYÉ ? Le reliquat sera transféré dans la destination choisie.')) return
+    if (!await confirmDialog('Marquer ce salaire comme PAYÉ ? Le reliquat sera transféré dans la destination choisie.', { confirmLabel: 'Valider' })) return
     await markSalairePaye(salaireId, user.id)
     reload()
   }
 
   async function handleDelete(salaireId) {
-    if (!confirm('Supprimer ce salaire ? Les enveloppes attachées seront libérées.')) return
+    if (!await confirmDialog('Supprimer ce salaire ? Les enveloppes attachées seront libérées.', { danger: true, confirmLabel: 'Supprimer' })) return
     await deleteSalaire(salaireId); reload()
   }
 

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Calendar, RefreshCw, Landmark, User, Briefcase } from 'lucide-react'
 import { fmtMoney, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
+import { toast } from '../../../lib/toast'
+import { confirmDialog } from '../../../lib/confirmDialog'
 
 export default function DetailReaffecterModal({ env, destinataires, onClose, onReassign, onUnassign, onUpdateDate }) {
   const [showReassign, setShowReassign] = useState(false)
@@ -21,7 +23,7 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
       await onUpdateDate(dateValue)
       setEditingDate(false)
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
     setSavingDate(false)
   }
@@ -76,7 +78,7 @@ export default function DetailReaffecterModal({ env, destinataires, onClose, onR
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button onClick={() => setShowReassign(true)} style={{ ...btnNormal, display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={14} /> Réaffecter à un autre destinataire</button>
-            <button onClick={() => { if (confirm('Annuler l\'affectation ? L\'enveloppe redevient grise.')) onUnassign() }} style={{ ...btnNormal, color: '#4a3a30' }}>↩ Retour à « À affecter »</button>
+            <button onClick={async () => { if (await confirmDialog('Annuler l\'affectation ? L\'enveloppe redevient grise.', { danger: true, confirmLabel: 'Annuler' })) onUnassign() }} style={{ ...btnNormal, color: '#4a3a30' }}>↩ Retour à « À affecter »</button>
             <button onClick={onClose} style={btnNormal}>Fermer</button>
           </div>
         </>

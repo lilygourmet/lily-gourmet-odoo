@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { RefreshCw, Banknote, ScrollText, Wallet, Coffee, ShoppingBag, MapPin, ArrowLeftRight } from 'lucide-react'
 import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate, loadSalairesYear } from '../../lib/caisse'
+import { toast } from '../../lib/toast'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, envStyle, COLOR_PALETTE } from './_helpers'
 import AttributionModal from './modals/AttributionModal'
 import DetailReaffecterModal from './modals/DetailReaffecterModal'
@@ -44,7 +45,7 @@ export default function EnveloppesView({ user }) {
       setLastSync(new Date())
       if (json.error) console.error(json.error)
       await reload()
-    } catch (e) { console.error(e); alert('Erreur sync : ' + e.message) }
+    } catch (e) { console.error(e); toast.error('Erreur sync : ' + e.message) }
     setSyncing(false)
   }
 
@@ -100,7 +101,7 @@ export default function EnveloppesView({ user }) {
       await assignEnveloppe(envId, destId, user.id, assignedDate)
       setAttributionEnv(null)
       await reload()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   async function handleReassign(envId, destId, assignedDate) {
@@ -108,7 +109,7 @@ export default function EnveloppesView({ user }) {
       await reassignEnveloppe(envId, destId, user.id, assignedDate)
       setDetailEnv(null)
       await reload()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   async function handleUpdateDate(envId, newDate) {
@@ -116,7 +117,7 @@ export default function EnveloppesView({ user }) {
       await updateEnveloppeAssignedDate(envId, newDate, user.id)
       setDetailEnv(null)
       await reload()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   async function handleUnassign(envId) {
@@ -124,7 +125,7 @@ export default function EnveloppesView({ user }) {
       await unassignEnveloppe(envId)
       setDetailEnv(null)
       await reload()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   const monthDisplay = month === 0 ? "toute l'année" : (MOIS_TABS.find(m => m.idx === month)?.label || '')

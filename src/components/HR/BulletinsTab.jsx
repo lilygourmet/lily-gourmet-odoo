@@ -5,6 +5,8 @@ import * as pdfjsLib from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { saveAs } from 'file-saver'
 import { loadBulletins, addBulletinPage, prunePeriods, relabelBulletin, getBulletinSignedUrl, downloadBulletinBytes, deletePeriod } from '../../lib/bulletins'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -93,14 +95,14 @@ export default function BulletinsTab() {
 
   async function handleView(path) {
     try { const url = await getBulletinSignedUrl(path); window.open(url, '_blank') }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleRelabel(g) {
     const val = prompt('Nom de l\'employé pour ce bulletin :', g.label)
     if (val === null || !val.trim()) return
     try { await relabelBulletin({ matricule: g.matricule, id: g.rows[0].id, label: val }); await refresh() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleDownloadEmploye(g) {
@@ -118,14 +120,14 @@ export default function BulletinsTab() {
       }
       const outBytes = await merged.save()
       saveAs(new Blob([outBytes], { type: 'application/pdf' }), `Bulletins_${g.label}_${periods.join('_')}.pdf`)
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusy(false) }
   }
 
   async function handleDeletePeriod(p) {
-    if (!confirm(`Supprimer tous les bulletins de ${p} ?`)) return
+    if (!await confirmDialog(`Supprimer tous les bulletins de ${p} ?`, { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deletePeriod(p); await refresh() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   // Regroupement par employé (matricule, sinon par id)

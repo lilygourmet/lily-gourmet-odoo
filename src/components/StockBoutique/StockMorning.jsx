@@ -20,6 +20,7 @@ import {
   patissierRequestRecount,
   todayISO,
 } from '../../lib/stockBoutique'
+import { toast } from '../../lib/toast'
 
 const FRESHNESS_LABELS = {
   fresh: 'Frais',
@@ -134,7 +135,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
       setTodayItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -145,7 +146,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
       setTodayItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updated } : i))
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -202,7 +203,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
       setLeftoversApplied(true)
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     } finally {
       setSending(false)
     }
@@ -223,7 +224,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
       setCart({})
     } catch (e) {
       console.error(e)
-      alert('Erreur envoi : ' + (e.message || e))
+      toast.error('Erreur envoi : ' + (e.message || e))
     } finally {
       setSending(false)
     }

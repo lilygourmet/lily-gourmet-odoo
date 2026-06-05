@@ -8,6 +8,7 @@ import {
   loadAllProfiles,
 } from '../lib/orders'
 import { logout, canSync, canManageUsers, canPatissier, isPatissierOnly, canPrintBatch, canPrintLabels, canRecaps, isAdmin } from '../lib/auth'
+import { toast } from '../lib/toast'
 import LabelsButton from './LabelsButton'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
@@ -347,7 +348,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
     } catch (e) {
       console.error('[sync-now] Erreur:', e)
       setSyncStatus('Erreur')
-      alert(`Erreur de synchronisation : ${e.message}`)
+      toast.error(`Erreur de synchronisation : ${e.message}`)
       setTimeout(() => setSyncStatus(''), 3000)
     } finally {
       setSyncing(false)
@@ -415,12 +416,12 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
     try {
       const fresh = await loadOrdersByIds(lastBatchInfo.ids)
       if (fresh.length === 0) {
-        alert('Les commandes du dernier batch ne sont plus disponibles.')
+        toast.error('Les commandes du dernier batch ne sont plus disponibles.')
         return
       }
       setReprintOrders(fresh)
     } catch (e) {
-      alert('Erreur de chargement : ' + e.message)
+      toast.error('Erreur de chargement : ' + e.message)
     }
   }
 

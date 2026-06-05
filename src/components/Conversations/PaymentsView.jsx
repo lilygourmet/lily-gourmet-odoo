@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
+import { toast } from '../../lib/toast'
 import { Paperclip } from 'lucide-react'
 import { loadPaymentsToValidate, validatePayment, rejectPayment, getMediaSignedUrl } from '../../lib/conversations'
 import { canValidatePayments } from '../../lib/auth'
@@ -48,7 +49,7 @@ export default function PaymentsView({ user }) {
     try {
       const updated = await validatePayment(m.id, user.id)
       setItems(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusyId(null) }
   }
 
@@ -59,7 +60,7 @@ export default function PaymentsView({ user }) {
     try {
       const updated = await rejectPayment(m.id, user.id, reason)
       setItems(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusyId(null) }
   }
 

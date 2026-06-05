@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Landmark, User, Cloud, Paperclip, Clock } from 'lucide-react'
 import { fmtMoney, fmtDateLongue, todayISO, COLOR_PALETTE } from '../_helpers'
+import { toast } from '../../../lib/toast'
 export default function UploadPreuveModal({ env, kind, onClose, onUpload }) {
   const [date, setDate] = useState(env.proof_date || todayISO())
   const [file, setFile] = useState(null)
@@ -9,13 +10,13 @@ export default function UploadPreuveModal({ env, kind, onClose, onUpload }) {
   const [noteProof, setNoteProof] = useState(env.note_proof || '')
 
   async function submit() {
-    if (!file) { alert('Sélectionnez un fichier'); return }
+    if (!file) { toast.error('Sélectionnez un fichier'); return }
     const amt = parseFloat(amountProof)
-    if (isNaN(amt) || amt < 0) { alert('Montant invalide'); return }
+    if (isNaN(amt) || amt < 0) { toast.error('Montant invalide'); return }
     setUploading(true)
     try {
       await onUpload(file, date, amt, noteProof.trim() || null)
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
     setUploading(false)
   }
   const c = COLOR_PALETTE[env.destinataire?.color_key] || COLOR_PALETTE.gris

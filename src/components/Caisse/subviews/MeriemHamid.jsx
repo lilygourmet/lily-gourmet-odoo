@@ -5,6 +5,8 @@ import { Trash2, Paperclip, AlertTriangle, Receipt, Scale } from 'lucide-react'
 import AjoutAvanceHamidModal from '../modals/AjoutAvanceHamidModal'
 import AjoutDepenseHamidModal from '../modals/AjoutDepenseHamidModal'
 import HamidRendModal from '../modals/HamidRendModal'
+import { toast } from '../../../lib/toast'
+import { confirmDialog } from '../../../lib/confirmDialog'
 
 export default function MeriemHamid({ user }) {
   const [year, setYear] = useState(currentYear())
@@ -60,25 +62,25 @@ export default function MeriemHamid({ user }) {
     if (!file) return
     setUploadingId(d.id)
     try { await uploadHamidDepenseProof(d.id, file, user.id); await reload() }
-    catch (e) { alert('Erreur : ' + (e.message || e)) }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
     finally { setUploadingId(null) }
   }
   async function handleSessionProof(sessionId, file) {
     if (!file) return
     setUploadingSessionId(sessionId)
     try { await uploadHamidSessionProof(sessionId, file, user.id); await reload() }
-    catch (e) { alert('Erreur : ' + (e.message || e)) }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
     finally { setUploadingSessionId(null) }
   }
   async function handleDeleteDepense(d) {
-    if (!confirm(`Supprimer la dépense « ${d.label} » (${fmtMoney(d.amount)}) ?`)) return
+    if (!await confirmDialog(`Supprimer la dépense « ${d.label} » (${fmtMoney(d.amount)}) ?`, { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deleteHamidDepense(d.id, user.id); reload() }
-    catch (e) { alert('Erreur : ' + (e.message || e)) }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
   }
   async function handleDeleteSession(s, total) {
-    if (!confirm(`Supprimer la session du ${fmtDateCourte(s.session_date)} (${fmtMoney(total)}) et toutes ses dépenses ?`)) return
+    if (!await confirmDialog(`Supprimer la session du ${fmtDateCourte(s.session_date)} (${fmtMoney(total)}) et toutes ses dépenses ?`, { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deleteHamidSession(s.id, user.id); reload() }
-    catch (e) { alert('Erreur : ' + (e.message || e)) }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
   }
 
   // Regroupe les dépenses par session ; les dépenses sans session (legacy)
@@ -105,9 +107,9 @@ export default function MeriemHamid({ user }) {
     return out
   }, [sessions, depenses])
   async function handleDeleteAvance(a) {
-    if (!confirm(`Supprimer l'avance « ${a.label} » (${fmtMoney(a.amount)}) ?\nCela annule aussi la sortie correspondante de la caisse Meriem.`)) return
+    if (!await confirmDialog(`Supprimer l'avance « ${a.label} » (${fmtMoney(a.amount)}) ?\nCela annule aussi la sortie correspondante de la caisse Meriem.`, { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deleteMouvement(a.id, user.id); reload() }
-    catch (e) { alert('Erreur : ' + (e.message || e)) }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
   }
 
   return (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import SearchSelect from '../SearchSelect'
 import { confirmDialog } from '../../lib/confirmDialog'
+import { toast } from '../../lib/toast'
 import {
   loadTasksReceived, loadTasksSent, countUnreadTasks,
   markTaskRead, deleteTask, loadTeamTasks
@@ -104,7 +105,7 @@ export default function TasksView({ user }) {
       await deleteTask(taskId, user.id, isAdmin)
       reload()
     } catch (e) {
-      alert(e?.message || 'Erreur suppression')
+      toast.error(e?.message || 'Erreur suppression')
     }
   }
 

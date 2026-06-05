@@ -4,6 +4,8 @@ import { loadEmployes, deleteEmploye } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
 import { createMissingEmployeUsers, deactivateUserForEmploye } from '../../lib/users'
 import EmployeEditModal from './EmployeEditModal'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
@@ -131,19 +133,19 @@ export default function EmployesTab({ user, isAdmin }) {
 
   async function handleDelete(e, emp) {
     e.stopPropagation()  // ne pas ouvrir le modal
-    if (!confirm(`Supprimer ${emp.nom} ? Cette action est définitive.`)) return
+    if (!await confirmDialog(`Supprimer ${emp.nom} ? Cette action est définitive.`, { danger: true, confirmLabel: 'Supprimer' })) return
     try {
       // On bloque d'abord l'accès du user lié (login désactivé) avant de supprimer.
       await deactivateUserForEmploye(emp.id).catch(() => {})
       await deleteEmploye(emp.id)
       reload()
     } catch (err) {
-      alert('Erreur : ' + err.message)
+      toast.error('Erreur : ' + err.message)
     }
   }
 
   async function handleCreateMissingUsers() {
-    if (!confirm('Créer les users manquants pour tous les employés actifs ?\n(Login + mot de passe générés ; accès envoyés par WhatsApp.)')) return
+    if (!await confirmDialog('Créer les users manquants pour tous les employés actifs ?\n(Login + mot de passe générés ; accès envoyés par WhatsApp.)', { confirmLabel: 'Créer' })) return
     setCreatingUsers(true)
     try {
       const all = await loadEmployes(true) // actifs uniquement
@@ -155,7 +157,7 @@ export default function EmployesTab({ user, isAdmin }) {
       alert(parts.join('\n'))
       reload()
     } catch (e) {
-      alert('Erreur : ' + (e?.message || ''))
+      toast.error('Erreur : ' + (e?.message || ''))
     } finally {
       setCreatingUsers(false)
     }

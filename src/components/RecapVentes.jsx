@@ -11,6 +11,8 @@ function CatIcon({ catId, size = 16, className = '' }) {
 import { isLivreur } from '../lib/auth'
 import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
+import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 
 // ============================================================
 // Helpers etiquettes par commande
@@ -1055,9 +1057,9 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
     setPrintCart(c => c.filter(e => e.id !== id))
   }
 
-  function clearPrintCart(skipConfirm = false) {
+  async function clearPrintCart(skipConfirm = false) {
     if (printCart.length === 0) return
-    if (!skipConfirm && !window.confirm('Vider le panier d\'impression ?')) return
+    if (!skipConfirm && !await confirmDialog('Vider le panier d\'impression ?', { danger: true, confirmLabel: 'Vider' })) return
     setPrintCart([])
   }
 
@@ -1072,7 +1074,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
         setPrintCartExpanded(false)
       } else {
         // Erreurs : on previent l'utilisateur, on garde le panier
-        alert(
+        toast.error(
           `${result.ok} ticket(s) imprime(s) sur ${result.total}.\n\n` +
           `${result.errors.length} erreur(s) :\n` +
           result.errors.slice(0, 3).map(e => `- ${e.article.productName} : ${e.error}`).join('\n') +
@@ -1081,7 +1083,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
         )
       }
     } catch (e) {
-      alert(
+      toast.error(
         `Echec impression : ${e.message}\n\n` +
         `Verifiez :\n` +
         `1. Le PC Windows est allume et connecte au reseau\n` +
@@ -1107,9 +1109,9 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
     setCart(c => c.filter(e => e.id !== id))
   }
 
-  function clearCart(skipConfirm = false) {
+  async function clearCart(skipConfirm = false) {
     if (cart.length === 0) return
-    if (!skipConfirm && !confirm('Vider le panier ?')) return
+    if (!skipConfirm && !await confirmDialog('Vider le panier ?', { danger: true, confirmLabel: 'Vider' })) return
     setCart([])
     setCartExpanded(false)
   }
@@ -1138,7 +1140,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
       URL.revokeObjectURL(url)
       clearCart(true)
     } catch (e) {
-      alert('Erreur generation : ' + e.message)
+      toast.error('Erreur generation : ' + e.message)
     } finally {
       setDownloadingCart(false)
     }
@@ -1186,7 +1188,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
       html += renderCategoryHtml(cat, catLines, dateLabel, false, filteredLines)
     }
     if (!html) {
-      alert('Aucune vente a imprimer pour cette date')
+      toast.error('Aucune vente a imprimer pour cette date')
       return
     }
     printHtml(html, `Recap ventes - ${dateLabel}`)

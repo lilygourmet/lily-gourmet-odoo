@@ -3,6 +3,7 @@ import { Zap } from 'lucide-react'
 import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, currentYear, SALAIRE_COLORS, REPORT_DESTINATIONS, COLOR_PALETTE } from '../_helpers'
 import { supabase } from '../../../lib/supabase'
+import { toast } from '../../../lib/toast'
 
 export default function CompositionSalaireModal({ salaire, onClose, userId }) {
   const [available, setAvailable] = useState([])
@@ -60,13 +61,13 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
     try {
       await setSalaireEnveloppes(salaire.id, attached.map(a => a.id))
       onClose()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
     setBusy(false)
   }
 
   async function validatePret() {
     if (cumule < Number(target)) {
-      alert(`Manque ${fmtMoney(Number(target) - cumule)} — Tu peux sauvegarder en brouillon mais pas valider en Prêt à payer.`)
+      toast.error(`Manque ${fmtMoney(Number(target) - cumule)} — Tu peux sauvegarder en brouillon mais pas valider en Prêt à payer.`)
       return
     }
     setBusy(true)
@@ -74,7 +75,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
       await setSalaireEnveloppes(salaire.id, attached.map(a => a.id))
       await markSalairePret(salaire.id, reliquat, reliquatDest)
       onClose()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
     setBusy(false)
   }
 

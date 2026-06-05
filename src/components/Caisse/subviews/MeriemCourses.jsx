@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Info, Trash2, ShoppingCart, Paperclip } from 'lucide-react'
 import { loadCoursesMonth, donnerCourse, reglerCourse, deleteCourse, loadCategories } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
+import { toast } from '../../../lib/toast'
+import { confirmDialog } from '../../../lib/confirmDialog'
 
 export default function MeriemCourses({ user }) {
   const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
@@ -62,14 +64,14 @@ export default function MeriemCourses({ user }) {
       await reglerCourse({ course: settle, lignes: clean, date: settleDate, userId: user.id })
       setSettle(null)
       await reload()
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusy(false) }
   }
 
   async function handleDelete(c) {
-    if (!confirm(`Supprimer la course de ${c.person} ? (annule le don et le rendu en caisse)`)) return
+    if (!await confirmDialog(`Supprimer la course de ${c.person} ? (annule le don et le rendu en caisse)`, { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deleteCourse(c.id); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   return (

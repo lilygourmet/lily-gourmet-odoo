@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { logout } from '../lib/auth'
 import AppHeader from './AppHeader'
 import { loadFreezerDoneIds, markFreezerDone, unmarkFreezerDone } from '../lib/freezerDone'
+import { toast } from '../lib/toast'
 
 const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
 const MONTH_NAMES = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
@@ -112,7 +113,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
         setDoneMap(prev => ({ ...prev, [item.mo_id]: { done_by: user.id, done_at: new Date().toISOString(), doneByName: user.full_name || user.username } }))
       }
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 

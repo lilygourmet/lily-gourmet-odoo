@@ -10,6 +10,8 @@ import {
   nomJour,
 } from '../../lib/pointage'
 import { createDemandeConge, validerConge } from '../../lib/conges'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 // Congés annuels : le jour off "fixe" (jour complet de repos chaque semaine)
 // ne compte PAS dans le décompte des jours de congé pris.
@@ -127,7 +129,7 @@ export default function PointageTab({ user, isAdmin }) {
   // Sync Odoo (cœur réutilisé par le bouton manuel ET la synchro auto à l'ouverture)
   const syncedRef = useRef(new Set())  // mois déjà synchronisés dans cette session
   const doSync = useCallback(async ({ confirmFirst, silent }) => {
-    if (confirmFirst && !confirm(`Synchroniser les pointages + congés depuis Odoo pour ${MOIS_FR[mois - 1]} ${annee} ?`)) return
+    if (confirmFirst && !await confirmDialog(`Synchroniser les pointages + congés depuis Odoo pour ${MOIS_FR[mois - 1]} ${annee} ?`, { confirmLabel: 'Synchroniser' })) return
     setSyncing(true); setError(null); if (!silent) setSuccess(null)
     try {
       const r1 = await syncAttendance(mois, annee)
@@ -156,7 +158,7 @@ export default function PointageTab({ user, isAdmin }) {
   // Édition d'une cellule (heures_travaillees, sup, manquantes, recup, statut)
   async function handleEditCell(dateJour, champ, valeur) {
     if (!canEdit) {
-      alert(isLocked
+      toast.error(isLocked
         ? '🔒 Ce mois est validé. Débloquez-le pour modifier.'
         : '🔒 Modification réservée à l\'admin.')
       return
@@ -169,7 +171,7 @@ export default function PointageTab({ user, isAdmin }) {
       }
       await reload()
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -179,7 +181,7 @@ export default function PointageTab({ user, isAdmin }) {
       await updatePointage(pointageId, { [champ]: valeur }, user.id)
       await reload()
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -192,7 +194,7 @@ export default function PointageTab({ user, isAdmin }) {
       setEditingTranches(null)
       await reload()
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -311,7 +313,7 @@ export default function PointageTab({ user, isAdmin }) {
   // Validation du mois
   // Valider pour TOUS les employés du mois
   async function handleValider() {
-    if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour TOUS les employés ?\n\nLes données seront figées et le solde reporté sur le mois suivant.\nUn PDF + CSV récapitulatif seront téléchargés.`)) return
+    if (!await confirmDialog(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour TOUS les employés ?\n\nLes données seront figées et le solde reporté sur le mois suivant.\nUn PDF + CSV récapitulatif seront téléchargés.`, { confirmLabel: 'Valider' })) return
     try {
       for (const emp of data.employes) {
         const r = resultats[emp.id]
@@ -441,7 +443,7 @@ export default function PointageTab({ user, isAdmin }) {
   // Valider seulement l'employé sélectionné
   async function handleValiderEmploye() {
     if (!isAdmin || !empSelected) return
-    if (!confirm(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour ${empSelected.nom} uniquement ?\n\nSes données seront figées (pas d'export PDF/CSV).`)) return
+    if (!await confirmDialog(`Valider le mois de ${MOIS_FR[mois - 1]} ${annee} pour ${empSelected.nom} uniquement ?\n\nSes données seront figées (pas d'export PDF/CSV).`, { confirmLabel: 'Valider' })) return
     try {
       const r = resultats[empSelected.id]
       if (r) await validerMois(empSelected.id, mois, annee, r.synthese, r.journal, user.id)
@@ -455,7 +457,7 @@ export default function PointageTab({ user, isAdmin }) {
   // Débloquer un mois (admin seulement, supprime le flag valide)
   async function handleDebloquer() {
     if (!isAdmin) return
-    if (!confirm(`Débloquer le mois de ${MOIS_FR[mois - 1]} ${annee} pour ${empSelected?.nom} ?\n\nLes données redeviennent modifiables mais Sync Odoo restera désactivé.`)) return
+    if (!await confirmDialog(`Débloquer le mois de ${MOIS_FR[mois - 1]} ${annee} pour ${empSelected?.nom} ?\n\nLes données redeviennent modifiables mais Sync Odoo restera désactivé.`, { confirmLabel: 'Débloquer' })) return
     try {
       const { supabase } = await import('../../lib/supabase')
       const { error } = await supabase
@@ -474,7 +476,7 @@ export default function PointageTab({ user, isAdmin }) {
   // Forcer un jour "Absent" à "Présent" (statut + heures travaillées)
   async function handleForcerPresent(dateJour) {
     if (!canEdit) return
-    if (!confirm(`Marquer le ${dateJour} comme PRÉSENT pour ${empSelected?.nom} ?\n\nLe statut deviendra 'Présent' et les heures prévues seront comptées comme travaillées.`)) return
+    if (!await confirmDialog(`Marquer le ${dateJour} comme PRÉSENT pour ${empSelected?.nom} ?\n\nLe statut deviendra 'Présent' et les heures prévues seront comptées comme travaillées.`, { confirmLabel: 'Confirmer' })) return
     try {
       const j = result.journal.find(jj => jj.date === dateJour)
       if (!j) return
@@ -484,7 +486,7 @@ export default function PointageTab({ user, isAdmin }) {
       await setAjustement(selectedEmpId, dateJour, 'statut', 'present', user.id)
       await reload()
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -505,7 +507,7 @@ export default function PointageTab({ user, isAdmin }) {
       setCongeModalDate(null)
       await reload()
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 

@@ -6,6 +6,7 @@ import {
   TYPE_LABELS, TYPE_EMOJIS,
   getRealQuantity, loadGmLogs,
 } from '../lib/gmFiches'
+import { toast } from '../lib/toast'
 import AppHeader from './AppHeader'
 import ActivityLog, { relativeTime } from './ActivityLog'
 import { Printer } from 'lucide-react'
@@ -96,12 +97,12 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
       }),
     })).filter(({ items }) => items.length > 0)
     if (todoOrders.length === 0) {
-      alert('Rien à imprimer pour ce jour')
+      toast.error('Rien à imprimer pour ce jour')
       return
     }
     const html = buildPrintHtml(date, todoOrders, palette, viewMode)
     const w = window.open('', '_blank')
-    if (!w) return alert('Bloquez les popups ?')
+    if (!w) return toast.error('Bloquez les popups ?')
     w.document.write(html)
     w.document.close()
     w.focus()
@@ -358,7 +359,7 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
         onChange && onChange()
       } catch (e) {
         console.error(e)
-        alert('Erreur : ' + e.message)
+        toast.error('Erreur : ' + e.message)
       }
     }
     return (
@@ -398,7 +399,7 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
       onChange && onChange()
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -409,7 +410,7 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
       onChange && onChange()
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -625,7 +626,7 @@ function AggLotChip({ entry, palette, currentUserId, onChange, fusionKey, expand
       onChange && onChange()
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 

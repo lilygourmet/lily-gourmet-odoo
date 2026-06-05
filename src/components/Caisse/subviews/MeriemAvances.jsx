@@ -14,6 +14,8 @@ import {
 import AuditLogPanel from '../AuditLogPanel'
 import { User, Info, Check, Clock, Trash2, HandCoins } from 'lucide-react'
 import { fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
+import { toast } from '../../../lib/toast'
+import { confirmDialog } from '../../../lib/confirmDialog'
 
 export default function MeriemAvances({ user }) {
   const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
@@ -45,7 +47,7 @@ export default function MeriemAvances({ user }) {
       setSummary(sum)
       setLgPaiements(await loadLgPaiementsPerso())
     } catch (e) {
-      console.error(e); alert('Erreur chargement avances : ' + e.message)
+      console.error(e); toast.error('Erreur chargement avances : ' + e.message)
     }
     setLoading(false)
   }
@@ -54,34 +56,34 @@ export default function MeriemAvances({ user }) {
     try {
       await createAvance({ ...payload, payerId: user.id, userId: user.id })
       setShowNew(false); reload()
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleAddRb(payload) {
     try {
       await addAvanceRemboursement({ ...payload, avanceId: rbAvance.id, userId: user.id })
       setRbAvance(null); reload()
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleDeleteRb(rbId) {
-    if (!window.confirm('Annuler ce remboursement ?')) return
-    try { await deleteAvanceRemboursement(rbId, user.id); reload() } catch (e) { alert('Erreur : ' + e.message) }
+    if (!await confirmDialog('Annuler ce remboursement ?', { danger: true, confirmLabel: 'Annuler' })) return
+    try { await deleteAvanceRemboursement(rbId, user.id); reload() } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleAddPayeLG(payload) {
     try { await addLgPaiementPerso({ ...payload, userId: user.id }); setShowPayeLG(false); reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleDeletePayeLG(id) {
-    if (!window.confirm('Supprimer ce paiement pour LG ?')) return
-    try { await deleteLgPaiementPerso(id); reload() } catch (e) { alert('Erreur : ' + e.message) }
+    if (!await confirmDialog('Supprimer ce paiement pour LG ?', { danger: true, confirmLabel: 'Supprimer' })) return
+    try { await deleteLgPaiementPerso(id); reload() } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm('Supprimer cette avance ?')) return
-    try { await deleteAvance(id); reload() } catch (e) { alert('Erreur : ' + e.message) }
+    if (!await confirmDialog('Supprimer cette avance ?', { danger: true, confirmLabel: 'Supprimer' })) return
+    try { await deleteAvance(id); reload() } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   const totalPending = useMemo(() => summary.reduce((s, x) => s + Number(x.total_due || 0), 0), [summary])
@@ -230,9 +232,9 @@ function PayeLGModal({ persoDests, onClose, onSubmit }) {
   const [submitting, setSubmitting] = useState(false)
 
   async function submit() {
-    if (!beneficiaryId) { alert('Choisis qui'); return }
+    if (!beneficiaryId) { toast.error('Choisis qui'); return }
     const amt = parseFloat(amount)
-    if (!amt || amt <= 0) { alert('Montant invalide'); return }
+    if (!amt || amt <= 0) { toast.error('Montant invalide'); return }
     setSubmitting(true)
     await onSubmit({ beneficiaryId, amount: amt, note: note.trim() || null, date })
     setSubmitting(false)
@@ -281,7 +283,7 @@ function RemboursementModal({ avance, onClose, onSubmit }) {
 
   async function submit() {
     const amt = parseFloat(amount)
-    if (!amt || amt <= 0) { alert('Montant invalide'); return }
+    if (!amt || amt <= 0) { toast.error('Montant invalide'); return }
     setSubmitting(true)
     await onSubmit({ amount: amt, mode, note: note.trim() || null, date })
     setSubmitting(false)
@@ -333,9 +335,9 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit() {
-    if (!beneficiaryId) { alert('Choisis pour qui'); return }
+    if (!beneficiaryId) { toast.error('Choisis pour qui'); return }
     const amt = parseFloat(amount)
-    if (!amt || amt <= 0) { alert('Montant invalide'); return }
+    if (!amt || amt <= 0) { toast.error('Montant invalide'); return }
     setSubmitting(true)
     const benefDest = persoDests.find(d => String(d.id) === String(beneficiaryId))
     const benefName = benefDest?.name || '?'

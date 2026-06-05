@@ -25,6 +25,7 @@ import { loadProdDoneForLines } from '../lib/prodDone'
 import { loadCafeReceivedForLines, markCafeReceived, unmarkCafeReceived } from '../lib/cafeReceived'
 import { confirmReception, todayISO } from '../lib/stockBoutique'
 import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
+import { toast } from '../lib/toast'
 import { RefreshCw } from 'lucide-react'
 
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
@@ -401,7 +402,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       refresh(true)
     } catch (e) {
       console.error('[handleVitrineDone]', e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -412,7 +413,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       refresh(true)
     } catch (e) {
       console.error('[handleProdDone]', e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -424,7 +425,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       refresh(true)
     } catch (e) {
       console.error('[handleCommandeDone]', e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -449,7 +450,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       refresh(true)
     } catch (e) {
       console.error('[handleUndo]', e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 

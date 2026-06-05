@@ -20,6 +20,8 @@ import {
   reopenStockDay,
   todayISO,
 } from '../../lib/stockBoutique'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 const FRESHNESS_OPTIONS = [
   { id: 'fresh', label: 'Frais' },
@@ -127,7 +129,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
       setSelectedId(created.id)
     } catch (e) {
       console.error(e)
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -139,7 +141,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
       const updated = await updateEveningCount(selectedItem.id, newQty, user.id)
       setCounts(prev => prev.map(c => c.id === selectedItem.id ? { ...c, ...updated } : c))
     } catch (e) {
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -149,7 +151,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
       const updated = await updateItem(item.id, { freshness: newFreshness })
       setCounts(prev => prev.map(c => c.id === item.id ? { ...c, ...updated } : c))
     } catch (e) {
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
@@ -160,20 +162,20 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
       setCounts(prev => prev.filter(c => c.id !== item.id))
       if (selectedId === item.id) setSelectedId(null)
     } catch (e) {
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 
   async function handleSubmit() {
     if (!stockDay || counts.length === 0) return
-    if (!confirm(`Envoyer le comptage à l'équipe audit ?\n\n${counts.length} ligne${counts.length > 1 ? 's' : ''} · ${totalCount} article${totalCount > 1 ? 's' : ''} compté${totalCount > 1 ? 's' : ''}.\n\nTu pourras toujours corriger tant que l'audit n'a pas validé.`)) return
+    if (!await confirmDialog(`Envoyer le comptage à l'équipe audit ?\n\n${counts.length} ligne${counts.length > 1 ? 's' : ''} · ${totalCount} article${totalCount > 1 ? 's' : ''} compté${totalCount > 1 ? 's' : ''}.\n\nTu pourras toujours corriger tant que l'audit n'a pas validé.`, { confirmLabel: 'Envoyer' })) return
     try {
       setSubmitting(true)
       await submitStockDay(stockDay.id, user.id)
       const sd = await getOrCreateStockDay(todayISO())
       setStockDay(sd)
     } catch (e) {
-      alert('Erreur envoi : ' + (e.message || e))
+      toast.error('Erreur envoi : ' + (e.message || e))
     } finally {
       setSubmitting(false)
     }
@@ -181,13 +183,13 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
 
   async function handleReopen() {
     if (!stockDay) return
-    if (!confirm("Corriger le comptage ? L'équipe audit sera notifiée du changement.")) return
+    if (!await confirmDialog("Corriger le comptage ? L'équipe audit sera notifiée du changement.", { confirmLabel: 'Corriger' })) return
     try {
       await reopenStockDay(stockDay.id)
       const sd = await getOrCreateStockDay(todayISO())
       setStockDay(sd)
     } catch (e) {
-      alert('Erreur : ' + (e.message || e))
+      toast.error('Erreur : ' + (e.message || e))
     }
   }
 

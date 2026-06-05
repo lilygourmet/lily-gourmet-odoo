@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { X, RotateCcw, GripVertical, FolderPlus, Trash2 } from 'lucide-react'
+import { toast } from '../lib/toast'
 
 // ============================================================
 // NavbarConfigModal v2 : l'utilisateur range ses onglets comme il veut.
@@ -136,7 +137,7 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
       await onSave(cfg)
       onClose()
     } catch (e) {
-      alert('Erreur : ' + (e?.message || e))
+      toast.error('Erreur : ' + (e?.message || e))
       setSaving(false)
     }
   }

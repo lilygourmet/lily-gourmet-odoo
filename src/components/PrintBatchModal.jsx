@@ -3,6 +3,7 @@ import { markOrdersPrintedBatch } from '../lib/printOrders'
 import { loadFichesForOrder, getSableDimensionLabel } from '../lib/gmFiches'
 import { computeSizesForCake } from '../lib/cakeSizes'
 import { loadPalette } from '../lib/palette'
+import { toast } from '../lib/toast'
 
 const DAY_NAMES_FULL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
 const MONTH_NAMES = [
@@ -392,7 +393,7 @@ ${ordersHtml}
           } catch (_) { /* localStorage indispo, ignore */ }
         } catch (e) {
           console.error('[print] ERREUR markOrdersPrintedBatch:', e)
-          alert('Erreur marquage: ' + e.message)
+          toast.error('Erreur marquage: ' + e.message)
         }
       } else {
         console.warn('[print] PAS de user.id, marquage skippe!')
@@ -413,7 +414,7 @@ ${ordersHtml}
       }, 1000)
     } catch (e) {
       console.error('[batch] erreur:', e)
-      alert('Erreur lors de l\'impression : ' + e.message)
+      toast.error('Erreur lors de l\'impression : ' + e.message)
     }
 
     setPrinting(false)

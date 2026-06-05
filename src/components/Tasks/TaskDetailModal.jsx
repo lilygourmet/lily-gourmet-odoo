@@ -3,6 +3,8 @@ import {
   markTaskDone, undoTaskDone, updateTask,
   getAttachmentURL, uploadTaskAttachment
 } from '../../lib/tasks'
+import { toast } from '../../lib/toast'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 /**
  * Modal de détail d'une tâche.
@@ -44,7 +46,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
   }
 
   async function handleUndo() {
-    if (!confirm('Remettre cette tâche à faire ?')) return
+    if (!await confirmDialog('Remettre cette tâche à faire ?', { confirmLabel: 'Confirmer' })) return
     setSaving(true); setError(null)
     try {
       await undoTaskDone(task.id, currentUserId)
@@ -132,7 +134,7 @@ export default function TaskDetailModal({ task: initialTask, currentUserId, onCl
   function handlePrint() {
     const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const w = window.open('', '_blank')
-    if (!w) { alert('Autorise les popups pour imprimer.'); return }
+    if (!w) { toast.error('Autorise les popups pour imprimer.'); return }
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(task.title)}</title>
 <style>
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a0f0a;margin:24px;line-height:1.5}

@@ -2,6 +2,8 @@
 // à partir d'un congé, de l'employé, du solde et des jours fériés.
 // Ouvre une nouvelle fenêtre prête à imprimer (bouton Imprimer + Ctrl+P).
 
+import { toast } from './toast'
+
 const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 const JOURS_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
@@ -351,10 +353,10 @@ ${pageAR(ctx)}
 }
 
 export function imprimerFeuilleConge({ conge, emp, solde, joursFeries, recupAllocs, recupDejaConsomme }) {
-  if (!conge || !emp) { alert('Données manquantes pour la feuille.'); return }
+  if (!conge || !emp) { toast.error('Données manquantes pour la feuille.'); return }
   const html = buildHTML({ conge, emp, solde, joursFeries, recupAllocs, recupDejaConsomme })
   const w = window.open('', '_blank')
-  if (!w) { alert("Autorise les fenêtres pop-up pour imprimer la feuille de congé."); return }
+  if (!w) { toast.error("Autorise les fenêtres pop-up pour imprimer la feuille de congé."); return }
   w.document.write(html)
   w.document.close()
 }

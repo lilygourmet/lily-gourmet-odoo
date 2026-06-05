@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
+import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
@@ -167,7 +168,7 @@ function BanqueSection({ user }) {
 
   // Retirer la preuve manuelle (photo/PDF) → repasse en attente
   async function handleClearProof(envId) {
-    if (!window.confirm('Retirer la preuve de ce versement ? Il repassera « en attente ».')) return
+    if (!await confirmDialog('Retirer la preuve de ce versement ? Il repassera « en attente ».', { danger: true, confirmLabel: 'Retirer' })) return
     await clearEnveloppeProof(envId)
     reload()
   }
@@ -584,7 +585,7 @@ function PersoSection({ user }) {
   }
 
   async function handleClearProof(envId) {
-    if (!window.confirm('Retirer la preuve de ce remboursement ? Il repassera « à rembourser ».')) return
+    if (!await confirmDialog('Retirer la preuve de ce remboursement ? Il repassera « à rembourser ».', { danger: true, confirmLabel: 'Retirer' })) return
     await clearEnveloppeProof(envId)
     reload()
   }
