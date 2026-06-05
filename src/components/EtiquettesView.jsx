@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 import { usePersistedState } from '../lib/usePersistedState'
 import { Cake, Cookie, Snowflake } from 'lucide-react'
 import AppHeader from './AppHeader'
@@ -135,9 +136,9 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
     }
   }
 
-  function clearAll() {
+  async function clearAll() {
     if (totalLabels === 0) return
-    if (!confirm('Tout decocher ?')) return
+    if (!await confirmDialog('Tout décocher ?', { confirmLabel: 'Décocher' })) return
     setQtys({})
   }
 

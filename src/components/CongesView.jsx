@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { usePersistedState } from '../lib/usePersistedState'
+import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 import SearchSelect from './SearchSelect'
 
 // Hook : retourne true si l'écran est ≤ 640px (mobile)
@@ -269,22 +271,22 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   }
 
   async function handleValider(c) {
-    if (!confirm(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.`)) return
+    if (!await confirmDialog(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.`, { confirmLabel: 'Valider' })) return
     try {
       const jd = joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
       await validerConge(c.id, user.id, jd); await reload()
     }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function handleRejeter(c) {
-    if (!confirm(`Rejeter cette demande ?\n\nUne notification WhatsApp sera envoyée à l'employé.`)) return
+    if (!await confirmDialog(`Rejeter cette demande ?\n\nUne notification WhatsApp sera envoyée à l'employé.`, { danger: true, confirmLabel: 'Rejeter' })) return
     try { await rejeterConge(c.id, user.id); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function handleAnnuler(c) {
-    if (!confirm(`Annuler ce congé validé ?\n\nUne notification WhatsApp sera envoyée à l'employé.`)) return
+    if (!await confirmDialog(`Annuler ce congé validé ?\n\nUne notification WhatsApp sera envoyée à l'employé.`, { danger: true, confirmLabel: 'Annuler le congé' })) return
     try { await annulerConge(c.id, user.id); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleAddAllocation(payload) {
@@ -294,38 +296,38 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       await createAllocation({ ...payload, created_by: user.id, statut })
       setShowAllocForm(false)
       await reload()
-      if (!isAdmin) alert('Allocation enregistrée. Elle sera visible une fois validée par un admin.')
+      if (!isAdmin) toast.success('Allocation enregistrée. Elle sera visible une fois validée par un admin.')
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
   async function handleValiderAlloc(a) {
-    if (!confirm(`Valider l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`)) return
+    if (!await confirmDialog(`Valider l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`, { confirmLabel: 'Valider' })) return
     try { await validerAllocation(a.id, user.id); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function handleRejeterAlloc(a) {
-    if (!confirm(`Rejeter l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`)) return
+    if (!await confirmDialog(`Rejeter l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`, { danger: true, confirmLabel: 'Rejeter' })) return
     try { await rejeterAllocation(a.id, user.id); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleUpdateAllocation(id, patch) {
     try { await updateAllocation(id, patch); setEditAlloc(null); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleUpdateConge(id, patch) {
     try { await updateConge(id, patch); setEditConge(null); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleCancelAllocation(a) {
     const lbl = (ALLOC_TYPES.find(t => t.v === a.type)?.label) || a.type
-    if (!confirm(`Annuler cette allocation ?\n\n${lbl} · ${a.jours} j${a.raison ? ` · ${a.raison}` : ''}`)) return
+    if (!await confirmDialog(`Annuler cette allocation ?\n\n${lbl} · ${a.jours} j${a.raison ? ` · ${a.raison}` : ''}`, { danger: true, confirmLabel: 'Annuler' })) return
     try { await cancelAllocation(a.id); await reload() }
-    catch (e) { alert('Erreur : ' + e.message) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function handleSaveFerie(payload) {
@@ -333,16 +335,16 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       if (editFerie) await updateJourFerie(editFerie.id, payload)
       else           await createJourFerie(payload)
       setShowFerieForm(false); setEditFerie(null); await reload()
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function handleGenererFixes() {
     try {
       const n = await genererFeriesFixes(feriesYear)
       await reload()
-      alert(n > 0
+      toast.success(n > 0
         ? `${n} jour(s) férié(s) fixe(s) ajouté(s) pour ${feriesYear}.`
         : `Tous les fériés fixes de ${feriesYear} sont déjà présents.`)
-    } catch (e) { alert('Erreur : ' + e.message) }
+    } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   return (

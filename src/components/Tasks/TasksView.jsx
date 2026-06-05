@@ -99,7 +99,7 @@ export default function TasksView({ user }) {
   }
 
   async function handleDeleteTask(taskId) {
-    if (!confirm('Supprimer cette tâche ? (action irréversible)')) return
+    if (!await confirmDialog('Supprimer cette tâche ? (action irréversible)', { danger: true, confirmLabel: 'Supprimer' })) return
     try {
       await deleteTask(taskId, user.id, isAdmin)
       reload()

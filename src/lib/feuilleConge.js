@@ -238,7 +238,7 @@ function pageFR({ conge, emp, c, dateDoc }) {
       <table class="sign">
         <tr><th>Fonction</th><th>Nom</th><th>Signature &amp; Date</th></tr>
         <tr><td class="fonction">Employé(e)</td><td class="nom">${esc(emp?.nom || '')}</td><td></td></tr>
-        <tr><td class="fonction">Direction</td><td class="nom">&nbsp;</td><td></td></tr>
+        <tr><td class="fonction">Direction</td><td class="nom">Layla El Amrani</td><td></td></tr>
       </table>
       <div class="nb">NB : Toute demande de congé doit être validée par : Employé(e) – Direction, et signée avant la prise du congé.</div>
     </div>
@@ -288,7 +288,7 @@ function pageAR({ conge, emp, c, dateDoc }) {
       <table class="sign">
         <tr><th>الصفة</th><th>الاسم</th><th>التوقيع والتاريخ</th></tr>
         <tr><td class="fonction">الموظف(ة)</td><td class="nom">${esc(emp?.nom || '')}</td><td></td></tr>
-        <tr><td class="fonction">الإدارة</td><td class="nom">&nbsp;</td><td></td></tr>
+        <tr><td class="fonction">الإدارة</td><td class="nom">Layla El Amrani</td><td></td></tr>
       </table>
       <div class="nb">ملاحظة : يجب أن يُصادَق على كل طلب إجازة من طرف : الموظف(ة) – الإدارة، وأن يُوقَّع قبل الاستفادة من الإجازة.</div>
     </div>
@@ -301,7 +301,8 @@ function pageAR({ conge, emp, c, dateDoc }) {
 
 function buildHTML(args) {
   const c = calcule(args)
-  const dateDoc = new Date().toLocaleDateString('fr-FR')
+  const now = new Date()
+  const dateDoc = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
   const ctx = { ...args, c, dateDoc }
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
 <title>Demande de congé — ${esc(args.emp?.nom || '')}</title>

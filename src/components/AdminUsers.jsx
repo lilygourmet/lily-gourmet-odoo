@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 import {
   loadUsers,
   createUser,
@@ -50,7 +52,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       await updateUser(user.id, { team_id: targetId })
       await refresh()
     } catch (e) {
-      alert('Erreur : ' + e.message)
+      toast.error('Erreur : ' + e.message)
     }
   }
 
@@ -77,7 +79,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       })
     } catch (e) {
       console.error('loadUsers error:', e)
-      alert(`Erreur de chargement : ${e.message}`)
+      toast.error(`Erreur de chargement : ${e.message}`)
     }
     setLoading(false)
   }
@@ -88,17 +90,17 @@ export default function AdminUsers({ currentUser, onClose }) {
       await createTeam(name)
       await refresh()
     } catch (e) {
-      alert(`Erreur création équipe : ${e.message}`)
+      toast.error(`Erreur création équipe : ${e.message}`)
     }
   }
 
   async function handleDeleteTeam(teamId) {
-    if (!confirm('Supprimer cette équipe ?')) return
+    if (!await confirmDialog('Supprimer cette équipe ?', { danger: true, confirmLabel: 'Supprimer' })) return
     try {
       await deleteTeam(teamId)
       await refresh()
     } catch (e) {
-      alert(`Erreur : ${e.message}`)
+      toast.error(`Erreur : ${e.message}`)
     }
   }
 
@@ -152,7 +154,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       setDuplicateFromUser(null)
       await refresh()
     } catch (e) {
-      alert(`Erreur création : ${e.message}`)
+      toast.error(`Erreur création : ${e.message}`)
     }
   }
 
@@ -205,7 +207,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       setEditingUser(null)
       await refresh()
     } catch (e) {
-      alert(`Erreur modification : ${e.message}`)
+      toast.error(`Erreur modification : ${e.message}`)
     }
   }
 
@@ -213,9 +215,9 @@ export default function AdminUsers({ currentUser, onClose }) {
     try {
       await resetUserPassword(userId, newPassword)
       setResetPasswordFor(null)
-      alert('Mot de passe réinitialisé ✅')
+      toast.success('Mot de passe réinitialisé')
     } catch (e) {
-      alert(`Erreur : ${e.message}`)
+      toast.error(`Erreur : ${e.message}`)
     }
   }
 
@@ -226,7 +228,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       await refresh()
     } catch (e) {
       console.error('[handleDelete]', e)
-      alert(`Erreur désactivation : ${e?.message || 'erreur inconnue'}`)
+      toast.error(`Erreur désactivation : ${e?.message || 'erreur inconnue'}`)
     }
   }
 
@@ -238,7 +240,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       await refresh()
     } catch (e) {
       console.error('[handleHardDelete]', e)
-      alert(`Erreur suppression : ${e?.message || 'erreur inconnue'}\n\nL'utilisateur peut etre lie a des donnees historiques (commandes faites, logs...). Dans ce cas il faut garder son compte desactive.`)
+      toast.error(`Erreur suppression : ${e?.message || 'erreur inconnue'}\n\nL'utilisateur peut etre lie a des donnees historiques (commandes faites, logs...). Dans ce cas il faut garder son compte desactive.`)
     }
   }
 
@@ -742,15 +744,15 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
   function handleSubmit() {
     if (isNew) {
       if (!formData.username.trim()) {
-        alert('Le nom d\'utilisateur est requis')
+        toast.error('Le nom d\'utilisateur est requis')
         return
       }
       if (!formData.fullName.trim()) {
-        alert('Le nom complet est requis')
+        toast.error('Le nom complet est requis')
         return
       }
       if (!formData.password || formData.password.length < 4) {
-        alert('Le mot de passe doit faire au moins 4 caractères')
+        toast.error('Le mot de passe doit faire au moins 4 caractères')
         return
       }
     }
@@ -1211,7 +1213,7 @@ function ResetPasswordModal({ user, onClose, onConfirm }) {
 
   function handleSubmit() {
     if (!newPassword || newPassword.length < 4) {
-      alert('Le mot de passe doit faire au moins 4 caractères')
+      toast.error('Le mot de passe doit faire au moins 4 caractères')
       return
     }
     onConfirm(newPassword)

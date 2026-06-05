@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 import { loadAbsences, createAbsence, deleteAbsence } from '../lib/absences'
 import { Trash2 } from 'lucide-react'
 
@@ -55,7 +56,7 @@ export default function AbsencesView({ user }) {
   }
 
   async function handleDelete(a) {
-    if (!confirm(`Supprimer l'absence de ${a.person} ?`)) return
+    if (!await confirmDialog(`Supprimer l'absence de ${a.person} ?`, { danger: true, confirmLabel: 'Supprimer' })) return
     try {
       await deleteAbsence(a.id)
       setItems(prev => prev.filter(x => x.id !== a.id))
