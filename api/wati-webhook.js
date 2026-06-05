@@ -91,8 +91,7 @@ async function handleInbound(req, res) {
       const since = new Date(Date.now() - 2 * 60 * 1000).toISOString()
       let dupQuery = supabase.from('messages').select('id')
         .eq('conversation_id', conv.id)
-        .eq('sender_type', 'agent')
-        .not('sender_user_id', 'is', null)
+        .in('sender_type', ['agent', 'system'])
         .gte('created_at', since)
       dupQuery = body
         ? dupQuery.eq('body', body)
@@ -145,11 +144,63 @@ async function handleInbound(req, res) {
         .catch(e => console.warn('[wati push]', e?.message || e))
     }
 
+    // Auto-réponse (RIB, etc.) : déclenchée par mot-clé sur message client texte.
+    if (senderType === 'client' && body) {
+      await maybeAutoReply(supabase, conv, phone, body)
+        .catch(e => console.warn('[auto-reply]', e?.message || e))
+    }
+
     return res.status(200).json({ ok: true })
   } catch (e) {
     console.error('[wati-webhook]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
+}
+
+// ============================================================
+// AUTO-RÉPONSES — déclenchées par mot-clé sur un message client.
+// Le texte vient des "réponses rapides" (quick_replies) → modifiable dans l'app.
+// Ajouter une règle = une ligne { quickReplyId, test }.
+// `test` = regex ; \b...\b = mot entier (donc "votre rib" OK, "terrible" non).
+// ============================================================
+const AUTO_RULES = [
+  { quickReplyId: 1, test: /\b(rib|iban)\b/i },   // [1] RIB
+]
+
+async function maybeAutoReply(supabase, conv, phone, body) {
+  for (const rule of AUTO_RULES) {
+    if (!rule.test.test(body)) continue
+    const { data: qr } = await supabase
+      .from('quick_replies').select('body').eq('id', rule.quickReplyId).maybeSingle()
+    if (!qr?.body) return
+    // Anti-spam : pas la même auto-réponse 2x dans la conversation en moins de 10 min.
+    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    const { data: recent } = await supabase
+      .from('messages').select('id')
+      .eq('conversation_id', conv.id).eq('sender_type', 'system').eq('body', qr.body)
+      .gte('created_at', since).limit(1)
+    if (recent && recent.length) return
+    await sendAutoReply(supabase, conv, phone, qr.body)
+    return  // une seule auto-réponse par message
+  }
+}
+
+async function sendAutoReply(supabase, conv, phone, text) {
+  const apiToken = process.env.WATI_API_TOKEN
+  const apiEndpoint = process.env.WATI_API_ENDPOINT
+  if (!apiToken || !apiEndpoint) return
+  const number = String(phone).replace(/\D/g, '')
+  const base = apiEndpoint.replace(/\/$/, '')
+  const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
+  const url = `${base}/api/v1/sendSessionMessage/${number}?${new URLSearchParams({ messageText: text })}`
+  const r = await fetch(url, { method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' } })
+  if (!r.ok) { console.warn('[auto-reply] WATI status', r.status); return }
+  const now = new Date().toISOString()
+  await supabase.from('messages').insert({
+    conversation_id: conv.id, sender_type: 'system', body: text, sent_at: now,
+  })
+  await supabase.from('conversations')
+    .update({ last_message_at: now, updated_at: now }).eq('id', conv.id)
 }
 
 // ============================================================
