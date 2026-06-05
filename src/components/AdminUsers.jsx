@@ -144,6 +144,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_conversations: formData.permConversations,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
+        perm_livraisons_dispatch: formData.permLivraisonsDispatch,
+        perm_livreur_defaut: formData.permLivreurDefaut,
+        perm_livreur_assigne: formData.permLivreurAssigne,
         perm_mark_payment_proof: formData.permMarkPaymentProof,
         perm_view_payments: formData.permViewPayments,
         perm_validate_payments: formData.permValidatePayments,
@@ -200,6 +203,9 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_conversations: formData.permConversations,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
+        perm_livraisons_dispatch: formData.permLivraisonsDispatch,
+        perm_livreur_defaut: formData.permLivreurDefaut,
+        perm_livreur_assigne: formData.permLivreurAssigne,
         perm_mark_payment_proof: formData.permMarkPaymentProof,
         perm_view_payments: formData.permViewPayments,
         perm_validate_payments: formData.permValidatePayments,
@@ -738,6 +744,9 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permConversations: initialData?.perm_conversations !== undefined ? initialData.perm_conversations : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
+    permLivraisonsDispatch: initialData?.perm_livraisons_dispatch || false,
+    permLivreurDefaut: initialData?.perm_livreur_defaut || false,
+    permLivreurAssigne: initialData?.perm_livreur_assigne || false,
     permMarkPaymentProof: initialData?.perm_mark_payment_proof !== undefined ? initialData.perm_mark_payment_proof : false,
     permViewPayments: initialData?.perm_view_payments !== undefined ? initialData.perm_view_payments : false,
     permValidatePayments: initialData?.perm_validate_payments !== undefined ? initialData.perm_validate_payments : false,
@@ -985,6 +994,24 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             label="🚚 Livreur par défaut (reçoit les livraisons non assignées)"
             checked={formData.livreurDefaut}
             onChange={v => update('livreurDefaut', v)}
+          />
+          <PermCheckbox
+            id="perm-livraisons-dispatch"
+            label="🧭 Dispatch livraisons (voit TOUTES les livraisons + peut assigner)"
+            checked={isAdmin || formData.permLivraisonsDispatch}
+            onChange={v => update('permLivraisonsDispatch', v)}
+          />
+          <PermCheckbox
+            id="perm-livreur-defaut"
+            label="🚚 Livreur par défaut (perm) — ses livraisons + les non assignées"
+            checked={formData.permLivreurDefaut}
+            onChange={v => update('permLivreurDefaut', v)}
+          />
+          <PermCheckbox
+            id="perm-livreur-assigne"
+            label="📦 Livreur à assigner — voit seulement ce qu'on lui assigne"
+            checked={formData.permLivreurAssigne}
+            onChange={v => update('permLivreurAssigne', v)}
           />
           <PermCheckbox
             id="perm-etiquettes"

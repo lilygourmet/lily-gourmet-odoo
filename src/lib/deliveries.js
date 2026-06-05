@@ -9,10 +9,11 @@ import { createTask } from './tasks'
 // ============================================================
 
 export async function loadLivreurs() {
+  // Livreurs = ancien rôle 'livreur' OU une des 2 permissions livreur.
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, username, livreur_defaut, whatsapp')
-    .eq('role', 'livreur')
+    .select('id, full_name, username, livreur_defaut, perm_livreur_defaut, perm_livreur_assigne, whatsapp')
+    .or('role.eq.livreur,perm_livreur_defaut.eq.true,perm_livreur_assigne.eq.true')
     .eq('active', true)
     .order('full_name', { ascending: true })
   if (error) throw error

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders, groupDeliveriesWithFullOrder, stripOdooPrefix } from '../lib/salesLines'
 import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite } from '../lib/deliveries'
-import { isLivreur } from '../lib/auth'
+import { canDispatchLivraisons, isLivreurDefaut, isLivreurAssigne } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
 import { toast } from '../lib/toast'
 import Skeleton from './Skeleton'
@@ -17,10 +17,14 @@ const labelDate = iso => { const d = new Date(iso + 'T12:00:00'); return `${JOUR
 const DAYS_AHEAD = 14
 
 export default function LivraisonsView({ user }) {
-  const livreur = isLivreur(user)
-  // Vue multi-jours sans calendrier : seulement pour les livreurs NON-défaut (Hamza).
-  // Le livreur défaut (Hamid) garde l'affichage par jour habituel.
-  const multiDay = livreur && !user.livreur_defaut
+  // 3 rôles (par permissions) : dispatcher (voit tout + assigne), livreur par
+  // défaut (siennes + non assignées), livreur à assigner (siennes seulement).
+  const isDispatcher = canDispatchLivraisons(user)
+  const livreurDefaut = isLivreurDefaut(user)
+  const livreur = !isDispatcher && (livreurDefaut || isLivreurAssigne(user))
+  // Vue multi-jours sans calendrier : seulement pour les livreurs à assigner.
+  // Le livreur par défaut garde l'affichage par jour habituel.
+  const multiDay = livreur && !livreurDefaut
   const [date, setDate] = useState(todayISO())
   const [deliveries, setDeliveries] = useState([])
   const [livreurs, setLivreurs] = useState([])
@@ -30,7 +34,7 @@ export default function LivraisonsView({ user }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
 
-  const defaultLivreurId = useMemo(() => livreurs.find(l => l.livreur_defaut)?.id || null, [livreurs])
+  const defaultLivreurId = useMemo(() => livreurs.find(l => l.livreur_defaut || l.perm_livreur_defaut)?.id || null, [livreurs])
 
   async function reload() {
     setErr('')
@@ -140,9 +144,11 @@ export default function LivraisonsView({ user }) {
     if (!livreur) return deliveries
     return deliveries.filter(d => {
       const lid = states[d.orderNum]?.livreur_id || null
-      return lid === user.id || (lid === null && user.livreur_defaut)
+      // Livreur à assigner : seulement ce qui lui est assigné.
+      // Livreur par défaut : ses livraisons + les non assignées.
+      return lid === user.id || (lid === null && livreurDefaut)
     })
-  }, [deliveries, states, livreur, user])
+  }, [deliveries, states, livreur, livreurDefaut, user])
 
   const btnNav = { padding: '6px 12px', fontSize: 14, background: 'white', border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer' }
 
@@ -177,7 +183,7 @@ export default function LivraisonsView({ user }) {
             const statut = s.statut
             const bg = faite ? '#EAF3DE' : statut === 'refusee' ? '#FCEEE8' : 'white'
             const lid = s.livreur_id || null
-            const mine = lid === user.id || (lid === null && user.livreur_defaut)
+            const mine = lid === user.id || (lid === null && livreurDefaut)
             const assignedName = lid ? (livreurs.find(l => l.id === lid)?.full_name || livreurs.find(l => l.id === lid)?.username || '') : ''
             const zoneRaw = (d.items || []).find(it => it.category === 'LIVR')?.product_name
             const zone = zoneRaw ? stripOdooPrefix(zoneRaw).replace(/^livr[-\s]*/i, '').trim() : ''
@@ -230,7 +236,7 @@ export default function LivraisonsView({ user }) {
                         onChange={e => setSel(m => ({ ...m, [d.orderNum]: e.target.value }))}
                         style={{ padding: '6px 8px', fontSize: 12, border: '1px solid #e5d8c3', borderRadius: 8 }}>
                         <option value="">— non assigné —</option>
-                        {livreurs.map(l => <option key={l.id} value={l.id}>{l.full_name || l.username}{l.livreur_defaut ? ' (défaut)' : ''}</option>)}
+                        {livreurs.map(l => <option key={l.id} value={l.id}>{l.full_name || l.username}{(l.livreur_defaut || l.perm_livreur_defaut) ? ' (défaut)' : ''}</option>)}
                       </select>
                       <button onClick={() => handleAssign(d, sel[d.orderNum] ?? effLivreur(d) ?? '')} disabled={busy === d.orderNum}
                         style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: '#993556', color: 'white', border: 'none' }}>
