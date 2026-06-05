@@ -221,8 +221,11 @@ function App() {
   }
 
   function renderActiveView() {
-    // Livreur : accès limité à Livraisons (jamais Récap ni Tâches, même via onglet mémorisé).
-    if (isLivreur(user)) return <LivraisonsWrapper {...navProps} />
+    // Livreur : accès limité à Livraisons + ses Tâches (jamais Récap, même via onglet mémorisé).
+    if (isLivreur(user)) {
+      if (activeView === 'tasks') return <TasksWrapper {...navProps} />
+      return <LivraisonsWrapper {...navProps} />
+    }
     if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
     if (activeView === 'patissier') return <PatissierView {...navProps} />
     if (activeView === 'prod') return <ProdView {...navProps} forcedCategory="prod" />

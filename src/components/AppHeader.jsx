@@ -598,7 +598,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     (!isLivreur(user) && canSeeCalendar(user)) && { view: 'calendar', emoji: '📅', label: 'Calendrier', badge: 0 },
     canRecaps(user) && { view: 'recap', emoji: '📊', label: 'Récap', badge: 0 },
     isLivreur(user) && { view: 'livraisons', emoji: '🚚', label: 'Livraisons', badge: livraisonsBadge },
-    !isLivreur(user) && { view: 'tasks', emoji: '✅', label: 'Tâches', badge: tasksBadge },
+    { view: 'tasks', emoji: '✅', label: 'Tâches', badge: tasksBadge },
     showChecklistBtn && { view: 'checklist', emoji: '📋', label: 'Checklist', badge: checklistBadge },
   ].filter(Boolean)
   const adminGallery = (admin && canSeeCakeVision(user))
@@ -792,9 +792,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               {isLivreur(user) && (
                 <NavButton view="livraisons" label="Livraisons" isActive={activeView === 'livraisons'} badgeCount={livraisonsBadge} onClick={() => onNavigate('livraisons')} />
               )}
-              {!isLivreur(user) && (
-                <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
-              )}
+              <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
               {primary && (
                 <NavButton
                   view={primary.view}
