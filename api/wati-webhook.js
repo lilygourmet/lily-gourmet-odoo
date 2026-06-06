@@ -746,6 +746,7 @@ async function handleInvoicesSearch(req, res) {
   const query = (req.body?.query || '').trim()
   try {
     const uid = await odooAuthenticate()
+    // Diagnostic temporaire : lister les étiquettes client contenant "vip".
     let domain = [['move_type', '=', 'out_invoice'], ['state', '=', 'posted']]
     if (query.length >= 2) {
       domain = ['&', '&', ['move_type', '=', 'out_invoice'], ['state', '=', 'posted'],
