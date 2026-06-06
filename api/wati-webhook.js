@@ -814,6 +814,7 @@ async function handleDevisList(req, res) {
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
         dateOrder: o.date_order || '',
+        deliveryAt: o.commitment_date || '',
         productLines: linesByOrder.get(o.id) || [],
       }
     })

@@ -8,7 +8,7 @@ function dayKey(dateOrder) {
   return (dateOrder || '').slice(0, 10) || 'sans-date'
 }
 function dayLabel(key) {
-  if (key === 'sans-date') return 'Sans date'
+  if (key === 'sans-date') return 'Sans date de livraison'
   const d = new Date(key + 'T00:00:00')
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const diff = Math.round((d - today) / 86400000)
@@ -40,10 +40,14 @@ export default function DevisView({ user }) {
 
   const shown = devis.filter(d => filter === 'all' ? true : d.state === filter)
 
-  // Regrouper par jour (date du devis), jours triés du + récent au + ancien.
+  // Regrouper par date de LIVRAISON (chronologique). "Sans date" à la fin.
   const groups = {}
-  for (const d of shown) { const k = dayKey(d.dateOrder); (groups[k] ||= []).push(d) }
-  const dayKeys = Object.keys(groups).sort((a, b) => (a < b ? 1 : -1))
+  for (const d of shown) { const k = dayKey(d.deliveryAt); (groups[k] ||= []).push(d) }
+  const dayKeys = Object.keys(groups).sort((a, b) => {
+    if (a === 'sans-date') return 1
+    if (b === 'sans-date') return -1
+    return a < b ? -1 : 1
+  })
 
   const FILTERS = [['all', 'Tous'], ['sent', 'Devis envoyé'], ['draft', 'Brouillon']]
 
