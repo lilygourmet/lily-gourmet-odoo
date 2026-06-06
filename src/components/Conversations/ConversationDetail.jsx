@@ -4,7 +4,6 @@ import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
-import ClientAvatar from './ClientAvatar'
 import { createModification } from '../../lib/modifications'
 import { uploadJustificatif } from '../../lib/conges'
 import { supabase } from '../../lib/supabase'
@@ -746,14 +745,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       <div className="flex flex-col flex-1 min-w-0">
       {/* En-tête : retour + infos contact + bouton Je prends */}
       <div className="bg-bordeaux text-cream flex flex-col gap-1 px-3 py-1.5 shadow-sm flex-shrink-0">
-        {/* Ligne 1 : retour + avatar + nom + tous les boutons d'action */}
+        {/* Ligne 1 : nom (sans photo) + ✏️ + MODIF + Cmd + 🔍 + Je prends */}
         <div className="flex items-center gap-1.5">
           <button
             onClick={onBack}
             className="md:hidden w-8 h-8 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
             title="Retour à la liste"
           ><ArrowLeft size={18} strokeWidth={1.8} /></button>
-          <ClientAvatar conv={conv} />
           {nameEditing ? (
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <input
@@ -777,17 +775,17 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto">
-                <button
-                  onClick={() => setThreadSearchOpen(o => !o)}
-                  className="w-8 h-8 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-                  title="Rechercher dans la conversation"
-                ><Search size={16} strokeWidth={1.8} /></button>
                 {conv && (
                   <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">MODIF.</button>
                 )}
                 {conv && (
                   <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
                 )}
+                <button
+                  onClick={() => setThreadSearchOpen(o => !o)}
+                  className="w-8 h-8 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+                  title="Rechercher dans la conversation"
+                ><Search size={16} strokeWidth={1.8} /></button>
                 {conv && (
                   conv.assigned_to ? (
                     <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-cream/15 text-cream flex-shrink-0 whitespace-nowrap">
@@ -799,25 +797,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     </button>
                   )
                 )}
-                {conv?.last_inbound_at && (
-                  <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
-                )}
-                {conv && (
-                  conv.status === 'fermee' ? (
-                    <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
-                  ) : (
-                    <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
-                  )
-                )}
               </div>
             </>
           )}
         </div>
 
-        {/* Ligne 2 : téléphone + étiquettes */}
+        {/* Ligne 2 : étiquettes + 📩 Non lu + Clôturer */}
         {conv && !nameEditing && (
-          <div className="flex items-center gap-2 overflow-x-auto">
-            {conv.client_name && <span className="font-mono text-[11px] text-cream/70 flex-shrink-0">{conv.client_phone}</span>}
+          <div className="flex items-center gap-1.5 overflow-x-auto">
             {labelDefs.map(l => {
               const on = (conv.labels || []).includes(l.key)
               return (
@@ -829,6 +816,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 </button>
               )
             })}
+            {conv.last_inbound_at && (
+              <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
+            )}
+            {conv.status === 'fermee' ? (
+              <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
+            ) : (
+              <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
+            )}
           </div>
         )}
       </div>
