@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders } from '../../lib/conversations'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
@@ -108,6 +108,20 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [noteBusy, setNoteBusy] = useState(false)
   // Édition du nom du client
   const [nameEditing, setNameEditing] = useState(false)
+  const [ordersOpen, setOrdersOpen] = useState(false)
+  const [clientOrders, setClientOrders] = useState(null)
+  const [ordersBusy, setOrdersBusy] = useState(false)
+
+  async function toggleClientOrders() {
+    const next = !ordersOpen
+    setOrdersOpen(next)
+    if (next && clientOrders === null && conv?.client_phone) {
+      setOrdersBusy(true)
+      try { setClientOrders(await searchOrders(conv.client_phone)) }
+      catch { setClientOrders([]) }
+      finally { setOrdersBusy(false) }
+    }
+  }
   const [nameInput, setNameInput] = useState('')
   const [nameBusy, setNameBusy] = useState(false)
   // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
@@ -691,6 +705,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               {conv && (
                 <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-4 py-1.5 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0">MODIFICATION</button>
               )}
+              {conv && (
+                <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-3 py-1.5 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0">📦 Commandes</button>
+              )}
             </div>
           )}
           {conv?.client_name && !nameEditing && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
@@ -1032,6 +1049,48 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           user={user}
           onClose={() => setForwardMsg(null)}
         />
+      )}
+
+      {ordersOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => setOrdersOpen(false)}>
+          <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-fraunces italic text-[18px] text-ink">📦 Commandes & devis</h3>
+              <button onClick={() => setOrdersOpen(false)} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>
+            </div>
+            <p className="text-[11px] text-ink-soft mb-3">{conv?.client_name || conv?.client_phone || ''}</p>
+            {ordersBusy ? (
+              <div className="text-center text-ink-mute py-8 text-[13px]">Chargement…</div>
+            ) : !clientOrders || clientOrders.length === 0 ? (
+              <div className="text-center text-ink-mute py-8 text-[13px]">Aucune commande/devis trouvé pour ce numéro.</div>
+            ) : (
+              <div className="space-y-2">
+                {clientOrders.map(o => {
+                  const isDevis = o.state === 'draft' || o.state === 'sent'
+                  const stLabel = isDevis ? 'Devis' : (o.state === 'cancel' ? 'Annulé' : 'Confirmé')
+                  const stCls = isDevis ? 'bg-amber-100 text-amber-800' : (o.state === 'cancel' ? 'bg-line/40 text-ink-mute' : 'bg-blue-100 text-blue-800')
+                  return (
+                    <div key={o.id} className="bg-white border border-line rounded-xl p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[13px] font-semibold text-bordeaux">{o.name}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${stCls}`}>{stLabel}</span>
+                      </div>
+                      <div className="text-[11px] text-ink-soft mt-1 flex flex-wrap gap-x-3">
+                        {o.pickupText && <span>🗓️ {o.pickupText}</span>}
+                        {o.amountText && <span>💰 {o.amountText}</span>}
+                      </div>
+                      {Array.isArray(o.productLines) && o.productLines.length > 0 && (
+                        <div className="text-[11px] text-ink mt-1 border-t border-line/60 pt-1">
+                          {o.productLines.slice(0, 6).map((l, i) => <div key={i} className="truncate">• {l}</div>)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {modifOpen && (
