@@ -690,7 +690,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const nextHl = () => matchCounter++
 
   return (
-    <div className="flex flex-col mx-auto w-full max-w-3xl" style={{ height: `calc(100dvh - ${headerTop}px)` }}>
+    <div className="flex mx-auto w-full max-w-5xl" style={{ height: `calc(100dvh - ${headerTop}px)` }}>
+      <div className="flex flex-col flex-1 min-w-0">
       {/* En-tête : retour + infos contact + bouton Je prends */}
       <div className="bg-bordeaux text-cream flex items-center gap-2 flex-wrap px-4 py-2 shadow-sm flex-shrink-0">
         <button
@@ -969,20 +970,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {quickReplies.length > 0 && (
-              <div className="flex gap-1.5 overflow-x-auto pb-1 -mt-1" title="Clic = envoi direct au client">
-                {quickReplies.map(q => (
-                  <button
-                    key={q.id}
-                    type="button"
-                    onClick={() => sendQuickReply(q)}
-                    disabled={sending}
-                    title={q.body}
-                    className="flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium border border-bordeaux/40 text-bordeaux bg-bordeaux/5 hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50"
-                  >{q.media_path ? '🖼️ ' : ''}{q.label}</button>
-                ))}
-              </div>
-            )}
             <textarea
               ref={textareaRef}
               value={text}
@@ -1065,6 +1052,21 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           </>
         )}
       </div>
+      </div>{/* fin colonne conversation */}
+
+      {quickReplies.length > 0 && (
+        <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-l border-line bg-cream-warm overflow-y-auto">
+          <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-mute border-b border-line flex-shrink-0">Phrases — clic = envoi</div>
+          <div className="p-2 flex flex-col gap-1.5">
+            {quickReplies.map(q => (
+              <button key={q.id} type="button" onClick={() => sendQuickReply(q)} disabled={sending} title={q.body}
+                className="text-left px-3 py-2 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50">
+                {q.media_path ? '🖼️ ' : ''}{q.label}
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
 
       {forwardMsg && (
         <ForwardModal
