@@ -797,35 +797,37 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     </button>
                   )
                 )}
-                {conv?.last_inbound_at && (
-                  <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
-                )}
-                {conv && (
-                  conv.status === 'fermee' ? (
-                    <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
-                  ) : (
-                    <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
-                  )
-                )}
               </div>
             </>
           )}
         </div>
 
-        {/* Ligne 2 : étiquettes + 📩 Non lu + Clôturer */}
+        {/* Ligne 2 : étiquettes (gauche) + 📩 Non lu + Clôturer (droite, sous Je prends) */}
         {conv && !nameEditing && (
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            {labelDefs.map(l => {
-              const on = (conv.labels || []).includes(l.key)
-              return (
-                <button key={l.key} type="button" onClick={() => toggleLabel(l.key)}
-                  title={on ? "Retirer l'étiquette" : "Ajouter l'étiquette"}
-                  className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all flex-shrink-0 whitespace-nowrap"
-                  style={{ background: on ? l.bg : 'rgba(255,255,255,0.12)', color: on ? l.color : 'rgba(255,255,255,0.75)', border: '1px solid ' + (on ? l.color : 'rgba(255,255,255,0.25)') }}>
-                  {on ? '✓ ' : ''}{l.label}
-                </button>
-              )
-            })}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0">
+              {labelDefs.map(l => {
+                const on = (conv.labels || []).includes(l.key)
+                return (
+                  <button key={l.key} type="button" onClick={() => toggleLabel(l.key)}
+                    title={on ? "Retirer l'étiquette" : "Ajouter l'étiquette"}
+                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all flex-shrink-0 whitespace-nowrap"
+                    style={{ background: on ? l.bg : 'rgba(255,255,255,0.12)', color: on ? l.color : 'rgba(255,255,255,0.75)', border: '1px solid ' + (on ? l.color : 'rgba(255,255,255,0.25)') }}>
+                    {on ? '✓ ' : ''}{l.label}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {conv.last_inbound_at && (
+                <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
+              )}
+              {conv.status === 'fermee' ? (
+                <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
+              ) : (
+                <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
+              )}
+            </div>
           </div>
         )}
       </div>
