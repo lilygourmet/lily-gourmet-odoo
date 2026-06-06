@@ -745,7 +745,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     <div className="flex mx-auto w-full max-w-5xl" style={{ height: `calc(100dvh - ${headerTop}px)` }}>
       <div className="flex flex-col flex-1 min-w-0">
       {/* En-tête : retour + infos contact + bouton Je prends */}
-      <div className="bg-bordeaux text-cream flex items-center gap-2 flex-wrap px-4 py-2 shadow-sm flex-shrink-0">
+      <div className="bg-bordeaux text-cream flex items-center gap-1.5 flex-wrap px-3 py-1.5 shadow-sm flex-shrink-0">
         <button
           onClick={onBack}
           className="md:hidden w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
@@ -779,22 +779,22 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
               )}
               {conv && (
-                <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-4 py-1.5 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0">MODIFICATION</button>
+                <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">MODIF.</button>
               )}
               {conv && (
-                <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-3 py-1.5 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0">📦 Commandes</button>
+                <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
               )}
             </div>
           )}
           {conv?.client_name && !nameEditing && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
           {conv && !nameEditing && (
-            <div className="flex items-center gap-1 mt-1 flex-wrap">
+            <div className="flex items-center gap-1 mt-0.5 overflow-x-auto">
               {labelDefs.map(l => {
                 const on = (conv.labels || []).includes(l.key)
                 return (
                   <button key={l.key} type="button" onClick={() => toggleLabel(l.key)}
                     title={on ? "Retirer l'étiquette" : "Ajouter l'étiquette"}
-                    className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-all"
+                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all flex-shrink-0 whitespace-nowrap"
                     style={{ background: on ? l.bg : 'rgba(255,255,255,0.12)', color: on ? l.color : 'rgba(255,255,255,0.75)', border: '1px solid ' + (on ? l.color : 'rgba(255,255,255,0.25)') }}>
                     {on ? '✓ ' : ''}{l.label}
                   </button>
