@@ -61,12 +61,15 @@ export function getCurrentUser() {
 // Retourne le user frais OU null si l'utilisateur a ete desactive/supprime
 export async function loadFreshUser(userId) {
   if (!userId) return null
+  const SELECT = 'id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, employe_id, last_visited_conversations, navbar_config'
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, employe_id, last_visited_conversations, navbar_config')
-      .eq('id', userId)
-      .maybeSingle()
+    let { data, error } = await supabase
+      .from('profiles').select(SELECT).eq('id', userId).maybeSingle()
+    // Repli si une colonne perm récente n'existe pas encore (SQL pas lancé) → on ne déconnecte personne.
+    if (error && /perm_devis/.test(error.message || '')) {
+      ;({ data, error } = await supabase
+        .from('profiles').select(SELECT.replace('perm_devis, ', '')).eq('id', userId).maybeSingle())
+    }
     if (error) {
       console.warn('[loadFreshUser]', error.message)
       return null
@@ -331,6 +334,12 @@ export function canAdminCaisse(user) {
 export function canSeeConversations(user) {
   if (!user) return false
   return user.role === 'admin' || user.perm_conversations === true
+}
+
+// User peut voir l'onglet Devis (admin ou perm_devis=true)
+export function canSeeDevis(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_devis === true
 }
 
 // User peut voir l'onglet Modifications de commande (admin ou perm_modification=true)

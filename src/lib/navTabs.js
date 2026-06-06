@@ -7,7 +7,7 @@
 import {
   isAdmin, isLivreur, canRecaps, canSeeCalendar, canSeeFreezer, canSeeMessages,
   canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, canStockPatissier, canStockCafe,
-  canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canViewPayments,
+  canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canViewPayments,
 } from './auth'
 
 const TAB_DEFS = [
@@ -28,6 +28,7 @@ const TAB_DEFS = [
   { view: 'etiquettes',        emoji: '🏷', label: 'Étiquettes Café',   can: u => !isLivreur(u) && canSeeEtiquettes(u) },
   { view: 'messages',          emoji: '💬', label: 'Messages',          can: u => !isLivreur(u) && canSeeMessages(u) },
   { view: 'conversations',     emoji: '📱', label: 'Conversations',     can: u => !isLivreur(u) && canSeeConversations(u) },
+  { view: 'devis',             emoji: '📄', label: 'Devis',             can: u => !isLivreur(u) && canSeeDevis(u) },
   { view: 'paiements',         emoji: '💰', label: 'Paiements',         can: u => !isLivreur(u) && canViewPayments(u) },
   { view: 'freezer',           emoji: '❄️', label: 'CD Négatif',        can: u => !isLivreur(u) && canSeeFreezer(u) },
   { view: 'caisse',            emoji: '💰', label: 'Caisse',            can: u => !isLivreur(u) && canSeeCaisse(u) && (isAdmin(u) || !u?.perm_admin_users) },

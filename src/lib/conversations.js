@@ -544,6 +544,17 @@ export async function fetchTemplates() {
   return data.templates || []
 }
 
+/** Liste les devis non confirmés (Odoo brouillon/envoyé). Vide = tous (récents). */
+export async function loadDevis(query = '') {
+  const res = await fetch('/api/wati-webhook?action=devis-list', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.orders || []
+}
+
 /** Recherche une commande/devis Odoo par n° S, nom client ou téléphone. */
 export async function searchOrders(query) {
   const res = await fetch('/api/wati-webhook?action=search-orders', {

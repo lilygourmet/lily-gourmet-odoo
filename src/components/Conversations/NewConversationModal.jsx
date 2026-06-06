@@ -54,12 +54,12 @@ function normalizePhoneFr(raw) {
   return d
 }
 
-export default function NewConversationModal({ user, onClose, onSent }) {
+export default function NewConversationModal({ user, onClose, onSent, initialPhone = '', initialName = '' }) {
   const [templates, setTemplates] = useState([])
   const [loadingT, setLoadingT] = useState(true)
   const [errT, setErrT] = useState('')
-  const [phone, setPhone] = useState('')
-  const [selectedName, setSelectedName] = useState('')
+  const [phone, setPhone] = useState(initialPhone || '')
+  const [selectedName, setSelectedName] = useState(initialName || '')
   const [params, setParams] = useState({})
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')

@@ -20,6 +20,7 @@ const CaisseView = lazy(() => import('./components/Caisse/CaisseView'))
 import TasksView from './components/Tasks/TasksView'
 const HRView = lazy(() => import('./components/HR/HRView'))
 const InboxView = lazy(() => import('./components/Conversations/InboxView'))
+const DevisView = lazy(() => import('./components/DevisView'))
 const ModificationsView = lazy(() => import('./components/ModificationsView'))
 import LivraisonsView from './components/LivraisonsView'
 const PaymentsView = lazy(() => import('./components/Conversations/PaymentsView'))
@@ -285,6 +286,7 @@ function App() {
     if (activeView === 'tasks') return <TasksWrapper {...navProps} />
     if (activeView === 'hr') return <HRWrapper {...navProps} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
+    if (activeView === 'devis') return <DevisWrapper {...navProps} />
     if (activeView === 'modifications') return <ModificationsWrapper {...navProps} />
     if (activeView === 'livraisons') return <LivraisonsWrapper {...navProps} />
     if (activeView === 'paiements') return <PaymentsWrapper {...navProps} />
@@ -362,6 +364,16 @@ function PaymentsWrapper(props) {
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <PaymentsView user={user} />
+    </div>
+  )
+}
+
+function DevisWrapper(props) {
+  const { user, onLogout, onNavigate, activeView } = props
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <DevisView user={user} />
     </div>
   )
 }

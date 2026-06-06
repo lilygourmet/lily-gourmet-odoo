@@ -143,6 +143,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_admin_users: formData.permAdminUsers,
         perm_cake_vision: formData.permCakeVision,
         perm_conversations: formData.permConversations,
+        perm_devis: formData.permDevis,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -203,6 +204,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_admin_users: formData.permAdminUsers,
         perm_cake_vision: formData.permCakeVision,
         perm_conversations: formData.permConversations,
+        perm_devis: formData.permDevis,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -745,6 +747,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permAdminUsers: initialData?.perm_admin_users !== undefined ? initialData.perm_admin_users : false,
     permCakeVision: initialData?.perm_cake_vision !== undefined ? initialData.perm_cake_vision : false,
     permConversations: initialData?.perm_conversations !== undefined ? initialData.perm_conversations : false,
+    permDevis: initialData?.perm_devis !== undefined ? initialData.perm_devis : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
     permLivraisonsDispatch: initialData?.perm_livraisons_dispatch || false,
@@ -985,6 +988,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             label="📱 Voir les Conversations WhatsApp"
             checked={isAdmin || formData.permConversations}
             onChange={v => update('permConversations', v)}
+          />
+          <PermCheckbox
+            id="perm-devis"
+            label="📄 Voir les Devis (relance clients)"
+            checked={isAdmin || formData.permDevis}
+            onChange={v => update('permDevis', v)}
           />
           <PermCheckbox
             id="perm-modification"

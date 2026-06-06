@@ -46,6 +46,7 @@ export default async function handler(req, res) {
   if (action === 'order-clients') return handleOrderClients(req, res)
   if (action === 'invoice-pdf') return handleInvoicePdf(req, res)
   if (action === 'invoices-search') return handleInvoicesSearch(req, res)
+  if (action === 'devis-list') return handleDevisList(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'correct') return handleCorrect(req, res)
   if (action === 'delete-message') return handleDeleteMessage(req, res)
@@ -739,6 +740,67 @@ async function odooWebLogin() {
   const m = setCookie.match(/session_id=([^;]+)/)
   if (!m) throw new Error('Session Odoo non obtenue')
   return m[1]
+}
+
+// Liste des devis non confirmés (sale.order en brouillon / envoyé). Lecture seule.
+async function handleDevisList(req, res) {
+  const query = (req.body?.query || '').trim()
+  try {
+    const uid = await odooAuthenticate()
+    let domain = [['state', 'in', ['draft', 'sent']]]
+    if (query.length >= 2) {
+      const digits = query.replace(/\D/g, '')
+      const ors = [['name', 'ilike', query], ['partner_id', 'ilike', query]]
+      if (digits.length >= 6) {
+        const last9 = digits.slice(-9)
+        ors.push(['partner_id.phone', 'ilike', last9], ['partner_id.mobile', 'ilike', last9])
+      }
+      domain = ['&', ['state', 'in', ['draft', 'sent']], ...Array(ors.length - 1).fill('|'), ...ors]
+    }
+    const orders = await odooSearchRead(uid, 'sale.order', domain,
+      ['name', 'partner_id', 'commitment_date', 'date_order', 'amount_total', 'order_line', 'state'],
+      { order: 'date_order desc', limit: 80 })
+    if (!orders.length) return res.status(200).json({ orders: [] })
+
+    const partnerIds = [...new Set(orders.map(o => Array.isArray(o.partner_id) ? o.partner_id[0] : null).filter(Boolean))]
+    const partners = partnerIds.length
+      ? await odooSearchRead(uid, 'res.partner', [['id', 'in', partnerIds]], ['id', 'phone', 'mobile'])
+      : []
+    const phoneById = new Map(partners.map(p => [p.id, normalizePhone(p.mobile || p.phone)]))
+
+    const lineIds = orders.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
+    const lines = lineIds.length
+      ? await odooSearchRead(uid, 'sale.order.line', [['id', 'in', lineIds]],
+          ['order_id', 'name', 'product_uom_qty', 'price_total', 'display_type'])
+      : []
+    const linesByOrder = new Map()
+    for (const l of lines) {
+      if (l.display_type) continue
+      const nm = (l.name || '').replace(/\s+/g, ' ').trim()
+      if (/^(Acompte|Down\s+Payment)/i.test(nm)) continue
+      const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id
+      if (!linesByOrder.has(oid)) linesByOrder.set(oid, [])
+      linesByOrder.get(oid).push(nm)
+    }
+
+    const result = orders.map(o => {
+      const pid = Array.isArray(o.partner_id) ? o.partner_id[0] : null
+      return {
+        id: o.id,
+        name: o.name,
+        state: o.state,
+        clientName: Array.isArray(o.partner_id) ? o.partner_id[1] : '',
+        clientPhone: pid ? (phoneById.get(pid) || '') : '',
+        amountText: fmtAmount(o.amount_total),
+        pickupText: fmtPickup(o.commitment_date),
+        productLines: linesByOrder.get(o.id) || [],
+      }
+    })
+    return res.status(200).json({ orders: result })
+  } catch (e) {
+    console.error('[devis-list]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
 }
 
 // Recherche de factures clients existantes (nom client, n° commande, n° facture). Vide = récentes.
