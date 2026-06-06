@@ -1058,7 +1058,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-l border-line bg-cream-warm overflow-y-auto">
           <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-mute border-b border-line flex-shrink-0">Phrases — clic = envoi</div>
           <div className="p-2 flex flex-col gap-1.5">
-            {quickReplies.map(q => (
+            {[...quickReplies].sort((a, b) => (a.label || '').localeCompare(b.label || '', 'fr')).map(q => (
               <button key={q.id} type="button" onClick={() => sendQuickReply(q)} disabled={sending} title={q.body}
                 className="text-left px-3 py-2 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50">
                 {q.media_path ? '🖼️ ' : ''}{q.label}
