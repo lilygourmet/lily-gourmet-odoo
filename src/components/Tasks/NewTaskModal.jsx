@@ -11,7 +11,9 @@ import SearchSelect from '../SearchSelect'
  */
 export default function NewTaskModal({ currentUser, onClose, onCreated }) {
   const [users, setUsers] = useState([])
+  const [mode, setMode] = useState('person')   // 'person' | 'group' | 'all'
   const [toUserId, setToUserId] = useState('')
+  const [groupValue, setGroupValue] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
@@ -47,26 +49,34 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
   async function handleSubmit(e) {
     e?.preventDefault?.()
     if (!title.trim()) { setError('Le titre est obligatoire'); return }
-    if (!toUserId) { setError('Sélectionne un destinataire'); return }
+
+    // Construire la liste des destinataires selon le mode
+    let recipients = []
+    if (mode === 'person') {
+      if (!toUserId) { setError('Sélectionne un destinataire'); return }
+      recipients = [toUserId]
+    } else if (mode === 'group') {
+      if (!groupValue) { setError('Choisis un groupe'); return }
+      recipients = users.filter(u => u.groupe === groupValue && u.active !== false && u.id !== currentUser.id).map(u => u.id)
+    } else {
+      recipients = users.filter(u => u.active !== false && u.id !== currentUser.id).map(u => u.id)
+    }
+    if (!recipients.length) { setError('Aucun destinataire trouvé.'); return }
 
     setSaving(true); setError(null)
     try {
-      // Upload fichier d'abord si présent
       let attachment = null
       if (file) {
         setUploading(true)
         attachment = await uploadTaskAttachment(file, currentUser.id)
         setUploading(false)
       }
-      await createTask({
-        title: title.trim(),
-        description: description.trim(),
-        fromUserId: currentUser.id,
-        toUserId,
-        isUrgent,
-        attachment,
-        dueDate: dueDate || null,
-      })
+      const base = { title: title.trim(), description: description.trim(), fromUserId: currentUser.id, isUrgent, attachment, dueDate: dueDate || null }
+      // Une tâche (+ notif WhatsApp) par destinataire, par lots de 8.
+      for (let i = 0; i < recipients.length; i += 8) {
+        const chunk = recipients.slice(i, i + 8)
+        await Promise.all(chunk.map(uid => createTask({ ...base, toUserId: uid })))
+      }
       onCreated?.()
       onClose()
     } catch (e) {
@@ -81,6 +91,8 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
       value: u.id,
       label: `👤 ${u.full_name || u.username || u.id.slice(0, 8)}${u.id === currentUser?.id ? ' (moi)' : ''}`,
     }))
+  const groups = [...new Set(users.map(u => u.groupe).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const nbAll = users.filter(u => u.active !== false && u.id !== currentUser?.id).length
 
   return (
     <div style={overlay} onClick={onClose}>
@@ -95,14 +107,26 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
         <form onSubmit={handleSubmit}>
           <label style={lblStyle}>
             À qui ?
-            <SearchSelect
-              options={userOptions}
-              value={toUserId}
-              onChange={setToUserId}
-              placeholder="Tape un nom…"
-              autoFocus
-              inputStyle={{ ...inputStyle }}
-            />
+            <div style={{ display: 'flex', gap: 6, marginTop: 5, marginBottom: 8 }}>
+              {[['person', '👤 Personne'], ['group', '👥 Groupe'], ['all', '📢 Tout le perso']].map(([k, lab]) => (
+                <button key={k} type="button" onClick={() => setMode(k)}
+                  style={{ flex: 1, padding: '7px 6px', fontSize: 11, borderRadius: 6, cursor: 'pointer', border: '1px solid ' + (mode === k ? '#993556' : '#e5d8c3'), background: mode === k ? '#993556' : 'white', color: mode === k ? 'white' : '#4a3a30' }}>{lab}</button>
+              ))}
+            </div>
+            {mode === 'person' && (
+              <SearchSelect options={userOptions} value={toUserId} onChange={setToUserId} placeholder="Tape un nom…" inputStyle={{ ...inputStyle }} />
+            )}
+            {mode === 'group' && (
+              <select value={groupValue} onChange={e => setGroupValue(e.target.value)} style={inputStyle}>
+                <option value="">— choisir un groupe —</option>
+                {groups.map(g => <option key={g} value={g}>{g} ({users.filter(u => u.groupe === g && u.active !== false).length})</option>)}
+              </select>
+            )}
+            {mode === 'all' && (
+              <div style={{ fontSize: 12, color: '#4a3a30', padding: '8px 10px', background: '#F4F0EA', borderRadius: 6, marginTop: 5 }}>
+                📢 Envoyée à <b>tout le personnel</b> ({nbAll} pers.) + notification WhatsApp à chacun.
+              </div>
+            )}
           </label>
 
           <label style={lblStyle}>

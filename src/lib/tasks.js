@@ -247,7 +247,7 @@ export async function deleteTask(taskId, currentUserId, isAdmin = false) {
 export async function loadAllUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name')
+    .select('id, username, full_name, groupe, active')
     .order('username')
   if (error) throw error
   return data || []
