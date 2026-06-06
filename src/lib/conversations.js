@@ -555,6 +555,16 @@ export async function loadDevis(query = '') {
   return data.orders || []
 }
 
+/** Photos (pièces jointes image) d'un devis/commande Odoo. */
+export async function loadDevisPhotos(orderId) {
+  const res = await fetch('/api/wati-webhook?action=devis-photos', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return data.photos || []
+}
+
 /** Recherche une commande/devis Odoo par n° S, nom client ou téléphone. */
 export async function searchOrders(query) {
   const res = await fetch('/api/wati-webhook?action=search-orders', {
