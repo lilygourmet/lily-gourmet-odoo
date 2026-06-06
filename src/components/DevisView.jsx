@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { loadDevis, loadDevisPhotos } from '../lib/conversations'
+import { loadDevis, loadDevisPhotos, loadDevisEnvois, recordDevisEnvoi } from '../lib/conversations'
 import NewConversationModal from './Conversations/NewConversationModal'
 import { toast } from '../lib/toast'
 
@@ -17,6 +17,10 @@ function dayLabel(key) {
   if (diff === -1) return `Hier · ${txt}`
   return txt
 }
+function fmtJour(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+}
 
 export default function DevisView({ user }) {
   const [query, setQuery] = useState('')
@@ -25,6 +29,7 @@ export default function DevisView({ user }) {
   const [loading, setLoading] = useState(true)
   const [waTarget, setWaTarget] = useState(null)
   const [detail, setDetail] = useState(null)
+  const [envois, setEnvois] = useState({})
 
   async function run(q) {
     setLoading(true)
@@ -32,7 +37,8 @@ export default function DevisView({ user }) {
     catch (e) { toast.error(e?.message || 'Erreur de chargement'); setDevis([]) }
     finally { setLoading(false) }
   }
-  useEffect(() => { run('') }, [])
+  function reloadEnvois() { loadDevisEnvois().then(setEnvois).catch(() => {}) }
+  useEffect(() => { run(''); reloadEnvois() }, [])
   useEffect(() => {
     const t = setTimeout(() => run(query.trim()), 400)
     return () => clearTimeout(t)
@@ -87,21 +93,51 @@ export default function DevisView({ user }) {
               <div className="space-y-2">
                 {groups[k].map(d => {
                   const isSent = d.state === 'sent'
+                  const env = envois[d.name]
                   return (
-                    <button key={d.id} onClick={() => setDetail(d)}
-                      className="w-full text-left bg-white border border-line rounded-xl p-3 hover:border-bordeaux transition-all">
+                    <div key={d.id} className="bg-white border border-line rounded-xl p-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-[13px] font-semibold text-bordeaux">{d.name}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isSent ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
-                          {isSent ? 'Devis envoyé' : 'Brouillon'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {env && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800" title={`Devis envoyé ${env.count} fois`}>
+                              📤 {fmtJour(env.last)}{env.count > 1 ? ` ×${env.count}` : ''}
+                            </span>
+                          )}
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isSent ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {isSent ? 'Devis envoyé' : 'Brouillon'}
+                          </span>
+                        </div>
                       </div>
                       <div className="text-[13px] text-ink font-medium mt-0.5 truncate">{d.clientName || '—'}</div>
                       <div className="text-[11px] text-ink-soft mt-0.5 flex flex-wrap gap-x-3">
                         {d.pickupText && <span>🗓️ {d.pickupText}</span>}
                         {d.amountText && <span>💰 {d.amountText}</span>}
+                        {d.clientPhone && <span className="font-mono">{d.clientPhone}</span>}
                       </div>
-                    </button>
+                      {Array.isArray(d.productLines) && d.productLines.length > 0 && (
+                        <div className="text-[11px] text-ink mt-1.5 border-t border-line/60 pt-1.5 space-y-0.5">
+                          {d.productLines.slice(0, 6).map((l, i) => <div key={i} className="leading-snug">• {l}</div>)}
+                          {d.productLines.length > 6 && <div className="text-ink-mute">+{d.productLines.length - 6} autre(s)</div>}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mt-2">
+                        {d.clientPhone ? (
+                          <button onClick={() => setWaTarget(d)}
+                            className="px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all">
+                            {env ? '🔁 Relancer' : '💬 WhatsApp'}
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-ink-mute italic">Pas de téléphone</span>
+                        )}
+                        {(d.id) && (
+                          <button onClick={() => setDetail(d)}
+                            className="px-3 py-1.5 border border-line text-ink-soft rounded-full text-[12px] hover:border-bordeaux transition-all">
+                            📷 Détails
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   )
                 })}
               </div>
@@ -121,7 +157,7 @@ export default function DevisView({ user }) {
           initialPhone={waTarget.clientPhone}
           initialName={waTarget.clientName || ''}
           onClose={() => setWaTarget(null)}
-          onSent={() => setWaTarget(null)}
+          onSent={async () => { await recordDevisEnvoi(waTarget.name, waTarget.clientPhone, user?.id); reloadEnvois(); setWaTarget(null) }}
         />
       )}
     </div>

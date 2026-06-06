@@ -555,6 +555,28 @@ export async function loadDevis(query = '') {
   return data.orders || []
 }
 
+/** Suivi des devis envoyés : map { order_num: { count, last } }. Résilient ({} si table absente). */
+export async function loadDevisEnvois() {
+  const { data, error } = await supabase
+    .from('devis_envois').select('order_num, sent_at').order('sent_at', { ascending: false })
+  if (error) return {}
+  const map = {}
+  for (const r of data || []) {
+    if (!r.order_num) continue
+    if (!map[r.order_num]) map[r.order_num] = { count: 0, last: r.sent_at }
+    map[r.order_num].count++
+    if (r.sent_at > map[r.order_num].last) map[r.order_num].last = r.sent_at
+  }
+  return map
+}
+
+/** Enregistre l'envoi d'un devis (pour le marquer "déjà envoyé"). */
+export async function recordDevisEnvoi(orderNum, clientPhone, userId) {
+  try {
+    await supabase.from('devis_envois').insert({ order_num: orderNum, client_phone: clientPhone || null, sent_by: userId || null })
+  } catch (_) { /* non bloquant */ }
+}
+
 /** Photos (pièces jointes image) d'un devis/commande Odoo. */
 export async function loadDevisPhotos(orderId) {
   const res = await fetch('/api/wati-webhook?action=devis-photos', {
