@@ -18,6 +18,21 @@ export const VENTE_CATEGORIES = [
 // ============================================================
 // LOAD DEPUIS SUPABASE
 // ============================================================
+// Prix TTC du cake design d'une commande = somme des lignes catégorie CD (CD-/GM-/GMD-).
+// Résilient : null si la colonne line_total n'existe pas encore ou pas de cake design.
+export async function loadCakeDesignPrice(orderNum) {
+  if (!orderNum) return null
+  const { data, error } = await supabase
+    .from('sales_lines')
+    .select('category, line_total')
+    .eq('order_num', orderNum)
+  if (error || !data) return null
+  const cd = data.filter(l => l.category === 'CD')
+  if (!cd.length) return null
+  const total = cd.reduce((s, l) => s + (Number(l.line_total) || 0), 0)
+  return total > 0 ? total : null
+}
+
 export async function loadSalesLinesForDate(date) {
   const [yyyy, mm, dd] = String(date).split('-').map(Number)
   const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))

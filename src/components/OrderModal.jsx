@@ -6,6 +6,7 @@ import { loadPalette } from '../lib/palette'
 import PrintCommande from './PrintCommande'
 import { markOrderPrinted } from '../lib/printOrders'
 import { computeSizesForCake } from '../lib/cakeSizes'
+import { loadCakeDesignPrice } from '../lib/salesLines'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -208,6 +209,8 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
   const [doneByItemId, setDoneByItemId] = useState({})
   const [palette, setPalette] = useState([])
   const [printing, setPrinting] = useState(false)
+  const [cakePrice, setCakePrice] = useState(null)
+  useEffect(() => { loadCakeDesignPrice(order.order_num).then(setCakePrice).catch(() => setCakePrice(null)) }, [order.order_num])
 
   useEffect(() => {
     let cancelled = false
@@ -487,6 +490,11 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
               <div className="font-mono text-[10px] tracking-wider text-ink-soft mt-1.5 capitalize">
                 {formatDeliveryDate(order.delivery_at)}
               </div>
+              {cakePrice != null && (
+                <div className="inline-flex items-center gap-1 mt-1.5 text-[12px] font-semibold text-bordeaux bg-bordeaux/10 px-2 py-0.5 rounded-full">
+                  🎂 Cake design : {cakePrice.toLocaleString('fr-FR')} DH
+                </div>
+              )}
               {order.seller_name && (
                 <div className="text-[10px] text-ink-mute mt-0.5">
                   Vendeur : {order.seller_name}

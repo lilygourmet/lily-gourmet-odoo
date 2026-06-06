@@ -184,7 +184,7 @@ async function fetchOdooOrders(uid) {
   if (allLineIds.length > 0) {
     lines = await odooSearchRead(uid, 'sale.order.line',
       [['id', 'in', allLineIds]],
-      ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'qty_delivered', 'price_unit', 'display_type', 'sequence'],
+      ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'qty_delivered', 'price_unit', 'price_total', 'display_type', 'sequence'],
       {}
     )
   }
@@ -548,6 +548,7 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
         warehouse: warehouse,
         order_total: orderTotal,
         order_acompte: orderAcompte,
+        line_total: parseFloat(line.price_total) || 0,   // prix TTC de cette ligne
         delivery_at: deliveryAt,
         order_num: orderNum,
       })
@@ -607,9 +608,16 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
     return
   }
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('sales_lines')
     .upsert(allRows, { onConflict: 'odoo_line_id' })
+
+  // Repli si la colonne line_total n'existe pas encore (SQL pas lancé) → on réessaie
+  // sans ce champ pour ne pas bloquer la synchro des autres données.
+  if (error && /line_total/i.test(error.message || '')) {
+    const stripped = allRows.map(({ line_total, ...r }) => r)
+    ;({ error } = await supabase.from('sales_lines').upsert(stripped, { onConflict: 'odoo_line_id' }))
+  }
 
   if (error) {
     console.error('[sync sales_lines] erreur upsert:', error)
