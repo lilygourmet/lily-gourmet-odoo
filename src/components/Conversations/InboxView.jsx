@@ -4,14 +4,13 @@ import LabelsManager from './LabelsManager'
 import { formatRelativeTime, isAdmin } from '../../lib/auth'
 import { toast } from '../../lib/toast'
 import { subscribeToPush } from '../../lib/pushNotif'
-import { isDingEnabled, setDingEnabled } from '../../lib/ding'
 import { supabase } from '../../lib/supabase'
 import Skeleton from '../Skeleton'
 import ConversationDetail from './ConversationDetail'
 import NewConversationModal from './NewConversationModal'
 import QuickRepliesModal from './QuickRepliesModal'
 import ClientAvatar from './ClientAvatar'
-import { Search, Volume2, VolumeX, MessageSquareText } from 'lucide-react'
+import { Search, MessageSquareText } from 'lucide-react'
 
 const FILTERS = [
   { key: 'all', label: 'Toutes' },
@@ -35,7 +34,6 @@ export default function InboxView({ user, initialConversationId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(initialConversationId || null)
-  const [soundOn, setSoundOn] = useState(isDingEnabled())
   const [search, setSearch] = useState('')
   const [contentMatchIds, setContentMatchIds] = useState(() => new Set())
   const [showNew, setShowNew] = useState(false)
@@ -176,22 +174,21 @@ export default function InboxView({ user, initialConversationId }) {
         <div className="md:sticky md:top-0 z-10 bg-cream px-4 pt-4 pb-3 border-b border-line">
           <div className="flex items-center justify-between gap-2 mb-3">
             <h1 className="font-fraunces italic text-[26px] text-ink leading-none">Conversations</h1>
-            <button
-              onClick={() => { const next = !soundOn; setDingEnabled(next); setSoundOn(next) }}
-              className="w-9 h-9 flex-shrink-0 rounded-full border border-line text-ink-soft hover:border-bordeaux transition-colors flex items-center justify-center"
-              title={soundOn ? 'Son des notifications activé (cliquer pour couper)' : 'Son des notifications coupé (cliquer pour activer)'}
-            >{soundOn ? <Volume2 size={16} strokeWidth={1.8} /> : <VolumeX size={16} strokeWidth={1.8} />}</button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => setShowNew(true)}
+                title="Nouveau message"
+                className="w-9 h-9 rounded-full bg-bordeaux text-cream hover:bg-bordeaux-deep transition-all flex items-center justify-center text-[22px] leading-none pb-0.5"
+              >+</button>
+              <button
+                onClick={() => setShowReplies(true)}
+                title="Phrases types"
+                className="w-9 h-9 rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all flex items-center justify-center"
+              ><MessageSquareText size={16} strokeWidth={1.8} /></button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <button
-              onClick={() => setShowNew(true)}
-              className="px-3 py-1.5 bg-bordeaux text-cream rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all"
-            >+ Nouveau message</button>
-            <button
-              onClick={() => setShowReplies(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux hover:text-cream transition-all"
-            ><MessageSquareText size={14} strokeWidth={1.8} /> Phrases</button>
             {isAdmin(user) && (
               <button
                 onClick={handleSyncNames}

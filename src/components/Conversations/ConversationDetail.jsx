@@ -745,21 +745,17 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     <div className="flex mx-auto w-full max-w-5xl" style={{ height: `calc(100dvh - ${headerTop}px)` }}>
       <div className="flex flex-col flex-1 min-w-0">
       {/* En-tête : retour + infos contact + bouton Je prends */}
-      <div className="bg-bordeaux text-cream flex items-center gap-1.5 flex-wrap px-3 py-1.5 shadow-sm flex-shrink-0">
-        <button
-          onClick={onBack}
-          className="md:hidden w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-          title="Retour à la liste"
-        ><ArrowLeft size={18} strokeWidth={1.8} /></button>
-        <button
-          onClick={() => setThreadSearchOpen(o => !o)}
-          className="w-9 h-9 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
-          title="Rechercher dans la conversation"
-        ><Search size={16} strokeWidth={1.8} /></button>
-        <ClientAvatar conv={conv} />
-        <div className="min-w-0 flex-1">
+      <div className="bg-bordeaux text-cream flex flex-col gap-1 px-3 py-1.5 shadow-sm flex-shrink-0">
+        {/* Ligne 1 : retour + avatar + nom + tous les boutons d'action */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onBack}
+            className="md:hidden w-8 h-8 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+            title="Retour à la liste"
+          ><ArrowLeft size={18} strokeWidth={1.8} /></button>
+          <ClientAvatar conv={conv} />
           {nameEditing ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <input
                 type="text"
                 value={nameInput}
@@ -769,76 +765,71 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 placeholder="Nom du client"
                 className="flex-1 min-w-0 px-2 py-1 text-[14px] text-ink bg-cream rounded border border-cream/40 focus:outline-none focus:border-cream"
               />
-              <button onClick={saveName} disabled={nameBusy} title="Enregistrer" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all"><Check size={14} /></button>
-              <button onClick={() => setNameEditing(false)} disabled={nameBusy} title="Annuler" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all"><X size={14} /></button>
+              <button onClick={saveName} disabled={nameBusy} title="Enregistrer" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all flex-shrink-0"><Check size={14} /></button>
+              <button onClick={() => setNameEditing(false)} disabled={nameBusy} title="Annuler" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all flex-shrink-0"><X size={14} /></button>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <div className="text-[16px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
-              {conv && (
-                <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
-              )}
-              {conv && (
-                <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">MODIF.</button>
-              )}
-              {conv && (
-                <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
-              )}
-            </div>
-          )}
-          {conv?.client_name && !nameEditing && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
-          {conv && !nameEditing && (
-            <div className="flex items-center gap-1 mt-0.5 overflow-x-auto">
-              {labelDefs.map(l => {
-                const on = (conv.labels || []).includes(l.key)
-                return (
-                  <button key={l.key} type="button" onClick={() => toggleLabel(l.key)}
-                    title={on ? "Retirer l'étiquette" : "Ajouter l'étiquette"}
-                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all flex-shrink-0 whitespace-nowrap"
-                    style={{ background: on ? l.bg : 'rgba(255,255,255,0.12)', color: on ? l.color : 'rgba(255,255,255,0.75)', border: '1px solid ' + (on ? l.color : 'rgba(255,255,255,0.25)') }}>
-                    {on ? '✓ ' : ''}{l.label}
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <div className="flex items-center gap-1 min-w-0 flex-1">
+                <div className="text-[15px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
+                {conv && (
+                  <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto">
+                <button
+                  onClick={() => setThreadSearchOpen(o => !o)}
+                  className="w-8 h-8 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
+                  title="Rechercher dans la conversation"
+                ><Search size={16} strokeWidth={1.8} /></button>
+                {conv && (
+                  <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">MODIF.</button>
+                )}
+                {conv && (
+                  <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
+                )}
+                {conv && (
+                  conv.assigned_to ? (
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-cream/15 text-cream flex-shrink-0 whitespace-nowrap">
+                      {conv.assigned_to === user.id ? 'À moi' : `Pris par ${conv.assigned?.full_name || conv.assigned?.username || '?'}`}
+                    </span>
+                  ) : (
+                    <button onClick={handleAssign} disabled={assigning} className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 whitespace-nowrap">
+                      {assigning ? '…' : 'Je prends'}
+                    </button>
+                  )
+                )}
+                {conv?.last_inbound_at && (
+                  <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
+                )}
+                {conv && (
+                  conv.status === 'fermee' ? (
+                    <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
+                  ) : (
+                    <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
+                  )
+                )}
+              </div>
+            </>
           )}
         </div>
-        {conv && (
-          conv.assigned_to ? (
-            <span className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-cream/15 text-cream flex-shrink-0">
-              {conv.assigned_to === user.id ? 'À moi' : `Pris par ${conv.assigned?.full_name || conv.assigned?.username || '?'}`}
-            </span>
-          ) : (
-            <button
-              onClick={handleAssign}
-              disabled={assigning}
-              className="px-4 py-1.5 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[12px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60"
-            >
-              {assigning ? '…' : 'Je prends'}
-            </button>
-          )
-        )}
-        {conv?.last_inbound_at && (
-          <button
-            onClick={handleMarkUnread}
-            className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0"
-            title="Faire réapparaître cette conversation dans 'Non lues'"
-          >📩 Non lu</button>
-        )}
-        {conv && (
-          conv.status === 'fermee' ? (
-            <button
-              onClick={handleReopen}
-              disabled={statusBusy}
-              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60"
-            >Rouvrir</button>
-          ) : (
-            <button
-              onClick={handleClose}
-              disabled={statusBusy}
-              className="px-3 py-1.5 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60"
-            >Clôturer</button>
-          )
+
+        {/* Ligne 2 : téléphone + étiquettes */}
+        {conv && !nameEditing && (
+          <div className="flex items-center gap-2 overflow-x-auto">
+            {conv.client_name && <span className="font-mono text-[11px] text-cream/70 flex-shrink-0">{conv.client_phone}</span>}
+            {labelDefs.map(l => {
+              const on = (conv.labels || []).includes(l.key)
+              return (
+                <button key={l.key} type="button" onClick={() => toggleLabel(l.key)}
+                  title={on ? "Retirer l'étiquette" : "Ajouter l'étiquette"}
+                  className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all flex-shrink-0 whitespace-nowrap"
+                  style={{ background: on ? l.bg : 'rgba(255,255,255,0.12)', color: on ? l.color : 'rgba(255,255,255,0.75)', border: '1px solid ' + (on ? l.color : 'rgba(255,255,255,0.25)') }}>
+                  {on ? '✓ ' : ''}{l.label}
+                </button>
+              )
+            })}
+          </div>
         )}
       </div>
 
