@@ -249,7 +249,7 @@ export async function loadConvLabels() {
 }
 
 function slugifyLabel(label) {
-  const base = String(label || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const base = String(label || '').toLowerCase().normalize('NFD')
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
   return (base || 'etiquette') + '_' + Date.now().toString(36).slice(-4)
 }

@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export async function loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -40,7 +40,7 @@ export async function createUser({
   perm_mark_payment_proof = false, perm_view_payments = false, perm_validate_payments = false,
   economat_profil = null, perm_econome = false, whatsapp = null,
   perm_vitrine_sale = false,
-  perm_stock_prod_vitrine = false, perm_stock_prod_annexe = false,
+  perm_stock_prod_vitrine = false, perm_stock_prod_annexe = false, perm_stock_minmax = false,
   perm_livraisons_dispatch = false, perm_livreur_defaut = false, perm_livreur_assigne = false,
   employe_id = null,
 }) {
@@ -86,6 +86,7 @@ export async function createUser({
           perm_vitrine_sale,
           perm_stock_prod_vitrine,
           perm_stock_prod_annexe,
+          perm_stock_minmax,
           perm_livraisons_dispatch,
           perm_livreur_defaut,
           perm_livreur_assigne,
@@ -235,7 +236,7 @@ export async function updateUser(userId, {
   perm_mark_payment_proof, perm_view_payments, perm_validate_payments,
   economat_profil, perm_econome, whatsapp,
   perm_vitrine_sale,
-  perm_stock_prod_vitrine, perm_stock_prod_annexe,
+  perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax,
   perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne,
   employe_id,
 }) {
@@ -285,6 +286,7 @@ export async function updateUser(userId, {
   if (perm_vitrine_sale !== undefined) updates.perm_vitrine_sale = perm_vitrine_sale
   if (perm_stock_prod_vitrine !== undefined) updates.perm_stock_prod_vitrine = perm_stock_prod_vitrine
   if (perm_stock_prod_annexe !== undefined) updates.perm_stock_prod_annexe = perm_stock_prod_annexe
+  if (perm_stock_minmax !== undefined) updates.perm_stock_minmax = perm_stock_minmax
   if (perm_livraisons_dispatch !== undefined) updates.perm_livraisons_dispatch = perm_livraisons_dispatch
   if (perm_livreur_defaut !== undefined) updates.perm_livreur_defaut = perm_livreur_defaut
   if (perm_livreur_assigne !== undefined) updates.perm_livreur_assigne = perm_livreur_assigne
