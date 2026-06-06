@@ -47,6 +47,7 @@ export default async function handler(req, res) {
   if (action === 'invoice-pdf') return handleInvoicePdf(req, res)
   if (action === 'invoices-search') return handleInvoicesSearch(req, res)
   if (action === 'devis-list') return handleDevisList(req, res)
+  if (action === 'devis-photos') return handleDevisPhotos(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'correct') return handleCorrect(req, res)
   if (action === 'delete-message') return handleDeleteMessage(req, res)
@@ -742,6 +743,25 @@ async function odooWebLogin() {
   return m[1]
 }
 
+// Photos (pièces jointes image) d'un devis/commande Odoo. Lecture seule. Renvoie des images base64.
+async function handleDevisPhotos(req, res) {
+  const orderId = req.body?.orderId
+  if (!orderId) return res.status(400).json({ error: 'orderId manquant' })
+  try {
+    const uid = await odooAuthenticate()
+    const atts = await odooSearchRead(uid, 'ir.attachment',
+      [['res_model', '=', 'sale.order'], ['res_id', '=', orderId], ['mimetype', 'ilike', 'image']],
+      ['id', 'name', 'mimetype', 'datas'], { limit: 12 })
+    const photos = (atts || [])
+      .filter(a => a.datas)
+      .map(a => ({ name: a.name, dataUrl: `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}` }))
+    return res.status(200).json({ photos })
+  } catch (e) {
+    console.error('[devis-photos]', e?.message || e)
+    return res.status(200).json({ photos: [], error: e?.message || 'indispo' })
+  }
+}
+
 // Liste des devis non confirmés (sale.order en brouillon / envoyé). Lecture seule.
 async function handleDevisList(req, res) {
   const query = (req.body?.query || '').trim()
@@ -793,6 +813,7 @@ async function handleDevisList(req, res) {
         clientPhone: pid ? (phoneById.get(pid) || '') : '',
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
+        dateOrder: o.date_order || '',
         productLines: linesByOrder.get(o.id) || [],
       }
     })
