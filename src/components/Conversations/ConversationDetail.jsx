@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, loadConvLabels, setConversationLabels } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, loadConvLabels, setConversationLabels, reorderQuickReplies } from '../../lib/conversations'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
@@ -20,6 +20,15 @@ function fmtDuration(s) {
 }
 
 const TONE_LABEL = { formelle: 'Formelle', amicale: 'Amicale', directe: 'Directe' }
+
+// Ordre d'affichage des phrases : si aucun classement manuel (tous les "ordre" égaux),
+// on trie par ordre alphabétique par défaut. Sinon on respecte l'ordre enregistré.
+function orderQuickReplies(list) {
+  if (!list || list.length === 0) return []
+  const allSame = list.every(q => (q.ordre || 0) === (list[0].ordre || 0))
+  if (allSame) return [...list].sort((a, b) => (a.label || '').localeCompare(b.label || '', 'fr'))
+  return list
+}
 
 // Devine un émoji selon le sujet d'une phrase type (pour repérer les chips d'un coup d'œil).
 function chipEmoji(q) {
@@ -133,8 +142,28 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [labelDefs, setLabelDefs] = useState(CONV_LABELS)
   useEffect(() => {
     loadConvLabels().then(setLabelDefs).catch(() => {})
-    loadQuickReplies().then(setQuickReplies).catch(() => {})
+    loadQuickReplies().then(l => setQuickReplies(orderQuickReplies(l))).catch(() => {})
   }, [])
+
+  // Glisser-déposer pour réordonner les chips de phrases (souris).
+  const dragIdx = useRef(null)
+  function onChipDragStart(i) { dragIdx.current = i }
+  function onChipDragOver(e, i) {
+    e.preventDefault()
+    const from = dragIdx.current
+    if (from === null || from === i) return
+    setQuickReplies(prev => {
+      const arr = [...prev]
+      const [moved] = arr.splice(from, 1)
+      arr.splice(i, 0, moved)
+      return arr
+    })
+    dragIdx.current = i
+  }
+  function onChipDrop() {
+    dragIdx.current = null
+    setQuickReplies(prev => { reorderQuickReplies(prev.map(q => q.id)).catch(() => {}); return prev })
+  }
 
   async function toggleLabel(key) {
     const cur = conv?.labels || []
@@ -1079,12 +1108,20 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
       {quickReplies.length > 0 && (
         <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-l border-line bg-cream-warm overflow-y-auto">
-          <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-mute border-b border-line flex-shrink-0">Phrases — clic = envoi</div>
+          <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-mute border-b border-line flex-shrink-0">Phrases — clic = envoi · glisser pour classer</div>
           <div className="p-2 flex flex-col gap-1.5">
-            {[...quickReplies].sort((a, b) => (a.label || '').localeCompare(b.label || '', 'fr')).map(q => (
-              <button key={q.id} type="button" onClick={() => sendQuickReply(q)} disabled={sending} title={q.body}
-                className="text-left px-3 py-2 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50">
-                <span className="mr-1">{chipEmoji(q)}</span>{q.label}
+            {quickReplies.map((q, i) => (
+              <button key={q.id} type="button"
+                draggable
+                onDragStart={() => onChipDragStart(i)}
+                onDragOver={e => onChipDragOver(e, i)}
+                onDrop={onChipDrop}
+                onDragEnd={onChipDrop}
+                onClick={() => sendQuickReply(q)}
+                disabled={sending} title={q.body}
+                className="text-left px-3 py-2 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50 cursor-grab active:cursor-grabbing flex items-center gap-1.5">
+                <span className="text-ink-mute/50 select-none flex-shrink-0">⠿</span>
+                <span className="truncate">{chipEmoji(q)} {q.label}</span>
               </button>
             ))}
           </div>

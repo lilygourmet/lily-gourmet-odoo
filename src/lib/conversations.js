@@ -489,6 +489,13 @@ export async function deleteQuickReply(id) {
   if (error) throw error
 }
 
+/** Enregistre un nouvel ordre des phrases (ordre = position dans la liste). */
+export async function reorderQuickReplies(orderedIds) {
+  await Promise.all(orderedIds.map((id, i) =>
+    supabase.from('quick_replies').update({ ordre: i }).eq('id', id)
+  ))
+}
+
 // ============================================================
 // TEMPLATES (initier une conversation)
 // ============================================================
