@@ -746,9 +746,9 @@ async function handleInvoicesSearch(req, res) {
   const query = (req.body?.query || '').trim()
   try {
     const uid = await odooAuthenticate()
-    let domain = [['move_type', '=', 'out_invoice']]
+    let domain = [['move_type', '=', 'out_invoice'], ['state', '=', 'posted']]
     if (query.length >= 2) {
-      domain = ['&', ['move_type', '=', 'out_invoice'],
+      domain = ['&', '&', ['move_type', '=', 'out_invoice'], ['state', '=', 'posted'],
         '|', '|', ['name', 'ilike', query], ['invoice_origin', 'ilike', query], ['partner_id', 'ilike', query]]
     }
     const moves = await odooSearchRead(uid, 'account.move', domain,
