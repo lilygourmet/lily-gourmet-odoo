@@ -18,15 +18,28 @@ export const VENTE_CATEGORIES = [
 // ============================================================
 // LOAD DEPUIS SUPABASE
 // ============================================================
-// Récupère le PDF (base64) d'une facture Odoo DÉJÀ existante pour une commande. Ne crée rien.
-export async function fetchInvoicePdf(orderNum) {
+// Récupère le PDF (base64) d'une facture Odoo DÉJÀ existante. Ne crée rien.
+// arg = numéro de commande (string) OU { orderNum } OU { invoiceId }.
+export async function fetchInvoicePdf(arg) {
+  const body = typeof arg === 'string' ? { orderNum: arg } : (arg || {})
   const res = await fetch('/api/wati-webhook?action=invoice-pdf', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orderNum }),
+    body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok || data.error) throw new Error(data.error || `Erreur ${res.status}`)
   return data   // { name, state, pdf }
+}
+
+// Cherche des factures Odoo existantes (nom client, n° commande, n° facture). Vide = récentes.
+export async function searchInvoices(query) {
+  const res = await fetch('/api/wati-webhook?action=invoices-search', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: query || '' }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.invoices || []
 }
 
 // Ouvre un PDF (base64) dans un nouvel onglet pour impression.

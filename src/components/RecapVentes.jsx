@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Phone, MapPin, Cake, Truck, Cookie, User, Croissant } from 'lucide-react'
-import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix, fetchInvoicePdf, openInvoicePdf } from '../lib/salesLines'
+import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix, fetchInvoicePdf, openInvoicePdf, searchInvoices } from '../lib/salesLines'
 
 const CAT_ICONS = { CD: Cake, LIVR: Truck, PROD: Cookie, CLT: User, RAHN: Croissant }
 function CatIcon({ catId, size = 16, className = '' }) {
@@ -535,7 +535,6 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
             <MapPin size={10} strokeWidth={2} /> {zone}
           </span>
         )}
-        <InvoiceButton orderNum={orderNum} />
       </div>
 
       {/* Telephone + note : seulement en mode livraison */}
@@ -999,6 +998,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
   const [popupCat, setPopupCat] = useState(null)
+  const [showFactures, setShowFactures] = useState(false)
   // Filtres : pour chaque (clients/articles) un mode + un champ de termes
   // mode : 'contains' (=garder uniquement les lignes qui matchent)
   //        'not_contains' (=retirer les lignes qui matchent)
@@ -1257,6 +1257,10 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                 className="px-2.5 py-1 border border-line rounded-full text-[11px] bg-cream focus:outline-none focus:border-bordeaux"
                 title="Choisir n'importe quelle date"
               />
+              <button
+                onClick={() => setShowFactures(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
+              >🧾 Factures</button>
               <button
                 onClick={handlePrintAll}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
@@ -1517,6 +1521,8 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           printing={printing}
         />
       )}
+
+      {showFactures && <FacturesModal onClose={() => setShowFactures(false)} />}
     </>
   )
 }
@@ -1615,27 +1621,72 @@ function FloatingPrintCart({ cart, expanded, onToggle, onRemove, onClear, onPrin
   )
 }
 
-// Bouton "🧾 Facture" : ouvre le PDF de la facture Odoo existante (aucune création).
-function InvoiceButton({ orderNum }) {
-  const [busy, setBusy] = useState(false)
-  if (!orderNum) return null
-  async function go(e) {
-    e.stopPropagation()
-    if (busy) return
-    setBusy(true)
-    try {
-      const data = await fetchInvoicePdf(orderNum)
-      openInvoicePdf(data)
-    } catch (err) {
-      toast.error(err?.message || 'Facture indisponible')
-    } finally {
-      setBusy(false)
-    }
+// Modal "Factures" : recherche par nom / n° de commande / n° de facture, + liste des récentes.
+function FacturesModal({ onClose }) {
+  const [query, setQuery] = useState('')
+  const [list, setList] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [openingId, setOpeningId] = useState(null)
+
+  async function run(q) {
+    setLoading(true)
+    try { setList(await searchInvoices(q)) }
+    catch (e) { toast.error(e?.message || 'Erreur'); setList([]) }
+    finally { setLoading(false) }
   }
+  useEffect(() => { run('') }, [])           // au départ : factures récentes
+  useEffect(() => {
+    const t = setTimeout(() => run(query.trim()), 350)   // recherche dès qu'on tape (anti-rebond)
+    return () => clearTimeout(t)
+  }, [query])
+
+  async function open(inv) {
+    setOpeningId(inv.id)
+    try {
+      const data = await fetchInvoicePdf({ invoiceId: inv.id })
+      openInvoicePdf(data)
+    } catch (e) { toast.error(e?.message || 'Facture indisponible') }
+    finally { setOpeningId(null) }
+  }
+
   return (
-    <button onClick={go} disabled={busy} title="Imprimer la facture Odoo (déjà générée)"
-      className="text-[10px] font-semibold text-bordeaux border border-bordeaux/40 rounded-full px-2 py-0.5 hover:bg-bordeaux hover:text-cream transition-all">
-      🧾 {busy ? '…' : 'Facture'}
-    </button>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-cream rounded-2xl w-full max-w-lg shadow-2xl border border-line p-5 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-fraunces italic text-[20px] text-ink">🧾 Factures</h3>
+          <button onClick={onClose} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>
+        </div>
+        <input
+          autoFocus value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Nom du client, n° commande (S…) ou n° facture (FAC…)"
+          className="w-full px-3 py-2 text-[13px] border border-line rounded-lg bg-white focus:outline-none focus:border-bordeaux mb-3"
+        />
+        <div className="overflow-y-auto -mx-1 px-1" style={{ minHeight: 120 }}>
+          {loading ? (
+            <div className="text-center text-ink-mute py-8 text-[13px]">Chargement…</div>
+          ) : list.length === 0 ? (
+            <div className="text-center text-ink-mute py-8 text-[13px]">Aucune facture trouvée.</div>
+          ) : (
+            <div className="space-y-2">
+              {list.map(inv => (
+                <button key={inv.id} onClick={() => open(inv)} disabled={openingId === inv.id}
+                  className="w-full text-left bg-white border border-line rounded-xl p-3 hover:border-bordeaux transition-all disabled:opacity-50">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[13px] font-semibold text-bordeaux">{inv.name}</span>
+                    <span className="text-[12px] text-ink-soft">{openingId === inv.id ? '…' : (inv.amount ? inv.amount.toLocaleString('fr-FR') + ' DH' : '')}</span>
+                  </div>
+                  <div className="text-[12px] text-ink mt-0.5 truncate">{inv.partner || '—'}</div>
+                  <div className="text-[10px] text-ink-mute mt-0.5 flex flex-wrap gap-x-2">
+                    {inv.date && <span>🗓️ {inv.date}</span>}
+                    {inv.origin && <span>· {inv.origin}</span>}
+                    {inv.state !== 'posted' && <span className="text-amber-700">· brouillon</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

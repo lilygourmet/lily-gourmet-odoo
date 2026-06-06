@@ -45,6 +45,7 @@ export default async function handler(req, res) {
   if (action === 'search-orders') return handleSearchOrders(req, res)
   if (action === 'order-clients') return handleOrderClients(req, res)
   if (action === 'invoice-pdf') return handleInvoicePdf(req, res)
+  if (action === 'invoices-search') return handleInvoicesSearch(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'correct') return handleCorrect(req, res)
   if (action === 'delete-message') return handleDeleteMessage(req, res)
@@ -740,9 +741,39 @@ async function odooWebLogin() {
   return m[1]
 }
 
+// Recherche de factures clients existantes (nom client, n° commande, n° facture). Vide = récentes.
+async function handleInvoicesSearch(req, res) {
+  const query = (req.body?.query || '').trim()
+  try {
+    const uid = await odooAuthenticate()
+    let domain = [['move_type', '=', 'out_invoice']]
+    if (query.length >= 2) {
+      domain = ['&', ['move_type', '=', 'out_invoice'],
+        '|', '|', ['name', 'ilike', query], ['invoice_origin', 'ilike', query], ['partner_id', 'ilike', query]]
+    }
+    const moves = await odooSearchRead(uid, 'account.move', domain,
+      ['id', 'name', 'invoice_origin', 'partner_id', 'invoice_date', 'amount_total', 'state'],
+      { order: 'invoice_date desc, id desc', limit: 30 })
+    const invoices = (moves || []).map(m => ({
+      id: m.id,
+      name: m.name,
+      origin: m.invoice_origin || '',
+      partner: Array.isArray(m.partner_id) ? m.partner_id[1] : '',
+      date: m.invoice_date || '',
+      amount: m.amount_total || 0,
+      state: m.state,
+    }))
+    return res.status(200).json({ invoices })
+  } catch (e) {
+    console.error('[invoices-search]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
 // Récupère le PDF d'une facture DÉJÀ EXISTANTE dans Odoo (aucune création/modification).
 async function handleInvoicePdf(req, res) {
   const orderNum = (req.body?.orderNum || '').trim()
+  const invoiceId = req.body?.invoiceId
   try {
     const uid = await odooAuthenticate()
 
@@ -754,23 +785,29 @@ async function handleInvoicePdf(req, res) {
       return res.status(200).json({ sample })
     }
 
-    if (!orderNum) return res.status(400).json({ error: 'Numéro de commande manquant' })
-
-    // Trouver les factures de la commande : via sale.order.invoice_ids, sinon invoice_origin.
-    let invoices = []
-    const so = await odooSearchRead(uid, 'sale.order', [['name', '=', orderNum]], ['invoice_ids'], { limit: 1 })
-    const invIds = so[0]?.invoice_ids || []
-    if (invIds.length) {
-      invoices = await odooSearchRead(uid, 'account.move', [['id', 'in', invIds]], ['id', 'name', 'state', 'move_type'])
+    let target = null
+    if (invoiceId) {
+      // PDF directement par id de facture (depuis la recherche).
+      const m = await odooSearchRead(uid, 'account.move', [['id', '=', invoiceId]], ['id', 'name', 'state', 'move_type'], { limit: 1 })
+      target = m[0] || null
+    } else {
+      if (!orderNum) return res.status(400).json({ error: 'Numéro de commande manquant' })
+      // Trouver les factures de la commande : via sale.order.invoice_ids, sinon invoice_origin.
+      let invoices = []
+      const so = await odooSearchRead(uid, 'sale.order', [['name', '=', orderNum]], ['invoice_ids'], { limit: 1 })
+      const invIds = so[0]?.invoice_ids || []
+      if (invIds.length) {
+        invoices = await odooSearchRead(uid, 'account.move', [['id', 'in', invIds]], ['id', 'name', 'state', 'move_type'])
+      }
+      if (!invoices.length) {
+        invoices = await odooSearchRead(uid, 'account.move',
+          [['invoice_origin', '=', orderNum], ['move_type', '=', 'out_invoice']],
+          ['id', 'name', 'state', 'move_type'])
+      }
+      const clientInv = invoices.filter(m => m.move_type === 'out_invoice')
+      target = clientInv.find(m => m.state === 'posted') || clientInv[0] || null
     }
-    if (!invoices.length) {
-      invoices = await odooSearchRead(uid, 'account.move',
-        [['invoice_origin', '=', orderNum], ['move_type', '=', 'out_invoice']],
-        ['id', 'name', 'state', 'move_type'])
-    }
-    const clientInv = invoices.filter(m => m.move_type === 'out_invoice')
-    const target = clientInv.find(m => m.state === 'posted') || clientInv[0]
-    if (!target) return res.status(200).json({ error: 'Aucune facture trouvée pour cette commande.' })
+    if (!target) return res.status(200).json({ error: 'Aucune facture trouvée.' })
 
     // Télécharger le PDF du rapport facture (session web).
     const session = await odooWebLogin()
