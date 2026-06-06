@@ -797,6 +797,16 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                     </button>
                   )
                 )}
+                {conv?.last_inbound_at && (
+                  <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
+                )}
+                {conv && (
+                  conv.status === 'fermee' ? (
+                    <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
+                  ) : (
+                    <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
+                  )
+                )}
               </div>
             </>
           )}
@@ -816,14 +826,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 </button>
               )
             })}
-            {conv.last_inbound_at && (
-              <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
-            )}
-            {conv.status === 'fermee' ? (
-              <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
-            ) : (
-              <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
-            )}
           </div>
         )}
       </div>
@@ -1094,7 +1096,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
       {quickReplies.length > 0 && (
         <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-l border-line bg-cream-warm overflow-y-auto">
-          <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-mute border-b border-line flex-shrink-0">Phrases — clic = envoi · glisser pour classer</div>
           <div className="p-2 flex flex-col gap-1.5">
             {quickReplies.map((q, i) => (
               <button key={q.id} type="button"
