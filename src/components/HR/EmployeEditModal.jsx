@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Clock, Lock, CheckCircle2 } from 'lucide-react'
-import { createEmploye, updateEmploye, loadEmployes, EMPLOYE_GROUPES } from '../../lib/hr'
+import { createEmploye, updateEmploye, loadEmployes, EMPLOYE_GROUPES, loadGroupes } from '../../lib/hr'
+import GroupesManager from './GroupesManager'
 import { supabase } from '../../lib/supabase'
 import { createUserForEmploye, deactivateUserForEmploye } from '../../lib/users'
 import EmployeDocumentsSection from './EmployeDocumentsSection'
@@ -29,6 +30,9 @@ export default function EmployeEditModal({
   const [societes, setSocietes] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [groupes, setGroupes] = useState(EMPLOYE_GROUPES)
+  const [showGroupes, setShowGroupes] = useState(false)
+  useEffect(() => { loadGroupes().then(setGroupes).catch(() => {}) }, [])
 
   // Liste des employés pour la navigation ◀ ▶
   // - Si le parent passe employesListProp, on l'utilise
@@ -272,10 +276,14 @@ export default function EmployeEditModal({
           </Row>
           <Row>
             <div>
-              <label style={lblStyle}>Groupe</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <label style={lblStyle}>Groupe</label>
+                <button type="button" onClick={() => setShowGroupes(true)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#993556', padding: 0 }}>⚙️ Gérer</button>
+              </div>
               <select value={form.groupe || ''} onChange={e => setF('groupe', e.target.value)} style={inputStyle}>
                 <option value="">— Choisir un groupe —</option>
-                {EMPLOYE_GROUPES.map(g => <option key={g} value={g}>{g}</option>)}
+                {[...new Set([...groupes, form.groupe].filter(Boolean))].map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div />
@@ -518,6 +526,10 @@ export default function EmployeEditModal({
           </div>
         </form>
       </div>
+
+      {showGroupes && (
+        <GroupesManager onClose={() => setShowGroupes(false)} onSaved={() => loadGroupes().then(setGroupes).catch(() => {})} />
+      )}
     </div>
   )
 }

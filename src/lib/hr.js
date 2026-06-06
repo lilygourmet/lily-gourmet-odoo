@@ -16,6 +16,39 @@ export const EMPLOYE_GROUPES = [
   'Aucun',
 ]
 
+// --- Groupes dynamiques (table employe_groupes). Repli sur la liste fixe ci-dessus. ---
+export async function loadGroupes() {
+  const { data, error } = await supabase
+    .from('employe_groupes').select('nom').order('sort', { ascending: true }).order('nom')
+  if (error || !data?.length) return EMPLOYE_GROUPES
+  return data.map(g => g.nom)
+}
+
+export async function createGroupe(nom) {
+  const n = (nom || '').trim()
+  if (!n) throw new Error('Nom vide')
+  const { error } = await supabase.from('employe_groupes').insert({ nom: n })
+  if (error) throw error
+}
+
+// Renomme un groupe ET met à jour tous les employés + comptes qui l'utilisaient.
+export async function renameGroupe(oldNom, newNom) {
+  const n = (newNom || '').trim()
+  if (!n) throw new Error('Nom vide')
+  const { error } = await supabase.from('employe_groupes').update({ nom: n }).eq('nom', oldNom)
+  if (error) throw error
+  await supabase.from('employes').update({ groupe: n }).eq('groupe', oldNom)
+  await supabase.from('profiles').update({ groupe: n }).eq('groupe', oldNom)
+}
+
+// Supprime un groupe et détache les employés + comptes concernés.
+export async function deleteGroupe(nom) {
+  const { error } = await supabase.from('employe_groupes').delete().eq('nom', nom)
+  if (error) throw error
+  await supabase.from('employes').update({ groupe: null }).eq('groupe', nom)
+  await supabase.from('profiles').update({ groupe: null }).eq('groupe', nom)
+}
+
 // ============================================================
 // CRUD EMPLOYÉS
 // ============================================================
