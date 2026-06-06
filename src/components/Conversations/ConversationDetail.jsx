@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, loadConvLabels, setConversationLabels } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, loadConvLabels, setConversationLabels } from '../../lib/conversations'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
@@ -8,7 +8,7 @@ import ClientAvatar from './ClientAvatar'
 import { createModification } from '../../lib/modifications'
 import { uploadJustificatif } from '../../lib/conges'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Search, Pin, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
+import { ArrowLeft, Search, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -102,17 +102,16 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [clientNameInput, setClientNameInput] = useState('')
   const [amountInput, setAmountInput] = useState('')
   const [markBusy, setMarkBusy] = useState(false)
-  // Note interne (privée, visible équipe)
-  const [noteEditing, setNoteEditing] = useState(false)
-  const [noteInput, setNoteInput] = useState('')
-  const [noteBusy, setNoteBusy] = useState(false)
   // Édition du nom du client
   const [nameEditing, setNameEditing] = useState(false)
   const [ordersOpen, setOrdersOpen] = useState(false)
   const [clientOrders, setClientOrders] = useState(null)
   const [ordersBusy, setOrdersBusy] = useState(false)
   const [labelDefs, setLabelDefs] = useState(CONV_LABELS)
-  useEffect(() => { loadConvLabels().then(setLabelDefs).catch(() => {}) }, [])
+  useEffect(() => {
+    loadConvLabels().then(setLabelDefs).catch(() => {})
+    loadQuickReplies().then(setQuickReplies).catch(() => {})
+  }, [])
 
   async function toggleLabel(key) {
     const cur = conv?.labels || []
@@ -353,6 +352,29 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     }
   }
 
+  // Envoi DIRECT d'une phrase type (chip) : pas de correction IA, envoi immédiat.
+  async function sendQuickReply(q) {
+    if (!conv || sending) return
+    setSending(true); setSendError('')
+    try {
+      const msg = await sendMessage({
+        conversationId,
+        clientPhone: conv.client_phone,
+        userId: user.id,
+        text: q.body?.trim() || null,
+        mediaPath: q.media_path || null,
+      })
+      setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
+      if (conv.status === 'fermee') {
+        try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ }
+      }
+    } catch (e) {
+      setSendError(e.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function handleSend() {
     if (!conv) return
     const trimmed = text.trim()
@@ -548,14 +570,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     } catch (e) {
       toast.error('Erreur : ' + e.message)
     }
-  }
-
-  function openNoteEdit() { setNoteInput(conv?.internal_note || ''); setNoteEditing(true) }
-  async function saveNote() {
-    setNoteBusy(true)
-    try { setConv(await updateConversationNote(conversationId, noteInput)); setNoteEditing(false) }
-    catch (e) { toast.error('Erreur : ' + e.message) }
-    finally { setNoteBusy(false) }
   }
 
   function openNameEdit() { setNameInput(conv?.client_name || ''); setNameEditing(true) }
@@ -775,34 +789,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         )}
       </div>
 
-      {/* Note interne (privée, visible équipe) */}
-      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex-shrink-0">
-        {noteEditing ? (
-          <div className="flex items-start gap-2">
-            <textarea
-              value={noteInput}
-              onChange={e => setNoteInput(e.target.value)}
-              rows={2}
-              autoFocus
-              placeholder="Note interne sur ce client (allergies, VIP, préférences…)"
-              className="flex-1 px-2 py-1.5 text-[12px] bg-cream border border-amber-300 rounded-lg focus:outline-none focus:border-amber-500 resize-none"
-            />
-            <div className="flex flex-col gap-1 flex-shrink-0">
-              <button onClick={saveNote} disabled={noteBusy} className="px-2 py-1 text-[11px] font-medium bg-amber-600 text-cream rounded-lg hover:bg-amber-700 disabled:opacity-50">{noteBusy ? '…' : 'OK'}</button>
-              <button onClick={() => setNoteEditing(false)} disabled={noteBusy} className="px-2 py-1 text-[11px] border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100">✕</button>
-            </div>
-          </div>
-        ) : conv?.internal_note ? (
-          <button onClick={openNoteEdit} className="w-full text-left flex items-start gap-1.5 text-[12px] text-amber-900" title="Modifier la note">
-            <Pin size={13} strokeWidth={1.8} className="flex-shrink-0 mt-0.5" />
-            <span className="whitespace-pre-wrap break-words flex-1">{conv.internal_note}</span>
-            <Pencil size={11} strokeWidth={1.8} className="text-amber-600 flex-shrink-0 mt-0.5" />
-          </button>
-        ) : (
-          <button onClick={openNoteEdit} className="inline-flex items-center gap-1.5 text-[11px] text-amber-700 hover:text-amber-900"><Pin size={12} strokeWidth={1.8} /> Ajouter une note interne</button>
-        )}
-      </div>
-
       {threadSearchOpen && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-line flex-shrink-0">
           <input
@@ -983,6 +969,20 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
+            {quickReplies.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1 -mt-1" title="Clic = envoi direct au client">
+                {quickReplies.map(q => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => sendQuickReply(q)}
+                    disabled={sending}
+                    title={q.body}
+                    className="flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium border border-bordeaux/40 text-bordeaux bg-bordeaux/5 hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50"
+                  >{q.media_path ? '🖼️ ' : ''}{q.label}</button>
+                ))}
+              </div>
+            )}
             <textarea
               ref={textareaRef}
               value={text}
@@ -1105,7 +1105,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                       </div>
                       {Array.isArray(o.productLines) && o.productLines.length > 0 && (
                         <div className="text-[11px] text-ink mt-1 border-t border-line/60 pt-1">
-                          {o.productLines.slice(0, 6).map((l, i) => <div key={i} className="truncate">• {l}</div>)}
+                          {o.productLines.slice(0, 6).map((l, i) => <div key={i} className="truncate">• {typeof l === 'string' ? l : l.text}{l && l.qty && Number(l.qty) > 1 ? ` (×${l.qty})` : ''}</div>)}
                         </div>
                       )}
                     </div>
