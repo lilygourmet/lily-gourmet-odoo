@@ -782,10 +782,10 @@ async function handleSearchOrders(req, res) {
       const digits = query.replace(/\D/g, '')
       const ors = [['name', 'ilike', query], ['partner_id', 'ilike', query]]
       if (digits.length >= 6) {
-        const variants = new Set([digits])
-        if (digits.startsWith('0')) variants.add('212' + digits.slice(1))
-        for (const v of variants) {
-          ors.push(['partner_id.phone', 'ilike', v], ['partner_id.mobile', 'ilike', v])
+        // Cherche par les 9 derniers chiffres (insensible au préfixe 0 / 212 / +212).
+        const last9 = digits.slice(-9)
+        if (last9.length >= 6) {
+          ors.push(['partner_id.phone', 'ilike', last9], ['partner_id.mobile', 'ilike', last9])
         }
       }
       domain = Array(ors.length - 1).fill('|').concat(ors)

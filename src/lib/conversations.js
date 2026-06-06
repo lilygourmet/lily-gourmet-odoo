@@ -219,12 +219,60 @@ export async function closeConversation(conversationId, userId) {
   return data
 }
 
-// Étiquettes de conversation (prédéfinies) + couleurs.
+// Étiquettes par défaut (servent de repli si la table n'est pas encore chargée).
 export const CONV_LABELS = [
   { key: 'a_relancer',  label: 'À relancer',   color: '#E08A00', bg: '#FFF3D6' },
   { key: 'devis_envoye', label: 'Devis envoyé', color: '#1456a0', bg: '#E6F1FB' },
   { key: 'a_encaisser', label: 'À encaisser',  color: '#A32D2D', bg: '#FBD9D0' },
 ]
+
+// Palette de couleurs proposée pour créer une étiquette (couleur du texte + fond clair).
+export const LABEL_PALETTE = [
+  { color: '#E08A00', bg: '#FFF3D6' }, // orange
+  { color: '#1456a0', bg: '#E6F1FB' }, // bleu
+  { color: '#A32D2D', bg: '#FBD9D0' }, // rouge
+  { color: '#2E7D32', bg: '#E3F3E4' }, // vert
+  { color: '#993556', bg: '#F7E3EA' }, // bordeaux
+  { color: '#6A3FB5', bg: '#EEE6FB' }, // violet
+  { color: '#0E7C86', bg: '#DFF3F4' }, // turquoise
+  { color: '#555555', bg: '#ECECEC' }, // gris
+]
+
+/** Charge les étiquettes définies (table conversation_labels). Repli sur CONV_LABELS si vide/erreur. */
+export async function loadConvLabels() {
+  const { data, error } = await supabase
+    .from('conversation_labels')
+    .select('key, label, color, bg, sort')
+    .order('sort', { ascending: true })
+  if (error || !data?.length) return CONV_LABELS
+  return data
+}
+
+function slugifyLabel(label) {
+  const base = String(label || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return (base || 'etiquette') + '_' + Date.now().toString(36).slice(-4)
+}
+
+/** Crée une étiquette. color/bg viennent d'une entrée de LABEL_PALETTE. */
+export async function createConvLabel({ label, color, bg, sort = 99 }) {
+  const key = slugifyLabel(label)
+  const { error } = await supabase.from('conversation_labels').insert({ key, label: label.trim(), color, bg, sort })
+  if (error) throw error
+  return key
+}
+
+/** Modifie une étiquette existante (label / couleur). */
+export async function updateConvLabel(key, fields) {
+  const { error } = await supabase.from('conversation_labels').update(fields).eq('key', key)
+  if (error) throw error
+}
+
+/** Supprime une étiquette. */
+export async function deleteConvLabel(key) {
+  const { error } = await supabase.from('conversation_labels').delete().eq('key', key)
+  if (error) throw error
+}
 /** Met à jour les étiquettes d'une conversation (tableau de clés). */
 export async function setConversationLabels(conversationId, labels) {
   const { data, error } = await supabase

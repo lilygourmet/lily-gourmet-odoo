@@ -7,9 +7,10 @@ import { RefreshCw, Settings, Check } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { STOCK_PROD_LIEUX, fetchStockProdOdoo, loadStockProdCatalog, upsertStockProdCatalog } from '../lib/stockProd'
+import { canEditStockMinMax } from '../lib/auth'
 
 export default function StockProd({ user, lieu, activeView, onNavigate, onLogout }) {
-  const isAdmin = user?.role === 'admin'
+  const canEdit = canEditStockMinMax(user)
   const conf = STOCK_PROD_LIEUX[lieu] || { label: 'Stock Prod', emoji: '📦' }
 
   const [loading, setLoading]   = useState(true)
@@ -25,7 +26,7 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
       const [arts, cat] = await Promise.all([fetchStockProdOdoo(lieu), loadStockProdCatalog(lieu)])
       setArticles(arts)
       const map = {}
-      for (const c of cat) map[c.product_name] = { actif: c.actif, stock_min: Number(c.stock_min) || 0 }
+      for (const c of cat) map[c.product_name] = { actif: c.actif, stock_min: Number(c.stock_min) || 0, stock_max: c.stock_max != null ? Number(c.stock_max) : null }
       setCatalog(map)
     } catch (e) {
       toast.error('Erreur de chargement : ' + (e?.message || e))
@@ -49,7 +50,9 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
     return articles.map(a => {
       const c = catalog[a.name]
       const stock_min = c ? (Number(c.stock_min) || 0) : (a.odoo_min != null ? a.odoo_min : 0)
-      return { name: a.name, qty: a.qty, odoo_min: a.odoo_min ?? null, odoo_max: a.odoo_max ?? null, actif: !!(c && c.actif), stock_min }
+      // max effectif = valeur du catalogue si réglée, sinon le max Odoo (pré-rempli)
+      const stock_max = (c && c.stock_max != null) ? Number(c.stock_max) : (a.odoo_max != null ? a.odoo_max : null)
+      return { name: a.name, qty: a.qty, odoo_min: a.odoo_min ?? null, odoo_max: a.odoo_max ?? null, actif: !!(c && c.actif), stock_min, stock_max }
     })
   }, [articles, catalog])
 
@@ -65,18 +68,25 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
   // stock mini avec celui d'Odoo (s'il existe) ; ensuite l'admin peut le corriger.
   async function toggleActif(name, actif, odooMin) {
     const existed = !!catalog[name]
-    setCatalog(prev => ({ ...prev, [name]: { actif, stock_min: prev[name]?.stock_min ?? (odooMin != null ? odooMin : 0) } }))
+    setCatalog(prev => ({ ...prev, [name]: { ...(prev[name] || {}), actif, stock_min: prev[name]?.stock_min ?? (odooMin != null ? odooMin : 0) } }))
     try {
       const patch = { actif }
       if (actif && !existed) patch.stock_min = odooMin != null ? odooMin : 0
       await upsertStockProdCatalog(lieu, name, patch)
     } catch (e) { toast.error('Erreur : ' + e.message); load() }
   }
-  // Admin : régler le stock mini
+  // Régler le stock mini
   async function setMin(name, val) {
     const stock_min = Math.max(0, Number(val) || 0)
     setCatalog(prev => ({ ...prev, [name]: { ...(prev[name] || { actif: false }), stock_min } }))
     try { await upsertStockProdCatalog(lieu, name, { stock_min }) }
+    catch (e) { toast.error('Erreur : ' + e.message); load() }
+  }
+  // Régler le stock maxi (cible de réappro). Vide = pas de cible.
+  async function setMax(name, val) {
+    const stock_max = val === '' || val == null ? null : Math.max(0, Number(val) || 0)
+    setCatalog(prev => ({ ...prev, [name]: { ...(prev[name] || { actif: false, stock_min: 0 }), stock_max } }))
+    try { await upsertStockProdCatalog(lieu, name, { stock_max }) }
     catch (e) { toast.error('Erreur : ' + e.message); load() }
   }
 
@@ -98,10 +108,10 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
                 className="px-3 py-2 pr-8 text-[13px] bg-white border border-line rounded-full focus:outline-none focus:border-bordeaux/60 placeholder:text-ink-mute" />
               {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-line text-ink-mute flex items-center justify-center text-[11px]">✕</button>}
             </div>
-            {isAdmin && (
+            {canEdit && (
               <button onClick={() => setAdminMode(m => !m)}
                 className={`px-3 py-2 rounded-full text-[13px] flex items-center gap-1.5 border transition-all ${adminMode ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line text-ink hover:border-bordeaux'}`}
-                title="Gérer le catalogue (activer + stock mini)">
+                title="Gérer le catalogue (activer + seuils min/max)">
                 <Settings size={14} strokeWidth={1.8} /> <span className="hidden sm:inline">Catalogue</span>
               </button>
             )}
@@ -131,12 +141,12 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
         ) : visibles.length === 0 ? (
           <div className="bg-white rounded-2xl border border-line shadow-sm p-8 text-center">
             <p className="text-[15px] font-semibold text-ink">{q ? 'Aucun résultat' : (adminMode ? 'Aucun article SM- à ce lieu' : 'Aucun article activé')}</p>
-            {!q && !adminMode && isAdmin && <p className="text-[12px] text-ink-mute mt-1">Clique « Catalogue » pour activer des articles.</p>}
+            {!q && !adminMode && canEdit && <p className="text-[12px] text-ink-mute mt-1">Clique « Catalogue » pour activer des articles.</p>}
           </div>
         ) : (
           <div className="space-y-2">
             {visibles.map(m => adminMode
-              ? <AdminRow key={m.name} m={m} onToggle={toggleActif} onMin={setMin} />
+              ? <AdminRow key={m.name} m={m} onToggle={toggleActif} onMin={setMin} onMax={setMax} />
               : <ViewRow key={m.name} m={m} />)}
           </div>
         )}
@@ -149,7 +159,7 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
 function ViewRow({ m }) {
   const besoin = m.qty <= m.stock_min            // à refill
   const zero = m.qty <= 0
-  const aProduire = m.odoo_max != null ? Math.max(0, Math.round((m.odoo_max - m.qty) * 100) / 100) : null
+  const aProduire = m.stock_max != null ? Math.max(0, Math.round((m.stock_max - m.qty) * 100) / 100) : null
   let box = 'bg-white border-line/60', pill = 'bg-emerald-600 text-white', badge = null
   if (zero) { box = 'bg-red-50 border-red-300'; pill = 'bg-red-600 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded-full ml-2">Rupture</span> }
   else if (besoin) { box = 'bg-amber-50 border-amber-300'; pill = 'bg-amber-500 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full ml-2">À refill</span> }
@@ -157,9 +167,9 @@ function ViewRow({ m }) {
     <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${box}`}>
       <div className="flex-1 min-w-0">
         <div className="text-[14px] font-medium text-ink flex items-center"><span className="truncate">{m.name}</span>{badge}</div>
-        <div className="text-[11px] text-ink-mute mt-0.5">Stock mini : {m.stock_min}{m.odoo_max != null ? ` · max ${m.odoo_max}` : ''}</div>
-        {besoin && m.odoo_max != null && (
-          <div className="text-[11px] font-semibold text-amber-800 mt-0.5">🎯 Remplir jusqu'à {m.odoo_max} — à produire : {aProduire}</div>
+        <div className="text-[11px] text-ink-mute mt-0.5">Stock mini : {m.stock_min}{m.stock_max != null ? ` · max ${m.stock_max}` : ''}</div>
+        {besoin && m.stock_max != null && (
+          <div className="text-[11px] font-semibold text-amber-800 mt-0.5">🎯 Remplir jusqu'à {m.stock_max} — à produire : {aProduire}</div>
         )}
       </div>
       <div className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[15px] font-bold tabular-nums ${pill}`}>{m.qty}</div>
@@ -167,10 +177,12 @@ function ViewRow({ m }) {
   )
 }
 
-// Ligne admin : activer + stock mini
-function AdminRow({ m, onToggle, onMin }) {
+// Ligne admin : activer + stock mini + stock maxi (cible réappro)
+function AdminRow({ m, onToggle, onMin, onMax }) {
   const [min, setMinLocal] = useState(String(m.stock_min))
+  const [max, setMaxLocal] = useState(m.stock_max != null ? String(m.stock_max) : '')
   useEffect(() => { setMinLocal(String(m.stock_min)) }, [m.stock_min])
+  useEffect(() => { setMaxLocal(m.stock_max != null ? String(m.stock_max) : '') }, [m.stock_max])
   return (
     <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${m.actif ? 'bg-white border-emerald-200' : 'bg-ink-mute/5 border-line/60'}`}>
       <button onClick={() => onToggle(m.name, !m.actif, m.odoo_min)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
@@ -187,6 +199,11 @@ function AdminRow({ m, onToggle, onMin }) {
         <label className="text-[11px] text-ink-mute flex items-center gap-1">mini
           <input type="number" min="0" step="1" value={min}
             onChange={e => setMinLocal(e.target.value)} onBlur={() => onMin(m.name, min)}
+            className="w-16 px-2 py-1 text-[13px] text-center border border-line rounded-lg focus:outline-none focus:border-bordeaux/60" />
+        </label>
+        <label className="text-[11px] text-ink-mute flex items-center gap-1">maxi
+          <input type="number" min="0" step="1" value={max} placeholder="—"
+            onChange={e => setMaxLocal(e.target.value)} onBlur={() => onMax(m.name, max)}
             className="w-16 px-2 py-1 text-[13px] text-center border border-line rounded-lg focus:outline-none focus:border-bordeaux/60" />
         </label>
       </div>

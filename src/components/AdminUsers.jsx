@@ -135,6 +135,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_gs: formData.permStockGS,
         perm_stock_prod_vitrine: formData.permStockProdVitrine,
         perm_stock_prod_annexe: formData.permStockProdAnnexe,
+        perm_stock_minmax: formData.permStockMinMax,
         perm_vitrine_sale: formData.permVitrineSale,
         perm_caisse: formData.permCaisse,
         perm_caisse_admin: formData.permCaisseAdmin,
@@ -194,6 +195,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_stock_gs: formData.permStockGS,
         perm_stock_prod_vitrine: formData.permStockProdVitrine,
         perm_stock_prod_annexe: formData.permStockProdAnnexe,
+        perm_stock_minmax: formData.permStockMinMax,
         perm_vitrine_sale: formData.permVitrineSale,
         perm_caisse: formData.permCaisse,
         perm_caisse_admin: formData.permCaisseAdmin,
@@ -735,6 +737,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permStockGS: initialData?.perm_stock_gs !== undefined ? initialData.perm_stock_gs : false,
     permStockProdVitrine: initialData?.perm_stock_prod_vitrine !== undefined ? initialData.perm_stock_prod_vitrine : false,
     permStockProdAnnexe: initialData?.perm_stock_prod_annexe !== undefined ? initialData.perm_stock_prod_annexe : false,
+    permStockMinMax: initialData?.perm_stock_minmax !== undefined ? initialData.perm_stock_minmax : false,
     permVitrineSale: initialData?.perm_vitrine_sale !== undefined ? initialData.perm_vitrine_sale : false,
     permCaisse: initialData?.perm_caisse !== undefined ? initialData.perm_caisse : false,
     permCaisseAdmin: initialData?.perm_caisse_admin !== undefined ? initialData.perm_caisse_admin : false,
@@ -1084,6 +1087,12 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             label="🏭 Voir l'onglet Stock Prod Annexe (SM-)"
             checked={isAdmin || formData.permStockProdAnnexe}
             onChange={v => update('permStockProdAnnexe', v)}
+          />
+          <PermCheckbox
+            id="perm-stock-minmax"
+            label="⚙️ Régler les seuils min/max des stocks (GS- / Prod)"
+            checked={isAdmin || formData.permStockMinMax}
+            onChange={v => update('permStockMinMax', v)}
           />
           {currentUser?.role === 'admin' && (
             <PermCheckbox
