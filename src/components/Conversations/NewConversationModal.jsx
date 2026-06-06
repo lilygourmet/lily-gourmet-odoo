@@ -54,7 +54,7 @@ function normalizePhoneFr(raw) {
   return d
 }
 
-export default function NewConversationModal({ user, onClose, onSent, initialPhone = '', initialName = '' }) {
+export default function NewConversationModal({ user, onClose, onSent, initialPhone = '', initialName = '', initialOrder = null }) {
   const [templates, setTemplates] = useState([])
   const [loadingT, setLoadingT] = useState(true)
   const [errT, setErrT] = useState('')
@@ -98,13 +98,25 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
   }, [mode, employes.length])
 
   // Dernières commandes affichées d'office (pour ne rien avoir à taper).
+  // Si on arrive avec une commande déjà choisie (depuis Devis), on saute cette liste.
   useEffect(() => {
+    if (initialOrder) { setSearching(false); return }
     let cancelled = false
     searchOrders('')
       .then(list => { if (!cancelled) setResults(list) })
       .catch(e => { if (!cancelled) setSearchErr(e.message) })
       .finally(() => { if (!cancelled) setSearching(false) })
     return () => { cancelled = true }
+  }, [])
+
+  // Pré-sélection d'office de la commande/devis (ouverture depuis l'onglet Devis).
+  useEffect(() => {
+    if (!initialOrder) return
+    const tmpl = templateForState(initialOrder.state)
+    setPickedOrder(initialOrder)
+    setResults([])
+    setSelectedName(tmpl)
+    fillFromOrder(initialOrder, tmpl)
   }, [])
 
   const selected = templates.find(t => templateName(t) === selectedName) || null

@@ -109,14 +109,15 @@ export default function DevisView({ user }) {
       )}
 
       {detail && (
-        <DevisDetail devis={detail} onClose={() => setDetail(null)} onWhatsapp={() => { setWaTarget({ phone: detail.clientPhone, name: detail.clientName || '' }); setDetail(null) }} />
+        <DevisDetail devis={detail} onClose={() => setDetail(null)} onWhatsapp={() => { setWaTarget(detail); setDetail(null) }} />
       )}
 
       {waTarget && (
         <NewConversationModal
           user={user}
-          initialPhone={waTarget.phone}
-          initialName={waTarget.name}
+          initialOrder={waTarget}
+          initialPhone={waTarget.clientPhone}
+          initialName={waTarget.clientName || ''}
           onClose={() => setWaTarget(null)}
           onSent={() => setWaTarget(null)}
         />
