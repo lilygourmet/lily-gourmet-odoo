@@ -21,6 +21,29 @@ function fmtDuration(s) {
 
 const TONE_LABEL = { formelle: 'Formelle', amicale: 'Amicale', directe: 'Directe' }
 
+// Devine un émoji selon le sujet d'une phrase type (pour repérer les chips d'un coup d'œil).
+function chipEmoji(q) {
+  const t = ((q?.label || '') + ' ' + (q?.body || '')).toLowerCase()
+  if (/\b(rib|iban|virement|compte|paiement|payer|payment)\b/.test(t)) return '💳'
+  if (/livr/.test(t)) return '🚚'
+  if (/(localis|adresse|maps|google|fin\s+kayn|win\s+kayn)/.test(t)) return '📍'
+  if (/(horaire|ouvert|ferm)/.test(t)) return '🕒'
+  if (/(prix|tarif|devis|co[uû]t)/.test(t)) return '💰'
+  if (/(acompte|avance|arrhes)/.test(t)) return '💵'
+  if (/(commande|command)/.test(t)) return '🛒'
+  if (/(g[âa]teau|cake|p[âa]tiss|dessert|tarte|pi[èe]ce\s+mont)/.test(t)) return '🎂'
+  if (/(anniversaire|f[êe]te|mariage|baby)/.test(t)) return '🎉'
+  if (/(bonjour|bonsoir|salam|salut|coucou|merhba)/.test(t)) return '👋'
+  if (/(merci|remerci|d[ée]sol|excuse|pardon)/.test(t)) return '🙏'
+  if (/(confirm|valid)/.test(t)) return '✅'
+  if (/(dispo|disponible|stock|rupture)/.test(t)) return '📦'
+  if (/(menu|catalogue|carte|photo|image)/.test(t)) return '📋'
+  if (/(t[ée]l[ée]phone|appel|num[ée]ro)/.test(t)) return '📞'
+  if (/(attente|patience|bient[ôo]t|d[ée]lai)/.test(t)) return '⏳'
+  if (q?.media_path) return '🖼️'
+  return '💬'
+}
+
 // Choisit un format d'enregistrement supporté par le navigateur ET par WhatsApp.
 // WhatsApp accepte officiellement : mp4/m4a, ogg/opus, mp3, aac, amr.
 // PAS webm — donc on le met en DERNIER recours (mieux que rien).
@@ -1061,7 +1084,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             {[...quickReplies].sort((a, b) => (a.label || '').localeCompare(b.label || '', 'fr')).map(q => (
               <button key={q.id} type="button" onClick={() => sendQuickReply(q)} disabled={sending} title={q.body}
                 className="text-left px-3 py-2 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50">
-                {q.media_path ? '🖼️ ' : ''}{q.label}
+                <span className="mr-1">{chipEmoji(q)}</span>{q.label}
               </button>
             ))}
           </div>
