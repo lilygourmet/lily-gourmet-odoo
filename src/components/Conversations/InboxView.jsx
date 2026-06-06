@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationRead } from '../../lib/conversations'
-import { formatRelativeTime } from '../../lib/auth'
+import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationRead, batchUpdateNamesFromOdoo } from '../../lib/conversations'
+import { formatRelativeTime, isAdmin } from '../../lib/auth'
+import { toast } from '../../lib/toast'
 import { subscribeToPush } from '../../lib/pushNotif'
 import { isDingEnabled, setDingEnabled } from '../../lib/ding'
 import { supabase } from '../../lib/supabase'
@@ -39,6 +40,18 @@ export default function InboxView({ user, initialConversationId }) {
   const [showNew, setShowNew] = useState(false)
   const [showReplies, setShowReplies] = useState(false)
   const [agentFilter, setAgentFilter] = useState('all')
+  const [syncingNames, setSyncingNames] = useState(false)
+
+  async function handleSyncNames() {
+    if (syncingNames) return
+    setSyncingNames(true)
+    try {
+      const n = await batchUpdateNamesFromOdoo()
+      toast.success(n > 0 ? `${n} nom(s) mis à jour depuis Odoo.` : 'Aucun nom à mettre à jour (déjà à jour ou pas de devis/commande).')
+      await refresh(true)
+    } catch (e) { toast.error('Erreur : ' + (e?.message || e)) }
+    finally { setSyncingNames(false) }
+  }
   // Dernière visite capturée au montage (pour repérer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
   // Conversations vues pendant cette session (id -> horodatage de la vue)
@@ -121,6 +134,9 @@ export default function InboxView({ user, initialConversationId }) {
     list = list.filter(c => c.marked_unread || c.unread_count > 0 || (c.last_inbound_at && (!lv || c.last_inbound_at > lv)))
   }
   if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
+  // Les conversations FERMÉES n'apparaissent que dans le filtre « Fermées ».
+  // Exception : en recherche, elles remontent (pour pouvoir les retrouver).
+  if (filter !== 'fermees' && !term) list = list.filter(c => c.status !== 'fermee')
   const filtered = !term ? list : list.filter(c =>
     (c.client_name || '').toLowerCase().includes(term) ||
     (c.client_phone || '').toLowerCase().includes(term) ||
@@ -170,6 +186,14 @@ export default function InboxView({ user, initialConversationId }) {
               onClick={() => setShowReplies(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[12px] font-medium tracking-wider hover:bg-bordeaux hover:text-cream transition-all"
             ><MessageSquareText size={14} strokeWidth={1.8} /> Phrases</button>
+            {isAdmin(user) && (
+              <button
+                onClick={handleSyncNames}
+                disabled={syncingNames}
+                title="Mettre à jour tous les noms depuis Odoo (devis/commande), sans écraser les noms manuels"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line text-ink-soft rounded-full text-[12px] font-medium hover:border-bordeaux transition-all disabled:opacity-50"
+              >🔄 {syncingNames ? 'Maj noms…' : 'Noms Odoo'}</button>
+            )}
           </div>
 
           {/* Recherche */}

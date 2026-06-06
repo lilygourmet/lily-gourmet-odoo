@@ -43,6 +43,7 @@ export default async function handler(req, res) {
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
   if (action === 'search-orders') return handleSearchOrders(req, res)
+  if (action === 'order-clients') return handleOrderClients(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'correct') return handleCorrect(req, res)
   if (action === 'delete-message') return handleDeleteMessage(req, res)
@@ -749,6 +750,24 @@ function normalizePhone(raw) {
   if (d.startsWith('212')) return d
   if (d.startsWith('0')) return '212' + d.slice(1)
   return d
+}
+
+// Renvoie tous les clients ayant au moins un devis/commande : { name, phone }.
+// Sert à la mise à jour EN MASSE des noms de conversations.
+async function handleOrderClients(req, res) {
+  try {
+    const uid = await odooAuthenticate()
+    const orders = await odooSearchRead(uid, 'sale.order', [], ['partner_id'], { limit: 10000, order: 'id desc' })
+    const pids = [...new Set(orders.map(o => Array.isArray(o.partner_id) ? o.partner_id[0] : null).filter(Boolean))]
+    if (!pids.length) return res.status(200).json({ clients: [] })
+    const partners = await odooSearchRead(uid, 'res.partner', [['id', 'in', pids]], ['id', 'name', 'phone', 'mobile'], { limit: pids.length })
+    const clients = partners
+      .map(p => ({ name: (p.name || '').trim(), phone: normalizePhone(p.mobile || p.phone) }))
+      .filter(c => c.name && c.phone)
+    return res.status(200).json({ clients })
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
 }
 
 async function handleSearchOrders(req, res) {

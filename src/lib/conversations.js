@@ -256,6 +256,39 @@ export async function setConversationNameFromOdoo(conversationId, clientPhone, c
   return data
 }
 
+/** Récupère tous les clients ayant un devis/commande (nom + téléphone) depuis Odoo. */
+export async function fetchOrderClients() {
+  const res = await fetch('/api/wati-webhook?action=order-clients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+  const d = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(d.error || 'Odoo erreur')
+  return d.clients || []
+}
+
+/** Met à jour EN MASSE les noms des conversations depuis Odoo (devis/commande).
+ * N'écrase pas les noms saisis à la main (name_manual). Renvoie le nb mis à jour. */
+export async function batchUpdateNamesFromOdoo() {
+  const [convs, clients] = await Promise.all([loadConversations('all'), fetchOrderClients()])
+  const byPhone = new Map()
+  for (const c of clients) { const k = String(c.phone).replace(/\D/g, '').slice(-9); if (k) byPhone.set(k, c.name) }
+  const toUpdate = []
+  for (const conv of convs) {
+    if (conv.name_manual) continue
+    const k = String(conv.client_phone || '').replace(/\D/g, '').slice(-9)
+    if (!k) continue
+    const real = byPhone.get(k)
+    if (real && real !== (conv.client_name || '').trim()) toUpdate.push({ id: conv.id, name: real })
+  }
+  let updated = 0
+  for (let i = 0; i < toUpdate.length; i += 20) {
+    const chunk = toUpdate.slice(i, i + 20)
+    await Promise.all(chunk.map(u =>
+      supabase.from('conversations').update({ client_name: u.name, updated_at: new Date().toISOString() }).eq('id', u.id)
+        .then(() => { updated++ }).catch(() => {})
+    ))
+  }
+  return updated
+}
+
 /** Enregistre la note interne (privée, visible équipe) d'une conversation. */
 export async function updateConversationNote(conversationId, note) {
   const { data, error } = await supabase
