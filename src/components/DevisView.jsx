@@ -38,7 +38,9 @@ export default function DevisView({ user }) {
     return () => clearTimeout(t)
   }, [query])
 
-  const shown = devis.filter(d => filter === 'all' ? true : d.state === filter)
+  const shown = devis
+    .filter(d => !/vitrin/i.test(d.clientName || ''))
+    .filter(d => filter === 'all' ? true : d.state === filter)
 
   // Regrouper par date de LIVRAISON (chronologique). "Sans date" à la fin.
   const groups = {}
