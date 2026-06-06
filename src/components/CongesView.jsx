@@ -112,6 +112,88 @@ function dispoTypeConge(solde, type) {
 function fmt(d) {
   return d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 }
+
+// Couleur d'une pastille selon le type de congé.
+function typeCongeCouleur(t) {
+  const s = String(t || '').toLowerCase()
+  if (s.includes('maladie')) return { bg: '#FCEBEB', fg: '#A32D2D' }
+  if (s.includes('recup') || s.includes('récup')) return { bg: '#E6F1FB', fg: '#1456a0' }
+  if (s.includes('annuel')) return { bg: '#F7E3EA', fg: '#993556' }
+  if (s.includes('sans')) return { bg: '#ECECEC', fg: '#555' }
+  return { bg: '#E3F3E4', fg: '#2E7D32' }   // événements (mariage, naissance…)
+}
+
+// Calendrier d'équipe : vue mois, qui est en congé (lecture seule).
+function CalendrierEquipe({ valides, empById, isMobile }) {
+  const now = new Date()
+  const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() }) // m : 0-11
+  const { y, m } = cur
+  const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+  const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+  const pad = n => String(n).padStart(2, '0')
+  const nbJoursMois = new Date(y, m + 1, 0).getDate()
+  const premierJour = (new Date(y, m, 1).getDay() + 6) % 7   // 0 = Lundi
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+
+  const prev = () => setCur(c => c.m === 0 ? { y: c.y - 1, m: 11 } : { y: c.y, m: c.m - 1 })
+  const next = () => setCur(c => c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 })
+  const congesJour = d => {
+    const ds = `${y}-${pad(m + 1)}-${pad(d)}`
+    return valides.filter(c => c.date_debut <= ds && c.date_fin >= ds)
+  }
+
+  const cellules = []
+  for (let i = 0; i < premierJour; i++) cellules.push(null)
+  for (let d = 1; d <= nbJoursMois; d++) cellules.push(d)
+
+  const btn = { padding: '6px 12px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30', fontSize: 14 }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 14 }}>
+        <button onClick={prev} style={btn}>‹</button>
+        <div style={{ fontSize: 16, fontWeight: 600, color: '#1a0f0a', minWidth: 180, textAlign: 'center' }}>{MOIS[m]} {y}</div>
+        <button onClick={next} style={btn}>›</button>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: isMobile ? 680 : 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
+            {JOURS.map(j => <div key={j} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#8a7a70', padding: '4px 0' }}>{j}</div>)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {cellules.map((d, i) => {
+              if (d === null) return <div key={`v${i}`} />
+              const ds = `${y}-${pad(m + 1)}-${pad(d)}`
+              const list = congesJour(d)
+              const isToday = ds === todayStr
+              return (
+                <div key={d} style={{ minHeight: 84, border: '1px solid ' + (isToday ? '#993556' : '#eee4d4'), borderRadius: 8, padding: 5, background: isToday ? '#fdf6f0' : 'white', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: isToday ? '#993556' : '#8a7a70' }}>{d}</div>
+                  {list.slice(0, 4).map(c => {
+                    const col = typeCongeCouleur(c.type_conge)
+                    const nom = empById[c.employe_id]?.nom || '?'
+                    return (
+                      <div key={c.id} title={`${nom} · ${c.type_conge}`} style={{ background: col.bg, color: col.fg, fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
+                    )
+                  })}
+                  {list.length > 4 && <div style={{ fontSize: 9, color: '#8a7a70' }}>+{list.length - 4}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 14, fontSize: 11, color: '#4a3a30' }}>
+        {[['annuel', 'Annuel'], ['maladie', 'Maladie'], ['recup', 'Récup'], ['mariage', 'Événement'], ['sans', 'Sans solde']].map(([t, lab]) => {
+          const col = typeCongeCouleur(t)
+          return <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: col.bg, border: '1px solid ' + col.fg }} /> {lab}</span>
+        })}
+      </div>
+    </div>
+  )
+}
 function nbJours(start, end) {
   if (!start || !end) return 0
   return Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86400000) + 1
@@ -386,6 +468,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             Allocations {allocations.filter(a => a.statut === 'attente').length > 0 && <span style={badge}>{allocations.filter(a => a.statut === 'attente').length}</span>}
           </Tab>
           <Tab active={tab === 'soldes'} onClick={() => setTab('soldes')}>Soldes employés</Tab>
+          <Tab active={tab === 'equipe'} onClick={() => setTab('equipe')}><Calendar size={13} /> Calendrier équipe</Tab>
           {canManagePending && (
             <Tab active={tab === 'a_traiter'} onClick={() => setTab('a_traiter')}>
               <AlertCircle size={13} /> À traiter {aTraiterCount > 0 && <span style={badge}>{aTraiterCount}</span>}
@@ -807,6 +890,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
         {!loading && tab === 'a_traiter' && canManagePending && (
           <ATraiterTab user={user} onChange={setATraiterCount} />
+        )}
+
+        {!loading && tab === 'equipe' && (
+          <CalendrierEquipe valides={valides} empById={empById} isMobile={isMobile} />
         )}
       </div>
 
