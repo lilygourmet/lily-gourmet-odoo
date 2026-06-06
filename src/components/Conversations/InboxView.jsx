@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationRead, batchUpdateNamesFromOdoo } from '../../lib/conversations'
+import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationRead, batchUpdateNamesFromOdoo, CONV_LABELS } from '../../lib/conversations'
 import { formatRelativeTime, isAdmin } from '../../lib/auth'
 import { toast } from '../../lib/toast'
 import { subscribeToPush } from '../../lib/pushNotif'
@@ -40,6 +40,7 @@ export default function InboxView({ user, initialConversationId }) {
   const [showNew, setShowNew] = useState(false)
   const [showReplies, setShowReplies] = useState(false)
   const [agentFilter, setAgentFilter] = useState('all')
+  const [labelFilter, setLabelFilter] = useState('all')
   const [syncingNames, setSyncingNames] = useState(false)
 
   async function handleSyncNames() {
@@ -134,6 +135,7 @@ export default function InboxView({ user, initialConversationId }) {
     list = list.filter(c => c.marked_unread || c.unread_count > 0 || (c.last_inbound_at && (!lv || c.last_inbound_at > lv)))
   }
   if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
+  if (labelFilter !== 'all') list = list.filter(c => (c.labels || []).includes(labelFilter))
   // Les conversations FERMÉES n'apparaissent que dans le filtre « Fermées ».
   // Exception : en recherche, elles remontent (pour pouvoir les retrouver).
   if (filter !== 'fermees' && !term) list = list.filter(c => c.status !== 'fermee')
@@ -246,6 +248,14 @@ export default function InboxView({ user, initialConversationId }) {
                 ))}
               </select>
             )}
+            <select
+              value={labelFilter}
+              onChange={e => setLabelFilter(e.target.value)}
+              className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux"
+            >
+              <option value="all">Toutes étiquettes</option>
+              {CONV_LABELS.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
+            </select>
           </div>
         </div>
 
@@ -303,6 +313,13 @@ export default function InboxView({ user, initialConversationId }) {
                         </span>
                         <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
                       </div>
+                      {(c.labels || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-1">
+                          {CONV_LABELS.filter(l => (c.labels || []).includes(l.key)).map(l => (
+                            <span key={l.key} className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: l.bg, color: l.color }}>{l.label}</span>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-[11px] text-ink-mute">{c.client_phone}</span>
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${badgeCls}`}>

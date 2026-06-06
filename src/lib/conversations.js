@@ -219,6 +219,24 @@ export async function closeConversation(conversationId, userId) {
   return data
 }
 
+// Étiquettes de conversation (prédéfinies) + couleurs.
+export const CONV_LABELS = [
+  { key: 'a_relancer',  label: 'À relancer',   color: '#E08A00', bg: '#FFF3D6' },
+  { key: 'devis_envoye', label: 'Devis envoyé', color: '#1456a0', bg: '#E6F1FB' },
+  { key: 'a_encaisser', label: 'À encaisser',  color: '#A32D2D', bg: '#FBD9D0' },
+]
+/** Met à jour les étiquettes d'une conversation (tableau de clés). */
+export async function setConversationLabels(conversationId, labels) {
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ labels: labels || [], updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .select(CONV_SEL)
+    .single()
+  if (error) throw error
+  return data
+}
+
 /** Renomme le client d'une conversation à la MAIN (marque name_manual=true → ne sera plus écrasé par Odoo). */
 export async function updateConversationClientName(conversationId, name) {
   const { data, error } = await supabase

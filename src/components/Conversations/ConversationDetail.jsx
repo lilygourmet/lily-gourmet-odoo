@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationNote, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, setConversationLabels } from '../../lib/conversations'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
@@ -111,6 +111,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [ordersOpen, setOrdersOpen] = useState(false)
   const [clientOrders, setClientOrders] = useState(null)
   const [ordersBusy, setOrdersBusy] = useState(false)
+
+  async function toggleLabel(key) {
+    const cur = conv?.labels || []
+    const next = cur.includes(key) ? cur.filter(l => l !== key) : [...cur, key]
+    setConv(prev => prev ? { ...prev, labels: next } : prev)
+    try { await setConversationLabels(conversationId, next) } catch { load() }
+  }
 
   async function toggleClientOrders() {
     const next = !ordersOpen
@@ -711,6 +718,21 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             </div>
           )}
           {conv?.client_name && !nameEditing && <div className="font-mono text-[11px] text-cream/70">{conv.client_phone}</div>}
+          {conv && !nameEditing && (
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              {CONV_LABELS.map(l => {
+                const on = (conv.labels || []).includes(l.key)
+                return (
+                  <button key={l.key} type="button" onClick={() => toggleLabel(l.key)}
+                    title={on ? "Retirer l'étiquette" : "Ajouter l'étiquette"}
+                    className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full transition-all"
+                    style={{ background: on ? l.bg : 'rgba(255,255,255,0.12)', color: on ? l.color : 'rgba(255,255,255,0.75)', border: '1px solid ' + (on ? l.color : 'rgba(255,255,255,0.25)') }}>
+                    {on ? '✓ ' : ''}{l.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
         {conv && (
           conv.assigned_to ? (
