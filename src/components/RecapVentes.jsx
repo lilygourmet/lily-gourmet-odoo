@@ -8,7 +8,7 @@ function CatIcon({ catId, size = 16, className = '' }) {
   if (!I) return null
   return <I size={size} className={className} />
 }
-import { isLivreur } from '../lib/auth'
+import { isLivreur, isAdmin } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
 import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
@@ -1257,10 +1257,12 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                 className="px-2.5 py-1 border border-line rounded-full text-[11px] bg-cream focus:outline-none focus:border-bordeaux"
                 title="Choisir n'importe quelle date"
               />
-              <button
-                onClick={() => setShowFactures(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
-              >🧾 Factures</button>
+              {isAdmin(user) && (
+                <button
+                  onClick={() => setShowFactures(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
+                >🧾 Factures</button>
+              )}
               <button
                 onClick={handlePrintAll}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
