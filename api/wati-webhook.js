@@ -767,7 +767,8 @@ async function handleDevisList(req, res) {
   const query = (req.body?.query || '').trim()
   try {
     const uid = await odooAuthenticate()
-    let domain = [['state', 'in', ['draft', 'sent']]]
+    // Exclut le pseudo-client "vitrine" (ventes internes).
+    let domain = [['state', 'in', ['draft', 'sent']], ['partner_id', 'not ilike', 'vitrin']]
     if (query.length >= 2) {
       const digits = query.replace(/\D/g, '')
       const ors = [['name', 'ilike', query], ['partner_id', 'ilike', query]]
@@ -775,7 +776,8 @@ async function handleDevisList(req, res) {
         const last9 = digits.slice(-9)
         ors.push(['partner_id.phone', 'ilike', last9], ['partner_id.mobile', 'ilike', last9])
       }
-      domain = ['&', ['state', 'in', ['draft', 'sent']], ...Array(ors.length - 1).fill('|'), ...ors]
+      domain = ['&', '&', ['state', 'in', ['draft', 'sent']], ['partner_id', 'not ilike', 'vitrin'],
+        ...Array(ors.length - 1).fill('|'), ...ors]
     }
     const orders = await odooSearchRead(uid, 'sale.order', domain,
       ['name', 'partner_id', 'commitment_date', 'date_order', 'amount_total', 'order_line', 'state'],
