@@ -38,6 +38,8 @@ import {
   genererFeriesFixes, compteFeriesHorsOff, feriesListePeriode, joursDecomptesDates,
 } from '../lib/joursFeries'
 import { imprimerFeuilleConge } from '../lib/feuilleConge'
+import ATraiterTab from './HR/ATraiterTab'
+import { countATraiter } from '../lib/aTraiter'
 
 const TYPES = [
   { v: 'annuel',           label: 'Congé annuel' },
@@ -124,6 +126,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const canImprimerFeuille = isAdmin || !!user?.perm_hr
   // RH (perm_hr) : peut modifier/supprimer un congé TANT QU'IL N'EST PAS VALIDÉ.
   const canManagePending = isAdmin || !!user?.perm_hr
+  const [aTraiterCount, setATraiterCount] = useState(0)
   const [employes, setEmployes]     = useState([])
   const [conges, setConges]         = useState([])
   const [loading, setLoading]       = useState(true)
@@ -224,6 +227,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   }, [])
 
   useEffect(() => { reload() }, [reload])
+  useEffect(() => { if (canManagePending) countATraiter().then(setATraiterCount).catch(() => {}) }, [canManagePending])
 
   const demandes = useMemo(() => conges.filter(c => c.statut === 'demande').sort((a, b) => a.date_debut.localeCompare(b.date_debut)), [conges])
   const valides  = useMemo(() => conges.filter(c => c.statut === 'valide').sort((a, b) => b.date_debut.localeCompare(a.date_debut)), [conges])
@@ -382,6 +386,11 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             Allocations {allocations.filter(a => a.statut === 'attente').length > 0 && <span style={badge}>{allocations.filter(a => a.statut === 'attente').length}</span>}
           </Tab>
           <Tab active={tab === 'soldes'} onClick={() => setTab('soldes')}>Soldes employés</Tab>
+          {canManagePending && (
+            <Tab active={tab === 'a_traiter'} onClick={() => setTab('a_traiter')}>
+              <AlertCircle size={13} /> À traiter {aTraiterCount > 0 && <span style={badge}>{aTraiterCount}</span>}
+            </Tab>
+          )}
           {isAdmin && (
             <Tab active={tab === 'feries'} onClick={() => setTab('feries')}>
               <Flag size={13} /> Jours fériés
@@ -795,6 +804,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             </>
           )
         })()}
+
+        {!loading && tab === 'a_traiter' && canManagePending && (
+          <ATraiterTab user={user} onChange={setATraiterCount} />
+        )}
       </div>
 
       {showForm && (
