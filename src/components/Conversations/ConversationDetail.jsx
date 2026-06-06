@@ -1121,7 +1121,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 disabled={sending} title={q.body}
                 className="text-left px-3 py-2 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50 cursor-grab active:cursor-grabbing flex items-center gap-1.5">
                 <span className="text-ink-mute/50 select-none flex-shrink-0">⠿</span>
-                <span className="truncate">{chipEmoji(q)} {q.label}</span>
+                <span className="truncate">{q.emoji || chipEmoji(q)} {q.label}</span>
               </button>
             ))}
           </div>

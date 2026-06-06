@@ -2,12 +2,16 @@ import { useState, useEffect } from 'react'
 import { loadQuickReplies, createQuickReply, updateQuickReply, deleteQuickReply, uploadConversationMedia, getMediaSignedUrl } from '../../lib/conversations'
 import { confirmDialog } from '../../lib/confirmDialog'
 
+// Émojis suggérés pour repérer une phrase d'un coup d'œil.
+const EMOJI_SUGGESTIONS = ['💳', '🚚', '📍', '🕒', '💰', '💵', '🛒', '🎂', '🎉', '👋', '🙏', '✅', '📦', '📋', '📞', '⏳', '💬', '⭐', '❤️', '🔥', '😊', '📸']
+
 // Écran de gestion des phrases types (communes à l'équipe).
 export default function QuickRepliesModal({ onClose }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [label, setLabel] = useState('')
+  const [emoji, setEmoji] = useState('')
   const [body, setBody] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -38,7 +42,7 @@ export default function QuickRepliesModal({ onClose }) {
   useEffect(() => { refresh() }, [])
 
   async function startEdit(it) {
-    setEditingId(it.id); setLabel(it.label); setBody(it.body)
+    setEditingId(it.id); setLabel(it.label); setBody(it.body); setEmoji(it.emoji || '')
     setMediaPath(it.media_path || null)
     setMediaPreview(null)
     if (it.media_path) {
@@ -46,15 +50,15 @@ export default function QuickRepliesModal({ onClose }) {
     }
   }
   function resetForm() {
-    setEditingId(null); setLabel(''); setBody(''); setMediaPath(null); setMediaPreview(null)
+    setEditingId(null); setLabel(''); setBody(''); setEmoji(''); setMediaPath(null); setMediaPreview(null)
   }
 
   async function handleSave() {
     if (!label.trim() || (!body.trim() && !mediaPath)) return
     setBusy(true); setError('')
     try {
-      if (editingId) await updateQuickReply(editingId, label, body, mediaPath)
-      else await createQuickReply(label, body, mediaPath)
+      if (editingId) await updateQuickReply(editingId, label, body, mediaPath, emoji)
+      else await createQuickReply(label, body, mediaPath, emoji)
       resetForm()
       await refresh()
     } catch (e) { setError(e.message) }
@@ -84,6 +88,25 @@ export default function QuickRepliesModal({ onClose }) {
             type="text" value={label} onChange={e => setLabel(e.target.value)}
             className="w-full px-3 py-2 text-[13px] bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-2"
           />
+          <label className="block text-[11px] font-medium text-ink-soft mb-1">Émoji (optionnel)</label>
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="text" value={emoji} onChange={e => setEmoji(e.target.value)} maxLength={4}
+              placeholder="—"
+              className="w-12 px-2 py-2 text-[18px] text-center bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+            />
+            <div className="flex flex-wrap gap-1 flex-1">
+              {EMOJI_SUGGESTIONS.map(e => (
+                <button key={e} type="button" onClick={() => setEmoji(e)}
+                  className={`w-7 h-7 rounded-lg text-[15px] flex items-center justify-center transition-all ${emoji === e ? 'bg-bordeaux/15 ring-1 ring-bordeaux' : 'hover:bg-cream'}`}>{e}</button>
+              ))}
+              {emoji && (
+                <button type="button" onClick={() => setEmoji('')} title="Aucun émoji"
+                  className="w-7 h-7 rounded-lg text-[12px] text-ink-mute hover:bg-cream flex items-center justify-center">✕</button>
+              )}
+            </div>
+          </div>
+
           <label className="block text-[11px] font-medium text-ink-soft mb-1">Texte du message</label>
           <textarea
             value={body} onChange={e => setBody(e.target.value)} rows={3}
@@ -126,7 +149,7 @@ export default function QuickRepliesModal({ onClose }) {
             {items.map(it => (
               <div key={it.id} className="bg-cream-warm border border-line rounded-lg p-2.5">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[13px] font-medium text-ink">{it.label}</span>
+                  <span className="text-[13px] font-medium text-ink">{it.emoji ? it.emoji + ' ' : ''}{it.label}</span>
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => startEdit(it)} className="text-[11px] text-ink-soft hover:text-bordeaux px-1">Modifier</button>
                     <button onClick={() => handleDelete(it.id)} className="text-[11px] text-bordeaux hover:underline px-1">Suppr.</button>
