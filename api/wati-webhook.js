@@ -44,6 +44,7 @@ export default async function handler(req, res) {
   if (action === 'send-template') return handleSendTemplate(req, res)
   if (action === 'search-orders') return handleSearchOrders(req, res)
   if (action === 'order-clients') return handleOrderClients(req, res)
+  if (action === 'invoice-pdf') return handleInvoicePdf(req, res)
   if (action === 'suggest') return handleSuggest(req, res)
   if (action === 'correct') return handleCorrect(req, res)
   if (action === 'delete-message') return handleDeleteMessage(req, res)
@@ -724,6 +725,64 @@ function odooSearchRead(uid, model, domain, fields, opts = {}) {
   return odooJsonRpc('object', 'execute_kw', [
     process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, 'search_read', [domain, fields], opts,
   ])
+}
+
+// Ouvre une session web Odoo (pour télécharger le PDF d'un rapport). Renvoie le cookie session_id.
+async function odooWebLogin() {
+  const r = await fetch(`${process.env.ODOO_URL}/web/session/authenticate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', params: { db: process.env.ODOO_DB, login: process.env.ODOO_USERNAME, password: process.env.ODOO_PASSWORD } }),
+  })
+  const setCookie = r.headers.get('set-cookie') || ''
+  const m = setCookie.match(/session_id=([^;]+)/)
+  if (!m) throw new Error('Session Odoo non obtenue')
+  return m[1]
+}
+
+// Récupère le PDF d'une facture DÉJÀ EXISTANTE dans Odoo (aucune création/modification).
+async function handleInvoicePdf(req, res) {
+  const orderNum = (req.body?.orderNum || '').trim()
+  try {
+    const uid = await odooAuthenticate()
+
+    // Mode diagnostic : renvoie quelques factures clients récentes (pour test).
+    if (req.body?.sample) {
+      const sample = await odooSearchRead(uid, 'account.move',
+        [['move_type', '=', 'out_invoice'], ['state', '=', 'posted']],
+        ['id', 'name', 'invoice_origin', 'state'], { limit: 5, order: 'id desc' })
+      return res.status(200).json({ sample })
+    }
+
+    if (!orderNum) return res.status(400).json({ error: 'Numéro de commande manquant' })
+
+    // Trouver les factures de la commande : via sale.order.invoice_ids, sinon invoice_origin.
+    let invoices = []
+    const so = await odooSearchRead(uid, 'sale.order', [['name', '=', orderNum]], ['invoice_ids'], { limit: 1 })
+    const invIds = so[0]?.invoice_ids || []
+    if (invIds.length) {
+      invoices = await odooSearchRead(uid, 'account.move', [['id', 'in', invIds]], ['id', 'name', 'state', 'move_type'])
+    }
+    if (!invoices.length) {
+      invoices = await odooSearchRead(uid, 'account.move',
+        [['invoice_origin', '=', orderNum], ['move_type', '=', 'out_invoice']],
+        ['id', 'name', 'state', 'move_type'])
+    }
+    const clientInv = invoices.filter(m => m.move_type === 'out_invoice')
+    const target = clientInv.find(m => m.state === 'posted') || clientInv[0]
+    if (!target) return res.status(200).json({ error: 'Aucune facture trouvée pour cette commande.' })
+
+    // Télécharger le PDF du rapport facture (session web).
+    const session = await odooWebLogin()
+    const pdfUrl = `${process.env.ODOO_URL}/report/pdf/account.report_invoice/${target.id}`
+    const pr = await fetch(pdfUrl, { headers: { Cookie: `session_id=${session}` } })
+    if (!pr.ok) return res.status(502).json({ error: `PDF Odoo indisponible (HTTP ${pr.status})` })
+    const b64 = Buffer.from(await pr.arrayBuffer()).toString('base64')
+    return res.status(200).json({ name: target.name, state: target.state, pdf: b64 })
+  } catch (e) {
+    console.error('[invoice-pdf]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
 }
 
 // "1 650,00 DH"
