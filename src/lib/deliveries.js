@@ -24,13 +24,20 @@ export async function loadLivreurs() {
 export async function loadDeliveryStates(orderNums) {
   const nums = (orderNums || []).filter(Boolean)
   if (nums.length === 0) return {}
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('livraisons')
-    .select('order_num, livreur_id, livraison_faite, statut, assigned_by')
+    .select('order_num, livreur_id, livraison_faite, statut, assigned_by, preuve_path')
     .in('order_num', nums)
-  if (error) throw error
+  if (error) {
+    // Repli si la colonne preuve_path n'existe pas encore (SQL pas lancé) → on ne casse rien.
+    ;({ data, error } = await supabase
+      .from('livraisons')
+      .select('order_num, livreur_id, livraison_faite, statut, assigned_by')
+      .in('order_num', nums))
+    if (error) throw error
+  }
   const map = {}
-  for (const o of (data || [])) map[o.order_num] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite, statut: o.statut, assigned_by: o.assigned_by }
+  for (const o of (data || [])) map[o.order_num] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite, statut: o.statut, assigned_by: o.assigned_by, preuve_path: o.preuve_path || null }
   return map
 }
 
@@ -104,5 +111,13 @@ export async function setLivraisonFaite(orderNum, faite) {
   const { error } = await supabase
     .from('livraisons')
     .upsert({ order_num: orderNum, livraison_faite: faite, updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
+  if (error) throw error
+}
+
+// Enregistre le chemin de la photo de preuve de livraison.
+export async function setLivraisonPreuve(orderNum, path) {
+  const { error } = await supabase
+    .from('livraisons')
+    .upsert({ order_num: orderNum, preuve_path: path, updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
 }

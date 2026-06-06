@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders, groupDeliveriesWithFullOrder, stripOdooPrefix } from '../lib/salesLines'
-import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite } from '../lib/deliveries'
+import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite, setLivraisonPreuve } from '../lib/deliveries'
+import { uploadConversationMedia, getMediaSignedUrl } from '../lib/conversations'
 import { canDispatchLivraisons, isLivreurDefaut, isLivreurAssigne } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
 import { toast } from '../lib/toast'
@@ -33,6 +34,7 @@ export default function LivraisonsView({ user }) {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
+  const [preuveBusy, setPreuveBusy] = useState('')
 
   const defaultLivreurId = useMemo(() => livreurs.find(l => l.livreur_defaut || l.perm_livreur_defaut)?.id || null, [livreurs])
 
@@ -135,6 +137,24 @@ export default function LivraisonsView({ user }) {
       setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livraison_faite: faite } }))
     } catch (e) { setErr(e.message) }
     finally { setBusy('') }
+  }
+
+  // Preuve de livraison : le livreur (ou l'admin) prend/joint une photo.
+  async function handlePreuve(d, file) {
+    if (!file) return
+    if (!file.type?.startsWith('image/')) { toast.error('Image uniquement.'); return }
+    setPreuveBusy(d.orderNum)
+    try {
+      const path = await uploadConversationMedia(file, 'livraisons')
+      await setLivraisonPreuve(d.orderNum, path)
+      setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], preuve_path: path } }))
+      toast.success('Preuve enregistrée ✓')
+    } catch (e) { toast.error('Erreur : ' + (e?.message || e)) }
+    finally { setPreuveBusy('') }
+  }
+  async function viewPreuve(path) {
+    try { const url = await getMediaSignedUrl(path); if (url) window.open(url, '_blank') }
+    catch { toast.error("Impossible d'ouvrir la photo") }
   }
 
   // Vue livreur : seulement SES livraisons (assignées à lui, ou non assignées s'il est le défaut)
@@ -268,6 +288,22 @@ export default function LivraisonsView({ user }) {
                         background: faite ? '#27500A' : 'white', color: faite ? 'white' : '#27500A', border: '1px solid #27500A' }}>
                       <CheckCircle2 size={14} /> {faite ? 'Livré ✓' : 'Marquer livré'}
                     </button>
+                  )}
+                  {/* Preuve de livraison (photo) : livreur sur les siennes, ou admin */}
+                  {(!livreur || mine) && (
+                    <>
+                      {s.preuve_path && (
+                        <button onClick={() => viewPreuve(s.preuve_path)}
+                          style={{ padding: '7px 10px', fontSize: 12, borderRadius: 8, cursor: 'pointer', background: '#E6F1FB', color: '#1456a0', border: '1px solid #1456a0' }}>
+                          📸 Voir preuve
+                        </button>
+                      )}
+                      <label style={{ padding: '7px 10px', fontSize: 12, borderRadius: 8, cursor: 'pointer', background: 'white', color: '#4a3a30', border: '1px solid #e5d8c3', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {preuveBusy === d.orderNum ? '…' : (s.preuve_path ? '🔄 Remplacer' : '📸 Preuve')}
+                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                          onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; handlePreuve(d, f) }} />
+                      </label>
+                    </>
                   )}
                   {/* Livreur : livraison d'un autre → lecture seule */}
                   {livreur && !mine && (
