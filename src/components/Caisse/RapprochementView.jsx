@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { loadRapproVerifies, setRapproVerified, unsetRapproVerified } from '../../lib/caisse'
+import { loadRapproVerifies, setRapproVerified, unsetRapproVerified, saveRapproBank, loadRapproBank, clearRapproBank } from '../../lib/caisse'
 import { toast } from '../../lib/toast'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -510,7 +510,9 @@ export default function RapprochementView({ user }) {
         idbSet('odoo2', { payments, from, to })
       }
       setRes(runMatch(bank, payments))
-      idbSet('bank', { excel: excelRef.current, pdf: pdfRef.current, names })
+      const bankPayload = { excel: excelRef.current, pdf: pdfRef.current, names }
+      idbSet('bank', bankPayload)
+      saveRapproBank(bankPayload).catch(() => {})   // partagé entre admins
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -522,19 +524,23 @@ export default function RapprochementView({ user }) {
     excelRef.current = []; pdfRef.current = []
     setRes(null); setFileNames([]); setErr(''); setSearch('')
     idbDel('bank'); idbDel('odoo'); idbDel('odoo2')
+    clearRapproBank().catch(() => {})   // efface aussi le relevé partagé
     try { localStorage.removeItem('rappro_bank_v1'); localStorage.removeItem('rappro_odoo_v1') } catch { /* ancien cache */ }
   }
 
   useEffect(() => {
     loadRapproVerifies().then(setVerified).catch(() => {})
-    idbGet('bank').then(saved => {
+    ;(async () => {
+      // Priorité au relevé PARTAGÉ en base (visible par tous les admins). Repli : cache local.
+      let saved = await loadRapproBank().catch(() => null)
+      if (!saved || !((saved.excel || []).length || (saved.pdf || []).length)) saved = await idbGet('bank')
       if (saved && ((saved.excel || []).length || (saved.pdf || []).length)) {
         excelRef.current = saved.excel || []
         pdfRef.current = saved.pdf || []
         setFileNames(saved.names || [])
         analyze(saved.names || [], { useCache: true })
       }
-    })
+    })()
   }, [])
 
   async function onFiles(fileList) {

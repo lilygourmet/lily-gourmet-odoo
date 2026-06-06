@@ -2236,3 +2236,21 @@ export async function unsetRapproVerified(txnKey) {
   const { error } = await supabase.from('caisse_rappro_verifies').delete().eq('txn_key', txnKey)
   if (error) throw error
 }
+
+// ---- Relevé importé PARTAGÉ (pour que tous les admins voient le même rapprochement) ----
+/** Sauvegarde le relevé importé (excel+pdf) en base, partagé entre tous les utilisateurs. */
+export async function saveRapproBank(data) {
+  const { error } = await supabase.from('caisse_rappro_bank')
+    .upsert({ id: 'current', data, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+  if (error) throw error
+}
+/** Charge le relevé importé partagé (ou null). */
+export async function loadRapproBank() {
+  const { data, error } = await supabase.from('caisse_rappro_bank').select('data').eq('id', 'current').maybeSingle()
+  if (error) return null
+  return data?.data || null
+}
+/** Efface le relevé partagé (réinitialisation). */
+export async function clearRapproBank() {
+  await supabase.from('caisse_rappro_bank').delete().eq('id', 'current')
+}
