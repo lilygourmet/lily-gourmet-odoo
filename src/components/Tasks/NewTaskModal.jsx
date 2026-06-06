@@ -11,8 +11,10 @@ import SearchSelect from '../SearchSelect'
  */
 export default function NewTaskModal({ currentUser, onClose, onCreated }) {
   const [users, setUsers] = useState([])
-  const [mode, setMode] = useState('person')   // 'person' | 'group' | 'all'
+  const [mode, setMode] = useState('person')   // 'person' | 'multi' | 'group' | 'all'
   const [toUserId, setToUserId] = useState('')
+  const [multiIds, setMultiIds] = useState([])
+  const [multiSearch, setMultiSearch] = useState('')
   const [groupValue, setGroupValue] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -55,6 +57,9 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
     if (mode === 'person') {
       if (!toUserId) { setError('Sélectionne un destinataire'); return }
       recipients = [toUserId]
+    } else if (mode === 'multi') {
+      recipients = multiIds.filter(id => id !== currentUser.id)
+      if (!recipients.length) { setError('Sélectionne au moins une personne'); return }
     } else if (mode === 'group') {
       if (!groupValue) { setError('Choisis un groupe'); return }
       recipients = users.filter(u => u.groupe === groupValue && u.active !== false && u.id !== currentUser.id).map(u => u.id)
@@ -107,14 +112,33 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
         <form onSubmit={handleSubmit}>
           <label style={lblStyle}>
             À qui ?
-            <div style={{ display: 'flex', gap: 6, marginTop: 5, marginBottom: 8 }}>
-              {[['person', '👤 Personne'], ['group', '👥 Groupe'], ['all', '📢 Tout le perso']].map(([k, lab]) => (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 5, marginBottom: 8 }}>
+              {[['person', '👤 Personne'], ['multi', '✅ Plusieurs'], ['group', '👥 Groupe'], ['all', '📢 Tout le perso']].map(([k, lab]) => (
                 <button key={k} type="button" onClick={() => setMode(k)}
-                  style={{ flex: 1, padding: '7px 6px', fontSize: 11, borderRadius: 6, cursor: 'pointer', border: '1px solid ' + (mode === k ? '#993556' : '#e5d8c3'), background: mode === k ? '#993556' : 'white', color: mode === k ? 'white' : '#4a3a30' }}>{lab}</button>
+                  style={{ flex: '1 1 45%', padding: '7px 6px', fontSize: 11, borderRadius: 6, cursor: 'pointer', border: '1px solid ' + (mode === k ? '#993556' : '#e5d8c3'), background: mode === k ? '#993556' : 'white', color: mode === k ? 'white' : '#4a3a30' }}>{lab}</button>
               ))}
             </div>
             {mode === 'person' && (
               <SearchSelect options={userOptions} value={toUserId} onChange={setToUserId} placeholder="Tape un nom…" inputStyle={{ ...inputStyle }} />
+            )}
+            {mode === 'multi' && (
+              <div>
+                <input value={multiSearch} onChange={e => setMultiSearch(e.target.value)} placeholder="Filtrer par nom…" style={inputStyle} />
+                <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5d8c3', borderRadius: 6, marginTop: 5 }}>
+                  {userOptions.filter(o => o.value !== currentUser?.id && o.label.toLowerCase().includes(multiSearch.toLowerCase())).map(o => {
+                    const checked = multiIds.includes(o.value)
+                    return (
+                      <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid #f0e9dd', fontSize: 13, background: checked ? '#F7E3EA' : 'white' }}>
+                        <input type="checkbox" checked={checked}
+                          onChange={() => setMultiIds(ids => checked ? ids.filter(x => x !== o.value) : [...ids, o.value])}
+                          style={{ width: 15, height: 15, accentColor: '#993556' }} />
+                        {o.label}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 5 }}>{multiIds.length} sélectionné(s)</div>
+              </div>
             )}
             {mode === 'group' && (
               <select value={groupValue} onChange={e => setGroupValue(e.target.value)} style={inputStyle}>
