@@ -3,6 +3,7 @@ import { Plus, Pencil, Clock, Lock, CheckCircle2 } from 'lucide-react'
 import { createEmploye, updateEmploye, loadEmployes, EMPLOYE_GROUPES } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
 import { createUserForEmploye, deactivateUserForEmploye } from '../../lib/users'
+import EmployeDocumentsSection from './EmployeDocumentsSection'
 
 // Normalise un numéro marocain en format international WATI (212XXXXXXXXX)
 // Ex : "06 66 32 84 93" → "212666328493"
@@ -458,6 +459,10 @@ export default function EmployeEditModal({
             <textarea value={form.notes} onChange={e => setF('notes', e.target.value)} rows={2} placeholder="Remarques…"
               style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
+
+          {!isNew && currentEmploye?.id && (
+            <EmployeDocumentsSection employeId={currentEmploye.id} user={user} />
+          )}
 
           {isAdmin && (
             <label style={{
