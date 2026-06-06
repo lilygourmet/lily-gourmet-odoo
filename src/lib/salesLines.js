@@ -18,6 +18,28 @@ export const VENTE_CATEGORIES = [
 // ============================================================
 // LOAD DEPUIS SUPABASE
 // ============================================================
+// Récupère le PDF (base64) d'une facture Odoo DÉJÀ existante pour une commande. Ne crée rien.
+export async function fetchInvoicePdf(orderNum) {
+  const res = await fetch('/api/wati-webhook?action=invoice-pdf', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderNum }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.error) throw new Error(data.error || `Erreur ${res.status}`)
+  return data   // { name, state, pdf }
+}
+
+// Ouvre un PDF (base64) dans un nouvel onglet pour impression.
+export function openInvoicePdf({ pdf }) {
+  const bytes = atob(pdf)
+  const arr = new Uint8Array(bytes.length)
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+  const url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' }))
+  const w = window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
+  return w
+}
+
 // Prix TTC du cake design d'une commande = somme des lignes catégorie CD (CD-/GM-/GMD-).
 // Résilient : null si la colonne line_total n'existe pas encore ou pas de cake design.
 export async function loadCakeDesignPrice(orderNum) {

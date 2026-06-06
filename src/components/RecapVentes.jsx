@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Phone, MapPin, Cake, Truck, Cookie, User, Croissant } from 'lucide-react'
-import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix } from '../lib/salesLines'
+import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix, fetchInvoicePdf, openInvoicePdf } from '../lib/salesLines'
 
 const CAT_ICONS = { CD: Cake, LIVR: Truck, PROD: Cookie, CLT: User, RAHN: Croissant }
 function CatIcon({ catId, size = 16, className = '' }) {
@@ -535,6 +535,7 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
             <MapPin size={10} strokeWidth={2} /> {zone}
           </span>
         )}
+        <InvoiceButton orderNum={orderNum} />
       </div>
 
       {/* Telephone + note : seulement en mode livraison */}
@@ -1611,5 +1612,30 @@ function FloatingPrintCart({ cart, expanded, onToggle, onRemove, onClear, onPrin
         </button>
       )}
     </div>
+  )
+}
+
+// Bouton "🧾 Facture" : ouvre le PDF de la facture Odoo existante (aucune création).
+function InvoiceButton({ orderNum }) {
+  const [busy, setBusy] = useState(false)
+  if (!orderNum) return null
+  async function go(e) {
+    e.stopPropagation()
+    if (busy) return
+    setBusy(true)
+    try {
+      const data = await fetchInvoicePdf(orderNum)
+      openInvoicePdf(data)
+    } catch (err) {
+      toast.error(err?.message || 'Facture indisponible')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button onClick={go} disabled={busy} title="Imprimer la facture Odoo (déjà générée)"
+      className="text-[10px] font-semibold text-bordeaux border border-bordeaux/40 rounded-full px-2 py-0.5 hover:bg-bordeaux hover:text-cream transition-all">
+      🧾 {busy ? '…' : 'Facture'}
+    </button>
   )
 }
