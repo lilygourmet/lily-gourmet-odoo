@@ -114,13 +114,13 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
         <div style={{ background: '#F4F0EA', padding: '14px 16px', borderRadius: 8, marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: '#4a3a30' }}>Salaire cible</div>
-            <input type="number" value={target} onChange={(e) => changeTarget(e.target.value)} style={{ fontSize: 18, fontWeight: 500, padding: '4px 8px', border: '0.5px solid #C4BFB6', borderRadius: 6, width: 110 }} />
+            <input type="number" value={netTarget} onChange={(e) => changeTarget(Number(e.target.value) + appliedTotal)} style={{ fontSize: 18, fontWeight: 500, padding: '4px 8px', border: '0.5px solid #C4BFB6', borderRadius: 6, width: 110 }} />
             <div style={{ fontSize: 11, color: '#4a3a30', marginLeft: 'auto' }}>Cumulé</div>
             <div style={{ fontSize: 18, fontWeight: 500, color: cumule >= netTarget ? '#1D7A5C' : '#1a0f0a' }}>{fmtMoney(cumule)}</div>
           </div>
           {appliedTotal > 0 && (
             <div style={{ fontSize: 12, color: colorBen.text, marginBottom: 10 }}>
-              − {fmtMoney(appliedTotal)} de report déduit → <b>cible : {fmtMoney(netTarget)}</b>
+              (report de {fmtMoney(appliedTotal)} déjà déduit de la cible ci-dessus)
             </div>
           )}
           <div style={{ height: 8, background: 'rgba(0,0,0,0.06)', borderRadius: 4, overflow: 'hidden', marginBottom: 6 }}>
