@@ -133,17 +133,19 @@ async function actionSyncPos() {
   const cfgNameById = Object.fromEntries((cfgRows || []).map(c => [c.pos_config_id, c.name]))
   const useFilter = activeCfgIds.length > 0
 
-  // Filtre depuis janvier 2026 (date de mise en place de la caisse)
-  const baseDomain = [['state', '=', 'closed'], ['stop_at', '>=', '2026-01-01 00:00:00']]
+  // Filtre depuis janvier 2026 (date de mise en place de la caisse).
+  // On se base sur la date d'OUVERTURE (start_at) : une caisse ouverte en 2025
+  // (ex : 31/12/2025) est exclue même si elle a été clôturée en janvier 2026.
+  const baseDomain = [['state', '=', 'closed'], ['start_at', '>=', '2026-01-01 00:00:00']]
   const sessionsDomain = useFilter
     ? [...baseDomain, ['config_id', 'in', activeCfgIds]]
     : baseDomain
-  const sessionIds = await odooExec(uid, 'pos.session', 'search', [sessionsDomain], { limit: 2000, order: 'stop_at asc' })
+  const sessionIds = await odooExec(uid, 'pos.session', 'search', [sessionsDomain], { limit: 2000, order: 'start_at asc' })
   if (!sessionIds || sessionIds.length === 0) {
     return { ok: true, created: 0, message: 'Aucune session fermée trouvée' }
   }
 
-  const sessions = await odooExec(uid, 'pos.session', 'read', [sessionIds, ['id', 'name', 'state', 'stop_at', 'config_id']])
+  const sessions = await odooExec(uid, 'pos.session', 'read', [sessionIds, ['id', 'name', 'state', 'start_at', 'config_id']])
 
   // Récupère l'ID du destinataire "Banque" pour auto-affecter les chèques
   const { data: banqueDest } = await sb
@@ -217,7 +219,7 @@ async function actionSyncPos() {
 
     const cfgId = Array.isArray(sess.config_id) ? sess.config_id[0] : null
     const source = cfgNameById[cfgId] || (Array.isArray(sess.config_id) ? sess.config_id[1] : 'POS')
-    const sessionDate = (sess.stop_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
+    const sessionDate = (sess.start_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
 
     // Créer l'enveloppe ESPÈCES si pas déjà créée et montant ≠ 0 (caisses négatives acceptées)
     if (cashTotal !== 0 && !existingMethods.has('cash')) {
@@ -338,6 +340,51 @@ async function actionPosPayments(req) {
   return { payments }
 }
 
+// ---- Action: fix-session-dates (correction unique, PROTÉGÉE par token) ----
+// Remet les enveloppes (session_date >= from) sur la date d'OUVERTURE (start_at)
+// de leur session Odoo. ?apply=1 pour appliquer, sinon simple aperçu.
+async function actionFixSessionDates(req) {
+  const from = req.query?.from || '2026-06-01'
+  const apply = req.query?.apply === '1' || req.body?.apply === true
+  const { data: envs, error } = await sb
+    .from('caisse_enveloppes')
+    .select('id, odoo_session_id, session_date')
+    .gte('session_date', from)
+    .not('odoo_session_id', 'is', null)
+    .limit(20000)
+  if (error) throw error
+  if (!envs || envs.length === 0) return { from, apply, total: 0, toFix: 0, changes: [] }
+
+  const uid = await odooAuth()
+  const sessionIds = [...new Set(envs.map(e => e.odoo_session_id))]
+  const startBySession = {}
+  for (let i = 0; i < sessionIds.length; i += 2000) {
+    const rows = await odooExec(uid, 'pos.session', 'read', [sessionIds.slice(i, i + 2000), ['id', 'start_at']])
+    for (const r of rows) startBySession[r.id] = (r.start_at || '').slice(0, 10)
+  }
+  const toFix = envs.filter(e => {
+    const open = startBySession[e.odoo_session_id]
+    return open && open !== e.session_date
+  })
+  const changes = toFix.map(e => ({ id: e.id, session: e.odoo_session_id, from: e.session_date, to: startBySession[e.odoo_session_id] }))
+
+  if (!apply) return { from, apply: false, total: envs.length, toFix: toFix.length, changes: changes.slice(0, 100) }
+
+  const bySession = {}
+  for (const e of toFix) bySession[e.odoo_session_id] = startBySession[e.odoo_session_id]
+  let done = 0
+  for (const [sid, open] of Object.entries(bySession)) {
+    const { error: upErr } = await sb
+      .from('caisse_enveloppes')
+      .update({ session_date: open })
+      .eq('odoo_session_id', Number(sid))
+      .gte('session_date', from)
+    if (!upErr) done++
+    else console.error('[fix-session-dates] session', sid, upErr.message)
+  }
+  return { from, apply: true, total: envs.length, toFix: toFix.length, sessionsFixed: done }
+}
+
 export default async function handler(req, res) {
   try {
     const action = req.query?.action || req.body?.action || 'sync-pos'
@@ -345,6 +392,15 @@ export default async function handler(req, res) {
     if (action === 'list-pos') result = await actionListPos()
     else if (action === 'sync-pos') result = await actionSyncPos()
     else if (action === 'pos-payments') result = await actionPosPayments(req)
+    else if (action === 'fix-session-dates') {
+      const authHeader = req.headers['authorization'] || ''
+      const tokenFromHeader = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+      const provided = tokenFromHeader || req.query?.token
+      if (!process.env.SYNC_SECRET_TOKEN || provided !== process.env.SYNC_SECRET_TOKEN) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+      result = await actionFixSessionDates(req)
+    }
     else return res.status(400).json({ error: 'Unknown action: ' + action })
     return res.status(200).json(result)
   } catch (e) {
