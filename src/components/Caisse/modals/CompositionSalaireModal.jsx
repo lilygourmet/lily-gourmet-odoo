@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Zap } from 'lucide-react'
-import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement } from '../../../lib/caisse'
-import { fmtMoney, fmtDateCourte, currentYear, SALAIRE_COLORS, REPORT_DESTINATIONS, COLOR_PALETTE } from '../_helpers'
+import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement, loadPendingReports, markReportsApplied } from '../../../lib/caisse'
+import { fmtMoney, fmtDateCourte, currentYear, SALAIRE_COLORS, fmtMois } from '../_helpers'
 import { supabase } from '../../../lib/supabase'
 import { toast } from '../../../lib/toast'
 
@@ -9,9 +9,10 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
   const [available, setAvailable] = useState([])
   const [attached, setAttached] = useState([])
   const [target, setTarget] = useState(salaire.target_amount)
-  // Reliquat reporté sur le salaire du mois suivant — au choix : Nezha ou Layla.
-  // Par défaut : le même bénéficiaire que ce salaire.
-  const [reliquatDest, setReliquatDest] = useState(`report_${salaire.beneficiaire}`)
+  // Reports en attente de CE bénéficiaire (chacune son report). On coche ceux
+  // qu'on veut déduire de la cible — la déduction se fait à la validation.
+  const [pendingReports, setPendingReports] = useState([])
+  const [appliedIds, setAppliedIds] = useState([])
   const [busy, setBusy] = useState(false)
 
   useEffect(() => { reload() }, [])
@@ -29,12 +30,22 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
     const av = allMonths.filter(e => !ids.has(e.id))
     setAvailable([...attachedList, ...av])
     setAttached(attachedList)
+    setPendingReports(await loadPendingReports(salaire.beneficiaire, salaire.year, salaire.month))
   }
 
   const selected = useMemo(() => available.filter(e => attached.some(a => a.id === e.id)), [available, attached])
   const cumule = useMemo(() => selected.reduce((s, e) => s + Number(e.amount_cash), 0), [selected])
-  const reliquat = cumule - Number(target)
-  const progress = Math.min(100, (cumule / Number(target)) * 100)
+  // Cible nette = cible pleine moins les reports cochés.
+  const appliedTotal = useMemo(
+    () => pendingReports.filter(r => appliedIds.includes(r.id)).reduce((s, r) => s + Number(r.reliquat_amount), 0),
+    [pendingReports, appliedIds])
+  const netTarget = Math.max(0, Number(target) - appliedTotal)
+  const reliquat = cumule - netTarget
+  const progress = Math.min(100, (cumule / (netTarget || 1)) * 100)
+
+  function toggleReport(id) {
+    setAppliedIds(appliedIds.includes(id) ? appliedIds.filter(x => x !== id) : [...appliedIds, id])
+  }
 
   function toggle(env) {
     if (attached.some(a => a.id === env.id)) {
@@ -50,7 +61,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
     const picked = []
     let sum = 0
     for (const env of sorted) {
-      if (sum >= Number(target)) break
+      if (sum >= netTarget) break
       picked.push(env); sum += Number(env.amount_cash)
     }
     setAttached(picked)
@@ -66,14 +77,20 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
   }
 
   async function validatePret() {
-    if (cumule < Number(target)) {
-      toast.error(`Manque ${fmtMoney(Number(target) - cumule)} — Tu peux sauvegarder en brouillon mais pas valider en Prêt à payer.`)
+    if (cumule < netTarget) {
+      toast.error(`Manque ${fmtMoney(netTarget - cumule)} — Tu peux sauvegarder en brouillon mais pas valider en Prêt à payer.`)
       return
     }
     setBusy(true)
     try {
       await setSalaireEnveloppes(salaire.id, attached.map(a => a.id))
-      await markSalairePret(salaire.id, reliquat, reliquatDest)
+      // Reports cochés : on enregistre la cible réduite et on les marque « déduits ».
+      if (appliedIds.length > 0) {
+        await supabase.from('caisse_salaires').update({ target_amount: netTarget }).eq('id', salaire.id)
+        await markReportsApplied(appliedIds)
+      }
+      // Le nouveau reliquat reste le report de la même personne (chacune son report).
+      await markSalairePret(salaire.id, reliquat, `report_${salaire.beneficiaire}`)
       onClose()
     } catch (e) { toast.error(e.message) }
     setBusy(false)
@@ -99,8 +116,13 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
             <div style={{ fontSize: 11, color: '#4a3a30' }}>Salaire cible</div>
             <input type="number" value={target} onChange={(e) => changeTarget(e.target.value)} style={{ fontSize: 18, fontWeight: 500, padding: '4px 8px', border: '0.5px solid #C4BFB6', borderRadius: 6, width: 110 }} />
             <div style={{ fontSize: 11, color: '#4a3a30', marginLeft: 'auto' }}>Cumulé</div>
-            <div style={{ fontSize: 18, fontWeight: 500, color: cumule >= target ? '#1D7A5C' : '#1a0f0a' }}>{fmtMoney(cumule)}</div>
+            <div style={{ fontSize: 18, fontWeight: 500, color: cumule >= netTarget ? '#1D7A5C' : '#1a0f0a' }}>{fmtMoney(cumule)}</div>
           </div>
+          {appliedTotal > 0 && (
+            <div style={{ fontSize: 12, color: colorBen.text, marginBottom: 10 }}>
+              − {fmtMoney(appliedTotal)} de report déduit → <b>cible : {fmtMoney(netTarget)}</b>
+            </div>
+          )}
           <div style={{ height: 8, background: 'rgba(0,0,0,0.06)', borderRadius: 4, overflow: 'hidden', marginBottom: 6 }}>
             <div style={{ height: '100%', background: colorBen.border, width: `${progress}%`, transition: 'width 0.3s' }} />
           </div>
@@ -111,6 +133,30 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
             </span>
           </div>
         </div>
+
+        {pendingReports.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Reports en attente — coche pour déduire de la cible</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {pendingReports.map(r => {
+                const isSel = appliedIds.includes(r.id)
+                return (
+                  <label key={r.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                    background: isSel ? colorBen.bg : '#FBF3E8',
+                    border: `0.5px solid ${isSel ? colorBen.border : '#e5d8c3'}`,
+                  }}>
+                    <input type="checkbox" checked={isSel} onChange={() => toggleReport(r.id)} style={{ accentColor: '#993556' }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: isSel ? colorBen.text : '#4a3a30' }}>Report {fmtMois(r.month - 1)} {r.year}</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: '#99201E' }}>− {fmtMoney(r.reliquat_amount)}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>Enveloppes disponibles</div>
@@ -139,22 +185,8 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
         </div>
 
         {reliquat > 0 && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: '0.5px solid #e5d8c3' }}>
-            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Reporter le reliquat de {fmtMoney(reliquat)} sur le salaire du mois suivant de :</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {REPORT_DESTINATIONS.map(d => {
-                const c = COLOR_PALETTE[d.color] || COLOR_PALETTE.gris
-                const sel = reliquatDest === d.key
-                return (
-                  <button key={d.key} onClick={() => setReliquatDest(d.key)} style={{
-                    background: c.bg, color: c.text, border: `${sel ? 1.5 : 0.5}px solid ${c.border}`,
-                    padding: 12, borderRadius: 8, cursor: 'pointer', fontSize: 12,
-                    fontWeight: sel ? 500 : 'normal',
-                    boxShadow: sel ? `0 0 0 2px ${c.border}33` : 'none',
-                  }}>{d.label}</button>
-                )
-              })}
-            </div>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: '0.5px solid #e5d8c3', fontSize: 13, color: '#4a3a30' }}>
+            Reliquat de <b>{fmtMoney(reliquat)}</b> → reporté sur le prochain salaire de {salaire.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'} (à déduire quand tu veux).
           </div>
         )}
 
@@ -162,9 +194,9 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
           <button onClick={saveDraft} disabled={busy} style={{ flex: 1, fontSize: 13, padding: 11, borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }}>
             Enregistrer en brouillon
           </button>
-          <button onClick={validatePret} disabled={busy || cumule < Number(target)} style={{
+          <button onClick={validatePret} disabled={busy || cumule < netTarget} style={{
             flex: 2, fontSize: 13, padding: 11, borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer',
-            opacity: (cumule < Number(target) || busy) ? 0.5 : 1,
+            opacity: (cumule < netTarget || busy) ? 0.5 : 1,
           }}>✓ Valider · Prêt à payer</button>
         </div>
       </div>

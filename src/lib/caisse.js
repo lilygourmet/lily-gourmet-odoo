@@ -81,20 +81,31 @@ export async function deleteDestinataire(id) {
 
 export async function loadEnveloppesByMonth(year, month) {
   const { start, end } = monthBounds(year, month)
-  const sel = '*, destinataire:caisse_destinataires(*), assigner:profiles!caisse_enveloppes_assigned_by_fkey(username, full_name)'
-
+  const base = '*, destinataire:caisse_destinataires(*), assigner:profiles!caisse_enveloppes_assigned_by_fkey(username, full_name)'
+  const withPret = base + ', pretpar:profiles!caisse_enveloppes_pret_banque_by_fkey(username, full_name)'
   // L'enveloppe reste TOUJOURS dans son mois de session POS (date originale Odoo).
-  // La date d'affectation (assigned_date) ne sert qu'à dater le mvt_date côté caisse-gérée,
-  // pas à déplacer l'enveloppe d'un mois à l'autre.
-  const { data, error } = await supabase
-    .from('caisse_enveloppes')
-    .select(sel)
-    .gte('session_date', start)
-    .lt('session_date', end)
-    .order('session_date', { ascending: true })
-    .order('source')
+  const q = sel => supabase
+    .from('caisse_enveloppes').select(sel)
+    .gte('session_date', start).lt('session_date', end)
+    .order('session_date', { ascending: true }).order('source')
+  // Filet de sécurité : si la colonne pret_banque_by n'existe pas encore (SQL pas lancé),
+  // on recharge sans le join « compté par » pour ne pas casser l'écran.
+  let { data, error } = await q(withPret)
+  if (error && /pret_banque/i.test(error.message || '')) ({ data, error } = await q(base))
   if (error) throw error
   return data || []
+}
+
+// Marque (ou démarque) une enveloppe « comptée, prête à envoyer en banque » + traçabilité.
+export async function setEnveloppePretBanque(envId, ready, userId) {
+  const { error } = await supabase
+    .from('caisse_enveloppes')
+    .update({
+      pret_banque_at: ready ? new Date().toISOString() : null,
+      pret_banque_by: ready ? (userId || null) : null,
+    })
+    .eq('id', envId)
+  if (error) throw error
 }
 
 export async function loadEnveloppesUnassigned() {
@@ -296,9 +307,19 @@ export async function loadEnveloppesForSuivi({ type, month, year, statusFilter =
   const { data, error } = await q
   if (error) throw error
   const list = (data || []).filter(e => e.destinataire?.type === type)
-  if (statusFilter === 'pending')   return list.filter(e => !e.proof_url)
+  // « En attente » : on cache les versements marqués « ignorés » (ils restent visibles dans « Toutes »).
+  if (statusFilter === 'pending')   return list.filter(e => !e.proof_url && !e.releve_ignore)
   if (statusFilter === 'done')      return list.filter(e =>  e.proof_url)
   return list
+}
+
+// Marque un versement comme « ignoré » (ou réactive) → sort/rentre dans « En attente ».
+export async function setEnveloppeIgnore(envId, ignore) {
+  const { error } = await supabase
+    .from('caisse_enveloppes')
+    .update({ releve_ignore: !!ignore })
+    .eq('id', envId)
+  if (error) throw error
 }
 
 // ============================================================
@@ -341,9 +362,43 @@ export async function loadAllFreeReleveLines() {
     .from('caisse_releve_lignes')
     .select('*')
     .is('used_by', null)
+    .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
     .order('ligne_date', { ascending: false })
   if (error) throw error
-  return data || []
+  // Dédoublonnage : un même dépôt vu sous 2 dates (opération vs valeur) ou 2 libellés
+  // (« N » / « N° ») → même MONTANT + même n° de versement (unique) → on garde 1 ligne.
+  const seen = new Set()
+  const out = []
+  for (const r of (data || [])) {
+    // n° de versement = le PLUS LONG nombre du libellé (évite de confondre avec un code court).
+    const nums = (r.label || '').match(/\d{5,}/g) || []
+    const ref = nums.sort((a, b) => b.length - a.length || (a < b ? 1 : -1))[0]
+    const k = ref ? `${Math.round(Number(r.amount) * 100)}|${ref}` : `row|${r.key || r.id}`
+    if (seen.has(k)) continue
+    seen.add(k); out.push(r)
+  }
+  return out
+}
+
+// Lignes du relevé DÉJÀ liées (used_by ≠ NULL), avec l'enveloppe/versement rattaché·e
+// (destination, date, montant Odoo) — pour « voir les montants déjà liés ».
+export async function loadAllLinkedReleveLines() {
+  const { data: lines, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('*')
+    .not('used_by', 'is', null)
+    .order('ligne_date', { ascending: false })
+  if (error) throw error
+  const ids = [...new Set((lines || []).map(l => l.used_by).filter(Boolean))]
+  let envById = {}
+  if (ids.length) {
+    const { data: envs } = await supabase
+      .from('caisse_enveloppes')
+      .select('id, source, session_date, amount_cash, payment_method, destinataire:caisse_destinataires(name)')
+      .in('id', ids)
+    envById = Object.fromEntries((envs || []).map(e => [e.id, e]))
+  }
+  return (lines || []).map(l => ({ ...l, env: envById[l.used_by] || null }))
 }
 
 // Lignes du relevé encore libres (non rattachées) d'un montant donné, du MÊME
@@ -358,6 +413,7 @@ export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
     .from('caisse_releve_lignes')
     .select('*')
     .is('used_by', null)
+    .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
     .gte('amount', a - 0.005)
     .lte('amount', a + 0.005)
     .in('type', types)
@@ -409,7 +465,7 @@ export async function loadPendingBanqueEnvelopes() {
     .is('proof_url', null)
     .order('session_date', { ascending: false })
   if (error) throw error
-  return (data || []).filter(e => e.destinataire?.type === 'banque')
+  return (data || []).filter(e => e.destinataire?.type === 'banque' && !e.releve_ignore)
 }
 
 // Enveloppes Banque ayant un ÉCART : montant réel du relevé (amount_proof) ≠ montant Odoo.
@@ -656,7 +712,7 @@ export async function setMouvementFacture(id, hasFacture, actorId = null) {
   })
 }
 
-export async function updateMouvement(id, updates, actorId = null) {
+export async function updateMouvement(id, updates, actorId = null, reason = null) {
   const { data: before } = await supabase.from('caisse_mouvements').select('*').eq('id', id).single()
   const { error } = await supabase.from('caisse_mouvements').update(updates).eq('id', id)
   if (error) throw error
@@ -664,14 +720,14 @@ export async function updateMouvement(id, updates, actorId = null) {
     entityType: 'mouvement',
     entityId: id,
     action: 'update',
-    description: `Modification mouvement : ${before?.label || ''}`,
+    description: `Modification mouvement : ${before?.label || ''}${reason ? ` — Raison : ${reason}` : ''}`,
     amount: updates?.amount != null ? Number(updates.amount) : before?.amount,
     before, after: updates,
     actorId,
   })
 }
 
-export async function deleteMouvement(id, actorId = null) {
+export async function deleteMouvement(id, actorId = null, reason = null) {
   const { data: before } = await supabase.from('caisse_mouvements').select('*').eq('id', id).single()
 
   // Si on supprime une sortie Layla LG qui a généré un transfert vers Meriem,
@@ -696,7 +752,7 @@ export async function deleteMouvement(id, actorId = null) {
     entityType: 'mouvement',
     entityId: id,
     action: 'delete',
-    description: `Suppression mouvement caisse ${before?.caisse_owner || ''} : ${before?.label || ''}`,
+    description: `Suppression mouvement caisse ${before?.caisse_owner || ''} : ${before?.label || ''}${reason ? ` — Raison : ${reason}` : ''}`,
     amount: before?.amount,
     before,
     actorId,
@@ -1412,36 +1468,40 @@ export async function setSalaireDefaut(beneficiaire, amount) {
 }
 
 export async function createSalaire({ beneficiaire, month, year, target_amount }) {
-  // Report du mois précédent : si le salaire du mois d'avant a un reliquat marqué
-  // « report_mois_suivant », on le DÉDUIT du salaire cible de ce mois (et on le
-  // marque consommé pour ne pas le déduire deux fois).
-  let finalTarget = Number(target_amount) || 0
-  const prevMonth = month === 1 ? 12 : month - 1
-  const prevYear = month === 1 ? year - 1 : year
-  const reportKey = `report_${beneficiaire}`   // report_nezha / report_layla
-  // Reliquats du mois précédent destinés à CE bénéficiaire (report_<ben>),
-  // + ancien format report_mois_suivant (même bénéficiaire). On les déduit et marque consommés.
-  const { data: prevs } = await supabase
-    .from('caisse_salaires')
-    .select('id, beneficiaire, reliquat_amount, reliquat_destination')
-    .eq('month', prevMonth).eq('year', prevYear)
-    .in('reliquat_destination', [reportKey, 'report_mois_suivant'])
-  for (const p of (prevs || [])) {
-    const matches = p.reliquat_destination === reportKey
-      || (p.reliquat_destination === 'report_mois_suivant' && p.beneficiaire === beneficiaire)
-    if (matches && Number(p.reliquat_amount) > 0) {
-      finalTarget -= Number(p.reliquat_amount)
-      await supabase.from('caisse_salaires')
-        .update({ reliquat_destination: 'report_applique' })
-        .eq('id', p.id)
-    }
-  }
+  // Le report d'un mois précédent N'EST PLUS déduit automatiquement : il reste
+  // « en attente » et c'est l'utilisateur qui le coche dans la composition
+  // (chacune son report, déduit quand on veut).
   const { data, error } = await supabase
     .from('caisse_salaires')
-    .insert({ beneficiaire, month, year, target_amount: finalTarget, status: 'brouillon' })
+    .insert({ beneficiaire, month, year, target_amount: Number(target_amount) || 0, status: 'brouillon' })
     .select().single()
   if (error) throw error
   return data
+}
+
+// Reports en attente de CE bénéficiaire, issus de mois antérieurs à (year, month).
+// = salaires avec reliquat > 0 marqué report_<ben> (ou ancien report_mois_suivant),
+// pas encore déduits (report_applique). À cocher dans la composition.
+export async function loadPendingReports(beneficiaire, year, month) {
+  const reportKey = `report_${beneficiaire}`
+  const { data, error } = await supabase
+    .from('caisse_salaires')
+    .select('id, beneficiaire, month, year, reliquat_amount, reliquat_destination')
+    .eq('beneficiaire', beneficiaire)
+    .in('reliquat_destination', [reportKey, 'report_mois_suivant'])
+    .gt('reliquat_amount', 0)
+  if (error) throw error
+  return (data || []).filter(r => (r.year * 12 + r.month) < (year * 12 + month))
+}
+
+// Marque des reports comme « déduits » (consommés) — appelé à la validation.
+export async function markReportsApplied(reportIds) {
+  if (!reportIds || reportIds.length === 0) return
+  const { error } = await supabase
+    .from('caisse_salaires')
+    .update({ reliquat_destination: 'report_applique' })
+    .in('id', reportIds)
+  if (error) throw error
 }
 
 export async function loadSalaireEnveloppes(salaireId) {
@@ -2234,6 +2294,24 @@ export async function setRapproVerified({ txnKey, amount, txnDate, userId, statu
 /** Annule la vérification d'une ligne. */
 export async function unsetRapproVerified(txnKey) {
   const { error } = await supabase.from('caisse_rappro_verifies').delete().eq('txn_key', txnKey)
+  if (error) throw error
+}
+
+// ---- Liens manuels TPE : cartes CMI non trouvées (partagé entre admins) ----
+// kind = 'link' (reliée à un paiement Odoo, odooRef) | 'regul' (à régulariser, note).
+export async function loadRapproLinks() {
+  const { data, error } = await supabase.from('caisse_rappro_links').select('cmi_key, kind, odoo_ref, note')
+  if (error) throw error
+  return new Map((data || []).map(r => [r.cmi_key, { kind: r.kind, odooRef: r.odoo_ref || null, note: r.note || null }]))
+}
+export async function setRapproLink({ cmiKey, kind, amount, txnDate, odooRef = null, note = null, userId }) {
+  const { error } = await supabase.from('caisse_rappro_links').upsert({
+    cmi_key: cmiKey, kind, amount, txn_date: txnDate, odoo_ref: odooRef, note, linked_by: userId || null,
+  })
+  if (error) throw error
+}
+export async function unsetRapproLink(cmiKey) {
+  const { error } = await supabase.from('caisse_rappro_links').delete().eq('cmi_key', cmiKey)
   if (error) throw error
 }
 
