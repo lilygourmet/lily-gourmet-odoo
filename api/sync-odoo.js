@@ -414,8 +414,15 @@ async function syncSalesLines(supabase, odooOrders, linesByOrderId, orderIdMap, 
       // les notes par-article (ses notes vont dans orderNote, gere plus bas).
       const isLivraison = /livraison/i.test(ln.name || '')
       if (isLivraison) continue
-      // Collecte les line_note qui suivent immediatement
       const accum = []
+      // 1) ⚠️ ecrits DANS la description de l'article (mecanisme app « Attention sur cet article »)
+      for (const p of String(ln.name || '').split(/\r?\n/)) {
+        if (/^\s*⚠️/.test(p)) {
+          const t = cleanNoteText(p.replace(/^\s*⚠️\s*/, ''))
+          if (t) accum.push(t)
+        }
+      }
+      // 2) Anciennes line_note separees qui suivent immediatement
       for (let j = i + 1; j < sortedLines.length; j++) {
         const sub = sortedLines[j]
         if (sub.display_type === 'line_note') {
