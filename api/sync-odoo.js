@@ -669,7 +669,7 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
         ['res_id', 'in', batch],
         ['mimetype', 'ilike', 'image/'],
       ],
-      ['id', 'res_id', 'name', 'mimetype', 'file_size'],
+      ['id', 'res_id', 'name', 'mimetype', 'file_size', 'checksum'],
       {}
     )
     allAttachments.push(...atts)
@@ -695,8 +695,7 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
 
   const toDownload = []
   for (const att of allAttachments) {
-    const ext = guessExt(att.mimetype)
-    const fileName = `line_${att.res_id}_att_${att.id}.${ext}`
+    const fileName = attFileName(att)
     if (!existingSet.has(fileName)) {
       toDownload.push({ att, fileName })
     }
@@ -733,10 +732,8 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
   for (const [lineId, atts] of attsByLineId) {
     const urls = []
     for (const att of atts) {
-      const ext = guessExt(att.mimetype)
-      const fileName = `line_${lineId}_att_${att.id}.${ext}`
-      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName)
-      if (data?.publicUrl) urls.push(data.publicUrl)
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(attFileName(att))
+      if (data?.publicUrl && !urls.includes(data.publicUrl)) urls.push(data.publicUrl)
     }
     if (urls.length > 0) result.set(lineId, urls)
   }
@@ -750,12 +747,12 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
     const batch = orderIds.slice(i, i + batchSize)
     const atts = await odooSearchRead(uid, 'ir.attachment',
       [['res_model', '=', 'sale.order'], ['res_id', 'in', batch], ['mimetype', 'ilike', 'image/']],
-      ['id', 'res_id', 'name', 'mimetype', 'file_size'], {})
+      ['id', 'res_id', 'name', 'mimetype', 'file_size', 'checksum'], {})
     orderAtts.push(...atts)
   }
   if (orderAtts.length > 0) {
     const toDl = orderAtts
-      .map(att => ({ att, fileName: `order_${att.res_id}_att_${att.id}.${guessExt(att.mimetype)}` }))
+      .map(att => ({ att, fileName: attFileName(att) }))
       .filter(x => !existingSet.has(x.fileName))
     for (let i = 0; i < toDl.length; i += 10) {
       const slice = toDl.slice(i, i + 10)
@@ -770,11 +767,11 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
     }
     const urlsByOrder = new Map()
     for (const att of orderAtts) {
-      const fileName = `order_${att.res_id}_att_${att.id}.${guessExt(att.mimetype)}`
-      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName)
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(attFileName(att))
       if (data?.publicUrl) {
         if (!urlsByOrder.has(att.res_id)) urlsByOrder.set(att.res_id, [])
-        urlsByOrder.get(att.res_id).push(data.publicUrl)
+        const arr = urlsByOrder.get(att.res_id)
+        if (!arr.includes(data.publicUrl)) arr.push(data.publicUrl)
       }
     }
     for (const po of parsedOrders) {
@@ -790,6 +787,13 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
   }
 
   return result
+}
+
+// Nom de fichier basé sur le CONTENU (checksum Odoo) : une même image jointe
+// plusieurs fois dans Odoo (ids différents) donne UN seul fichier → UNE seule URL,
+// donc plus de photos en double sur la fiche / le calendrier / l'impression.
+function attFileName(att) {
+  return `img_${att.checksum || att.id}.${guessExt(att.mimetype)}`
 }
 
 function guessExt(mimetype) {
