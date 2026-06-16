@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationRead, batchUpdateNamesFromOdoo, CONV_LABELS, loadConvLabels } from '../../lib/conversations'
+import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationOpened, loadClientsCdCounts, markConversationsFidele, CONV_LABELS, loadConvLabels } from '../../lib/conversations'
 import LabelsManager from './LabelsManager'
 import { formatRelativeTime, isAdmin } from '../../lib/auth'
 import { toast } from '../../lib/toast'
@@ -28,9 +28,11 @@ const STATUS_LABEL = {
   fermee:       { text: 'Fermée',       cls: 'bg-line/40 text-ink-mute' },
 }
 
-export default function InboxView({ user, initialConversationId }) {
+export default function InboxView({ user, initialConversationId, initialPhone, initialRelanceRef = null }) {
   const [filter, setFilter] = useState('all')
   const [conversations, setConversations] = useState([])
+  const fideleCheckedRef = useRef(false)   // on ne vérifie les clients « pas encore fidèles » qu'une fois par chargement
+  const [fideleSet, setFideleSet] = useState(new Set())   // affichage immédiat (9 derniers chiffres) même avant mémorisation
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(initialConversationId || null)
@@ -42,18 +44,6 @@ export default function InboxView({ user, initialConversationId }) {
   const [labelFilter, setLabelFilter] = useState('all')
   const [labels, setLabels] = useState(CONV_LABELS)
   const [showLabels, setShowLabels] = useState(false)
-  const [syncingNames, setSyncingNames] = useState(false)
-
-  async function handleSyncNames() {
-    if (syncingNames) return
-    setSyncingNames(true)
-    try {
-      const n = await batchUpdateNamesFromOdoo()
-      toast.success(n > 0 ? `${n} nom(s) mis à jour depuis Odoo.` : 'Aucun nom à mettre à jour (déjà à jour ou pas de devis/commande).')
-      await refresh(true)
-    } catch (e) { toast.error('Erreur : ' + (e?.message || e)) }
-    finally { setSyncingNames(false) }
-  }
   // Dernière visite capturée au montage (pour repérer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
   // Conversations vues pendant cette session (id -> horodatage de la vue)
@@ -86,6 +76,43 @@ export default function InboxView({ user, initialConversationId }) {
 
   useEffect(() => { refresh() }, [filter])
   useEffect(() => { loadConvLabels().then(setLabels).catch(() => {}) }, [])
+
+  // Ouverture par téléphone (bouton « Relancer » depuis les Devis) : on
+  // sélectionne le fil du client dès que la liste est chargée (match sur les 9 derniers chiffres).
+  // Conversation ouverte via une relance depuis Devis : on retient son id pour
+  // n'enregistrer « Relancé par » que sur CETTE conversation (pas une autre).
+  const relanceConvIdRef = useRef(null)
+  useEffect(() => {
+    if (!initialPhone || conversations.length === 0) return
+    const target = String(initialPhone).replace(/\D/g, '').slice(-9)
+    const found = conversations.find(c => String(c.client_phone || '').replace(/\D/g, '').slice(-9) === target)
+    if (found) { setSelectedId(found.id); if (initialRelanceRef) relanceConvIdRef.current = found.id }
+  }, [initialPhone, conversations, initialRelanceRef])
+
+  // Clients fidèles : l'étoile vient de la colonne mémorisée `c.fidele` (plus de re-check
+  // une fois acquis). On vérifie via Odoo SEULEMENT les clients pas encore fidèles, une seule
+  // fois par chargement, et on mémorise ceux qui le deviennent.
+  const last9 = (p) => String(p || '').replace(/\D/g, '').slice(-9)
+  useEffect(() => {
+    if (fideleCheckedRef.current || conversations.length === 0) return
+    fideleCheckedRef.current = true
+    const candidats = conversations.filter(c => !c.fidele && last9(c.client_phone).length >= 8)
+    const phones = [...new Set(candidats.map(c => last9(c.client_phone)))]
+    if (!phones.length) return
+    let cancelled = false
+    loadClientsCdCounts(phones).then(async counts => {
+      if (cancelled) return
+      const fideleL9 = new Set(Object.entries(counts).filter(([, n]) => n >= 3).map(([l9]) => l9))
+      if (!fideleL9.size) return
+      setFideleSet(prev => new Set([...prev, ...fideleL9]))   // affichage immédiat
+      const toMark = candidats.filter(c => fideleL9.has(last9(c.client_phone)))
+      const ids = toMark.map(c => c.id)
+      if (!ids.length) return
+      try { await markConversationsFidele(ids) } catch { /* non bloquant */ }
+      setConversations(prev => prev.map(c => ids.includes(c.id) ? { ...c, fidele: true } : c))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [conversations])
 
   // Temps réel : rafraîchit la liste quand une conversation change (nouveau message…)
   useEffect(() => {
@@ -123,18 +150,21 @@ export default function InboxView({ user, initialConversationId }) {
 
   const waitingCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🔴').length
   const followupCount = conversations.filter(c => conversationUrgency(c)?.emoji === '🟡').length
-  const unreadCount = conversations.filter(c => c.marked_unread || c.unread_count > 0 || (c.last_inbound_at && (!user?.last_visited_conversations || c.last_inbound_at > user.last_visited_conversations))).length
+  // « Non lu » = on n'a pas encore répondu (le client a parlé en dernier), ou marqué manuellement.
+  // → reste non lu même après ouverture ; part uniquement quand on répond.
+  const unreadCount = conversations.filter(c => c.marked_unread || !!conversationWaitingSince(c)).length
 
   const term = search.trim().toLowerCase()
   let list = conversations
-  if (filter === 'mine') list = list.filter(c => c.assigned_to === user.id)
+  // « À moi » = mes conversations + le pool des non assignées (à prendre par n'importe qui).
+  // Dès qu'une non assignée est prise, elle devient « celle du preneur » → quitte le « À moi » des autres.
+  if (filter === 'mine') list = list.filter(c => c.assigned_to === user.id || c.status === 'non_assignee')
   else if (filter === 'unassigned') list = list.filter(c => c.status === 'non_assignee')
   else if (filter === 'waiting') list = list.filter(c => conversationUrgency(c)?.emoji === '🔴')
   else if (filter === 'followup') list = list.filter(c => conversationUrgency(c)?.emoji === '🟡')
   else if (filter === 'fermees') list = list.filter(c => c.status === 'fermee')
   else if (filter === 'unread') {
-    const lv = user?.last_visited_conversations
-    list = list.filter(c => c.marked_unread || c.unread_count > 0 || (c.last_inbound_at && (!lv || c.last_inbound_at > lv)))
+    list = list.filter(c => c.marked_unread || !!conversationWaitingSince(c))
   }
   if (agentFilter !== 'all') list = list.filter(c => (c.assigned?.id || null) === agentFilter)
   if (labelFilter !== 'all') list = list.filter(c => (c.labels || []).includes(labelFilter))
@@ -157,8 +187,8 @@ export default function InboxView({ user, initialConversationId }) {
     const wa = conversationWaitingSince(a)
     const wb = conversationWaitingSince(b)
     // En haut : client en attente OU conversation marquée "non lue"
-    const topA = (wa || a.marked_unread) ? 1 : 0
-    const topB = (wb || b.marked_unread) ? 1 : 0
+    const topA = (wa || a.marked_unread || a.link_order_at) ? 1 : 0
+    const topB = (wb || b.marked_unread || b.link_order_at) ? 1 : 0
     if (topA !== topB) return topB - topA
     if (wa && wb) return wa - wb        // les deux attendent : le plus vieux d'abord
     if (wa) return -1                    // a attend, pas b -> a devant
@@ -189,14 +219,6 @@ export default function InboxView({ user, initialConversationId }) {
           </div>
 
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            {isAdmin(user) && (
-              <button
-                onClick={handleSyncNames}
-                disabled={syncingNames}
-                title="Mettre à jour tous les noms depuis Odoo (devis/commande), sans écraser les noms manuels"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line text-ink-soft rounded-full text-[12px] font-medium hover:border-bordeaux transition-all disabled:opacity-50"
-              >🔄 {syncingNames ? 'Maj noms…' : 'Noms Odoo'}</button>
-            )}
             {isAdmin(user) && (
               <button
                 onClick={() => setShowLabels(true)}
@@ -292,7 +314,7 @@ export default function InboxView({ user, initialConversationId }) {
               const seenRef = seenAt[c.id] || visitedAtRef.current
               // En avant aussi tant que le client attend une réponse (même déjà ouverte),
               // jusqu'à ce qu'un agent réponde (conversationWaitingSince repasse à null).
-              const isNew = c.marked_unread || c.unread_count > 0 || conversationWaitingSince(c) || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))
+              const isNew = c.marked_unread || c.unread_count > 0 || !!c.link_order_at || conversationWaitingSince(c) || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))
               const isSelected = c.id === selectedId
               return (
                 <button
@@ -300,9 +322,11 @@ export default function InboxView({ user, initialConversationId }) {
                   onClick={() => {
                     setSeenAt(prev => ({ ...prev, [c.id]: new Date().toISOString() }))
                     setSelectedId(c.id)
-                    if (c.marked_unread || c.unread_count) {
-                      setConversations(prev => prev.map(x => x.id === c.id ? { ...x, marked_unread: false, unread_count: 0 } : x))
-                      markConversationRead(c.id).catch(() => {})
+                    // On garde le compteur "non lu" (vert) tant que l'équipe n'a pas
+                    // répondu : l'ouverture enlève seulement l'étiquette manuelle et le tag commande.
+                    if (c.marked_unread || c.link_order_at) {
+                      setConversations(prev => prev.map(x => x.id === c.id ? { ...x, marked_unread: false, link_order_at: null } : x))
+                      markConversationOpened(c.id).catch(() => {})
                     }
                   }}
                   className={`w-full text-left rounded-xl border p-3 transition-colors shadow-sm hover:border-bordeaux ${
@@ -310,14 +334,15 @@ export default function InboxView({ user, initialConversationId }) {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <ClientAvatar conv={c} size={40} variant="light" />
+                    <ClientAvatar conv={c} size={40} variant="light" fidele={!!c.fidele || fideleSet.has(last9(c.client_phone))} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
-                          {c.unread_count > 0
+                          {c.unread_count > 0 && conversationWaitingSince(c)
                             ? <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[#6f9171] text-white text-[10px] font-semibold flex items-center justify-center leading-none">{c.unread_count}</span>
                             : isNew && <span className="w-2 h-2 rounded-full bg-bordeaux flex-shrink-0" />}
                           <span className="truncate">{c.client_name || c.client_phone}</span>
+                          {c.link_order_at && <span className="flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#F7E3EA] text-[#993556]">🎂 Commande</span>}
                         </span>
                         <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
                       </div>
@@ -362,6 +387,7 @@ export default function InboxView({ user, initialConversationId }) {
             conversationId={selectedId}
             user={user}
             onBack={() => { setSelectedId(null); refresh() }}
+            relanceRef={initialRelanceRef && selectedId === relanceConvIdRef.current ? initialRelanceRef : null}
           />
         ) : (
           <div className="hidden md:flex items-center justify-center bg-cream-warm/30 md:h-[calc(100dvh-var(--appbar))]">

@@ -21,6 +21,7 @@ export async function loadConversations(filter = 'all', userId = null) {
     .from('conversations')
     .select(CONV_SEL)
     .order('last_message_at', { ascending: false, nullsFirst: false })
+    .limit(1000)   // plafond de sécurité : les 1000 conversations les plus récentes
 
   if (filter === 'mine' && userId) query = query.eq('assigned_to', userId)
   if (filter === 'unassigned') query = query.eq('status', 'non_assignee')
@@ -131,7 +132,20 @@ export async function setConversationUnread(conversationId, value) {
 export async function markConversationRead(conversationId) {
   const { error } = await supabase
     .from('conversations')
-    .update({ marked_unread: false, unread_count: 0 })
+    .update({ marked_unread: false, unread_count: 0, link_order_at: null })
+    .eq('id', conversationId)
+  if (error) throw error
+}
+
+/**
+ * Conversation simplement OUVERTE (pas encore répondue) : on enlève l'étiquette
+ * manuelle et le surlignage "commande", MAIS on garde le compteur "non lu" vert
+ * tant que l'équipe n'a pas répondu (il sera remis à 0 à l'envoi d'une réponse).
+ */
+export async function markConversationOpened(conversationId) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ marked_unread: false, link_order_at: null })
     .eq('id', conversationId)
   if (error) throw error
 }
@@ -217,6 +231,19 @@ export async function closeConversation(conversationId, userId) {
     conversation_id: conversationId, type: 'closed', by_user_id: userId,
   })
   return data
+}
+
+/** Qui a fermé la conversation (dernier événement 'closed') → { name, at } ou null. */
+export async function loadClosedBy(conversationId) {
+  const { data: ev } = await supabase
+    .from('conversation_events')
+    .select('by_user_id, created_at')
+    .eq('conversation_id', conversationId).eq('type', 'closed')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (!ev?.by_user_id) return null
+  const { data: p } = await supabase
+    .from('profiles').select('full_name, username').eq('id', ev.by_user_id).maybeSingle()
+  return { name: p?.full_name || p?.username || null, at: ev.created_at }
 }
 
 // Étiquettes par défaut (servent de repli si la table n'est pas encore chargée).
@@ -555,6 +582,190 @@ export async function loadDevis(query = '') {
   return data.orders || []
 }
 
+// Liste les commandes confirmées (sale.order state=sale) avec qty/prix/commentaire.
+export async function loadConfirmedOrders(query = '') {
+  const res = await fetch('/api/wati-webhook?action=orders-confirmed', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.orders || []
+}
+
+// Journal « qui a traité » : enregistre une action (confirme / annulation) sur une commande.
+export async function recordDevisTraitement({ order_num, action, user_id, user_name, detail = null }) {
+  const base = { order_num, action, user_id: user_id || null, user_name: user_name || null }
+  try {
+    const { error } = await supabase.from('devis_traitements').insert({ ...base, detail: detail || null })
+    if (error) throw error
+  } catch (_) {
+    // Repli si la colonne `detail` n'existe pas encore : on enregistre au moins l'action.
+    try { await supabase.from('devis_traitements').insert(base) } catch (_) { /* non bloquant */ }
+  }
+}
+
+// Journal complet des actions sur les commandes (le plus récent d'abord) — fenêtre admin.
+// select('*') = résilient si la colonne `detail` n'est pas encore créée.
+// `search` : filtre côté base par n° de commande ou nom (pour retrouver une commande même ancienne).
+export async function loadDevisTraitementsJournal({ limit = 400, search = '' } = {}) {
+  let q = supabase.from('devis_traitements').select('*').order('created_at', { ascending: false }).limit(limit)
+  const s = (search || '').trim().replace(/[%,()]/g, ' ')
+  if (s) q = q.or(`order_num.ilike.%${s}%,user_name.ilike.%${s}%`)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+// Qui a PRIS/CONFIRMÉ la commande dans l'app (vendeur « app ») : on prend la personne
+// du « confirme », sinon la 1ʳᵉ action ayant un nom. null si rien. Résilient.
+export async function loadOrderHandler(orderNum) {
+  if (!orderNum) return null
+  const { data, error } = await supabase
+    .from('devis_traitements').select('action, user_name, created_at')
+    .eq('order_num', orderNum).order('created_at', { ascending: true })
+  if (error || !data?.length) return null
+  const confirme = data.find(r => r.action === 'confirme' && r.user_name)
+  return (confirme || data.find(r => r.user_name) || {}).user_name || null
+}
+
+// Note (commentaire) d'une commande Odoo par n° — ex. « ⚠️ … chocolat blanc 10 hajj… ».
+// Récupérée en direct d'Odoo (pas dans les données synchronisées du calendrier).
+export async function loadOrderNote(orderNum) {
+  if (!orderNum) return ''
+  try {
+    const r = await fetch('/api/wati-webhook?action=order-note', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNum }),
+    })
+    const d = await r.json()
+    return d?.note || ''
+  } catch { return '' }
+}
+
+// Notes de PLUSIEURS commandes en UN seul appel (impression en lot) → map { S123: "…" }.
+export async function loadOrdersNotes(orderNums) {
+  const nums = (orderNums || []).filter(Boolean)
+  if (!nums.length) return {}
+  try {
+    const r = await fetch('/api/wati-webhook?action=orders-notes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNums: nums }),
+    })
+    const d = await r.json()
+    return d?.notes || {}
+  } catch { return {} }
+}
+
+// Vendeurs « app » de PLUSIEURS commandes en UNE requête → map { S123: "Nom" }.
+export async function loadOrdersHandlers(orderNums) {
+  const nums = (orderNums || []).filter(Boolean)
+  if (!nums.length) return {}
+  const { data, error } = await supabase
+    .from('devis_traitements').select('order_num, action, user_name, created_at')
+    .in('order_num', nums).order('created_at', { ascending: true })
+  if (error || !data?.length) return {}
+  const byOrder = {}
+  for (const r of data) { (byOrder[r.order_num] ||= []).push(r) }
+  const map = {}
+  for (const [num, rows] of Object.entries(byOrder)) {
+    const name = (rows.find(r => r.action === 'confirme' && r.user_name) || rows.find(r => r.user_name) || {}).user_name
+    if (name) map[num] = name
+  }
+  return map
+}
+
+// Map order_num -> dernière action { action, user_name, created_at }. Résilient ({} si table absente).
+export async function loadDevisTraitements() {
+  const { data, error } = await supabase
+    .from('devis_traitements').select('order_num, action, user_name, created_at')
+    .order('created_at', { ascending: false })
+  if (error) return {}
+  const map = {}
+  for (const r of data || []) { if (!map[r.order_num]) map[r.order_num] = r }
+  return map
+}
+
+// Numéros de téléphone qui ont déjà une conversation (= clients déjà contactés).
+export async function loadConversationPhones() {
+  const { data, error } = await supabase.from('conversations').select('client_phone')
+  if (error) return []
+  return (data || []).map(c => c.client_phone).filter(Boolean)
+}
+
+// Compte les devis internet (état 'sent') ; avec `since` (ISO) = nouveaux depuis la dernière visite.
+export async function countNouveauxDevisInternet(since = null) {
+  try {
+    const res = await fetch('/api/wati-webhook?action=count-devis-internet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ since }),
+    })
+    const d = await res.json().catch(() => ({}))
+    return d.count || 0
+  } catch { return 0 }
+}
+
+// Compte les devis internet (état 'sent') NON TRAITÉS = qui traînent encore dans l'onglet
+// « Devis internet ». Calcul fait CÔTÉ SERVEUR (1 appel léger) pour ne pas ralentir l'app :
+// avant, ça chargeait toute la liste Odoo + toute la table conversations depuis le navigateur.
+export async function countDevisInternetNonTraites() {
+  try {
+    const res = await fetch('/api/wati-webhook?action=count-devis-internet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nonTraites: true }),
+    })
+    const d = await res.json().catch(() => ({}))
+    return d.count || 0
+  } catch { return 0 }
+}
+
+// Numéros de commande (S…) déjà mentionnés dans NOS messages WhatsApp (agent/system).
+// Sert à savoir si un client a été contacté pour CETTE commande précise.
+export async function loadContactedOrderRefs() {
+  const set = new Set()
+  const { data, error } = await supabase
+    .from('messages').select('body')
+    .in('sender_type', ['agent', 'system'])
+    .ilike('body', '%S%')
+  if (error) return set
+  for (const m of data || []) {
+    const matches = (m.body || '').match(/\bS\d{4,}\b/gi)
+    if (matches) matches.forEach(s => set.add(s.toUpperCase()))
+  }
+  return set
+}
+
+// Confirme un devis dans Odoo (action réelle). Renvoie { ok, name, state }.
+export async function confirmDevis(id, actorId = null) {
+  const res = await fetch('/api/wati-webhook?action=devis-confirm', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, actorId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data
+}
+
+export async function cancelDevis(id, actorId = null) {
+  const res = await fetch('/api/wati-webhook?action=devis-cancel', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, actorId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data
+}
+
+/** Remet une commande annulée en DEVIS (par n° S… ou id Odoo). Effet réel dans Odoo. */
+export async function restoreDevis({ id = null, orderNum = null, actorId = null }) {
+  const res = await fetch('/api/wati-webhook?action=devis-restore', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, orderNum, actorId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data
+}
+
 /** Suivi des devis envoyés : map { order_num: { count, last } }. Résilient ({} si table absente). */
 export async function loadDevisEnvois() {
   const { data, error } = await supabase
@@ -577,11 +788,22 @@ export async function recordDevisEnvoi(orderNum, clientPhone, userId) {
   } catch (_) { /* non bloquant */ }
 }
 
-/** Photos (pièces jointes image) d'un devis/commande Odoo. */
-export async function loadDevisPhotos(orderId) {
+/** Photos (pièces jointes image) d'un devis/commande Odoo. limit=1 pour une vignette. */
+export async function loadDevisPhotos(orderId, limit) {
   const res = await fetch('/api/wati-webhook?action=devis-photos', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orderId }),
+    body: JSON.stringify({ orderId, limit }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return data.photos || []
+}
+
+// Photos d'une commande par N° (le calendrier n'a pas l'id Odoo, seulement S…).
+export async function loadOrderPhotosByNum(orderNum, limit) {
+  if (!orderNum) return []
+  const res = await fetch('/api/wati-webhook?action=devis-photos', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderNum, limit }),
   })
   const data = await res.json().catch(() => ({}))
   return data.photos || []
@@ -600,11 +822,11 @@ export async function searchOrders(query) {
 }
 
 /** Envoie un message template (initie une conversation). */
-export async function sendTemplate({ clientPhone, templateName, broadcastName, parameters, bodyText, userId }) {
+export async function sendTemplate({ clientPhone, templateName, broadcastName, parameters, bodyText, freeText, userId }) {
   const res = await fetch('/api/wati-webhook?action=send-template', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientPhone, templateName, broadcastName, parameters, bodyText, userId }),
+    body: JSON.stringify({ clientPhone, templateName, broadcastName, parameters, bodyText, freeText, userId }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
@@ -666,4 +888,30 @@ export async function sendMessage({ conversationId, clientPhone, userId, text, m
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
   return data.message
+}
+
+/** Nombre de commandes Cake Design (CD-) d'un client — pour le badge « client fidèle ». */
+export async function loadClientCdCount(clientPhone) {
+  const res = await fetch('/api/wati-webhook?action=client-cd-count', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientPhone }),
+  })
+  const d = await res.json().catch(() => ({}))
+  return d.count || 0
+}
+
+/** Mémorise « fidèle » sur des conversations (une fois acquis, plus de re-check Odoo). */
+export async function markConversationsFidele(ids) {
+  if (!ids?.length) return
+  await supabase.from('conversations').update({ fidele: true }).in('id', ids)
+}
+
+/** EN LOT : { <9 derniers chiffres>: nb CD- sans acompte } pour une liste de téléphones (étoile dans la liste). */
+export async function loadClientsCdCounts(phones) {
+  const res = await fetch('/api/wati-webhook?action=clients-cd-counts', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phones }),
+  })
+  const d = await res.json().catch(() => ({}))
+  return d.counts || {}
 }
