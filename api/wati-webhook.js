@@ -2331,7 +2331,7 @@ async function handleCdLoad(req, res) {
     if (!orders.length) return res.status(200).json({ counts: {} })
     const lineIds = orders.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
     const cdLines = lineIds.length ? await odooSearchRead(uid, 'sale.order.line',
-      [['id', 'in', lineIds], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%']],
+      [['id', 'in', lineIds], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%'], ['product_uom_qty', '>', 0]],
       ['order_id', 'name']) : []
     const hourByOrder = new Map()
     for (const o of orders) hourByOrder.set(o.id, moroccoHourFromUtc(o.commitment_date))
@@ -2379,7 +2379,7 @@ async function handleCdSlot(req, res) {
     if (!inHour.length) return res.status(200).json({ items: [] })
     const lineIds = inHour.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
     const cdLinesRaw = lineIds.length ? await odooSearchRead(uid, 'sale.order.line',
-      [['id', 'in', lineIds], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%']],
+      [['id', 'in', lineIds], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%'], ['product_uom_qty', '>', 0]],
       ['id', 'order_id', 'name']) : []
     const cdLines = cdLinesRaw.filter(l => isRealCakeLine(l.name))
     if (!cdLines.length) return res.status(200).json({ items: [] })
