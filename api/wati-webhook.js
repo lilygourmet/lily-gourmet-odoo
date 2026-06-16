@@ -1634,31 +1634,36 @@ async function handleOrderCreateDevis(req, res) {
     }
     if (!orderId) orderId = await odooCreate(uid, 'sale.order', vals)
 
-    // Photos (modèle de gâteau) → attachées à la COMMANDE puis publiées dans le chatter
-    // pour être visibles directement dans Odoo (et pas seulement en pièce jointe « brute »).
-    const created = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['name'])
-    const photoAttIds = []
+    // Photos (modèle de gâteau) → attachées à CHAQUE ARTICLE précis (sa ligne), pas à
+    // la commande entière. Ainsi chaque gâteau/accessoire montre UNIQUEMENT sa photo
+    // (fiche, calendrier, impression), sans déborder sur les autres articles.
+    const created = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['name', 'order_line'])
+    const allLineIds = (created[0]?.order_line) || []
+    // Nos lignes = les dernières créées (en cas de fusion, elles sont ajoutées à la fin).
+    const newLineIds = allLineIds.slice(Math.max(0, allLineIds.length - lines.length))
+    let nbPhotos = 0
     for (let i = 0; i < lines.length; i++) {
       const ph = lines[i].photo
-      if (ph?.data) {
+      const lineId = newLineIds[i]
+      if (ph?.data && lineId) {
         try {
-          const attId = await odooCreate(uid, 'ir.attachment', {
+          await odooCreate(uid, 'ir.attachment', {
             name: ph.name || `photo-${i + 1}.jpg`,
             datas: ph.data,
-            res_model: 'sale.order',
-            res_id: orderId,
+            res_model: 'sale.order.line',
+            res_id: lineId,
             mimetype: ph.mimetype || 'image/jpeg',
           })
-          photoAttIds.push(attId)
+          nbPhotos++
         } catch (e) { console.warn('[order-photo]', e?.message || e) }
       }
     }
-    if (photoAttIds.length) {
+    if (nbPhotos) {
       try {
-        const s = photoAttIds.length > 1 ? 's' : ''
+        const s = nbPhotos > 1 ? 's' : ''
         await odooJsonRpc('object', 'execute_kw', [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, 'sale.order', 'message_post', [[orderId]],
-          { body: `📸 Modèle${s} de gâteau (ajouté${s} depuis l'app)`, attachment_ids: photoAttIds }])
-      } catch (e) { console.warn('[order-photo chatter]', e?.message || e) }
+          { body: `📸 ${nbPhotos} photo${s} de modèle ajoutée${s} sur l'article${s} (depuis l'app)` }])
+      } catch (e) { console.warn('[order-photo note]', e?.message || e) }
     }
 
     // Badge « 🎂 Commande » : marque la conversation du client (recherche par 9 derniers chiffres).
