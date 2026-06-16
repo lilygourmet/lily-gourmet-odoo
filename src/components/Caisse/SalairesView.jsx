@@ -1,7 +1,7 @@
 import AuditLogPanel from './AuditLogPanel'
 import { useState, useEffect } from 'react'
 import { User, Pencil, Check, Trash2 } from 'lucide-react'
-import { loadSalairesYear, loadSalaireMonth, createSalaire, markSalairePaye, loadSalairesDefaut, deleteSalaire, loadSalaireEnveloppes } from '../../lib/caisse'
+import { loadSalairesYear, loadSalaireMonth, createSalaire, markSalairePaye, loadSalairesDefaut, deleteSalaire, loadSalaireEnveloppes, loadReliquatHistory } from '../../lib/caisse'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { currentYear, currentMonth, fmtMoney, fmtMois, SALAIRE_STATUS_LABELS, SALAIRE_COLORS, reliquatDestLabel } from './_helpers'
 import CompositionSalaireModal from './modals/CompositionSalaireModal'
@@ -12,12 +12,14 @@ export default function SalairesView({ user }) {
   const [salaires, setSalaires] = useState([])
   const [defaults, setDefaults] = useState({})
   const [composing, setComposing] = useState(null) // salaire object
+  const [reliquatHist, setReliquatHist] = useState([])
 
   useEffect(() => { (async () => { setDefaults(await loadSalairesDefaut()) })() }, [])
   useEffect(() => { reload() }, [year])
 
   async function reload() {
     setSalaires(await loadSalairesYear(year))
+    loadReliquatHistory().then(setReliquatHist).catch(() => setReliquatHist([]))
   }
 
   async function ensureSalaireMonth(beneficiaire) {
@@ -110,7 +112,17 @@ export default function SalairesView({ user }) {
             <div style={{ fontSize: 12, color: '#4a3a30' }}>{fmtMois(sal.month - 1)} {sal.year}</div>
             <div><span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 999, background: c.bg, color: c.text, display: 'inline-flex', alignItems: 'center', gap: 4 }}><User size={12} /> {sal.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'}</span></div>
             <div style={{ fontSize: 12, color: '#4a3a30' }}>
-              {sal.reliquat_amount > 0 ? `reliquat ${fmtMoney(sal.reliquat_amount)} → ${reliquatDestLabel(sal.reliquat_destination)}` : 'sans reliquat'}
+              {(() => {
+                const cree = reliquatHist.find(h => h.type === 'cree' && h.source_salaire_id === sal.id)
+                const applied = reliquatHist.filter(h => h.type === 'applique' && h.target_salaire_id === sal.id)
+                if (!cree && applied.length === 0) {
+                  return sal.reliquat_amount > 0 ? `reliquat ${fmtMoney(sal.reliquat_amount)} → ${reliquatDestLabel(sal.reliquat_destination)}` : 'sans reliquat'
+                }
+                return <>
+                  {applied.map(a => <div key={a.id} style={{ color: '#99201E' }}>− {fmtMoney(a.amount)} (report {fmtMois(a.source_month - 1)} {a.source_year})</div>)}
+                  {cree && <div style={{ color: '#1D7A5C' }}>+ {fmtMoney(cree.amount)} reliquat reporté</div>}
+                </>
+              })()}
             </div>
             <div><span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, background: statusObj.bg, color: statusObj.text, fontWeight: 500 }}>{statusObj.label}</span></div>
             <div style={{ fontWeight: 500, textAlign: 'right' }}>{fmtMoney(sal.target_amount)}</div>
@@ -123,6 +135,26 @@ export default function SalairesView({ user }) {
           </div>
         )
       })}
+
+      <div style={{ fontSize: 13, fontWeight: 500, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5, margin: '28px 0 12px' }}>📜 Journal du reliquat</div>
+      <p style={{ fontSize: 12, color: '#6b5f57', margin: '0 0 12px' }}>Trace permanente : chaque reliquat <b>créé</b> (surplus d'un mois) et chaque report <b>appliqué</b> (déduit sur un mois).</p>
+      {reliquatHist.length === 0
+        ? <div style={{ padding: 24, textAlign: 'center', color: '#6b5f57', background: '#F9F6F1', borderRadius: 16 }}>Aucun mouvement de reliquat. Clique « Reconstituer le passé » pour partir des salaires existants.</div>
+        : reliquatHist.map(r => {
+          const c = SALAIRE_COLORS[r.beneficiaire] || { bg: '#eee', text: '#333' }
+          const cree = r.type === 'cree'
+          return (
+            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3' }}>
+              <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, background: c.bg, color: c.text }}>{r.beneficiaire === 'nezha' ? 'Nezha' : 'Layla'}</span>
+              <div style={{ flex: 1, fontSize: 12.5, color: '#4a3a30' }}>
+                {cree
+                  ? <>Reliquat <b>créé</b> sur {fmtMois(r.source_month - 1)} {r.source_year}</>
+                  : <>Report de {fmtMois(r.source_month - 1)} {r.source_year} <b>appliqué</b> sur {fmtMois(r.target_month - 1)} {r.target_year}</>}
+              </div>
+              <div style={{ fontWeight: 600, color: cree ? '#1D7A5C' : '#99201E' }}>{cree ? '+' : '−'}{fmtMoney(r.amount)}</div>
+            </div>
+          )
+        })}
 
       {composing && (
         <CompositionSalaireModal salaire={composing} onClose={() => { setComposing(null); reload() }} userId={user.id} />

@@ -1494,6 +1494,61 @@ export async function loadPendingReports(beneficiaire, year, month) {
   return (data || []).filter(r => (r.year * 12 + r.month) < (year * 12 + month))
 }
 
+// Journal du reliquat : enregistre (sans rien écraser) le reliquat CRÉÉ par un salaire
+// et les reports APPLIQUÉS dessus. Idempotent (re-validation = remplace les lignes de ce salaire).
+export async function recordReliquatHistory(salaire, reliquat, appliedReports) {
+  const ben = salaire.beneficiaire
+  // Applications : on remplace celles attachées à ce salaire cible
+  await supabase.from('caisse_reliquat_historique').delete().eq('type', 'applique').eq('target_salaire_id', salaire.id)
+  if (appliedReports && appliedReports.length) {
+    await supabase.from('caisse_reliquat_historique').insert(appliedReports.map(r => ({
+      type: 'applique', beneficiaire: ben, amount: Number(r.reliquat_amount),
+      source_salaire_id: r.id, source_month: r.month, source_year: r.year,
+      target_salaire_id: salaire.id, target_month: salaire.month, target_year: salaire.year,
+    })))
+  }
+  // Création : on remplace celle de ce salaire
+  await supabase.from('caisse_reliquat_historique').delete().eq('type', 'cree').eq('source_salaire_id', salaire.id)
+  if (reliquat > 0) {
+    await supabase.from('caisse_reliquat_historique').insert({
+      type: 'cree', beneficiaire: ben, amount: Number(reliquat),
+      source_salaire_id: salaire.id, source_month: salaire.month, source_year: salaire.year,
+    })
+  }
+}
+
+// Reconstitue l'historique des reliquats CRÉÉS à partir des salaires passés
+// (le montant reste stocké sur chaque salaire). Idempotent. Renvoie le nb d'entrées.
+// Les « applications » passées ne sont pas reconstituables (l'info d'origine avait été écrasée).
+export async function backfillReliquatHistory() {
+  const { data: sals, error } = await supabase
+    .from('caisse_salaires')
+    .select('id, beneficiaire, month, year, reliquat_amount')
+    .gt('reliquat_amount', 0)
+  if (error) throw error
+  let n = 0
+  for (const s of (sals || [])) {
+    await supabase.from('caisse_reliquat_historique').delete().eq('type', 'cree').eq('source_salaire_id', s.id)
+    const { error: insErr } = await supabase.from('caisse_reliquat_historique').insert({
+      type: 'cree', beneficiaire: s.beneficiaire, amount: Number(s.reliquat_amount),
+      source_salaire_id: s.id, source_month: s.month, source_year: s.year,
+    })
+    if (insErr) throw insErr
+    n++
+  }
+  return n
+}
+
+// Historique complet du reliquat (plus récent d'abord).
+export async function loadReliquatHistory() {
+  const { data, error } = await supabase
+    .from('caisse_reliquat_historique')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
 // Marque des reports comme « déduits » (consommés) — appelé à la validation.
 export async function markReportsApplied(reportIds) {
   if (!reportIds || reportIds.length === 0) return

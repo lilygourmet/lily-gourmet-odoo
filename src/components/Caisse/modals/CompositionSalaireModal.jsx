@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Zap } from 'lucide-react'
-import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement, loadPendingReports, markReportsApplied } from '../../../lib/caisse'
+import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement, loadPendingReports, markReportsApplied, recordReliquatHistory } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, currentYear, SALAIRE_COLORS, fmtMois } from '../_helpers'
 import { supabase } from '../../../lib/supabase'
 import { toast } from '../../../lib/toast'
@@ -85,12 +85,16 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
     try {
       await setSalaireEnveloppes(salaire.id, attached.map(a => a.id))
       // Reports cochés : on enregistre la cible réduite et on les marque « déduits ».
+      const appliedReports = pendingReports.filter(r => appliedIds.includes(r.id))
       if (appliedIds.length > 0) {
         await supabase.from('caisse_salaires').update({ target_amount: netTarget }).eq('id', salaire.id)
         await markReportsApplied(appliedIds)
       }
       // Le nouveau reliquat reste le report de la même personne (chacune son report).
       await markSalairePret(salaire.id, reliquat, `report_${salaire.beneficiaire}`)
+      // Journal du reliquat (trace permanente) : ce qui est créé + ce qui est appliqué.
+      // Non-bloquant : si la table n'est pas encore créée, la validation du salaire marche quand même.
+      try { await recordReliquatHistory(salaire, reliquat, appliedReports) } catch { /* table absente → pas de journal */ }
       onClose()
     } catch (e) { toast.error(e.message) }
     setBusy(false)
