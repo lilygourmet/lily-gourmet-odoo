@@ -21,6 +21,9 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
   // UNIQUEMENT pour une vraie modification = quantité qui BAISSE / passe à 0, ou suppression.
   // (Pas pour : ajout d'article, hausse de quantité, prix, remise, message, date…)
   const notifyModif = (detail) => {
+    // Si la commande est encore un DEVIS (non confirmée), pas de demande de modification :
+    // modifier un devis fait partie de la prise de commande normale, rien n'est en production.
+    if (order.state !== 'sale') return
     createModification({
       order_ref: order.name, client_name: order.clientName || null, client_phone: order.clientPhone || null,
       requested_by: user?.id || null, description: `✏️ ${detail}`,
