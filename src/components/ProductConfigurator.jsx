@@ -40,6 +40,17 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   function pick(attrId, val) { onChange(c => ({ ...c, sel: { ...c.sel, [attrId]: val } })) }
   function setText(attrId, val) { onChange(c => ({ ...c, text: { ...c.text, [attrId]: val } })) }
 
+  // Décor cake design : modelage main / impression / les deux / rien (obligatoire pour CD-).
+  const isCD = cfg.catKey === 'cd'
+  const decor = cfg.decor || { mode: '', main: '', imp: '' }
+  function setDecor(patch) { onChange(c => ({ ...c, decor: { ...(c.decor || { mode: '', main: '', imp: '' }), ...patch } })) }
+  const showMain = decor.mode === 'main' || decor.mode === 'both'
+  const showImp = decor.mode === 'imp' || decor.mode === 'both'
+  const decorOk = !isCD || decor.mode === 'rien'
+    || (showMain && !showImp && decor.main.trim())
+    || (showImp && !showMain && decor.imp.trim())
+    || (showMain && showImp && decor.main.trim() && decor.imp.trim())
+
   // Prix final : pour CD-, on prend le prix saisi à la main s'il existe.
   const finalPrice = priceEditable && cfg.priceOverride != null && cfg.priceOverride !== ''
     ? Number(cfg.priceOverride) : (price ?? 0)
@@ -48,7 +59,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   const requireAll = cfg.catKey === 'cd'
   const allOptionsChosen = optionAttrs.every(a => sel[a.attrId])
   const allTextFilled = textAttrs.every(a => (text[a.attrId] || '').trim())
-  const requiredOk = !requireAll || (allOptionsChosen && allTextFilled)
+  const requiredOk = (!requireAll || (allOptionsChosen && allTextFilled)) && decorOk
 
   function add() {
     // Description aérée : chaque attribut (parfum, thème, âge, message) sur sa ligne.
@@ -56,9 +67,14 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       ...optionAttrs.filter(a => sel[a.attrId]).map(a => `${dispLabel(a)} : ${sel[a.attrId]}`),
       ...textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`),
     ]
+    const decorSub = isCD
+      ? (decor.mode === 'rien' ? 'Décor : rien'
+        : [showMain && decor.main.trim() && `🖐️ ${decor.main.trim()}`, showImp && decor.imp.trim() && `🖨️ ${decor.imp.trim()}`].filter(Boolean).join(' · '))
+      : ''
     const subDisplay = [
       ...optionAttrs.map(a => sel[a.attrId]).filter(Boolean),
       ...textAttrs.map(a => text[a.attrId]).filter(Boolean),
+      decorSub,
       warn && `⚠️ ${warn}`,
       photo && `📎 ${photo}`,
     ].filter(Boolean).join(' · ')
@@ -81,7 +97,16 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       parfumA.forEach(a => { if (sel[a.attrId]) parts.push(sel[a.attrId]) })
       otherA.forEach(a => { if (sel[a.attrId]) parts.push(sel[a.attrId]) })
       lineName = `${prefix}${item.name}${parts.length ? ` (${parts.join(', ')})` : ''}`
-      lineDesc = textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`).join('\n')
+      const cdTextLines = textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`)
+      const decorLines = []
+      if (isCD) {
+        if (decor.mode === 'rien') decorLines.push('Décor : rien à faire')
+        else {
+          if (showMain && decor.main.trim()) decorLines.push(`Modelage : ${decor.main.trim()}`)
+          if (showImp && decor.imp.trim()) decorLines.push(`Impression : ${decor.imp.trim()}`)
+        }
+      }
+      lineDesc = [...cdTextLines, ...decorLines].join('\n')
     }
 
     onAdd({
@@ -129,6 +154,36 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                     className="w-full px-3 py-2 border border-line rounded-lg text-[13px]" />
                 </div>
               ))}
+
+              {isCD && (
+                <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
+                  <div className="text-[12px] font-bold text-bordeaux mb-2">🎨 Décor — comment ? <span className="text-bordeaux">*</span></div>
+                  <div className="flex gap-1.5 mb-1">
+                    {[['main', '🖐️', 'Modelage main'], ['imp', '🖨️', 'Impression'], ['both', '🤝', 'Les deux'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
+                      <button key={m} type="button" onClick={() => setDecor({ mode: m })}
+                        className={`flex-1 rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${decor.mode === m ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
+                        <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
+                      </button>
+                    ))}
+                  </div>
+                  {showMain && (
+                    <div className="mt-2">
+                      <div className="text-[12px] font-bold text-ink-soft mb-1">À modeler à la main <span className="text-bordeaux">*</span></div>
+                      <textarea value={decor.main} onChange={e => setDecor({ main: e.target.value })}
+                        placeholder="ex : licorne 3D, fleurs en pâte à sucre, logo"
+                        className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
+                    </div>
+                  )}
+                  {showImp && (
+                    <div className="mt-2">
+                      <div className="text-[12px] font-bold text-ink-soft mb-1">À imprimer <span className="text-bordeaux">*</span></div>
+                      <textarea value={decor.imp} onChange={e => setDecor({ imp: e.target.value })}
+                        placeholder="ex : photo du visage, logo, fond arc-en-ciel"
+                        className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mb-3">
                 <div className="text-[12px] font-bold text-ink-soft mb-1">Photo (optionnel)</div>
@@ -193,7 +248,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                 {addLabel}
               </button>
               {!requiredOk && (
-                <div className="text-[11px] text-bordeaux text-center mt-2">Cake design : remplis tous les champs (parfums, nombre de personnes, thème, âge, message) avant d'ajouter.</div>
+                <div className="text-[11px] text-bordeaux text-center mt-2">Cake design : remplis tous les champs (parfums, personnes, thème, âge, message) et le <b>décor</b> (modelage / impression / rien) avant d'ajouter.</div>
               )}
             </>
           )}

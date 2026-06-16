@@ -144,9 +144,13 @@ function parseItems(odooLines) {
       const title = extractTitle(cleanName)
       if (!title) continue
 
-      const theme = extractField(cleanName, 'Thème', ['Age', 'Message', 'Option'])
-      const age = extractField(cleanName, 'Age', ['Message', 'Option'])
-      const message = extractField(cleanName, 'Message', ['Age', 'Option', 'Acompte'])
+      const DECOR_STOPS = ['Modelage', 'Impression', 'Décor']
+      const theme = extractField(cleanName, 'Thème', ['Age', 'Message', 'Option', ...DECOR_STOPS])
+      const age = extractField(cleanName, 'Age', ['Message', 'Option', ...DECOR_STOPS])
+      const message = extractField(cleanName, 'Message', ['Age', 'Option', 'Acompte', ...DECOR_STOPS])
+      const modelage = extractField(cleanName, 'Modelage', ['Impression', 'Décor', 'Thème', 'Age', 'Message', 'Option'])
+      const impression = extractField(cleanName, 'Impression', ['Modelage', 'Décor', 'Thème', 'Age', 'Message', 'Option'])
+      const decor = extractField(cleanName, 'Décor', ['Modelage', 'Impression', 'Thème', 'Age', 'Message', 'Option'])
 
       const decomposed = decomposeTitle(title, type)
 
@@ -163,6 +167,9 @@ function parseItems(odooLines) {
         theme,
         age,
         message,
+        modelage,
+        impression,
+        decor,
         warnings: embeddedWarns,
         quantity,
         isGift,
@@ -201,7 +208,7 @@ function extractTitle(productName) {
   // productName est deja trim()
   let cleaned = productName.replace(/^(CD-|GM-|GMD-)\s*/i, '')
 
-  const stopMatch = cleaned.match(/^([\s\S]*?)(?:\n\s*)?(?:Thème|Age|Message|Option)\s*:/m)
+  const stopMatch = cleaned.match(/^([\s\S]*?)(?:\n\s*)?(?:Thème|Age|Message|Option|Modelage|Impression|Décor)\s*:/m)
   if (stopMatch) {
     cleaned = stopMatch[1]
   }
@@ -301,7 +308,7 @@ function extractField(text, fieldName, stopWords) {
     if (stopIdx !== -1) value = value.substring(0, stopIdx).trim()
   }
 
-  if (/^(Age|Message|Thème|Option)\s*:?\s*$/i.test(value)) return null
+  if (/^(Age|Message|Thème|Option|Modelage|Impression|Décor)\s*:?\s*$/i.test(value)) return null
 
   return cleanText(value)
 }
