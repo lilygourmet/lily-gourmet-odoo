@@ -1763,8 +1763,12 @@ async function handleDevisPhotos(req, res) {
       '&', ['res_model', '=', 'sale.order.line'], ['res_id', 'in', lineIds]]
     const atts = await odooSearchRead(uid, 'ir.attachment', domain,
       ['id', 'name', 'mimetype', 'datas'], { limit })
+    // Dedup : la même image peut être attachée 2 fois (lien client + Articles…).
+    // Même contenu base64 = même photo → on ne la garde qu'une fois.
+    const seenData = new Set()
     const photos = (atts || [])
       .filter(a => a.datas)
+      .filter(a => { if (seenData.has(a.datas)) return false; seenData.add(a.datas); return true })
       .map(a => ({ name: a.name, dataUrl: `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}` }))
     return res.status(200).json({ photos })
   } catch (e) {
