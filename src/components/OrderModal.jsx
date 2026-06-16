@@ -6,7 +6,7 @@ import { loadPalette } from '../lib/palette'
 import PrintCommande from './PrintCommande'
 import { markOrderPrinted } from '../lib/printOrders'
 import { computeSizesForCake } from '../lib/cakeSizes'
-import { loadCakeDesignPrice } from '../lib/salesLines'
+import { loadCakeDesignPrice, loadSalesLinesForOrders, stripOdooPrefix } from '../lib/salesLines'
 import { loadOrderHandler, loadOrderNote, loadOrderPhotosByNum } from '../lib/conversations'
 import {
   markWarningAsRead,
@@ -151,10 +151,20 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
   // + note Odoo de la commande (commentaire « ⚠️ … ») pour l'impression.
   const [appSeller, setAppSeller] = useState(null)
   const [orderNote, setOrderNote] = useState('')
+  // Entremets / salés de la commande (hors cake design) pour les ajouter à l'impression.
+  const [extraItems, setExtraItems] = useState([])
   useEffect(() => {
     let off = false
     loadOrderHandler(order.order_num).then(n => { if (!off) setAppSeller(n) }).catch(() => {})
     loadOrderNote(order.order_num).then(n => { if (!off) setOrderNote(n) }).catch(() => {})
+    loadSalesLinesForOrders([order.order_num]).then(lines => {
+      if (off) return
+      const extra = (lines || [])
+        .filter(l => l.category !== 'CD' && l.category !== 'LIVR')
+        .filter(l => !/^(Acompte|Down\s+Payment)/i.test(l.product_name || ''))
+        .map(l => ({ name: stripOdooPrefix(l.product_name), qty: l.quantity, note: l.product_note || '', category: l.category }))
+      setExtraItems(extra)
+    }).catch(() => {})
     return () => { off = true }
   }, [order.order_num])
 
@@ -704,7 +714,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
 
       {printing && (
         <PrintCommande
-          orders={[{ ...order, app_seller: appSeller, order_note: orderNote, fallback_photos: chatterPhotos }]}
+          orders={[{ ...order, app_seller: appSeller, order_note: orderNote, extra_items: extraItems, fallback_photos: chatterPhotos }]}
           fichesByItemId={fichesByItemId}
           palette={palette}
         />

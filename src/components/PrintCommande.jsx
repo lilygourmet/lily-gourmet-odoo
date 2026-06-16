@@ -70,6 +70,29 @@ function ItemNote({ item }) {
   )
 }
 
+// Section "Entremets & sucré" / "Salé" : liste simple nom + quantité + commentaire ⚠️
+function ExtraSection({ title, emoji, items }) {
+  if (!items || items.length === 0) return null
+  return (
+    <div style={{ marginBottom: '20px' }}>
+      <div style={{
+        fontSize: '11px', fontWeight: 'bold', color: '#666', textTransform: 'uppercase',
+        letterSpacing: '1.5px', paddingBottom: '6px', borderBottom: '0.5px solid #ddd', marginBottom: '12px',
+      }}>
+        {emoji} {title}
+      </div>
+      {items.map((it, i) => (
+        <div key={i} style={{ marginBottom: i < items.length - 1 ? '8px' : '0' }}>
+          <div style={{ fontSize: '13px', color: '#1a0f0a' }}>
+            <span style={{ fontWeight: 'bold' }}>{Number(it.qty) > 1 ? `${it.qty}× ` : ''}</span>{it.name}
+          </div>
+          {it.note && <ItemNote item={{ warnings: it.note }} />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ============================================================
 // Composant : impression d'1 ou plusieurs commandes (A4 portrait)
 // Calque sur le style PDF Odoo de Lily Gourmet
@@ -151,6 +174,10 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
   })
   const cdItems = items.filter(i => i.type === 'CD')
   const gmItems = items.filter(i => i.type === 'GM')
+  // Entremets/sucré + salés : viennent de sales_lines (hors cake design), avec leur commentaire.
+  const extraItems = order.extra_items || []
+  const sucreItems = extraItems.filter(i => ['PROD', 'RAHN', 'VIENN'].includes(i.category))
+  const saleItems = extraItems.filter(i => i.category === 'SALES')
 
   // Toutes les photos
   const allPhotos = []
@@ -292,6 +319,10 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
           ))}
         </div>
       )}
+
+      {/* SECTION ENTREMETS & SUCRÉ + SALÉ (depuis sales_lines, avec commentaire) */}
+      <ExtraSection title="Entremets & sucré" emoji="🍰" items={sucreItems} />
+      <ExtraSection title="Salé" emoji="🥪" items={saleItems} />
 
       {/* PHOTOS */}
       {allPhotos.length > 0 && (
