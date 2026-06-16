@@ -8,7 +8,9 @@ const ProdView = lazy(() => import('./components/ProdView'))
 const FreezerView = lazy(() => import('./components/FreezerView'))
 const MessagesView = lazy(() => import('./components/MessagesView'))
 const EtiquettesView = lazy(() => import('./components/EtiquettesView'))
+const ProductLabelsView = lazy(() => import('./components/ProductLabelsView'))
 const StockMorning = lazy(() => import('./components/StockBoutique/StockMorning'))
+const StockPrevisions = lazy(() => import('./components/StockBoutique/StockPrevisions'))
 const StockReception = lazy(() => import('./components/StockBoutique/StockReception'))
 const StockEvening = lazy(() => import('./components/StockBoutique/StockEvening'))
 const StockAudit = lazy(() => import('./components/StockBoutique/StockAudit'))
@@ -21,6 +23,8 @@ import TasksView from './components/Tasks/TasksView'
 const HRView = lazy(() => import('./components/HR/HRView'))
 const InboxView = lazy(() => import('./components/Conversations/InboxView'))
 const DevisView = lazy(() => import('./components/DevisView'))
+const OcpManage = lazy(() => import('./components/OcpManage'))
+const NewOrderView = lazy(() => import('./components/NewOrderView'))
 const ModificationsView = lazy(() => import('./components/ModificationsView'))
 import LivraisonsView from './components/LivraisonsView'
 const PaymentsView = lazy(() => import('./components/Conversations/PaymentsView'))
@@ -42,6 +46,14 @@ function App() {
   const [activeView, setActiveViewRaw] = useState('calendar')
   // Conversation à ouvrir d'office (deep-link depuis une notif push)
   const [deepLinkConv, setDeepLinkConv] = useState(null)
+  // Ouverture d'un fil par numéro de téléphone (depuis le bouton Relancer des Devis)
+  const [deepLinkPhone, setDeepLinkPhone] = useState(null)
+  // N° de commande à marquer « Relancé par » au 1er envoi réel (relance depuis Devis)
+  const [deepLinkRelanceRef, setDeepLinkRelanceRef] = useState(null)
+  // Commande à ouvrir d'office dans l'onglet Commandes (depuis le 📦 Cmd d'une conversation)
+  const [deepLinkDevis, setDeepLinkDevis] = useState(null)
+  // Client (nom + téléphone) à pré-remplir dans « Nouvelle commande » (depuis une conversation)
+  const [deepLinkNewCmd, setDeepLinkNewCmd] = useState(null)
 
   // Wrapper pour setActiveView : persiste dans localStorage pour que Cmd+R
   // ramene l'utilisateur sur la meme page
@@ -110,10 +122,28 @@ function App() {
     // Sinon fallback sur la vue par defaut du user.
     const persisted = getStoredActiveView()
     // Deep-link depuis une notif push (/?conv=123) : ouvre direct la conversation
-    const convParam = new URLSearchParams(window.location.search).get('conv')
+    const sp = new URLSearchParams(window.location.search)
+    const convParam = sp.get('conv')
+    const convPhoneParam = sp.get('convphone')
     if (convParam) {
       setActiveView('conversations')
       setDeepLinkConv(Number(convParam))
+      try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
+    } else if (convPhoneParam) {
+      setActiveView('conversations')
+      setDeepLinkPhone(convPhoneParam)
+      const relanceRefParam = sp.get('relanceref')
+      if (relanceRefParam) setDeepLinkRelanceRef(relanceRefParam)
+      try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
+    } else if (sp.get('devis')) {
+      // Ouverture d'une commande précise dans l'onglet Commandes (depuis 📦 Cmd)
+      setActiveView('devis')
+      setDeepLinkDevis({ q: sp.get('devis'), state: sp.get('dstate') || '', day: sp.get('dday') || '' })
+      try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
+    } else if (sp.get('newcmd')) {
+      // Nouvelle commande pré-remplie avec le client (depuis une conversation WhatsApp)
+      setActiveView('nouvelle-commande')
+      setDeepLinkNewCmd({ phone: sp.get('cmdphone') || '', name: sp.get('cmdname') || '' })
       try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
     } else if (persisted) {
       setActiveView(persisted)
@@ -240,6 +270,7 @@ function App() {
 
   function handleNavigate(view) {
     setDeepLinkConv(null)
+    setDeepLinkPhone(null)
     setActiveView(view)
   }
 
@@ -275,7 +306,9 @@ function App() {
     if (activeView === 'freezer') return <FreezerView {...navProps} />
     if (activeView === 'messages') return <MessagesView {...navProps} />
     if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
+    if (activeView === 'etiquettes-prix') return <ProductLabelsView {...navProps} />
     if (activeView === 'vitrine') return <StockMorning {...navProps} mode="sucre" />
+    if (activeView === 'vitrine-previsions') return <StockPrevisions {...navProps} />
     if (activeView === 'vitrine-sale') return <StockMorning {...navProps} mode="sale" />
     if (activeView === 'reception-vitrine') return <StockReception {...navProps} />
     if (activeView === 'fin-journee') return <StockEvening {...navProps} />
@@ -285,8 +318,11 @@ function App() {
     if (activeView === 'stock-prod-annexe') return <StockProd {...navProps} lieu="annexe" />
     if (activeView === 'tasks') return <TasksWrapper {...navProps} />
     if (activeView === 'hr') return <HRWrapper {...navProps} />
-    if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} />
-    if (activeView === 'devis') return <DevisWrapper {...navProps} />
+    if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} initialPhone={deepLinkPhone} initialRelanceRef={deepLinkRelanceRef} />
+    if (activeView === 'devis') return <DevisWrapper {...navProps} initialDevis={deepLinkDevis} />
+    if (activeView === 'ocp-link') return <div className="min-h-screen bg-cream"><AppHeader {...navProps} /><OcpManage /></div>
+    if (activeView === 'devis-internet') return <DevisWrapper {...navProps} internetOnly />
+    if (activeView === 'nouvelle-commande') return <NewOrderWrapper {...navProps} initialClient={deepLinkNewCmd} />
     if (activeView === 'modifications') return <ModificationsWrapper {...navProps} />
     if (activeView === 'livraisons') return <LivraisonsWrapper {...navProps} />
     if (activeView === 'paiements') return <PaymentsWrapper {...navProps} />
@@ -348,12 +384,22 @@ function HRWrapper(props) {
   )
 }
 
+function NewOrderWrapper(props) {
+  const { user, onLogout, onNavigate, activeView, initialClient } = props
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+      <NewOrderView user={user} initialClient={initialClient} />
+    </div>
+  )
+}
+
 function ConversationsWrapper(props) {
-  const { user, onLogout, onNavigate, activeView, initialConversationId } = props
+  const { user, onLogout, onNavigate, activeView, initialConversationId, initialPhone, initialRelanceRef } = props
   return (
     <div className="min-h-[100dvh] bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
-      <InboxView user={user} initialConversationId={initialConversationId} />
+      <InboxView user={user} initialConversationId={initialConversationId} initialPhone={initialPhone} initialRelanceRef={initialRelanceRef} />
     </div>
   )
 }
@@ -369,11 +415,11 @@ function PaymentsWrapper(props) {
 }
 
 function DevisWrapper(props) {
-  const { user, onLogout, onNavigate, activeView } = props
+  const { user, onLogout, onNavigate, activeView, initialDevis, internetOnly } = props
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
-      <DevisView user={user} />
+      <DevisView user={user} initialDevis={initialDevis} internetOnly={internetOnly} />
     </div>
   )
 }

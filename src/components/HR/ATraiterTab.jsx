@@ -1,14 +1,39 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react'
-import { loadATraiter, traiterAbsence, traiterOubliPointage, validerRecup, refuserRecup } from '../../lib/aTraiter'
-import { uploadJustificatif } from '../../lib/conges'
+import { loadATraiter, traiterAbsence, traiterOubliPointage, ignorerAbsence, validerRecup, refuserRecup } from '../../lib/aTraiter'
+import { uploadJustificatif, dispoTypeConge } from '../../lib/conges'
+import { toast } from '../../lib/toast'
 
+// Mêmes types qu'une demande de congé classique (cf. CongesView.jsx), sauf
+// 'recup' qui a sa propre section ci-dessous. + 'oubli' = la personne a pointé.
 const CLASSIFS = [
-  { v: 'annuel',     label: 'Congé annuel' },
-  { v: 'maladie',    label: 'Maladie' },
-  { v: 'sans_solde', label: 'Sans solde' },
-  { v: 'oubli',      label: 'Oubli de pointage (présent)' },
+  { v: 'annuel',         label: 'Congé annuel' },
+  { v: 'maladie_courte', label: 'Congé maladie ≤ 3 j' },
+  { v: 'maladie_longue', label: 'Congé maladie > 3 j' },
+  { v: 'recup',          label: 'Récupération' },
+  { v: 'mariage',        label: 'Mariage' },
+  { v: 'naissance',      label: 'Naissance' },
+  { v: 'deces',          label: 'Décès' },
+  { v: 'circoncision',   label: 'Circoncision' },
+  { v: 'maternite',      label: 'Congé maternité' },
+  { v: 'sans solde',     label: 'Sans solde' },
+  { v: 'oubli',          label: 'Oubli de pointage (présent)' },
+  { v: 'ancien_jour_off', label: 'Ancien jour off (planning changé)' },
+  { v: 'deja_traite',    label: 'Déjà traité dans un autre congé' },
 ]
+
+// Types soumis à un solde/allocation : proposés UNIQUEMENT s'ils sont disponibles
+// pour l'employé (dispoTypeConge renvoie undefined sinon).
+const LIMITED = ['mariage', 'naissance', 'deces', 'circoncision', 'maternite', 'recup']
+
+// Classifications « sans suite » : ne créent AUCUN congé (pas de dates, pas de
+// justificatif, pas de solde) — l'absence est juste retirée de la liste.
+const SANS_SUITE = ['oubli', 'ancien_jour_off', 'deja_traite']
+
+// Nombre de jours calendaires entre 2 dates (incluses).
+function nbJours(d1, d2) {
+  return Math.floor((new Date(d2 + 'T00:00:00') - new Date(d1 + 'T00:00:00')) / 86400000) + 1
+}
 
 const fmtJour = ymd => (ymd ? ymd.split('-').reverse().join('/') : '')
 
@@ -53,16 +78,29 @@ export default function ATraiterTab({ user, onChange }) {
     try {
       if (classification === 'oubli') {
         await traiterOubliPointage({ employe_id: a.employe_id, date: a.date, heures_prevues: a.heures_prevues, userId: user.id })
+      } else if (classification === 'ancien_jour_off' || classification === 'deja_traite') {
+        // Classer sans suite : aucune demande de congé, aucun ajustement de pointage.
+        await ignorerAbsence({ employe_id: a.employe_id, date: a.date, raison: classification, userId: user.id })
       } else {
         const date_debut = f.date_debut || a.date
         const date_fin = f.date_fin || a.date
         if (date_fin < date_debut) { setErr('La date de fin est avant la date de début.'); setBusyKey(''); return }
+        const dispo = dispoTypeConge(a.solde, classification)
+        if (typeof dispo === 'number' && nbJours(date_debut, date_fin) > dispo) {
+          const lbl = CLASSIFS.find(c => c.v === classification)?.label || classification
+          setErr(`Solde « ${lbl} » épuisé (${dispo} j dispo) pour ${a.nom}. Choisis un autre type.`); setBusyKey(''); return
+        }
         let justificatif_path = null
         if (files[key]) justificatif_path = await uploadJustificatif(files[key], user.id)
         await traiterAbsence({ employe_id: a.employe_id, date_debut, date_fin, classification, raison: f.raison || null, userId: user.id, justificatif_path })
       }
       await reload()
-    } catch (e) { setErr(e.message) }
+      toast.success(
+        classification === 'oubli' ? `${a.nom} marqué présent ✓`
+          : (classification === 'ancien_jour_off' || classification === 'deja_traite') ? `Absence classée sans suite ✓`
+          : `${a.nom} envoyé en validation ✓`
+      )
+    } catch (e) { setErr(e.message); toast.error(e.message || 'Échec') }
     finally { setBusyKey('') }
   }
 
@@ -70,15 +108,17 @@ export default function ATraiterTab({ user, onChange }) {
     const key = `${r.employe_id}|${r.date}`
     const f = form[key] || {}
     if (action === 'valider' && (!f.raison || !f.raison.trim())) {
-      setErr('Indique la raison pour valider la récup de ' + r.nom + '.'); return
+      const msg = `Écris d'abord la raison (pourquoi a-t-il travaillé ?) pour valider la récup de ${r.nom}.`
+      setErr(msg); toast.error(msg); return
     }
     setBusyKey(key); setErr('')
     try {
       const args = { employe_id: r.employe_id, date: r.date, raison: (f.raison || '').trim() || null, userId: user.id }
       if (action === 'valider') await validerRecup(args)
       else await refuserRecup(args)
+      toast.success(action === 'valider' ? `Récup de ${r.nom} validée ✓` : `Récup de ${r.nom} refusée`)
       await reload()
-    } catch (e) { setErr(e.message) }
+    } catch (e) { setErr(e.message); toast.error(e.message || 'Échec') }
     finally { setBusyKey('') }
   }
 
@@ -105,6 +145,10 @@ export default function ATraiterTab({ user, onChange }) {
           {data.absences.map(a => {
             const key = `${a.employe_id}|${a.date}`
             const f = form[key] || {}
+            const classifs = CLASSIFS.filter(c => !LIMITED.includes(c.v) || dispoTypeConge(a.solde, c.v) !== undefined)
+            const cls = f.classification || 'annuel'
+            const dispoSel = SANS_SUITE.includes(cls) ? null : dispoTypeConge(a.solde, cls)
+            const depasse = typeof dispoSel === 'number' && nbJours(f.date_debut || a.date, f.date_fin || a.date) > dispoSel
             return (
               <div key={key} style={{ background: 'white', border: '1px solid #f0d9d2', borderRadius: 12, padding: '12px 14px', marginBottom: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
                 <div style={{ minWidth: 170 }}>
@@ -113,9 +157,12 @@ export default function ATraiterTab({ user, onChange }) {
                 </div>
                 <select value={f.classification || 'annuel'} onChange={e => setField(key, 'classification', e.target.value)}
                   style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }}>
-                  {CLASSIFS.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
+                  {classifs.map(c => {
+                    const d = dispoTypeConge(a.solde, c.v)
+                    return <option key={c.v} value={c.v}>{c.label}{typeof d === 'number' ? ` (${d} j dispo)` : ''}</option>
+                  })}
                 </select>
-                {f.classification !== 'oubli' && (
+                {!SANS_SUITE.includes(cls) && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#4a3a30' }}>
                     du <input type="date" value={f.date_debut || a.date} onChange={e => setField(key, 'date_debut', e.target.value)}
                       style={{ padding: '6px 8px', fontSize: 12, border: '1px solid #e5d8c3', borderRadius: 8 }} />
@@ -126,7 +173,7 @@ export default function ATraiterTab({ user, onChange }) {
                 <input value={f.raison || ''} onChange={e => setField(key, 'raison', e.target.value)}
                   placeholder="Raison (optionnel)"
                   style={{ flex: 1, minWidth: 120, padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
-                {f.classification !== 'oubli' && (
+                {!SANS_SUITE.includes(cls) && (
                   <label style={{ fontSize: 11, color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: '1px solid #e5d8c3', borderRadius: 8, padding: '6px 8px', background: files[key] ? '#EAF3DE' : 'white' }}
                     title="Joindre un certificat médical / justificatif (PDF ou photo)">
                     📎 {files[key] ? files[key].name.slice(0, 14) : 'Justificatif'}
@@ -134,9 +181,10 @@ export default function ATraiterTab({ user, onChange }) {
                       onChange={e => setFiles(fl => ({ ...fl, [key]: e.target.files?.[0] || null }))} />
                   </label>
                 )}
-                <button onClick={() => handleAbsence(a)} disabled={busyKey === key}
-                  style={{ padding: '8px 14px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Send size={13} /> {busyKey === key ? '…' : (f.classification === 'oubli' ? 'Marquer présent' : 'Envoyer en validation')}
+                {depasse && <span style={{ fontSize: 11, color: '#A32D2D', fontWeight: 600 }}>Solde épuisé</span>}
+                <button onClick={() => handleAbsence(a)} disabled={busyKey === key || depasse}
+                  style={{ padding: '8px 14px', fontSize: 13, background: '#993556', color: 'white', border: 'none', borderRadius: 8, cursor: (busyKey === key || depasse) ? 'not-allowed' : 'pointer', opacity: (busyKey === key || depasse) ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Send size={13} /> {busyKey === key ? '…' : (cls === 'oubli' ? 'Marquer présent' : (cls === 'ancien_jour_off' || cls === 'deja_traite') ? 'Classer sans suite' : 'Envoyer en validation')}
                 </button>
               </div>
             )

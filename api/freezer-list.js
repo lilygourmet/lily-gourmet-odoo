@@ -118,7 +118,7 @@ async function fetchListForDate(date, uid) {
   const orderInfo = {}
   if (scodes.length > 0) {
     const orders = await odooSearchRead(uid, 'sale.order', [['name', 'in', scodes]],
-      ['name', 'commitment_date', 'partner_id'])
+      ['name', 'commitment_date', 'partner_id', 'state'])
     for (const o of orders) orderInfo[o.name] = o
   }
 
@@ -137,6 +137,8 @@ async function fetchListForDate(date, uid) {
     // Ignorer les MO sans scode (= stock/réapprovisionnement, pas une commande client)
     if (!scode) continue
     const ord = orderInfo[scode]
+    // Ne pas montrer les composants d'une commande client ANNULÉE
+    if (ord && ord.state === 'cancel') continue
     let hour = 0, minute = 0, clientName = ''
     if (ord) {
       if (ord.commitment_date) {

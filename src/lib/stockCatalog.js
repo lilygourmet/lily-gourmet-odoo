@@ -16,9 +16,9 @@
 //     all: [...]
 //   }
 
-// Cache en mémoire (recharge à chaque session)
-let cachedCatalog = null
-let cacheTimestamp = 0
+// Cache en mémoire (recharge à chaque session). Une entrée par variante d'URL
+// (catalogue normal vs catalogue du soir qui inclut les V-cakes (1)).
+const catalogCache = new Map() // key -> { catalog, ts }
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 // Tailles affichées par défaut (compat ancienne API)
@@ -53,14 +53,17 @@ export function extractProductCode(name) {
 /**
  * Récupère le catalogue complet depuis Odoo (toutes catégories).
  */
-export async function fetchEntremetsCatalog() {
+export async function fetchEntremetsCatalog(opts = {}) {
+  const includeV1 = !!opts.includeV1
+  const cacheKey = includeV1 ? 'v1' : 'default'
   // Cache hit
-  if (cachedCatalog && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
-    return cachedCatalog
+  const cached = catalogCache.get(cacheKey)
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    return cached.catalog
   }
 
   try {
-    const res = await fetch('/api/catalog-from-odoo')
+    const res = await fetch('/api/catalog-from-odoo' + (includeV1 ? '?vcake1=1' : ''))
     if (!res.ok) {
       console.error('[stockCatalog] HTTP error:', res.status, await res.text())
       return emptyCatalog()
@@ -93,13 +96,13 @@ export async function fetchEntremetsCatalog() {
       all.push(...cat.articles)
     }
 
-    cachedCatalog = {
+    const catalog = {
       categories: data.categories || [],
       sizes: sizesLegacy,
       all,
     }
-    cacheTimestamp = Date.now()
-    return cachedCatalog
+    catalogCache.set(cacheKey, { catalog, ts: Date.now() })
+    return catalog
   } catch (e) {
     console.error('[stockCatalog] fetch error:', e)
     return emptyCatalog()
@@ -118,8 +121,7 @@ function emptyCatalog() {
  * Vide le cache (utile après resync Odoo manuel)
  */
 export function invalidateCatalog() {
-  cachedCatalog = null
-  cacheTimestamp = 0
+  catalogCache.clear()
 }
 
 /**

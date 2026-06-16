@@ -42,6 +42,28 @@ export async function searchInvoices(query) {
   return data.invoices || []
 }
 
+// Recherche de produits pour imprimer les étiquettes prix (nom, prix, taille, descriptif).
+export async function searchProductLabels(query) {
+  const res = await fetch('/api/wati-webhook?action=product-labels', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: query || '' }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.products || []
+}
+
+// Génère en lot les produits d'une famille (entremets/cakes/cookies/viennoiserie).
+export async function genProductLabelsGroup(group) {
+  const res = await fetch('/api/wati-webhook?action=product-labels-group', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  return data.products || []
+}
+
 // Ouvre un PDF (base64) dans un nouvel onglet pour impression.
 export function openInvoicePdf({ pdf }) {
   const bytes = atob(pdf)
@@ -147,7 +169,7 @@ export const PROD_VIEW_CATEGORIES = {
 // Patterns GS- qui vont en Prod (gateaux secs, cookies, mini cakes sucres)
 // → Ces produits, bien que prefixe GS-, doivent apparaitre en Prod et PAS en Sales
 const GS_PROD_PATTERNS = [
-  /^GS-\s*plateau\s*gateau\s*sec/i,
+  /^GS-\s*plateaux?\s*g[âa]teaux?\s*secs?/i,
   /^GS-\s*cookies?\b/i,
   /^GS-\s*plateau\s*mini\s*cakes?\s*sucr/i,
 ]

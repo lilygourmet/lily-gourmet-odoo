@@ -164,9 +164,15 @@ export default async function handler(req, res) {
       const prefix = detectPrefix(cleaned)
       if (!prefix) continue
 
+      // V- : les cakes existent en (1) [1 part] et (6) ; on n'affiche pas les (1) en vitrine,
+      // SAUF pour le comptage du soir (?vcake1=1) où l'on compte les parts individuelles restantes.
+      if (prefix === 'V-' && extractSize(cleaned) === 1 && !req.query.vcake1) continue
+
       const tmplId = Array.isArray(v.product_tmpl_id) ? v.product_tmpl_id[0] : null
       const tmplInfo = tmplById.get(tmplId) || { sequence: 99, image_url_fallback: null }
-      const size = extractSize(cleaned)
+      // Le (N) final n'est un nombre de personnes que pour les entremets/cakes.
+      // Pour MI- (mignardises), (18)/(28) = nb de pièces → pas une « taille » : on garde tout dans une seule liste.
+      const size = prefix === 'MI-' ? null : extractSize(cleaned)
       const image_url = v.image_128
         ? `data:image/png;base64,${v.image_128}`
         : tmplInfo.image_url_fallback
@@ -282,11 +288,11 @@ async function handleStockProd(req, res) {
       }
     } catch (e) { console.warn('[stockProd orderpoint]', e.message) }
 
-    // On ne garde QUE les articles réellement présents à ce lieu (qui ont une
-    // ligne de stock — quant — à cette location), pas tout le catalogue SM-.
+    // On garde TOUS les articles SM- (même ceux à 0 / sans ligne de stock à ce lieu),
+    // pour que l'admin puisse les activer et régler min/max dans le catalogue.
+    // qty = 0 si aucun stock à cette location. La vue non-admin n'affiche que les actifs.
     const byName = new Map()
     for (const v of variants) {
-      if (!qtyByVariant.has(v.id)) continue
       const name = cleanName(v.name)
       if (!name) continue
       const cur = byName.get(name) || { qty: 0, odoo_min: null, odoo_max: null }

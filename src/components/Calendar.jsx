@@ -935,20 +935,6 @@ function SearchResults({ orders, stepsMap, onOrderClick, query }) {
   )
 }
 
-// Pastille couleur par statut de commande : devis (orange) / confirmé (bleu).
-// (Payé en vert : à venir, nécessite la donnée de paiement sur le calendrier.)
-function statutCommande(order) {
-  const s = order?.odoo_state
-  if (s === 'draft' || s === 'sent') return { color: '#E08A00', label: 'Devis' }
-  if (s === 'sale' || s === 'done')  return { color: '#1456a0', label: 'Confirmé' }
-  return null
-}
-function StatutPastille({ order }) {
-  const st = statutCommande(order)
-  if (!st) return null
-  return <span title={st.label} className="inline-block w-2 h-2 rounded-full flex-shrink-0 mr-1" style={{ background: st.color }} />
-}
-
 function SearchResultRow({ order, stepsMap, onClick }) {
   const dt = new Date(order.delivery_at)
   const dateStr = `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`
@@ -966,7 +952,7 @@ function SearchResultRow({ order, stepsMap, onClick }) {
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <StatutPastille order={order} /><span className={`font-mono text-[11px] text-bordeaux font-semibold ${cancelled ? 'line-through' : ''}`}>{order.order_num}</span>
+          <span className={`font-mono text-[11px] text-bordeaux font-semibold ${cancelled ? 'line-through' : ''}`}>{order.order_num}</span>
           <span className={`text-[12px] text-ink font-medium truncate ${cancelled ? 'line-through' : ''}`}>{order.client_name || '—'}</span>
           {cancelled && <CancelledBadge />}
           {!cancelled && modified && <ModifiedBadge />}
@@ -1129,7 +1115,7 @@ function AllCapsule({ order, stepsMap }) {
       <div className="md:hidden p-2.5">
         <div className="flex items-start justify-between gap-2 mb-2">
           <span className={`font-mono text-[12px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-            <StatutPastille order={order} /><span className="truncate">{order.order_num}</span>
+            <span className="truncate">{order.order_num}</span>
             {warningOnOrder && <WarningBadge />}
           </span>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -1215,7 +1201,7 @@ function AllCapsule({ order, stepsMap }) {
       <div className="hidden md:block p-2">
         <div className="flex items-center justify-between mb-1.5 gap-1">
           <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-            <StatutPastille order={order} /><span className="truncate">{order.order_num}</span>
+            <span className="truncate">{order.order_num}</span>
             {warningOnOrder && <WarningBadge />}
           </span>
           <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
@@ -1297,7 +1283,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
       <div className="md:hidden p-2.5">
         <div className="flex items-start justify-between gap-2 mb-2">
           <span className={`font-mono text-[12px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-            <StatutPastille order={order} /><span className="truncate">{order.order_num}</span>
+            <span className="truncate">{order.order_num}</span>
             <span className="text-[9px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
             {itemWarning && <WarningBadge />}
           </span>
@@ -1354,7 +1340,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
       <div className="hidden md:block p-2">
         <div className="flex items-center justify-between mb-1.5 gap-1">
           <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-            <StatutPastille order={order} /><span className="truncate">{order.order_num}</span>
+            <span className="truncate">{order.order_num}</span>
             <span className="text-[8px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
             {itemWarning && <WarningBadge />}
           </span>
@@ -1413,7 +1399,7 @@ function GMItemCapsule({ order, item, stepsMap }) {
       <div className="md:hidden p-2.5">
         <div className="flex items-start justify-between gap-2 mb-2">
           <span className={`font-mono text-[12px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-            <StatutPastille order={order} /><span className="truncate">{order.order_num}</span>
+            <span className="truncate">{order.order_num}</span>
             <span className="text-[9px] font-mono px-1 py-0.5 bg-gold/20 text-chocolate rounded flex-shrink-0">GM</span>
             {itemWarning && <WarningBadge />}
           </span>
@@ -1459,7 +1445,7 @@ function GMItemCapsule({ order, item, stepsMap }) {
       <div className="hidden md:block p-2">
         <div className="flex items-center justify-between mb-1.5 gap-1">
           <span className={`font-mono text-[10px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-            <StatutPastille order={order} /><span className="truncate">{order.order_num}</span>
+            <span className="truncate">{order.order_num}</span>
             <span className="text-[8px] font-mono px-1 py-0.5 bg-gold/20 text-chocolate rounded flex-shrink-0">GM</span>
             {itemWarning && <WarningBadge />}
           </span>

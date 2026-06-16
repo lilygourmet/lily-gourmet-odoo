@@ -50,7 +50,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
         setStockDay(sd)
         const [its, cat] = await Promise.all([
           loadEveningCounts(sd.id),
-          fetchEntremetsCatalog(),
+          fetchEntremetsCatalog({ includeV1: true }),
         ])
         if (!mounted) return
         setCounts(its)

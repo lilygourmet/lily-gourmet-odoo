@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders, groupDeliveriesWithFullOrder, stripOdooPrefix } from '../lib/salesLines'
-import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite, setLivraisonPreuve } from '../lib/deliveries'
+import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite, setLivraisonPreuve, setLivraisonLocalisation } from '../lib/deliveries'
 import { uploadConversationMedia, getMediaSignedUrl } from '../lib/conversations'
 import { canDispatchLivraisons, isLivreurDefaut, isLivreurAssigne } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
@@ -221,7 +221,18 @@ export default function LivraisonsView({ user }) {
                     {d.clientPhone && <div style={{ fontSize: 12, color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={11} /> <a href={`tel:${d.clientPhone}`} style={{ color: '#4a3a30' }}>{d.clientPhone}</a></div>}
                   </div>
                 </div>
-                {d.orderNote && <a href={buildMapsHref(d.orderNote)} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#1a5fb4', marginTop: 4, display: 'flex', alignItems: 'flex-start', gap: 4, textDecoration: 'underline' }}><MapPin size={12} style={{ flexShrink: 0, marginTop: 2 }} /> {d.orderNote}</a>}
+                {(() => {
+                  const loc = s.localisation || d.orderNote
+                  return (
+                    <div style={{ marginTop: 4 }}>
+                      {loc && <a href={buildMapsHref(loc)} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#1a5fb4', display: 'flex', alignItems: 'flex-start', gap: 4, textDecoration: 'underline' }}><MapPin size={12} style={{ flexShrink: 0, marginTop: 2 }} /> {loc}</a>}
+                      {isDispatcher && d.orderNum && (
+                        <LocalisationEditor orderNum={d.orderNum} value={s.localisation || ''} hasLoc={!!loc}
+                          onSaved={v => setStates(st => ({ ...st, [d.orderNum]: { ...st[d.orderNum], localisation: v } }))} />
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {Array.isArray(d.items) && d.items.filter(it => it.category !== 'LIVR').length > 0 && (
                   <div style={{ marginTop: 8, padding: '8px 10px', background: '#FAF7F2', borderRadius: 8, fontSize: 13, color: '#4a3a30' }}>
@@ -318,6 +329,44 @@ export default function LivraisonsView({ user }) {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// Édition de l'adresse / localisation d'une livraison (réservé au dispatcher).
+function LocalisationEditor({ orderNum, value, hasLoc, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(value)
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    setBusy(true)
+    try {
+      await setLivraisonLocalisation(orderNum, val)
+      onSaved((val || '').trim())
+      setEditing(false)
+      toast.success('Adresse / localisation enregistrée')
+    } catch (e) { toast.error(e?.message || 'Échec') }
+    finally { setBusy(false) }
+  }
+
+  if (!editing) {
+    return (
+      <button onClick={() => { setVal(value); setEditing(true) }}
+        style={{ marginTop: 4, fontSize: 11, color: '#993556', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+        {hasLoc ? '✏️ Modifier l’adresse / localisation' : '📍 Ajouter l’adresse / localisation'}
+      </button>
+    )
+  }
+  return (
+    <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+      <textarea value={val} onChange={e => setVal(e.target.value)} rows={2} autoFocus
+        placeholder="Adresse, lien Maps/WhatsApp, ou coordonnées GPS…"
+        style={{ flex: 1, padding: '6px 8px', fontSize: 12, border: '1px solid #e5d8c3', borderRadius: 8, resize: 'vertical' }} />
+      <button onClick={save} disabled={busy}
+        style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', background: '#993556', color: 'white', border: 'none' }}>{busy ? '…' : 'OK'}</button>
+      <button onClick={() => setEditing(false)} disabled={busy}
+        style={{ padding: '6px 8px', fontSize: 12, borderRadius: 8, cursor: 'pointer', background: 'none', border: '1px solid #e5d8c3', color: '#8a7a70' }}>✕</button>
     </div>
   )
 }

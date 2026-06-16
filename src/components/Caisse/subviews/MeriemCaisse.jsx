@@ -10,6 +10,7 @@ import PreuveMouvementModal from '../modals/PreuveMouvementModal'
 import ValiderReceptionsModal from '../modals/ValiderReceptionsModal'
 import AuditLogPanel from '../AuditLogPanel'
 import { confirmDialog } from '../../../lib/confirmDialog'
+import { toast } from '../../../lib/toast'
 
 export default function MeriemCaisse({ user, focus }) {
   return <CaisseGenericView caisseOwner="meriem" user={user} focus={focus} accent={{ bg: '#EAF3DE', text: '#27500A', border: '#97C459' }} />
@@ -116,13 +117,30 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
     setShowCloture(false); reload()
   }
   async function handleDeleteMvt(id) {
-    if (!await confirmDialog('Supprimer ce mouvement ? (l\'action sera enregistrée dans l\'historique)', { danger: true, confirmLabel: 'Supprimer' })) return
-    await deleteMouvement(id, user.id); reload()
+    let reason = null
+    if (!isAdmin) {
+      // Meriem : raison OBLIGATOIRE (enregistrée dans l'historique vu par Layla).
+      reason = prompt('Raison de la suppression (obligatoire) :')
+      if (reason == null) return                  // annulé
+      reason = reason.trim()
+      if (!reason) { toast.error('La raison est obligatoire pour supprimer.'); return }
+    } else if (!await confirmDialog('Supprimer ce mouvement ? (l\'action sera enregistrée dans l\'historique)', { danger: true, confirmLabel: 'Supprimer' })) {
+      return
+    }
+    await deleteMouvement(id, user.id, reason); reload()
   }
   async function handleEditAmount(mvt) {
     const nv = prompt('Nouveau montant :', mvt.amount)
     if (!nv || isNaN(Number(nv))) return
-    await updateMouvement(mvt.id, { amount: Number(nv) }, user.id)
+    let reason = null
+    if (!isAdmin) {
+      // Meriem : raison OBLIGATOIRE pour changer un montant.
+      reason = prompt('Raison de la modification du montant (obligatoire) :')
+      if (reason == null) return
+      reason = reason.trim()
+      if (!reason) { toast.error('La raison est obligatoire pour modifier le montant.'); return }
+    }
+    await updateMouvement(mvt.id, { amount: Number(nv) }, user.id, reason)
     reload()
   }
   async function handleSaveEdit(updates) {
@@ -385,8 +403,8 @@ function MouvementRow({ mvt, isAdmin, highlight, onEdit, onEditAmount, onDelete,
           <button onClick={onEdit} title="Modifier intitulé et date" style={btnIcon}><Pencil size={14} /></button>
         )}
 
-        {/* Modifier montant + supprimer : admin seulement */}
-        {canEdit && isAdmin && (
+        {/* Modifier montant + supprimer : admin direct ; Meriem avec raison obligatoire */}
+        {canEdit && (
           <>
             <button onClick={onEditAmount} title="Modifier le montant" style={btnIcon}><Coins size={14} /></button>
             <button onClick={onDelete} title="Supprimer ce mouvement" style={btnIconRed}><Trash2 size={14} /></button>

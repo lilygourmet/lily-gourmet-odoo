@@ -158,6 +158,10 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
     const urls = Array.isArray(item.image_urls) ? item.image_urls : []
     for (const u of urls) if (!allPhotos.includes(u)) allPhotos.push(u)
   }
+  // Repli : photos du chatter Odoo (passées par order.fallback_photos) si aucune photo synchronisée.
+  if (allPhotos.length === 0 && Array.isArray(order.fallback_photos)) {
+    for (const u of order.fallback_photos) if (u && !allPhotos.includes(u)) allPhotos.push(u)
+  }
 
   return (
     <div className="print-order-page" style={{
@@ -228,9 +232,17 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
         </div>
         <div>
           <div style={{ color: '#888', fontSize: '11px', marginBottom: '2px' }}>Vendeur :</div>
-          <div style={{ fontWeight: '600' }}>{order.seller_name || '—'}</div>
+          <div style={{ fontWeight: '600' }}>{order.app_seller || order.seller_name || '—'}</div>
         </div>
       </div>
+
+      {/* Note / commentaire de la commande (ex. « ⚠️ … chocolat blanc… ») */}
+      {order.order_note && (
+        <div style={{ margin: '0 0 16px', padding: '8px 12px', background: '#fce4ec', borderLeft: '3px solid #c2185b', borderRadius: '3px' }}>
+          <div style={{ fontSize: '9.5px', fontWeight: 'bold', color: '#c2185b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '3px' }}>💬 Commentaire</div>
+          <div style={{ fontSize: '12px', color: '#333', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{order.order_note}</div>
+        </div>
+      )}
 
       {/* SECTION CD */}
       {cdItems.length > 0 && (
@@ -518,6 +530,10 @@ function GmItemPrint({ item, fiche, palette, index, totalGmItems }) {
         {decos.length > 0 && (
           <div>Deco : {decos.join(' · ')}</div>
         )}
+        {/* Thème / Âge / Message (comme les cake design) — ex. « chocolat blanc, hajj mubarak… » */}
+        {item.theme && <div>Theme : {item.theme}</div>}
+        {item.age && <div>Age : {item.age}</div>}
+        {item.message && <div>Message : « {item.message} »</div>}
       </div>
       <ItemNote item={item} />
     </div>

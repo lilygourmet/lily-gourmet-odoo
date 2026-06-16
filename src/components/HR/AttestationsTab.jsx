@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { FileText, FilePen, Building2, Info, Wallet, CheckCircle2, ClipboardList, GraduationCap, Clock, Download } from 'lucide-react'
-import { loadEmployes, generateAttestation, getAllTemplates } from '../../lib/hr'
+import { loadEmployes, generateAttestation, generateDepartPackWord, getAllTemplates } from '../../lib/hr'
 import SearchSelect from '../SearchSelect'
+import ReglementInterieur from './ReglementInterieur'
 
 /**
  * Onglet Attestations : choix du type + employé + champs + génération.
@@ -127,9 +128,16 @@ export default function AttestationsTab({ user, isAdmin }) {
         societe_cnss: soc?.cnss || '',
         societe_ice: soc?.ice || '',
       }
-      await generateAttestation(type, formAvecSociete)
-      setSuccess(`✅ Document généré et téléchargé : ${currentTemplate.label} pour ${form.nom}${soc ? ' · ' + soc.nom : ''}`)
-      setTimeout(() => setSuccess(null), 5000)
+      // Pack départ : .zip = 3 attestations Word fusionnées + bulletins PDF. Sinon : 1 modèle.
+      if (currentTemplate?.pack) {
+        const r = await generateDepartPackWord(formAvecSociete)
+        setSuccess(`✅ Pack départ (.zip) téléchargé : 3 attestations + ${r.bulletins} bulletin(s) — ${form.nom}.`
+          + (r.bulletins === 0 ? ' ⚠️ Aucun bulletin trouvé (ajoute-les dans l\'onglet Salaires).' : ''))
+      } else {
+        await generateAttestation(type, formAvecSociete)
+        setSuccess(`✅ Document généré et téléchargé : ${currentTemplate.label} pour ${form.nom}${soc ? ' · ' + soc.nom : ''}`)
+      }
+      setTimeout(() => setSuccess(null), 8000)
     } catch (e) {
       console.error(e)
       setError(e.message || 'Erreur lors de la génération')
@@ -139,15 +147,16 @@ export default function AttestationsTab({ user, isAdmin }) {
 
   return (
     <div>
-      {/* Sous-onglets : Attestations / Contrats */}
-      {isAdmin && (
+      {/* Sous-onglets : Attestations / Contrats / Règlement */}
+      {(
         <div style={{
           display: 'flex', gap: 4, padding: 3, background: '#F4F0EA', borderRadius: 8,
           marginBottom: 16, width: 'fit-content',
         }}>
           {[
             { v: 'attestations', label: 'Attestations', Icon: FileText },
-            { v: 'contrats', label: 'Contrats', Icon: FilePen },
+            ...(isAdmin ? [{ v: 'contrats', label: 'Contrats', Icon: FilePen }] : []),
+            { v: 'reglement', label: 'Règlement intérieur', Icon: ClipboardList },
           ].map(t => (
             <button key={t.v} type="button" onClick={() => setSubTab(t.v)} style={{
               padding: '7px 14px', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer',
@@ -160,6 +169,9 @@ export default function AttestationsTab({ user, isAdmin }) {
         </div>
       )}
 
+      {subTab === 'reglement' && <ReglementInterieur />}
+
+      {subTab !== 'reglement' && (
       <form onSubmit={handleGenerate}>
 
         {/* Type de document */}
@@ -443,10 +455,11 @@ export default function AttestationsTab({ user, isAdmin }) {
           {generating ? (
             <><Clock size={16} /> Génération en cours…</>
           ) : (
-            <><Download size={16} /> Générer et télécharger le document Word</>
+            <><Download size={16} /> {currentTemplate?.pack ? 'Générer le Pack départ (.zip)' : 'Générer et télécharger le document Word'}</>
           )}
         </button>
       </form>
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import PrintCommande from './PrintCommande'
 import { markOrderPrinted } from '../lib/printOrders'
 import { computeSizesForCake } from '../lib/cakeSizes'
 import { loadCakeDesignPrice } from '../lib/salesLines'
+import { loadOrderHandler, loadOrderNote, loadOrderPhotosByNum } from '../lib/conversations'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -146,6 +147,17 @@ function buildHistory(order, checkedSteps, polysMap, profiles) {
 
 export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, isPatissierMode, onClose, user, profiles, onStepsChanged, onPolysChanged, onOrderDeleted }) {
 
+  // Vendeur « app » = qui a pris/confirmé la commande dans l'app (journal), pas le vendeur Odoo.
+  // + note Odoo de la commande (commentaire « ⚠️ … ») pour l'impression.
+  const [appSeller, setAppSeller] = useState(null)
+  const [orderNote, setOrderNote] = useState('')
+  useEffect(() => {
+    let off = false
+    loadOrderHandler(order.order_num).then(n => { if (!off) setAppSeller(n) }).catch(() => {})
+    loadOrderNote(order.order_num).then(n => { if (!off) setOrderNote(n) }).catch(() => {})
+    return () => { off = true }
+  }, [order.order_num])
+
   // Raccourcis clavier : fleches gauche/droite pour naviguer entre commandes du jour
   useEffect(() => {
     if (!dayOrders || dayOrders.length <= 1 || !onNavigate) return
@@ -258,6 +270,17 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     }
     return all
   }, [order])
+
+  // Repli photos : si la commande n'a pas de photo synchronisée (image_urls vide),
+  // on récupère les photos du chatter Odoo (uploadées via le lien client / Articles).
+  const [chatterPhotos, setChatterPhotos] = useState([])
+  useEffect(() => {
+    if (!order?.order_num || sharedPhotos.length) { setChatterPhotos([]); return }
+    let off = false
+    loadOrderPhotosByNum(order.order_num).then(ph => { if (!off) setChatterPhotos((ph || []).map(p => p.dataUrl).filter(Boolean)) }).catch(() => {})
+    return () => { off = true }
+  }, [order?.order_num, sharedPhotos.length])
+  const displayPhotos = sharedPhotos.length ? sharedPhotos : chatterPhotos
 
   useEffect(() => {
     if (!order) return
@@ -495,9 +518,9 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
                   🎂 Cake design : {cakePrice.toLocaleString('fr-FR')} DH
                 </div>
               )}
-              {order.seller_name && (
+              {(appSeller || order.seller_name) && (
                 <div className="text-[10px] text-ink-mute mt-0.5">
-                  Vendeur : {order.seller_name}
+                  Vendeur : {appSeller || order.seller_name}
                 </div>
               )}
             </div>
@@ -556,11 +579,17 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
           </div>
 
           <div className="px-6 py-5 space-y-6">
+            {orderNote && (
+              <div className="rounded-lg border-l-4 border-bordeaux bg-bordeaux/5 px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-bordeaux mb-1">💬 Commentaire</div>
+                <div className="text-[13px] text-ink whitespace-pre-wrap leading-snug">{orderNote}</div>
+              </div>
+            )}
             {displayedItems.map((item, idx) => (
               <ItemBlock
                 key={item.id}
                 item={item}
-                sharedPhotos={sharedPhotos}
+                sharedPhotos={displayPhotos}
                 isLast={idx === displayedItems.length - 1}
                 onPhotoClick={setZoomUrl}
                 isReadThisSession={readThisSession.has(item.id)}
@@ -675,7 +704,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
 
       {printing && (
         <PrintCommande
-          orders={[order]}
+          orders={[{ ...order, app_seller: appSeller, order_note: orderNote, fallback_photos: chatterPhotos }]}
           fichesByItemId={fichesByItemId}
           palette={palette}
         />

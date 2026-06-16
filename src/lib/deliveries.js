@@ -26,10 +26,10 @@ export async function loadDeliveryStates(orderNums) {
   if (nums.length === 0) return {}
   let { data, error } = await supabase
     .from('livraisons')
-    .select('order_num, livreur_id, livraison_faite, statut, assigned_by, preuve_path')
+    .select('order_num, livreur_id, livraison_faite, statut, assigned_by, preuve_path, localisation')
     .in('order_num', nums)
   if (error) {
-    // Repli si la colonne preuve_path n'existe pas encore (SQL pas lancé) → on ne casse rien.
+    // Repli si une colonne (preuve_path / localisation) n'existe pas encore (SQL pas lancé) → on ne casse rien.
     ;({ data, error } = await supabase
       .from('livraisons')
       .select('order_num, livreur_id, livraison_faite, statut, assigned_by')
@@ -37,8 +37,16 @@ export async function loadDeliveryStates(orderNums) {
     if (error) throw error
   }
   const map = {}
-  for (const o of (data || [])) map[o.order_num] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite, statut: o.statut, assigned_by: o.assigned_by, preuve_path: o.preuve_path || null }
+  for (const o of (data || [])) map[o.order_num] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite, statut: o.statut, assigned_by: o.assigned_by, preuve_path: o.preuve_path || null, localisation: o.localisation || null }
   return map
+}
+
+// Enregistre l'adresse / localisation de livraison (texte, lien Maps/WhatsApp ou GPS).
+export async function setLivraisonLocalisation(orderNum, localisation) {
+  const { error } = await supabase
+    .from('livraisons')
+    .upsert({ order_num: orderNum, localisation: (localisation || '').trim() || null, updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
+  if (error) throw error
 }
 
 // Notifie TOUTES les personnes ayant accès aux Livraisons (admin / récap / livreurs),

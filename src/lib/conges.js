@@ -342,6 +342,49 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
 }
 
 // ------------------------------------------------------------
+// Dispo restant pour un type de congé, à partir d'un solde calculé.
+//   null      = aucune limite (sans solde, maladie longue)
+//   undefined = type non autorisé (allocation événementielle / récup manquante)
+//   number    = jours disponibles
+// (utilisé par le formulaire de demande ET par « À traiter ».)
+// ------------------------------------------------------------
+export function dispoTypeConge(solde, type) {
+  if (!solde) return undefined
+  if (type === 'sans solde')      return null
+  if (type === 'maladie_longue')  return null
+  if (type === 'annuel')          return solde.dispo
+  if (type === 'maladie_courte')  return solde.maladie?.dispo ?? 0
+  if (type === 'recup') {
+    const allocAutre = (solde.events?.detail || [])
+      .filter(d => d.type === 'autre' && d.applicable)
+      .reduce((s, e) => s + Number(e.jours), 0)
+    const total = (solde.recup || 0) + allocAutre
+    if (total <= 0) return undefined            // pas d'allocation ni gain
+    return Math.max(0, total - (solde.prisType?.autre || 0) - (solde.prisType?.recup || 0))
+  }
+  // Événements : mariage / naissance / deces / circoncision / maternite
+  const alloc = (solde.events?.detail || [])
+    .filter(d => d.type === type && d.applicable)
+    .reduce((s, e) => s + Number(e.jours), 0)
+  if (alloc <= 0) return undefined              // aucune allocation → type non dispo
+  const pris = solde.prisType?.[type] || 0
+  return Math.max(0, alloc - pris)
+}
+
+// Date à partir de laquelle un congé de ce type peut être consommé (date_evt la
+// plus ancienne des allocations). Null si aucune contrainte de date.
+export function debutPossibleType(solde, type) {
+  const allocs = (solde?.events?.detail || []).filter(d => {
+    if (type === 'recup') return d.type === 'autre'
+    return d.type === type
+  })
+  if (!allocs.length) return null
+  const dates = allocs.map(a => a.date_evt).filter(Boolean)
+  if (!dates.length) return null   // pas de contrainte de date
+  return dates.sort()[0]
+}
+
+// ------------------------------------------------------------
 // CRUD — DEMANDES & VALIDATION
 // ------------------------------------------------------------
 export async function loadCongesDemandes() {
@@ -355,12 +398,14 @@ export async function loadCongesDemandes() {
   return data || []
 }
 
-export async function loadCongesByStatuts(statuts = ['demande', 'valide']) {
-  const { data, error } = await supabase
+export async function loadCongesByStatuts(statuts = ['demande', 'valide'], sinceDate = null) {
+  let q = supabase
     .from('conges')
     .select('*')
     .in('statut', statuts)
-    .order('date_debut', { ascending: false })
+  // Optionnel : ne charger que les congés se terminant après cette date (perf).
+  if (sinceDate) q = q.gte('date_fin', sinceDate)
+  const { data, error } = await q.order('date_debut', { ascending: false })
   if (error) throw error
   return data || []
 }
@@ -584,7 +629,7 @@ export async function updateAllocation(id, patch) {
 
 // Met à jour les champs modifiables d'un congé.
 export async function updateConge(id, patch) {
-  const allowed = ['date_debut', 'date_fin', 'type_conge', 'motif', 'statut', 'recup_detail']
+  const allowed = ['date_debut', 'date_fin', 'type_conge', 'motif', 'statut', 'recup_detail', 'signe']
   const clean = {}
   for (const k of allowed) if (patch[k] !== undefined) clean[k] = patch[k]
   const { data, error } = await supabase

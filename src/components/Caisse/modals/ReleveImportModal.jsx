@@ -3,6 +3,7 @@ import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucid
 import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
 import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
+import { confirmDialog } from '../../../lib/confirmDialog'
 
 // Import d'un relevé/extrait bancaire (PDF) → rapprochement auto des enveloppes Banque.
 // Reconnaît BMCI (relevé + extrait) et Attijariwafa. Étapes : choisir → aperçu → enregistrer.
@@ -41,7 +42,15 @@ export default function ReleveImportModal({ onClose, onDone }) {
     } catch (e) { setError(e.message || String(e)); setStep('pick') }
   }
 
-  function toggleRecompute(flag) {
+  async function toggleRecompute(flag) {
+    if (flag) {
+      const p = recon?.period || {}
+      const ok = await confirmDialog(
+        `Tout recalculer ?\n\nÇa refait le rapprochement (même les vertes) et peut EFFACER des rapprochements déjà faits.\n\n✅ Seuls les rapprochements de la période importée (${p.min || '?'} → ${p.max || '?'}) sont concernés — les autres mois ne sont PAS touchés.`,
+        { danger: true, confirmLabel: 'Oui, tout recalculer' }
+      )
+      if (!ok) return
+    }
     setRecompute(flag)
     if (parsed) setRecon(reconcileEnvelopes(parsed.envs, parsed.allTx, { recompute: flag }))
   }
@@ -64,7 +73,7 @@ export default function ReleveImportModal({ onClose, onDone }) {
           status: r.status,
           libelle: r.line
             ? `${r.line.dateIso} · ${r.line.label}`.slice(0, 220)
-            : (r.candidates || []).map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300) || null,
+            : ((r.combined ? '🔗 2 virements = 1 ligne · ' : '') + (r.crossMethod ? '⚠️ moyen différent · ' : '') + (r.candidates || []).map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ')).slice(0, 300) || null,
           candidates: r.status === 'a_confirmer'
             ? JSON.stringify((r.candidates || []).map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) })))
             : null,
@@ -72,19 +81,31 @@ export default function ReleveImportModal({ onClose, onDone }) {
         done += Math.min(15, toWrite.length - i)
         setSavedCount(done)
       }
-      // En mode « tout recalculer » : effacer les anciens rapprochements devenus « absents »
+      // En mode « tout recalculer » : effacer les anciens rapprochements devenus « absents »,
+      // MAIS uniquement ceux dont la ligne était DANS la période importée (sinon on
+      // effacerait par erreur les rapprochements d'autres mois non couverts par ce relevé).
       if (recompute) {
-        const toClear = recon.results.filter(r => r.status === 'absent' && r.env.releve_status)
+        const pMin = recon.period?.min, pMax = recon.period?.max
+        const inPeriod = np => { const d = (np || '').slice(0, 10); return !!pMin && !!pMax && d >= pMin && d <= pMax }
+        const toClear = recon.results.filter(r => r.status === 'absent' && r.env.releve_status && inPeriod(r.env.note_proof))
         for (let i = 0; i < toClear.length; i += 15) {
           await Promise.all(toClear.slice(i, i + 15).map(r => clearEnveloppeReleve(r.env.id)))
         }
       }
       // Mémoriser les lignes du relevé non attribuées (pour rattachement manuel)
-      const freeLines = (recon.unmatched || []).map(u => ({
-        key: `${u.dateIso}|${Math.round(u.credit * 100)}|${(u.label || '').slice(0, 50)}`,
-        ligne_date: u.dateIso, amount: u.credit, label: (u.label || '').slice(0, 120), type: u.type,
-        releve_url: paths[u._fileIdx ?? 0] || paths[0],
-      }))
+      const freeLines = (recon.unmatched || []).map(u => {
+        // Clé stable par MONTANT + n° de versement (unique) → un même dépôt réimporté
+        // sous une autre date/format ne crée plus de doublon. Repli si pas de n°.
+        const ref = (u.label || '').match(/\d{5,}/)
+        const key = ref
+          ? `ref|${Math.round(u.credit * 100)}|${ref[0]}`
+          : `${u.dateIso}|${Math.round(u.credit * 100)}|${(u.label || '').slice(0, 50)}`
+        return {
+          key,
+          ligne_date: u.dateIso, amount: u.credit, label: (u.label || '').slice(0, 120), type: u.type,
+          releve_url: paths[u._fileIdx ?? 0] || paths[0],
+        }
+      })
       await saveUnmatchedReleveLines(freeLines)
       setStep('done')
       onDone && onDone()
@@ -177,7 +198,7 @@ export default function ReleveImportModal({ onClose, onDone }) {
 
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: '#4a3a30', marginBottom: 10, cursor: 'pointer' }}>
               <input type="checkbox" checked={recompute} onChange={e => toggleRecompute(e.target.checked)} style={{ marginTop: 2 }} />
-              <span><b>Tout recalculer</b> — refait le rapprochement même pour les enveloppes déjà vertes, et efface les anciens matchs devenus faux. ⚠️ Importe <b>tous</b> tes relevés (BMCI + Attijariwafa) ensemble, sinon ça efface les rapprochements de la banque absente.</span>
+              <span><b>Tout recalculer</b> — refait le rapprochement même pour les enveloppes déjà vertes. ✅ N'efface QUE les rapprochements de la <b>période importée</b> ({recon?.period?.min} → {recon?.period?.max}) — les autres mois ne sont pas touchés. (Une confirmation te sera demandée.)</span>
             </label>
             <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 12 }}>
               Les « trouvés » (vert) et « à confirmer » (orange) recevront le relevé comme preuve.

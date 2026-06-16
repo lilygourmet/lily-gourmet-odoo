@@ -15,7 +15,6 @@ const TABS = [
   { key: 'enveloppes',    label: 'Enveloppes',     Icon: BarChart3 },
   { key: 'caisses',       label: 'Caisses gérées', Icon: Briefcase },
   { key: 'salaires',      label: 'Salaires',       Icon: Banknote },
-  { key: 'rapprochement', label: 'Rapprochement',  Icon: Scale },
   { key: 'recherche',     label: 'Recherche',      Icon: Search },
   { key: 'params',        label: 'Paramètres',     Icon: Settings },
 ]
@@ -78,6 +77,7 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
             {[
               { k: 'affectation', Icon: BarChart3, label: 'Affectation' },
               { k: 'suivi', Icon: Landmark, label: 'Suivi versements & remboursements' },
+              { k: 'tpe', Icon: Scale, label: '💳 TPE (rapprochement)' },
             ].map(s => (
               <button key={s.k} onClick={() => setEnvSub(s.k)} style={{
                 padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -90,11 +90,11 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
           </div>
           {envSub === 'affectation' && <EnveloppesView user={user} />}
           {envSub === 'suivi'       && <SuiviView user={user} />}
+          {envSub === 'tpe'         && <RapprochementView user={user} />}
         </>
       )}
       {tab === 'caisses'      && <CaissesGereesView user={user} focus={focusMvt} />}
       {tab === 'salaires'     && <SalairesView user={user} />}
-      {tab === 'rapprochement' && <RapprochementView user={user} />}
       {tab === 'recherche'    && <RechercheView user={user} onGoToSource={(r) => {
         if (r.kind === 'mouvement') {
           const d = String(r.date || '')

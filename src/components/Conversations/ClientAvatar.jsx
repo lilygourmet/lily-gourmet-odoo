@@ -10,11 +10,21 @@ import { useState } from 'react'
  *  - size : taille en px (par défaut 36). Adapte aussi la police des initiales.
  *  - variant : 'dark' (en-tête bordeaux) | 'light' (liste) — change les couleurs.
  */
-export default function ClientAvatar({ conv, size = 36, variant = 'dark' }) {
+export default function ClientAvatar({ conv, size = 36, variant = 'dark', fidele = false }) {
   const [broken, setBroken] = useState(false)
   if (!conv) return null
-  const photo = !broken && conv.client_photo_url
   const dim = { width: size, height: size, minWidth: size, minHeight: size }
+  // Client fidèle : une étoile à la place de la photo / des initiales.
+  if (fidele) {
+    return (
+      <div
+        title="Client fidèle (peut commander sans acompte)"
+        style={{ ...dim, fontSize: Math.round(size * 0.5) }}
+        className={`rounded-full flex items-center justify-center flex-shrink-0 ${variant === 'dark' ? 'border border-amber-200/50 bg-amber-300/25 text-amber-100' : 'border border-amber-300 bg-amber-50 text-amber-500'}`}
+      >★</div>
+    )
+  }
+  const photo = !broken && conv.client_photo_url
   if (photo) {
     return (
       <img

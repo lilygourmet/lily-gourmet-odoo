@@ -117,7 +117,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
     }
   }
 
-  function printDay(date, _ignored) {
+  function printDay(date, _ignored, wantDone = false) {
     // Trouve l'index du jour cliqué dans dateKeys, puis prends ce jour + les 2 suivants
     const startIdx = dateKeys.indexOf(date)
     if (startIdx === -1) return
@@ -125,14 +125,14 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
 
     function buildSection(d) {
       const dayItems = itemsByDate[d] || []
-      const todoItems = dayItems.filter(it => !doneMap[it.mo_id])
+      const items = wantDone ? dayItems.filter(it => doneMap[it.mo_id]) : dayItems.filter(it => !doneMap[it.mo_id])
       const dayLabel = fmtDayLabel(d, today)
 
-      if (todoItems.length === 0) {
+      if (items.length === 0) {
         return `
           <section>
             <h3>${dayLabel}</h3>
-            <p class="empty">Aucun composant à sortir</p>
+            <p class="empty">${wantDone ? 'Aucun composant fait' : 'Aucun composant à sortir'}</p>
           </section>
         `
       }
@@ -140,7 +140,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       let body = ''
       if (groupBy === 'product') {
         const byProd = {}
-        for (const it of todoItems) {
+        for (const it of items) {
           const key = `${it.taille} ${it.parfum}`
           if (!byProd[key]) byProd[key] = []
           byProd[key].push(it)
@@ -162,7 +162,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
         `
       } else {
         const byScode = {}
-        for (const it of todoItems) {
+        for (const it of items) {
           const key = it.scode || '?'
           if (!byScode[key]) byScode[key] = []
           byScode[key].push(it)
@@ -192,7 +192,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
 
       return `
         <section>
-          <h3>${dayLabel} <span class="count">· ${todoItems.length} composants</span></h3>
+          <h3>${dayLabel} <span class="count">· ${items.length} composants</span></h3>
           ${body}
         </section>
       `
@@ -227,7 +227,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
         .total { font-size: 10px; color: #999; margin-top: 14px; }
       </style></head>
       <body>
-        <h1>Sortie congélateur</h1>
+        <h1>Sortie congélateur${wantDone ? ' · FAITS' : ''}</h1>
         <p class="subtitle">${groupBy === 'product' ? 'Vue par produit' : 'Vue par commande'} · 3 jours à partir du ${fmtDayLabel(date, today)}</p>
         ${sections}
         <div class="total">Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
@@ -318,12 +318,12 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
                       onClick={() => setShowDone(prev => ({ ...prev, [date]: true }))}
                       className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}
                     >Faits ({doneItems.length})</button>
-                    {todoItems.length > 0 && (
+                    {visibleItems.length > 0 && (
                       <button
-                        onClick={() => printDay(date, dayItems)}
+                        onClick={() => printDay(date, dayItems, showingDone)}
                         className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all"
-                        title="Imprimer ce jour + les 2 suivants"
-                      >🖨 Imprimer 3j</button>
+                        title={`Imprimer ${showingDone ? 'les faits' : 'à sortir'} · ce jour + les 2 suivants`}
+                      >🖨 Imprimer 3j {showingDone ? '(faits)' : ''}</button>
                     )}
                   </div>
                 </div>

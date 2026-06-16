@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof, setEnveloppeIgnore } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -78,6 +78,7 @@ function BanqueSection({ user }) {
   const [freeLines, setFreeLines] = useState([])
   const [hideNoSugg, setHideNoSugg] = useState(false)
   const [ecartList, setEcartList] = useState([])
+  const [linkFrom, setLinkFrom] = useState(null)   // 1er virement d'un lien manuel « 2 = 1 »
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -140,6 +141,11 @@ function BanqueSection({ user }) {
     reload()
   }
 
+  async function handleIgnore(envId, ignore) {
+    try { await setEnveloppeIgnore(envId, ignore); reload() }
+    catch (e) { alert('Erreur : ' + (e?.message || e)) }
+  }
+
   async function handleUpload(file, proofDate, amountProof, noteProof) {
     if (!uploadEnv || !file) return
     const url = await uploadPreuve(file, uploadEnv.id)
@@ -157,6 +163,17 @@ function BanqueSection({ user }) {
       candidates: null,
     })
     setConfirmEnv(null)
+    reload()
+  }
+
+  // Lier manuellement 2 virements à 1 seule ligne du relevé : les deux passent
+  // « Rapprochée » avec une note « lié manuellement » (la banque les a reçus en une fois).
+  async function handleLink(a, b) {
+    const total = Number(a.amount_cash) + Number(b.amount_cash)
+    const note = `🔗 Lié manuellement · 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`
+    await setEnveloppeReleve(a.id, { status: 'trouve', libelle: note, candidates: null })
+    await setEnveloppeReleve(b.id, { status: 'trouve', libelle: note, candidates: null })
+    setLinkFrom(null)
     reload()
   }
 
@@ -316,7 +333,12 @@ function BanqueSection({ user }) {
                 ↺ Annuler
               </button>
             )}
-            {!env.releve_status && !env.proof_url && (
+            {(env.payment_method === 'virement') && env.releve_status !== 'trouve' && !env.releve_ignore && (
+              <button onClick={() => setLinkFrom(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
+                🔗 Lier 2
+              </button>
+            )}
+            {!env.releve_status && !env.proof_url && !env.releve_ignore && (
               hasSuggestion(env) ? (
                 <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
                   💡 Suggérer
@@ -326,6 +348,16 @@ function BanqueSection({ user }) {
                   Sans suggestion
                 </button>
               )
+            )}
+            {!env.releve_status && !env.proof_url && !env.releve_ignore && (
+              <button onClick={() => handleIgnore(env.id, true)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#8a7a70' }}>
+                🚫 Ignorer
+              </button>
+            )}
+            {env.releve_ignore && (
+              <button onClick={() => handleIgnore(env.id, false)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#0a7d3d', border: '1px solid #B6E2C8' }}>
+                ↩ Réactiver
+              </button>
             )}
           </div>
         </div>
@@ -338,6 +370,10 @@ function BanqueSection({ user }) {
 
       {showImport && (
         <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} />
+      )}
+
+      {linkFrom && (
+        <LinkTwoModal from={linkFrom} list={list} onClose={() => setLinkFrom(null)} onLink={handleLink} />
       )}
 
       {confirmEnv && (
@@ -358,15 +394,23 @@ function NonLieSection() {
   const [linkLine, setLinkLine] = useState(null)
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useState('all') // all | cash | cheque | virement
+  const [view, setView] = useState('free')            // 'free' = non liés | 'linked' = déjà liés
   async function reload() {
-    try { setLines(await loadAllFreeReleveLines()) } catch { setLines([]) }
+    setLines(null)
+    try { setLines(await (view === 'linked' ? loadAllLinkedReleveLines() : loadAllFreeReleveLines())) } catch { setLines([]) }
     try { setPendingEnvs(await loadPendingBanqueEnvelopes()) } catch { setPendingEnvs([]) }
   }
-  useEffect(() => { reload() }, [])
+  useEffect(() => { reload() }, [view])
   async function handleLink(env, line) {
     await linkReleveLineToEnv(env, line)
     setLinkLine(null)
     reload()
+  }
+  async function handleDelier(l) {
+    if (!l.used_by) return
+    if (!await confirmDialog('Délier ce montant du versement ? (la ligne redevient « non liée »)', { danger: true, confirmLabel: 'Délier' })) return
+    try { await clearEnveloppeReleve(l.used_by); reload() }
+    catch (e) { alert('Erreur : ' + (e?.message || e)) }
   }
   const TYPE_GROUP = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
   const count = useMemo(() => {
@@ -384,9 +428,14 @@ function NonLieSection() {
   const total = useMemo(() => list.reduce((s, l) => s + Number(l.amount || 0), 0), [list])
   return (
     <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <button onClick={() => setView('free')} style={methodFilterBtn(view === 'free')}>Non liés</button>
+        <button onClick={() => setView('linked')} style={methodFilterBtn(view === 'linked')}>Déjà liés</button>
+      </div>
       <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>
-        Lignes reçues sur les relevés bancaires qui n'ont <b>pas</b> trouvé d'enveloppe Odoo correspondante.
-        Importe tes relevés pour remplir cette liste ; rattache-les via « 💡 Suggérer » sur les enveloppes grises.
+        {view === 'linked'
+          ? 'Lignes du relevé déjà rattachées à un versement (avec la destination). Tu peux les délier si besoin.'
+          : <>Lignes reçues sur les relevés bancaires qui n'ont <b>pas</b> trouvé d'enveloppe Odoo correspondante. Rattache-les via « 💡 Suggérer » sur les enveloppes grises.</>}
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
         <button onClick={() => setTypeFilter('all')} style={methodFilterBtn(typeFilter === 'all')}>Tout ({(lines || []).length})</button>
@@ -398,7 +447,7 @@ function NonLieSection() {
         placeholder="🔍 montant, nom, date…"
         style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: '#EDE4F6', color: '#5b2a86', fontSize: 13 }}>
-        <span>{lines === null ? 'Chargement…' : `${list.length} ligne(s) non liée(s)`}</span>
+        <span>{lines === null ? 'Chargement…' : `${list.length} ligne(s) ${view === 'linked' ? 'liée(s)' : 'non liée(s)'}`}</span>
         <span>{fmtMoney(total)}</span>
       </div>
       {lines !== null && list.length === 0 && (
@@ -411,11 +460,22 @@ function NonLieSection() {
           <div>
             <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.ligne_date}</div>
             <div style={{ fontSize: 13, color: '#1a0f0a' }}>{l.label || '—'}</div>
+            {view === 'linked' && l.env && (
+              <div style={{ fontSize: 11, color: '#0a7d3d', marginTop: 2 }}>
+                → {l.env.destinataire?.name || l.env.source || 'enveloppe'} · {l.env.session_date}{l.env.amount_cash != null ? ` · ${fmtMoney(l.env.amount_cash)}` : ''}
+              </div>
+            )}
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#5b2a86' }}>{fmtMoney(l.amount)}</div>
-          <button onClick={() => setLinkLine(l)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA', marginLeft: 8 }}>
-            🔗 Lier
-          </button>
+          {view === 'linked' ? (
+            <button onClick={() => handleDelier(l)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#A32D2D', border: '1px solid #f0c9c9', marginLeft: 8 }}>
+              Délier
+            </button>
+          ) : (
+            <button onClick={() => setLinkLine(l)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA', marginLeft: 8 }}>
+              🔗 Lier
+            </button>
+          )}
         </div>
       ))}
 
@@ -429,7 +489,8 @@ function NonLieSection() {
 // Lier une ligne du relevé (non liée) à l'enveloppe choisie ; écart si montants ≠.
 function LinkLineModal({ line, envs, onClose, onLink }) {
   const [q, setQ] = useState('')
-  const method = ({ versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' })[line.type] || 'virement'
+  const guess = ({ versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' })[line.type] || 'virement'
+  const [method, setMethod] = useState(guess)   // type d'enveloppe à lier — modifiable (espèces/chèque/virement)
   const methodLabel = method === 'cash' ? 'espèces' : method === 'cheque' ? 'chèque' : 'virement'
   const list = useMemo(() => {
     let l = envs.filter(e => (e.payment_method || 'cash') === method)
@@ -442,7 +503,12 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
       <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>Lier ce reçu de {fmtMoney(line.amount)}</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 4 }}>{line.ligne_date} · {line.label}</div>
-        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>Choisis l'enveloppe <b>{methodLabel}</b> à qui appartient ce montant :</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 8 }}>Choisis l'enveloppe <b>{methodLabel}</b> à qui appartient ce montant :</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+          <button onClick={() => setMethod('cash')} style={methodFilterBtn(method === 'cash')}><Banknote size={14} /> Espèces</button>
+          <button onClick={() => setMethod('cheque')} style={methodFilterBtn(method === 'cheque')}><ScrollText size={14} /> Chèques</button>
+          <button onClick={() => setMethod('virement')} style={methodFilterBtn(method === 'virement')}><ArrowLeftRight size={14} /> Virements</button>
+        </div>
         <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 nom du client, montant…" autoFocus
           style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />
         {list.length === 0 ? (
@@ -547,6 +613,35 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
           <button onClick={() => onPick(env.id, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
           <button onClick={onClose} style={{ ...btnNormal, flex: 1 }}>Annuler</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function LinkTwoModal({ from, list, onClose, onLink }) {
+  const candidates = list.filter(e => e.id !== from.id && (e.payment_method || 'cash') === 'virement' && e.releve_status !== 'trouve')
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>🔗 Lier 2 virements = 1 ligne</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
+          Virement 1 : <b>{fmtMoney(from.amount_cash)} dh</b>{from.virement_client ? ` · ${from.virement_client}` : ''}
+        </div>
+        <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>Choisis le 2ᵉ virement (la banque les a reçus en un seul virement) :</div>
+        {candidates.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucun autre virement à lier.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {candidates.map(e => (
+              <button key={e.id} onClick={() => onLink(from, e)}
+                style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
+                <b>{fmtMoney(e.amount_cash)} dh</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
+                <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))} dh</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <button onClick={onClose} style={{ ...btnNormal, width: '100%' }}>Annuler</button>
       </div>
     </div>
   )

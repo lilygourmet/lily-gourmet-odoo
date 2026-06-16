@@ -725,6 +725,7 @@ export default function PointageTab({ user, isAdmin }) {
               <CarteSalaire
                 salaire={Number(empSelected.salaire_net)}
                 heuresSup={empSelected.heures_sup_mensuelles === false ? 0 : result.synthese.heures_sup}
+                heuresManquantes={empSelected.heures_sup_mensuelles === false ? 0 : result.synthese.heures_manquantes}
               />
             )}
           </div>
@@ -968,8 +969,10 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
   const tauxMajore = tauxHoraire * 1.25
   const salaireAnnuel = data.reduce((sum, m) => {
     if (m.vide) return sum
-    const supPay = emp.heures_sup_mensuelles === false ? 0 : (m.heures_sup || 0)
-    return sum + salaireNet + (tauxMajore * supPay)
+    const forfait = emp.heures_sup_mensuelles === false
+    const supPay = forfait ? 0 : (m.heures_sup || 0)
+    const manqPay = forfait ? 0 : (m.heures_manquantes || 0)
+    return sum + salaireNet + (tauxMajore * supPay) - (tauxHoraire * manqPay)
   }, 0)
 
   return (
@@ -1006,8 +1009,10 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
           </thead>
           <tbody>
             {data.map(m => {
-              const supPay = emp.heures_sup_mensuelles === false ? 0 : (m.heures_sup || 0)
-              const salaireMois = salaireNet > 0 ? salaireNet + (tauxMajore * supPay) : 0
+              const forfait = emp.heures_sup_mensuelles === false
+              const supPay = forfait ? 0 : (m.heures_sup || 0)
+              const manqPay = forfait ? 0 : (m.heures_manquantes || 0)
+              const salaireMois = salaireNet > 0 ? salaireNet + (tauxMajore * supPay) - (tauxHoraire * manqPay) : 0
               return (
                 <tr key={m.mois} style={{ borderTop: '1px solid #F4F0EA', opacity: m.vide ? 0.4 : 1 }}>
                   <td style={{ padding: '8px 12px' }}><strong>{MOIS_FR_LOCAL[m.mois - 1]}</strong></td>
@@ -1058,13 +1063,14 @@ function VueAnnee({ empId, emp, annee, isAdmin }) {
   )
 }
 
-function CarteSalaire({ salaire, heuresSup }) {
+function CarteSalaire({ salaire, heuresSup, heuresManquantes = 0 }) {
   const [revealed, setRevealed] = useState(false)
-  // Formule : salaire + (salaire / 26 / 8) × 1.25 × heures_sup
+  // Taux horaire = salaire / 26 jours / 8 h.
+  // Heures sup majorées +25% (ajoutées), heures manquantes au taux normal (déduites).
   const tauxHoraire = salaire / 26 / 8
-  const tauxMajore = tauxHoraire * 1.25
-  const montantSup = tauxMajore * heuresSup
-  const total = salaire + montantSup
+  const montantSup = tauxHoraire * 1.25 * heuresSup
+  const montantManq = tauxHoraire * heuresManquantes
+  const total = salaire + montantSup - montantManq
   return (
     <div style={{ background: '#EAF3DE', padding: 12, borderRadius: 12, border: '1px solid #C0DD97', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
       <p style={{ fontSize: 11, color: '#27500A', margin: 0, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1081,6 +1087,13 @@ function CarteSalaire({ salaire, heuresSup }) {
           ? total.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' dh'
           : '••••• dh'}
       </p>
+      {revealed && (heuresSup > 0 || heuresManquantes > 0) && (
+        <p style={{ fontSize: 10, color: '#4a3a30', margin: '4px 0 0' }}>
+          base {salaire.toLocaleString('fr-FR')}
+          {heuresSup > 0 && <span style={{ color: '#27500A' }}> + {montantSup.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} (sup ×1,25)</span>}
+          {heuresManquantes > 0 && <span style={{ color: '#A32D2D' }}> − {montantManq.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} (manq.)</span>}
+        </p>
+      )}
     </div>
   )
 }

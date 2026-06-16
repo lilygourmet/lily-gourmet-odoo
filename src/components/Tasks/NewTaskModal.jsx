@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createTask, loadAllUsers, uploadTaskAttachment } from '../../lib/tasks'
+import { loadGroupesPourInfo } from '../../lib/watiInfo'
 import SearchSelect from '../SearchSelect'
 
 /**
@@ -11,6 +12,7 @@ import SearchSelect from '../SearchSelect'
  */
 export default function NewTaskModal({ currentUser, onClose, onCreated }) {
   const [users, setUsers] = useState([])
+  const [groupes, setGroupes] = useState([])   // [{ nom, profileIds }] depuis les Employés
   const [mode, setMode] = useState('person')   // 'person' | 'multi' | 'group' | 'all'
   const [toUserId, setToUserId] = useState('')
   const [multiIds, setMultiIds] = useState([])
@@ -34,6 +36,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
     } catch (e) {
       console.warn('loadAllUsers:', e?.message)
     }
+    loadGroupesPourInfo().then(setGroupes).catch(() => {})
   })() }, [currentUser?.id])
 
   function handleFileChange(e) {
@@ -62,7 +65,8 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
       if (!recipients.length) { setError('Sélectionne au moins une personne'); return }
     } else if (mode === 'group') {
       if (!groupValue) { setError('Choisis un groupe'); return }
-      recipients = users.filter(u => u.groupe === groupValue && u.active !== false && u.id !== currentUser.id).map(u => u.id)
+      const g = groupes.find(x => x.nom === groupValue)
+      recipients = (g?.profileIds || []).filter(id => id !== currentUser.id)
     } else {
       recipients = users.filter(u => u.active !== false && u.id !== currentUser.id).map(u => u.id)
     }
@@ -96,7 +100,6 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
       value: u.id,
       label: `👤 ${u.full_name || u.username || u.id.slice(0, 8)}${u.id === currentUser?.id ? ' (moi)' : ''}`,
     }))
-  const groups = [...new Set(users.map(u => u.groupe).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   const nbAll = users.filter(u => u.active !== false && u.id !== currentUser?.id).length
 
   return (
@@ -143,7 +146,7 @@ export default function NewTaskModal({ currentUser, onClose, onCreated }) {
             {mode === 'group' && (
               <select value={groupValue} onChange={e => setGroupValue(e.target.value)} style={inputStyle}>
                 <option value="">— choisir un groupe —</option>
-                {groups.map(g => <option key={g} value={g}>{g} ({users.filter(u => u.groupe === g && u.active !== false).length})</option>)}
+                {groupes.map(g => <option key={g.nom} value={g.nom}>{g.nom} ({g.profileIds.length})</option>)}
               </select>
             )}
             {mode === 'all' && (

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Lily Gourmet — Votre commande</title>
+<style>
+  :root{ --bordeaux:#7a1f3d; --bordeaux-deep:#5c1530; --cream:#FBF6EE; --cream-warm:#F4EADb; --gold:#C9A24B; --ink:#241a16; --line:#e7dccb; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; font-family:-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--cream); color:var(--ink); }
+  .phone{ max-width:430px; margin:0 auto; min-height:100vh; background:var(--cream); position:relative; padding-bottom:120px; }
+  header{ background:var(--bordeaux); color:var(--cream); padding:16px 18px 14px; position:sticky; top:0; z-index:20; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+  header .logo{ font-family:'Georgia',serif; font-style:italic; font-size:21px; letter-spacing:.5px; }
+  header .hi{ font-size:13px; opacity:.9; margin-top:3px; }
+  .wrap{ padding:16px 16px 0; }
+  h2{ font-family:'Georgia',serif; font-style:italic; font-size:19px; color:var(--bordeaux); margin:6px 2px 12px; }
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+  .tile{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:0; overflow:hidden; cursor:pointer; box-shadow:0 3px 10px rgba(122,31,61,.05); transition:transform .12s, border-color .12s; }
+  .tile:active{ transform:scale(.97); border-color:var(--bordeaux); }
+  .tile .img{ height:96px; background:var(--cream-warm); display:flex; align-items:center; justify-content:center; font-size:38px; }
+  .tile .lbl{ padding:9px 10px; font-size:13.5px; font-weight:600; }
+  .tile .price{ padding:0 10px 9px; font-size:13px; color:var(--bordeaux); font-weight:700; }
+  .back{ display:inline-flex; align-items:center; gap:5px; background:none; border:none; color:var(--bordeaux); font-size:14px; padding:8px 2px; cursor:pointer; font-weight:600; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:18px; padding:16px; margin-bottom:14px; box-shadow:0 3px 10px rgba(122,31,61,.05); }
+  .field{ margin-bottom:15px; }
+  .field .q{ font-size:13px; font-weight:700; margin-bottom:8px; color:var(--ink); }
+  .opts{ display:flex; flex-wrap:wrap; gap:8px; }
+  .opt{ border:1.5px solid var(--line); background:#fff; border-radius:999px; padding:9px 14px; font-size:13px; cursor:pointer; transition:.12s; }
+  .opt.sel{ background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+  .opt .p{ opacity:.7; font-size:11.5px; margin-left:4px; }
+  .opt.sel .p{ opacity:.85; }
+  input[type=text]{ width:100%; padding:11px 13px; border:1.5px solid var(--line); border-radius:12px; font-size:14px; background:var(--cream); }
+  .photo{ display:flex; align-items:center; gap:8px; border:1.5px dashed var(--bordeaux); color:var(--bordeaux); border-radius:12px; padding:11px 13px; font-size:13px; cursor:pointer; background:#fff; }
+  .addbtn{ width:100%; background:var(--bordeaux); color:#fff; border:none; border-radius:999px; padding:15px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 6px 16px rgba(122,31,61,.25); }
+  .addbtn:active{ transform:translateY(1px); }
+  .priceline{ display:flex; justify-content:space-between; align-items:center; padding:12px 2px; font-size:15px; }
+  .priceline b{ color:var(--bordeaux); font-size:20px; }
+  /* panier */
+  .cart{ position:fixed; left:0; right:0; bottom:0; max-width:430px; margin:0 auto; background:#fff; border-top:1px solid var(--line); box-shadow:0 -4px 18px rgba(0,0,0,.10); padding:12px 16px 16px; z-index:30; }
+  .cart .row{ display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:3px 0; }
+  .cart .row .x{ color:#b33; cursor:pointer; padding:0 4px; }
+  .cart .tot{ display:flex; justify-content:space-between; align-items:center; margin:8px 0 10px; font-size:16px; }
+  .cart .tot b{ color:var(--bordeaux); font-size:21px; }
+  .validate{ width:100%; background:var(--gold); color:#3a2a10; border:none; border-radius:999px; padding:15px; font-size:15.5px; font-weight:800; cursor:pointer; }
+  .empty-cart{ text-align:center; color:#9a8e80; font-size:13px; padding:6px 0 2px; }
+  /* modal cross-sell */
+  .overlay{ position:fixed; inset:0; background:rgba(36,26,22,.5); display:none; align-items:flex-end; justify-content:center; z-index:50; }
+  .overlay.show{ display:flex; }
+  .sheet{ background:var(--cream); width:100%; max-width:430px; border-radius:22px 22px 0 0; padding:20px 18px 26px; text-align:center; }
+  .sheet h3{ font-family:'Georgia',serif; font-style:italic; color:var(--bordeaux); margin:4px 0 6px; font-size:19px; }
+  .sheet p{ font-size:13.5px; color:#6a5d52; margin:0 0 16px; }
+  .sheet .acc{ display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; margin-bottom:14px; }
+  .sheet .acc .t{ flex:0 0 auto; width:96px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:8px; cursor:pointer; }
+  .sheet .acc .t .e{ font-size:28px; }
+  .sheet .acc .t .n{ font-size:11.5px; font-weight:600; margin-top:3px; }
+  .sheet .acc .t .pp{ font-size:11px; color:var(--bordeaux); font-weight:700; }
+  .sheet .no{ background:none; border:none; color:#8a7d70; font-size:13.5px; cursor:pointer; text-decoration:underline; }
+  /* confirmation */
+  .done{ text-align:center; padding:60px 24px; }
+  .done .big{ font-size:54px; }
+  .done h2{ font-size:22px; }
+  .done p{ color:#6a5d52; font-size:14.5px; line-height:1.5; }
+  .hidden{ display:none; }
+  .brow{ display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:9px 12px; font-size:13.5px; }
+  .brow i{ color:var(--bordeaux); font-style:normal; font-weight:700; font-size:12px; margin-left:6px; }
+  .step{ display:flex; align-items:center; gap:12px; }
+  .step button{ width:30px; height:30px; border-radius:50%; border:1.5px solid var(--bordeaux); background:#fff; color:var(--bordeaux); font-size:17px; cursor:pointer; line-height:1; }
+  .step b{ min-width:16px; text-align:center; font-size:15px; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <div class="logo">Lily Gourmet</div>
+    <div class="hi">Bonjour <b id="cliName">Sara</b> 👋 — composez votre commande, on s'occupe du reste 💛</div>
+  </header>
+
+  <!-- ÉCRAN 1 : entrée Cake Design (uniquement, pour l'instant) -->
+  <div id="screen-cats" class="wrap">
+    <h2>Composez votre Cake Design</h2>
+    <div class="grid">
+      <div class="tile" onclick="openCat('cd')" style="grid-column:1 / -1"><div class="img" style="height:130px;font-size:54px">🎂</div><div class="lbl">Cake Design</div><div class="price">à partir de 300 DH (prix approximatif)</div></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 2 : liste produits d'une catégorie (ex cake design) -->
+  <div id="screen-list" class="wrap hidden">
+    <button class="back" onclick="show('screen-cats')">‹ Retour</button>
+    <h2 id="listTitle">Cake Design</h2>
+    <div class="grid" id="listGrid"></div>
+  </div>
+
+  <!-- ÉCRAN 3 : configurateur cake design -->
+  <div id="screen-cfg" class="wrap hidden">
+    <button class="back" onclick="show('screen-list')">‹ Retour</button>
+    <h2 id="cfgTitle">Cake Design 1 étage</h2>
+    <div class="card">
+      <div class="field">
+        <div class="q">Nombre de personnes</div>
+        <div class="opts" id="persOpts"></div>
+      </div>
+      <div id="parfumZone"></div>
+      <div id="fraisierNote" style="display:none;font-size:12px;color:#8a5a00;background:#FFF6E5;border:1px solid #f0d9b8;border-radius:10px;padding:8px 11px;margin:-4px 0 14px">🍓 Le <b>fraisier</b> est préparé frais : disponible <b>uniquement à partir de 16h</b> (retrait ou livraison).</div>
+      <div class="field"><div class="q">Thème / inscription</div><input type="text" placeholder="ex : Licorne, joyeux anniversaire…"></div>
+      <div class="field"><div class="q">Âge (optionnel)</div><input type="text" placeholder="ex : 7 ans"></div>
+      <div class="field"><div class="q">Message sur le gâteau</div><input type="text" placeholder="ex : Joyeux anniversaire Lina"></div>
+      <div class="field"><label class="photo">📎 Joindre une photo du modèle <input type="file" accept="image/*" hidden></label></div>
+      <div class="field"><div class="q">💬 Commentaire / précision (optionnel)</div><input type="text" id="cfgComment" placeholder="ex : décor en bleu, sans fruits à coque, écrire en doré…"></div>
+      <div class="priceline"><span>Prix <span style="font-size:12px;color:#9a8e80">(approximatif)</span></span><b id="cfgPrice">— DH</b></div>
+      <div style="font-size:11.5px;color:#9a8e80;margin:-6px 2px 12px">Le prix exact vous est confirmé par Lily Gourmet.</div>
+      <button class="addbtn" onclick="addToCart()">Ajouter à ma commande</button>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 4 : retrait / livraison + créneau 2h -->
+  <div id="screen-finalize" class="wrap hidden">
+    <button class="back" onclick="show('screen-cats')">‹ Ajouter autre chose</button>
+    <h2>Retrait ou livraison ?</h2>
+    <div class="card">
+      <div class="field">
+        <div class="q">Mode</div>
+        <div class="opts">
+          <div class="opt sel" onclick="pickMode(this,'retrait')">🏬 Retrait en boutique</div>
+          <div class="opt" onclick="pickMode(this,'livraison')">🚚 Livraison</div>
+        </div>
+      </div>
+      <div class="field" id="adresseField" style="display:none">
+        <div class="q">Adresse de livraison</div>
+        <button type="button" class="photo" style="justify-content:center;font-weight:600;width:100%" onclick="this.innerHTML='📍 Localisation partagée ✓';this.style.background='#DCF0E2';this.style.color='#085041';this.style.borderColor='#B6E2C8'">📍 Partager ma localisation</button>
+        <input type="text" placeholder="Précision (étage, repère…)" style="margin-top:8px">
+      </div>
+      <div class="field" id="quartierField" style="display:none">
+        <div class="q">Quartier <span style="font-size:12px;color:#9a8e80">(frais de livraison)</span></div>
+        <div class="opts">
+          <div class="opt" onclick="pickQuartier(this,30)">Agdal <span class="p">+30</span></div>
+          <div class="opt" onclick="pickQuartier(this,30)">Hassan <span class="p">+30</span></div>
+          <div class="opt" onclick="pickQuartier(this,40)">Hay Riad <span class="p">+40</span></div>
+          <div class="opt" onclick="pickQuartier(this,50)">Souissi <span class="p">+50</span></div>
+          <div class="opt" onclick="pickQuartier(this,40)">Hay Nahda <span class="p">+40</span></div>
+          <div class="opt" onclick="pickQuartier(this,40)">Yaacoub El Mansour <span class="p">+40</span></div>
+          <div class="opt" onclick="pickQuartier(this,40)">Akkari <span class="p">+40</span></div>
+          <div class="opt" onclick="pickQuartier(this,40)">Océan <span class="p">+40</span></div>
+          <div class="opt" onclick="pickQuartier(this,40)">Médina <span class="p">+40</span></div>
+          <div class="opt" onclick="pickQuartier(this,60)">Salé <span class="p">+60</span></div>
+          <div class="opt" onclick="pickQuartier(this,70)">Témara <span class="p">+70</span></div>
+          <div class="opt" onclick="pickQuartier(this,80)">Autre <span class="p">+80</span></div>
+        </div>
+      </div>
+      <div class="field"><div class="q">Date souhaitée</div><input type="date" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;font-size:14px;background:var(--cream)"></div>
+      <div class="field" id="retraitHeure">
+        <div class="q">Heure de retrait</div>
+        <input type="time" value="16:00" style="width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;font-size:14px;background:var(--cream)">
+      </div>
+      <div class="field" id="livraisonCreneau" style="display:none">
+        <div class="q">Créneau horaire de livraison (2h)</div>
+        <div class="opts">
+          <div class="opt" onclick="pickOne(this)">10h – 12h</div>
+          <div class="opt" onclick="pickOne(this)">12h – 14h</div>
+          <div class="opt" onclick="pickOne(this)">14h – 16h</div>
+          <div class="opt" onclick="pickOne(this)">16h – 18h</div>
+          <div class="opt" onclick="pickOne(this)">18h – 20h</div>
+        </div>
+      </div>
+      <div class="priceline" style="border-top:1px solid var(--line);margin-top:6px"><span>Total <span style="font-size:12px;color:#9a8e80">(approximatif)</span></span><b id="finTotal">0 DH</b></div>
+      <div style="font-size:11.5px;color:#9a8e80;margin:-6px 2px 12px">💰 Prix approximatif — le montant exact vous sera confirmé par Lily Gourmet.</div>
+      <button class="addbtn" onclick="confirmOrder()">Confirmer ma commande</button>
+    </div>
+  </div>
+
+  <!-- CONFIRMATION -->
+  <div id="screen-done" class="hidden">
+    <div class="done">
+      <div class="big">💛</div>
+      <h2>Merci Sara !</h2>
+      <p>Votre commande a bien été envoyée à Lily Gourmet.<br>On revient vers vous très vite pour confirmer.</p>
+      <p style="margin-top:14px;background:#FFF6E5;border:1px solid #f0d9b8;border-radius:12px;padding:12px 14px;color:#8a5a00;font-size:13.5px">💰 Le total affiché est <b>approximatif</b> — le <b>prix exact</b> vous sera confirmé par Lily Gourmet.</p>
+    </div>
+  </div>
+
+  <!-- PANIER (sticky) -->
+  <div class="cart" id="cartBar">
+    <div id="cartItems"><div class="empty-cart">Votre commande est vide — choisissez un article ci-dessus 🙂</div></div>
+    <div class="tot"><span>Total <span style="font-size:11px;color:#9a8e80">approximatif</span></span><b id="cartTotal">0 DH</b></div>
+    <button class="validate" onclick="validate()">Valider ma commande</button>
+  </div>
+</div>
+
+<!-- MODAL CROSS-SELL accessoires -->
+<div class="overlay" id="crossSell">
+  <div class="sheet">
+    <h3>✨ Des bougies ou un topper ?</h3>
+    <p>Pour compléter votre cake design :</p>
+    <div class="acc" style="justify-content:center" id="accMain">
+      <div class="t" onclick="showBougieTypes()"><div class="e">🕯️</div><div class="n">Bougies</div><div class="pp">choisir →</div></div>
+      <div class="t" id="topperTile" onclick="addTopper(this)">
+        <div class="e" style="font-size:12px;line-height:1.05;padding:7px 0;color:var(--bordeaux);font-weight:800;font-family:'Georgia',serif">Happy<br>Birthday</div>
+        <div class="n">Topper</div><div class="pp">~30 DH</div>
+      </div>
+    </div>
+    <div id="bougieTypes" style="display:none;text-align:left">
+      <p style="font-size:13px;color:#6a5d52;margin:2px 0 10px;text-align:center">Type de bougies — choisissez la quantité :</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="brow" data-name="Bougies simple" data-price="0"><span>🕯️ Simple <i>offert</i></span><div class="step"><button onclick="bq(this,-1)">−</button><b>0</b><button onclick="bq(this,1)">+</button></div></div>
+        <div class="brow" data-name="Bougies fine" data-price="8"><span>🕯️ Fine <i>~8 DH</i></span><div class="step"><button onclick="bq(this,-1)">−</button><b>0</b><button onclick="bq(this,1)">+</button></div></div>
+        <div class="brow" data-name="Bougies en chiffre" data-price="25"><span>7️⃣ En chiffre <i>~25 DH</i></span><div class="step"><button onclick="bq(this,-1)">−</button><b>0</b><button onclick="bq(this,1)">+</button></div></div>
+        <div class="brow" data-name="Bougies étincelles ✨" data-price="25"><span>🎇 Étincelles <i>~25 DH</i></span><div class="step"><button onclick="bq(this,-1)">−</button><b>0</b><button onclick="bq(this,1)">+</button></div></div>
+      </div>
+      <button class="addbtn" style="margin-top:12px" onclick="addBougies()">Ajouter ces bougies</button>
+    </div>
+    <button class="addbtn" style="margin-top:4px" onclick="closeCross()">🧁 Voir les gourmandises (cupcakes, donuts…) →</button>
+    <div style="margin-top:8px"><button class="no" onclick="finishFromCross()">Non merci, voir mon panier</button></div>
+  </div>
+</div>
+
+<script>
+  let cart = [];
+  let cur = { pers:null, parfum:null, price:0 };
+  let deliveryFee = 0;
+
+  function show(id){ ['screen-cats','screen-list','screen-cfg','screen-finalize','screen-done'].forEach(s=>document.getElementById(s).classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); window.scrollTo(0,0); document.getElementById('cartBar').style.display = (id==='screen-done'||id==='screen-finalize') ? 'none' : 'block'; }
+  function pickMode(el,m){ el.parentElement.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel')); el.classList.add('sel'); const liv = m==='livraison'; document.getElementById('adresseField').style.display = liv?'block':'none'; document.getElementById('quartierField').style.display = liv?'block':'none'; document.getElementById('retraitHeure').style.display = liv?'none':'block'; document.getElementById('livraisonCreneau').style.display = liv?'block':'none'; if(!liv){ deliveryFee=0; document.querySelectorAll('#quartierField .opt').forEach(o=>o.classList.remove('sel')); } renderFinTotal(); }
+  function pickQuartier(el,fee){ el.parentElement.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel')); el.classList.add('sel'); deliveryFee=fee; renderFinTotal(); }
+  function renderFinTotal(){ const el=document.getElementById('finTotal'); if(el) el.textContent=(cart.reduce((s,c)=>s+c.price,0)+deliveryFee)+' DH'; }
+  function confirmOrder(){
+    if(cart.some(c=>c.fraisier)){
+      const liv = document.getElementById('livraisonCreneau').style.display!=='none';
+      let early=false;
+      if(liv){ const slot=document.querySelector('#livraisonCreneau .opt.sel'); if(!slot){ alert('Choisissez un créneau de livraison 🙂'); return; } if(/^(10h|12h|14h)/.test(slot.textContent.trim())) early=true; }
+      else { const t=(document.querySelector('#retraitHeure input')||{}).value||''; if(t && t < '16:00') early=true; }
+      if(early){ alert('🍓 Le fraisier est préparé frais et n\'est disponible qu\'à partir de 16h.\nMerci de choisir une heure à partir de 16h.'); return; }
+    }
+    show('screen-done');
+  }
+
+  const LISTS = {
+    cd:{ title:'Cake Design', items:[
+      {n:'1 étage', s:'5 à 20 pers', etages:1, pers:[[5,300],[10,600],[15,750],[20,1000]]},
+      {n:'2 étages', s:'15 à 35 pers', etages:2, pers:[[15,750],[20,1000],[25,1250],[30,1500],[35,1750]]},
+      {n:'3 étages', s:'30 à 50 pers', etages:3, pers:[[30,1500],[35,1750],[40,2000],[45,2250],[50,2500]]},
+    ] },
+    gm:{ title:'Gourmandises', items:[ {n:'Cupcakes', s:'dès 96 DH'},{n:'Cake pops', s:'dès 180 DH'},{n:'Donuts', s:'dès 180 DH'},{n:'Magnum', s:'dès 240 DH'} ] },
+    e:{ title:'Entremets', items:[ {n:'Tiramisu', s:'dès 32 DH'},{n:'Fraisier', s:'dès 200 DH'},{n:'Forêt Noire', s:'dès 200 DH'} ] },
+    sa:{ title:'Salé', items:[ {n:'Mini hot dogs', s:'—'},{n:'Mini pizzas', s:'—'} ] },
+  };
+  function openCat(k){ const c=LISTS[k]; document.getElementById('listTitle').textContent=c.title; const g=document.getElementById('listGrid'); g.innerHTML=''; c.items.forEach(it=>{ const d=document.createElement('div'); d.className='tile'; d.innerHTML='<div class="img">🍰</div><div class="lbl">'+it.n+'</div><div class="price">'+it.s+'</div>'; d.onclick=()=>{ document.getElementById('cfgTitle').textContent=c.title+' — '+it.n; resetCfg(); renderPers(it.pers); renderParfums(it.etages); show('screen-cfg'); }; g.appendChild(d); }); show('screen-list'); }
+
+  function renderPers(list){ const box=document.getElementById('persOpts'); if(!list){ box.innerHTML='<div style="font-size:12px;color:#9a8e80">Quantité confirmée avec Lily Gourmet</div>'; return; } box.innerHTML=list.map(function(x){ return '<div class="opt" data-p="'+x[1]+'" onclick="pickPers(this,'+x[0]+')">'+x[0]+' pers <span class="p">~'+x[1]+' DH</span></div>'; }).join(''); }
+  const FLAVORS=['Vanille','Chocolat','Praliné chocolaté','Citron','Oréo','Fraisier'];
+  function renderParfums(etages){ const n=etages||1; let labels; if(n>=3) labels=['Parfum — étage du bas','Parfum — étage du milieu','Parfum — étage du haut']; else if(n===2) labels=['Parfum — étage du bas','Parfum — étage du haut']; else labels=['Parfum']; document.getElementById('parfumZone').innerHTML=labels.map(function(lab){ return '<div class="field"><div class="q">'+lab+'</div><div class="opts">'+FLAVORS.map(function(f){ return '<div class="opt" onclick="pickOne(this)">'+f+'</div>'; }).join('')+'</div></div>'; }).join(''); }
+  function resetCfg(){ cur={pers:null,parfum:null,price:0}; const cm=document.getElementById('cfgComment'); if(cm) cm.value=''; document.getElementById('cfgPrice').textContent='— DH'; }
+  function pickPers(el,p){ document.querySelectorAll('#persOpts .opt').forEach(o=>o.classList.remove('sel')); el.classList.add('sel'); cur.pers=p; cur.price=Number(el.dataset.p); document.getElementById('cfgPrice').textContent=cur.price+' DH'; }
+  function pickOne(el){ const sib=el.parentElement.querySelectorAll('.opt'); sib.forEach(o=>o.classList.remove('sel')); el.classList.add('sel'); cur.parfum=el.textContent.trim(); updateFraisierNote(); }
+  function updateFraisierNote(){ const any=Array.from(document.querySelectorAll('#parfumZone .opt.sel')).some(o=>/fraisier/i.test(o.textContent)); const n=document.getElementById('fraisierNote'); if(n) n.style.display=any?'block':'none'; }
+  function pickPers2(){}
+
+  function addToCart(){ if(!cur.price){ alert('Choisissez le nombre de personnes 🙂'); return; } const parfums=Array.from(document.querySelectorAll('#parfumZone .opt.sel')).map(o=>o.textContent.trim()); const fraisier=parfums.some(p=>/fraisier/i.test(p)); const title=document.getElementById('cfgTitle').textContent.replace('Cake Design — ',''); cart.push({ label:'🎂 '+title+(parfums.length?' · '+parfums.join(', '):''), price:cur.price, fraisier:fraisier }); renderCart(); openCross(); }
+  function addAcc(name,price){ cart.push({ label:'➕ '+name, price }); renderCart(); }
+  function renderCart(){ const box=document.getElementById('cartItems'); if(!cart.length){ box.innerHTML='<div class="empty-cart">Votre commande est vide 🙂</div>'; } else { box.innerHTML=cart.map((c,i)=>'<div class="row"><span>'+c.label+'</span><span>'+c.price+' DH <span class="x" onclick="rm('+i+')">✕</span></span></div>').join(''); } document.getElementById('cartTotal').textContent=cart.reduce((s,c)=>s+c.price,0)+' DH'; }
+  function rm(i){ cart.splice(i,1); renderCart(); }
+  function openCross(){ resetBougie(); resetTopper(); document.getElementById('crossSell').classList.add('show'); }
+  function addTopper(el){ addAcc('Topper Happy Birthday',30); el.dataset.n=(parseInt(el.dataset.n)||0)+1; el.querySelector('.pp').textContent='✓ Ajouté ×'+el.dataset.n; el.style.background='#DCF0E2'; el.style.borderColor='#B6E2C8'; }
+  function resetTopper(){ const el=document.getElementById('topperTile'); if(el){ el.dataset.n='0'; el.querySelector('.pp').textContent='~30 DH'; el.style.background=''; el.style.borderColor=''; } }
+  function showBougieTypes(){ document.getElementById('accMain').style.display='none'; document.getElementById('bougieTypes').style.display='block'; }
+  function bq(btn,d){ const b=btn.parentElement.querySelector('b'); b.textContent=Math.max(0,(parseInt(b.textContent)||0)+d); }
+  function addBougies(){ document.querySelectorAll('#bougieTypes .brow').forEach(function(row){ const n=parseInt(row.querySelector('b').textContent)||0; if(n>0) cart.push({label:'➕ '+row.dataset.name+' ×'+n, price:Number(row.dataset.price)*n}); }); renderCart(); resetBougie(); }
+  function resetBougie(){ const m=document.getElementById('accMain'); const b=document.getElementById('bougieTypes'); if(m) m.style.display='flex'; if(b) b.style.display='none'; document.querySelectorAll('#bougieTypes .brow b').forEach(function(x){ x.textContent='0'; }); }
+  function closeCross(){ document.getElementById('crossSell').classList.remove('show'); openCat('gm'); }
+  function finishFromCross(){ document.getElementById('crossSell').classList.remove('show'); openCat('cd'); }
+  function validate(){ if(!cart.length){ alert('Ajoutez au moins un article 🙂'); return; } show('screen-finalize'); renderFinTotal(); }
+</script>
+</body>
+</html>

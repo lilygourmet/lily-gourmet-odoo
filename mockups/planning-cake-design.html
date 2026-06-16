@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planning Cake Design — maquette</title>
+<style>
+  :root{--bordeaux:#993556;--bordeaux-d:#7a1f3d;--cream:#FBF6EE;--line:#e7dccb;--ink:#2b2522;--ink-soft:#6b5f57;--ink-mute:#9a8e80}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;background:#efe7d9;margin:0;padding:24px;color:var(--ink)}
+  .card{max-width:430px;margin:0 auto;background:var(--cream);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+  h1{font-size:15px;margin:0 0 14px;color:var(--bordeaux-d)}
+  .label{font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}
+  .star{color:var(--bordeaux)}
+  .row{display:flex;gap:8px;margin-bottom:14px}
+  input{padding:9px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;background:#fff;color:var(--ink)}
+  .date{flex:1}
+  .planning{margin-top:6px;border:1px solid var(--line);background:rgba(251,246,238,.6);border-radius:10px;padding:11px}
+  .ptitle{font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:9px}
+  .ptitle span{color:var(--ink-mute);font-weight:500}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .slot{border-radius:9px;border:1px solid;padding:7px 9px;text-align:left;cursor:pointer;font-size:12px;line-height:1.2;transition:.15s;font-family:inherit}
+  .slot:hover{opacity:.82}
+  .slot .h{font-weight:700}
+  .slot .n{font-size:10.5px;margin-top:2px}
+  .free{background:#ecfdf3;color:#1e7e4f;border-color:#bbecd0}
+  .mid{background:#fff8ec;color:#9a6a00;border-color:#f2e2b8}
+  .full{background:#fdecec;color:#b42424;border-color:#f3bcbc}
+  .sel{outline:2px solid var(--bordeaux);outline-offset:1px}
+  .warn{margin-top:10px;font-size:11px;font-weight:700;color:#b42424}
+  .detail{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .dtitle{font-size:10.5px;color:var(--ink-soft);margin-bottom:6px}
+  .photos{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+  .cake{flex:0 0 auto;width:66px;text-align:center}
+  .thumb{width:66px;height:66px;border-radius:9px;border:1px solid var(--line);object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff}
+  .cake .p{font-size:10px;margin-top:3px}
+  .legend{margin-top:12px;font-size:11px;color:var(--ink-mute)}
+  .note{max-width:430px;margin:14px auto 0;font-size:12px;color:var(--ink-soft);text-align:center}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Nouvelle commande — exemple Samedi 13 juin</h1>
+    <div class="label">Retrait / livraison <span class="star">*</span> (obligatoire)</div>
+    <div class="row">
+      <input class="date" type="text" value="13/06/2026" readonly>
+      <input id="timeInput" type="text" value="16:00" readonly style="width:84px">
+    </div>
+    <div class="planning">
+      <div class="ptitle">🎂 Cake design déjà prévus ce jour
+        <span>(max conseillé 3/créneau — clique pour choisir l'heure)</span></div>
+      <div class="grid" id="grid"></div>
+      <div id="warn"></div>
+      <div class="detail" id="detail"></div>
+    </div>
+    <div class="legend">🟢 libre · 🟠 1 à 3 · 🔴 plein (plus de 3) — clique un créneau pour voir les gâteaux (photo + nb pers).</div>
+  </div>
+  <div class="note">Maquette : données réelles du 13 juin (bougies/toppers exclus). Les vignettes = vraies photos des modèles dans l'app.</div>
+
+<script>
+  const counts = {9:0,10:1,11:0,12:3,13:4,14:4,15:3,16:3,17:0,18:2,19:3,20:0};
+  // Exemple : gâteaux réels du créneau 16h (dans l'app, ce sont les vraies photos + nb pers).
+  const slots = {
+    16:[{p:10,c:'#caa05a'},{p:10,c:'#9c6b8a'},{p:15,c:'#7aa0b8'}],
+    13:[{p:8,c:'#b87a7a'},{p:20,c:'#7ab88a'},{p:10,c:'#caa05a'},{p:6,c:'#9c8a6b'}],
+    14:[{p:12,c:'#9c6b8a'},{p:10,c:'#7aa0b8'},{p:30,c:'#caa05a'},{p:8,c:'#b87a7a'}]
+  };
+  const HOURS=[9,10,11,12,13,14,15,16,17,18,19,20], MAX=3;
+  let selected=16;
+
+  function render(){
+    const g=document.getElementById('grid'); g.innerHTML='';
+    for(const h of HOURS){
+      const n=counts[h]||0;
+      const cls=n>MAX?'full':n>0?'mid':'free';
+      const emo=n>MAX?'🔴':n>0?'🟠':'🟢';
+      const b=document.createElement('button');
+      b.className='slot '+cls+(selected===h?' sel':'');
+      b.innerHTML='<div class="h">'+h+'h '+emo+'</div><div class="n">'+(n===0?'libre':n+' CD-')+'</div>';
+      b.onclick=()=>{selected=h; document.getElementById('timeInput').value=(h<10?'0'+h:h)+':00'; render();};
+      g.appendChild(b);
+    }
+    const n=counts[selected]||0;
+    document.getElementById('warn').innerHTML = n>MAX
+      ? '<div class="warn">⚠️ '+n+' cake design déjà à '+selected+'h — privilégie un créneau 🟢.</div>' : '';
+    const items=slots[selected]||[];
+    const d=document.getElementById('detail');
+    if(items.length){
+      d.style.display='block';
+      d.innerHTML='<div class="dtitle">À '+selected+'h — gâteaux déjà réservés (juge si tu peux en ajouter) :</div>'
+        +'<div class="photos">'+items.map(it=>'<div class="cake"><div class="thumb" style="background:'+it.c+'">photo</div><div class="p">'+it.p+' pers</div></div>').join('')+'</div>';
+    } else { d.style.display='none'; d.innerHTML=''; }
+  }
+  render();
+</script>
+</body>
+</html>

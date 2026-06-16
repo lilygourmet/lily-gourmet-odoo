@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
-import { countConversationBadges, markConversationsVisited } from '../lib/conversations'
+import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
 import { countLivraisonsARelancer } from '../lib/deliveries'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
+import OrderJournalModal from './OrderJournalModal'
 import NavbarConfigModal from './NavbarConfigModal'
 import { saveNavbarConfig } from '../lib/users'
 import LabelsButton from './LabelsButton'
 import NewConversationModal from './Conversations/NewConversationModal'
+import WhatsAppLogo from './WhatsAppLogo'
 import {
   Calendar, BarChart3, ListTodo, Cake, Croissant, Sandwich, Boxes, Store,
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
@@ -25,17 +27,20 @@ import {
 const HEADER_ICONS = {
   calendar: Calendar, recap: BarChart3, tasks: ListTodo, patissier: Cake,
   prod: Croissant, sales: Sandwich, 'stock-gs': Boxes, 'stock-prod-vitrine': Boxes, 'stock-prod-annexe': Boxes,
-  vitrine: Store, 'vitrine-sale': Store, 'reception-vitrine': PackageCheck,
+  vitrine: Store, 'vitrine-sale': Store, 'reception-vitrine': PackageCheck, 'vitrine-previsions': BarChart3,
   'fin-journee': Moon, stock: ClipboardList, checklist: ListChecks,
-  etiquettes: Tag, 'cake-vision-link': Camera, messages: MessageSquare,
+  etiquettes: Tag, 'etiquettes-prix': Tag, 'cake-vision-link': Camera, messages: MessageSquare,
   conversations: MessageCircle, modifications: Pencil, livraisons: Truck, paiements: CreditCard, freezer: Snowflake,
   caisse: Banknote, hr: Users, absences: Plane, economat: Receipt,
   // menus déroulants
   menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench, menu_more: MoreHorizontal,
   // actions
   settings: Settings, sync: RefreshCw, logout: LogOut, password: KeyRound,
-  print: Printer, palette: Palette, users: Users, nav_config: Sliders,
+  print: Printer, palette: Palette, users: Users, nav_config: Sliders, journal: ClipboardList,
 }
+
+// Boutons affichés en LOGO SEUL (nom au survol) pour désencombrer la barre.
+const ICON_ONLY_VIEWS = new Set(['tasks', 'conversations', 'cake-vision-link', 'messages'])
 function Ico({ name, size = 16, className = '' }) {
   const C = HEADER_ICONS[name] || Circle
   return <C size={size} strokeWidth={1.8} className={className} />
@@ -71,6 +76,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   }, [showBell])
   const [showChangePwd, setShowChangePwd] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
+  const [showOrderJournal, setShowOrderJournal] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
   const [showQuickSend, setShowQuickSend] = useState(false)
   // Disposition perso des onglets (header) : { order, hidden } ou null = défaut
@@ -101,6 +107,31 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [modifBadge, setModifBadge] = useState(0)
   // Badge Livraisons refusées à réassigner
   const [livraisonsBadge, setLivraisonsBadge] = useState(0)
+  // Badge "devis internet NON TRAITÉS" (ceux qui traînent encore dans l'onglet).
+  const [devisInternetBadge, setDevisInternetBadge] = useState(0)
+  const prevViewRef = useRef(activeView)
+
+  // Compte les devis internet non traités (au démarrage + toutes les 5 min).
+  useEffect(() => {
+    if (isLivreur(user) || !canSeeDevis(user)) return
+    let cancelled = false
+    async function refresh() {
+      const n = await countDevisInternetNonTraites()
+      if (!cancelled) setDevisInternetBadge(n)
+    }
+    refresh()
+    const iv = setInterval(refresh, 5 * 60 * 1000)   // rafraîchit toutes les 5 min
+    return () => { cancelled = true; clearInterval(iv) }
+  }, [user])
+
+  // Recompte quand on QUITTE l'onglet Devis internet (on vient peut-être de traiter des devis).
+  useEffect(() => {
+    if (prevViewRef.current === 'devis-internet' && activeView !== 'devis-internet'
+        && !isLivreur(user) && canSeeDevis(user)) {
+      countDevisInternetNonTraites().then(setDevisInternetBadge).catch(() => {})
+    }
+    prevViewRef.current = activeView
+  }, [activeView, user])
   // Menus deroulants ouverts (un seul a la fois)
   const [openMenu, setOpenMenu] = useState(null) // 'prod' | 'vitrine' | 'outils' | null
 
@@ -113,9 +144,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // UNIQUEMENT pour ceux qui peuvent imprimer mais ne voient pas le calendrier.
   const showHeaderLabels = canPrintLabels(user) && !canSeeCalendar(user)
 
-  // Refresh affichage relatif chaque minute
+  // Refresh affichage relatif (toutes les 5 min — évite des re-rendus globaux trop fréquents)
   useEffect(() => {
-    const t = setInterval(() => setNow(n => n + 1), 60000)
+    const t = setInterval(() => setNow(n => n + 1), 5 * 60 * 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -336,24 +367,29 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
     refreshChecklistBadge()
 
+    // Anti-cascade : les 4 tables peuvent changer en rafale (batch) → on regroupe en 1 refresh.
+    let debTimer = null
+    const scheduleRefresh = () => { clearTimeout(debTimer); debTimer = setTimeout(refreshChecklistBadge, 800) }
+
     // Realtime sur 4 tables qui influent sur le badge
     channels = [
       supabase.channel('checklist-badge-stock')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_day_items' }, refreshChecklistBadge)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_day_items' }, scheduleRefresh)
         .subscribe(),
       supabase.channel('checklist-badge-prod')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'prod_done' }, refreshChecklistBadge)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'prod_done' }, scheduleRefresh)
         .subscribe(),
       supabase.channel('checklist-badge-cafe')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'cafe_received' }, refreshChecklistBadge)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cafe_received' }, scheduleRefresh)
         .subscribe(),
       supabase.channel('checklist-badge-steps')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'item_steps' }, refreshChecklistBadge)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'item_steps' }, scheduleRefresh)
         .subscribe(),
     ]
 
     return () => {
       cancelled = true
+      clearTimeout(debTimer)
       channels.forEach(c => supabase.removeChannel(c))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -384,8 +420,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           () => { refreshTasksBadge() })
       .subscribe()
 
-    // Refresh régulier toutes les 2 min (au cas où realtime louppe un event)
-    const interval = setInterval(refreshTasksBadge, 2 * 60 * 1000)
+    // Refresh de secours toutes les 5 min (au cas où le temps réel loupe un event)
+    const interval = setInterval(refreshTasksBadge, 5 * 60 * 1000)
 
     return () => {
       cancelled = true
@@ -414,7 +450,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('conv-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, refreshConvBadge)
       .subscribe()
-    const interval = setInterval(refreshConvBadge, 30000)
+    const interval = setInterval(refreshConvBadge, 3 * 60 * 1000)   // secours (le temps réel est instantané)
 
     return () => {
       cancelled = true
@@ -436,7 +472,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('modif-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'modifications' }, refresh)
       .subscribe()
-    const interval = setInterval(refresh, 60000)
+    const interval = setInterval(refresh, 3 * 60 * 1000)   // secours (temps réel instantané)
     return () => { cancelled = true; clearInterval(interval); if (channel) supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeModif, user?.id])
@@ -453,7 +489,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('livraisons-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'livraisons' }, refresh)
       .subscribe()
-    const interval = setInterval(refresh, 60000)
+    const interval = setInterval(refresh, 3 * 60 * 1000)   // secours (temps réel instantané)
     return () => { cancelled = true; clearInterval(interval); if (channel) supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeLivraisons, user?.id])
@@ -490,14 +526,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSync])
 
-  function fmtRelative(d) {
-    if (!d) return ''
-    const diff = Math.floor((Date.now() - d.getTime()) / 1000)
-    if (diff < 60) return 'à l\'instant'
-    if (diff < 3600) return `il y a ${Math.floor(diff / 60)}min`
-    if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`
-    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-  }
 
   async function handleSync() {
     if (syncing) return
@@ -578,6 +606,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   const menuVitrine = [
     { view: 'vitrine',           emoji: '🥐', label: 'Vitrine',           visible: !isLivreur(user) && canStockPatissier(user), badge: 0 },
+    { view: 'vitrine-previsions', emoji: '📈', label: 'Prévisions',        visible: !isLivreur(user) && canStockPatissier(user), badge: 0 },
     { view: 'vitrine-sale',      emoji: '🥟', label: 'Vitrine Salé',      visible: !isLivreur(user) && canSeeVitrineSale(user), badge: 0 },
     { view: 'reception-vitrine', emoji: '📦', label: 'Réception Vitrine', visible: !isLivreur(user) && canStockCafe(user),     badge: receptionBadge },
     { view: 'fin-journee',       emoji: '🌙', label: 'Fin de journée',    visible: !isLivreur(user) && canStockCafe(user),     badge: 0 },
@@ -586,12 +615,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   const menuOutils = [
     { view: 'etiquettes',       emoji: '🏷',  label: 'Étiquettes Café', visible: !isLivreur(user) && canSeeEtiquettes(user) },
+    { view: 'etiquettes-prix',  emoji: '🏷',  label: 'Étiquettes produits', visible: !isLivreur(user) && canSeeEtiquettes(user) },
     // Galerie CD : pour les admins, c'est le bouton principal donc on l'enleve d'ici.
     // Pour les non-admins qui ont la perm, on la garde dans Outils.
     { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && !admin && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user), badge: convBadge.unassigned + convBadge.unread, convBadge },
-    { view: 'devis',            emoji: '📄', label: 'Devis',            visible: !isLivreur(user) && canSeeDevis(user), badge: 0 },
+    { view: 'devis',            emoji: '📄', label: 'Commandes',        visible: !isLivreur(user) && canSeeDevis(user), badge: 0 },
+    { view: 'ocp-link',         emoji: '🍽️', label: 'Lien OCP',         visible: !isLivreur(user) && (admin || canSeeDevis(user)) },
+    { view: 'devis-internet',   emoji: '🌐', label: 'Devis internet',   visible: !isLivreur(user) && canSeeDevis(user), badge: devisInternetBadge },
     { view: 'modifications',    emoji: '✏️', label: 'Modifications',    visible: !isLivreur(user) && canSeeModifications(user), badge: modifBadge },
     { view: 'livraisons',       emoji: '🚚', label: 'Livraisons',       visible: canSeeLivraisons(user), badge: livraisonsBadge },
     { view: 'paiements',        emoji: '💰', label: 'Paiements',         visible: !isLivreur(user) && canViewPayments(user), badge: paiementsBadge },
@@ -648,17 +680,19 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // Composants helper
   // ============================================================
   function NavButton({ view, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
+    const iconOnly = ICON_ONLY_VIEWS.has(view)
     return (
       <button
         onClick={onClick}
+        title={iconOnly ? label : undefined}
         className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
           isActive
             ? 'bg-bordeaux text-cream border border-bordeaux'
             : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
         }`}
       >
-        <Ico name={view} size={15} />
-        <span>{label}</span>
+        {view === 'conversations' ? <WhatsAppLogo size={15} /> : <Ico name={view} size={15} />}
+        {!iconOnly && <span>{label}</span>}
         {convBadge ? (
           <ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} />
         ) : badgeCount > 0 && (
@@ -750,7 +784,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   return (
     <>
-      <div id="app-header" className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+      <div id="app-header" className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-2 flex-wrap">
         {/* Logo cliquable -> calendrier */}
         <button
           onClick={() => !isLivreur(user) && canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
@@ -874,46 +908,26 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         </div>
 
         {/* Actions : sync + roue + logout */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
           {userCanSeeConv && (
             <button
               onClick={() => setShowQuickSend(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0"
+              className="flex items-center gap-1.5 h-9 px-3 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full transition-all flex-shrink-0 text-[11px] font-medium tracking-wider"
               title="Envoyer un devis ou une confirmation par WhatsApp"
             >
-              <MessageCircle size={14} strokeWidth={1.8} />
-              <span className="hidden sm:inline">WHATSAPP</span>
+              <WhatsAppLogo size={16} /> <span>Envoi devis</span>
             </button>
+          )}
+          {canSeeCommande(user) && (
+            <button
+              onClick={() => onNavigate('nouvelle-commande')}
+              className="w-9 h-9 flex items-center justify-center bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full transition-all flex-shrink-0 text-[22px] leading-none pb-0.5"
+              title="Nouvelle commande (créer un devis)"
+            >+</button>
           )}
 
           {showHeaderLabels && <LabelsButton />}
 
-          {!admin && lastSyncAt && !syncing && (
-            <span className="font-mono text-[9px] text-ink-mute hidden md:inline" title={`Dernière sync : ${lastSyncAt.toLocaleString('fr-FR')}`}>
-              sync {fmtRelative(lastSyncAt)}
-            </span>
-          )}
-
-          {!admin && userCanSync && (
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bordeaux hover:bg-bordeaux-deep text-cream rounded-full text-[10px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
-              title={lastSyncAt ? `Dernière synchro : ${lastSyncAt.toLocaleString('fr-FR')}` : 'Synchroniser depuis Odoo'}
-            >
-              {syncing ? (
-                <>
-                  <RefreshCw size={14} strokeWidth={1.8} className="animate-spin" />
-                  <span className="hidden sm:inline">{syncStatus || 'SYNC...'}</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCw size={14} strokeWidth={1.8} />
-                  <span className="hidden sm:inline">SYNC</span>
-                </>
-              )}
-            </button>
-          )}
 
           {!isLivreur(user) && (() => {
             const items = [
@@ -946,55 +960,35 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             )
           })()}
 
-          {(admin || user?.perm_admin_users) && (
-            <div className="relative" ref={cogRef}>
-              <button
-                onClick={() => setShowCog(!showCog)}
-                className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-                title="Paramètres"
-              >
-                <Ico name="settings" size={17} />
-              </button>
-              {showCog && (
-                <>
-                  <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
-                    {admin && <CogItem name="nav_config" label="Mes onglets" onClick={() => { setShowNavConfig(true); setShowCog(false) }} />}
-                    <CogItem name="password" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
-                    <CogItem name="users" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />
-                    {admin && <CogItem name="palette" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
-                    {admin && userCanSync && <CogItem name="sync" label="Synchroniser" onClick={() => { setShowCog(false); handleSync() }} />}
-                    {admin && onLogout && <CogItem name="logout" label="Se déconnecter" onClick={() => { setShowCog(false); onLogout() }} />}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {!admin && !user?.perm_admin_users && (
+          {/* Roue ⚙️ pour TOUS les employés (désencombre l'en-tête) : mot de passe,
+              synchro (si permission), déconnexion + items admin (onglets/users/palette). */}
+          <div className="relative" ref={cogRef}>
             <button
-              onClick={() => setShowChangePwd(true)}
+              onClick={() => setShowCog(!showCog)}
               className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-              title="Changer mot de passe"
+              title="Paramètres"
             >
-              <Ico name="password" size={17} />
+              <Ico name="settings" size={17} />
             </button>
-          )}
-
-          {!admin && onLogout && (
-            <button
-              onClick={onLogout}
-              className="w-9 h-9 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all"
-              title="Se déconnecter"
-            >
-              <Ico name="logout" size={17} />
-            </button>
-          )}
+            {showCog && (
+              <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
+                {admin && <CogItem name="nav_config" label="Mes onglets" onClick={() => { setShowNavConfig(true); setShowCog(false) }} />}
+                <CogItem name="password" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
+                {(admin || user?.perm_admin_users) && <CogItem name="users" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />}
+                {admin && <CogItem name="journal" label="Journal des commandes" onClick={() => { setShowOrderJournal(true); setShowCog(false) }} />}
+                {admin && <CogItem name="palette" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
+                {userCanSync && <CogItem name="sync" label="Synchroniser" onClick={() => { setShowCog(false); handleSync() }} />}
+                {onLogout && <CogItem name="logout" label="Se déconnecter" onClick={() => { setShowCog(false); onLogout() }} />}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Modals */}
       {showChangePwd && <ChangePasswordModal user={user} onClose={() => setShowChangePwd(false)} />}
       {showAdminUsers && <AdminUsers currentUser={user} onClose={() => setShowAdminUsers(false)} />}
+      {showOrderJournal && <OrderJournalModal onClose={() => setShowOrderJournal(false)} />}
       {showPalette && <AdminGmConfig onClose={() => setShowPalette(false)} />}
       {showQuickSend && (
         <NewConversationModal

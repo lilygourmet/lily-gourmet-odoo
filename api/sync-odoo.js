@@ -44,6 +44,16 @@ export default async function handler(req, res) {
     const { orders, lines } = await fetchOdooOrders(uid)
     console.log(`[sync] ${orders.length} commandes (sale+cancel), ${lines.length} lignes`)
 
+    // Commandes prises via l'app : nom de ligne « propre » (sans CD-/GM- pour le client).
+    // Le parser du calendrier exige le préfixe → on le rétablit depuis le PRODUIT Odoo (en mémoire).
+    for (const line of lines) {
+      const pn = (Array.isArray(line.product_id) ? line.product_id[1] : '').replace(/^\[\d+\]\s*/, '')
+      const m = pn.match(/^(CD-|GM-)/i)
+      if (m && !/^(CD-|GM-)/i.test((line.name || '').trim())) {
+        line.name = `${m[1].toUpperCase()} ${line.name}`
+      }
+    }
+
     const linesByOrderId = new Map()
     for (const line of lines) {
       const orderId = Array.isArray(line.order_id) ? line.order_id[0] : line.order_id
@@ -153,8 +163,9 @@ async function odooRead(uid, model, ids, fields) {
 async function fetchOdooOrders(uid) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const in14Days = new Date(today)
-  in14Days.setDate(in14Days.getDate() + 14)
+  // Fenêtre de synchro : commandes livrées dans les 90 prochains jours.
+  const windowEnd = new Date(today)
+  windowEnd.setDate(windowEnd.getDate() + 90)
 
   const fmtDate = (d) => {
     const pad = (n) => String(n).padStart(2, '0')
@@ -162,7 +173,7 @@ async function fetchOdooOrders(uid) {
   }
 
   const dateStart = fmtDate(today)
-  const dateEnd = fmtDate(new Date(in14Days.getTime() + 86399999))
+  const dateEnd = fmtDate(new Date(windowEnd.getTime() + 86399999))
 
   // On fetch sale + cancel pour pouvoir afficher les annulees barrees
   const orders = await odooSearchRead(uid, 'sale.order',
@@ -172,7 +183,7 @@ async function fetchOdooOrders(uid) {
       ['commitment_date', '<=', dateEnd],
     ],
     ['id', 'name', 'partner_id', 'commitment_date', 'livraison_hour', 'state', 'note', 'order_line', 'user_id', 'create_uid', 'warehouse_id', 'amount_total'],
-    { order: 'commitment_date asc', limit: 500 }
+    { order: 'commitment_date asc', limit: 2000 }
   )
 
   const allLineIds = []
@@ -723,6 +734,54 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
     if (urls.length > 0) result.set(lineId, urls)
   }
 
+  // Photos ajoutées DEPUIS L'APP : elles sont attachées à la COMMANDE (sale.order),
+  // pas à la ligne. On les rattache aux articles CD de la commande pour qu'elles
+  // apparaissent dans le calendrier (comme les photos posées directement sur la ligne).
+  const orderIds = [...new Set(parsedOrders.map(po => po.odooId).filter(Boolean))]
+  const orderAtts = []
+  for (let i = 0; i < orderIds.length; i += batchSize) {
+    const batch = orderIds.slice(i, i + batchSize)
+    const atts = await odooSearchRead(uid, 'ir.attachment',
+      [['res_model', '=', 'sale.order'], ['res_id', 'in', batch], ['mimetype', 'ilike', 'image/']],
+      ['id', 'res_id', 'name', 'mimetype', 'file_size'], {})
+    orderAtts.push(...atts)
+  }
+  if (orderAtts.length > 0) {
+    const toDl = orderAtts
+      .map(att => ({ att, fileName: `order_${att.res_id}_att_${att.id}.${guessExt(att.mimetype)}` }))
+      .filter(x => !existingSet.has(x.fileName))
+    for (let i = 0; i < toDl.length; i += 10) {
+      const slice = toDl.slice(i, i + 10)
+      const datas = await odooRead(uid, 'ir.attachment', slice.map(s => s.att.id), ['datas'])
+      for (const { att, fileName } of slice) {
+        const data = datas.find(d => d.id === att.id)
+        if (!data?.datas) continue
+        const { error: upErr } = await supabase.storage.from(STORAGE_BUCKET)
+          .upload(fileName, Buffer.from(data.datas, 'base64'), { contentType: att.mimetype, upsert: true })
+        if (upErr) console.error(`[sync] Erreur upload ${fileName}: ${upErr.message}`)
+      }
+    }
+    const urlsByOrder = new Map()
+    for (const att of orderAtts) {
+      const fileName = `order_${att.res_id}_att_${att.id}.${guessExt(att.mimetype)}`
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName)
+      if (data?.publicUrl) {
+        if (!urlsByOrder.has(att.res_id)) urlsByOrder.set(att.res_id, [])
+        urlsByOrder.get(att.res_id).push(data.publicUrl)
+      }
+    }
+    for (const po of parsedOrders) {
+      const urls = urlsByOrder.get(po.odooId)
+      if (!urls || urls.length === 0) continue
+      for (const item of po.items) {
+        if (item.type !== 'CD' || !item.lineId) continue
+        const merged = [...(result.get(item.lineId) || [])]
+        for (const u of urls) if (!merged.includes(u)) merged.push(u)
+        result.set(item.lineId, merged)
+      }
+    }
+  }
+
   return result
 }
 
@@ -782,6 +841,21 @@ function isEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+// Valeur « vide » = pas de contenu avant (null, '', tableau vide, « pas de message », « 0 »).
+function isEmptyVal(v) {
+  if (v == null) return true
+  if (Array.isArray(v)) return v.length === 0
+  const s = String(v).trim().toLowerCase()
+  return s === '' || s === 'pas de message' || s === '0'
+}
+// AJOUT (≠ remplacement) → on NE flague PAS : rien avant, OU un tableau où tout l'ancien
+// est encore présent (ex. une 2e photo / un 2e parfum ajouté à ce qui existait déjà).
+function isAddition(oldV, newV) {
+  if (isEmptyVal(oldV)) return true
+  if (Array.isArray(oldV) && Array.isArray(newV)) return oldV.every(x => newV.includes(x))
+  return false
+}
+
 // Renvoie un objet avec les champs modifies (avant/apres)
 // Ex: { title: { from: "x", to: "y" }, parfums: { from: [...], to: [...] } }
 function diffItems(existingItem, newRow) {
@@ -806,7 +880,7 @@ function diffItems(existingItem, newRow) {
     const col = fieldMap[field]
     const oldVal = existingItem[col]
     const newVal = newRow[col]
-    if (!isEqual(oldVal, newVal)) {
+    if (!isEqual(oldVal, newVal) && !isAddition(oldVal, newVal)) {
       changes[field] = { from: oldVal, to: newVal }
     }
   }
@@ -1002,11 +1076,7 @@ async function syncToSupabase(supabase, parsedOrders) {
           const { error } = await supabase.from('order_items').insert(fullRow)
           if (error) throw error
           itemsAdded++
-          // Si la commande existait deja mais qu'un item est ajoute, c'est une modif
-          if (!isNewOrder) {
-            orderChanges[`item_${idx}`] = ['ajoute']
-            orderHasChanges = true
-          }
+          // Article AJOUTÉ : on ne flague PAS (un ajout n'est pas un remplacement — demande Layla).
         }
       }
 

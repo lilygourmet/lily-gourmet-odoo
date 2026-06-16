@@ -2,6 +2,8 @@ import { supabase } from './supabase'
 import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 import { saveAs } from 'file-saver'
+import { PDFDocument } from 'pdf-lib'
+import { downloadBulletinBytes } from './bulletins'
 
 // Groupes/catégories d'employé (menu déroulant). Simple étiquette de classement :
 // n'active aucune permission (le dispatch des perms reste manuel).
@@ -56,7 +58,7 @@ export async function deleteGroupe(nom) {
 /**
  * Charge tous les employés (actifs en premier, puis par nom).
  */
-export async function loadEmployes(filterActif = null) {
+export async function loadEmployes(filterActif = null, excludeFantome = false) {
   let query = supabase
     .from('employes')
     .select('*, societe:societes(*)')
@@ -64,6 +66,9 @@ export async function loadEmployes(filterActif = null) {
     .order('nom', { ascending: true })
 
   if (filterActif !== null) query = query.eq('actif', filterActif)
+  // Employés fantômes : masqués des suivis (pointage/congés) mais gardés pour
+  // l'onglet Employés et les Salaires (qui n'activent pas ce filtre).
+  if (excludeFantome) query = query.eq('fantome', false)
 
   const { data, error } = await query
   if (error) throw error
@@ -190,6 +195,12 @@ const TEMPLATES = {
     label: 'Accusé de remise des documents de départ',
     required: ['nom'],
   },
+  pack_depart: {
+    // Type SPÉCIAL (pas de fichier) : fusionne les 3 modèles Word en 1 seul .docx.
+    label: '📦 Pack départ (Certif. travail + Accusé + Salaire en 1)',
+    required: ['nom', 'cnss', 'poste', 'date_entree', 'date_sortie', 'salaire'],
+    pack: true,
+  },
   stage: {
     file: '/hr_modeles/stage_template.docx',
     label: 'Attestation de stage',
@@ -247,9 +258,12 @@ export function getAllTemplates() {
  * @param {object} data - données à injecter ({ nom, cnss, cin, poste, salaire, date_entree, ... })
  * @returns {Promise<void>}
  */
-export async function generateAttestation(type, data) {
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+// Remplit un modèle .docx (Docxtemplater) et renvoie le PizZip rempli (sans télécharger).
+async function fillTemplate(type, data) {
   const info = TEMPLATES[type]
-  if (!info) throw new Error(`Type d'attestation inconnu : ${type}`)
+  if (!info || !info.file) throw new Error(`Type d'attestation inconnu : ${type}`)
 
   // Vérifier données requises
   for (const f of info.required) {
@@ -265,8 +279,6 @@ export async function generateAttestation(type, data) {
   const zip = new PizZip(buf)
 
   const today = todayFR()
-  // Les modèles utilisent un placeholder {DATE_REDACTION} (cf. scripts/fix-attestations-templates.mjs)
-  // → plus besoin de remplacer des dates hardcodées dans le XML.
 
   // 4. Docxtemplater
   const doc = new Docxtemplater(zip, {
@@ -309,22 +321,81 @@ export async function generateAttestation(type, data) {
     templateValues.NOM = data.nom_famille || templateValues.NOM
   }
 
-  // 6. Rendu
   try {
     doc.render(templateValues)
   } catch (e) {
     console.error('Erreur Docxtemplater:', e)
     throw new Error('Erreur lors de la génération du document : ' + (e.message || e))
   }
+  return doc.getZip()
+}
 
-  // 7. Générer le blob et déclencher le téléchargement
-  const blob = doc.getZip().generate({
-    type: 'blob',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  })
+// Génère un document .docx (1 modèle) et déclenche le téléchargement.
+export async function generateAttestation(type, data) {
+  const zip = await fillTemplate(type, data)
+  const blob = zip.generate({ type: 'blob', mimeType: DOCX_MIME })
+  saveAs(blob, formatFilename(type, data.nom))
+}
 
-  const nomFichier = formatFilename(type, data.nom)
-  saveAs(blob, nomFichier)
+// Récupère les `n` derniers bulletins (PDF) d'un employé : par CNSS, sinon par nom.
+async function dernierssBulletins(data, n = 3) {
+  const base = () => supabase.from('bulletins_paie').select('period, storage_path, label, cnss').order('period', { ascending: false })
+  let rows = []
+  if (data.cnss) { const r = await base().eq('cnss', data.cnss); rows = r.data || [] }
+  if (!rows.length && (data.nom || '').trim()) { const r = await base().ilike('label', `%${data.nom.trim()}%`); rows = r.data || [] }
+  return rows.slice(0, n)
+}
+
+// PACK DÉPART : 1 fichier .zip contenant
+//   • les 3 attestations (modèles Word EXACTS) fusionnées en UN seul .docx,
+//   • les 3 derniers bulletins de paie (PDF) de l'employé.
+// (Un Word ne peut pas contenir de PDF → on regroupe tout dans un seul .zip.)
+export async function generateDepartPackWord(data) {
+  // 1) Fusionner les 3 attestations en 1 .docx (on garde l'en-tête/format du 1er).
+  const types = ['travail_depart', 'accuse', 'salaire']
+  const zips = []
+  for (const t of types) zips.push(await fillTemplate(t, data))
+  const DOC = 'word/document.xml'
+  const base = zips[0]
+  let baseXml = base.file(DOC).asText()
+  const cut = xml => { const i = xml.lastIndexOf('<w:sectPr'); return i >= 0 ? i : xml.lastIndexOf('</w:body>') }
+  const PAGEBREAK = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+  let inserts = ''
+  for (let i = 1; i < zips.length; i++) {
+    const xml = zips[i].file(DOC).asText()
+    const start = xml.indexOf('<w:body>') + '<w:body>'.length
+    inserts += PAGEBREAK + xml.slice(start, cut(xml))
+  }
+  const at = cut(baseXml)
+  baseXml = baseXml.slice(0, at) + inserts + baseXml.slice(at)
+  base.file(DOC, baseXml)
+  const docxBytes = base.generate({ type: 'uint8array' })
+
+  const nom = (data.nom || 'employe').replace(/[^a-zA-Z0-9À-ÿ _-]/g, '').replace(/\s+/g, '_')
+
+  // 2) Récupérer les 3 derniers bulletins (PDF).
+  const bulletins = await dernierssBulletins(data, 3)
+  let nbBul = 0
+
+  // 3) Fusionner les bulletins en UN seul PDF.
+  const pack = new PizZip()
+  pack.file(`1_Attestations_depart_${nom}.docx`, docxBytes)
+  if (bulletins.length) {
+    const merged = await PDFDocument.create()
+    for (const b of bulletins) {
+      try {
+        const bytes = await downloadBulletinBytes(b.storage_path)
+        const src = await PDFDocument.load(bytes)
+        const pages = await merged.copyPages(src, src.getPageIndices())
+        pages.forEach(p => merged.addPage(p))
+        nbBul++
+      } catch (e) { /* bulletin illisible, on saute */ }
+    }
+    if (nbBul) pack.file(`2_Bulletins_${nom}.pdf`, await merged.save())
+  }
+  const blob = pack.generate({ type: 'blob', mimeType: 'application/zip' })
+  saveAs(blob, `Pack_depart_${nom}.zip`)
+  return { bulletins: nbBul }
 }
 
 /**

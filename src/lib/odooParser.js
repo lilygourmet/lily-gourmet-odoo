@@ -133,13 +133,20 @@ function parseItems(odooLines) {
     if (isCdGmProduct(productName)) {
       if (quantity === 0) continue
 
+      // Les ⚠️ sont desormais ecrits DANS la description de l'article (1 par ligne).
+      const cleanName = productName.split('\n').filter(p => !/^\s*⚠️/.test(p)).join('\n').trim()
+      const embeddedWarns = productName.split('\n')
+        .filter(p => /^\s*⚠️/.test(p))
+        .map(p => p.replace(/^\s*⚠️\s*/, '').replace(/\s+/g, ' ').trim())
+        .filter(t => t.length > 0)
+
       const type = /^CD-/i.test(productName) ? 'CD' : 'GM'
-      const title = extractTitle(productName)
+      const title = extractTitle(cleanName)
       if (!title) continue
 
-      const theme = extractField(productName, 'Thème', ['Age', 'Message', 'Option'])
-      const age = extractField(productName, 'Age', ['Message', 'Option'])
-      const message = extractField(productName, 'Message', ['Age', 'Option', 'Acompte'])
+      const theme = extractField(cleanName, 'Thème', ['Age', 'Message', 'Option'])
+      const age = extractField(cleanName, 'Age', ['Message', 'Option'])
+      const message = extractField(cleanName, 'Message', ['Age', 'Option', 'Acompte'])
 
       const decomposed = decomposeTitle(title, type)
 
@@ -156,7 +163,7 @@ function parseItems(odooLines) {
         theme,
         age,
         message,
-        warnings: [],
+        warnings: embeddedWarns,
         quantity,
         isGift,
       }
@@ -215,6 +222,18 @@ function decomposeTitle(title, type) {
   if (type === 'CD') {
     const etagesMatch = title.match(/(\d+)\s*étages?/i)
     if (etagesMatch) etages = parseInt(etagesMatch[1], 10)
+  }
+
+  // Cake design « nouvelle commande » (configurateur) : format attribut « Nom : Valeur »,
+  // ex. « … Nombre de personnes : 10 parfum étage 1 ( l'étage le plus haut) : fraisier ».
+  // Le nb de personnes et le parfum sont APRÈS des « : » (pas dans une parenthèse de variante).
+  if (type === 'CD' && /parfum\b[^:]*:/i.test(title)) {
+    const persMatch = title.match(/nombre de personnes\s*:\s*(\d+)/i)
+    const parfums = []
+    const re = /parfum\b[^:]*:\s*(.+?)(?=\s+parfum\b[^:]*:|$)/gi
+    let pm
+    while ((pm = re.exec(title))) { const v = pm[1].trim(); if (v) parfums.push(v) }
+    return { etages, pers: persMatch ? parseInt(persMatch[1], 10) : null, taille_value: null, parfums }
   }
 
   const parenMatch = title.match(/\(([^)]+)\)/)

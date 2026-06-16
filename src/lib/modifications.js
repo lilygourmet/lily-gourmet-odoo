@@ -12,7 +12,21 @@ export async function createModification({ order_ref, client_name, client_phone,
     .insert({ order_ref, client_name, client_phone, conversation_id, requested_by, status: 'a_traiter', description, justificatif_path })
     .select().single()
   if (error) throw error
+  notifyModifUsers(data).catch(() => {})   // notif WhatsApp aux personnes désignées (non bloquant)
   return data
+}
+
+// Notif WhatsApp aux personnes « perm_notif_modif » — entièrement CÔTÉ SERVEUR
+// (clé service = lecture fiable des profils + envoi robuste). Non bloquant.
+// Renvoie { sent, total } (pour pouvoir afficher le résultat si besoin).
+async function notifyModifUsers(modif) {
+  try {
+    const r = await fetch('/api/wati-webhook?action=notify-modif', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderRef: modif.order_ref, clientName: modif.client_name, description: modif.description }),
+    })
+    return await r.json().catch(() => ({}))
+  } catch (e) { console.warn('[modif] notif WhatsApp:', e.message); return {} }
 }
 
 export async function loadModificationsATraiter() {

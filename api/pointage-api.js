@@ -748,6 +748,50 @@ async function actionListEmployees() {
 }
 
 // ============================================================
+// Action : audit-maladie-courte — vérifie que chaque employé actif a une
+// allocation 'maladie_courte' (6 j) pour l'année. Avec fix=1 : crée les
+// manquantes (source 'auto'). Lecture seule sans fix.
+// ============================================================
+async function actionAuditMaladieCourte({ annee, fix, only } = {}) {
+  const year = Number(annee) || new Date().getFullYear()
+  const { data: emps, error: e1 } = await sb
+    .from('employes').select('id, nom, date_entree').eq('actif', true)
+  if (e1) throw e1
+  const { data: allocs, error: e2 } = await sb
+    .from('conges_allocations').select('employe_id, jours, statut')
+    .eq('annee', year).eq('type', 'maladie_courte')
+  if (e2) throw e2
+  const have = new Map()
+  for (const a of allocs || []) {
+    if (a.statut === 'annule') continue
+    have.set(a.employe_id, (have.get(a.employe_id) || 0) + Number(a.jours || 0))
+  }
+  const sans = (emps || []).filter(e => !((have.get(e.id) || 0) > 0))
+  // only = liste de noms (séparés par virgule) → on ne corrige QUE ceux-là.
+  let toGrant = sans
+  if (only) {
+    const set = new Set(String(only).split(',').map(s => s.trim().toLowerCase()))
+    toGrant = sans.filter(s => set.has((s.nom || '').trim().toLowerCase()))
+  }
+  let granted = 0
+  if (fix && toGrant.length) {
+    const rows = toGrant.map(s => ({ employe_id: s.id, annee: year, type: 'maladie_courte', jours: 6, source: 'auto', statut: 'valide' }))
+    const { error: e3 } = await sb.from('conges_allocations').insert(rows)
+    if (e3) throw e3
+    granted = rows.length
+  }
+  return {
+    ok: true, year,
+    total_actifs: emps?.length || 0,
+    avec: (emps?.length || 0) - sans.length,
+    sans_count: sans.length,
+    sans_noms: sans.map(s => s.nom).sort(),
+    granted,
+    granted_noms: toGrant.map(s => s.nom).sort(),
+  }
+}
+
+// ============================================================
 // Handler principal
 // ============================================================
 
@@ -823,6 +867,7 @@ export default async function handler(req, res) {
     else if (action === 'import-allocations') result = await actionImportAllocations(params)
     else if (action === 'list-employees')     result = await actionListEmployees()
     else if (action === 'debug-attendance')   result = await actionDebugAttendance(params)
+    else if (action === 'audit-maladie-courte') result = await actionAuditMaladieCourte(params)
     else return res.status(400).json({ error: 'Unknown action: ' + action })
 
     return res.status(200).json(result)

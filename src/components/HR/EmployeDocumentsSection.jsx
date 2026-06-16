@@ -34,8 +34,16 @@ export default function EmployeDocumentsSection({ employeId, user }) {
   }
 
   async function open(d) {
-    const url = await getEmployeeDocumentUrl(d.storage_path)
-    if (url) window.open(url, '_blank'); else toast.error('Impossible d\'ouvrir le document')
+    // On ouvre l'onglet TOUT DE SUITE (dans le geste du clic) pour éviter que le
+    // navigateur bloque la pop-up, puis on y met le lien une fois obtenu.
+    const win = window.open('', '_blank')
+    try {
+      const url = await getEmployeeDocumentUrl(d.storage_path)
+      if (win) win.location = url; else window.open(url, '_blank')
+    } catch (err) {
+      if (win) win.close()
+      toast.error('Impossible d\'ouvrir : ' + (err?.message || err))
+    }
   }
 
   async function remove(d) {

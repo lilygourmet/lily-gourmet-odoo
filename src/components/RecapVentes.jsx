@@ -8,7 +8,7 @@ function CatIcon({ catId, size = 16, className = '' }) {
   if (!I) return null
   return <I size={size} className={className} />
 }
-import { isLivreur, isAdmin } from '../lib/auth'
+import { isLivreur } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
 import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
@@ -632,12 +632,12 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
             className="ml-4 text-[12px] text-bordeaux font-medium flex gap-2 hover:bg-bordeaux/10 px-2 py-1 rounded transition-colors text-left w-full"
           >
             <span className="font-mono min-w-[32px]">×{item.quantity}</span>
-            <span>{item.product_name}</span>
+            <span className="whitespace-pre-line">{item.product_name}</span>
           </button>
         ) : (
           <div key={item.id} className="ml-4 text-[12px] text-ink-soft flex gap-2">
             <span className="font-bold text-bordeaux min-w-[32px]">×{item.quantity}</span>
-            <span>{item.product_name}</span>
+            <span className="whitespace-pre-line">{item.product_name}</span>
           </div>
         )
       ))}
@@ -1257,12 +1257,10 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
                 className="px-2.5 py-1 border border-line rounded-full text-[11px] bg-cream focus:outline-none focus:border-bordeaux"
                 title="Choisir n'importe quelle date"
               />
-              {isAdmin(user) && (
-                <button
-                  onClick={() => setShowFactures(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
-                >🧾 Factures</button>
-              )}
+              <button
+                onClick={() => setShowFactures(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"
+              >🧾 Factures</button>
               <button
                 onClick={handlePrintAll}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium tracking-wider transition-all"

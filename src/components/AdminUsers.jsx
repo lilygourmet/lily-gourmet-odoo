@@ -144,6 +144,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_cake_vision: formData.permCakeVision,
         perm_conversations: formData.permConversations,
         perm_devis: formData.permDevis,
+        perm_commande: formData.permCommande,
+        perm_notif_modif: formData.permNotifModif,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -205,6 +207,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_cake_vision: formData.permCakeVision,
         perm_conversations: formData.permConversations,
         perm_devis: formData.permDevis,
+        perm_commande: formData.permCommande,
+        perm_notif_modif: formData.permNotifModif,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -748,6 +752,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permCakeVision: initialData?.perm_cake_vision !== undefined ? initialData.perm_cake_vision : false,
     permConversations: initialData?.perm_conversations !== undefined ? initialData.perm_conversations : false,
     permDevis: initialData?.perm_devis !== undefined ? initialData.perm_devis : false,
+    permCommande: initialData?.perm_commande !== undefined ? initialData.perm_commande : false,
+    permNotifModif: initialData?.perm_notif_modif !== undefined ? initialData.perm_notif_modif : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
     permLivraisonsDispatch: initialData?.perm_livraisons_dispatch || false,
@@ -912,260 +918,74 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
         <label className="block text-[11px] font-medium text-ink-soft mb-1.5">
           Permissions {isAdmin && <span className="text-ink-mute italic">(admin = tout autorisé)</span>}
         </label>
-        <div className={`space-y-2 ${isAdmin ? 'opacity-50 pointer-events-none' : ''}`}>
-          <PermCheckbox
-            id="perm-sync"
-            label="🔄 Synchroniser depuis Odoo"
-            checked={isAdmin || formData.permSync}
-            onChange={v => update('permSync', v)}
-          />
-          {(isAdmin || formData.permCalendar) && <>
-          <PermCheckbox
-            id="perm-check"
-            label="✅ Cocher les étapes (Couvert / Fini / Rangé)"
-            checked={isAdmin || formData.permCheck}
-            onChange={v => update('permCheck', v)}
-          />
-          <PermCheckbox
-            id="perm-polys"
-            label="📏 Choisir la taille des polys"
-            checked={isAdmin || formData.permPolys}
-            onChange={v => update('permPolys', v)}
-          />
-          <PermCheckbox
-            id="perm-delete"
-            label="🗑 Supprimer une commande"
-            checked={isAdmin || formData.permDelete}
-            onChange={v => update('permDelete', v)}
-          />
-          </>}
-          <PermCheckbox
-            id="perm-patissier"
-            label="🧁 Mode Accessoires (voit uniquement les GM)"
-            checked={isAdmin || formData.permPatissier}
-            onChange={v => update('permPatissier', v)}
-          />
-          {(isAdmin || formData.permCalendar) && <>
-          <PermCheckbox
-            id="perm-print-batch"
-            label="🖨️ Imprimer toutes les commandes (batch)"
-            checked={isAdmin || formData.permPrintBatch}
-            onChange={v => update('permPrintBatch', v)}
-          />
-          <PermCheckbox
-            id="perm-print-single"
-            label="🖨️ Imprimer une commande seule"
-            checked={isAdmin || formData.permPrintSingle}
-            onChange={v => update('permPrintSingle', v)}
-          />
-          </>}
-          <PermCheckbox
-            id="perm-recaps"
-            label="📊 Voir les récaps de ventes"
-            checked={isAdmin || formData.permRecaps}
-            onChange={v => update('permRecaps', v)}
-          />
-          <PermCheckbox
-            id="perm-labels"
-            label="🏷️ Imprimer les étiquettes CD (Zebra)"
-            checked={isAdmin || formData.permLabels}
-            onChange={v => update('permLabels', v)}
-          />
-          <PermCheckbox
-            id="perm-freezer"
-            label="❄️ Voir liste sortie congélateur"
-            checked={isAdmin || formData.permFreezer}
-            onChange={v => update('permFreezer', v)}
-          />
-          <PermCheckbox
-            id="perm-messages"
-            label="💌 Voir l'onglet Messages"
-            checked={isAdmin || formData.permMessages}
-            onChange={v => update('permMessages', v)}
-          />
-          <PermCheckbox
-            id="perm-conversations"
-            label="📱 Voir les Conversations WhatsApp"
-            checked={isAdmin || formData.permConversations}
-            onChange={v => update('permConversations', v)}
-          />
-          <PermCheckbox
-            id="perm-devis"
-            label="📄 Voir les Devis (relance clients)"
-            checked={isAdmin || formData.permDevis}
-            onChange={v => update('permDevis', v)}
-          />
-          <PermCheckbox
-            id="perm-modification"
-            label="✏️ Traiter les Modifications de commande"
-            checked={isAdmin || formData.permModification}
-            onChange={v => update('permModification', v)}
-          />
-          <PermCheckbox
-            id="livreur-defaut"
-            label="🚚 Livreur par défaut (reçoit les livraisons non assignées)"
-            checked={formData.livreurDefaut}
-            onChange={v => update('livreurDefaut', v)}
-          />
-          <PermCheckbox
-            id="perm-livraisons-dispatch"
-            label="🧭 Dispatch livraisons (voit TOUTES les livraisons + peut assigner)"
-            checked={isAdmin || formData.permLivraisonsDispatch}
-            onChange={v => update('permLivraisonsDispatch', v)}
-          />
-          <PermCheckbox
-            id="perm-livreur-defaut"
-            label="🚚 Livreur par défaut (perm) — ses livraisons + les non assignées"
-            checked={formData.permLivreurDefaut}
-            onChange={v => update('permLivreurDefaut', v)}
-          />
-          <PermCheckbox
-            id="perm-livreur-assigne"
-            label="📦 Livreur à assigner — voit seulement ce qu'on lui assigne"
-            checked={formData.permLivreurAssigne}
-            onChange={v => update('permLivreurAssigne', v)}
-          />
-          <PermCheckbox
-            id="perm-etiquettes"
-            label="🏷 Voir l'onglet Étiquettes (Entremets/GS/Surgelés)"
-            checked={isAdmin || formData.permEtiquettes}
-            onChange={v => update('permEtiquettes', v)}
-          />
-          <PermCheckbox
-            id="perm-cake-vision"
-            label="📸 Voir la Galerie CD"
-            checked={isAdmin || formData.permCakeVision}
-            onChange={v => update('permCakeVision', v)}
-          />
-          <PermCheckbox
-            id="perm-mark-payment-proof"
-            label="💰 Marquer une preuve de paiement"
-            checked={isAdmin || formData.permMarkPaymentProof}
-            onChange={v => update('permMarkPaymentProof', v)}
-          />
-          <PermCheckbox
-            id="perm-view-payments"
-            label="👁 Voir les paiements à valider"
-            checked={isAdmin || formData.permViewPayments}
-            onChange={v => update('permViewPayments', v)}
-          />
-          <PermCheckbox
-            id="perm-validate-payments"
-            label="✅ Valider les paiements"
-            checked={isAdmin || formData.permValidatePayments}
-            onChange={v => update('permValidatePayments', v)}
-          />
-          <PermCheckbox
-            id="perm-stock-patissier"
-            label="🥐 Voir l'onglet Vitrine (saisie pâtissier)"
-            checked={isAdmin || formData.permStockPatissier}
-            onChange={v => update('permStockPatissier', v)}
-          />
-          <PermCheckbox
-            id="perm-vitrine-sale"
-            label="🥟 Voir l'onglet Vitrine Salé"
-            checked={isAdmin || formData.permVitrineSale}
-            onChange={v => update('permVitrineSale', v)}
-          />
-          <PermCheckbox
-            id="perm-stock-cafe"
-            label="📦 Voir Réception Vitrine + Fin de journée (équipe café)"
-            checked={isAdmin || formData.permStockCafe}
-            onChange={v => update('permStockCafe', v)}
-          />
-          <PermCheckbox
-            id="perm-stock-audit"
-            label="📊 Voir l'onglet Stock (audit + historique)"
-            checked={isAdmin || formData.permStockAudit}
-            onChange={v => update('permStockAudit', v)}
-          />
-          <PermCheckbox
-            id="perm-stock-gs"
-            label="🥪 Voir l'onglet Stock GS- (sous-vue salés)"
-            checked={isAdmin || formData.permStockGS}
-            onChange={v => update('permStockGS', v)}
-          />
-          <PermCheckbox
-            id="perm-stock-prod-vitrine"
-            label="🛍️ Voir l'onglet Stock Prod Vitrine (SM-)"
-            checked={isAdmin || formData.permStockProdVitrine}
-            onChange={v => update('permStockProdVitrine', v)}
-          />
-          <PermCheckbox
-            id="perm-stock-prod-annexe"
-            label="🏭 Voir l'onglet Stock Prod Annexe (SM-)"
-            checked={isAdmin || formData.permStockProdAnnexe}
-            onChange={v => update('permStockProdAnnexe', v)}
-          />
-          <PermCheckbox
-            id="perm-stock-minmax"
-            label="⚙️ Régler les seuils min/max des stocks (GS- / Prod)"
-            checked={isAdmin || formData.permStockMinMax}
-            onChange={v => update('permStockMinMax', v)}
-          />
-          {currentUser?.role === 'admin' && (
-            <PermCheckbox
-              id="perm-caisse"
-              label="💰 Caisse (vue limitée — pour Meriem)"
-              checked={isAdmin || formData.permCaisse}
-              onChange={v => update('permCaisse', v)}
-            />
-          )}
-          {currentUser?.role === 'admin' && (
-            <PermCheckbox
-              id="perm-caisse-admin"
-              label="💰 Caisse · Admin (accès complet au module)"
-              checked={isAdmin || formData.permCaisseAdmin}
-              onChange={v => update('permCaisseAdmin', v)}
-            />
-          )}
-          {currentUser?.role === 'admin' && (
-            <PermCheckbox
-              id="perm-hr"
-              label="🏢 RH (gestion employés sans salaire, attestations limitées, récap pointage)"
-              checked={isAdmin || formData.permHR}
-              onChange={v => update('permHR', v)}
-            />
-          )}
-          {currentUser?.role === 'admin' && (
-            <PermCheckbox
-              id="perm-admin-users"
-              label="👑 Super-admin permissions (gère les utilisateurs sans accès Caisse/RH)"
-              checked={isAdmin || formData.permAdminUsers}
-              onChange={v => update('permAdminUsers', v)}
-            />
-          )}
-          <PermCheckbox
-            id="perm-define-gm"
-            label="✏️ Définir les détails GM"
-            checked={isAdmin || formData.permDefineGM}
-            onChange={v => update('permDefineGM', v)}
-          />
-        </div>
+        <div className={`space-y-3 ${isAdmin ? 'opacity-50 pointer-events-none' : ''}`}>
 
-        {/* Vue Production : 3 checkboxes (calendrier + prod + sales) */}
-        <div className="mt-3 pt-3 border-t border-line">
-          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Vue production</div>
-          <div className="flex flex-col gap-1">
-            <PermCheckbox
-              id="perm-calendar"
-              label="📅 Calendrier"
-              checked={isAdmin || formData.permCalendar}
-              onChange={v => update('permCalendar', v)}
-            />
-            <PermCheckbox
-              id="perm-prod"
-              label="🥐 Production (E-, MI-, V-)"
-              checked={isAdmin || formData.permProd}
-              onChange={v => update('permProd', v)}
-            />
-            <PermCheckbox
-              id="perm-sales"
-              label="🥪 Salés (SA-, SAK-, GS-)"
-              checked={isAdmin || formData.permSales}
-              onChange={v => update('permSales', v)}
-            />
-          </div>
+          <PermGroup emoji="🎂" title="Production & Calendrier" defaultOpen={true}>
+            <PermCheckbox id="perm-calendar" label="Calendrier des commandes" desc="Voir le calendrier et les commandes du jour." checked={isAdmin || formData.permCalendar} onChange={v => update('permCalendar', v)} />
+            <PermCheckbox id="perm-prod" label="Production sucrée" desc="Onglet Prod (entremets, mignardises, viennoiserie)." checked={isAdmin || formData.permProd} onChange={v => update('permProd', v)} />
+            <PermCheckbox id="perm-sales" label="Production salée" desc="Onglet Salés (snacking, plateaux salés)." checked={isAdmin || formData.permSales} onChange={v => update('permSales', v)} />
+            <PermCheckbox id="perm-patissier" label="Mode Accessoires" desc="Ne voit que les accessoires gâteaux (GM)." checked={isAdmin || formData.permPatissier} onChange={v => update('permPatissier', v)} />
+            {(isAdmin || formData.permCalendar) && <>
+            <PermCheckbox id="perm-check" label="Cocher les étapes" desc="Marquer Couvert / Fini / Rangé sur une commande." checked={isAdmin || formData.permCheck} onChange={v => update('permCheck', v)} />
+            <PermCheckbox id="perm-print-batch" label="Imprimer les commandes (lot)" desc="Imprimer toutes les commandes d'un coup." checked={isAdmin || formData.permPrintBatch} onChange={v => update('permPrintBatch', v)} />
+            <PermCheckbox id="perm-print-single" label="Imprimer une commande" desc="Imprimer une seule commande." checked={isAdmin || formData.permPrintSingle} onChange={v => update('permPrintSingle', v)} />
+            <PermCheckbox id="perm-polys" label="Taille des polys" desc="Choisir la taille des boîtes/polys à l'impression." checked={isAdmin || formData.permPolys} onChange={v => update('permPolys', v)} />
+            <PermCheckbox id="perm-delete" label="Supprimer une commande" desc="Action sensible." checked={isAdmin || formData.permDelete} onChange={v => update('permDelete', v)} />
+            </>}
+            <PermCheckbox id="perm-sync" label="Synchroniser depuis Odoo" desc="Forcer la mise à jour des commandes depuis Odoo." checked={isAdmin || formData.permSync} onChange={v => update('permSync', v)} />
+            <PermCheckbox id="perm-define-gm" label="Définir les détails GM" desc="Réglage avancé GM (à clarifier)." checked={isAdmin || formData.permDefineGM} onChange={v => update('permDefineGM', v)} />
+          </PermGroup>
+
+          <PermGroup emoji="🏬" title="Vitrine & Stock (boutique)">
+            <PermCheckbox id="perm-stock-patissier" label="Vitrine — saisie pâtissier" desc="Saisir la vitrine sucrée du matin." checked={isAdmin || formData.permStockPatissier} onChange={v => update('permStockPatissier', v)} />
+            <PermCheckbox id="perm-vitrine-sale" label="Vitrine salée" desc="Saisir la vitrine salée." checked={isAdmin || formData.permVitrineSale} onChange={v => update('permVitrineSale', v)} />
+            <PermCheckbox id="perm-stock-cafe" label="Réception & fin de journée (café)" desc="Équipe café : réception vitrine + clôture du soir." checked={isAdmin || formData.permStockCafe} onChange={v => update('permStockCafe', v)} />
+            <PermCheckbox id="perm-stock-audit" label="Stock — audit & historique" desc="Voir l'audit de stock complet." checked={isAdmin || formData.permStockAudit} onChange={v => update('permStockAudit', v)} />
+            <PermCheckbox id="perm-stock-gs" label="Stock Gâteaux secs" desc="Sous-vue stock des GS-." checked={isAdmin || formData.permStockGS} onChange={v => update('permStockGS', v)} />
+            <PermCheckbox id="perm-stock-prod-vitrine" label="Stock Prod Vitrine" desc="Stock de production vitrine (SM-)." checked={isAdmin || formData.permStockProdVitrine} onChange={v => update('permStockProdVitrine', v)} />
+            <PermCheckbox id="perm-stock-prod-annexe" label="Stock Prod Annexe" desc="Stock de production annexe (SM-)." checked={isAdmin || formData.permStockProdAnnexe} onChange={v => update('permStockProdAnnexe', v)} />
+            <PermCheckbox id="perm-stock-minmax" label="Régler les seuils min/max" desc="Définir les alertes de réassort (GS- / Prod)." checked={isAdmin || formData.permStockMinMax} onChange={v => update('permStockMinMax', v)} />
+            <PermCheckbox id="perm-freezer" label="Sortie congélateur" desc="Voir la liste des sorties de congélateur." checked={isAdmin || formData.permFreezer} onChange={v => update('permFreezer', v)} />
+          </PermGroup>
+
+          <PermGroup emoji="🏷️" title="Étiquettes & visuels">
+            <PermCheckbox id="perm-labels" label="Étiquettes gâteaux (Zebra)" desc="Imprimer les étiquettes cake design sur l'imprimante Zebra." checked={isAdmin || formData.permLabels} onChange={v => update('permLabels', v)} />
+            <PermCheckbox id="perm-etiquettes" label="Étiquettes café & produits" desc="Onglets « Étiquettes Café » et « Étiquettes produits » (prix vitrine)." checked={isAdmin || formData.permEtiquettes} onChange={v => update('permEtiquettes', v)} />
+            <PermCheckbox id="perm-cake-vision" label="Galerie CD" desc="Accès à la galerie des modèles de gâteaux." checked={isAdmin || formData.permCakeVision} onChange={v => update('permCakeVision', v)} />
+          </PermGroup>
+
+          <PermGroup emoji="💬" title="Clients & Ventes">
+            <PermCheckbox id="perm-conversations" label="Conversations WhatsApp" desc="Répondre aux clients sur WhatsApp." checked={isAdmin || formData.permConversations} onChange={v => update('permConversations', v)} />
+            <PermCheckbox id="perm-messages" label="Messages (étiquettes messages)" desc="Onglet d'impression des petits mots/messages." checked={isAdmin || formData.permMessages} onChange={v => update('permMessages', v)} />
+            <PermCheckbox id="perm-devis" label="Devis (relance clients)" desc="Voir les devis et relancer les clients." checked={isAdmin || formData.permDevis} onChange={v => update('permDevis', v)} />
+            <PermCheckbox id="perm-commande" label="Nouvelle commande" desc="Créer un devis/commande dans l'app." checked={isAdmin || formData.permCommande} onChange={v => update('permCommande', v)} />
+            <PermCheckbox id="perm-notif-modif" label="🔧 Notif modifications (WhatsApp)" desc="Reçoit un WhatsApp à chaque modification de commande créée." checked={formData.permNotifModif} onChange={v => update('permNotifModif', v)} />
+            <PermCheckbox id="perm-modification" label="Modifications de commande" desc="Traiter les demandes de modif/annulation." checked={isAdmin || formData.permModification} onChange={v => update('permModification', v)} />
+            <PermCheckbox id="perm-mark-payment-proof" label="Marquer une preuve de paiement" desc="Signaler qu'un client a envoyé un justificatif." checked={isAdmin || formData.permMarkPaymentProof} onChange={v => update('permMarkPaymentProof', v)} />
+            <PermCheckbox id="perm-view-payments" label="Voir les paiements à valider" desc="Consulter la file des paiements." checked={isAdmin || formData.permViewPayments} onChange={v => update('permViewPayments', v)} />
+            <PermCheckbox id="perm-validate-payments" label="Valider les paiements" desc="Confirmer un paiement reçu. Action sensible." checked={isAdmin || formData.permValidatePayments} onChange={v => update('permValidatePayments', v)} />
+          </PermGroup>
+
+          <PermGroup emoji="🚚" title="Livraisons">
+            <PermCheckbox id="perm-livraisons-dispatch" label="Dispatch livraisons" desc="Voit TOUTES les livraisons et peut les assigner aux livreurs." checked={isAdmin || formData.permLivraisonsDispatch} onChange={v => update('permLivraisonsDispatch', v)} />
+            <PermCheckbox id="perm-livreur-defaut" label="Livreur par défaut" desc="Reçoit ses livraisons + celles non assignées." checked={formData.permLivreurDefaut} onChange={v => update('permLivreurDefaut', v)} />
+            <PermCheckbox id="perm-livreur-assigne" label="Livreur assigné" desc="Ne voit que les livraisons qu'on lui donne." checked={formData.permLivreurAssigne} onChange={v => update('permLivreurAssigne', v)} />
+            <PermCheckbox id="livreur-defaut" label="Livreur par défaut (ancien réglage)" desc="Doublon historique — préférer « Livreur par défaut » ci-dessus." checked={formData.livreurDefaut} onChange={v => update('livreurDefaut', v)} />
+          </PermGroup>
+
+          <PermGroup emoji="📊" title="Récap & Reporting">
+            <PermCheckbox id="perm-recaps" label="Voir les récaps de ventes" desc="Tableaux de ventes par jour/produit + bouton Factures." checked={isAdmin || formData.permRecaps} onChange={v => update('permRecaps', v)} />
+          </PermGroup>
+
+          {currentUser?.role === 'admin' && (
+          <PermGroup emoji="🔐" title="Administration (sensible)" danger>
+            <PermCheckbox id="perm-caisse" label="Caisse — vue limitée" desc="Accès restreint (ex. Meriem)." checked={isAdmin || formData.permCaisse} onChange={v => update('permCaisse', v)} />
+            <PermCheckbox id="perm-caisse-admin" label="Caisse — accès complet" desc="Module Caisse entier." checked={isAdmin || formData.permCaisseAdmin} onChange={v => update('permCaisseAdmin', v)} />
+            <PermCheckbox id="perm-hr" label="RH" desc="Employés (sans salaire), pointage, attestations limitées." checked={isAdmin || formData.permHR} onChange={v => update('permHR', v)} />
+            <PermCheckbox id="perm-admin-users" label="Gérer les utilisateurs & permissions" desc="Crée/modifie les comptes (sans accès Caisse/RH). Très sensible." checked={isAdmin || formData.permAdminUsers} onChange={v => update('permAdminUsers', v)} />
+          </PermGroup>
+          )}
+
         </div>
 
         {/* Equipe (dropdown) */}
@@ -1250,19 +1070,39 @@ function RoleButton({ label, active, onClick }) {
   )
 }
 
-function PermCheckbox({ id, label, checked, onChange }) {
+function PermCheckbox({ id, label, desc, checked, onChange }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-start gap-2 py-1.5">
       <input
         type="checkbox"
         id={id}
         checked={checked}
         onChange={e => onChange(e.target.checked)}
-        className="w-4 h-4"
+        className="w-4 h-4 mt-0.5 flex-shrink-0"
       />
-      <label htmlFor={id} className="text-[12px] text-ink leading-snug">
-        {label}
+      <label htmlFor={id} className="leading-snug cursor-pointer">
+        <span className="block text-[12.5px] text-ink font-medium">{label}</span>
+        {desc && <span className="block text-[11px] text-ink-mute mt-0.5">{desc}</span>}
       </label>
+    </div>
+  )
+}
+
+// Section de permissions repliable.
+function PermGroup({ emoji, title, children, defaultOpen = false, danger = false }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className={`border rounded-xl overflow-hidden ${danger ? 'border-bordeaux/40' : 'border-line'}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center gap-2 px-3 py-2.5 text-left ${danger ? 'bg-bordeaux/10' : 'bg-cream-warm'}`}
+      >
+        <span className="text-[15px]">{emoji}</span>
+        <span className="font-fraunces italic text-[14px] text-ink">{title}</span>
+        <span className="ml-auto text-ink-mute text-[12px]">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && <div className="px-3 py-1 divide-y divide-line/40">{children}</div>}
     </div>
   )
 }

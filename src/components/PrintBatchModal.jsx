@@ -3,6 +3,7 @@ import { markOrdersPrintedBatch } from '../lib/printOrders'
 import { loadFichesForOrder, getSableDimensionLabel } from '../lib/gmFiches'
 import { computeSizesForCake } from '../lib/cakeSizes'
 import { loadPalette } from '../lib/palette'
+import { loadOrdersHandlers, loadOrdersNotes, loadOrderPhotosByNum } from '../lib/conversations'
 import { toast } from '../lib/toast'
 
 const DAY_NAMES_FULL = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
@@ -86,7 +87,7 @@ function renderItemNoteBlock(item) {
 }
 
 // Generer le HTML d'une seule commande
-function renderOrderHtml(order, fichesByItemId, palette) {
+function renderOrderHtml(order, fichesByItemId, palette, handlers = {}, notes = {}, photoFallbacks = {}) {
   // Filtre les items a quantite zero (acompte, lignes ajoutees pour reference, etc.)
   const rawItems = order.order_items || []
   const items = rawItems.filter(i => {
@@ -101,6 +102,10 @@ function renderOrderHtml(order, fichesByItemId, palette) {
   for (const item of items) {
     const urls = Array.isArray(item.image_urls) ? item.image_urls : []
     for (const u of urls) if (!allPhotos.includes(u)) allPhotos.push(u)
+  }
+  // Repli : photos du chatter Odoo si aucune photo synchronisée pour cette commande.
+  if (allPhotos.length === 0 && Array.isArray(photoFallbacks[order.order_num])) {
+    for (const u of photoFallbacks[order.order_num]) if (u && !allPhotos.includes(u)) allPhotos.push(u)
   }
 
   // CD HTML
@@ -186,6 +191,9 @@ function renderOrderHtml(order, fichesByItemId, palette) {
                 ${fiche?.zigzag_mode === 'meme' ? `<div>Zigzag meme couleur</div>` : ''}
                 ${fiche?.zigzag_mode === 'differente' && zigzagCouleurs.length > 0 ? `<div>Zigzag : ${zigzagCouleurs.map(c => escapeHtml(c.nom)).join(', ')}</div>` : ''}
                 ${decos.length > 0 ? `<div>Deco : ${decos.map(escapeHtml).join(' · ')}</div>` : ''}
+                ${item.theme ? `<div>Theme : ${escapeHtml(item.theme)}</div>` : ''}
+                ${item.age ? `<div>Age : ${escapeHtml(item.age)}</div>` : ''}
+                ${item.message ? `<div>Message : « ${escapeHtml(item.message)} »</div>` : ''}
               </div>
               ${renderItemNoteBlock(item)}
             </div>
@@ -238,9 +246,14 @@ function renderOrderHtml(order, fichesByItemId, palette) {
         </div>
         <div>
           <div style="color:#888;font-size:11px;">Vendeur :</div>
-          <div style="font-weight:600;">${escapeHtml(order.seller_name || '—')}</div>
+          <div style="font-weight:600;">${escapeHtml(handlers[order.order_num] || order.seller_name || '—')}</div>
         </div>
       </div>
+
+      ${notes[order.order_num] ? `<div style="margin:0 0 14px;padding:8px 12px;background:#fce4ec;border-left:3px solid #c2185b;border-radius:3px;">
+        <div style="font-size:9.5px;font-weight:bold;color:#c2185b;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">💬 Commentaire</div>
+        <div style="font-size:12px;color:#333;white-space:pre-wrap;line-height:1.4;">${escapeHtml(notes[order.order_num])}</div>
+      </div>` : ''}
 
       ${cdHtml}
       ${gmHtml}
@@ -253,6 +266,9 @@ export default function PrintBatchModal({ orders, user, onClose, onPrinted }) {
   const [printing, setPrinting] = useState(false)
   const [fichesByItemId, setFichesByItemId] = useState({})
   const [palette, setPalette] = useState([])
+  const [handlers, setHandlers] = useState({})   // order_num -> vendeur « app » (qui a pris/confirmé)
+  const [notes, setNotes] = useState({})         // order_num -> note/commentaire Odoo
+  const [photoFallbacks, setPhotoFallbacks] = useState({})  // order_num -> [dataUrls] (chatter, si pas de photo synchro)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -266,6 +282,17 @@ export default function PrintBatchModal({ orders, user, onClose, onPrinted }) {
         setFichesByItemId(allFiches)
         const p = await loadPalette()
         setPalette(p)
+        // Vendeur « app » + note/commentaire Odoo : en lot (1 appel chacun, en parallèle).
+        const nums = orders.map(o => o.order_num)
+        const [h, nMap] = await Promise.all([loadOrdersHandlers(nums), loadOrdersNotes(nums)])
+        setHandlers(h); setNotes(nMap)
+        // Repli photo (chatter) : seulement pour les commandes SANS photo synchronisée.
+        const sansPhoto = orders.filter(o => !(o.order_items || []).some(it => Array.isArray(it.image_urls) && it.image_urls.length))
+        const pf = {}
+        await Promise.all(sansPhoto.map(async o => {
+          try { const ph = await loadOrderPhotosByNum(o.order_num); if (ph?.length) pf[o.order_num] = ph.map(p => p.dataUrl).filter(Boolean) } catch { /* ignore */ }
+        }))
+        setPhotoFallbacks(pf)
       } catch (e) {
         console.error('[batch] erreur chargement:', e)
       } finally {
@@ -283,7 +310,7 @@ export default function PrintBatchModal({ orders, user, onClose, onPrinted }) {
       const printedAtStr = `${printedAt.getDate()}/${String(printedAt.getMonth()+1).padStart(2,'0')}/${printedAt.getFullYear()} a ${String(printedAt.getHours()).padStart(2,'0')}h${String(printedAt.getMinutes()).padStart(2,'0')}`
 
       // Construire le HTML complet
-      const ordersHtml = orders.map(o => renderOrderHtml(o, fichesByItemId, palette)).join('')
+      const ordersHtml = orders.map(o => renderOrderHtml(o, fichesByItemId, palette, handlers, notes, photoFallbacks)).join('')
 
       const html = `<!DOCTYPE html>
 <html>

@@ -8,6 +8,8 @@ import {
 } from '../../lib/tasks'
 import TaskDetailModal from './TaskDetailModal'
 import NewTaskModal from './NewTaskModal'
+import NewWatiInfoModal from './NewWatiInfoModal'
+import { canSeeWatiInfo } from '../../lib/auth'
 import { Trash2, Paperclip } from 'lucide-react'
 
 const MONTHS_FR = [
@@ -44,6 +46,7 @@ export default function TasksView({ user }) {
   const [filter, setFilter] = useState('todo')
   const [detailTask, setDetailTask] = useState(null)
   const [showNew, setShowNew] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
@@ -172,9 +175,16 @@ export default function TasksView({ user }) {
             )} · {doneCount} terminées
           </p>
         </div>
-        <button onClick={() => setShowNew(true)} style={btnPrimary}>
-          Nouvelle tâche
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {canSeeWatiInfo(user) && (
+            <button onClick={() => setShowInfo(true)} style={btnInfo}>
+              📢 Envoyer une info
+            </button>
+          )}
+          <button onClick={() => setShowNew(true)} style={btnPrimary}>
+            Nouvelle tâche
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -267,6 +277,12 @@ export default function TasksView({ user }) {
           currentUser={user}
           onClose={() => setShowNew(false)}
           onCreated={reload}
+        />
+      )}
+      {showInfo && (
+        <NewWatiInfoModal
+          currentUser={user}
+          onClose={() => setShowInfo(false)}
         />
       )}
     </div>
@@ -483,5 +499,10 @@ function Chip({ active, onClick, children }) {
 const btnPrimary = {
   padding: '11px 18px', fontSize: 13, fontWeight: 600,
   background: '#993556', color: '#faf7f2', border: '1px solid #993556',
+  borderRadius: 10, cursor: 'pointer'
+}
+const btnInfo = {
+  padding: '11px 18px', fontSize: 13, fontWeight: 600,
+  background: '#25D366', color: 'white', border: '1px solid #25D366',
   borderRadius: 10, cursor: 'pointer'
 }

@@ -19,14 +19,35 @@ function placeholders(body) {
 // Compose le bloc détails {{3}} sur UNE seule ligne (WhatsApp interdit les
 // retours à la ligne dans les variables de template).
 function composeDetails(order, tmplName) {
-  const prods = (order.productLines || [])
-    .map(l => `Produit : ${l.text} Qté : ${l.qty} Prix : ${l.price}`)
-    .join(' ; ')
+  // articleLine() gère les 2 formats (objet devis OU chaîne commande confirmée) :
+  // évite le « Produit : undefined » et donne « Gâteau ×1 — 2500 DH ».
+  const prods = (order.productLines || []).map(l => articleLine(l)).join(' ; ')
   if (tmplName === 'devis_validation') {
     return `Montant : ${order.amountText}. ${prods}. Date et heure de retrait souhaitées : ${order.pickupText}`
   }
   // message_de_confirmation
   return `Montant : ${order.amountText}. La date et l'heure de retrait sont ${order.pickupText}. Détails : ${prods}`
+}
+
+// Une ligne d'article lisible : « Gâteau 20 pers ×1 — 2500 DH ».
+// Gère les deux formats : objet {text, qty, price} ou chaîne déjà formatée.
+function articleLine(l) {
+  // Retire le préfixe interne CD-/GM-/GMD- (le client ne doit pas le voir).
+  const clean = s => String(s || '').replace(/^[•\-\s]+/, '').replace(/^(CD-|GM-|GMD-)\s*/i, '')
+  if (typeof l === 'string') return clean(l)
+  const qty = l.qty && Number(l.qty) ? ` ×${l.qty}` : ''
+  const price = l.price ? ` — ${l.price} DH` : ''
+  return `${clean(l.text)}${qty}${price}`
+}
+
+// Version « un article par ligne » du bloc {{3}} (autorisée seulement dans un
+// message NORMAL, pas dans un modèle — WhatsApp interdit les \n dans un modèle).
+function composeDetailsMultiline(order, tmplName) {
+  const prods = (order.productLines || []).map(l => `• ${articleLine(l)}`).join('\n')
+  if (tmplName === 'devis_validation') {
+    return `Montant : ${order.amountText}\n${prods}\nDate et heure de retrait souhaitées : ${order.pickupText}`
+  }
+  return `Montant : ${order.amountText}\nLa date et l'heure de retrait sont ${order.pickupText}\nDétails :\n${prods}`
 }
 const AUTOFILL_TEMPLATES = new Set(['devis_validation', 'message_de_confirmation'])
 
@@ -122,6 +143,15 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
   const selected = templates.find(t => templateName(t) === selectedName) || null
   const body = selected ? templateBody(selected) : ''
   const vars = placeholders(body)
+  // Aperçu = message final (variables remplies). Pour un devis/confirmation avec
+  // une commande, on montre la version « un article par ligne » (ce que le client
+  // verra si la conversation est ouverte).
+  const previewText = body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => {
+    if (k === '3' && AUTOFILL_TEMPLATES.has(selectedName) && pickedOrder) {
+      return composeDetailsMultiline(pickedOrder, selectedName)
+    }
+    return params[k] || `{{${k}}}`
+  })
 
   async function handleSearch() {
     const q = orderQuery.trim()
@@ -170,11 +200,20 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
       const parameters = vars.map(v => ({ name: v, value: params[v] || '' }))
       // Texte réel envoyé au client : variables {{1}}… remplacées par ce qui est saisi.
       const bodyText = body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => params[k] || `{{${k}}}`)
+      // Pour un devis/confirmation : version « un article par ligne ». Le serveur
+      // l'envoie en message normal si la conversation est ouverte (client a écrit
+      // < 24h) ; sinon il garde le modèle (sur une ligne, obligé).
+      let freeText = null
+      if (AUTOFILL_TEMPLATES.has(selectedName) && pickedOrder) {
+        const p3 = { ...params, 3: composeDetailsMultiline(pickedOrder, selectedName) }
+        freeText = body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => p3[k] || `{{${k}}}`)
+      }
       const r = await sendTemplate({
         clientPhone: phone,
         templateName: selectedName,
         parameters,
         bodyText,
+        freeText,
         userId: user.id,
       })
       onSent?.(r.conversationId)
@@ -334,7 +373,8 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
         {/* Aperçu + variables */}
         {selected && (
           <>
-            <div className="text-[11px] text-ink-mute bg-cream-warm border border-line rounded-lg p-2 mb-3 whitespace-pre-wrap">{body}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-mute mb-1">Aperçu (ce que verra le client)</div>
+            <div className="text-[12px] text-ink bg-cream-warm border border-line rounded-lg p-2.5 mb-3 whitespace-pre-wrap leading-relaxed">{previewText}</div>
             {vars.map(v => (
               <div key={v} className="mb-2">
                 <label className="block text-[11px] font-medium text-ink-soft mb-1">Variable {`{{${v}}}`}</label>

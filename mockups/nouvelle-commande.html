@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Nouvelle commande · Lily Gourmet</title>
+<style>
+  :root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;
+    --bordeaux:#993556;--bordeaux-deep:#7a2942;--line:#e8dcc9;--green:#6f9171;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px}
+  .serif{font-family:'Fraunces',Georgia,serif;font-style:italic}
+  header{background:var(--bordeaux);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:22px}
+  .tag{font-size:11px;background:rgba(255,255,255,.18);padding:3px 9px;border-radius:20px}
+  .clientbar{background:var(--cream-warm);border-bottom:1px solid var(--line);padding:12px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .clientbar input{flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:#fff}
+  .btn{border:none;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn-outline{background:#fff;border:1px solid var(--bordeaux);color:var(--bordeaux)}
+  .btn-primary{background:var(--bordeaux);color:#fff}.btn-primary:hover{background:var(--bordeaux-deep)}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed}
+  .wrap{display:flex;align-items:flex-start}
+  .left{flex:1;min-width:0;padding:14px 18px}
+  .right{width:370px;flex-shrink:0;border-left:1px solid var(--line);background:var(--cream-warm);padding:14px;position:sticky;top:64px;height:calc(100vh - 64px);overflow:auto}
+  .cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .cat{padding:7px 13px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);font-size:12px;font-weight:600;cursor:pointer}
+  .cat.active{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .tile{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 10px;cursor:pointer;text-align:center;transition:.12s}
+  .tile:hover{border-color:var(--bordeaux);transform:translateY(-1px);box-shadow:0 4px 10px rgba(122,41,66,.08)}
+  .tile .nm{font-weight:600;font-size:13px;line-height:1.25}
+  .tile .pp{font-size:11px;color:var(--ink-mute);margin-top:3px}
+  .tile .pr{margin-top:7px;font-weight:700;color:var(--bordeaux);font-size:14px}
+  .tile.cfg{border-style:dashed}.tile.cfg .pr{font-size:11px;color:var(--ink-mute);font-weight:600}
+  .right h2{margin:0 0 10px;font-size:18px}
+  .empty{color:var(--ink-mute);font-style:italic;font-size:13px;padding:18px 4px;text-align:center}
+  .item{display:flex;align-items:flex-start;gap:7px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .item .inm{flex:1;min-width:0}
+  .item .inm b{font-size:13px;font-weight:600}
+  .item .inm small{display:block;color:var(--ink-mute);font-size:11px;line-height:1.3}
+  .priceedit{width:62px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;font-size:12px;text-align:right}
+  .qty{display:flex;align-items:center;gap:5px;margin-top:4px}
+  .qty button{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:14px;color:var(--bordeaux)}
+  .qty span{min-width:16px;text-align:center;font-weight:600}
+  .lt{width:64px;text-align:right;font-weight:700;font-size:13px}
+  .rm{border:none;background:none;cursor:pointer;color:#A32D2D;font-size:14px}
+  .addcust{margin-top:10px;width:100%;padding:9px;border:1px dashed var(--bordeaux);background:#fff;color:var(--bordeaux);border-radius:10px;font-weight:600;cursor:pointer;font-size:13px}
+  .field{margin-top:12px}
+  .field label{display:block;font-size:11px;color:var(--ink-soft);font-weight:600;margin-bottom:4px}
+  .field input,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;background:#fff;font-family:inherit}
+  .row2{display:flex;gap:8px}
+  .total{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:2px solid var(--line);font-size:18px}
+  .total b{color:var(--bordeaux)}
+  .create{margin-top:12px;width:100%;padding:13px;font-size:15px}
+  .note{font-size:11px;color:var(--ink-mute);text-align:center;margin-top:8px}
+  .ov{position:fixed;inset:0;background:rgba(26,15,10,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+  .ov.show{display:flex}
+  .modal{background:var(--cream);border-radius:18px;width:100%;max-width:460px;max-height:92vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+  .mhead{background:var(--bordeaux);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+  .mhead h3{margin:0;font-size:19px}
+  .mhead button{background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px}
+  .mbody{padding:16px 18px}
+  .step{margin-bottom:13px}
+  .step .lbl{font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:7px}
+  .opts{display:flex;gap:7px;flex-wrap:wrap}
+  .opt{padding:9px 13px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-soft)}
+  .opt.sel{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+  select.sl,input.tx{width:100%;padding:9px;border:1px solid var(--line);border-radius:10px;font-size:13px;background:#fff;font-family:inherit}
+  .warnfield{border:1px solid #E08A00 !important;background:#FFF8EC}
+  .warnlbl{color:#B36B00 !important}
+  .photo{display:inline-flex;align-items:center;gap:8px;border:1px dashed var(--bordeaux);color:var(--bordeaux);border-radius:10px;padding:9px 12px;cursor:pointer;font-size:13px;font-weight:600;background:#fff}
+  .mprice{display:flex;justify-content:space-between;align-items:center;margin:8px 0 12px;font-size:20px}
+  .mprice b{color:var(--bordeaux)}.muted{color:var(--ink-mute);font-size:12px}
+  @media(max-width:820px){.wrap{flex-direction:column}.right{width:100%;border-left:none;border-top:1px solid var(--line);position:static;height:auto}}
+</style>
+</head>
+<body>
+<header><h1 class="serif">Nouvelle commande</h1><span class="tag">MAQUETTE — données réelles Odoo, mais rien n'est enregistré</span></header>
+<div class="clientbar"><input placeholder="🔍 Client : nom ou téléphone…"><button class="btn btn-outline">+ Nouveau client</button></div>
+<div class="wrap">
+  <div class="left"><div class="cats" id="cats"></div><div class="grid" id="grid"></div></div>
+  <div class="right">
+    <h2 class="serif">🛒 Panier</h2><div id="cart"></div>
+    <button class="addcust" onclick="addCustom()">+ Ligne sur-mesure (prix à la main)</button>
+    <div class="field"><label>Retrait / livraison</label><div class="row2"><input type="date"><input type="time" value="16:00"></div></div>
+    <div class="field"><label>Note générale</label><textarea rows="2" placeholder="précisions livraison, etc."></textarea></div>
+    <div class="total"><span>Total</span><b id="total">0 DH</b></div>
+    <button class="btn btn-primary create">Créer le devis (brouillon Odoo)</button>
+    <div class="note">Prix de chaque ligne modifiable. Devis créé en brouillon ; tu confirmes & envoies comme aujourd'hui.</div>
+  </div>
+</div>
+<div class="ov" id="ov"><div class="modal"><div class="mhead"><h3 class="serif" id="mtitle"></h3><button onclick="closeCfg()">✕</button></div><div class="mbody" id="mbody"></div></div></div>
+
+<script>
+// ====== VRAIES DONNÉES ODOO ======
+const PARFUMS=['Vanille','Chocolat','Praliné Chocolaté','Praliné Amandes caramélisées','Citron','Oréo','fraisier'];
+const CAKEDESIGN={'1 étage':{5:300,10:600,15:750,20:1000},'2 étages':{15:750,20:1000,25:1250,30:1500,35:1750},'3 étages':{30:1500,35:1750,40:2000,45:2250}};
+const NB_ETAGES={'1 étage':1,'2 étages':2,'3 étages':3};
+const ENTREMETS={"Black Forest":{1:39,5:300,10:480,15:720},"Cheese Caramel Beurre Salé":{1:39,10:380},"Cheesecake Exotique":{1:40,10:450},"Citron meringué":{1:32,5:200,10:350,15:525,20:700},"Dark Chocolat":{1:40,8:380},"Flan Vanille Pécan":{1:38,10:380},"Fraisier":{1:40,5:240,10:400,15:600,20:800},"Framboisier":{1:40,5:240,10:400,15:600,20:800},"Gianduja":{1:42,10:480},"Le Citron Framboise":{1:42,5:260,10:430},"Pistache fleur d'oranger":{1:46,10:580},"Royal chocolat":{5:250,10:480},"Suprême amande":{1:32,5:200,10:350,15:525,20:700},"Suprême chocolat":{5:200,10:350,15:525,20:700},"Suprême vanille":{5:200,10:350,15:525,20:700},"Tarte Caramel Beurre Salé":{1:33,5:200,10:330},"Tarte aux Framboises":{1:38,5:200,10:320},"Tarte citron gingembre":{1:30,5:180,10:250},"Tiramisu":{1:32,5:200,10:330},"Miss Pistache":{},"Paris Brest":{},"Tatin":{}};
+const GM={"Cake pops":180,"Donuts":180,"Magnum":240,"Sablés boite de 12":72,"Sablés boite de 18":108,"Sablés boite de 24":144,"Sablés boite de 30":180,"Boite signature Sellou/Nougat":116,"Cupcake boite de 12":96,"Cupcake boite de 18":144,"Cupcake boite de 24":192,"Cupcake boite de 30":240,"Sucettes Guimauve Vanille":25,"Macarons":11};
+// GM- avec variantes (vrais attributs Odoo)
+const GM_CONFIG={
+ "Cake pops":{tailles:{"boite de 12":180,"boite de 18":270,"boite de 24":360,"Boite de 30":450},parfums:["Caramel","Nutella","Mixte"],nparf:1},
+ "Donuts":{tailles:{"boite de 12":180,"boite de 18":270,"boite de 24":360,"Boite de 30":450},nparf:0},
+ "Magnum":{tailles:{"boite de 12":240,"boite de 18":360,"boite de 24":480,"Boite de 30":600},parfums:["Caramel","Nutella","Mixte"],nparf:1},
+ "Cupcake boite de 12":{tailles:{"Mini simple":96,"Mini personnalisé":120,"Grand simple":180,"Grand personnalisé":240},parfums:["Chocolat","Oréo","Vanille","Caramel Beurre salé","malteser"],nparf:2},
+};
+// Saisonnier RA- (Ramadan) / H- (Halloween) / N- (Noël) — H-/N- hors saison désactivés dans Odoo
+const SAISON={"Chebbakia Mhencha aux Amandes (500g)":160,"Chocolat Guimauve à la Fleur d Oranger (300g)":175,"Chocolat Nougat":14.5,"Chocolat Sellou Caramel Croustillant (400g)":230,"Chocolat sellou":14.5,"Cigares au Miel (500g)":160,"Collection Cannage":500,"Collection Tifour":850,"Céramique Intemporelle":380,"Céramique Signature":550,"Gaufrettes Caramel Beurre Salé":55,"Panier Mixte":700,"Plateau Cuir":1400,"Plateau Doré":350,"Plateau Doré GF":2100,"Plateau Khmissa":250,"Plateau bois":700,"Sucette Guimauve":25,"Barre chocolatée (Halloween)":18,"Guimauve halloween":25,"Kit DIY Halloween":120,"Personnage halloween":100,"Sucette Halloween PF":9,"Barre chocolatée Noël":18,"Bûche 100% Chocolat":45,"Bûche 100% Noisettes":45,"Bûche Chocolat":45,"Bûche Citron Meringuée":32,"Bûche Dulcey Praliné":45,"Bûche Fruits des Bois":40,"Bûche Passion Caramel":45,"Bûche Pistache Exotique":45,"Bûche Pécan Caramel":45,"Bûche Supreme Amandes":32,"Chaussette de Noel":90,"Christmas chocolat chaud":15,"Coffret Noel":110,"Cuillères de chocolat chaud":20,"Galette Frangipane":35,"Galette Praliné Noisette":38,"Guimauve Noël Vanille":25,"Kit DIY Maison Pain d Epices":160,"Mini Kit DIY Noël":65,"Sablé pain d épice enrobé":8,"Sucette Noël à la fraise":11,"Sucette chocolatée Noël":12,"Sucettes Brownies Noel":12};
+
+const CATS=['Cake design (CD-)','Entremets (E-)','Gourmandises (GM-)','Saisonnier (RA·H·N)'];
+let current=CATS[0];
+const cart={};
+const $=s=>document.querySelector(s);
+
+function renderCats(){$('#cats').innerHTML=CATS.map(c=>`<button class="cat ${c===current?'active':''}" onclick="pick('${c}')">${c}</button>`).join('')}
+function pick(c){current=c;renderCats();renderGrid()}
+function renderGrid(){
+  let tiles='';
+  if(current.startsWith('Cake')){
+    tiles=`<div class="tile cfg" onclick="openCake()"><div class="nm">Cake Design</div><div class="pp">étage → personnes → parfum</div><div class="pr">à configurer</div></div>`;
+  } else if(current.startsWith('Entremets')){
+    tiles=Object.keys(ENTREMETS).map(n=>{const s=ENTREMETS[n];const ks=Object.keys(s);const from=ks.length?Math.min(...ks.map(k=>s[k])):null;
+      return `<div class="tile ${ks.length?'cfg':''}" onclick="openEntremet('${n.replace(/'/g,"\\'")}')"><div class="nm">${n}</div><div class="pp">${ks.length?'taille au choix':'sur demande'}</div><div class="pr">${from!=null?'dès '+from+' DH':'sur-mesure'}</div></div>`;}).join('');
+  } else if(current.startsWith('Gourmandises')){
+    tiles=Object.keys(GM).map(n=>{const cfg=GM_CONFIG[n];const from=cfg?Math.min(...Object.values(cfg.tailles)):GM[n];
+      return `<div class="tile ${cfg?'cfg':''}" onclick="openGM('${n.replace(/'/g,"\\'")}')"><div class="nm">${n}</div><div class="pp">${cfg?'taille / parfum':'boîte'}</div><div class="pr">${cfg?'dès '+from+' DH':GM[n]+' DH'}</div></div>`;}).join('');
+  } else {
+    tiles=Object.keys(SAISON).map(n=>`<div class="tile" onclick="addToCart('${n.replace(/'/g,"\\'")}','saisonnier',${SAISON[n]})"><div class="nm">${n}</div><div class="pr">${SAISON[n]} DH</div></div>`).join('');
+  }
+  $('#grid').innerHTML=tiles;
+}
+
+// ---- Configurateur Cake Design ----
+let M=null;
+function openCake(){M={kind:'cake',etage:null,pers:null,parfums:[],theme:'',age:'',message:'',warn:'',photo:''};$('#mtitle').textContent='Cake Design';$('#ov').classList.add('show');renderCake()}
+function renderCake(){
+  let h=`<div class="step"><div class="lbl">1 · Nombre d'étages</div><div class="opts">`+
+    Object.keys(CAKEDESIGN).map(e=>`<div class="opt ${M.etage===e?'sel':''}" onclick="ce('${e}')">${e}</div>`).join('')+`</div></div>`;
+  if(M.etage){
+    h+=`<div class="step"><div class="lbl">2 · Nombre de personnes</div><div class="opts">`+
+      Object.keys(CAKEDESIGN[M.etage]).map(p=>`<div class="opt ${M.pers==p?'sel':''}" onclick="cp(${p})">${p} pers<small>${CAKEDESIGN[M.etage][p]} DH</small></div>`).join('')+`</div></div>`;
+  }
+  if(M.etage&&M.pers){
+    const n=NB_ETAGES[M.etage];
+    for(let i=0;i<n;i++){
+      h+=`<div class="step"><div class="lbl">Parfum étage ${i+1}${n>1?(i===0?' (le plus haut)':''):''}</div>`+
+        `<select class="sl" onchange="cpf(${i},this.value)"><option value="">— choisir —</option>`+PARFUMS.map(f=>`<option ${M.parfums[i]===f?'selected':''}>${f}</option>`).join('')+`</select></div>`;
+    }
+    h+=`<div class="step"><div class="lbl">Thème (optionnel)</div><input class="tx" placeholder="ex : Licorne, Foot…" value="${M.theme}" oninput="M.theme=this.value"></div>`;
+    h+=`<div class="step"><div class="lbl">Âge (optionnel)</div><input class="tx" placeholder="ex : 7 ans" value="${M.age}" oninput="M.age=this.value"></div>`;
+    h+=`<div class="step"><div class="lbl">Message sur le gâteau (optionnel)</div><input class="tx" placeholder="ex : Joyeux anniversaire Sara" value="${M.message}" oninput="M.message=this.value"></div>`;
+    h+=`<div class="step"><div class="lbl">Photo du modèle (optionnel)</div><label class="photo">📎 ${M.photo||'Joindre une photo'}<input type="file" accept="image/*" style="display:none" onchange="M.photo=(this.files[0]||{}).name||'';renderCake()"></label></div>`;
+    h+=`<div class="step"><div class="lbl warnlbl">⚠️ Attention / instruction spéciale (optionnel)</div><input class="tx warnfield" placeholder="ex : le décor doit être en bleu · sans fruits à coque" value="${M.warn}" oninput="M.warn=this.value"></div>`;
+  }
+  const ready=M.etage&&M.pers&&M.parfums.slice(0,NB_ETAGES[M.etage]).filter(Boolean).length===NB_ETAGES[M.etage];
+  const pr=M.etage&&M.pers?CAKEDESIGN[M.etage][M.pers]:null;
+  h+=`<div class="mprice"><span class="muted">Prix (modifiable ensuite)</span><b>${pr!=null?pr+' DH':'—'}</b></div>`+
+     `<button class="btn btn-primary" style="width:100%;padding:12px" ${ready?'':'disabled'} onclick="addCake()">Ajouter au panier</button>`;
+  $('#mbody').innerHTML=h;
+}
+function ce(e){M.etage=e;M.pers=null;M.parfums=[];renderCake()}
+function cp(p){M.pers=p;renderCake()}
+function cpf(i,v){M.parfums[i]=v;renderCake()}
+function addCake(){
+  const pr=CAKEDESIGN[M.etage][M.pers];
+  const extra=[M.parfums.join(' / '),M.theme&&'Thème: '+M.theme,M.age&&'Âge: '+M.age,M.message&&'« '+M.message+' »',M.warn&&'⚠️ '+M.warn,M.photo&&'📎 '+M.photo].filter(Boolean).join(' · ');
+  addToCart('Cake Design '+M.etage, M.pers+' pers · '+extra, pr);
+  closeCfg();
+}
+
+// ---- Configurateur Entremet ----
+function openEntremet(n){
+  const s=ENTREMETS[n];
+  if(!Object.keys(s).length){addCustom(n);return;}
+  M={kind:'entremet',name:n,pers:null,message:''};$('#mtitle').textContent=n;$('#ov').classList.add('show');renderEntremet();
+}
+function renderEntremet(){
+  const s=ENTREMETS[M.name];
+  let h=`<div class="step"><div class="lbl">Nombre de personnes</div><div class="opts">`+
+    Object.keys(s).map(p=>`<div class="opt ${M.pers==p?'sel':''}" onclick="ep(${p})">${p} pers<small>${s[p]} DH</small></div>`).join('')+`</div></div>`;
+  h+=`<div class="step"><div class="lbl">Message (optionnel)</div><input class="tx" placeholder="message" value="${M.message}" oninput="M.message=this.value"></div>`;
+  const pr=M.pers?s[M.pers]:null;
+  h+=`<div class="mprice"><span class="muted">Prix</span><b>${pr!=null?pr+' DH':'—'}</b></div>`+
+     `<button class="btn btn-primary" style="width:100%;padding:12px" ${M.pers?'':'disabled'} onclick="addEntremet()">Ajouter au panier</button>`;
+  $('#mbody').innerHTML=h;
+}
+function ep(p){M.pers=p;renderEntremet()}
+function addEntremet(){const s=ENTREMETS[M.name];addToCart(M.name, M.pers+' pers'+(M.message?' · « '+M.message+' »':''), s[M.pers]);closeCfg()}
+
+// ---- Configurateur GM- ----
+function openGM(n){const cfg=GM_CONFIG[n];if(!cfg){addToCart(n,'boîte',GM[n]);return;}M={kind:'gm',name:n,cfg,taille:null,parfums:[],message:'',warn:''};$('#mtitle').textContent=n;$('#ov').classList.add('show');renderGM()}
+function renderGM(){
+  const c=M.cfg;
+  let h=`<div class="step"><div class="lbl">Taille & type</div><div class="opts">`+
+    Object.keys(c.tailles).map(t=>`<div class="opt ${M.taille===t?'sel':''}" onclick="gt('${t.replace(/'/g,"\\'")}')">${t}<small>${c.tailles[t]} DH</small></div>`).join('')+`</div></div>`;
+  if(M.taille && c.parfums){
+    for(let i=0;i<(c.nparf||1);i++){
+      h+=`<div class="step"><div class="lbl">Parfum ${c.nparf>1?(i+1):''}</div><select class="sl" onchange="gpf(${i},this.value)"><option value="">— choisir —</option>`+
+        c.parfums.map(f=>`<option ${M.parfums[i]===f?'selected':''}>${f}</option>`).join('')+`</select></div>`;
+    }
+  }
+  if(M.taille){h+=`<div class="step"><div class="lbl">Message (optionnel)</div><input class="tx" value="${M.message}" oninput="M.message=this.value"></div>`;
+    h+=`<div class="step"><div class="lbl warnlbl">⚠️ Attention / instruction spéciale (optionnel)</div><input class="tx warnfield" placeholder="ex : couleur, allergie…" value="${M.warn}" oninput="M.warn=this.value"></div>`;}
+  const need=c.parfums?(c.nparf||1):0;
+  const ready=M.taille && M.parfums.slice(0,need).filter(Boolean).length===need;
+  const pr=M.taille?c.tailles[M.taille]:null;
+  h+=`<div class="mprice"><span class="muted">Prix</span><b>${pr!=null?pr+' DH':'—'}</b></div>`+
+     `<button class="btn btn-primary" style="width:100%;padding:12px" ${ready?'':'disabled'} onclick="addGM()">Ajouter au panier</button>`;
+  $('#mbody').innerHTML=h;
+}
+function gt(t){M.taille=t;M.parfums=[];renderGM()}
+function gpf(i,v){M.parfums[i]=v;renderGM()}
+function addGM(){const c=M.cfg;const sub=[M.taille,M.parfums.filter(Boolean).join(' / '),M.message&&'« '+M.message+' »',M.warn&&'⚠️ '+M.warn].filter(Boolean).join(' · ');addToCart(M.name,sub,c.tailles[M.taille]);closeCfg()}
+
+function closeCfg(){$('#ov').classList.remove('show');M=null}
+
+// ---- Panier (prix modifiable) ----
+function addToCart(label,sub,pr){const k=label+'|'+sub+'|'+pr+'|'+Math.random().toString(36).slice(2,6);cart[k]={label,sub,pr:Number(pr),qty:1};renderCart()}
+function addCustom(name){const desc=prompt('Description (sur-mesure) :',name||'Pièce montée');if(!desc)return;const pr=parseFloat(prompt('Prix (DH) :','600'))||0;cart['c'+Date.now()]={label:desc,sub:'sur-mesure',pr,qty:1};renderCart()}
+function setPrice(k,v){if(cart[k]){cart[k].pr=Number(v)||0;renderCart()}}
+function chg(k,d){if(!cart[k])return;cart[k].qty+=d;if(cart[k].qty<=0)delete cart[k];renderCart()}
+function rm(k){delete cart[k];renderCart()}
+function renderCart(){
+  const ks=Object.keys(cart);
+  if(!ks.length){$('#cart').innerHTML='<div class="empty">Panier vide — clique sur un article.</div>';$('#total').textContent='0 DH';return}
+  let total=0;
+  $('#cart').innerHTML=ks.map(k=>{const it=cart[k];const lt=it.pr*it.qty;total+=lt;
+    return `<div class="item"><div class="inm"><b>${it.label}</b><small>${it.sub}</small>
+      <div class="qty">Prix: <input class="priceedit" type="number" value="${it.pr}" onchange="setPrice('${k}',this.value)"> DH
+      <button onclick="chg('${k}',-1)">−</button><span>${it.qty}</span><button onclick="chg('${k}',1)">+</button></div></div>
+      <div class="lt">${lt} DH</div><button class="rm" onclick="rm('${k}')">✕</button></div>`;}).join('');
+  $('#total').textContent=total+' DH';
+}
+renderCats();renderGrid();renderCart();
+</script>
+</body>
+</html>

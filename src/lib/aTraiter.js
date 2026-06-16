@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { loadMonthData, calculerMois, firstDay, setAjustement } from './pointage'
-import { createDemandeConge } from './conges'
+import { createDemandeConge, calculSoldeConges } from './conges'
 
 // ============================================================
 // "À TRAITER" — absences non justifiées + jours de repos travaillés (récup)
@@ -26,9 +26,6 @@ function periodsToScan() {
  */
 export async function loadATraiter() {
   const today = todayYMD()
-  // On ne déclare PAS une absence du jour même avant 13h (l'employé peut encore
-  // arriver / le pointage peut se synchroniser). heure locale (navigateur).
-  const avant13 = new Date().getHours() < 13
   const periods = periodsToScan()
   const minDate = firstDay(periods[0].mois, periods[0].annee)
 
@@ -49,6 +46,44 @@ export async function loadATraiter() {
       .filter(a => a.statut !== 'annule' && a.date_evt)
       .map(a => `${a.employe_id}|${a.date_evt}`)
   )
+
+  // Absences classées sans suite (ancien jour off / déjà traité ailleurs) → on les
+  // retire de la liste (aucun congé créé, aucun ajustement de pointage).
+  const { data: absIgnoreesData } = await supabase
+    .from('rh_absences_ignorees').select('employe_id,date_jour').gte('date_jour', minDate)
+  const absIgnorees = new Set((absIgnoreesData || []).map(a => `${a.employe_id}|${a.date_jour}`))
+
+  // Solde de congé par employé : sert à proposer en absence uniquement les types
+  // ALLOUÉS (événements, récup) et à bloquer l'envoi si le solde est épuisé.
+  // (même règle que le formulaire de demande de congé.) Données préchargées en une fois.
+  const anneeNow = new Date().getFullYear()
+  const [{ data: congesValides }, { data: allAllocs }, { data: pmois }, { data: fData }] = await Promise.all([
+    supabase.from('conges').select('*').eq('statut', 'valide'),
+    supabase.from('conges_allocations').select('*').eq('annee', anneeNow).eq('statut', 'valide'),
+    supabase.from('pointages_mois').select('employe_id,jours_recup').eq('annee', anneeNow),
+    supabase.from('jours_feries').select('date'),
+  ])
+  const congesByEmp = new Map()
+  for (const c of congesValides || []) {
+    if (!congesByEmp.has(c.employe_id)) congesByEmp.set(c.employe_id, [])
+    congesByEmp.get(c.employe_id).push(c)
+  }
+  const allocsByEmp = new Map()
+  for (const a of allAllocs || []) {
+    if (!allocsByEmp.has(a.employe_id)) allocsByEmp.set(a.employe_id, [])
+    allocsByEmp.get(a.employe_id).push(a)
+  }
+  const recupByEmp = new Map()
+  for (const r of pmois || []) recupByEmp.set(r.employe_id, (recupByEmp.get(r.employe_id) || 0) + Number(r.jours_recup || 0))
+  const feriesSet = new Set((fData || []).map(f => f.date))
+  const prefetched = { allocsByEmp, recupByEmp, feriesSet }
+  const soldeByEmp = new Map()
+  async function soldeFor(emp) {
+    if (!soldeByEmp.has(emp.id)) {
+      soldeByEmp.set(emp.id, await calculSoldeConges(emp, congesByEmp.get(emp.id) || [], today, prefetched))
+    }
+    return soldeByEmp.get(emp.id)
+  }
 
   const absences = []
   const recups = []
@@ -76,10 +111,13 @@ export async function loadATraiter() {
         if (emp.date_sortie && d.date > emp.date_sortie) continue
         if (emp.date_entree && d.date < emp.date_entree) continue
         if (d.statut === 'absent') {
+          // On ne déclare une absence que pour un jour TERMINÉ et synchronisé.
+          // Le jour même n'est pas fiable (pointage de l'après-midi pas encore synchronisé
+          // depuis Odoo) → on attend le lendemain pour éviter les fausses absences.
+          if (d.date === today) continue
           const aPointeCeJour = pointeCeJour.has(`${emp.id}|${d.date}`)
-          if (d.date === today && avant13) continue   // jour même avant 13h → on attend
-          if (aPointe.has(emp.id) && !aPointeCeJour && !couvertParDemande(emp.id, d.date)) {
-            absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues })
+          if (aPointe.has(emp.id) && !aPointeCeJour && !couvertParDemande(emp.id, d.date) && !absIgnorees.has(`${emp.id}|${d.date}`)) {
+            absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues, solde: await soldeFor(emp) })
           }
         } else if (Number(d.jours_recup) > 0) {
           const k = `${emp.id}|${d.date}`
@@ -101,10 +139,18 @@ export async function countATraiter() {
 }
 
 // Classification d'absence -> type de congé créé (en demande).
+// Mêmes types qu'une demande de congé classique (cf. CongesView.jsx).
 const CLASSIF_TO_TYPE = {
-  sans_solde: 'sans solde',
   annuel: 'annuel',
-  maladie: 'maladie_courte',
+  maladie_courte: 'maladie_courte',
+  maladie_longue: 'maladie_longue',
+  mariage: 'mariage',
+  naissance: 'naissance',
+  deces: 'deces',
+  circoncision: 'circoncision',
+  maternite: 'maternite',
+  'sans solde': 'sans solde',
+  recup: 'recup',
 }
 
 /**
@@ -133,6 +179,19 @@ export async function traiterAbsence({ employe_id, date_debut, date_fin, classif
 export async function traiterOubliPointage({ employe_id, date, heures_prevues, userId }) {
   await setAjustement(employe_id, date, 'heures_travaillees', String(heures_prevues ?? 8.5), userId)
   await setAjustement(employe_id, date, 'statut', 'present', userId)
+}
+
+/**
+ * CLASSE une absence sans suite (ne crée AUCUN congé, ne touche PAS au pointage) :
+ *   raison = 'ancien_jour_off' (l'employé a changé de jour off)
+ *          | 'deja_traite'     (déjà couvert par un autre congé)
+ * L'absence disparaît simplement de la liste « À traiter ».
+ */
+export async function ignorerAbsence({ employe_id, date, raison, userId }) {
+  const { error } = await supabase
+    .from('rh_absences_ignorees')
+    .upsert({ employe_id, date_jour: date, raison, created_by: userId }, { onConflict: 'employe_id,date_jour' })
+  if (error) throw error
 }
 
 /**

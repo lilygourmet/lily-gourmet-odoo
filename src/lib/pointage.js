@@ -29,7 +29,7 @@ export async function loadMonthData(mois, annee) {
     { data: ajustements },
     { data: synthese },
   ] = await Promise.all([
-    supabase.from('employes').select('*').eq('actif', true).order('nom'),
+    supabase.from('employes').select('*').eq('actif', true).eq('fantome', false).order('nom'),
     supabase.from('jours_feries').select('*'),
     supabase.from('pointages').select('*')
       .gte('date_pointage', firstDay(mois, annee))
@@ -275,14 +275,17 @@ export function calculerJour(prevu, pointe, employe) {
     heures_travaillees = heures_prevues
   }
 
-  // Anomalies : pointage incomplet/anormal sur jour normal → on met prévu
-  if (anomalie && prevu.statut === 'normal') {
+  // Anomalies : pointage incomplet/anormal sur jour normal OU demi-journée → on met prévu
+  // (la personne a bien pointé, juste un oubli de départ : on ne la pénalise pas).
+  if (anomalie && (prevu.statut === 'normal' || prevu.statut === 'demi')) {
     heures_travaillees = heures_prevues
   }
 
   // ─── CAS 1 : Jour normal / demi-journée
   if (prevu.statut === 'normal' || prevu.statut === 'demi') {
-    if (heures_travaillees === 0 && pointe.nb_sessions === 0) {
+    // Absent UNIQUEMENT si AUCUN pointage du tout (ni session complète, ni punch isolé).
+    // Règle : dès qu'il y a un pointage, la personne n'est jamais comptée absente.
+    if (heures_travaillees === 0 && pointe.nb_sessions === 0 && (pointe.nb_punchs || 0) === 0) {
       // Absent : on garde prévues affichées mais manquantes = 0 (sera affiché '—')
       statut = 'absent'
       label = 'Absent'

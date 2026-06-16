@@ -16,6 +16,8 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
   // sur 'client' plus bas via un useEffect quand on sait qu'on est en mode Sales.
   const [viewMode, setViewMode] = useState('product')  // 'client' | 'product'
   const [printDate, setPrintDate] = useState(null)
+  const [printMode, setPrintMode] = useState('todo')    // 'todo' (à faire) | 'done' (faites)
+  const [printData, setPrintData] = useState(null)      // { byDate, statusOf } — inclut J-3
   const [expandedKey, setExpandedKey] = useState(null)  // pour vue par produit
 
   // category peut etre 'prod', 'sales', ou un array ['prod', 'sales']
@@ -151,14 +153,42 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     setTabsByDate(prev => ({ ...prev, [date]: tab }))
   }
 
+  // Ouvre la fenêtre d'impression : charge une plage incluant les 3 DERNIERS jours
+  // (J-3) en plus des jours à venir, pour pouvoir réimprimer les commandes faites.
+  async function openPrintDialog() {
+    setPrintDate('__loading__')
+    try {
+      const d0 = new Date(); d0.setDate(d0.getDate() - 3)
+      const start = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`
+      const all = await loadSalesLinesForRange(start, DAYS + 3)
+      const filtered = filterLinesForProdCategory(all, category).filter(l => !/vitrine/i.test(l.client_name || ''))
+      const dones = await loadProdDoneForLines(filtered.map(l => l.odoo_line_id).filter(Boolean))
+      const dmap = new Map(); for (const d of dones) dmap.set(d.odoo_line_id, d)
+      const map = new Map()
+      for (const l of filtered) {
+        const k = new Date(l.delivery_at).toISOString().slice(0, 10)
+        if (!map.has(k)) map.set(k, [])
+        map.get(k).push(l)
+      }
+      const statusOf = id => { const e = dmap.get(id); return !e ? null : (e.status === 'cancelled' ? 'cancelled' : 'done') }
+      setPrintData({ byDate: map, statusOf })
+      setPrintDate('__open__')
+    } catch (e) {
+      toast.error('Erreur de chargement : ' + e.message)
+      setPrintDate(null)
+    }
+  }
+
   function handlePrint(date) {
-    // On imprime uniquement les lignes "a faire" (ni done ni cancelled)
-    const dayLines = (byDate.get(date) || []).filter(l => getStatus(l.odoo_line_id) === null)
+    const wantDone = printMode === 'done'
+    const statusOf = printData?.statusOf || getStatus
+    const all = printData?.byDate.get(date) || byDate.get(date) || []
+    const dayLines = all.filter(l => wantDone ? statusOf(l.odoo_line_id) === 'done' : statusOf(l.odoo_line_id) === null)
     if (dayLines.length === 0) {
-      toast.error('Rien à imprimer pour ce jour')
+      toast.error(wantDone ? 'Aucune commande faite ce jour' : 'Rien à imprimer pour ce jour')
       return
     }
-    const html = buildPrintHtml(date, dayLines, def, viewMode)
+    const html = buildPrintHtml(date, dayLines, def, viewMode, wantDone ? 'FAITES' : 'À FAIRE')
     const w = window.open('', '_blank')
     if (!w) return toast.error('Bloquez les popups ?')
     w.document.write(html)
@@ -189,7 +219,6 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     )
   }
 
-  const datesWithLines = [...byDate.keys()].sort()
 
   return (
     <div className="min-h-screen bg-cream pb-40">
@@ -226,7 +255,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
               </button>
             </div>
             <button
-              onClick={() => setPrintDate('__open__')}
+              onClick={openPrintDialog}
               className="flex items-center gap-1.5 px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[11px] hover:bg-bordeaux hover:text-cream transition-colors"
             >
               <i className="ti ti-printer text-[13px]" aria-hidden="true"></i>
@@ -329,6 +358,13 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
         )}
       </div>
 
+      {/* Chargement de la fenêtre d'impression */}
+      {printDate === '__loading__' && (
+        <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-cream rounded-2xl px-6 py-5 shadow-2xl border border-line text-[13px] text-ink-mute">Chargement…</div>
+        </div>
+      )}
+
       {/* Dialog impression */}
       {printDate === '__open__' && (
         <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
@@ -336,25 +372,38 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
           <div className="bg-cream rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-line"
                onClick={e => e.stopPropagation()}>
             <h3 className="font-fraunces italic text-[18px] text-ink mb-3">Imprimer</h3>
-            <p className="text-[12px] text-ink-mute mb-3">Choisis le jour à imprimer (non-faites uniquement)</p>
-            <div className="space-y-1 max-h-[60vh] overflow-y-auto">
-              {datesWithLines.map(d => {
+
+            {/* Choix : à faire ou déjà faites */}
+            <div className="flex bg-cream-warm rounded-full p-0.5 border border-line mb-3">
+              <button onClick={() => setPrintMode('todo')}
+                className={`flex-1 py-1.5 rounded-full text-[11px] font-medium transition-colors ${printMode === 'todo' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'}`}>À faire</button>
+              <button onClick={() => setPrintMode('done')}
+                className={`flex-1 py-1.5 rounded-full text-[11px] font-medium transition-colors ${printMode === 'done' ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:text-bordeaux'}`}>Faites ✓</button>
+            </div>
+            <p className="text-[12px] text-ink-mute mb-3">Choisis le jour à imprimer ({printMode === 'done' ? 'commandes faites' : 'à faire uniquement'})</p>
+
+            <div className="space-y-1 max-h-[55vh] overflow-y-auto">
+              {[...(printData?.byDate.keys() || [])].sort().map(d => {
                 const dt = new Date(d)
                 const lab = dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-                const todoCount = (byDate.get(d) || []).filter(l => getStatus(l.odoo_line_id) === null).length
+                const wantDone = printMode === 'done'
+                const count = (printData?.byDate.get(d) || []).filter(l =>
+                  wantDone ? printData.statusOf(l.odoo_line_id) === 'done' : printData.statusOf(l.odoo_line_id) === null
+                ).length
+                const isPast = d < todayStr
                 return (
                   <button
                     key={d}
                     onClick={() => handlePrint(d)}
-                    disabled={todoCount === 0}
+                    disabled={count === 0}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded border text-[12px] transition-colors ${
-                      todoCount === 0
+                      count === 0
                         ? 'bg-cream-warm/30 border-line/40 text-ink-mute cursor-not-allowed'
                         : 'bg-cream-warm border-line hover:border-bordeaux hover:bg-bordeaux/5'
                     }`}
                   >
-                    <span className="capitalize">{lab}</span>
-                    <span className="font-mono text-[10px] text-bordeaux">{todoCount} à faire</span>
+                    <span className="capitalize">{lab}{isPast ? ' (passé)' : ''}</span>
+                    <span className="font-mono text-[10px] text-bordeaux">{count} {wantDone ? 'faite(s)' : 'à faire'}</span>
                   </button>
                 )
               })}
@@ -475,7 +524,7 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
                 {isDone ? '✓' : isCancelled ? '−' : ''}
               </span>
               {/* Bloc texte : 2 lignes sur mobile (flex-col), 1 ligne sur >= sm (flex-row) */}
-              <span className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:gap-2">
+              <span className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:gap-2 sm:flex-wrap">
                 {/* Ligne 1 (mobile) / debut ligne unique (PC) : heure + code + client */}
                 <span className="flex items-center gap-2 min-w-0 sm:flex-shrink-0">
                   <span className="font-mono text-[10px] text-ink-mute w-12 flex-shrink-0">{hour}</span>
@@ -488,6 +537,9 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
                   <span className="font-bold text-bordeaux flex-shrink-0">×{line.quantity}</span>
                   <span className="text-[12px] text-ink min-w-0 break-words sm:truncate">{cleanProdProductName(line.product_name)}</span>
                 </span>
+                {line.product_note && (
+                  <span className="text-[11px] text-[#B36B00] font-semibold break-words w-full pl-[3.75rem] sm:pl-[3.75rem] mt-0.5">{line.product_note}</span>
+                )}
               </span>
             </button>
             {/* Bouton Annuler (croix rouge) - uniquement pour Prod */}
@@ -590,6 +642,9 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
               }`}>
                 {cleanProdProductName(g.name)}
               </span>
+              {g.lines.some(l => l.product_note) && (
+                <span className="text-[14px] flex-shrink-0" title="Une commande a une ⚠️ attention — ouvre le détail clients">⚠️</span>
+              )}
               {allVitrine && <VitrinePill />}
               {someVitrine && (
                 <span
@@ -649,6 +704,7 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
                         <span className="truncate max-w-[120px]">— {line.client_name}</span>
                         <span className="font-bold text-bordeaux">×{line.quantity}</span>
                         {isReservationVitrine(line) && <VitrinePill />}
+                        {line.product_note && <span className="text-[10px] text-[#B36B00] font-semibold truncate">⚠️ {line.product_note}</span>}
                       </button>
                       {supportsCancellation && (
                         <button
@@ -676,7 +732,7 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
 }
 
 // Build HTML pour imprimer
-function buildPrintHtml(dateStr, lines, def, viewMode) {
+function buildPrintHtml(dateStr, lines, def, viewMode, modeLabel = 'À FAIRE') {
   const d = new Date(dateStr)
   const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const sorted = [...lines].sort((a, b) => new Date(a.delivery_at) - new Date(b.delivery_at))
@@ -708,7 +764,7 @@ function buildPrintHtml(dateStr, lines, def, viewMode) {
   td.detail{font-size:9px;color:#666}
   @media print{body{margin:6mm}}
 </style></head><body>
-<h1>${def.emoji} ${def.label} · ${label} · À FAIRE (par produit)</h1>
+<h1>${def.emoji} ${def.label} · ${label} · ${modeLabel} (par produit)</h1>
 <table>
 <thead><tr><th>Qty</th><th>Article</th><th>Détail</th></tr></thead>
 <tbody>${body}</tbody>
@@ -738,7 +794,7 @@ function buildPrintHtml(dateStr, lines, def, viewMode) {
   td.num{text-align:right;font-weight:bold;color:#a8324b}
   @media print{body{margin:6mm}}
 </style></head><body>
-<h1>${def.emoji} ${def.label} · ${label} · À FAIRE</h1>
+<h1>${def.emoji} ${def.label} · ${label} · ${modeLabel}</h1>
 <table>
 <thead><tr><th>Heure</th><th>N°</th><th>Client</th><th class="num">Qty</th><th>Article</th></tr></thead>
 <tbody>${body}</tbody>

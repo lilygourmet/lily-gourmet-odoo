@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Clock, Lock, CheckCircle2 } from 'lucide-react'
 import { createEmploye, updateEmploye, loadEmployes, EMPLOYE_GROUPES, loadGroupes } from '../../lib/hr'
+import { createAllocation } from '../../lib/conges'
 import GroupesManager from './GroupesManager'
 import { supabase } from '../../lib/supabase'
 import { createUserForEmploye, deactivateUserForEmploye } from '../../lib/users'
@@ -148,6 +149,7 @@ export default function EmployeEditModal({
         rib: form.rib.trim() || null,
         banque: form.banque.trim() || null,
         actif: form.actif,
+        fantome: form.fantome,
         notes: form.notes.trim() || null,
         planning_type: form.planning_type || 'aucun',
         planning_jour_off: form.planning_jour_off || null,
@@ -178,6 +180,10 @@ export default function EmployeEditModal({
       }
       if (isNew) {
         const created = await createEmploye(data, user.id)
+        // Nouvel employé : on accorde d'office les 6 jours de maladie ≤ 3 j (année en cours).
+        try {
+          await createAllocation({ employe_id: created.id, annee: new Date().getFullYear(), type: 'maladie_courte', jours: 6, source: 'auto', created_by: user.id })
+        } catch (e) { console.warn('[alloc maladie_courte]', e?.message || e) }
         // Création auto du user (sans permission) + envoi des accès par WhatsApp.
         try {
           const r = await createUserForEmploye(created)
@@ -393,7 +399,7 @@ export default function EmployeEditModal({
                 <label style={lblStyle}>Équipe</label>
                 <select value={form.equipe} onChange={e => setF('equipe', e.target.value)} style={inputStyle}>
                   <option value="normale">Normale (8h30/jour)</option>
-                  <option value="cafe">Café (8h si pause / 9h sans pause)</option>
+                  <option value="cafe">Horaire pause (8h avec pause / 9h sans)</option>
                 </select>
               </div>
             </Row>
@@ -458,6 +464,9 @@ export default function EmployeEditModal({
               <Field label="Heures journée complète (h)" type="number" value={form.heures_jour_complet} onChange={v => setF('heures_jour_complet', v)} placeholder="8.50" />
               <Field label="Heures demi-journée (h)" type="number" value={form.heures_demi_journee} onChange={v => setF('heures_demi_journee', v)} placeholder="4.00" />
             </Row>
+            <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>
+              ⚠️ Si l'employé fait <b>8h</b> ou <b>9h</b>, mettez <b>8</b> ou <b>9</b> — pas 8,5 (le 8,5 n'est qu'un exemple par défaut).
+            </div>
 
             <Field label="Nom Odoo complet (avec préfixe PA-, PC-, etc. pour matching pointages)" value={form.nom_odoo_match} onChange={v => setF('nom_odoo_match', v)} placeholder="Ex : PA- Asmae El Abbadi" />
           </div>
@@ -493,6 +502,18 @@ export default function EmployeEditModal({
               <input type="checkbox" checked={form.actif} onChange={e => setF('actif', e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
               <span style={{ fontSize: 13, color: '#1a0f0a' }}>Employé actif (décocher si parti)</span>
+            </label>
+          )}
+
+          {isAdmin && (
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+              background: form.fantome ? '#F3EAF0' : '#F9F6F1', borderRadius: 8, cursor: 'pointer', marginBottom: 14,
+              border: form.fantome ? '1px solid #D8B8CC' : '1px solid transparent',
+            }}>
+              <input type="checkbox" checked={form.fantome} onChange={e => setF('fantome', e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: '#993556', cursor: 'pointer' }} />
+              <span style={{ fontSize: 13, color: '#1a0f0a' }}>Employé fantôme (masqué du pointage, des absences et des congés ; géré par l'admin)</span>
             </label>
           )}
 
@@ -552,6 +573,7 @@ function initForm(employe) {
     rib: employe?.rib || '',
     banque: employe?.banque || '',
     actif: employe?.actif != null ? employe.actif : true,
+    fantome: employe?.fantome != null ? employe.fantome : false,
     notes: employe?.notes || '',
     planning_type: employe?.planning_type || 'aucun',
     planning_jour_off: employe?.planning_jour_off || '',

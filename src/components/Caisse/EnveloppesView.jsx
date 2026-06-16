@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
 import { RefreshCw, Banknote, ScrollText, Wallet, Coffee, ShoppingBag, MapPin, ArrowLeftRight } from 'lucide-react'
-import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate, loadSalairesYear } from '../../lib/caisse'
+import { loadEnveloppesByMonth, loadDestinataires, assignEnveloppe, reassignEnveloppe, unassignEnveloppe, updateEnveloppeAssignedDate, loadSalairesYear, setEnveloppePretBanque } from '../../lib/caisse'
 import { toast } from '../../lib/toast'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, envStyle, COLOR_PALETTE } from './_helpers'
 import AttributionModal from './modals/AttributionModal'
 import DetailReaffecterModal from './modals/DetailReaffecterModal'
 import AuditLogPanel from './AuditLogPanel'
+
+// Nom de caisse « propre » : regroupe ex. « boutique (not used) » avec « boutique ».
+const normSource = s => String(s || '').replace(/\s*\(\s*not[\s_]*used\s*\)\s*/i, '').trim() || 'POS'
 
 export default function EnveloppesView({ user }) {
   const [year, setYear]   = useState(currentYear())
@@ -37,6 +40,11 @@ export default function EnveloppesView({ user }) {
     setLoading(false)
   }
 
+  async function handleTogglePret(env) {
+    try { await setEnveloppePretBanque(env.id, !env.pret_banque_at, user?.id); await reload() }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+
   async function handleSync() {
     setSyncing(true)
     try {
@@ -56,7 +64,7 @@ export default function EnveloppesView({ user }) {
 
   // Sources distinctes du mois (Café, Boutique, etc.) sur les enveloppes filtrées par méthode
   const sources = useMemo(() => {
-    const set = new Set(envByMethod.map(e => e.source))
+    const set = new Set(envByMethod.map(e => normSource(e.source)))
     return Array.from(set).sort()
   }, [envByMethod])
 
@@ -86,8 +94,9 @@ export default function EnveloppesView({ user }) {
     const map = {}
     sources.forEach(s => { map[s] = [] })
     filteredEnveloppes.forEach(e => {
-      if (!map[e.source]) map[e.source] = []
-      map[e.source].push(e)
+      const src = normSource(e.source)
+      if (!map[src]) map[src] = []
+      map[src].push(e)
     })
     Object.keys(map).forEach(s => {
       // Tri ascendant (plus ancien → plus récent)
@@ -237,7 +246,8 @@ export default function EnveloppesView({ user }) {
                   <div style={{ fontSize: 12, color: '#8a7a70', padding: 8 }}>Aucune enveloppe</div>
                 ) : (bySource[src] || []).map(env => (
                   <EnveloppeCard key={env.id} env={env} salaireMap={salaireMap}
-                    onClick={() => env.destinataire_id ? setDetailEnv(env) : setAttributionEnv(env)} />
+                    onClick={() => env.destinataire_id ? setDetailEnv(env) : setAttributionEnv(env)}
+                    onTogglePret={() => handleTogglePret(env)} />
                 ))}
               </div>
             </div>
@@ -281,7 +291,7 @@ export default function EnveloppesView({ user }) {
   )
 }
 
-function EnveloppeCard({ env, onClick, salaireMap = {} }) {
+function EnveloppeCard({ env, onClick, salaireMap = {}, onTogglePret }) {
   // Affectée à un salaire (et pas à un destinataire) → style + libellé "Salaire X"
   const salBenef = !env.destinataire_id && env.salaire_id ? salaireMap[env.salaire_id] : null
   const style = salBenef
@@ -305,6 +315,20 @@ function EnveloppeCard({ env, onClick, salaireMap = {} }) {
         <div style={{ fontSize: 9, opacity: 0.65, marginTop: 2, fontStyle: 'italic' }}>
           par {env.assigner.username || env.assigner.full_name || '?'}
         </div>
+      )}
+      {(env.payment_method || 'cash') !== 'virement' && (
+        env.pret_banque_at ? (
+          <div onClick={e => { e.stopPropagation(); onTogglePret && onTogglePret() }}
+            title="Comptée et prête pour la banque — cliquer pour annuler"
+            style={{ marginTop: 6, fontSize: 10, fontWeight: 600, color: '#0a7d3d', background: '#e6f6ec', borderRadius: 6, padding: '3px 7px', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+            ✅ Prête banque{env.pretpar ? ' · ' + (env.pretpar.username || env.pretpar.full_name || '') : ''}
+          </div>
+        ) : (
+          <button onClick={e => { e.stopPropagation(); onTogglePret && onTogglePret() }}
+            style={{ marginTop: 6, fontSize: 10, fontWeight: 600, color: '#5b2a86', background: '#fff', border: '1px solid #D6C3EA', borderRadius: 6, padding: '3px 7px', cursor: 'pointer' }}>
+            ✅ Comptée, prête banque
+          </button>
+        )
       )}
     </div>
   )

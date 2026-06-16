@@ -25,6 +25,7 @@ import { loadProdDoneForLines } from '../lib/prodDone'
 import { loadCafeReceivedForLines, markCafeReceived, unmarkCafeReceived } from '../lib/cafeReceived'
 import { confirmReception, todayISO } from '../lib/stockBoutique'
 import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
+import { loadVitrineReservations, loadResaRangees, markResaRangee, unmarkResaRangee } from '../lib/previsionsVitrine'
 import { toast } from '../lib/toast'
 import { RefreshCw } from 'lucide-react'
 
@@ -153,7 +154,35 @@ function isItemRanged(item, steps) {
 
 export default function ChecklistView({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = usePersistedState('lily.checklist.tab', 'todo') // 'todo' | 'done'
+  const [tab, setTab] = usePersistedState('lily.checklist.tab', 'todo') // 'todo' | 'done' | 'vitrine'
+
+  // Colonne « Réservation Vitrine » (dans « À ranger ») : commandes vitrine du jour à
+  // mettre de côté (depuis Odoo) + suivi de celles déjà rangées (table Supabase).
+  const [vitrineResa, setVitrineResa] = useState(null)   // null = pas encore chargé
+  const [resaRangees, setResaRangees] = useState(new Set())
+  async function loadVitrineResa() {
+    try {
+      const [orders, ranged] = await Promise.all([
+        loadVitrineReservations(todayISO()),
+        loadResaRangees(todayISO()).catch(() => new Set()),
+      ])
+      setVitrineResa(orders); setResaRangees(ranged)
+    } catch { setVitrineResa([]) }
+  }
+  useEffect(() => { loadVitrineResa() }, [])
+
+  async function handleResaDone(o) {
+    setResaRangees(prev => new Set(prev).add(o.id))   // optimiste
+    try { await markResaRangee({ day: todayISO(), orderId: o.id, orderName: o.name, clientName: o.clientName, userId: user?.id }) }
+    catch (e) { toast.error(e?.message || 'Erreur'); loadVitrineResa() }
+  }
+  async function handleResaUndo(o) {
+    setResaRangees(prev => { const n = new Set(prev); n.delete(o.id); return n })
+    try { await unmarkResaRangee(todayISO(), o.id) }
+    catch (e) { toast.error(e?.message || 'Erreur'); loadVitrineResa() }
+  }
+  const resaTodo = Array.isArray(vitrineResa) ? vitrineResa.filter(o => !resaRangees.has(o.id)) : vitrineResa
+  const resaDone = Array.isArray(vitrineResa) ? vitrineResa.filter(o => resaRangees.has(o.id)) : []
 
   // Section VITRINE
   const [vitrineItems, setVitrineItems] = useState([])
@@ -547,6 +576,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
             )}
           </button>
 
+
           {/* Spacer + recherche + refresh */}
           <div className="flex-1 flex items-center gap-2 justify-end min-w-0">
             <div className="relative flex-1 max-w-xs">
@@ -590,15 +620,19 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
             vitrineItems={filteredVitrineItems}
             prodLines={filteredProdLines}
             commandeItems={filteredCommandeItems}
+            vitrineResa={resaTodo}
             onVitrineDone={handleVitrineDone}
             onProdDone={handleProdDone}
             onCommandeDone={handleCommandeDone}
+            onResaDone={handleResaDone}
           />
         ) : (
           <DoneTab
             vitrineItems={filteredDoneVitrine}
             prodItems={filteredDoneProd}
             commandeItems={filteredDoneCommandes}
+            vitrineResa={resaDone}
+            onResaUndo={handleResaUndo}
             onUndo={handleUndo}
           />
         )}
@@ -610,8 +644,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 // ============================================================
 // Onglet "A ranger"
 // ============================================================
-function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVitrineDone, onProdDone, onCommandeDone }) {
-  if (allDone) {
+function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, vitrineResa, onVitrineDone, onProdDone, onCommandeDone, onResaDone }) {
+  const nbResa = Array.isArray(vitrineResa) ? vitrineResa.length : 0
+  if (allDone && nbResa === 0) {
     return (
       <div className="bg-white rounded-2xl border border-line p-8 text-center shadow-sm">
         <p className="text-[15px] font-semibold text-success">Tout est rangé !</p>
@@ -629,7 +664,30 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, onVit
       </div>
 
       {/* 3 colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <ColumnSection title="RÉSERVATION VITRINE" count={nbResa} subtitle="à mettre de côté">
+          {!vitrineResa ? (
+            <EmptyHint>Chargement…</EmptyHint>
+          ) : nbResa === 0 ? (
+            <EmptyHint>Aucune réservation</EmptyHint>
+          ) : (
+            vitrineResa.map(o => (
+              <button key={`resa-${o.id}`} type="button" onClick={() => onResaDone(o)}
+                title="Marquer comme rangé"
+                className="w-full text-left bg-white border border-line rounded-xl p-2.5 mb-2 shadow-sm hover:border-emerald-400 hover:bg-emerald-50/40 transition-all">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-semibold text-ink truncate">{o.clientName || '—'}</span>
+                  {o.pickupText && <span className="text-[10px] text-ink-mute whitespace-nowrap">{o.pickupText.slice(-5)}</span>}
+                </div>
+                {Array.isArray(o.lines) && o.lines.map((l, i) => (
+                  <div key={i} className="text-[11px] text-ink-soft leading-snug">{Number(l.qty) > 1 ? `${l.qty}× ` : ''}{l.text}</div>
+                ))}
+                <div className="text-[10px] text-emerald-700 mt-1 font-medium">✓ Marquer rangé</div>
+              </button>
+            ))
+          )}
+        </ColumnSection>
+
         <ColumnSection title="VITRINE" count={vitrineItems.length} subtitle="envoyés par la vitrine">
           {vitrineItems.length === 0 ? (
             <EmptyHint>Aucun envoi</EmptyHint>
@@ -712,8 +770,9 @@ function EmptyHint({ children }) {
 // ============================================================
 // Onglet "Range"
 // ============================================================
-function DoneTab({ vitrineItems, prodItems, commandeItems, onUndo }) {
-  const total = vitrineItems.length + prodItems.length + commandeItems.length
+function DoneTab({ vitrineItems, prodItems, commandeItems, vitrineResa, onResaUndo, onUndo }) {
+  const resaDone = Array.isArray(vitrineResa) ? vitrineResa : []
+  const total = vitrineItems.length + prodItems.length + commandeItems.length + resaDone.length
   if (total === 0) {
     return (
       <div className="bg-white rounded-2xl border border-line p-8 text-center shadow-sm">
@@ -724,7 +783,28 @@ function DoneTab({ vitrineItems, prodItems, commandeItems, onUndo }) {
   }
 
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <ColumnSection title="RÉSERVATION VITRINE" count={resaDone.length} subtitle="rangées du jour">
+        {resaDone.length === 0 ? (
+          <EmptyHint>Rien rangé</EmptyHint>
+        ) : (
+          resaDone.map(o => (
+            <button key={`resaD-${o.id}`} type="button" onClick={() => onResaUndo(o)}
+              title="Annuler (remettre à ranger)"
+              className="w-full text-left bg-emerald-50/60 border border-emerald-200 rounded-xl p-2.5 mb-2 shadow-sm hover:bg-white transition-all">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-semibold text-ink truncate line-through decoration-emerald-600/40">{o.clientName || '—'}</span>
+                {o.pickupText && <span className="text-[10px] text-ink-mute whitespace-nowrap">{o.pickupText.slice(-5)}</span>}
+              </div>
+              {Array.isArray(o.lines) && o.lines.map((l, i) => (
+                <div key={i} className="text-[11px] text-ink-soft leading-snug">{Number(l.qty) > 1 ? `${l.qty}× ` : ''}{l.text}</div>
+              ))}
+              <div className="text-[10px] text-ink-mute mt-1">↩︎ Annuler</div>
+            </button>
+          ))
+        )}
+      </ColumnSection>
+
       <ColumnSection title="VITRINE" count={vitrineItems.length} subtitle="rangés du jour">
         {vitrineItems.length === 0 ? (
           <EmptyHint>Rien rangé</EmptyHint>

@@ -32,6 +32,7 @@ import {
   ALLOC_TYPES,
   updateAllocation, updateConge, deleteConge,
   uploadJustificatif, getJustificatifUrl,
+  dispoTypeConge, debutPossibleType,
 } from '../lib/conges'
 import {
   loadJoursFeries, createJourFerie, updateJourFerie,
@@ -68,46 +69,8 @@ function formatTypeConge(t) {
   return t
 }
 
-// Date à partir de laquelle un congé de ce type peut être consommé,
-// d'après la date_evt des allocations événementielles. Null si aucune
-// contrainte (pas de date_evt, ou type non événementiel).
-function debutPossibleType(solde, type) {
-  const allocs = (solde?.events?.detail || []).filter(d => {
-    if (type === 'recup') return d.type === 'autre'
-    return d.type === type
-  })
-  if (!allocs.length) return null
-  const dates = allocs.map(a => a.date_evt).filter(Boolean)
-  if (!dates.length) return null   // pas de contrainte de date
-  // La PLUS ANCIENNE des dates : dès qu'une allocation devient consommable, c'est OK.
-  return dates.sort()[0]
-}
-
-// Dispo restant pour un type de congé donné, à partir du solde calculé.
-// Renvoie null si aucune limite (sans solde, maladie longue) ou undefined
-// si le type n'est pas autorisé (allocation événementielle manquante).
-function dispoTypeConge(solde, type) {
-  if (!solde) return undefined
-  if (type === 'sans solde')      return null
-  if (type === 'maladie_longue')  return null
-  if (type === 'annuel')          return solde.dispo
-  if (type === 'maladie_courte')  return solde.maladie?.dispo ?? 0
-  if (type === 'recup') {
-    const allocAutre = (solde.events?.detail || [])
-      .filter(d => d.type === 'autre' && d.applicable)
-      .reduce((s, e) => s + Number(e.jours), 0)
-    const total = (solde.recup || 0) + allocAutre
-    if (total <= 0) return undefined            // pas d'allocation ni gain
-    return Math.max(0, total - (solde.prisType?.autre || 0) - (solde.prisType?.recup || 0))
-  }
-  // Événements : mariage / naissance / deces / circoncision / maternite
-  const alloc = (solde.events?.detail || [])
-    .filter(d => d.type === type && d.applicable)
-    .reduce((s, e) => s + Number(e.jours), 0)
-  if (alloc <= 0) return undefined              // aucune allocation → type non dispo
-  const pris = solde.prisType?.[type] || 0
-  return Math.max(0, alloc - pris)
-}
+// dispoTypeConge / debutPossibleType : déplacés dans lib/conges.js
+// (réutilisés par l'onglet « À traiter »).
 
 function fmt(d) {
   return d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
@@ -167,9 +130,22 @@ function CalendrierEquipe({ valides, empById, isMobile }) {
               const ds = `${y}-${pad(m + 1)}-${pad(d)}`
               const list = congesJour(d)
               const isToday = ds === todayStr
+              // clash = 2+ absents du MÊME groupe le même jour (un seul groupe en sous-effectif)
+              const byGroupe = {}
+              for (const c of list) {
+                const g = empById[c.employe_id]?.groupe || '—'
+                byGroupe[g] = (byGroupe[g] || 0) + 1
+              }
+              const clashEntry = Object.entries(byGroupe).find(([, n]) => n >= 2)
+              const clash = !!clashEntry
+              const borderCol = isToday ? '#993556' : (clash ? '#d97706' : '#eee4d4')
+              const bgCol = isToday ? '#fdf6f0' : (clash ? '#fff7ed' : 'white')
               return (
-                <div key={d} style={{ minHeight: 84, border: '1px solid ' + (isToday ? '#993556' : '#eee4d4'), borderRadius: 8, padding: 5, background: isToday ? '#fdf6f0' : 'white', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: isToday ? '#993556' : '#8a7a70' }}>{d}</div>
+                <div key={d} style={{ minHeight: 84, border: (clash ? '2px' : '1px') + ' solid ' + borderCol, borderRadius: 8, padding: 5, background: bgCol, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: isToday ? '#993556' : '#8a7a70' }}>{d}</span>
+                    {clash && <span title={`${clashEntry[1]} absents du groupe « ${clashEntry[0]} »`} style={{ fontSize: 9, fontWeight: 700, color: '#b45309', background: '#fde68a', borderRadius: 6, padding: '1px 5px' }}>⚠ {clashEntry[1]}</span>}
+                  </div>
                   {list.slice(0, 4).map(c => {
                     const col = typeCongeCouleur(c.type_conge)
                     const nom = empById[c.employe_id]?.nom || '?'
@@ -190,6 +166,7 @@ function CalendrierEquipe({ valides, empById, isMobile }) {
           const col = typeCongeCouleur(t)
           return <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: col.bg, border: '1px solid ' + col.fg }} /> {lab}</span>
         })}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: '#fde68a', borderRadius: 6, padding: '1px 5px' }}>⚠ 2</span> 2+ absents du même groupe</span>
       </div>
     </div>
   )
@@ -218,6 +195,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [tab, setTab]               = usePersistedState('lily.conges.tab', 'demandes')  // 'demandes' | 'valides' | 'soldes'
   const [filterEmp, setFilterEmp]   = useState('all')   // 'all' | empId
   const [filterYear, setFilterYear] = useState('all')   // 'all' | YYYY
+  const [onlyUnsigned, setOnlyUnsigned] = useState(false)  // n'afficher que les congés pas encore signés
   const [allocations, setAllocations]   = useState([])    // table conges_allocations
   const [showAllocForm, setShowAllocForm] = useState(false)
   const [detailEmp, setDetailEmp]         = useState(null)  // employé sélectionné pour voir le détail
@@ -235,8 +213,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
       const annee = new Date().getFullYear()
       // 4 requêtes batchées au lieu de 2 par employé.
       const [emps, all, allocs, recupRows, feries] = await Promise.all([
-        loadEmployes(true),
-        loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule']),
+        loadEmployes(true, true),   // exclut les employés fantômes des congés/soldes
+        loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule'], `${annee - 1}-01-01`),
         loadAllocations({ annee, statut: ['valide', 'attente'] }),
         supabase.from('pointages_mois').select('employe_id, jours_recup').eq('annee', annee),
         loadJoursFeries(),
@@ -326,6 +304,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     const filtered = valides.filter(c => {
       if (filterEmp !== 'all' && String(c.employe_id) !== String(filterEmp)) return false
       if (filterYear !== 'all' && c.date_debut.slice(0, 4) !== String(filterYear)) return false
+      if (onlyUnsigned && c.signe) return false
       return true
     })
     const map = new Map() // YYYY-MM -> [c]
@@ -336,7 +315,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     }
     // Tri descendant (mois le plus récent en premier)
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [valides, filterEmp, filterYear])
+  }, [valides, filterEmp, filterYear, onlyUnsigned])
 
   function fmtMonthLabel(key) {
     const [y, m] = key.split('-')
@@ -416,6 +395,12 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
   async function handleUpdateConge(id, patch) {
     try { await updateConge(id, patch); setEditConge(null); await reload() }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+
+  // Marque/démarque un congé comme « signé par l'employé » (feuille de congé).
+  async function handleToggleSigne(c) {
+    try { await updateConge(c.id, { signe: !c.signe }); await reload() }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
@@ -521,6 +506,11 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                   {annees.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
+              <button onClick={() => setOnlyUnsigned(v => !v)}
+                style={{ ...btnSlim, alignSelf: 'flex-end', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: onlyUnsigned ? '#7a1f3d' : '#fff', color: onlyUnsigned ? '#fff' : '#4a3a30', borderColor: onlyUnsigned ? '#7a1f3d' : undefined }}>
+                ✍️ Non signés seulement
+              </button>
               {(filterEmp !== 'all' || filterYear !== 'all') && (
                 <button onClick={() => { setFilterEmp('all'); setFilterYear('all') }}
                   style={{ ...btnSlim, alignSelf: 'flex-end', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -552,6 +542,13 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                               key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
                               actions={canImprimerFeuille ? <>
                       <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
+                      <button onClick={() => handleToggleSigne(c)}
+                        style={c.signe
+                          ? { ...btnSlim, background: '#DCF0E2', color: '#085041', borderColor: '#B6E2C8' }
+                          : { ...btnSlim, color: '#a9620a', borderColor: '#f0d9b8' }}
+                        title={c.signe ? 'Feuille signée par l\'employé — cliquer pour annuler' : 'Marquer la feuille comme signée par l\'employé'}>
+                        {c.signe ? '✓ Signé' : '☐ À signer'}
+                      </button>
                       {isAdmin && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>}
                       {isAdmin && <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>}
                     </> : null}
@@ -591,11 +588,17 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                   {allocations.filter(a => a.statut === 'attente').map(a => {
                     const emp = empById[a.employe_id]
                     const t = ALLOC_TYPES.find(x => x.v === a.type)
+                    const debutAlloc = a.date_evt || `${a.annee}-01-01`
+                    const finAlloc   = `${a.annee}-12-31`
                     return (
                       <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, background: 'white', padding: '6px 10px', borderRadius: 8 }}>
                         <strong>{emp?.nom || `#${a.employe_id}`}</strong>
                         <span>· {t?.label || a.type}</span>
                         <span style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</span>
+                        <span style={{ color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Calendar size={11} />
+                          du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} au {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
+                        </span>
                         {a.raison && <span style={{ color: '#8a7a70' }}>· {a.raison}</span>}
                         <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                           <button onClick={() => handleValiderAlloc(a)} style={{ ...btnValider, padding: '4px 10px', fontSize: 11 }}><Check size={12} /> Valider</button>

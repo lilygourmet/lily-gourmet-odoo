@@ -51,8 +51,9 @@ export async function deleteEmployeeDocument(id, storagePath) {
 
 /** URL signée (1h) pour ouvrir/télécharger un document. */
 export async function getEmployeeDocumentUrl(storagePath) {
-  if (!storagePath) return null
+  if (!storagePath) throw new Error('Chemin du fichier manquant')
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 3600)
-  if (error) return null
-  return data?.signedUrl || null
+  if (error) throw error
+  if (!data?.signedUrl) throw new Error('URL non générée')
+  return data.signedUrl
 }

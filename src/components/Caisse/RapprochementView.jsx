@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { loadRapproVerifies, setRapproVerified, unsetRapproVerified, saveRapproBank, loadRapproBank, clearRapproBank } from '../../lib/caisse'
+import { loadRapproVerifies, setRapproVerified, unsetRapproVerified, saveRapproBank, loadRapproBank, clearRapproBank, loadRapproLinks, setRapproLink, unsetRapproLink } from '../../lib/caisse'
 import { toast } from '../../lib/toast'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -41,7 +41,16 @@ function parseBank(rows) {
     date: col('date de transaction') >= 0 ? col('date de transaction') : col('transaction'),
     heure: col('heure'), stan: col('stan'), montant: col('montant brut'), net: col('montant net'), sys: col('systeme'), pdv: col('pdv'),
   }
-  const num = x => parseFloat(String(x).replace(',', '.')) || 0
+  // Montant robuste : nombre Excel → tel quel ; texte « 1 234,56 » → enlève les espaces
+  // (et les points de milliers quand la virgule est le séparateur décimal) sans casser « 1234.56 ».
+  const num = x => {
+    if (typeof x === 'number') return x
+    const s = String(x).trim()
+    if (!s) return 0
+    return (s.includes(',')
+      ? parseFloat(s.replace(/[\s.]/g, '').replace(',', '.'))
+      : parseFloat(s.replace(/\s/g, ''))) || 0
+  }
   const bank = []
   for (const r of rows.slice(hi + 1)) {
     if (!Array.isArray(r)) continue
@@ -471,12 +480,14 @@ export default function RapprochementView({ user }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)
+  const [links, setLinks] = useState(new Map())   // cartes CMI liées manuellement (partagé serveur)
+  const [linkFor, setLinkFor] = useState(null)    // carte en cours de liaison (sa key)
   const [fileNames, setFileNames] = useState([])
   const [over, setOver] = useState(false)
   const [search, setSearch] = useState('')
   const [month, setMonth] = useState('')
   const [day, setDay] = useState('')
-  const [view, setView] = useState('synthese')
+  const [view, setView] = useState('detail')
   const [hideOk, setHideOk] = useState(true)
   const [verified, setVerified] = useState(new Map())
   const excelRef = useRef([])  // lignes Excel accumulées (avec heure)
@@ -512,7 +523,7 @@ export default function RapprochementView({ user }) {
       setRes(runMatch(bank, payments))
       const bankPayload = { excel: excelRef.current, pdf: pdfRef.current, names }
       idbSet('bank', bankPayload)
-      saveRapproBank(bankPayload).catch(() => {})   // partagé entre admins
+      saveRapproBank(bankPayload).catch(e => setErr('⚠️ Le relevé n’a pas pu être partagé avec les autres admins : ' + (e?.message || e)))   // partagé entre admins
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -530,6 +541,7 @@ export default function RapprochementView({ user }) {
 
   useEffect(() => {
     loadRapproVerifies().then(setVerified).catch(() => {})
+    loadRapproLinks().then(setLinks).catch(() => {})
     ;(async () => {
       // Priorité au relevé PARTAGÉ en base (visible par tous les admins). Repli : cache local.
       let saved = await loadRapproBank().catch(() => null)
@@ -618,7 +630,10 @@ export default function RapprochementView({ user }) {
   // Écart par ligne (caisse − relevé) : une carte Odoo sans relevé = +, une carte
   // au relevé absente/tapée autrement = −. Les lignes marquées « justifié »
   // sortent de l'écart ; « refusé » (ou non traité) y reste.
-  const lineGap = r => verified.get(r.key) === 'justifie' ? 0
+  // Cartes reliées à la main (kind='link') : on sort de l'écart la carte CMI ET le paiement Odoo lié.
+  const linkedOdoo = new Set([...links.values()].filter(l => l.kind === 'link' && l.odooRef).map(l => l.odooRef))
+  const isLinked = r => links.get(r.key)?.kind === 'link' || linkedOdoo.has(r.key)
+  const lineGap = r => (verified.get(r.key) === 'justifie' || isLinked(r)) ? 0
     : r.status === 'odoo-only' ? r.odooAmt
       : (r.status === 'cmi-only' || r.status === 'mismatch') ? -r.cmiAmt : 0
   const dayGap = {}
@@ -700,7 +715,7 @@ export default function RapprochementView({ user }) {
           )}
 
           <div className="flex gap-1 mb-4 p-1 bg-cream-deep rounded-lg w-fit">
-            {[['synthese', '🧾 Synthèse'], ['detail', '📋 Détail (CMI ↔ Odoo)'], ['jour', '📊 Résumé par jour']].map(([v, l]) => (
+            {[['detail', '📋 Détail (CMI ↔ Odoo)'], ['jour', '📊 Résumé par jour'], ['alier', '🔗 À lier']].map(([v, l]) => (
               <button key={v} onClick={() => setView(v)}
                 className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${view === v ? 'bg-bordeaux text-white' : 'text-ink-soft hover:text-bordeaux'}`}>{l}</button>
             ))}
@@ -734,6 +749,59 @@ export default function RapprochementView({ user }) {
               ⬇︎ Export Excel
             </button>
           </div>
+
+          {view === 'alier' && (() => {
+            const cmiOnly = ledgerCounts.filter(r => r.status === 'cmi-only')
+            const odooOnly = (res.ledger || []).filter(r => r.status === 'odoo-only')
+            const refreshLinks = () => loadRapproLinks().then(setLinks).catch(() => {})
+            return (
+              <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">
+                <h3 className="font-fraunces italic text-[20px] text-ink mb-1">🔗 Cartes à lier</h3>
+                <p className="text-[13px] text-ink-mute mb-3">Cartes du relevé CMI <b>non trouvées</b> dans Odoo. <b>Relie</b>-les au bon paiement Odoo, ou marque-les <b>à régulariser</b>.</p>
+                {cmiOnly.length === 0 ? <p className="text-[13px] text-ink-mute italic">Aucune carte à lier 🎉</p> : (
+                  <div className="space-y-2">
+                    {cmiOnly.map(r => {
+                      const lk = links.get(r.key)
+                      const cands = odooOnly.filter(o => o.amt === r.amt).concat(odooOnly.filter(o => o.amt !== r.amt))
+                      return (
+                        <div key={r.key} className="bg-cream border border-line rounded-lg p-3">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="text-[13px] text-ink"><b>{fmt(r.amt)} dh</b> · {r.dateStr}{r.heureStr !== '—' ? ' · ' + r.heureStr : ''}{r.online ? ' · 🌐 en ligne' : ''}</div>
+                            {lk ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[12px] text-success">{lk.kind === 'link' ? '✓ Relié à Odoo' : '📝 À régulariser' + (lk.note ? ' · ' + lk.note : '')}</span>
+                                <button onClick={async () => { await unsetRapproLink(r.key); refreshLinks() }} className="text-[11px] text-danger underline">annuler</button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2">
+                                <button onClick={() => setLinkFor(linkFor === r.key ? null : r.key)} className="px-2.5 py-1 rounded-md bg-bordeaux text-white text-[11px] font-semibold">🔗 Relier</button>
+                                <button onClick={async () => { const note = window.prompt('Note (à régulariser) :', ''); if (note === null) return; await setRapproLink({ cmiKey: r.key, kind: 'regul', amount: r.amt, txnDate: isoOf(r.dateStr), note, userId: user?.id }); refreshLinks() }} className="px-2.5 py-1 rounded-md border border-line text-ink-soft text-[11px] font-semibold">📝 À régulariser</button>
+                              </div>
+                            )}
+                          </div>
+                          {!lk && linkFor === r.key && (
+                            <div className="mt-2 border-t border-line pt-2">
+                              <div className="text-[11px] text-ink-mute mb-1">Choisis le paiement Odoo correspondant :</div>
+                              {cands.length === 0 ? <div className="text-[12px] text-ink-mute italic">Aucun paiement Odoo non rapproché.</div> : (
+                                <div className="flex flex-col gap-1 max-h-[180px] overflow-y-auto">
+                                  {cands.slice(0, 30).map((o, i) => (
+                                    <button key={i} onClick={async () => { await setRapproLink({ cmiKey: r.key, kind: 'link', amount: r.amt, txnDate: isoOf(r.dateStr), odooRef: o.key, userId: user?.id }); setLinkFor(null); refreshLinks() }}
+                                      className={`text-left text-[12px] px-2 py-1 rounded border ${o.amt === r.amt ? 'border-success/40' : 'border-line'} bg-cream-warm hover:border-bordeaux`}>
+                                      {fmt(o.amt)} dh · {o.odooDate || o.dateStr} {o.odooHeure || o.heureStr}{o.ref ? ' · ' + o.ref : ''}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {view === 'detail' && (
             <div className="bg-cream-warm border border-line rounded-2xl p-[18px]">

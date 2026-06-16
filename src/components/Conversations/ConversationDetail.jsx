@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, loadConvLabels, setConversationLabels, reorderQuickReplies } from '../../lib/conversations'
+import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, loadConvLabels, setConversationLabels, reorderQuickReplies, recordDevisTraitement, confirmDevis, cancelDevis, loadClosedBy } from '../../lib/conversations'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { formatRelativeTime, canMarkPaymentProof } from '../../lib/auth'
 import ForwardModal from './ForwardModal'
 import { createModification } from '../../lib/modifications'
-import { uploadJustificatif } from '../../lib/conges'
+import NewConversationModal from './NewConversationModal'
+import OrderEditModal from '../OrderEditModal'
 import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Search, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
 
@@ -96,9 +97,21 @@ function renderHighlighted(text, term, nextIndex, activeIndex) {
   return out
 }
 
-export default function ConversationDetail({ conversationId, user, onBack }) {
+export default function ConversationDetail({ conversationId, user, onBack, relanceRef = null }) {
   const [conv, setConv] = useState(null)
+  const [linkedOrder, setLinkedOrder] = useState(null)   // commande liée (link_order_ref) complète
+  const [confirmingOrder, setConfirmingOrder] = useState(false)
+  const [waConfirm, setWaConfirm] = useState(null)       // commande pour laquelle envoyer le message de confirmation
+  const [editOrder, setEditOrder] = useState(null)       // commande à modifier (✏️ Articles)
+  const [linkMenuOpen, setLinkMenuOpen] = useState(false) // menu « 🔗 Lien » (cake / catalogue)
   const [messages, setMessages] = useState([])
+  // Conversation réellement affichée à l'instant T (anti-fuite entre clients lors d'un
+  // changement de conversation pendant qu'une requête async est en cours).
+  const convIdRef = useRef(conversationId)
+  // Ajoute un message au fil SEULEMENT s'il appartient à la conversation affichée.
+  function appendMsg(msg) {
+    setMessages(prev => (!msg || Number(msg.conversation_id) !== Number(convIdRef.current) || prev.some(x => x.id === msg.id)) ? prev : [...prev, msg])
+  }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [assigning, setAssigning] = useState(false)
@@ -110,6 +123,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [headerTop, setHeaderTop] = useState(0)
   const [suggestions, setSuggestions] = useState([])
   const [suggesting, setSuggesting] = useState(false)
+  // Brouillon de réponse préparé à la réception (IA) : pré-rempli à l'ouverture.
+  const [prefilled, setPrefilled] = useState(false)
   // Photo d'une phrase type, préparée pour l'envoi (option B)
   const [stagedMediaPath, setStagedMediaPath] = useState(null)
   const [stagedPreviewUrl, setStagedPreviewUrl] = useState(null)
@@ -117,16 +132,15 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const [threadSearch, setThreadSearch] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
   const [mediaUrls, setMediaUrls] = useState({}) // messageId -> URL signée
+  const [lightboxUrl, setLightboxUrl] = useState(null) // photo affichée en grand (modale)
+  const relanceMarkedRef = useRef(false) // « Relancé par » enregistré une seule fois, au 1er envoi réel
   const [showEmoji, setShowEmoji] = useState(false)
   const [showReplies, setShowReplies] = useState(false)
+  const [repliesDrawerOpen, setRepliesDrawerOpen] = useState(false)
+  const repliesDrawerRef = useRef(null)
   const [quickReplies, setQuickReplies] = useState([])
   const [forwardMsg, setForwardMsg] = useState(null)
   // Demande de modification de commande
-  const [modifOpen, setModifOpen] = useState(false)
-  const [modifRef, setModifRef] = useState('')
-  const [modifDesc, setModifDesc] = useState('')
-  const [modifFile, setModifFile] = useState(null)
-  const [modifBusy, setModifBusy] = useState(false)
   // Preuve de paiement : message en cours de marquage + n° commande saisi
   const [paymentMsg, setPaymentMsg] = useState(null)
   const [orderRefInput, setOrderRefInput] = useState('')
@@ -181,6 +195,17 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       finally { setOrdersBusy(false) }
     }
   }
+  // Ouvre « Nouvelle commande » (nouvel onglet) avec le nom + téléphone du client pré-remplis.
+  function openNewOrder() {
+    const params = new URLSearchParams({ newcmd: '1' })
+    if (conv?.client_phone) params.set('cmdphone', conv.client_phone)
+    if (conv?.client_name) params.set('cmdname', conv.client_name)
+    const url = `/?${params.toString()}`
+    // Nouvel onglet si possible ; si le navigateur/tablette bloque les pop-ups
+    // (window.open renvoie null), on bascule dans le même onglet → marche toujours.
+    const w = window.open(url, '_blank')
+    if (!w) window.location.href = url
+  }
   const [nameInput, setNameInput] = useState('')
   const [nameBusy, setNameBusy] = useState(false)
   // Dernière visite capturée au montage (pour colorer les nouveaux messages reçus)
@@ -193,6 +218,12 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const emojiContainerRef = useRef(null)
   const [recording, setRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
+  // Qui a fermé la conversation (affiché quand elle est fermée)
+  const [closedBy, setClosedBy] = useState(null)
+  useEffect(() => {
+    if (conv?.status === 'fermee') loadClosedBy(conversationId).then(setClosedBy).catch(() => {})
+    else setClosedBy(null)
+  }, [conv?.status, conversationId])
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
   const recordTimerRef = useRef(null)
@@ -201,15 +232,28 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   const sendOnStopRef = useRef(false)
 
   async function load() {
+    const cid = conversationId
+    convIdRef.current = cid
     setLoading(true)
     setError('')
+    setPrefilled(false)
+    setLinkedOrder(null) // on efface la commande de la conversation précédente (sinon les boutons « sautent »)
+    setText('') // on repart d'une zone vide à chaque conversation (pas de débordement entre conversations)
     try {
       const [c, msgs] = await Promise.all([
-        loadConversation(conversationId),
-        loadMessages(conversationId),
+        loadConversation(cid),
+        loadMessages(cid),
       ])
+      if (convIdRef.current !== cid) return   // on a changé de conversation entre-temps → on ignore ce chargement
       setConv(c)
       setMessages(msgs)
+      // Réponse préparée à la réception (IA) : on la met d'office dans la zone
+      // d'écriture de CETTE conversation. On laisse corrected=false pour que
+      // la correction orthographe s'applique normalement à l'envoi (comme un texte tapé).
+      if (c?.suggested_reply) {
+        setText(c.suggested_reply)
+        setPrefilled(true)
+      }
       // Récupère le vrai nom depuis Odoo (devis/commande) si pas saisi à la main — non bloquant.
       if (c && !c.name_manual && c.client_phone) {
         setConversationNameFromOdoo(c.id, c.client_phone, c.client_name, c.name_manual)
@@ -224,6 +268,67 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   useEffect(() => { load() }, [conversationId])
+
+  // Commande liée (link_order_ref) : permet de la CONFIRMER directement depuis l'en-tête
+  // de la conversation, sans aller dans l'onglet Commandes.
+  useEffect(() => {
+    if (!conv) { setLinkedOrder(null); return }
+    const ref = conv.link_order_ref
+    const q = ref || conv.client_phone
+    if (!q) { setLinkedOrder(null); return }
+    let cancelled = false
+    searchOrders(q).then(orders => {
+      if (cancelled) return
+      const list = orders || []
+      // Avec un lien explicite : cette commande. Sinon : la dernière commande non annulée du client.
+      const o = ref ? (list.find(x => x.name === ref) || list[0]) : (list.find(x => x.state !== 'cancel') || list[0])
+      setLinkedOrder(o || null)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [conv?.link_order_ref, conv?.client_phone])
+
+  async function handleConfirmOrder() {
+    if (!linkedOrder?.id) return
+    if (!(await confirmDialog(`Confirmer le devis ${linkedOrder.name} dans Odoo ?\n\nIl devient une commande confirmée (effet réel).`, { confirmLabel: 'Confirmer' }))) return
+    setConfirmingOrder(true)
+    try {
+      await confirmDevis(linkedOrder.id, user?.id)
+      recordDevisTraitement({ order_num: linkedOrder.name, action: 'confirme', user_id: user?.id, user_name: user?.full_name || user?.username }).catch(() => {})
+      const confirmed = { ...linkedOrder, state: 'sale' }
+      setLinkedOrder(confirmed)
+      toast.success(`${linkedOrder.name} confirmée`)
+      // Proposer d'envoyer le message de confirmation au client.
+      if (await confirmDialog('Envoyer le message de confirmation au client sur WhatsApp ?', { confirmLabel: 'Envoyer' })) {
+        setWaConfirm(confirmed)
+      }
+    } catch (e) { toast.error(e?.message || 'Échec de la confirmation') }
+    finally { setConfirmingOrder(false) }
+  }
+
+  async function handleCancelOrder() {
+    if (!linkedOrder?.id) return
+    const isConfirmed = linkedOrder.state === 'sale'
+    if (!(await confirmDialog(`Annuler ${isConfirmed ? 'la commande' : 'le devis'} ${linkedOrder.name} dans Odoo ?\n\n(Effet réel : ${isConfirmed ? 'la commande' : 'le devis'} sera annulé·e.)`, { danger: true, confirmLabel: 'Annuler dans Odoo' }))) return
+    setConfirmingOrder(true)
+    try {
+      await cancelDevis(linkedOrder.id, user?.id)
+      recordDevisTraitement({ order_num: linkedOrder.name, action: 'annulation', user_id: user?.id, user_name: user?.full_name || user?.username }).catch(() => {})
+      // Commande confirmée annulée → on la trace dans l'onglet Modifications (comme l'onglet Devis).
+      if (isConfirmed) {
+        createModification({
+          order_ref: linkedOrder.name,
+          client_name: linkedOrder.clientName || conv?.client_name || null,
+          client_phone: linkedOrder.clientPhone || conv?.client_phone || null,
+          conversation_id: conversationId,
+          requested_by: user?.id || null,
+          description: `❌ ANNULATION — commande ${linkedOrder.name}${linkedOrder.amountText ? ` (${linkedOrder.amountText})` : ''} (annulée dans Odoo)`,
+        }).catch(() => {})
+      }
+      setLinkedOrder(o => o ? { ...o, state: 'cancel' } : o)
+      toast.success(`${linkedOrder.name} annulée`)
+    } catch (e) { toast.error(e?.message || "Échec de l'annulation") }
+    finally { setConfirmingOrder(false) }
+  }
 
   // Tentative de récupération de la photo client via WATI, une fois par
   // semaine au max (best-effort, ne bloque rien si WATI ne renvoie rien).
@@ -256,6 +361,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           const m = payload.new
           if (!m || Number(m.conversation_id) !== Number(conversationId)) return
           setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, m])
+        })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages' },
+        (payload) => {
+          const m = payload.new
+          if (!m || Number(m.conversation_id) !== Number(conversationId)) return
+          setMessages(prev => prev.map(x => x.id === m.id ? { ...x, ...m } : x))
         })
       .subscribe()
     return () => supabase.removeChannel(channel)
@@ -365,6 +477,18 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showEmoji])
 
+  // Tiroir « Réponses » : se referme si on clique en dehors.
+  useEffect(() => {
+    if (!repliesDrawerOpen) return
+    function onDocClick(e) {
+      if (repliesDrawerRef.current && !repliesDrawerRef.current.contains(e.target)) {
+        setRepliesDrawerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [repliesDrawerOpen])
+
   function onPickFile(e) {
     const f = e.target.files?.[0]
     e.target.value = '' // permet de re-choisir le même fichier
@@ -404,8 +528,17 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
   }
 
   // Envoi DIRECT d'une phrase type (chip) : pas de correction IA, envoi immédiat.
+  // Relance ouverte depuis un devis (nouvel onglet) : on enregistre « Relancé par »
+  // UNIQUEMENT au 1er message réellement envoyé, et une seule fois.
+  async function markRelanceIfNeeded() {
+    if (!relanceRef || relanceMarkedRef.current) return
+    relanceMarkedRef.current = true
+    try { await recordDevisTraitement({ order_num: relanceRef, action: 'relance', user_id: user?.id, user_name: user?.full_name || user?.username }) } catch (_) { /* non bloquant */ }
+  }
+
   async function sendQuickReply(q) {
     if (!conv || sending) return
+    setRepliesDrawerOpen(false)   // referme le tiroir dès qu'un choix est cliqué
     setSending(true); setSendError('')
     try {
       const msg = await sendMessage({
@@ -415,7 +548,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         text: q.body?.trim() || null,
         mediaPath: q.media_path || null,
       })
-      setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
+      appendMsg(msg)
+      markRelanceIfNeeded()
       if (conv.status === 'fermee') {
         try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ }
       }
@@ -424,6 +558,78 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
     } finally {
       setSending(false)
     }
+  }
+
+  // Envoie au client le LIEN de commande (page publique) pré-rempli avec son prénom + numéro.
+  async function sendOrderLink() {
+    if (!conv || sending) return
+    // Prix par PART (cake design) : tu le fixes d'avance (après avoir vu le design) ;
+    // la page client multipliera par le nombre de personnes. Optionnel (vide = prix normal).
+    const partRaw = prompt('Prix de la PART pour un cake design (DH) ?\nLaisse vide si pas concerné.')
+    if (partRaw === null) return   // annulé
+    const part = partRaw.trim() === '' ? null : Number(partRaw.replace(',', '.'))
+    if (part !== null && (!Number.isFinite(part) || part <= 0)) { toast.error('Prix de la part invalide.'); return }
+    const prenom = (conv.client_name || '').trim().split(/\s+/)[0] || ''
+    const params = new URLSearchParams()
+    params.set('commande', '1')
+    if (prenom) params.set('nom', prenom)
+    if (conv.client_phone) params.set('tel', conv.client_phone)
+    if (part) params.set('part', String(part))
+    const link = `${window.location.origin}/?${params.toString()}`
+    const body = `Si c'est possible et pour vous faciliter les choses, vous pouvez composer votre commande tranquillement ici 👇\n${link}\n(gâteau, parfum, thème, date…) — on s'occupe du reste avec plaisir 💛`
+    if (!(await confirmDialog('Envoyer le lien de commande à ce client par WhatsApp ?'))) return
+    setSending(true); setSendError('')
+    try {
+      const msg = await sendMessage({ conversationId, clientPhone: conv.client_phone, userId: user.id, text: body })
+      appendMsg(msg)
+      if (conv.status === 'fermee') { try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ } }
+      toast.success('Lien de commande envoyé ✅')
+    } catch (e) { setSendError(e.message); toast.error('Échec : ' + e.message) }
+    finally { setSending(false) }
+  }
+
+  // 2ᵉ lien : catalogue (entremets, mignardises, salé, surgelés, boissons, gourmandises, gâteaux secs).
+  async function sendCatalogueLink() {
+    if (!conv || sending) return
+    const prenom = (conv.client_name || '').trim().split(/\s+/)[0] || ''
+    const params = new URLSearchParams()
+    params.set('commande', '2')
+    if (prenom) params.set('nom', prenom)
+    if (conv.client_phone) params.set('tel', conv.client_phone)
+    const link = `${window.location.origin}/?${params.toString()}`
+    const body = `Pour vous faciliter les choses, vous pouvez composer votre commande ici 👇\n${link}\n(entremets, mignardises, salé, boissons, gourmandises…) — on s'occupe du reste avec plaisir 💛`
+    if (!(await confirmDialog('Envoyer le lien « catalogue » à ce client par WhatsApp ?'))) return
+    setSending(true); setSendError('')
+    try {
+      const msg = await sendMessage({ conversationId, clientPhone: conv.client_phone, userId: user.id, text: body })
+      appendMsg(msg)
+      if (conv.status === 'fermee') { try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ } }
+      toast.success('Lien catalogue envoyé ✅')
+    } catch (e) { setSendError(e.message); toast.error('Échec : ' + e.message) }
+    finally { setSending(false) }
+  }
+
+  // Envoie une INFORMATION libre au client (modèle wati_info hors fenêtre 24h, sinon message normal).
+  async function sendInfoToClient() {
+    if (!conv || sending) return
+    const raw = prompt('Information à envoyer au client (WhatsApp) :')
+    if (raw === null) return
+    const text = raw.trim()
+    if (!text) return
+    setSending(true); setSendError('')
+    try {
+      const res = await fetch('/api/wati-webhook?action=send-template', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, clientPhone: conv.client_phone, templateName: 'wati_info', parameters: [{ name: '1', value: text }], freeText: text, bodyText: text, userId: user.id }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || `Erreur ${res.status}`)
+      const cid = conversationId
+      try { const ms = await loadMessages(cid); if (convIdRef.current === cid) setMessages(ms) } catch (_) { /* ignore */ }
+      if (conv.status === 'fermee') { try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ } }
+      toast.success('Information envoyée ✅')
+    } catch (e) { setSendError(e.message); toast.error('Échec : ' + e.message) }
+    finally { setSending(false) }
   }
 
   async function handleSend() {
@@ -464,9 +670,11 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         text: trimmed || null,
         mediaPath,
       })
-      setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
+      appendMsg(msg)
+      markRelanceIfNeeded()
       setText('')
       setCorrected(false)
+      setPrefilled(false)
       setFile(null)
       setStagedMediaPath(null)
       setStagedPreviewUrl(null)
@@ -507,7 +715,8 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
         mediaPath,
         mediaType: 'audio',
       })
-      setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, msg])
+      appendMsg(msg)
+      markRelanceIfNeeded()
       setSuggestions([])
       if (conv.status === 'fermee') {
         try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ }
@@ -625,38 +834,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   function openNameEdit() { setNameInput(conv?.client_name || ''); setNameEditing(true) }
 
-  // Demande de modification : prend le DERNIER n° S du fil et ouvre la fenêtre
-  // (description + justificatif) avant d'envoyer à l'équipe Modification.
-  function handleModification() {
-    let ref = ''
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const mS = (messages[i].body || '').match(/\bS\d{4,}\b/i)
-      if (mS) { ref = mS[0].toUpperCase(); break }
-    }
-    if (!ref) { toast.error('Aucun n° de commande (S…) trouvé dans cette conversation.'); return }
-    setModifRef(ref); setModifDesc(''); setModifFile(null); setModifOpen(true)
-  }
-
-  async function confirmModification() {
-    if (!modifRef.trim()) { toast.error('Indique le n° de commande (S…).'); return }
-    setModifBusy(true)
-    try {
-      let jp = null
-      if (modifFile) jp = await uploadJustificatif(modifFile, user.id)
-      await createModification({
-        order_ref: modifRef.trim(),
-        client_name: conv?.client_name || null,
-        client_phone: conv?.client_phone || null,
-        conversation_id: conversationId,
-        requested_by: user.id,
-        description: modifDesc.trim() || null,
-        justificatif_path: jp,
-      })
-      setModifOpen(false)
-      toast.success(`✅ Demande de modification envoyée pour ${modifRef}.`)
-    } catch (e) { toast.error('Erreur : ' + e.message) }
-    finally { setModifBusy(false) }
-  }
   async function saveName() {
     setNameBusy(true)
     try { setConv(await updateConversationClientName(conversationId, nameInput)); setNameEditing(false) }
@@ -742,7 +919,27 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
 
   return (
     <div className="flex mx-auto w-full max-w-5xl" style={{ height: `calc(100dvh - ${headerTop}px)` }}>
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0 relative">
+      {/* Tiroir « Réponses rapides » : poignée à droite, s'ouvre/se ferme au CLIC (ne mange pas la largeur). */}
+      {quickReplies.length > 0 && (
+        <div ref={repliesDrawerRef} className="absolute top-0 right-0 h-full z-30 flex items-center">
+          <button type="button" onClick={() => setRepliesDrawerOpen(o => !o)}
+            className="flex-shrink-0 w-6 h-28 rounded-l-lg bg-bordeaux/15 border border-r-0 border-bordeaux/25 text-bordeaux flex items-center justify-center cursor-pointer hover:bg-bordeaux/25 transition-colors">
+            <span className="text-[10px] font-medium tracking-wide" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Réponses</span>
+          </button>
+          <div className={`h-full bg-cream-warm border-l border-line shadow-2xl overflow-hidden transition-all duration-200 ${repliesDrawerOpen ? 'w-[210px]' : 'w-0'}`}>
+            <div className="w-[210px] h-full overflow-y-auto p-2 flex flex-col gap-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-ink-mute px-1 pb-1 flex-shrink-0">Réponses rapides</div>
+              {quickReplies.map(q => (
+                <button key={q.id} type="button" onClick={() => sendQuickReply(q)} disabled={sending} title={q.body}
+                  className="flex-shrink-0 text-left px-3 py-1.5 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50">
+                  <span className="line-clamp-2">{q.emoji || chipEmoji(q)} {q.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {/* En-tête : retour + infos contact + bouton Je prends */}
       <div className="bg-bordeaux text-cream flex flex-col gap-1 px-3 py-1.5 shadow-sm flex-shrink-0">
         {/* Ligne 1 : nom (sans photo) + ✏️ + MODIF + Cmd + 🔍 + Je prends */}
@@ -775,11 +972,44 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto">
-                {conv && (
-                  <button onClick={handleModification} title="Demander la modification de la dernière commande (équipe Modification)" className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">MODIF.</button>
-                )}
+                {linkedOrder && (() => {
+                  // Commande déjà passée (facturée/clôturée dans Odoo) : on garde SEULEMENT « Articles »
+                  // (pour corriger un message), on cache Confirmer / Confirmée / Annuler.
+                  const orderPast = linkedOrder.state === 'done' || linkedOrder.invoiceStatus === 'invoiced'
+                  if (orderPast) {
+                    return (
+                      <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
+                    )
+                  }
+                  return (
+                    <>
+                      {linkedOrder.state === 'sale' ? (
+                        <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-400/30 text-cream border border-emerald-200/40">Confirmée</span>
+                      ) : linkedOrder.state === 'cancel' ? (
+                        <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cream/15 text-cream/70 border border-cream/30">Annulée</span>
+                      ) : (
+                        <button onClick={handleConfirmOrder} disabled={confirmingOrder} title={`Confirmer ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wider bg-emerald-500 text-white hover:bg-emerald-600 transition-all disabled:opacity-50">{confirmingOrder ? '…' : 'Confirmer'}</button>
+                      )}
+                      {linkedOrder.state !== 'cancel' && (
+                        <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
+                      )}
+                      {linkedOrder.state !== 'cancel' && (
+                        <button onClick={handleCancelOrder} disabled={confirmingOrder} title={`Annuler ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-red-500/80 text-cream border border-red-300/40 hover:bg-red-600 transition-all disabled:opacity-50">Annuler</button>
+                      )}
+                    </>
+                  )
+                })()}
                 {conv && (
                   <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
+                )}
+                {conv && (
+                  <button onClick={openNewOrder} title="Créer une nouvelle commande pour ce client (nom + téléphone pré-remplis)" className="w-8 h-8 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[14px] transition-all flex-shrink-0 flex items-center justify-center">🧾</button>
+                )}
+                {conv && (
+                  <button onClick={() => setLinkMenuOpen(true)} disabled={sending} title="Envoyer un lien de commande en ligne" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50">🔗 Lien</button>
+                )}
+                {conv && (
+                  <button onClick={sendInfoToClient} disabled={sending} title="Envoyer une information au client (WhatsApp)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50">📢 Info</button>
                 )}
                 <button
                   onClick={() => setThreadSearchOpen(o => !o)}
@@ -823,7 +1053,10 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 <button onClick={handleMarkUnread} title="Faire réapparaître dans 'Non lues'" className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 whitespace-nowrap">📩 Non lu</button>
               )}
               {conv.status === 'fermee' ? (
-                <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
+                <>
+                  {closedBy?.name && <span className="text-[10px] text-cream/80 italic whitespace-nowrap flex-shrink-0">Fermé par {closedBy.name}</span>}
+                  <button onClick={handleReopen} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Rouvrir</button>
+                </>
               ) : (
                 <button onClick={handleClose} disabled={statusBusy} className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux transition-all flex-shrink-0 disabled:opacity-60">Clôturer</button>
               )}
@@ -905,9 +1138,9 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? 'Vocal…' : isImage ? 'Image…' : 'Pièce jointe…'}</span>
                   if (isAudio) return <audio controls src={href} className="block max-w-full mb-1" />
                   if (isImage) return (
-                    <a href={href} target="_blank" rel="noopener noreferrer" title="Ouvrir en grand">
-                      <img src={href} alt="" onLoad={() => { if (scrollModeRef.current === 'bottom' && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight }} className="block max-w-[160px] max-h-[160px] object-cover rounded mb-1" />
-                    </a>
+                    <button type="button" onClick={() => setLightboxUrl(href)} title="Voir en grand" className="block mb-1">
+                      <img src={href} alt="" onLoad={() => { if (scrollModeRef.current === 'bottom' && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight }} className="block max-w-[160px] max-h-[160px] object-cover rounded" />
+                    </button>
                   )
                   return (
                     <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] underline mb-1 opacity-90">
@@ -920,6 +1153,22 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   <span className={`text-[9px] ${isAgent ? 'text-cream/70' : 'text-ink-mute'}`}>
                     {isAgent && m.sender?.full_name ? `${m.sender.full_name} · ` : ''}{fmtTime(m.sent_at)}
                   </span>
+                  {isAgent && m.delivery_status && (
+                    <span className="text-[10px] leading-none flex-shrink-0" title={
+                      m.delivery_status === 'failed' ? 'Non reçu par la cliente'
+                      : m.delivery_status === 'read' ? 'Lu'
+                      : m.delivery_status === 'delivered' ? 'Reçu'
+                      : 'Envoyé (réception pas encore confirmée)'
+                    }>
+                      {m.delivery_status === 'failed'
+                        ? <span className="text-red-300 font-semibold">⚠ non reçu</span>
+                        : m.delivery_status === 'read'
+                          ? <span className="text-sky-300">✓✓</span>
+                          : m.delivery_status === 'delivered'
+                            ? <span className="text-cream/90">✓✓</span>
+                            : <span className="text-cream/55">✓</span>}
+                    </span>
+                  )}
                   {canMarkPaymentProof(user) && m.media_url && (
                     <button
                       onClick={() => m.is_payment_proof ? handleUnmarkPayment(m) : openPaymentModal(m)}
@@ -977,6 +1226,13 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
             ))}
           </div>
         )}
+        {prefilled && text.trim() && (
+          <div className="flex items-center gap-1.5 mb-2 text-[11px] text-bordeaux bg-bordeaux/5 border border-bordeaux/20 rounded-lg px-3 py-1.5">
+            <Sparkles size={12} strokeWidth={1.8} className="flex-shrink-0" />
+            <span>Réponse préparée à la réception — relis et ajuste avant d'envoyer.</span>
+            <button onClick={() => { setText(''); setPrefilled(false); setCorrected(false) }} className="ml-auto text-ink-mute hover:text-bordeaux flex-shrink-0" title="Effacer">✕</button>
+          </div>
+        )}
         {sendError && <div className="text-[11px] text-bordeaux mb-1">{sendError}</div>}
         {file && (
           <div className="flex items-center gap-2 mb-1.5 text-[11px] text-ink-soft">
@@ -1012,6 +1268,7 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
+            {/* Réponses rapides : déplacées dans le tiroir à droite (survol). */}
             <textarea
               ref={textareaRef}
               value={text}
@@ -1096,25 +1353,34 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
       </div>
       </div>{/* fin colonne conversation */}
 
-      {quickReplies.length > 0 && (
-        <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-l border-line bg-cream-warm overflow-y-auto">
-          <div className="p-2 flex flex-col gap-1.5">
-            {quickReplies.map((q, i) => (
-              <button key={q.id} type="button"
-                draggable
-                onDragStart={() => onChipDragStart(i)}
-                onDragOver={e => onChipDragOver(e, i)}
-                onDrop={onChipDrop}
-                onDragEnd={onChipDrop}
-                onClick={() => sendQuickReply(q)}
-                disabled={sending} title={q.body}
-                className="text-left px-3 py-2 rounded-lg text-[12px] font-medium border border-bordeaux/30 text-bordeaux bg-white hover:bg-bordeaux hover:text-cream transition-all disabled:opacity-50 cursor-grab active:cursor-grabbing flex items-center gap-1.5">
-                <span className="text-ink-mute/50 select-none flex-shrink-0">⠿</span>
-                <span className="truncate">{q.emoji || chipEmoji(q)} {q.label}</span>
-              </button>
-            ))}
+      {waConfirm && (
+        <NewConversationModal
+          user={user}
+          initialOrder={waConfirm}
+          initialPhone={waConfirm.clientPhone || conv?.client_phone}
+          initialName={waConfirm.clientName || conv?.client_name || ''}
+          onClose={() => setWaConfirm(null)}
+          onSent={() => setWaConfirm(null)}
+        />
+      )}
+
+      {editOrder && (
+        <OrderEditModal
+          order={editOrder}
+          user={user}
+          onClose={() => setEditOrder(null)}
+          onChanged={() => { const ref = conv?.link_order_ref; if (ref) searchOrders(ref).then(os => { const o = (os || []).find(x => x.name === ref) || (os || [])[0]; if (o) setLinkedOrder(o) }).catch(() => {}) }}
+        />
+      )}
+
+      {linkMenuOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setLinkMenuOpen(false)}>
+          <div className="bg-white rounded-2xl p-4 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div className="text-[13px] font-semibold text-ink mb-3">Quel lien envoyer au client ?</div>
+            <button onClick={() => { setLinkMenuOpen(false); sendOrderLink() }} className="w-full text-left px-3 py-3 rounded-xl text-[13px] text-ink hover:bg-cream/40 border border-line mb-2">🎂 Cake design <span className="text-ink-mute">(prix par part)</span></button>
+            <button onClick={() => { setLinkMenuOpen(false); sendCatalogueLink() }} className="w-full text-left px-3 py-3 rounded-xl text-[13px] text-ink hover:bg-cream/40 border border-line">🧁 Catalogue <span className="text-ink-mute">(salé, boissons, plateaux…)</span></button>
           </div>
-        </aside>
+        </div>
       )}
 
       {forwardMsg && (
@@ -1145,9 +1411,14 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                   const stLabel = isDevis ? 'Devis' : (o.state === 'cancel' ? 'Annulé' : 'Confirmé')
                   const stCls = isDevis ? 'bg-amber-100 text-amber-800' : (o.state === 'cancel' ? 'bg-line/40 text-ink-mute' : 'bg-blue-100 text-blue-800')
                   return (
-                    <div key={o.id} className="bg-white border border-line rounded-xl p-3">
+                    <div
+                      key={o.id}
+                      onClick={() => window.open(`/?devis=${encodeURIComponent(o.name)}&dstate=${encodeURIComponent(o.state || '')}&dday=${encodeURIComponent((o.deliveryAt || '').slice(0, 10))}`, '_blank')}
+                      title="Ouvrir cette commande dans l'onglet Commandes"
+                      className="bg-white border border-line rounded-xl p-3 cursor-pointer hover:border-bordeaux transition-colors"
+                    >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-[13px] font-semibold text-bordeaux">{o.name}</span>
+                        <span className="font-mono text-[13px] font-semibold text-bordeaux">{o.name} ↗</span>
                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${stCls}`}>{stLabel}</span>
                       </div>
                       <div className="text-[11px] text-ink-soft mt-1 flex flex-wrap gap-x-3">
@@ -1164,30 +1435,6 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
                 })}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {modifOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => !modifBusy && setModifOpen(false)}>
-          <div className="bg-cream rounded-2xl w-full max-w-sm shadow-2xl border border-line p-5" onClick={e => e.stopPropagation()}>
-            <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Demande de modification</h3>
-            <p className="text-[12px] text-ink-soft mb-2">Client : {conv?.client_name || conv?.client_phone || ''}</p>
-            <label className="block text-[11px] font-medium text-ink-soft mb-1">N° de commande (modifiable si c'en est une autre)</label>
-            <input type="text" value={modifRef} onChange={e => setModifRef(e.target.value)} placeholder="ex : S49251"
-              className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3 font-mono" />
-            <label className="block text-[11px] font-medium text-ink-soft mb-1">Que faut-il modifier ?</label>
-            <textarea value={modifDesc} onChange={e => setModifDesc(e.target.value)} rows={3}
-              placeholder="ex : changer la date de retrait au 12/06, ajouter un message sur le gâteau…"
-              className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3" />
-            <label className="inline-flex items-center gap-2 text-[12px] text-ink-soft cursor-pointer mb-4 border border-line rounded-lg px-3 py-2" style={{ background: modifFile ? '#EAF3DE' : undefined }}>
-              📎 {modifFile ? modifFile.name.slice(0, 22) : 'Joindre un justificatif (optionnel)'}
-              <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => setModifFile(e.target.files?.[0] || null)} />
-            </label>
-            <div className="flex gap-2">
-              <button onClick={() => setModifOpen(false)} disabled={modifBusy} className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded-lg hover:bg-cream-warm transition-all">Annuler</button>
-              <button onClick={confirmModification} disabled={modifBusy} className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50">{modifBusy ? 'Envoi…' : 'Envoyer'}</button>
-            </div>
           </div>
         </div>
       )}
@@ -1228,6 +1475,18 @@ export default function ConversationDetail({ conversationId, user, onBack }) {
               <button onClick={confirmMarkPayment} disabled={markBusy} className="px-4 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">{markBusy ? '…' : 'Transférer aux paiements'}</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+          <button onClick={() => setLightboxUrl(null)} title="Fermer"
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-white/90 text-ink rounded-full hover:bg-white shadow-lg">
+            <X size={22} strokeWidth={2} />
+          </button>
+          <img src={lightboxUrl} alt="" onClick={e => e.stopPropagation()}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
         </div>
       )}
     </div>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maquette — Chantier Villa Elmesmoudi</title>
+<style>
+  :root{
+    --bg:#F6F2EC;--panel:#FFFFFF;--ink:#2B2622;--soft:#6B635B;--mute:#9A8F84;
+    --line:#E7DECF;--accent:#A9703F;--accent-deep:#8A5A30;--gold:#C29B5E;
+    --ok:#3E7A52;--ok-bg:#E7F1E9;--warn:#B07A2E;--warn-bg:#FBF1DD;--todo:#9A8F84;--todo-bg:#F0EBE2;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
+  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0}
+  h1{font-size:21px;font-weight:600}
+  .sub{font-size:12.5px;color:var(--soft);margin-top:1px}
+  .tabs{margin-left:auto;display:flex;gap:6px;background:var(--panel);padding:4px;border-radius:999px;border:1px solid var(--line)}
+  .tab{border:0;background:transparent;color:var(--soft);font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;cursor:pointer}
+  .tab.on{background:var(--accent);color:#fff}
+  .rolebar{display:flex;align-items:center;gap:10px;margin:8px 2px 0;flex-wrap:wrap}
+  .roleseg{display:flex;gap:4px;background:var(--panel);padding:4px;border-radius:999px;border:1px solid var(--line)}
+  .roleseg button{border:0;background:transparent;color:var(--soft);font-size:12px;font-weight:700;padding:6px 13px;border-radius:999px;cursor:pointer}
+  .roleseg button.on{background:var(--ink);color:#fff}
+  .rolehint{font-size:11.5px;color:var(--mute)}
+  .demo-note{font-size:11.5px;color:var(--mute);font-style:italic;margin:10px 2px 14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px}
+  .card-h{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card-h .t{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--soft)}
+  .lvl{margin-left:auto;display:flex;gap:5px}
+  .lvl button{font-size:11.5px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--soft);padding:5px 11px;border-radius:999px;cursor:pointer}
+  .lvl button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  .planbox{padding:14px}
+  .planwrap{position:relative;width:100%;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#FBF8F2}
+  .planwrap img{width:100%;display:block}
+  .pin{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.92);border:1.5px solid var(--accent);color:var(--accent-deep);border-radius:999px;padding:3px 9px 3px 4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+  .pin:hover{background:#fff;transform:translate(-50%,-50%) scale(1.06)}
+  .pin.sel{background:var(--accent);color:#fff;border-color:var(--accent-deep)}
+  .pin.done{border-color:var(--ok);color:var(--ok)}
+  .pin.done.sel{background:var(--ok);color:#fff}
+  .pin .num{width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+  .pin.done .num{background:var(--ok)}.pin.sel .num{background:rgba(255,255,255,.35)}
+  .planlegend{display:flex;gap:16px;flex-wrap:wrap;padding:10px 18px 14px;font-size:11.5px;color:var(--soft)}
+  .planlegend span{display:inline-flex;align-items:center;gap:5px}.dot{width:10px;height:10px;border-radius:50%}
+  .sscards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding:14px}
+  .sscard{border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;background:#FCFAF6}
+  .sscard:hover{border-color:var(--accent)}
+  .sscard .nm{font-size:14px;font-weight:600}.sscard .mt{font-size:11.5px;color:var(--soft);margin-top:3px}
+
+  .roompanel{margin-top:16px}
+  .roomhead{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .roomhead .n{font-size:18px;font-weight:600}.roomhead .meta{font-size:12px;color:var(--soft)}
+  .roomhead .addbtn{margin-left:auto;font-size:12px;font-weight:600;border:1px solid var(--accent);color:var(--accent);background:#fff;padding:6px 12px;border-radius:999px;cursor:pointer}
+  .detplan{margin:12px 14px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#FBF8F2}
+  .detplan summary{cursor:pointer;list-style:none;padding:9px 13px;font-size:12px;font-weight:600;color:var(--accent-deep);display:flex;align-items:center;gap:7px}
+  .detplan summary::-webkit-details-marker{display:none}
+  .detplan img{width:100%;display:block;border-top:1px solid var(--line)}
+  .items{padding:8px 12px 16px}
+  .item{border:1px solid var(--line);border-radius:14px;margin:8px 4px;overflow:hidden}
+  .item-h{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+  .item-ic{width:34px;height:34px;border-radius:9px;background:var(--todo-bg);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .item-n{font-size:14px;font-weight:600;flex:1}
+  .pill{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px}
+  .pill.todo{background:var(--todo-bg);color:var(--todo)}.pill.choix{background:var(--warn-bg);color:var(--warn)}.pill.valide{background:var(--ok-bg);color:var(--ok)}
+  .chev{color:var(--mute);font-size:13px;transition:.2s}.item.open .chev{transform:rotate(90deg)}
+  .item-body{display:none;padding:4px 14px 14px;border-top:1px dashed var(--line)}.item.open .item-body{display:block}
+  .opts{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .opt{width:158px;border:2px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;position:relative}
+  .opt.clk{cursor:pointer}.opt.clk:hover{border-color:var(--gold)}
+  .opt.chosen{border-color:var(--accent);box-shadow:0 0 0 3px rgba(169,112,63,.12)}
+  .opt .ph{height:90px;display:flex;align-items:center;justify-content:center;font-size:30px;overflow:hidden}
+  .opt .ph img{width:100%;height:100%;object-fit:cover}
+  .opt .info{padding:8px 9px}
+  .opt .on2{font-size:12px;font-weight:600;line-height:1.25}
+  .opt .sup{font-size:10.5px;color:var(--mute);margin-top:2px}
+  .opt .pr{font-size:13px;font-weight:700;color:var(--accent-deep);margin-top:5px}
+  .opt .lnk{font-size:10.5px;color:var(--accent);text-decoration:underline;display:inline-block;margin-top:3px}
+  .opt .badge-ok{position:absolute;top:6px;right:6px;background:var(--ok);color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:2px 7px}
+  .add-opt{width:158px;min-height:158px;border:2px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--soft);font-size:12px;cursor:pointer;background:#FCFAF6;text-align:center;padding:8px}
+  .add-opt:hover{border-color:var(--accent);color:var(--accent)}.add-opt .plus{font-size:24px}
+  .pform{border:1.5px solid var(--accent);border-radius:12px;padding:12px;margin-top:10px;background:#FCFAF6}
+  .pform .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .pform input,.pform textarea{flex:1;min-width:120px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;background:#fff}
+  .pform .lbl{font-size:11px;font-weight:700;color:var(--soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+  .pform .prev{width:64px;height:64px;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;font-size:22px;flex-shrink:0}
+  .pform .prev img{width:100%;height:100%;object-fit:cover}
+  .pform .acts{display:flex;gap:8px;justify-content:flex-end}
+  .hint{font-size:11.5px;color:var(--mute);margin-top:10px}
+  .readonly-note{font-size:11.5px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:7px 11px;margin:6px 4px 0}
+
+  .devis{max-width:820px;margin:0 auto}
+  .dgroup{margin:14px 4px}.dgroup .gh{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--accent-deep);padding:6px 2px;border-bottom:1px solid var(--line);margin-bottom:4px}
+  .drow{display:flex;align-items:center;gap:12px;padding:9px 8px;border-bottom:1px solid #F1ECE3}
+  .drow .ic{width:30px;height:30px;border-radius:8px;background:var(--todo-bg);display:flex;align-items:center;justify-content:center;font-size:16px}
+  .drow .nm{flex:1}.drow .nm .a{font-size:13.5px;font-weight:600}.drow .nm .b{font-size:11.5px;color:var(--mute)}
+  .drow .pr{font-size:13.5px;font-weight:700}.drow.miss .pr{color:var(--todo);font-weight:600;font-style:italic}
+  .total{display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding:16px 14px;background:#fff;border:1px solid var(--line);border-radius:14px}
+  .total .l{font-size:15px;font-weight:600}.total .v{font-size:22px;font-weight:700;color:var(--accent-deep)}
+  .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+  .btn{border:0;border-radius:999px;padding:11px 20px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--soft)}.btn.ok{background:var(--ok);color:#fff}.btn.sm{padding:8px 14px;font-size:12px}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .vbanner{display:none;align-items:center;gap:8px;background:var(--ok-bg);color:var(--ok);border:1px solid #BfD9C6;border-radius:12px;padding:12px 16px;font-size:13px;font-weight:600;margin-top:14px}
+  .vbanner.show{display:flex}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">🏛️</div>
+    <div>
+      <h1>Chantier — <span style="color:var(--accent-deep)">Villa Elmesmoudi</span> · Rabat</h1>
+      <div class="sub">Plan → pièce → articles manquants → propositions → devis</div>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-tab="plan" onclick="setTab('plan')">🗺️ Plan</button>
+      <button class="tab" data-tab="devis" onclick="setTab('devis')">🧾 Devis</button>
+    </div>
+  </header>
+
+  <div class="rolebar">
+    <span class="rolehint">Connecté en tant que :</span>
+    <div class="roleseg">
+      <button class="on" data-role="admin" onclick="setRole('admin')">👑 Admin (Layla)</button>
+      <button data-role="deco" onclick="setRole('deco')">👁️ Décoratrice</button>
+    </div>
+    <span class="rolehint" id="rolehint">L'admin valide. La décoratrice peut proposer des articles (photo, prix).</span>
+  </div>
+
+  <div class="demo-note">⚠️ Maquette : vrai plan de repérage en fond. Les <b>points</b> sont posés approximativement (dis-moi lesquels bouger). Articles & prix = exemples.</div>
+
+  <section id="tab-plan">
+    <div class="card">
+      <div class="card-h">
+        <span class="t" id="planTitle">Plan — Rez-de-chaussée</span>
+        <div class="lvl">
+          <button class="on" data-lvl="rdc" onclick="setLevel('rdc')">Rez-de-chaussée</button>
+          <button data-lvl="ss" onclick="setLevel('ss')">Sous-sol</button>
+        </div>
+      </div>
+      <div id="planArea"></div>
+      <div class="planlegend">
+        <span><i class="dot" style="background:var(--accent)"></i> articles à traiter</span>
+        <span><i class="dot" style="background:var(--ok)"></i> pièce terminée</span>
+        <span style="color:var(--mute)">Clique une pièce ↓</span>
+      </div>
+    </div>
+
+    <div class="card roompanel">
+      <div class="roomhead">
+        <div><span class="n" id="rname">—</span> <span class="meta" id="rmeta"></span></div>
+        <button class="addbtn" id="additem" onclick="addItem()">＋ Ajouter un article manquant</button>
+      </div>
+      <div id="detplan"></div>
+      <div id="roNote"></div>
+      <div class="items" id="items"></div>
+    </div>
+  </section>
+
+  <section id="tab-devis" class="devis" style="display:none">
+    <div class="card" style="padding:18px">
+      <div class="card-h" style="border:0;padding:0 0 8px"><span class="t">Devis — articles choisis</span></div>
+      <div id="devisbody"></div>
+      <div class="total"><span class="l">Total estimé</span><span class="v" id="dtotal">0 DH</span></div>
+      <div class="actions">
+        <button class="btn ghost">📄 Exporter PDF</button>
+        <button class="btn ghost">📲 Envoyer au client</button>
+        <button class="btn ok" id="validbtn" onclick="validate()">✓ Valider le devis</button>
+      </div>
+      <div class="vbanner" id="vbanner">✅ Devis validé par l'admin — les articles passent en commande.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+const ICON={Tapis:'🟫',Luminaire:'🪔',Lustre:'🪔',Suspension:'🪔','Faux plafond':'🔲',Peinture:'🎨',Rideaux:'🪟',Canapé:'🛋️',Fauteuil:'🪑','Tête de lit':'🛏️',Linge:'🛏️','Plan de travail':'🍳',Crédence:'🧱',Miroir:'🪞',Console:'🪑',Bureau:'🖥️',Bibliothèque:'📚',Pouf:'🪑',Banc:'🪑',Table:'🍽️',Chaises:'🪑',Tabouret:'🪑',Plante:'🪴',Applique:'💡'};
+function ic(n){for(const k in ICON){if(n.toLowerCase().includes(k.toLowerCase()))return ICON[k];}return '📦';}
+const COL=['#C9A36A','#D9C8A8','#BFD3D6','#E2D8C4','#C29B5E','#CBB89A'];
+
+const rooms=[
+  {id:'salon',name:'Salon / Coin Cheminée',lvl:'rdc',x:13,y:40,items:[
+    {name:'Tapis',status:'choix',chosen:null,options:[{n:'Tapis laine ivoire 250×350',sup:'Caractère',link:'#',pr:6500,qte:1,c:'#E7DEC9'},{n:'Tapis berbère beni ouarain',sup:'Artisan',link:'#',pr:4200,qte:1,c:'#C9A36A'}]},
+    {name:'Lustre / suspension',status:'valide',chosen:0,options:[{n:'Lustre laiton 8 bras',sup:'Atelier Médina',link:'#',pr:9800,qte:1,c:'#C29B5E'}]},
+    {name:'Canapés',status:'todo',chosen:null,options:[]},{name:'Rideaux',status:'todo',chosen:null,options:[]},
+  ]},
+  {id:'sam',name:'Salle à manger',lvl:'rdc',x:9,y:70,items:[
+    {name:'Suspension table',status:'choix',chosen:null,options:[{n:'Suspension linéaire laiton',sup:'Atelier Médina',link:'#',pr:5200,qte:1,c:'#C29B5E'}]},
+    {name:'Tapis',status:'todo',chosen:null,options:[]},{name:'Rideaux',status:'todo',chosen:null,options:[]},
+  ]},
+  {id:'bar',name:'Coin bar',lvl:'rdc',x:27,y:40,items:[{name:'Tabourets de bar',status:'todo',chosen:null,options:[]},{name:'Luminaire',status:'todo',chosen:null,options:[]}]},
+  {id:'hall',name:'Hall',lvl:'rdc',x:37,y:38,items:[{name:'Luminaire',status:'todo',chosen:null,options:[]},{name:'Tapis de couloir',status:'todo',chosen:null,options:[]}]},
+  {id:'entree',name:'Entrée',lvl:'rdc',x:37,y:56,items:[{name:'Console',status:'choix',chosen:null,options:[{n:'Console travertin',sup:'Caractère',link:'#',pr:3800,qte:1,c:'#E2D8C4'}]},{name:'Miroir',status:'todo',chosen:null,options:[]}]},
+  {id:'patio',name:'Patio / Escalier',lvl:'rdc',x:40,y:80,items:[{name:'Suspension cage escalier',status:'todo',chosen:null,options:[]},{name:'Plantes',status:'todo',chosen:null,options:[]}]},
+  {id:'cuisine',name:'Cuisine',lvl:'rdc',x:60,y:74,plan:'plans/cuisine.png',items:[
+    {name:'Faux plafond + spots',status:'choix',chosen:null,options:[{n:'Faux plafond BA13 + spots LED',sup:'Plâtrier',link:'#',pr:8500,qte:1,c:'#E2D8C4'}]},
+    {name:'Suspensions îlot',status:'todo',chosen:null,options:[]},{name:'Crédence',status:'todo',chosen:null,options:[]},{name:'Tabourets îlot',status:'todo',chosen:null,options:[]},
+  ]},
+  {id:'bureau',name:'Bureau',lvl:'rdc',x:66,y:46,items:[{name:'Bureau',status:'todo',chosen:null,options:[]},{name:'Fauteuil',status:'todo',chosen:null,options:[]},{name:'Bibliothèque',status:'todo',chosen:null,options:[]}]},
+  {id:'ch02',name:'Chambre 02',lvl:'rdc',x:50,y:42,plan:'plans/ch02.png',items:[{name:'Tête de lit',status:'todo',chosen:null,options:[]},{name:'Tapis',status:'todo',chosen:null,options:[]},{name:'Luminaire',status:'todo',chosen:null,options:[]},{name:'Rideaux',status:'todo',chosen:null,options:[]}]},
+  {id:'ch01',name:'Chambre 01',lvl:'rdc',x:69,y:26,plan:'plans/ch01.png',items:[{name:'Tête de lit capitonnée',status:'choix',chosen:null,options:[{n:'Tête velours ocre',sup:'Sur-mesure',link:'#',pr:4500,qte:1,c:'#C9A36A'}]},{name:'Tapis',status:'todo',chosen:null,options:[]},{name:'Luminaire',status:'todo',chosen:null,options:[]}]},
+  {id:'master',name:'Suite Master',lvl:'rdc',x:82,y:17,plan:'plans/master.png',items:[{name:'Tête de lit',status:'todo',chosen:null,options:[]},{name:'Tapis',status:'todo',chosen:null,options:[]},{name:'Luminaires chevet',status:'todo',chosen:null,options:[]},{name:'Rideaux',status:'todo',chosen:null,options:[]}]},
+  {id:'sdbm',name:'SDB Master',lvl:'rdc',x:93,y:11,items:[{name:'Miroir LED',status:'valide',chosen:0,options:[{n:'Miroir LED 100×70',sup:'Leroy Merlin',link:'#',pr:1600,qte:1,c:'#BFD3D6'}]},{name:'Applique',status:'todo',chosen:null,options:[]}]},
+  {id:'dressh',name:'Dressing Homme',lvl:'rdc',x:88,y:30,plan:'plans/dressh.png',items:[{name:'Luminaire',status:'todo',chosen:null,options:[]},{name:'Banc / pouf',status:'todo',chosen:null,options:[]}]},
+  {id:'dressf',name:'Dressing Femme',lvl:'rdc',x:88,y:43,plan:'plans/dressf.png',items:[{name:'Luminaire',status:'todo',chosen:null,options:[]},{name:'Pouf + miroir',status:'todo',chosen:null,options:[]}]},
+  {id:'cuisiness',name:'Cuisine sous-sol',lvl:'ss',plan:'plans/cuisine-ss.png',items:[{name:'Luminaire',status:'todo',chosen:null,options:[]},{name:'Plan de travail',status:'todo',chosen:null,options:[]},{name:'Crédence',status:'todo',chosen:null,options:[]}]},
+];
+
+let role='admin', level='rdc', selected='salon', proposeFor=null, pendingImg=null;
+const isAdmin=()=>role==='admin';
+function miss(r){return r.items.filter(i=>i.status!=='valide').length;}
+
+function setRole(r){role=r;document.querySelectorAll('.roleseg button').forEach(b=>b.classList.toggle('on',b.dataset.role===r));
+  document.getElementById('rolehint').textContent = r==='admin'?'Tu peux ajouter, proposer et VALIDER.':'Tu peux proposer des articles (photo, prix). Seul l\'admin valide.';
+  proposeFor=null;renderPins();renderRoom();renderDevisCtl();}
+function setLevel(l){level=l;selected=rooms.find(r=>r.lvl===l)?.id||selected;
+  document.querySelectorAll('.lvl button').forEach(b=>b.classList.toggle('on',b.dataset.lvl===l));
+  document.getElementById('planTitle').textContent='Plan — '+(l==='rdc'?'Rez-de-chaussée':'Sous-sol');
+  renderPlanArea();renderRoom();}
+
+function renderPlanArea(){
+  const area=document.getElementById('planArea');
+  if(level==='rdc'){
+    area.innerHTML='<div class="planbox"><div class="planwrap"><img src="villa-plan.png" alt="Plan"/><div id="pins"></div></div></div>';
+    renderPins();
+  }else{
+    const cards=rooms.filter(r=>r.lvl==='ss').map(r=>{const m=miss(r);return `<div class="sscard" onclick="selectRoom('${r.id}')"><div class="nm">${r.name}</div><div class="mt">${m===0?'Tout validé ✓':m+' article(s) à traiter'}</div></div>`;}).join('');
+    area.innerHTML='<div class="sscards">'+cards+'<div class="sscard" style="display:flex;align-items:center;color:var(--mute)">+ d\'autres pièces sous-sol à ajouter</div></div>';
+  }
+}
+function renderPins(){
+  const el=document.getElementById('pins');if(!el)return;
+  el.innerHTML=rooms.filter(r=>r.lvl==='rdc').map(r=>{const m=miss(r),done=m===0;
+    return `<div class="pin ${r.id===selected?'sel':''} ${done?'done':''}" style="left:${r.x}%;top:${r.y}%" onclick="selectRoom('${r.id}')" title="${r.name}"><span class="num">${done?'✓':m}</span>${r.name}</div>`;}).join('');
+}
+function statusPill(s){const m={todo:['todo','À faire'],choix:['choix','Choix proposé'],valide:['valide','Validé']};const[c,l]=m[s];return `<span class="pill ${c}">${l}</span>`;}
+function selectRoom(id){selected=id;proposeFor=null;renderPins();renderRoom();document.querySelector('.roompanel').scrollIntoView({behavior:'smooth',block:'nearest'});}
+
+function renderRoom(){
+  const r=rooms.find(x=>x.id===selected); if(!r){return;}
+  document.getElementById('rname').textContent=r.name;
+  const m=miss(r);
+  document.getElementById('rmeta').textContent=m===0?'· Tout validé ✓':`· ${m} à traiter sur ${r.items.length}`;
+  document.getElementById('additem').style.display='block';
+  document.getElementById('detplan').innerHTML = r.plan
+    ? `<details class="detplan"><summary>📐 Voir le plan détaillé de la pièce</summary><img src="${r.plan}" alt="plan ${r.name}"/></details>` : '';
+  document.getElementById('roNote').innerHTML = isAdmin()?'' : '<div class="readonly-note">👁️ Vue décoratrice — tu peux proposer des articles (photo, prix). Seul l\'admin choisit/valide l\'article retenu.</div>';
+  document.getElementById('items').innerHTML=r.items.map((it,ii)=>{
+    const opts=it.options.map((o,oi)=>{
+      const chosen=it.chosen===oi;
+      return `<div class="opt ${isAdmin()?'clk':''} ${chosen?'chosen':''}" ${isAdmin()?`onclick="choose('${r.id}',${ii},${oi})"`:''}>
+        ${chosen?'<span class="badge-ok">✓ choisi</span>':''}
+        <div class="ph" style="background:${o.c}22">${o.img?`<img src="${o.img}">`:ic(it.name)}</div>
+        <div class="info"><div class="on2">${o.n}</div><div class="sup">${o.sup}${o.qte>1?' · ×'+o.qte:''}</div>
+        <div class="pr">${(o.pr*(o.qte||1)).toLocaleString('fr-FR')} DH</div>
+        ${o.link?`<a class="lnk" href="${o.link}" target="_blank" onclick="event.stopPropagation()">🔗 fournisseur</a>`:''}</div></div>`;
+    }).join('');
+    const formOpen = proposeFor===r.id+':'+ii;
+    const adder = formOpen ? proposeForm(r.id,ii)
+      : `<div class="add-opt" onclick="event.stopPropagation();openPropose('${r.id}',${ii})"><span class="plus">＋</span>Proposer un article</div>`;
+    return `<div class="item ${ii===0?'open':''}">
+      <div class="item-h" onclick="this.parentNode.classList.toggle('open')">
+        <div class="item-ic">${ic(it.name)}</div><div class="item-n">${it.name}</div>${statusPill(it.status)}<span class="chev">▶</span>
+      </div>
+      <div class="item-body">
+        <div class="opts">${opts}${adder}</div>
+        <div class="hint">${isAdmin()?'Propose des articles, puis clique celui que tu retiens → il passe « Validé ».':'Tu peux proposer des articles. C\'est l\'admin qui choisit/valide l\'article retenu.'}</div>
+      </div></div>`;
+  }).join('');
+}
+function proposeForm(rid,ii){
+  return `<div class="pform" onclick="event.stopPropagation()">
+    <div class="lbl">Proposer un article</div>
+    <div class="row"><div class="prev" id="pf-prev">📎</div>
+      <input type="file" accept="image/*" onchange="pfPhoto(this)" style="align-self:center"/></div>
+    <div class="row"><input id="pf-nom" placeholder="Nom de l'article *"/></div>
+    <div class="row"><input id="pf-sup" placeholder="Fournisseur"/><input id="pf-link" placeholder="Lien (https://…)"/></div>
+    <div class="row"><input id="pf-prix" type="number" placeholder="Prix (DH)"/><input id="pf-qte" type="number" placeholder="Qté" value="1"/></div>
+    <div class="row"><textarea id="pf-note" rows="2" placeholder="Note (dimensions, couleur…)"></textarea></div>
+    <div class="acts"><button class="btn ghost sm" onclick="cancelPropose()">Annuler</button><button class="btn ok sm" onclick="addOptFromForm('${rid}',${ii})">Ajouter</button></div>
+  </div>`;
+}
+function openPropose(rid,ii){proposeFor=rid+':'+ii;pendingImg=null;renderRoom();}
+function cancelPropose(){proposeFor=null;pendingImg=null;renderRoom();}
+function pfPhoto(input){const f=input.files[0];pendingImg=f?URL.createObjectURL(f):null;const p=document.getElementById('pf-prev');if(p)p.innerHTML=pendingImg?`<img src="${pendingImg}">`:'📎';}
+function addOptFromForm(rid,ii){
+  const g=id=>(document.getElementById(id)?.value||'').trim();
+  const nom=g('pf-nom');if(!nom){alert('Le nom de l\'article est requis.');return;}
+  const it=rooms.find(x=>x.id===rid).items[ii];
+  it.options.push({n:nom,sup:g('pf-sup')||'—',link:g('pf-link'),pr:Number(g('pf-prix'))||0,qte:Number(g('pf-qte'))||1,note:g('pf-note'),img:pendingImg,c:COL[it.options.length%COL.length]});
+  if(it.status==='todo')it.status='choix';
+  proposeFor=null;pendingImg=null;renderPins();renderRoom();
+}
+function addItem(){const n=prompt('Nom du nouvel article manquant (ex : Tapis, Luminaire, Faux plafond…)');if(!n||!n.trim())return;
+  rooms.find(x=>x.id===selected).items.push({name:n.trim(),status:'todo',chosen:null,options:[]});renderPins();renderRoom();}
+function choose(rid,ii,oi){if(!isAdmin())return;const it=rooms.find(x=>x.id===rid).items[ii];it.chosen=(it.chosen===oi?null:oi);it.status=it.chosen===null?(it.options.length?'choix':'todo'):'valide';renderPins();renderRoom();}
+
+function renderDevis(){
+  let total=0;
+  const body=rooms.map(r=>{
+    const rows=r.items.map(it=>{const ch=it.chosen!=null?it.options[it.chosen]:null;const line=ch?ch.pr*(ch.qte||1):0;if(ch)total+=line;
+      return `<div class="drow ${ch?'':'miss'}"><div class="ic">${ic(it.name)}</div>
+        <div class="nm"><div class="a">${it.name}</div><div class="b">${ch?ch.n+' · '+ch.sup+(ch.qte>1?' ×'+ch.qte:''):'— pas encore choisi —'}</div></div>
+        <div class="pr">${ch?line.toLocaleString('fr-FR')+' DH':'à choisir'}</div></div>`;}).join('');
+    return `<div class="dgroup"><div class="gh">${r.name}</div>${rows}</div>`;
+  }).join('');
+  document.getElementById('devisbody').innerHTML=body;
+  document.getElementById('dtotal').textContent=total.toLocaleString('fr-FR')+' DH';
+}
+function renderDevisCtl(){const b=document.getElementById('validbtn');b.disabled=!isAdmin();b.title=isAdmin()?'':'Seul l\'admin peut valider';}
+function validate(){if(!isAdmin()){alert('Seul l\'admin peut valider le devis.');return;}document.getElementById('vbanner').classList.add('show');}
+function setTab(t){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  document.getElementById('tab-plan').style.display=t==='plan'?'block':'none';
+  document.getElementById('tab-devis').style.display=t==='devis'?'block':'none';
+  if(t==='devis'){renderDevis();renderDevisCtl();}}
+
+renderPlanArea();renderRoom();renderDevisCtl();
+</script>
+</body>
+</html>

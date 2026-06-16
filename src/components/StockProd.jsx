@@ -60,8 +60,11 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
   const visibles = useMemo(() => {
     let list = adminMode ? merged : merged.filter(m => m.actif)
     if (q) list = list.filter(m => m.name.toLowerCase().includes(q))
-    // tri : stock croissant (à refill en haut), puis alpha
-    return [...list].sort((a, b) => (a.qty - b.qty) || a.name.localeCompare(b.name, 'fr'))
+    // Catalogue (admin) : juste alphabétique.
+    // Liste stock : urgents d'abord (stock ≤ mini = à réappro), puis alphabétique.
+    if (adminMode) return [...list].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    const urgent = m => (m.qty <= m.stock_min ? 0 : 1)
+    return [...list].sort((a, b) => (urgent(a) - urgent(b)) || a.name.localeCompare(b.name, 'fr'))
   }, [merged, adminMode, q])
 
   // Admin : (dé)activer un article. À la 1ère activation, on pré-remplit le

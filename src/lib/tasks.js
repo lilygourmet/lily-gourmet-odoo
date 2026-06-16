@@ -15,6 +15,8 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 
 // Modèle Wati générique pour notifier une nouvelle tâche (à valider dans Wati).
 const WA_TASK_TEMPLATE = 'nouvelle_tache'
+// Modèle Wati pour notifier le demandeur qu'une tâche a été réalisée (à valider dans Wati).
+const WA_TASK_DONE_TEMPLATE = 'tache_realisee'
 
 // Numéro au format international (Maroc : 0xxxxxxxxx -> 212xxxxxxxxx)
 function normalizePhone(raw) {
@@ -47,6 +49,31 @@ async function notifyTaskWhatsapp(toUserId, fromUserId, fromName, title) {
     }).catch(() => {})
   } catch (e) {
     console.warn('[tasks] WhatsApp notif:', e.message)
+  }
+}
+
+// Notifie le DEMANDEUR qu'une tâche qu'il avait confiée a été réalisée.
+// Même logique que notifyTaskWhatsapp : conversation ouverte sinon modèle Wati. Non bloquant.
+async function notifyTaskDoneWhatsapp(toUserId, fromUserId, doneByName, title, description) {
+  try {
+    const { data: u } = await supabase.from('profiles').select('whatsapp').eq('id', toUserId).maybeSingle()
+    const phone = normalizePhone(u?.whatsapp)
+    if (!phone) return
+    const text = `✅ ${doneByName} a fait la tâche : ${title}` + (description ? `\n📝 ${description}` : '')
+    const { data: conv } = await supabase.from('conversations').select('id').eq('client_phone', phone).maybeSingle()
+    if (conv?.id) {
+      const r = await fetch('/api/wati-webhook?action=send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: fromUserId, text }),
+      })
+      if (r.ok) return
+    }
+    await fetch('/api/wati-webhook?action=send-template', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientPhone: phone, templateName: WA_TASK_DONE_TEMPLATE, parameters: [{ name: '1', value: doneByName }, { name: '2', value: title }, { name: '3', value: description || '—' }], userId: fromUserId }),
+    }).catch(() => {})
+  } catch (e) {
+    console.warn('[tasks] WhatsApp notif (done):', e.message)
   }
 }
 
@@ -190,6 +217,13 @@ export async function markTaskDone(taskId) {
     .select(SEL)
     .single()
   if (error) throw error
+
+  // Notif WhatsApp au DEMANDEUR : « X a fait telle tâche » (sauf tâche à soi-même). Non bloquant.
+  if (data && data.from_user_id && data.from_user_id !== data.to_user_id) {
+    const doneByName = data.to_user?.full_name || data.to_user?.username || ''
+    notifyTaskDoneWhatsapp(data.from_user_id, data.to_user_id, doneByName, data.title, data.description)
+  }
+
   return data
 }
 

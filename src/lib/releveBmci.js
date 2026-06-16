@@ -24,11 +24,12 @@ const signedDays = (isoA, isoB) => (new Date(isoA) - new Date(isoB)) / 86400000
 // Type d'une opération d'après son libellé
 function classify(label) {
   const L = (label || '').toUpperCase()
-  if (/VERSEMENT ESPECE/.test(L)) return 'versement'         // dépôt espèces (crédit)
-  if (/REMISE CHEQUE/.test(L)) return 'cheque_depot'         // remise de chèque (crédit)
-  if (/REMISE TPE/.test(L)) return 'tpe'                     // carte (à ignorer)
-  if (/VIR(EMENT)? (INST )?EMIS|VIR\.EMIS/.test(L)) return 'virement_emis'   // sortant / remboursement
-  if (/VIR(EMENT)? (INST )?RECU|VIR\.RECU/.test(L)) return 'virement_recu'   // virement reçu
+  if (/VERSEMENT|VERST\s*ESP/.test(L)) return 'versement'        // dépôt espèces (crédit)
+  if (/REMISE\s*(DE\s+)?(CHEQUE|CHQ)/.test(L)) return 'cheque_depot'  // remise de chèque (crédit)
+  if (/REMISE\s*TPE/.test(L)) return 'tpe'                       // carte (à ignorer)
+  // VIR / VIREMENT / VIRT, avec ou sans point, INST optionnel
+  if (/VIR(EMENT|T)?\.?\s*(INST\s*)?EMIS/.test(L)) return 'virement_emis'   // sortant / remboursement
+  if (/VIR(EMENT|T)?\.?\s*(INST\s*)?RECU/.test(L)) return 'virement_recu'   // virement reçu
   if (/CHEQUE/.test(L)) return 'cheque'
   return 'autre'
 }
@@ -109,7 +110,8 @@ function parseBmciReleve(items) {
 
 // BMCI extrait : libellé sur la ligne du montant ; débit/crédit par position X.
 function parseBmciExtrait(items) {
-  const out = []
+  const ops = []       // lignes avec un montant (les opérations)
+  const refRows = []   // lignes sans montant = codes de référence (imprimés sous chaque opération)
   for (const r of groupRows(items)) {
     let deb = null, cre = null, date = null
     const lab = []
@@ -119,12 +121,20 @@ function parseBmciExtrait(items) {
       if (DR.test(it.str) && it.x < 90) { if (date == null) date = it.str; continue }
       if (it.x >= 90 && it.x < 290) lab.push({ x: it.x, s: it.str })
     }
-    if (deb == null && cre == null) continue
     const label = lab.sort((a, b) => a.x - b.x).map(p => p.s).join(' ')
+    if (deb == null && cre == null) { if (label) refRows.push({ page: r.page, y: r.y, s: label }); continue }
     const mm = (date || '').match(/(\d{2})\/(\d{2})\/(\d{4})/)
-    out.push({ dateIso: mm ? isoDate(mm[1], mm[2], mm[3]) : null, label, debit: deb, credit: cre, type: classify(label) })
+    ops.push({ page: r.page, y: r.y, dateIso: mm ? isoDate(mm[1], mm[2], mm[3]) : null, label, debit: deb, credit: cre, type: classify(label) })
   }
-  return out
+  // Référence unique = les codes imprimés JUSTE SOUS chaque opération (jusqu'à l'opération suivante).
+  // Sert à distinguer 2 virements identiques (même nom/montant/date) et reste identique d'un relevé à l'autre.
+  ops.sort((a, b) => a.page - b.page || b.y - a.y)
+  for (let i = 0; i < ops.length; i++) {
+    const o = ops[i], next = ops[i + 1]
+    const yBot = next && next.page === o.page ? next.y : -Infinity
+    o.ref = refRows.filter(f => f.page === o.page && f.y < o.y && f.y > yBot).map(f => f.s).join(' ')
+  }
+  return ops.map(({ page, y, ...t }) => t)
 }
 
 // Attijariwafa : code | libellé | réf | date valeur | montant (crédit si x>500).
@@ -149,7 +159,10 @@ function parseAwb(items) {
 }
 
 // Attijariwafa « Mouvement du compte / Relevé des opérations » : colonnes Débit/Crédit
-// séparées ; le libellé est décalé du montant (on rattache au montant le plus proche en Y).
+// séparées. Le libellé est sur une ligne légèrement décalée du montant. Comme ce relevé
+// est en 1 pour 1 (1 ligne = 1 libellé + 1 montant, jamais de vide), on apparie les
+// libellés et les montants DANS L'ORDRE (haut → bas) plutôt qu'« au plus proche en Y »
+// (qui décalait d'une ligne et laissait un libellé vide).
 function parseAwbMvt(items) {
   let headerY = Infinity
   for (const it of items) { if (/^Crédit$/i.test(it.str)) { headerY = it.y; break } }
@@ -161,21 +174,48 @@ function parseAwbMvt(items) {
       if (m != null && it.x > 340) { const v = Math.abs(m); if (v < 0.005) continue; if (it.x < 405) deb = v; else cre = v; continue }
       if (DR.test(it.str) && it.x < 60 && dop == null) dop = it.str
     }
-    if (deb != null || cre != null) ars.push({ page: r.page, y: r.y, dop, deb, cre, frags: [] })
+    if (deb != null || cre != null) ars.push({ page: r.page, y: r.y, dop, deb, cre, label: '' })
   }
-  const bp = {}
-  for (const ar of ars) (bp[ar.page] || (bp[ar.page] = [])).push(ar)
+
+  // Fragments de la colonne « libellé », groupés par page.
+  const labFrags = {}
   for (const it of items) {
     if (it.y >= headerY || it.x < 100 || it.x >= 295 || DR.test(it.str) || parseAmount(it.str) != null) continue
-    const c = bp[it.page]; if (!c) continue
-    let b = c[0], bd = Math.abs(it.y - b.y)
-    for (const ar of c) { const d = Math.abs(it.y - ar.y); if (d < bd) { bd = d; b = ar } }
-    b.frags.push({ y: it.y, x: it.x, s: it.str })
+    ;(labFrags[it.page] || (labFrags[it.page] = [])).push({ y: it.y, x: it.x, s: it.str })
   }
+  // Regroupe les fragments d'une même ligne (même Y), triés haut → bas.
+  function labelLines(frags) {
+    const sorted = (frags || []).slice().sort((a, b) => b.y - a.y || a.x - b.x)
+    const lines = []
+    for (const f of sorted) {
+      const last = lines[lines.length - 1]
+      if (last && Math.abs(last.y - f.y) < 4) last.parts.push(f)
+      else lines.push({ y: f.y, parts: [f] })
+    }
+    return lines.map(l => ({ y: l.y, s: l.parts.sort((a, b) => a.x - b.x).map(p => p.s).join(' ').replace(/\s+/g, ' ').trim() }))
+  }
+
+  const byPage = {}
+  for (const ar of ars) (byPage[ar.page] || (byPage[ar.page] = [])).push(ar)
+  for (const page in byPage) {
+    const amounts = byPage[page].sort((a, b) => b.y - a.y)   // haut → bas
+    const labels = labelLines(labFrags[page])                // déjà haut → bas
+    if (labels.length === amounts.length) {
+      // 1 pour 1 dans l'ordre (jamais de libellé vide) — corrige le décalage.
+      amounts.forEach((ar, i) => { ar.label = labels[i].s })
+    } else {
+      // Repli (nombre différent, ex. libellé sur 2 lignes) : plus proche en Y.
+      for (const lab of labels) {
+        let b = amounts[0], bd = Math.abs(lab.y - b.y)
+        for (const ar of amounts) { const d = Math.abs(lab.y - ar.y); if (d < bd) { bd = d; b = ar } }
+        b.label = (b.label ? b.label + ' ' : '') + lab.s
+      }
+    }
+  }
+
   return ars.map(ar => {
-    const label = ar.frags.sort((p, q) => q.y - p.y || p.x - q.x).map(f => f.s).join(' ').replace(/\s+/g, ' ').trim()
     const mm = (ar.dop || '').match(/(\d{2})\/(\d{2})\/(\d{4})/)
-    return { dateIso: mm ? isoDate(mm[1], mm[2], mm[3]) : null, label, debit: ar.deb, credit: ar.cre, type: classify(label) }
+    return { dateIso: mm ? isoDate(mm[1], mm[2], mm[3]) : null, label: ar.label, debit: ar.deb, credit: ar.cre, type: classify(ar.label) }
   })
 }
 
@@ -196,6 +236,9 @@ export async function parseStatement(file) {
   else if (format === 'awb') transactions = parseAwb(items)
   else if (format === 'awb_mvt') transactions = parseAwbMvt(items)
   else throw new Error("Banque non reconnue (ni BMCI ni Attijariwafa). Vérifie que c'est bien un relevé/extrait PDF.")
+  // Exclure les lignes TPE « Lanacash » : ce sont des encaissements carte/TPE,
+  // pas des enveloppes (espèces/chèque/virement) → on ne les rapproche pas.
+  transactions = transactions.filter(t => !/lanacash/i.test(t.label || ''))
   return { format, bankLabel: BANK_LABEL[format] || format, transactions }
 }
 
@@ -227,7 +270,8 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
   const seenC = new Set()
   const credits = []
   for (const c of rawCredits) {
-    const ref = (c.label || '').match(/\d{5,}/)
+    // Référence = 1er long numéro du libellé, sinon des codes lus sous l'opération (BMCI extrait), sinon le libellé.
+    const ref = ((c.label || '') + ' ' + (c.ref || '')).match(/\d{5,}/)
     const key = `${Math.round(c.credit * 100)}|${ref ? ref[0] : (c.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24)}`
     if (seenC.has(key)) continue
     seenC.add(key); credits.push(c)
@@ -275,13 +319,15 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
     c.sort((a, b) => Math.abs(signedDays(a.dateIso, env.session_date)) - Math.abs(signedDays(b.dateIso, env.session_date)))
     // Virement : priorité au NOM du client. Si aucune ligne ne porte le nom, repli sur un
-    // virement INSTANTANÉ (INST) de la MÊME DATE exacte (l'instantané arrive le jour même → fiable).
+    // virement INSTANTANÉ (INST) du jour de la commande (J) ou de la veille (J-1) : l'instantané
+    // est daté du jour réel sur le relevé, et la commande est saisie le jour même ou le lendemain.
     if (method === 'virement') {
       const toks = nameTokens(env.virement_client)
       if (toks.length) {
         const named = c.filter(x => { const L = norm(x.label); return toks.some(t => L.includes(t)) })
         if (named.length >= 1) return named
-        return c.filter(x => /INST/i.test(x.label) && x.dateIso === env.session_date)
+        return c.filter(x => /INST/i.test(x.label) &&
+          signedDays(x.dateIso, env.session_date) >= -1 && signedDays(x.dateIso, env.session_date) <= 0)
       }
     }
     return c
@@ -304,6 +350,51 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     if (decided.has(env.id)) continue
     const c = avail(env)
     decided.set(env.id, c.length === 0 ? { status: 'absent', line: null, candidates: [] } : { status: 'a_confirmer', line: null, candidates: c })
+  }
+  // 2bis) 2 virements = 1 ligne : 2 enveloppes virement absentes du MÊME client dont la
+  //    SOMME = une ligne virement dispo (nom du client dans le libellé). On propose les
+  //    deux « à confirmer » sur cette ligne (jamais vert auto → l'utilisateur valide).
+  const absentVir = pending.filter(e => (e.payment_method || 'cash') === 'virement' && decided.get(e.id)?.status === 'absent')
+  for (let i = 0; i < absentVir.length; i++) {
+    const a = absentVir[i]
+    if (decided.get(a.id)?.status !== 'absent') continue
+    const ta = nameTokens(a.virement_client)
+    if (!ta.length) continue
+    for (let j = i + 1; j < absentVir.length; j++) {
+      const b = absentVir[j]
+      if (decided.get(b.id)?.status !== 'absent') continue
+      const tb = nameTokens(b.virement_client)
+      if (!tb.length || !ta.some(t => tb.includes(t))) continue   // même client
+      const sum = Number(a.amount_cash) + Number(b.amount_cash)
+      const w = windowFor('virement')
+      const inWin = c => (signedDays(c.dateIso, a.session_date) >= w.min && signedDays(c.dateIso, a.session_date) <= w.max)
+        || (signedDays(c.dateIso, b.session_date) >= w.min && signedDays(c.dateIso, b.session_date) <= w.max)
+      const line = credits.find(x => !used.has(x) && (x.type === 'virement_recu' || x.type === 'autre')
+        && Math.abs(x.credit - sum) < 0.005 && inWin(x) && ta.some(t => norm(x.label).includes(t)))
+      if (line) {
+        used.add(line)
+        decided.set(a.id, { status: 'a_confirmer', line: null, candidates: [line], combined: true })
+        decided.set(b.id, { status: 'a_confirmer', line: null, candidates: [line], combined: true })
+        break
+      }
+    }
+  }
+
+  // 3) Filet anti-erreur de typage : une enveloppe restée 'absent' est aussi cherchée dans l'AUTRE
+  //    moyen (virement ↔ espèces), même montant + fenêtre du moyen visé. Toujours 'à confirmer'
+  //    (jamais vert auto) car les versements espèces n'ont pas de nom à vérifier.
+  const OTHER = { virement: 'cash', cash: 'virement' }
+  for (const env of pending) {
+    const d = decided.get(env.id)
+    if (!d || d.status !== 'absent') continue
+    const other = OTHER[env.payment_method || 'cash']
+    if (!other) continue
+    const amt = Number(env.amount_cash)
+    const w = windowFor(other)
+    const c = candidatesFor(other, credits).filter(x =>
+      !used.has(x) && Math.abs(x.credit - amt) < 0.005 &&
+      signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
+    if (c.length) decided.set(env.id, { status: 'a_confirmer', line: null, candidates: c, crossMethod: true })
   }
   const results = pending.map(env => ({ env, ...decided.get(env.id) }))
   // Lignes du relevé NON attribuées (argent reçu sans enveloppe correspondante)
