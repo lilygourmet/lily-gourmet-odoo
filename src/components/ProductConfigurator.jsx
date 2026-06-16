@@ -5,11 +5,10 @@
 
 import { toast } from '../lib/toast'
 
-// Catégories où le prix est modifiable + où on ajoute photo / Attention
+// Catégories où le prix est modifiable
 export const PRICE_EDITABLE = new Set(['cd', 'divers'])
-export const PHOTO_WARN = new Set(['cd', 'gm'])
 
-export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, withPhotoWarn, priceEditable, addLabel = 'Ajouter au panier' }) {
+export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable, addLabel = 'Ajouter au panier' }) {
   const { item, loading, attributes, variants, sel, text, warn, photo } = cfg
   const optionAttrs = attributes.filter(a => a.type === 'option')
   const textAttrs = attributes.filter(a => a.type === 'text')
@@ -169,14 +168,12 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, withPhotoWarn
                 )}
               </div>
 
-              {withPhotoWarn && (
-                <div className="mb-3">
-                  <div className="text-[12px] font-bold text-[#B36B00] mb-1">⚠️ Attention / instruction spéciale (optionnel)</div>
-                  <input value={warn} onChange={e => onChange(c => ({ ...c, warn: e.target.value }))}
-                    placeholder="ex : le décor doit être en bleu · sans fruits à coque"
-                    className="w-full px-3 py-2 border border-[#E08A00] bg-[#FFF8EC] rounded-lg text-[13px]" />
-                </div>
-              )}
+              <div className="mb-3">
+                <div className="text-[12px] font-bold text-[#B36B00] mb-1">⚠️ Attention / instruction spéciale (optionnel)</div>
+                <input value={warn} onChange={e => onChange(c => ({ ...c, warn: e.target.value }))}
+                  placeholder="ex : le décor doit être en bleu · sans fruits à coque"
+                  className="w-full px-3 py-2 border border-[#E08A00] bg-[#FFF8EC] rounded-lg text-[13px]" />
+              </div>
 
               <div className="flex justify-between items-center my-3">
                 <span className="text-ink-mute text-[13px]">Prix{priceEditable ? ' (modifiable ici)' : ''}</span>

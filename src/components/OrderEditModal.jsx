@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { loadOrderLines, addOrderLine, updateOrderLine, deleteOrderLine, addOrderWarning, removeOrderWarning, updateOrderDate, loadOrderCatalog, loadOrderProduct, loadWarehouses, setOrderWarehouse } from '../lib/commande'
 import { recordDevisTraitement } from '../lib/conversations'
 import { createModification } from '../lib/modifications'
-import { ConfiguratorModal, PRICE_EDITABLE, PHOTO_WARN } from './ProductConfigurator'
+import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
@@ -454,7 +454,6 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
           onChange={setCfg}
           onClose={() => setCfg(null)}
           onAdd={(line) => { addToOrder(line); setCfg(null) }}
-          withPhotoWarn={PHOTO_WARN.has(activeCat)}
           priceEditable={PRICE_EDITABLE.has(activeCat)}
           addLabel="Ajouter à la commande"
         />

@@ -8,7 +8,7 @@ import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
 import Skeleton from './Skeleton'
 
-import { ConfiguratorModal, PRICE_EDITABLE, PHOTO_WARN } from './ProductConfigurator'
+import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
 
 // Lit un fichier image en base64 (sans le préfixe data:) pour l'envoyer à Odoo.
@@ -476,7 +476,6 @@ export default function NewOrderView({ user, initialClient = null }) {
           onChange={setCfg}
           onClose={() => setCfg(null)}
           onAdd={(line) => { addLine(line); setCfg(null) }}
-          withPhotoWarn={PHOTO_WARN.has(activeCat)}
           priceEditable={PRICE_EDITABLE.has(activeCat)}
         />
       )}
