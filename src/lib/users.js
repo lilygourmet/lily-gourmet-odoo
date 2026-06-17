@@ -17,6 +17,12 @@ export async function loadUsers() {
 // Alias compat
 export const loadAllProfiles = loadUsers
 
+// Active/désactive la réception de la notif devis OCP pour un utilisateur (toggle direct).
+export async function setUserOcpNotif(userId, on) {
+  const { error } = await supabase.from('profiles').update({ perm_notif_ocp: on }).eq('id', userId)
+  if (error) throw error
+}
+
 // ============================================================
 // Creation
 // ============================================================

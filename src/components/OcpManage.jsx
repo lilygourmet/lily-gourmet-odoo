@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { loadOrderCatalog, loadOrderProduct, searchOrderProducts } from '../lib/commande'
 import { loadOcpOverrides, addOcpOverride, removeOcpOverride, setOcpPhoto, removeOcpPhoto } from '../lib/ocp'
+import { loadUsers, setUserOcpNotif } from '../lib/users'
 import { toast } from '../lib/toast'
 
 // Gestion VISUELLE du lien OCP : même présentation que le lien (catégories + tuiles),
@@ -19,9 +20,18 @@ export default function OcpManage() {
   const [addOpen, setAddOpen] = useState(false)
   const [varItem, setVarItem] = useState(null)
   const [photoItem, setPhotoItem] = useState(null)
+  const [users, setUsers] = useState([])
 
   const reloadOv = () => loadOcpOverrides().then(setOv).catch(() => {})
-  useEffect(() => { loadOrderCatalog().then(setCatalog).catch(() => {}); reloadOv() }, [])
+  useEffect(() => { loadOrderCatalog().then(setCatalog).catch(() => {}); reloadOv(); loadUsers().then(setUsers).catch(() => {}) }, [])
+
+  // Choisir directement qui reçoit la notif devis OCP (toggle par personne).
+  async function toggleOcpNotif(u) {
+    if (u.role === 'admin') return   // les admins reçoivent toujours
+    const next = !u.perm_notif_ocp
+    setUsers(us => us.map(x => x.id === u.id ? { ...x, perm_notif_ocp: next } : x))
+    try { await setUserOcpNotif(u.id, next) } catch (e) { toast.error(e?.message || 'Échec'); setUsers(us => us.map(x => x.id === u.id ? { ...x, perm_notif_ocp: !next } : x)) }
+  }
 
   if (!catalog) return <div className="p-6 text-center text-ink-soft">Chargement du catalogue…</div>
 
@@ -68,6 +78,23 @@ export default function OcpManage() {
     <div style={{ maxWidth: 560, margin: '0 auto', padding: 12 }}>
       <h1 className="font-fraunces text-2xl text-bordeaux mb-1">🍽️ Lien OCP — articles</h1>
       <p className="text-[12px] text-ink-soft mb-3">Tape <b style={{ color: '#b42424' }}>✕</b> pour enlever un article du lien, <b style={{ color: '#1e7e4f' }}>➕</b> pour le remettre. « Ajouter » en bas. <a href="/?client=ocp" target="_blank" className="text-bordeaux underline">Ouvrir le lien</a></p>
+
+      {/* Qui reçoit la notif WhatsApp à chaque nouveau devis OCP */}
+      <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: B, marginBottom: 8 }}>📩 Notif devis OCP — qui reçoit ?</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+          {users.filter(u => u.active !== false && (u.full_name || u.username)).map(u => {
+            const on = u.role === 'admin' || u.perm_notif_ocp
+            return (
+              <button key={u.id} onClick={() => toggleOcpNotif(u)} disabled={u.role === 'admin'}
+                style={{ padding: '6px 11px', borderRadius: 20, border: `1.5px solid ${on ? B : LINE}`, background: on ? '#fbeef2' : '#fff', color: on ? B : SOFT, fontSize: 12.5, fontWeight: 700, cursor: u.role === 'admin' ? 'default' : 'pointer' }}>
+                {on ? '✓ ' : ''}{u.full_name || u.username}{u.role === 'admin' ? ' (admin)' : ''}
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ fontSize: 11, color: SOFT, marginTop: 8 }}>Les admins reçoivent toujours. Clique un nom pour l'ajouter / l'enlever.</div>
+      </div>
 
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 12, paddingBottom: 4 }}>
         {cats.map(cc => <button key={cc.key} onClick={() => setActive(cc.key)} style={{ flexShrink: 0, padding: '8px 13px', border: 'none', borderRadius: 30, fontSize: 13, fontWeight: 700, background: cc.key === active ? B : '#e7dcc8', color: cc.key === active ? '#fff' : SOFT }}>{cc.label}</button>)}
