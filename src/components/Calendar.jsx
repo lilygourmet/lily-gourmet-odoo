@@ -89,6 +89,26 @@ function itemHasWarning(item) {
   return Array.isArray(item.warnings) && item.warnings.length > 0
 }
 
+// Texte(s) des avertissements (depuis Odoo) d'une liste d'articles.
+function warningTexts(items) {
+  return (items || [])
+    .flatMap(i => Array.isArray(i.warnings) ? i.warnings.map(w => typeof w === 'string' ? w : (w?.text || '')) : [])
+    .map(t => String(t).trim()).filter(Boolean)
+}
+
+// Bloc affichant le texte des avertissements sur une carte du calendrier.
+function WarningTexts({ items }) {
+  const texts = warningTexts(items)
+  if (!texts.length) return null
+  return (
+    <div className="mt-1.5 space-y-0.5">
+      {texts.map((t, i) => (
+        <div key={i} className="text-[10px] leading-snug text-bordeaux bg-bordeaux/5 border border-bordeaux/30 rounded px-1.5 py-1">⚠️ {t}</div>
+      ))}
+    </div>
+  )
+}
+
 function isCancelled(order) {
   return order.odoo_state === 'cancel'
 }
@@ -1195,6 +1215,7 @@ function AllCapsule({ order, stepsMap }) {
             )}
           </div>
         </div>
+        <WarningTexts items={order.order_items} />
       </div>
 
       {/* === Desktop (md+) — original === */}
@@ -1258,6 +1279,8 @@ function AllCapsule({ order, stepsMap }) {
             )}
           </div>
         )}
+
+        <WarningTexts items={order.order_items} />
 
         <div className="flex items-center justify-between mt-1.5">
           <div>{!cancelled && needsPolys && <PolyBadge />}</div>
@@ -1334,6 +1357,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
             )}
           </div>
         </div>
+        <WarningTexts items={[item]} />
       </div>
 
       {/* === Desktop (md+) : layout compact original === */}
@@ -1375,6 +1399,8 @@ function CDItemCapsule({ order, item, stepsMap }) {
             )}
           </div>
         </div>
+
+        <WarningTexts items={[item]} />
 
         <div className="flex items-center justify-between mt-1.5">
           <div>{!cancelled && needsPolys && <PolyBadge />}</div>

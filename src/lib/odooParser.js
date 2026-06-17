@@ -186,14 +186,22 @@ function parseItems(odooLines) {
       continue
     }
 
-    // CAS 3 : Ligne "warning" potentielle (suit un CD- ou GM-)
-    if (lastItemRef && isPotentialWarningLine(productName)) {
+    // Un VRAI produit (prix > 0 ou product_id) sans préfixe connu n'est NI un gâteau NI un
+    // avertissement — ex. « Plateau Bagels » (salé). Un vrai avertissement est une note libre (prix 0).
+    const isRealProduct = (parseFloat(line.price_unit) || parseFloat(line.price_total) || 0) > 0
+      || (Array.isArray(line.product_id) ? !!line.product_id[0] : !!line.product_id)
+
+    // CAS 3 : Ligne "warning" potentielle (suit un CD- ou GM-) — seulement si ce n'est PAS un vrai produit
+    if (lastItemRef && isPotentialWarningLine(productName) && !isRealProduct) {
       const warningText = productName.replace(/\s+/g, ' ').trim()
       if (warningText.length > 2) {
         lastItemRef.warnings.push(warningText)
       }
       continue
     }
+    // Vrai produit non géré ci-dessus (ex. plateau salé sans préfixe) → coupe le rattachement warning
+    // (il est affiché ailleurs, via les lignes de vente), et n'est jamais collé au gâteau.
+    if (isRealProduct) { lastItemRef = null; continue }
 
     // CAS 4 : Tout le reste (SA-, Acompte, etc.) -> coupe le rattachement warning
     if (KNOWN_PREFIXES.test(productName) || /^Down\s+Payment/i.test(productName)) {

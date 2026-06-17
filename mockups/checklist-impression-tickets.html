@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Impression tickets depuis Checklist</title>
+<style>
+  :root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;
+    --bordeaux:#993556;--bordeaux-deep:#7a2942;--line:#e8dcc9;--green:#6f9171;--amber:#B36B00;}
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9e2d6;color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px}
+  .phone{max-width:430px;margin:0 auto;background:var(--cream);min-height:100vh;position:relative;overflow:hidden}
+  .serif{font-family:Georgia,serif;font-style:italic}
+  header{background:var(--bordeaux);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:16px;font-weight:600}
+  .tabs{display:flex;gap:8px;padding:10px 14px 4px}
+  .tab{flex:1;text-align:center;padding:9px;border-radius:24px;font-size:13px;font-weight:700;border:none;cursor:pointer}
+  .tab.on{background:var(--bordeaux);color:#fff}
+  .tab.off{background:#e7dcc8;color:var(--ink-soft)}
+  .hint{font-size:11.5px;color:var(--ink-mute);padding:4px 16px 10px}
+  .list{padding:6px 14px 90px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px;
+        display:flex;align-items:center;gap:12px;cursor:pointer;box-shadow:0 2px 8px rgba(122,42,68,.05)}
+  .card:active{transform:scale(.99)}
+  .thumb{width:46px;height:46px;border-radius:12px;background:#f3e7d6;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+  .card .nm{font-weight:700;font-size:14.5px;line-height:1.2}
+  .card .sub{font-size:11.5px;color:var(--ink-mute);margin-top:3px}
+  .badge{margin-left:auto;flex-shrink:0;font-size:11px;font-weight:700;color:var(--green);background:#eaf3ec;border:1px solid #cfe2d3;border-radius:20px;padding:4px 9px}
+  .done{opacity:.5}
+  .done .badge{color:var(--ink-mute);background:#efe9df;border-color:var(--line)}
+  /* overlay / modals */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:30}
+  .overlay.show{display:flex}
+  .sheet{background:#fff;width:100%;max-width:430px;border-radius:20px 20px 0 0;padding:20px 18px 26px;animation:up .18s ease}
+  @keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+  .sheet h3{margin:0 0 4px;font-size:18px}
+  .sheet p{margin:0 0 16px;color:var(--ink-soft);font-size:13.5px}
+  .art{display:flex;align-items:center;gap:10px;background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:16px}
+  .art .thumb{width:38px;height:38px;font-size:20px}
+  .btnrow{display:flex;gap:10px}
+  .btn{flex:1;padding:14px;border-radius:14px;font-size:15px;font-weight:700;border:none;cursor:pointer}
+  .btn-primary{background:var(--bordeaux);color:#fff}
+  .btn-primary:hover{background:var(--bordeaux-deep)}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink-soft)}
+  .btn-amber{background:#FFF4E2;border:1px solid #E5B978;color:var(--amber)}
+  .stepper{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 20px}
+  .stepper button{width:54px;height:54px;border-radius:50%;border:2px solid var(--bordeaux);background:#fff;color:var(--bordeaux);font-size:28px;font-weight:800;cursor:pointer;line-height:1}
+  .stepper .val{font-size:40px;font-weight:800;min-width:70px;text-align:center}
+  .stepper .unit{font-size:13px;color:var(--ink-mute);display:block;font-weight:600}
+  .photo-warn{background:#FDECEC;border:1px solid #E5BFB6;color:#99201E;border-radius:12px;padding:11px 13px;font-size:13px;margin-bottom:14px;display:none}
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1f7a4d;color:#fff;padding:12px 18px;border-radius:30px;font-size:14px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);display:none;z-index:50}
+  .toast.show{display:block;animation:up .2s ease}
+  .note{font-size:11px;color:var(--ink-mute);text-align:center;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <header><h1>✅ Checklist — À ranger</h1></header>
+  <div class="tabs">
+    <button class="tab off">Vitrine</button>
+    <button class="tab off">Prod</button>
+    <button class="tab on" id="tCmd">Commandes</button>
+  </div>
+  <div class="hint">Touche un gâteau pour imprimer ses tickets de boîte. (la prod a coché « fini »)<br>
+    <b>Une fois le ticket imprimé, le gâteau quitte « À ranger » et passe dans « Rangé ».</b></div>
+
+  <div class="list" id="list">
+    <!-- les cartes sont générées en JS -->
+  </div>
+
+  <div class="hint" id="rangeBox" style="display:none">
+    ✅ <b>Rangé</b> (<span id="rangeN">0</span>) — <span id="rangeList"></span>
+  </div>
+</div>
+
+<!-- ÉTAPE 1 : photo ? -->
+<div class="overlay" id="ov1">
+  <div class="sheet">
+    <h3 class="serif">📷 Photo prise ?</h3>
+    <p>As-tu pris une photo de ce gâteau avant de l'emballer ?</p>
+    <div class="art"><div class="thumb">🎂</div><div><div class="nm" id="a1nm">—</div><div class="sub" id="a1sub">—</div></div></div>
+    <div class="btnrow">
+      <button class="btn btn-amber" onclick="pasDePhoto()">Pas encore</button>
+      <button class="btn btn-primary" onclick="goStep2()">Oui, photo prise →</button>
+    </div>
+    <div class="note">« Pas encore » ➜ prends d'abord la photo, puis reviens.</div>
+  </div>
+</div>
+
+<!-- ÉTAPE 2 : nb de boîtes -->
+<div class="overlay" id="ov2">
+  <div class="sheet">
+    <h3 class="serif">🖨️ Imprimer les tickets</h3>
+    <p>Combien de boîtes pour ce gâteau ? (1 ticket par boîte, numérotés 1/N, 2/N…)</p>
+    <div class="art"><div class="thumb">🎂</div><div><div class="nm" id="a2nm">—</div><div class="sub" id="a2sub">—</div></div></div>
+    <div class="stepper">
+      <button onclick="bump(-1)">−</button>
+      <div class="val"><span id="nb">1</span><span class="unit">boîte(s)</span></div>
+      <button onclick="bump(1)">+</button>
+    </div>
+    <div class="btnrow">
+      <button class="btn btn-ghost" onclick="close2()">Annuler</button>
+      <button class="btn btn-primary" onclick="imprimer()">🖨️ Imprimer <span id="nbBtn">1</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">✓ Tickets imprimés</div>
+
+<script>
+  const items = [
+    { id:1, nm:'CD- Cake Design 2 étages', sub:'S49680 · Yousra · 16h · 15 pers' },
+    { id:2, nm:'CD- Number Cake "3"', sub:'S49714 · Laury · 13h · 10 pers' },
+    { id:3, nm:'CD- Cakedesign 40 cm', sub:'S49426 · Mouna · 07h · Oréo' },
+  ];
+  let done = {};
+  let cur = null, nb = 1;
+
+  function render(){
+    // Les gâteaux dont le ticket est imprimé QUITTENT la colonne « À ranger ».
+    const todo = items.filter(it=>!done[it.id]);
+    document.getElementById('list').innerHTML = todo.length ? todo.map(it=>`
+      <div class="card" onclick="openItem(${it.id})">
+        <div class="thumb">🎂</div>
+        <div><div class="nm">${it.nm}</div><div class="sub">${it.sub}</div></div>
+        <div class="badge">à imprimer</div>
+      </div>`).join('') : '<div class="hint" style="text-align:center;padding:24px">Tout est rangé 🎉</div>';
+    const doneItems = items.filter(it=>done[it.id]);
+    document.getElementById('rangeBox').style.display = doneItems.length?'block':'none';
+    document.getElementById('rangeN').textContent = doneItems.length;
+    document.getElementById('rangeList').textContent = doneItems.map(it=>it.nm.replace('CD- ','')+' ('+done[it.id]+' bte)').join(' · ');
+  }
+  function openItem(id){ cur = items.find(x=>x.id===id);
+    document.getElementById('a1nm').textContent = cur.nm;
+    document.getElementById('a1sub').textContent = cur.sub;
+    document.getElementById('ov1').classList.add('show');
+  }
+  function pasDePhoto(){
+    document.getElementById('ov1').classList.remove('show');
+    toast('📸 Prends d\'abord la photo, puis reviens', '#B36B00');
+  }
+  function goStep2(){
+    document.getElementById('ov1').classList.remove('show');
+    nb = 1; setNb();
+    document.getElementById('a2nm').textContent = cur.nm;
+    document.getElementById('a2sub').textContent = cur.sub;
+    document.getElementById('ov2').classList.add('show');
+  }
+  function bump(d){ nb = Math.max(1, nb + d); setNb(); }
+  function setNb(){ document.getElementById('nb').textContent = nb; document.getElementById('nbBtn').textContent = nb; }
+  function close2(){ document.getElementById('ov2').classList.remove('show'); }
+  function imprimer(){
+    done[cur.id] = nb;
+    document.getElementById('ov2').classList.remove('show');
+    toast('✓ '+nb+' ticket(s) envoyé(s) à l\'imprimante', '#1f7a4d');
+    render();
+  }
+  function toast(msg,color){ const t=document.getElementById('toast'); t.textContent=msg; t.style.background=color; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+  render();
+</script>
+</body>
+</html>

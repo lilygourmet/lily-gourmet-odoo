@@ -32,6 +32,8 @@ import { RefreshCw } from 'lucide-react'
 
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
 const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-']
+// Salé (colonne dédiée) : salés stricts SA-/SAK- + surgelés SU-.
+const SALE_PREFIXES = ['SA-', 'SAK-', 'SU-']
 const ACCESSOIRES_PREFIXES = ['GM-', 'GMD-']  // (commentaire historique, non utilise ici)
 // Clients a exclure de la checklist (commandes internes, type vitrine boutique)
 const EXCLUDED_CLIENTS = ['Vitrine']
@@ -191,6 +193,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // Section PROD (sales_lines E-/V-/GS-/MI- via prod_done)
   const [prodLines, setProdLines] = useState([])
 
+  // Section SALÉ (sales_lines SA-/SAK-/SU- via prod_done) — colonne dédiée
+  const [saleLines, setSaleLines] = useState([])
+
   // Section COMMANDES (order_items CD/GM/GMD via item_steps)
   const [commandeItems, setCommandeItems] = useState([])
   // Flux d'impression des tickets depuis Commandes : photo ? → nb de boîtes → imprimer → ranger.
@@ -202,6 +207,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // Onglet RANGE : items deja ranges (separes par source pour 3 colonnes)
   const [doneVitrine, setDoneVitrine] = useState([])
   const [doneProd, setDoneProd] = useState([])
+  const [doneSale, setDoneSale] = useState([])
   const [doneCommandes, setDoneCommandes] = useState([])
 
   // Recherche partout (filtre les 3 colonnes)
@@ -320,13 +326,13 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       // 3b) PROD a ranger
       const doneSet = new Set(dones.filter(d => d.status === 'done').map(d => d.odoo_line_id))
       const receivedMap = new Map(receiveds.map(r => [r.odoo_line_id, r]))
-      const todoLines = allLines.filter(l =>
+      const eligibleLines = allLines.filter(l =>
         doneSet.has(l.odoo_line_id) &&
         !receivedMap.has(l.odoo_line_id) &&
-        startsWithAny(l.product_name, PROD_PREFIXES) &&
         !isExcludedClient(l.client_name)
       )
-      setProdLines(todoLines)
+      setProdLines(eligibleLines.filter(l => startsWithAny(l.product_name, PROD_PREFIXES)))
+      setSaleLines(eligibleLines.filter(l => startsWithAny(l.product_name, SALE_PREFIXES)))
 
       // 3c) COMMANDES a ranger
       const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap))
@@ -344,8 +350,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       }))
       setDoneVitrine(vitDoneItems)
 
-      // 3e) PROD rangee
+      // 3e) PROD + SALÉ rangee
       const doneProdItems = []
+      const doneSaleItems = []
       if (allReceivedIds.length > 0) {
         const linesDone = linesDoneResult?.data || []
         const linesDoneMap = new Map(linesDone.map(l => [l.odoo_line_id, l]))
@@ -354,22 +361,26 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         for (const r of allReceived) {
           const line = linesDoneMap.get(r.odoo_line_id)
           if (!line) continue
-          if (!startsWithAny(line.product_name, PROD_PREFIXES)) continue
+          const isSale = startsWithAny(line.product_name, SALE_PREFIXES)
+          const isProd = startsWithAny(line.product_name, PROD_PREFIXES)
+          if (!isSale && !isProd) continue
           if (isExcludedClient(line.client_name)) continue
           const day = lineDay(line)
           if (!day || day < todayStr) continue
-          doneProdItems.push({
-            kind: 'prod',
-            key: `prod-${r.odoo_line_id}`,
+          const entry = {
+            kind: isSale ? 'sale' : 'prod',
+            key: `${isSale ? 'sale' : 'prod'}-${r.odoo_line_id}`,
             title: cleanProductName(line.product_name),
             subtitle: buildSalesLineSubtitle(line),
             quantity: line.quantity,
             received_at: recvByLine.get(r.odoo_line_id),
             odoo_line_id: r.odoo_line_id,
-          })
+          }
+          ;(isSale ? doneSaleItems : doneProdItems).push(entry)
         }
       }
       setDoneProd(doneProdItems)
+      setDoneSale(doneSaleItems)
 
       // 4c) Commandes rangees : items dont 'range' est coche, commande aujourd'hui ou futur
       const doneCommandeItems = []
@@ -452,6 +463,32 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     }
   }
 
+  // Salé : impression DIRECTE du ticket (pas d'étape photo), puis rangement.
+  const [saleBusy, setSaleBusy] = useState(null)   // odoo_line_id en cours
+  async function handleSaleDone(line) {
+    setSaleBusy(line.odoo_line_id)
+    try {
+      const res = await printArticleBatch([{
+        deliveryAt: line.delivery_at,
+        orderNum: line.order_num,
+        clientName: line.client_name,
+        productName: cleanProductName(line.product_name),
+        quantity: line.quantity,
+        boxCount: 1,
+      }])
+      if (!res || res.ok < 1) { toast.error('Impression échouée — vérifie l\'imprimante et réessaie.'); return }
+      toast.success('Ticket imprimé')
+      await markCafeReceived(line.odoo_line_id, user.id)
+      setSaleLines(prev => prev.filter(l => l.odoo_line_id !== line.odoo_line_id))
+      refresh(true)
+    } catch (e) {
+      console.error('[handleSaleDone]', e)
+      toast.error('Erreur : ' + (e.message || e))
+    } finally {
+      setSaleBusy(null)
+    }
+  }
+
   // Clic sur une commande : CD → flux « photo ? » + impression tickets ; GM/GMD → rangement direct.
   function handleCommandeDone(item) {
     if (item.type === 'CD') { setPrintFlow(item); setPrintStep('photo'); setBoxCount(1) }
@@ -505,6 +542,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       if (doneItem.kind === 'prod') {
         await unmarkCafeReceived(doneItem.odoo_line_id)
         setDoneProd(prev => prev.filter(d => d.key !== doneItem.key))
+      } else if (doneItem.kind === 'sale') {
+        await unmarkCafeReceived(doneItem.odoo_line_id)
+        setDoneSale(prev => prev.filter(d => d.key !== doneItem.key))
       } else if (doneItem.kind === 'commande') {
         const ok = await uncheckItemStep(doneItem.item_id, 'range')
         if (!ok) throw new Error("La requete a echoue")
@@ -534,8 +574,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // ============================================================
   // Compteurs
   // ============================================================
-  const totalTodo = vitrineItems.length + prodLines.length + commandeItems.length
-  const totalDone = doneVitrine.length + doneProd.length + doneCommandes.length
+  const totalTodo = vitrineItems.length + prodLines.length + saleLines.length + commandeItems.length
+  const totalDone = doneVitrine.length + doneProd.length + doneSale.length + doneCommandes.length
   const allDone = totalTodo === 0
 
   // ============================================================
@@ -554,6 +594,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   const filteredProdLines = prodLines.filter(l =>
     matchesSearch([l.product_name, l.client_name, l.order_num])
   )
+  const filteredSaleLines = saleLines.filter(l =>
+    matchesSearch([l.product_name, l.client_name, l.order_num])
+  )
   const filteredCommandeItems = commandeItems.filter(i =>
     matchesSearch([i.title, i.client_name, i.order_num])
   )
@@ -561,6 +604,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // Filtre les listes "Range"
   const filteredDoneVitrine = doneVitrine.filter(d => matchesSearch([d.title]))
   const filteredDoneProd = doneProd.filter(d => matchesSearch([d.title, d.subtitle]))
+  const filteredDoneSale = doneSale.filter(d => matchesSearch([d.title, d.subtitle]))
   const filteredDoneCommandes = doneCommandes.filter(d => matchesSearch([d.title, d.subtitle]))
 
   // ============================================================
@@ -660,10 +704,13 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
             total={totalTodo}
             vitrineItems={filteredVitrineItems}
             prodLines={filteredProdLines}
+            saleLines={filteredSaleLines}
             commandeItems={filteredCommandeItems}
             vitrineResa={resaTodo}
             onVitrineDone={handleVitrineDone}
             onProdDone={handleProdDone}
+            onSaleDone={handleSaleDone}
+            saleBusy={saleBusy}
             onCommandeDone={handleCommandeDone}
             onResaDone={handleResaDone}
           />
@@ -671,6 +718,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           <DoneTab
             vitrineItems={filteredDoneVitrine}
             prodItems={filteredDoneProd}
+            saleItems={filteredDoneSale}
             commandeItems={filteredDoneCommandes}
             vitrineResa={resaDone}
             onResaUndo={handleResaUndo}
@@ -720,7 +768,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 // ============================================================
 // Onglet "A ranger"
 // ============================================================
-function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, vitrineResa, onVitrineDone, onProdDone, onCommandeDone, onResaDone }) {
+function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeItems, vitrineResa, onVitrineDone, onProdDone, onSaleDone, saleBusy, onCommandeDone, onResaDone }) {
   const nbResa = Array.isArray(vitrineResa) ? vitrineResa.length : 0
   if (allDone && nbResa === 0) {
     return (
@@ -739,8 +787,8 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, vitri
         </p>
       </div>
 
-      {/* 3 colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      {/* Colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
         <ColumnSection title="RÉSERVATION VITRINE" count={nbResa} subtitle="à mettre de côté">
           {!vitrineResa ? (
             <EmptyHint>Chargement…</EmptyHint>
@@ -781,7 +829,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, vitri
           )}
         </ColumnSection>
 
-        <ColumnSection title="PROD" count={prodLines.length} subtitle="préparés par la prod">
+        <ColumnSection title="PROD" count={prodLines.length} subtitle="prod + salés">
           {prodLines.length === 0 ? (
             <EmptyHint>Rien à ranger</EmptyHint>
           ) : (
@@ -792,6 +840,23 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, commandeItems, vitri
                 subtitle={buildSalesLineSubtitle(line)}
                 quantity={line.quantity}
                 onClick={() => onProdDone(line)}
+                compact
+              />
+            ))
+          )}
+        </ColumnSection>
+
+        <ColumnSection title="🥪 SALÉ" count={saleLines.length} subtitle="clic = imprime + range">
+          {saleLines.length === 0 ? (
+            <EmptyHint>Rien à ranger</EmptyHint>
+          ) : (
+            saleLines.map(line => (
+              <ItemCard
+                key={`sale-${line.odoo_line_id}`}
+                title={cleanProductName(line.product_name)}
+                subtitle={saleBusy === line.odoo_line_id ? '🖨️ impression…' : buildSalesLineSubtitle(line)}
+                quantity={line.quantity}
+                onClick={() => saleBusy ? null : onSaleDone(line)}
                 compact
               />
             ))
@@ -846,9 +911,9 @@ function EmptyHint({ children }) {
 // ============================================================
 // Onglet "Range"
 // ============================================================
-function DoneTab({ vitrineItems, prodItems, commandeItems, vitrineResa, onResaUndo, onUndo }) {
+function DoneTab({ vitrineItems, prodItems, saleItems, commandeItems, vitrineResa, onResaUndo, onUndo }) {
   const resaDone = Array.isArray(vitrineResa) ? vitrineResa : []
-  const total = vitrineItems.length + prodItems.length + commandeItems.length + resaDone.length
+  const total = vitrineItems.length + prodItems.length + (saleItems?.length || 0) + commandeItems.length + resaDone.length
   if (total === 0) {
     return (
       <div className="bg-white rounded-2xl border border-line p-8 text-center shadow-sm">
@@ -859,7 +924,7 @@ function DoneTab({ vitrineItems, prodItems, commandeItems, vitrineResa, onResaUn
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
       <ColumnSection title="RÉSERVATION VITRINE" count={resaDone.length} subtitle="rangées du jour">
         {resaDone.length === 0 ? (
           <EmptyHint>Rien rangé</EmptyHint>
@@ -904,6 +969,24 @@ function DoneTab({ vitrineItems, prodItems, commandeItems, vitrineResa, onResaUn
           <EmptyHint>Rien rangé</EmptyHint>
         ) : (
           prodItems.map(d => (
+            <ItemCard
+              key={d.key}
+              title={d.title}
+              subtitle={`${d.subtitle ? d.subtitle + ' · ' : ''}rangé ${formatRelativeTime(d.received_at)}`}
+              quantity={d.quantity}
+              done={true}
+              onClick={() => onUndo(d)}
+              compact
+            />
+          ))
+        )}
+      </ColumnSection>
+
+      <ColumnSection title="🥪 SALÉ" count={(saleItems || []).length} subtitle="rangés du jour J+">
+        {(saleItems || []).length === 0 ? (
+          <EmptyHint>Rien rangé</EmptyHint>
+        ) : (
+          saleItems.map(d => (
             <ItemCard
               key={d.key}
               title={d.title}
