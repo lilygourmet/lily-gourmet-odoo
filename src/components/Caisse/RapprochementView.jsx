@@ -312,17 +312,25 @@ function runMatch(bank, raw) {
   // alors qu'une ligne n'a pas trouvé de match). « relevé » = cartes du relevé,
   // « caisse » = cartes Odoo correspondantes, écart = caisse − relevé. Une ligne
   // non appariée fait donc bien apparaître un écart. Annulations exclues (neutres).
-  const dRel = {}, dCai = {}
+  // « Carte relevé » = total carte du relevé (par jour du relevé), pour la colonne de gauche.
+  const dRel = {}
   const addRel = (dstr, v) => { const d = isoOf(dstr); dRel[d] = (dRel[d] || 0) + v }
-  const addCai = (dstr, v) => { const d = isoOf(dstr); dCai[d] = (dCai[d] || 0) + v }
-  for (const o of okList) { addRel(o.b.dateStr, o.b.amt); addCai(o.b.dateStr, o.b.amt) } // matché : relevé = caisse
-  for (const sp of splits) for (const b of sp.parts) { addRel(b.dateStr, b.amt); addCai(b.dateStr, b.amt) }
-  for (const b of [...intro, ...oNone]) addRel(b.dateStr, b.amt)            // carte au relevé, absente d'Odoo
-  for (const s of [...suspects, ...oSusp]) addRel(s.dateStr, s.amt)         // carte au relevé, tapée autrement
-  for (const r of reverse) addCai(r.dateStr, r.amt)                         // carte Odoo, absente du relevé
+  for (const o of okList) addRel(o.b.dateStr, o.b.amt)
+  for (const sp of splits) for (const b of sp.parts) addRel(b.dateStr, b.amt)
+  for (const b of [...intro, ...oNone]) addRel(b.dateStr, b.amt)
+  for (const s of [...suspects, ...oSusp]) addRel(s.dateStr, s.amt)
+  // « Carte caisse (Odoo) » = total carte TEL QU'ENREGISTRÉ DANS ODOO, à sa DATE DE VENTE
+  // et détaillé par caisse. AUCUN lien avec le relevé bancaire.
+  const odooD = {}, odooPos = {}
+  for (const p of odoo) {
+    if (p.c !== 'c') continue
+    const d = new Date(p.t - offForP(p)).toISOString().slice(0, 10)
+    odooD[d] = (odooD[d] || 0) + p.a
+    ;(odooPos[d] ||= {}); const k = p.pos || '(sans caisse)'; odooPos[d][k] = (odooPos[d][k] || 0) + p.a
+  }
   const r2 = n => Math.round(n * 100) / 100
-  const days2 = [...new Set([...days, ...reverse.map(r => isoOf(r.dateStr))])].sort()
-  const daily = days2.map(d => ({ date: d, bank: r2(dRel[d] || 0), odoo: r2(dCai[d] || 0), gap: r2((dCai[d] || 0) - (dRel[d] || 0)) }))
+  const days2 = [...new Set([...days, ...Object.keys(odooD)])].sort()
+  const daily = days2.map(d => ({ date: d, bank: r2(dRel[d] || 0), odoo: r2(odooD[d] || 0), gap: r2((odooD[d] || 0) - (dRel[d] || 0)), posBreak: odooPos[d] || {} }))
 
   // Grand livre unifié : CMI ↔ Odoo côte à côte (côté vide si pas de correspondance).
   const ledger = []
@@ -838,6 +846,21 @@ export default function RapprochementView({ user }) {
                   })}
                 </tbody>
               </table>
+              {/* Détail du total carte Odoo du jour, par caisse → pour voir si plusieurs caisses s'additionnent. */}
+              {day && dailyF[0] && Object.keys(dailyF[0].posBreak).length > 0 && (
+                <div className="mt-4 border-t border-line pt-3 text-[13px]">
+                  <div className="text-[12px] font-semibold text-ink mb-1">🔎 « Carte caisse (Odoo) » du {frOf(day)} par caisse :</div>
+                  {Object.entries(dailyF[0].posBreak).sort((a, b) => b[1] - a[1]).map(([pos, amt]) => (
+                    <div key={pos} className="flex justify-between py-0.5 border-b border-cream-deep">
+                      <span className="text-ink-soft">{pos}</span>
+                      <span className="tabular-nums">{fmt(Math.round(amt))} dh</span>
+                    </div>
+                  ))}
+                  {Object.keys(dailyF[0].posBreak).length > 1 && (
+                    <div className="text-[11px] text-ink-mute mt-2">➡️ Plusieurs caisses s'additionnent : ton total Odoo ne couvre peut-être qu'une seule d'entre elles.</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

@@ -123,6 +123,11 @@ export async function updateOrderDate(orderId, deliveryDate, deliveryTime) {
   return post('order-line', { op: 'date', orderId, deliveryDate, deliveryTime })
 }
 
+/** Supprime une photo (pièce jointe) d'une commande, par son id Odoo. */
+export async function removeOrderPhoto(orderId, attId) {
+  return post('order-line', { op: 'photo-remove', orderId, attId })
+}
+
 const _productCache = {}
 /** Détail d'un produit configurable : { attributes, variants }. Caché par produit. */
 export async function loadOrderProduct(tmplId) {

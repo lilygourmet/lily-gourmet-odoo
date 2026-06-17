@@ -239,6 +239,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     setPrefilled(false)
     setLinkedOrder(null) // on efface la commande de la conversation précédente (sinon les boutons « sautent »)
     setText('') // on repart d'une zone vide à chaque conversation (pas de débordement entre conversations)
+    relanceMarkedRef.current = false // nouvelle conversation → on pourra ré-enregistrer « Relancé par » si besoin
     try {
       const [c, msgs] = await Promise.all([
         loadConversation(cid),

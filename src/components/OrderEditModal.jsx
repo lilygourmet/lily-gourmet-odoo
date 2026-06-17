@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadOrderLines, addOrderLine, updateOrderLine, deleteOrderLine, addOrderWarning, removeOrderWarning, updateOrderDate, loadOrderCatalog, loadOrderProduct, loadWarehouses, setOrderWarehouse } from '../lib/commande'
-import { recordDevisTraitement } from '../lib/conversations'
+import { loadOrderLines, addOrderLine, updateOrderLine, deleteOrderLine, addOrderWarning, removeOrderWarning, updateOrderDate, loadOrderCatalog, loadOrderProduct, loadWarehouses, setOrderWarehouse, removeOrderPhoto } from '../lib/commande'
+import { recordDevisTraitement, loadDevisPhotos } from '../lib/conversations'
 import { createModification } from '../lib/modifications'
 import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
@@ -30,6 +30,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
     }).catch(() => {})
   }
   const [lines, setLines] = useState(null)        // null = chargement
+  const [photos, setPhotos] = useState([])        // photos déjà enregistrées dans la commande
   const [busy, setBusy] = useState(false)
   const [adding, setAdding] = useState(false)
   const [warnFor, setWarnFor] = useState(null)   // id de l'article pour lequel on ajoute une attention
@@ -92,6 +93,22 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
     catch (e) { toast.error(e?.message || 'Chargement impossible'); setLines([]) }
   }
   useEffect(() => { reload() }, [order.id])
+  // Photos déjà attachées à la commande (pour les revoir au lieu de croire qu'elles ont disparu).
+  function reloadPhotos() { loadDevisPhotos(order.id).then(setPhotos).catch(() => setPhotos([])) }
+  useEffect(() => { reloadPhotos() }, [order.id])
+
+  // Supprime une photo déjà enregistrée dans la commande.
+  async function deletePhoto(p) {
+    if (!await confirmDialog('Supprimer cette photo de la commande ?', { danger: true, confirmLabel: 'Supprimer' })) return
+    setBusy(true)
+    try {
+      await removeOrderPhoto(order.id, p.id)
+      logModif('Photo supprimée')
+      toast.success('Photo supprimée')
+      reloadPhotos(); onChanged?.()
+    } catch (e) { toast.error(e?.message || 'Échec') }
+    finally { setBusy(false) }
+  }
   const [warehouses, setWarehouses] = useState([])
   useEffect(() => { loadWarehouses().then(setWarehouses).catch(() => {}) }, [])
 
@@ -324,6 +341,22 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
               )}
             </div>
           ))}
+
+          {/* Photos déjà enregistrées dans la commande (avec suppression). */}
+          {photos.length > 0 && (
+            <div className="mt-1 mb-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-2">Photos de la commande</div>
+              <div className="flex flex-wrap gap-2">
+                {photos.map(p => (
+                  <div key={p.id} className="relative">
+                    <img src={p.dataUrl} alt={p.name || 'photo'} className="w-20 h-20 rounded-lg object-cover border border-line" />
+                    <button onClick={() => deletePhoto(p)} disabled={busy} title="Supprimer cette photo"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-white border border-line rounded-full text-ink-mute hover:text-danger text-[11px] shadow">✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {!adding ? (
             <button onClick={() => setAdding(true)}

@@ -82,11 +82,14 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
   // Conversation ouverte via une relance depuis Devis : on retient son id pour
   // n'enregistrer « Relancé par » que sur CETTE conversation (pas une autre).
   const relanceConvIdRef = useRef(null)
+  // Ouverture auto UNE SEULE FOIS : sinon le rafraîchissement temps réel relance cet effet
+  // et te ramène de force sur le fil du lien à chaque nouveau message (impossible de naviguer).
+  const autoSelectedRef = useRef(false)
   useEffect(() => {
-    if (!initialPhone || conversations.length === 0) return
+    if (autoSelectedRef.current || !initialPhone || conversations.length === 0) return
     const target = String(initialPhone).replace(/\D/g, '').slice(-9)
     const found = conversations.find(c => String(c.client_phone || '').replace(/\D/g, '').slice(-9) === target)
-    if (found) { setSelectedId(found.id); if (initialRelanceRef) relanceConvIdRef.current = found.id }
+    if (found) { autoSelectedRef.current = true; setSelectedId(found.id); if (initialRelanceRef) relanceConvIdRef.current = found.id }
   }, [initialPhone, conversations, initialRelanceRef])
 
   // Clients fidèles : l'étoile vient de la colonne mémorisée `c.fidele` (plus de re-check
@@ -114,13 +117,18 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
     return () => { cancelled = true }
   }, [conversations])
 
-  // Temps réel : rafraîchit la liste quand une conversation change (nouveau message…)
+  // Temps réel : rafraîchit la liste quand une conversation change (nouveau message…).
+  // Anti-rebond 1,5 s : une rafale de messages = UN seul rechargement (sinon ça rame).
   useEffect(() => {
+    let timer = null
     const channel = supabase
       .channel('inbox-conversations')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => refresh(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => refresh(true), 1500)
+      })
       .subscribe()
-    return () => supabase.removeChannel(channel)
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -195,6 +203,12 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
     if (wb) return 1
     return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0)
   })
+
+  // Affichage plafonné (perf) : on dessine seulement les plus prioritaires (déjà triées en haut).
+  // En recherche, on montre TOUS les résultats. Les autres restent accessibles via la recherche.
+  const SHOWN_CAP = 80
+  const visible = term ? sorted : sorted.slice(0, SHOWN_CAP)
+  const hiddenCount = sorted.length - visible.length
 
   return (
     <div className="md:flex md:items-start" style={{ '--appbar': `${headerTop}px` }}>
@@ -302,7 +316,7 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
           )}
 
           <div className="space-y-2">
-            {sorted.map(c => {
+            {visible.map(c => {
               const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
               const u = conversationUrgency(c)
               const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'
@@ -376,6 +390,11 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
                 </button>
               )
             })}
+            {hiddenCount > 0 && (
+              <div className="text-center py-3 text-[12px] text-ink-mute italic">
+                + {hiddenCount} autre{hiddenCount > 1 ? 's' : ''} — utilise la recherche pour les retrouver
+              </div>
+            )}
           </div>
         </div>
       </div>
