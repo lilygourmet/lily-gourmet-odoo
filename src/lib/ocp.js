@@ -25,3 +25,9 @@ export async function removeOcpPhoto(category, label) {
   const { error } = await supabase.from('ocp_overrides').delete().eq('action', 'photo').eq('category', category).eq('label', label)
   if (error) throw error
 }
+// Active (on) / désactive le « choix de la taille » sur un article du lien OCP :
+// le client pourra alors choisir la taille (comme les entremets) au lieu d'une taille par défaut.
+export async function setOcpSizeSelect(category, label, on) {
+  await supabase.from('ocp_overrides').delete().eq('action', 'size_on').eq('category', category).eq('label', label)
+  if (on) await addOcpOverride({ action: 'size_on', category, label })
+}
