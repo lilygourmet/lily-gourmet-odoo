@@ -1307,6 +1307,20 @@ async function handleOrderLine(req, res) {
       return res.status(200).json({ ok: true })
     }
 
+    if (op === 'photo-remove') {
+      const attId = Number(req.body?.attId)
+      if (!attId) return res.status(400).json({ error: 'photo requise' })
+      // Sécurité : on ne supprime que si la pièce jointe appartient à CETTE commande (entête ou une de ses lignes).
+      const ord = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['order_line'])
+      const lineIds = ord[0]?.order_line || []
+      const att = await odooSearchRead(uid, 'ir.attachment', [['id', '=', attId]], ['res_model', 'res_id'])
+      const a = att[0]
+      const ok = a && ((a.res_model === 'sale.order' && a.res_id === orderId) || (a.res_model === 'sale.order.line' && lineIds.includes(a.res_id)))
+      if (!ok) return res.status(400).json({ error: 'photo introuvable pour cette commande' })
+      await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'ir.attachment', 'unlink', [[attId]]])
+      return res.status(200).json({ ok: true })
+    }
+
     let command
     if (op === 'add') {
       if (!variantId) return res.status(400).json({ error: 'article requis' })
@@ -1338,19 +1352,27 @@ async function handleOrderLine(req, res) {
 
     await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'sale.order', 'write', [[orderId], { order_line: [command] }]])
 
-    // Photo (modèle de gâteau) → attachée à la COMMANDE puis publiée dans le chatter
-    // pour être visible directement dans Odoo (et pas seulement en pièce jointe « brute »).
+    // Photo (modèle de gâteau) → attachée à L'ARTICLE (sale.order.line), pas à l'entête,
+    // pour que chaque CD- garde SA propre photo dans le calendrier / l'impression.
+    // (Pas de message_post : il rebasculerait la pièce jointe sur la commande entière.)
     if ((op === 'add' || op === 'update') && photo?.data) {
       try {
-        const attId = await odooCreate(uid, 'ir.attachment', {
-          name: photo.name || 'photo.jpg',
-          datas: photo.data,
-          res_model: 'sale.order',
-          res_id: orderId,
-          mimetype: photo.mimetype || 'image/jpeg',
-        })
-        await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'sale.order', 'message_post', [[orderId]],
-          { body: "📸 Modèle de gâteau (ajouté depuis l'app)", attachment_ids: [attId] }])
+        let targetLineId = lineId
+        if (op === 'add') {
+          // La ligne vient d'être créée dans le write ci-dessus → on récupère son id (la plus récente).
+          const ord = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['order_line'])
+          const ids = ord[0]?.order_line || []
+          targetLineId = ids.length ? Math.max(...ids) : null
+        }
+        if (targetLineId) {
+          await odooCreate(uid, 'ir.attachment', {
+            name: photo.name || 'photo.jpg',
+            datas: photo.data,
+            res_model: 'sale.order.line',
+            res_id: targetLineId,
+            mimetype: photo.mimetype || 'image/jpeg',
+          })
+        }
       } catch (e) { console.warn('[order-line photo]', e?.message || e) }
     }
 
@@ -1774,7 +1796,7 @@ async function handleDevisPhotos(req, res) {
     const photos = (atts || [])
       .filter(a => a.datas)
       .filter(a => { if (seenData.has(a.datas)) return false; seenData.add(a.datas); return true })
-      .map(a => ({ name: a.name, dataUrl: `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}` }))
+      .map(a => ({ id: a.id, name: a.name, dataUrl: `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}` }))
     return res.status(200).json({ photos })
   } catch (e) {
     console.error('[devis-photos]', e?.message || e)
@@ -2447,12 +2469,12 @@ async function handleOrderSizes(req, res) {
     const sizes = {}
     for (const v of variants) {
       const t = Array.isArray(v.product_tmpl_id) ? v.product_tmpl_id[0] : v.product_tmpl_id
-      let size = ''
+      let size = '', attr = ''
       for (const id of (v.product_template_attribute_value_ids || [])) {
         const p = byId[id]
-        if (p && /personne|taille|pi[èe]ce|format/i.test(p.attr)) { size = p.name; break }
+        if (p && /personne|taille|pi[èe]ce|format/i.test(p.attr)) { size = p.name; attr = p.attr; break }
       }
-      ;(sizes[t] ||= []).push({ id: v.id, size })
+      ;(sizes[t] ||= []).push({ id: v.id, size, attr })
     }
     for (const t in sizes) sizes[t].sort((a, b) => (parseInt(a.size) || 0) - (parseInt(b.size) || 0))
     return res.status(200).json({ sizes })
