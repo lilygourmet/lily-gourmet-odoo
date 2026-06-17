@@ -2447,13 +2447,16 @@ async function notifyOcpOrder(orderName, date, detail) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_notif_ocp.eq.true')
     const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
-    if (!recipients.length) return
+    if (!recipients.length) return { recipients: 0, sent: 0 }
     const text = `🍽️ Devis OCP ${orderName}${date ? ` (livraison ${date})` : ''} :\n${detail || '—'}`
+    let sent = 0
     for (const u of recipients) {
-      await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
+      const ok = await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
+      if (ok) sent++
     }
-    console.log(`[ocp-notif] ${recipients.length} destinataire(s) pour ${orderName}`)
-  } catch (e) { console.warn('[ocp-notif]', e?.message || e) }
+    console.log(`[ocp-notif] ${recipients.length} destinataire(s), ${sent} envoyé(s) pour ${orderName}`)
+    return { recipients: recipients.length, sent }
+  } catch (e) { console.warn('[ocp-notif]', e?.message || e); return { error: e?.message || String(e) } }
 }
 
 // Notif « devis OCP ANNULÉ » aux mêmes destinataires (admins + « Notif devis OCP »).
@@ -2565,8 +2568,9 @@ async function handleOrderCreateOcp(req, res) {
     if (zone) detailParts.push(`• Livraison ${zone}`)
     let detail = detailParts.join('\n')   // 1 article par ligne
     if (detail.length > 950) detail = detail.slice(0, 950) + '…'
-    notifyOcpOrder(orderName, date, detail).catch(() => {})
-    return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name })
+    let notif = null
+    try { notif = await notifyOcpOrder(orderName, date, detail) } catch (e) { notif = { error: e?.message || String(e) } }
+    return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name, notif })
   } catch (e) {
     console.error('[ocp-devis]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
