@@ -2018,9 +2018,10 @@ async function handleDevisCancel(req, res) {
   if (!id) return res.status(400).json({ error: 'id de la commande requis' })
   try {
     const uid = await odooAuthenticate()
-    const found = await odooSearchRead(uid, 'sale.order', [['id', '=', id]], ['name', 'state'])
+    const found = await odooSearchRead(uid, 'sale.order', [['id', '=', id]], ['name', 'state', 'partner_id'])
     if (!found.length) return res.status(404).json({ error: 'Commande introuvable dans Odoo' })
     const { name, state } = found[0]
+    const partnerName = Array.isArray(found[0].partner_id) ? found[0].partner_id[1] : ''
     if (state === 'cancel') return res.status(200).json({ ok: true, name, state, already: true })
     await odooJsonRpc('object', 'execute_kw', [
       process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, 'sale.order', 'action_cancel', [[id]],
@@ -2028,6 +2029,8 @@ async function handleDevisCancel(req, res) {
     const after = await odooSearchRead(uid, 'sale.order', [['id', '=', id]], ['name', 'state'])
     const newState = after[0]?.state || 'cancel'
     console.log(`[devis-cancel] ${name} (id ${id}) annulé par user=${req.body?.actorId || '?'} → ${newState}`)
+    // Devis OCP annulé → notif aux mêmes destinataires (admins + « Notif devis OCP »).
+    if (/\bOCP\b/i.test(partnerName)) notifyOcpCancel(name).catch(() => {})
     return res.status(200).json({ ok: true, name, state: newState })
   } catch (e) {
     console.error('[devis-cancel]', e?.message || e)
@@ -2451,6 +2454,21 @@ async function notifyOcpOrder(orderName, date, detail) {
     }
     console.log(`[ocp-notif] ${recipients.length} destinataire(s) pour ${orderName}`)
   } catch (e) { console.warn('[ocp-notif]', e?.message || e) }
+}
+
+// Notif « devis OCP ANNULÉ » aux mêmes destinataires (admins + « Notif devis OCP »).
+async function notifyOcpCancel(orderName) {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_notif_ocp.eq.true')
+    const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
+    if (!recipients.length) return
+    const text = `❌ Devis OCP ${orderName} ANNULÉ.`
+    for (const u of recipients) {
+      await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
+    }
+    console.log(`[ocp-cancel] ${recipients.length} destinataire(s) pour ${orderName}`)
+  } catch (e) { console.warn('[ocp-cancel]', e?.message || e) }
 }
 
 // Crée le devis OCP (lien dédié). Retrouve OCP SA, résout les variantes (entremets par taille,
