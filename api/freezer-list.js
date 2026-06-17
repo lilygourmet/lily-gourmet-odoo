@@ -130,7 +130,10 @@ async function fetchListForDate(date, uid) {
   }
 
   // 4) Heures de livraison via sale.order
-  const scodes = [...new Set(Object.values(parentMap).map(p => p.scode).filter(Boolean))]
+  // scodes = ceux des MO parents WHLVP + ceux rattachés directement à la commande (grands gâteaux).
+  const directScodes = childMos
+    .map(c => (c.origin || '').match(/S\d{3,}/i)).filter(Boolean).map(x => x[0].toUpperCase())
+  const scodes = [...new Set([...Object.values(parentMap).map(p => p.scode).filter(Boolean), ...directScodes])]
   const orderInfo = {}
   if (scodes.length > 0) {
     const orders = await odooSearchRead(uid, 'sale.order', [['name', 'in', scodes]],
