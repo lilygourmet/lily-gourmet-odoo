@@ -21,6 +21,7 @@ export default function OcpManage() {
   const [varItem, setVarItem] = useState(null)
   const [photoItem, setPhotoItem] = useState(null)
   const [users, setUsers] = useState([])
+  const [notifOpen, setNotifOpen] = useState(false)
 
   const reloadOv = () => loadOcpOverrides().then(setOv).catch(() => {})
   useEffect(() => { loadOrderCatalog().then(setCatalog).catch(() => {}); reloadOv(); loadUsers().then(setUsers).catch(() => {}) }, [])
@@ -62,6 +63,7 @@ export default function OcpManage() {
     ov.filter(o => o.action === 'add' && o.category === c.key).forEach(o => c.items.push({ name: o.label, added: true, ovId: o.id, free: o.is_free, img: imgByTmpl[o.tmpl_id] || '' }))
   })
   const c = cats.find(x => x.key === active) || cats[0]
+  const nbOcpNotif = users.filter(u => u.active !== false && (u.role === 'admin' || u.perm_notif_ocp)).length
 
   async function toggle(it) {
     setBusy(true)
@@ -79,21 +81,28 @@ export default function OcpManage() {
       <h1 className="font-fraunces text-2xl text-bordeaux mb-1">🍽️ Lien OCP — articles</h1>
       <p className="text-[12px] text-ink-soft mb-3">Tape <b style={{ color: '#b42424' }}>✕</b> pour enlever un article du lien, <b style={{ color: '#1e7e4f' }}>➕</b> pour le remettre. « Ajouter » en bas. <a href="/?client=ocp" target="_blank" className="text-bordeaux underline">Ouvrir le lien</a></p>
 
-      {/* Qui reçoit la notif WhatsApp à chaque nouveau devis OCP */}
+      {/* Qui reçoit la notif WhatsApp à chaque nouveau devis OCP (section pliable) */}
       <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: B, marginBottom: 8 }}>📩 Notif devis OCP — qui reçoit ?</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-          {users.filter(u => u.active !== false && (u.full_name || u.username)).map(u => {
-            const on = u.role === 'admin' || u.perm_notif_ocp
-            return (
-              <button key={u.id} onClick={() => toggleOcpNotif(u)} disabled={u.role === 'admin'}
-                style={{ padding: '6px 11px', borderRadius: 20, border: `1.5px solid ${on ? B : LINE}`, background: on ? '#fbeef2' : '#fff', color: on ? B : SOFT, fontSize: 12.5, fontWeight: 700, cursor: u.role === 'admin' ? 'default' : 'pointer' }}>
-                {on ? '✓ ' : ''}{u.full_name || u.username}{u.role === 'admin' ? ' (admin)' : ''}
-              </button>
-            )
-          })}
-        </div>
-        <div style={{ fontSize: 11, color: SOFT, marginTop: 8 }}>Les admins reçoivent toujours. Clique un nom pour l'ajouter / l'enlever.</div>
+        <button onClick={() => setNotifOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: B }}>📩 Notif devis OCP — qui reçoit ? <span style={{ fontWeight: 600, color: SOFT }}>({nbOcpNotif})</span></span>
+          <span style={{ fontSize: 16, color: SOFT }}>{notifOpen ? '▾' : '▸'}</span>
+        </button>
+        {notifOpen && (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 10 }}>
+              {users.filter(u => u.active !== false && (u.full_name || u.username)).map(u => {
+                const on = u.role === 'admin' || u.perm_notif_ocp
+                return (
+                  <button key={u.id} onClick={() => toggleOcpNotif(u)} disabled={u.role === 'admin'}
+                    style={{ padding: '6px 11px', borderRadius: 20, border: `1.5px solid ${on ? B : LINE}`, background: on ? '#fbeef2' : '#fff', color: on ? B : SOFT, fontSize: 12.5, fontWeight: 700, cursor: u.role === 'admin' ? 'default' : 'pointer' }}>
+                    {on ? '✓ ' : ''}{u.full_name || u.username}{u.role === 'admin' ? ' (admin)' : ''}
+                  </button>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: SOFT, marginTop: 8 }}>Les admins reçoivent toujours. Clique un nom pour l'ajouter / l'enlever.</div>
+          </>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 12, paddingBottom: 4 }}>
