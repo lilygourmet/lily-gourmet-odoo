@@ -2566,10 +2566,11 @@ async function handleOrderCreateOcp(req, res) {
       if (it.autre) return `À préciser: ${String(it.autre).replace(/\s+/g, ' ').trim()}`
       const q = Number(it.qty) || 1
       const nm = String(it.name || '').replace(/\s+/g, ' ').trim()
-      return nm ? `${nm}${q > 1 ? ` ×${q}` : ''}${(it.free && it.unit) ? ` (${it.unit})` : ''}` : ''
+      return nm ? `${nm} ×${q}${(it.free && it.unit) ? ` (${it.unit})` : ''}` : ''
     }).filter(Boolean)
     if (zone) detailParts.push(`Livraison ${zone}`)
-    let detail = detailParts.join(' · ')   // une seule ligne (WhatsApp refuse les retours à la ligne)
+    // Puces en ligne (WhatsApp refuse les vrais retours à la ligne dans les modèles).
+    let detail = detailParts.map(p => `▪️ ${p}`).join(' ')
     if (detail.length > 950) detail = detail.slice(0, 950) + '…'
     notifyOcpOrder(orderName, date, detail).catch(() => {})
     return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name })

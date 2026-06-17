@@ -50,7 +50,7 @@ export default function OcpOrderView() {
         try {
           const prod = await loadOrderProduct(jusItem.tmplId)
           const fa = (prod.attributes || []).find(a => /parfum|go[uû]t|type/i.test(a.name))
-          if (fa) jus = (prod.variants || []).map(v => ({ tmplId: jusItem.tmplId, variantId: v.id, name: v.values[fa.attrId], variantHint: v.values[fa.attrId], img: jusItem.image || '' })).filter(x => x.name)
+          if (fa) jus = (prod.variants || []).map(v => { const pn = v.values[fa.attrId]; return { tmplId: jusItem.tmplId, variantId: v.id, name: pn ? (/jus/i.test(pn) ? pn : `Jus ${pn}`) : '', variantHint: pn, img: jusItem.image || '' } }).filter(x => x.name)
         } catch { /* ignore */ }
         if (!jus.length) jus = [{ tmplId: jusItem.tmplId, name: 'Jus (litre)', img: jusItem.image || '' }]
       }
