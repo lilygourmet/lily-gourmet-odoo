@@ -37,8 +37,7 @@ export default function OcpOrderView() {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
   const [err, setErr] = useState('')
-  const [entVar, setEntVar] = useState({})   // tmplId -> [{id,size,label}]
-  const [tailleByTmpl, setTailleByTmpl] = useState({})   // tmplId -> "18 · 28" (taille affichée sous le nom)
+  const [entVar, setEntVar] = useState({})   // tmplId -> [{id,size,label}] (taille sélectionnable)
   const [hiddenVar, setHiddenVar] = useState(() => new Set())   // variant_id masqués (tailles/parfums)
 
   useEffect(() => {
@@ -84,9 +83,6 @@ export default function OcpOrderView() {
         // photos mises à la main depuis l'app (priment sur l'image par défaut)
         const photoMap = {}; ov.filter(o => o.action === 'photo').forEach(o => { photoMap[`${o.category}|${o.label}`] = o.image })
         built.forEach(cc => cc.items.forEach(it => { const p = photoMap[`${cc.key}|${it.name}`]; if (p) it.img = p }))
-        // « Choix de la taille » activé sur certains articles → sélectionnable comme les entremets.
-        const sizeOn = new Set(ov.filter(o => o.action === 'size_on').map(o => `${o.category}|${o.label}`))
-        built.forEach(cc => cc.items.forEach(it => { if (sizeOn.has(`${cc.key}|${it.name}`)) it.sizeSel = true }))
         setHiddenVar(hidVar)
       } catch { /* table absente → catalogue par défaut */ }
       const out = built.filter(c => c.note || c.items.length)
@@ -94,33 +90,24 @@ export default function OcpOrderView() {
     }).catch(e => setErr(e?.message || 'Catalogue indisponible'))
   }, [])
 
-  // Préchargement des tailles EN 1 APPEL pour TOUTES les catégories (entremets interactifs
-  // + libellé de taille affiché sous chaque autre article).
+  // Préchargement des tailles EN 1 APPEL pour TOUTES les catégories.
+  // Tout produit ayant plusieurs tailles officielles devient sélectionnable (comme les entremets),
+  // automatiquement, sans rien activer.
   useEffect(() => {
     if (!cats) return
     const allTmpl = [...new Set(cats.flatMap(c => c.items.map(it => it.tmplId)).filter(Boolean))]
     if (!allTmpl.length) return
     loadOrderSizes(allTmpl).then(sizes => {
-      // Variantes interactives : entremets (X pers) + articles « Choix de la taille » activé (valeur brute).
       const entTmpls = new Set((cats.find(c => c.key === 'ent')?.items || []).map(it => String(it.tmplId)).filter(Boolean))
-      const selTmpls = new Set(cats.flatMap(c => c.items).filter(it => it.sizeSel).map(it => String(it.tmplId)).filter(Boolean))
       const m = {}
       for (const t in sizes) {
-        const isEnt = entTmpls.has(String(t)), isSel = selTmpls.has(String(t))
-        if (!isEnt && !isSel) continue
+        const isEnt = entTmpls.has(String(t))
         m[t] = sizes[t].filter(v => !hiddenVar.has(v.id)).map(v => ({
           id: v.id, size: v.size,
           label: isEnt ? (/^1$/.test(String(v.size)) ? 'Individuel' : (v.size ? v.size + ' pers' : 'Standard')) : (v.size || 'Standard'),
         }))
       }
       setEntVar(m)
-      // Toutes catégories : libellé de taille (lecture seule) sous le nom
-      const tb = {}
-      for (const t in sizes) {
-        const vals = [...new Set((sizes[t] || []).filter(v => !hiddenVar.has(v.id)).map(v => (v.size || '').trim()).filter(Boolean))]
-        if (vals.length) tb[t] = vals.join(' · ')
-      }
-      setTailleByTmpl(tb)
     }).catch(() => {})
   }, [cats, hiddenVar])
 
@@ -129,8 +116,10 @@ export default function OcpOrderView() {
   if (done) return <Center><div style={{ fontSize: 40 }}>✅</div><h2 style={{ color: B }}>Commande envoyée !</h2><p style={{ color: SOFT }}>Devis {done} bien reçu. Nous revenons vers vous pour confirmer.</p></Center>
 
   const findCat = k => cats.find(c => c.key === k)
+  // Sélectionnable par taille = entremets OU tout produit ayant plusieurs tailles officielles.
+  const isSizeItem = (c, it) => c?.kind === 'size' || (it?.tmplId && (entVar[it.tmplId]?.length > 1))
   const totOf = (c, ii) => {
-    if (c.kind === 'size' || c.items[ii]?.sizeSel) { const base = `${c.key}-${ii}`; return Object.keys(qty).filter(k => k.startsWith(base + ':')).reduce((s, k) => s + qty[k], 0) }
+    if (isSizeItem(c, c.items[ii])) { const base = `${c.key}-${ii}`; return Object.keys(qty).filter(k => k.startsWith(base + ':')).reduce((s, k) => s + qty[k], 0) }
     return qty[`${c.key}-${ii}`] || 0
   }
   const chg = (key, d) => setQty(q => { const v = Math.max(0, (q[key] || 0) + d); const n = { ...q }; if (v <= 0) delete n[key]; else n[key] = v; return n })
@@ -161,7 +150,7 @@ export default function OcpOrderView() {
 
       <div style={{ padding: '14px 12px 0' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {c.items.map((it, ii) => <Tile key={ii} c={c} ii={ii} it={it} qty={qty} chg={chg} setVal={setVal} totOf={totOf} entVar={entVar} tailleByTmpl={tailleByTmpl} />)}
+          {c.items.map((it, ii) => <Tile key={ii} c={c} ii={ii} it={it} qty={qty} chg={chg} setVal={setVal} totOf={totOf} entVar={entVar} />)}
         </div>
         {c.note && <textarea value={autre} onChange={e => setAutre(e.target.value)} placeholder="Écrivez ici ce que vous voulez en plus…" style={{ width: '100%', marginTop: c.items.length ? 12 : 0, padding: 12, border: `1px solid ${LINE}`, borderRadius: 12, fontSize: 15, fontFamily: 'inherit', minHeight: 110 }} />}
       </div>
@@ -182,7 +171,7 @@ export default function OcpOrderView() {
               if (!cc || !it) continue
               if (it.free) items.push({ free: true, group: ck === 'fru' ? 'fruits' : null, name: it.name, qty: qty[key], unit: it.unit || '' })
               else if (it.variantId) items.push({ variantId: it.variantId, name: it.name, qty: qty[key] })   // ajouté avec variante précise
-              else if (cc.kind === 'size' || it.sizeSel) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); items.push({ variantId: Number(sub), name: `${it.name}${v ? ' — ' + v.label : ''}`, qty: qty[key] }) }
+              else if (isSizeItem(cc, it)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); items.push({ variantId: Number(sub), name: `${it.name}${v ? ' — ' + v.label : ''}`, qty: qty[key] }) }
               else items.push({ tmplId: it.tmplId, kind: cc.kind, variantHint: it.variantHint || null, name: it.name, qty: qty[key] })
             }
             if (autre.trim()) items.push({ autre: autre.trim() })
@@ -197,10 +186,10 @@ export default function OcpOrderView() {
   )
 }
 
-function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar, tailleByTmpl }) {
+function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar }) {
   const base = `${c.key}-${ii}`; const tot = totOf(c, ii); const sel = tot > 0
-  const isSize = c.kind === 'size' || it.sizeSel   // entremets OU « choix de la taille » activé
-  const taille = it.tmplId ? (tailleByTmpl?.[it.tmplId] || '') : ''
+  // Sélectionnable par taille = entremets OU produit ayant plusieurs tailles officielles.
+  const isSize = c.kind === 'size' || (it.tmplId && (entVar[it.tmplId]?.length > 1))
   const canTap = !isSize && (c.kind === 'unit' || c.kind === 'free')
   const [imgOk, setImgOk] = useState(true)
   const hasImg = it.img && imgOk
@@ -213,7 +202,6 @@ function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar, tailleByTmpl }) {
       {sel && <div style={{ position: 'absolute', top: -8, right: -8, background: B, color: '#fff', minWidth: 26, height: 26, borderRadius: 13, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px' }}>{tot}</div>}
       {thumb}
       <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6, lineHeight: 1.15 }}>{it.name}</div>
-      {!isSize && taille && <div style={{ fontSize: 11, color: SOFT, marginTop: 3 }}>Taille : {taille}</div>}
       {isSize ? (
         (entVar[it.tmplId] || []).length
           ? (entVar[it.tmplId]).map(v => <SizeRow key={v.id} label={v.label} k={`${base}:${v.id}`} qty={qty} chg={chg} setVal={setVal} />)
@@ -252,7 +240,7 @@ function Recap({ cats, qty, chg, setVal, autre, zone, date, time, entVar, onClos
     if (!c || !it) return
     if (!byBase[base]) { byBase[base] = { name: it.name + (it.unit ? ` · ${it.unit}` : ''), rows: [] }; groups.push(byBase[base]) }
     let label = ''
-    if (c.kind === 'size' || it.sizeSel) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); label = v ? v.label : '' }
+    if (c.kind === 'size' || (it.tmplId && entVar[it.tmplId]?.length > 1)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); label = v ? v.label : '' }
     byBase[base].rows.push({ key, label, n: qty[key] })
   })
   return (

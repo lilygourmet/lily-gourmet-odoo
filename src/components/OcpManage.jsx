@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadOrderCatalog, loadOrderProduct, searchOrderProducts } from '../lib/commande'
-import { loadOcpOverrides, addOcpOverride, removeOcpOverride, setOcpPhoto, removeOcpPhoto, setOcpSizeSelect } from '../lib/ocp'
+import { loadOcpOverrides, addOcpOverride, removeOcpOverride, setOcpPhoto, removeOcpPhoto } from '../lib/ocp'
 import { toast } from '../lib/toast'
 
 // Gestion VISUELLE du lien OCP : même présentation que le lien (catégories + tuiles),
@@ -46,10 +46,9 @@ export default function OcpManage() {
   const imgByTmpl = {}; catalog.forEach(c => (c.items || []).forEach(it => { if (it.tmplId) imgByTmpl[it.tmplId] = it.image || '' }))
   const hidden = new Set(ov.filter(o => o.action === 'hide').map(o => `${o.category}|${o.label}`))
   const photoMap = {}; ov.filter(o => o.action === 'photo').forEach(o => { photoMap[`${o.category}|${o.label}`] = o.image })
-  const sizeOnSet = new Set(ov.filter(o => o.action === 'size_on').map(o => `${o.category}|${o.label}`))
   // marque caché + ajoute les articles « add »
   cats.forEach(c => {
-    c.items = c.items.map(it => ({ ...it, hidden: hidden.has(`${c.key}|${it.name}`), sizeSel: sizeOnSet.has(`${c.key}|${it.name}`) }))
+    c.items = c.items.map(it => ({ ...it, hidden: hidden.has(`${c.key}|${it.name}`) }))
     ov.filter(o => o.action === 'add' && o.category === c.key).forEach(o => c.items.push({ name: o.label, added: true, ovId: o.id, free: o.is_free, img: imgByTmpl[o.tmpl_id] || '' }))
   })
   const c = cats.find(x => x.key === active) || cats[0]
@@ -62,14 +61,6 @@ export default function OcpManage() {
       else { await addOcpOverride({ action: 'hide', category: c.key, label: it.name }) }
       await reloadOv()
     } catch (e) { toast.error(e?.message || 'Échec (SQL ocp_overrides lancé ?)') }
-    finally { setBusy(false) }
-  }
-
-  // Active / désactive le « choix de la taille » (le client choisit 18/28… comme les entremets).
-  async function toggleSize(it) {
-    setBusy(true)
-    try { await setOcpSizeSelect(c.key, it.name, !it.sizeSel); await reloadOv() }
-    catch (e) { toast.error(e?.message || 'Échec') }
     finally { setBusy(false) }
   }
 
@@ -95,8 +86,6 @@ export default function OcpManage() {
             <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 6, lineHeight: 1.15 }}>{it.name}{it.added && <span style={{ fontSize: 10, color: SOFT }}> (ajouté)</span>}</div>
             {!it.hidden && <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginTop: 7 }}>
               <button onClick={() => setPhotoItem(it)} style={{ padding: '5px 10px', borderRadius: 20, border: `1px solid ${B}`, background: ph ? '#fbeef2' : '#fff', color: B, fontSize: 11.5, fontWeight: 700 }}>📷 {ph ? 'Photo ✓' : 'Photo'}</button>
-              {it.tmplId && !it.free && !it.added &&
-                <button onClick={() => toggleSize(it)} disabled={busy} style={{ padding: '5px 10px', borderRadius: 20, border: `1px solid ${B}`, background: it.sizeSel ? '#fbeef2' : '#fff', color: B, fontSize: 11.5, fontWeight: 700 }}>📐 Taille {it.sizeSel ? '✓' : ''}</button>}
               {it.tmplId && it.configurable && !it.added &&
                 <button onClick={() => setVarItem(it)} style={{ padding: '5px 10px', borderRadius: 20, border: `1px solid ${B}`, background: '#fff', color: B, fontSize: 11.5, fontWeight: 700 }}>⚙︎ Variantes</button>}
             </div>}
