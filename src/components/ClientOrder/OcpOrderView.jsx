@@ -38,6 +38,7 @@ export default function OcpOrderView() {
   const [done, setDone] = useState(null)
   const [err, setErr] = useState('')
   const [entVar, setEntVar] = useState({})   // tmplId -> [{id,size,label}]
+  const [tailleByTmpl, setTailleByTmpl] = useState({})   // tmplId -> "18 · 28" (taille affichée sous le nom)
   const [hiddenVar, setHiddenVar] = useState(() => new Set())   // variant_id masqués (tailles/parfums)
 
   useEffect(() => {
@@ -90,15 +91,30 @@ export default function OcpOrderView() {
     }).catch(e => setErr(e?.message || 'Catalogue indisponible'))
   }, [])
 
-  // Préchargement des tailles d'entremets EN 1 APPEL, dès que le catalogue est prêt (express).
+  // Préchargement des tailles EN 1 APPEL pour TOUTES les catégories (entremets interactifs
+  // + libellé de taille affiché sous chaque autre article).
   useEffect(() => {
     if (!cats) return
-    const ent = cats.find(c => c.key === 'ent'); if (!ent || !ent.items.length) return
-    const tmplIds = ent.items.map(it => it.tmplId).filter(Boolean)
-    loadOrderSizes(tmplIds).then(sizes => {
-      const m = {}
-      for (const t in sizes) m[t] = (sizes[t] || []).filter(v => !hiddenVar.has(v.id)).map(v => ({ id: v.id, size: v.size, label: /^1$/.test(String(v.size)) ? 'Individuel' : (v.size ? v.size + ' pers' : 'Standard') }))
-      setEntVar(m)
+    const allTmpl = [...new Set(cats.flatMap(c => c.items.map(it => it.tmplId)).filter(Boolean))]
+    if (!allTmpl.length) return
+    loadOrderSizes(allTmpl).then(sizes => {
+      // Entremets : variantes interactives (X pers / Individuel)
+      const ent = cats.find(c => c.key === 'ent')
+      if (ent) {
+        const m = {}
+        for (const it of ent.items) {
+          const t = it.tmplId; if (!t || !sizes[t]) continue
+          m[t] = sizes[t].filter(v => !hiddenVar.has(v.id)).map(v => ({ id: v.id, size: v.size, label: /^1$/.test(String(v.size)) ? 'Individuel' : (v.size ? v.size + ' pers' : 'Standard') }))
+        }
+        setEntVar(m)
+      }
+      // Toutes catégories : libellé de taille (lecture seule) sous le nom
+      const tb = {}
+      for (const t in sizes) {
+        const vals = [...new Set((sizes[t] || []).filter(v => !hiddenVar.has(v.id)).map(v => (v.size || '').trim()).filter(Boolean))]
+        if (vals.length) tb[t] = vals.join(' · ')
+      }
+      setTailleByTmpl(tb)
     }).catch(() => {})
   }, [cats, hiddenVar])
 
@@ -139,7 +155,7 @@ export default function OcpOrderView() {
 
       <div style={{ padding: '14px 12px 0' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {c.items.map((it, ii) => <Tile key={ii} c={c} ii={ii} it={it} qty={qty} chg={chg} setVal={setVal} totOf={totOf} entVar={entVar} />)}
+          {c.items.map((it, ii) => <Tile key={ii} c={c} ii={ii} it={it} qty={qty} chg={chg} setVal={setVal} totOf={totOf} entVar={entVar} tailleByTmpl={tailleByTmpl} />)}
         </div>
         {c.note && <textarea value={autre} onChange={e => setAutre(e.target.value)} placeholder="Écrivez ici ce que vous voulez en plus…" style={{ width: '100%', marginTop: c.items.length ? 12 : 0, padding: 12, border: `1px solid ${LINE}`, borderRadius: 12, fontSize: 15, fontFamily: 'inherit', minHeight: 110 }} />}
       </div>
@@ -175,8 +191,9 @@ export default function OcpOrderView() {
   )
 }
 
-function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar }) {
+function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar, tailleByTmpl }) {
   const base = `${c.key}-${ii}`; const tot = totOf(c, ii); const sel = tot > 0
+  const taille = it.tmplId ? (tailleByTmpl?.[it.tmplId] || '') : ''
   const canTap = c.kind === 'unit' || c.kind === 'free'
   const [imgOk, setImgOk] = useState(true)
   const hasImg = it.img && imgOk
@@ -189,6 +206,7 @@ function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar }) {
       {sel && <div style={{ position: 'absolute', top: -8, right: -8, background: B, color: '#fff', minWidth: 26, height: 26, borderRadius: 13, fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px' }}>{tot}</div>}
       {thumb}
       <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6, lineHeight: 1.15 }}>{it.name}</div>
+      {c.kind !== 'size' && taille && <div style={{ fontSize: 11, color: SOFT, marginTop: 3 }}>Taille : {taille}</div>}
       {c.kind === 'size' ? (
         (entVar[it.tmplId] || []).length
           ? (entVar[it.tmplId]).map(v => <SizeRow key={v.id} label={v.label} k={`${base}:${v.id}`} qty={qty} chg={chg} setVal={setVal} />)
