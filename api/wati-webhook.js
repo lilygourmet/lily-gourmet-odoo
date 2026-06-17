@@ -2437,11 +2437,11 @@ async function handleCdSlot(req, res) {
   }
 }
 
-// Notif « nouvelle commande OCP » aux admins + commerciaux (perm_devis), par WhatsApp (tâche).
+// Notif « nouvelle commande OCP » aux admins + personnes ayant la permission « Notif devis OCP ».
 async function notifyOcpOrder(orderName, date) {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_devis.eq.true,perm_notif_modif.eq.true')
+    const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_notif_ocp.eq.true')
     const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
     if (!recipients.length) return
     const text = `🍽️ Nouvelle commande OCP : ${orderName}${date ? ` (livraison ${date})` : ''} — à traiter dans les devis.`

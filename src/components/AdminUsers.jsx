@@ -146,6 +146,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_devis: formData.permDevis,
         perm_commande: formData.permCommande,
         perm_notif_modif: formData.permNotifModif,
+        perm_notif_ocp: formData.permNotifOcp,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -209,6 +210,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_devis: formData.permDevis,
         perm_commande: formData.permCommande,
         perm_notif_modif: formData.permNotifModif,
+        perm_notif_ocp: formData.permNotifOcp,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -754,6 +756,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permDevis: initialData?.perm_devis !== undefined ? initialData.perm_devis : false,
     permCommande: initialData?.perm_commande !== undefined ? initialData.perm_commande : false,
     permNotifModif: initialData?.perm_notif_modif !== undefined ? initialData.perm_notif_modif : false,
+    permNotifOcp: initialData?.perm_notif_ocp !== undefined ? initialData.perm_notif_ocp : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
     permLivraisonsDispatch: initialData?.perm_livraisons_dispatch || false,
@@ -960,6 +963,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-devis" label="Devis (relance clients)" desc="Voir les devis et relancer les clients." checked={isAdmin || formData.permDevis} onChange={v => update('permDevis', v)} />
             <PermCheckbox id="perm-commande" label="Nouvelle commande" desc="Créer un devis/commande dans l'app." checked={isAdmin || formData.permCommande} onChange={v => update('permCommande', v)} />
             <PermCheckbox id="perm-notif-modif" label="🔧 Notif modifications (WhatsApp)" desc="Reçoit un WhatsApp à chaque modification de commande créée." checked={formData.permNotifModif} onChange={v => update('permNotifModif', v)} />
+            <PermCheckbox id="perm-notif-ocp" label="📩 Notif devis OCP (WhatsApp)" desc="Reçoit un WhatsApp à chaque nouveau devis OCP envoyé." checked={isAdmin || formData.permNotifOcp} onChange={v => update('permNotifOcp', v)} />
             <PermCheckbox id="perm-modification" label="Modifications de commande" desc="Traiter les demandes de modif/annulation." checked={isAdmin || formData.permModification} onChange={v => update('permModification', v)} />
             <PermCheckbox id="perm-mark-payment-proof" label="Marquer une preuve de paiement" desc="Signaler qu'un client a envoyé un justificatif." checked={isAdmin || formData.permMarkPaymentProof} onChange={v => update('permMarkPaymentProof', v)} />
             <PermCheckbox id="perm-view-payments" label="Voir les paiements à valider" desc="Consulter la file des paiements." checked={isAdmin || formData.permViewPayments} onChange={v => update('permViewPayments', v)} />
