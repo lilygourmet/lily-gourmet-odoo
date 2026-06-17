@@ -2438,13 +2438,14 @@ async function handleCdSlot(req, res) {
 }
 
 // Notif « nouvelle commande OCP » aux admins + personnes ayant la permission « Notif devis OCP ».
-async function notifyOcpOrder(orderName, date) {
+// detail = devis complet (articles + quantités), SANS les prix, sur une seule ligne.
+async function notifyOcpOrder(orderName, date, detail) {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_notif_ocp.eq.true')
     const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
     if (!recipients.length) return
-    const text = `🍽️ Nouvelle commande OCP : ${orderName}${date ? ` (livraison ${date})` : ''} — à traiter dans les devis.`
+    const text = `🍽️ Devis OCP ${orderName}${date ? ` (livraison ${date})` : ''} : ${detail || '—'}`
     for (const u of recipients) {
       await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
     }
@@ -2536,8 +2537,17 @@ async function handleOrderCreateOcp(req, res) {
     const ord = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['name'])
     const orderName = ord[0]?.name || ''
     console.log(`[ocp-devis] ${orderName} pour ${p[0].name} (${orderLines.length} lignes)`)
-    // Notif tâche aux admins + commerciaux (perm_devis).
-    notifyOcpOrder(orderName, date).catch(() => {})
+    // Détail du devis SANS prix (articles + quantités), sur une seule ligne pour le modèle WhatsApp.
+    const detailParts = items.map(it => {
+      if (it.autre) return `À préciser: ${String(it.autre).replace(/\s+/g, ' ').trim()}`
+      const q = Number(it.qty) || 1
+      const nm = String(it.name || '').replace(/\s+/g, ' ').trim()
+      return nm ? `${nm}${q > 1 ? ` ×${q}` : ''}${(it.free && it.unit) ? ` (${it.unit})` : ''}` : ''
+    }).filter(Boolean)
+    if (zone) detailParts.push(`Livraison ${zone}`)
+    let detail = detailParts.join(' · ')
+    if (detail.length > 950) detail = detail.slice(0, 950) + '…'
+    notifyOcpOrder(orderName, date, detail).catch(() => {})
     return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name })
   } catch (e) {
     console.error('[ocp-devis]', e?.message || e)
