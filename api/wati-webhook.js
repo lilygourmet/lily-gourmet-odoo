@@ -2030,9 +2030,8 @@ async function handleDevisCancel(req, res) {
     const newState = after[0]?.state || 'cancel'
     console.log(`[devis-cancel] ${name} (id ${id}) annulé par user=${req.body?.actorId || '?'} → ${newState}`)
     // Devis OCP annulé → notif aux mêmes destinataires (admins + « Notif devis OCP »).
-    let notif = null
-    if (/\bOCP\b/i.test(partnerName)) { try { notif = await notifyOcpCancel(name) } catch (e) { notif = { error: e?.message || String(e) } } }
-    return res.status(200).json({ ok: true, name, state: newState, notif })
+    if (/\bOCP\b/i.test(partnerName)) notifyOcpCancel(name).catch(() => {})
+    return res.status(200).json({ ok: true, name, state: newState })
   } catch (e) {
     console.error('[devis-cancel]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
@@ -2572,9 +2571,8 @@ async function handleOrderCreateOcp(req, res) {
     if (zone) detailParts.push(`Livraison ${zone}`)
     let detail = detailParts.join(' · ')   // une seule ligne (WhatsApp refuse les retours à la ligne)
     if (detail.length > 950) detail = detail.slice(0, 950) + '…'
-    let notif = null
-    try { notif = await notifyOcpOrder(orderName, date, detail) } catch (e) { notif = { error: e?.message || String(e) } }
-    return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name, notif })
+    notifyOcpOrder(orderName, date, detail).catch(() => {})
+    return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name })
   } catch (e) {
     console.error('[ocp-devis]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
