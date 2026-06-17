@@ -138,13 +138,13 @@ async function loadOrdersForRange(fromStr, toStr) {
 }
 
 // Pour chaque item d'une commande, on determine si l'item est "a ranger" :
-// - Type GM/GMD : etape 'fait' cochee mais 'range' pas cochee
-// - Type CD     : etape 'fini' cochee mais 'range' pas cochee
-function isItemToRange(item, steps) {
+// - Aujourd'hui : etape 'fini' (CD) / 'fait' (GM,GMD) cochee, 'range' pas cochee
+// - Lendemain et apres : rangeable directement (sans attendre la prod), tant que 'range' pas cochee
+function isItemToRange(item, steps, todayStr) {
+  if (steps[`${item.id}_range`]) return false   // deja range
+  if (item.day && todayStr && item.day > todayStr) return true   // commandes du lendemain+ : rangeables sans attendre fini/fait
   const fini = !!steps[`${item.id}_fini`]
   const fait = !!steps[`${item.id}_fait`]
-  const range = !!steps[`${item.id}_range`]
-  if (range) return false
   if (item.type === 'CD') return fini
   return fait // GM, GMD, autres
 }
@@ -323,7 +323,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       setProdLines(todoLines)
 
       // 3c) COMMANDES a ranger
-      const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap))
+      const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap, todayStr))
       setCommandeItems(todoCommandes)
 
       // 3d) VITRINE rangee
