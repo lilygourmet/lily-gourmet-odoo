@@ -54,8 +54,10 @@ function sumIndivQty(items) {
   return items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
 }
 
-// Categories ou les lignes sont cliquables pour generer une etiquette
+// Categories ou les lignes sont cliquables pour generer une etiquette.
+// CD : impression des tickets déplacée dans la Checklist (Commandes) → plus cliquable ici.
 function isClickableCategory(cat) {
+  if (cat?.id === 'CD') return false
   return cat?.viewMode === 'hour-client' || cat?.viewMode === 'delivery-all'
 }
 
@@ -399,10 +401,12 @@ function CategoryPopup({
             </div>
           </div>
           <div className="flex gap-2">
+            {cat.id !== 'CD' && (
             <button onClick={handlePrintThisOne}
                     className="px-3 py-2 bg-bordeaux text-cream rounded-full text-[11px] font-medium tracking-wider hover:bg-bordeaux-deep transition-all">
               Imprimer
             </button>
+            )}
             <button onClick={onClose}
                     className="w-9 h-9 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all">
               ✕
