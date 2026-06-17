@@ -27,6 +27,7 @@ import { confirmReception, todayISO } from '../lib/stockBoutique'
 import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
 import { loadVitrineReservations, loadResaRangees, markResaRangee, unmarkResaRangee } from '../lib/previsionsVitrine'
 import { toast } from '../lib/toast'
+import { printArticleBatch } from '../lib/printTicket'
 import { RefreshCw } from 'lucide-react'
 
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
@@ -192,6 +193,11 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 
   // Section COMMANDES (order_items CD/GM/GMD via item_steps)
   const [commandeItems, setCommandeItems] = useState([])
+  // Flux d'impression des tickets depuis Commandes : photo ? → nb de boîtes → imprimer → ranger.
+  const [printFlow, setPrintFlow] = useState(null)   // { item } ou null
+  const [printStep, setPrintStep] = useState('photo')   // 'photo' | 'boxes'
+  const [boxCount, setBoxCount] = useState(1)
+  const [printing, setPrinting] = useState(false)
 
   // Onglet RANGE : items deja ranges (separes par source pour 3 colonnes)
   const [doneVitrine, setDoneVitrine] = useState([])
@@ -446,15 +452,50 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     }
   }
 
-  async function handleCommandeDone(item) {
+  // Clic sur une commande : CD → flux « photo ? » + impression tickets ; GM/GMD → rangement direct.
+  function handleCommandeDone(item) {
+    if (item.type === 'CD') { setPrintFlow(item); setPrintStep('photo'); setBoxCount(1) }
+    else rangeCommande(item)
+  }
+
+  // Range réellement l'item (étape 'range' cochée → quitte « À ranger »).
+  async function rangeCommande(item) {
     try {
       const ok = await checkItemStep(item.id, 'range', user.id)
       if (!ok) throw new Error("La requete a echoue")
       setCommandeItems(prev => prev.filter(i => i.id !== item.id))
       refresh(true)
     } catch (e) {
-      console.error('[handleCommandeDone]', e)
+      console.error('[rangeCommande]', e)
       toast.error('Erreur : ' + (e.message || e))
+    }
+  }
+
+  // « Oui, photo prise » → imprime N tickets de boîte, puis range l'item (si au moins 1 imprimé).
+  async function confirmPrintAndRange() {
+    const item = printFlow
+    if (!item) return
+    setPrinting(true)
+    try {
+      const res = await printArticleBatch([{
+        deliveryAt: item.delivery_at,
+        orderNum: item.order_num,
+        clientName: item.client_name,
+        productName: extractItemTitle(item),
+        quantity: item.quantity || 1,
+        boxCount,
+      }])
+      if (res.ok > 0) {
+        toast.success(`${res.ok} ticket(s) imprimé(s)`)
+        setPrintFlow(null)
+        await rangeCommande(item)
+      } else {
+        toast.error('Impression échouée — vérifie l\'imprimante et réessaie.')
+      }
+    } catch (e) {
+      toast.error('Impression : ' + (e.message || e))
+    } finally {
+      setPrinting(false)
     }
   }
 
@@ -637,6 +678,41 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           />
         )}
       </div>
+
+      {printFlow && (
+        <div className="fixed inset-0 z-50 bg-black/45 flex items-end sm:items-center justify-center" onClick={() => !printing && setPrintFlow(null)}>
+          <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 pb-7" onClick={e => e.stopPropagation()}>
+            <div className="bg-cream border border-line rounded-xl px-3 py-2 mb-4">
+              <div className="font-semibold text-[14px] text-ink leading-tight">{extractItemTitle(printFlow)}</div>
+              <div className="text-[11.5px] text-ink-mute mt-0.5">{buildOrderItemSubtitle(printFlow)}</div>
+            </div>
+            {printStep === 'photo' ? (
+              <>
+                <h3 className="font-fraunces italic text-[18px] text-ink mb-1">📷 Photo prise ?</h3>
+                <p className="text-[13.5px] text-ink-soft mb-4">As-tu pris une photo de ce gâteau avant de l'emballer ?</p>
+                <div className="flex gap-2.5">
+                  <button onClick={() => setPrintFlow(null)} className="flex-1 py-3 rounded-xl bg-[#FFF4E2] border border-[#E5B978] text-[#B36B00] font-bold text-[15px]">Pas encore</button>
+                  <button onClick={() => setPrintStep('boxes')} className="flex-1 py-3 rounded-xl bg-bordeaux text-cream font-bold text-[15px]">Oui, photo prise →</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="font-fraunces italic text-[18px] text-ink mb-1">🖨️ Imprimer les tickets</h3>
+                <p className="text-[13.5px] text-ink-soft mb-3">Combien de boîtes ? (1 ticket par boîte)</p>
+                <div className="flex items-center justify-center gap-5 my-2 mb-5">
+                  <button onClick={() => setBoxCount(n => Math.max(1, n - 1))} className="w-14 h-14 rounded-full border-2 border-bordeaux text-bordeaux text-3xl font-extrabold leading-none">−</button>
+                  <div className="text-center min-w-[70px]"><div className="text-[40px] font-extrabold leading-none text-ink">{boxCount}</div><div className="text-[12px] text-ink-mute font-semibold">boîte(s)</div></div>
+                  <button onClick={() => setBoxCount(n => n + 1)} className="w-14 h-14 rounded-full border-2 border-bordeaux text-bordeaux text-3xl font-extrabold leading-none">+</button>
+                </div>
+                <div className="flex gap-2.5">
+                  <button onClick={() => setPrintStep('photo')} disabled={printing} className="flex-1 py-3 rounded-xl bg-white border border-line text-ink-soft font-bold text-[15px]">← Retour</button>
+                  <button onClick={confirmPrintAndRange} disabled={printing} className="flex-[2] py-3 rounded-xl bg-bordeaux text-cream font-bold text-[15px] disabled:opacity-50">{printing ? 'Impression…' : `🖨️ Imprimer ${boxCount}`}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
