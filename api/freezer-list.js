@@ -43,21 +43,36 @@ async function odooSearchRead(uid, model, domain, fields, opts = {}) {
 //  - "CD- Ganache cakedesign (...)" : c'est un ingrédient, pas un composant à sortir
 function parseCakedesign(productName) {
   if (!productName) return null
-  // Exclure ganache cakedesign (ingrédient)
-  if (/ganache\s+cakedesign/i.test(productName)) return null
-
-  // Rond : "15 cm cakedesign (Vanille)" ou "20 cm CD* (Citron)"
-  let m = productName.match(/(\d+)\s*cm\s+(?:CD\*?|cakedesign)\s*\(([^)]+)\)/i)
-  if (m) return { taille: `${m[1]} cm`, parfum: m[2].trim() }
-
-  // Carré : "40x40 Cakedesign CD* (Praliné)" ou "35x35 cakedesign (Praliné)"
-  m = productName.match(/(\d+)\s*x\s*(\d+)\s*cakedesign(?:\s+CD\*?)?\s*\(([^)]+)\)/i)
-  if (m) return { taille: `${m[1]}×${m[2]}`, parfum: m[3].trim() }
-
-  // Plaque suprême amande
-  if (/cakedesign\s+plaque\s+supreme\s+amande/i.test(productName)) {
-    return { taille: 'Plaque suprême amande', parfum: '' }
+  const n = productName.trim()
+  // Exclusions : ingrédients / sous-recettes (pas des fonds à sortir du congélateur)
+  if (/ganache\s+cakedesign/i.test(n)) return null   // ganache = ingrédient
+  if (/^\s*MP-/i.test(n)) return null                // MP- = matière première
+  if (/^\s*SM\b/i.test(n)) return null               // SM CD* = crèmes/craquant/bases montées à part
+  // Doit être un composant cakedesign
+  if (!/(cakedesign|CD\*)/i.test(n)) return null
+  const cleanP = (s) => (s || '').replace(/\bCD\*?\b/ig, '').replace(/cakedesign/ig, '').replace(/\s+/g, ' ').trim()
+  let m
+  // Bombé : "18cm bombé Cakedesign CD*"
+  if ((m = n.match(/(\d+)\s*cm\s*bomb[ée]/i))) return { taille: `${m[1]} cm bombé`, parfum: '' }
+  // Cœur : "Coeur 15p Cakedesign CD*"
+  if ((m = n.match(/c(?:oe|œ)ur\s*(\d+)\s*p\b/i))) return { taille: `Cœur ${m[1]}p`, parfum: '' }
+  // Carré / rectangle : "40x40 Cakedesign CD*" (parfum entre parenthèses si présent)
+  if ((m = n.match(/(\d+)\s*[x×]\s*(\d+)\s*cakedesign/i))) {
+    const pm = n.match(/\(([^)]+)\)/)
+    return { taille: `${m[1]}×${m[2]}`, parfum: pm && !/pers/i.test(pm[1]) ? pm[1].trim() : '' }
   }
+  // Rond : "15 cm cakedesign (Vanille)", "20 cm CD* vanille Bleu", "CD- Cakedesign 40 cm (40 pers) CD*"
+  if ((m = n.match(/(\d+)\s*cm/i))) {
+    let parfum = ''
+    const pm = n.match(/\(([^)]+)\)/)
+    if (pm) parfum = /pers/i.test(pm[1]) ? '' : pm[1].trim()
+    else { const a = n.match(/\d+\s*cm\s*(?:CD\*?|cakedesign)\s*(.+)$/i); if (a) parfum = cleanP(a[1]) }
+    return { taille: `${m[1]} cm`, parfum }
+  }
+  // Plaque : "CD- Cakedesign Plaque Oreo CD*", "Plaque fraisier"…
+  if ((m = n.match(/plaque\s+(.+?)\s*(?:CD\*?\s*)?$/i))) return { taille: `Plaque ${cleanP(m[1])}`.replace(/\s+/g, ' ').trim(), parfum: '' }
+  // Letter Cake
+  if (/letter\s*cake/i.test(n)) return { taille: 'Letter Cake', parfum: '' }
 
   return null
 }
