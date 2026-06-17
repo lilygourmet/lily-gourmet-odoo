@@ -102,10 +102,12 @@ export default function OcpOrderView() {
       const m = {}
       for (const t in sizes) {
         const isEnt = entTmpls.has(String(t))
-        m[t] = sizes[t].filter(v => !hiddenVar.has(v.id)).map(v => ({
-          id: v.id, size: v.size,
-          label: isEnt ? (/^1$/.test(String(v.size)) ? 'Individuel' : (v.size ? v.size + ' pers' : 'Standard')) : (v.size || 'Standard'),
-        }))
+        const seen = new Set()
+        const rows = sizes[t]
+          .filter(v => !hiddenVar.has(v.id) && String(v.size || '').trim())   // SEULEMENT les vraies tailles (pas les parfums)
+          .filter(v => { const s = String(v.size); if (seen.has(s)) return false; seen.add(s); return true })   // une ligne par taille distincte
+          .map(v => ({ id: v.id, size: v.size, label: isEnt ? (/^1$/.test(String(v.size)) ? 'Individuel' : v.size + ' pers') : String(v.size) }))
+        if (rows.length) m[t] = rows
       }
       setEntVar(m)
     }).catch(() => {})
@@ -117,7 +119,7 @@ export default function OcpOrderView() {
 
   const findCat = k => cats.find(c => c.key === k)
   // Sélectionnable par taille = entremets OU tout produit ayant plusieurs tailles officielles.
-  const isSizeItem = (c, it) => c?.kind === 'size' || (it?.tmplId && (entVar[it.tmplId]?.length > 1))
+  const isSizeItem = (c, it) => c?.kind === 'size' || (it?.tmplId && !it.variantId && (entVar[it.tmplId]?.length > 1))
   const totOf = (c, ii) => {
     if (isSizeItem(c, c.items[ii])) { const base = `${c.key}-${ii}`; return Object.keys(qty).filter(k => k.startsWith(base + ':')).reduce((s, k) => s + qty[k], 0) }
     return qty[`${c.key}-${ii}`] || 0
@@ -189,7 +191,7 @@ export default function OcpOrderView() {
 function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar }) {
   const base = `${c.key}-${ii}`; const tot = totOf(c, ii); const sel = tot > 0
   // Sélectionnable par taille = entremets OU produit ayant plusieurs tailles officielles.
-  const isSize = c.kind === 'size' || (it.tmplId && (entVar[it.tmplId]?.length > 1))
+  const isSize = c.kind === 'size' || (it.tmplId && !it.variantId && (entVar[it.tmplId]?.length > 1))
   const canTap = !isSize && (c.kind === 'unit' || c.kind === 'free')
   const [imgOk, setImgOk] = useState(true)
   const hasImg = it.img && imgOk
@@ -240,7 +242,7 @@ function Recap({ cats, qty, chg, setVal, autre, zone, date, time, entVar, onClos
     if (!c || !it) return
     if (!byBase[base]) { byBase[base] = { name: it.name + (it.unit ? ` · ${it.unit}` : ''), rows: [] }; groups.push(byBase[base]) }
     let label = ''
-    if (c.kind === 'size' || (it.tmplId && entVar[it.tmplId]?.length > 1)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); label = v ? v.label : '' }
+    if (c.kind === 'size' || (it.tmplId && !it.variantId && entVar[it.tmplId]?.length > 1)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); label = v ? v.label : '' }
     byBase[base].rows.push({ key, label, n: qty[key] })
   })
   return (
