@@ -2448,7 +2448,7 @@ async function notifyOcpOrder(orderName, date, detail) {
     const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_notif_ocp.eq.true')
     const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
     if (!recipients.length) return { recipients: 0, sent: 0 }
-    const text = `🍽️ Devis OCP ${orderName}${date ? ` (livraison ${date})` : ''} :\n${detail || '—'}`
+    const text = `🍽️ Devis OCP ${orderName}${date ? ` (livraison ${date})` : ''} : ${detail || '—'}`
     let sent = 0
     for (const u of recipients) {
       const ok = await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
@@ -2560,13 +2560,13 @@ async function handleOrderCreateOcp(req, res) {
     console.log(`[ocp-devis] ${orderName} pour ${p[0].name} (${orderLines.length} lignes)`)
     // Détail du devis SANS prix (articles + quantités), sur une seule ligne pour le modèle WhatsApp.
     const detailParts = items.map(it => {
-      if (it.autre) return `• À préciser: ${String(it.autre).replace(/\s+/g, ' ').trim()}`
+      if (it.autre) return `À préciser: ${String(it.autre).replace(/\s+/g, ' ').trim()}`
       const q = Number(it.qty) || 1
       const nm = String(it.name || '').replace(/\s+/g, ' ').trim()
-      return nm ? `• ${nm}${q > 1 ? ` ×${q}` : ''}${(it.free && it.unit) ? ` (${it.unit})` : ''}` : ''
+      return nm ? `${nm}${q > 1 ? ` ×${q}` : ''}${(it.free && it.unit) ? ` (${it.unit})` : ''}` : ''
     }).filter(Boolean)
-    if (zone) detailParts.push(`• Livraison ${zone}`)
-    let detail = detailParts.join('\n')   // 1 article par ligne
+    if (zone) detailParts.push(`Livraison ${zone}`)
+    let detail = detailParts.join(' · ')   // une seule ligne (WhatsApp refuse les retours à la ligne)
     if (detail.length > 950) detail = detail.slice(0, 950) + '…'
     let notif = null
     try { notif = await notifyOcpOrder(orderName, date, detail) } catch (e) { notif = { error: e?.message || String(e) } }
