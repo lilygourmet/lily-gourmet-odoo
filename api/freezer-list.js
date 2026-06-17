@@ -61,12 +61,13 @@ function parseCakedesign(productName) {
     const pm = n.match(/\(([^)]+)\)/)
     return { taille: `${m[1]}×${m[2]}`, parfum: pm && !/pers/i.test(pm[1]) ? pm[1].trim() : '' }
   }
-  // Rond : "15 cm cakedesign (Vanille)", "20 cm CD* vanille Bleu", "CD- Cakedesign 40 cm (40 pers) CD*"
+  // Rond : "15 cm cakedesign (Vanille)", "20 cm CD* vanille Bleu", "CD- Cakedesign 40 cm (40 pers) CD* (Oréo)"
   if ((m = n.match(/(\d+)\s*cm/i))) {
     let parfum = ''
-    const pm = n.match(/\(([^)]+)\)/)
-    if (pm) parfum = /pers/i.test(pm[1]) ? '' : pm[1].trim()
-    else { const a = n.match(/\d+\s*cm\s*(?:CD\*?|cakedesign)\s*(.+)$/i); if (a) parfum = cleanP(a[1]) }
+    const allParens = [...n.matchAll(/\(([^)]+)\)/g)].map(x => x[1].trim())
+    const flav = allParens.filter(p => !/pers/i.test(p))   // ignore "(40 pers)"
+    if (flav.length) parfum = flav[flav.length - 1]         // dernier parfum réel, ex. "(Oréo)"
+    else if (allParens.length === 0) { const a = n.match(/\d+\s*cm\s*(?:CD\*?|cakedesign)\s*(.+)$/i); if (a) parfum = cleanP(a[1]) }
     return { taille: `${m[1]} cm`, parfum }
   }
   // Plaque : "CD- Cakedesign Plaque Oreo CD*", "Plaque fraisier"…
@@ -141,7 +142,10 @@ async function fetchListForDate(date, uid) {
   const items = []
   for (const child of childMos) {
     const parent = parentMap[child.origin] || { scode: '', productName: '' }
-    const scode = parent.scode
+    // scode : via le MO parent (fond enfant d'un MO WHLVP), OU directement dans l'origine
+    // (grand gâteau / plaque : le fond est le MO rattaché à la commande S#### elle-même).
+    let scode = parent.scode
+    if (!scode) { const ds = (child.origin || '').match(/S\d{3,}/i); if (ds) scode = ds[0].toUpperCase() }
     // Si pas de parfum (cas Plaque suprême amande), extraire du parent
     let parfum = child.parfum
     if (!parfum && parent.productName) {
