@@ -2030,8 +2030,9 @@ async function handleDevisCancel(req, res) {
     const newState = after[0]?.state || 'cancel'
     console.log(`[devis-cancel] ${name} (id ${id}) annulé par user=${req.body?.actorId || '?'} → ${newState}`)
     // Devis OCP annulé → notif aux mêmes destinataires (admins + « Notif devis OCP »).
-    if (/\bOCP\b/i.test(partnerName)) notifyOcpCancel(name).catch(() => {})
-    return res.status(200).json({ ok: true, name, state: newState })
+    let notif = null
+    if (/\bOCP\b/i.test(partnerName)) { try { notif = await notifyOcpCancel(name) } catch (e) { notif = { error: e?.message || String(e) } } }
+    return res.status(200).json({ ok: true, name, state: newState, notif })
   } catch (e) {
     console.error('[devis-cancel]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
@@ -2465,13 +2466,16 @@ async function notifyOcpCancel(orderName) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_notif_ocp.eq.true')
     const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
-    if (!recipients.length) return
+    if (!recipients.length) return { recipients: 0, sent: 0 }
     const text = `❌ Devis OCP ${orderName} ANNULÉ.`
+    let sent = 0
     for (const u of recipients) {
-      await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
+      const ok = await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
+      if (ok) sent++
     }
-    console.log(`[ocp-cancel] ${recipients.length} destinataire(s) pour ${orderName}`)
-  } catch (e) { console.warn('[ocp-cancel]', e?.message || e) }
+    console.log(`[ocp-cancel] ${recipients.length} destinataire(s), ${sent} envoyé(s) pour ${orderName}`)
+    return { recipients: recipients.length, sent }
+  } catch (e) { console.warn('[ocp-cancel]', e?.message || e); return { error: e?.message || String(e) } }
 }
 
 // Crée le devis OCP (lien dédié). Retrouve OCP SA, résout les variantes (entremets par taille,
