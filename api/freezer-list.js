@@ -152,9 +152,15 @@ async function fetchListForDate(date, uid) {
     // Si pas de parfum (cas Plaque suprême amande), extraire du parent
     let parfum = child.parfum
     if (!parfum && parent.productName) {
-      // Parent format "CD- Cake Design X étages (taille, Parfum)"
-      const pm = parent.productName.match(/\(([^,)]+)(?:,\s*([^)]+))?\)/)
-      if (pm) parfum = (pm[2] || pm[1] || '').trim()
+      // Parent "CD- Cake Design X étages (pers, forme, parfum…)" : on jette le nombre de
+      // personnes et la forme, on garde le(s) vrai(s) parfum(s).
+      const pm = parent.productName.match(/\(([^)]+)\)/)
+      if (pm) {
+        const FORMES = /^(rond|carr[ée]|rectangle|ovale|c(?:oe|œ)ur|bomb[ée]|fleur|[ée]toile|plaque|letter\s*cake|number\s*cake)$/i
+        const toks = pm[1].split(',').map(t => t.trim())
+          .filter(t => t && !/^\d+$/.test(t) && !/pers/i.test(t) && !FORMES.test(t))
+        if (toks.length) parfum = toks.join(', ')
+      }
     }
     // Ignorer les MO sans scode (= stock/réapprovisionnement, pas une commande client)
     if (!scode) continue
