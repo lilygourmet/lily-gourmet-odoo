@@ -489,10 +489,9 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     }
   }
 
-  // Clic sur une commande : CD → flux « photo ? » + impression tickets ; GM/GMD → rangement direct.
+  // Clic sur une commande (CD, GM, GMD) : flux « photo ? » + impression tickets pour TOUS.
   function handleCommandeDone(item) {
-    if (item.type === 'CD') { setPrintFlow(item); setPrintStep('photo'); setBoxCount(1) }
-    else rangeCommande(item)
+    setPrintFlow(item); setPrintStep('photo'); setBoxCount(1)
   }
 
   // Range réellement l'item (étape 'range' cochée → quitte « À ranger »).
