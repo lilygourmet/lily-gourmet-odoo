@@ -508,6 +508,21 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
                   style={isArabic(freeText) ? { direction: 'rtl', textAlign: 'right' } : {}}
                   autoFocus
                 />
+                {/* Formules rapides : clic = insère la formule + un espace (plus besoin de la retaper). */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {['Joyeux anniversaire', 'Happy Birthday', 'عيد ميلاد سعيد'].map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onMouseDown={ev => ev.preventDefault()}
+                      onClick={() => setFreeText(t => (t && !/\s$/.test(t) ? t + ' ' : t) + g + ' ')}
+                      className="text-[11px] px-2 py-0.5 rounded border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream transition-colors"
+                      style={/[؀-ۿ]/.test(g) ? { fontFamily: '"Noto Naskh Arabic", "Amiri", sans-serif' } : {}}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex flex-wrap gap-1 mb-2 items-center">
                   {EMOJI_PICKER.map(e => (
                     <button key={e} type="button" onMouseDown={ev => ev.preventDefault()} onClick={() => setFreeText(t => t + e)} className="text-[16px] px-1.5 py-0.5 hover:bg-cream rounded">{e}</button>

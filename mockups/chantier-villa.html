@@ -70,7 +70,7 @@
   .opts{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
   .opt{width:158px;border:2px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;position:relative}
   .opt.clk{cursor:pointer}.opt.clk:hover{border-color:var(--gold)}
-  .opt.chosen{border-color:var(--accent);box-shadow:0 0 0 3px rgba(169,112,63,.12)}
+  .opt.chosen{border-color:var(--ok);box-shadow:0 0 0 3px rgba(62,122,82,.32)}
   .opt .ph{height:90px;display:flex;align-items:center;justify-content:center;font-size:30px;overflow:hidden}
   .opt .ph img{width:100%;height:100%;object-fit:cover}
   .opt .info{padding:8px 9px}
@@ -78,7 +78,9 @@
   .opt .sup{font-size:10.5px;color:var(--mute);margin-top:2px}
   .opt .pr{font-size:13px;font-weight:700;color:var(--accent-deep);margin-top:5px}
   .opt .lnk{font-size:10.5px;color:var(--accent);text-decoration:underline;display:inline-block;margin-top:3px}
-  .opt .badge-ok{position:absolute;top:6px;right:6px;background:var(--ok);color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:2px 7px}
+  .opt .badge-ok{position:absolute;top:6px;right:6px;z-index:3;background:var(--ok);color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:3px 9px;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+  .opt .check{position:absolute;top:6px;left:6px;z-index:3;width:26px;height:26px;border-radius:50%;background:var(--ok);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+  .dsub{display:flex;justify-content:space-between;padding:8px 8px 2px;font-size:12.5px;font-weight:700;color:var(--accent-deep)}
   .add-opt{width:158px;min-height:158px;border:2px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--soft);font-size:12px;cursor:pointer;background:#FCFAF6;text-align:center;padding:8px}
   .add-opt:hover{border-color:var(--accent);color:var(--accent)}.add-opt .plus{font-size:24px}
   .pform{border:1.5px solid var(--accent);border-radius:12px;padding:12px;margin-top:10px;background:#FCFAF6}
@@ -251,7 +253,7 @@ function renderRoom(){
     const opts=it.options.map((o,oi)=>{
       const chosen=it.chosen===oi;
       return `<div class="opt ${isAdmin()?'clk':''} ${chosen?'chosen':''}" ${isAdmin()?`onclick="choose('${r.id}',${ii},${oi})"`:''}>
-        ${chosen?'<span class="badge-ok">✓ choisi</span>':''}
+        ${chosen?'<span class="check">✓</span><span class="badge-ok">choisi</span>':''}
         <div class="ph" style="background:${o.c}22">${o.img?`<img src="${o.img}">`:ic(it.name)}</div>
         <div class="info"><div class="on2">${o.n}</div><div class="sup">${o.sup}${o.qte>1?' · ×'+o.qte:''}</div>
         <div class="pr">${(o.pr*(o.qte||1)).toLocaleString('fr-FR')} DH</div>
@@ -300,11 +302,13 @@ function choose(rid,ii,oi){if(!isAdmin())return;const it=rooms.find(x=>x.id===ri
 function renderDevis(){
   let total=0;
   const body=rooms.map(r=>{
-    const rows=r.items.map(it=>{const ch=it.chosen!=null?it.options[it.chosen]:null;const line=ch?ch.pr*(ch.qte||1):0;if(ch)total+=line;
+    let sub=0;
+    const rows=r.items.map(it=>{const ch=it.chosen!=null?it.options[it.chosen]:null;const line=ch?ch.pr*(ch.qte||1):0;if(ch){total+=line;sub+=line;}
       return `<div class="drow ${ch?'':'miss'}"><div class="ic">${ic(it.name)}</div>
         <div class="nm"><div class="a">${it.name}</div><div class="b">${ch?ch.n+' · '+ch.sup+(ch.qte>1?' ×'+ch.qte:''):'— pas encore choisi —'}</div></div>
         <div class="pr">${ch?line.toLocaleString('fr-FR')+' DH':'à choisir'}</div></div>`;}).join('');
-    return `<div class="dgroup"><div class="gh">${r.name}</div>${rows}</div>`;
+    const subrow = sub>0 ? `<div class="dsub"><span>Sous-total ${r.name}</span><span>${sub.toLocaleString('fr-FR')} DH</span></div>` : '';
+    return `<div class="dgroup"><div class="gh">${r.name}</div>${rows}${subrow}</div>`;
   }).join('');
   document.getElementById('devisbody').innerHTML=body;
   document.getElementById('dtotal').textContent=total.toLocaleString('fr-FR')+' DH';

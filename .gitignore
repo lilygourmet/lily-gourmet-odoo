@@ -30,3 +30,6 @@ dist-ssr
 
 # Sauvegardes locales
 backups/
+
+# Photos sources (lourd, hors git)
+cake-photos/

@@ -1,0 +1,254 @@
+// Maquette COMPOSEUR de page : poser plusieurs photos/formes différentes sur une A4,
+// rangement automatique + glisser pour ajuster, par élément (forme, taille, rotation, dupliquer).
+//   node scripts/gen-composeur.mjs "Spiderman LS"
+import { readdirSync, writeFileSync } from 'node:fs'
+const stem = process.argv[2] || 'Spiderman LS'
+const dir = `cake-photos/${stem}`
+const files = readdirSync(dir).filter(f => /\.png$/i.test(f)).sort((a,b)=>parseInt(a)-parseInt(b))
+const rel = f => '../' + encodeURI(`cake-photos/${stem}/${f}`)
+const items = files.map((f,i)=>({id:i+1,nom:f.replace(/^\d+\s/,'').replace(/\.png$/i,''),src:rel(f)}))
+
+const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Composeur — Photos gâteaux (${stem})</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Pacifico&family=Lobster&family=Playfair+Display:wght@700&family=Montserrat:wght@800&family=Satisfy&display=swap" rel="stylesheet">
+<style>
+  :root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;--bordeaux:#993556;--line:#e8dcc9}
+  *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px}
+  header{background:var(--bordeaux);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
+  header h1{margin:0;font-size:15px}
+  .toolbar{display:flex;gap:8px}.tb{background:rgba(255,255,255,.16);border:none;color:#fff;padding:7px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer}
+  .wrap{display:flex;height:calc(100vh - 44px)}
+  .lib{width:240px;flex-shrink:0;border-right:1px solid var(--line);padding:10px;overflow:auto}
+  .search{width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px;font-size:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .card{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:5px;cursor:pointer;text-align:center}
+  .card:hover{border-color:var(--bordeaux)}.card img{width:100%;height:64px;object-fit:contain}.card .nm{font-size:9.5px;color:var(--ink-soft);height:22px;overflow:hidden;line-height:1.05;margin-top:2px}
+  .add{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--bordeaux);color:var(--bordeaux);font-weight:800;font-size:12px;border-radius:10px;min-height:90px;cursor:pointer;background:#faf4ee;text-align:center}
+  .center{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:16px;background:#e9e2d6}
+  .page{position:relative;width:520px;aspect-ratio:210/297;background:#fff;border:1px solid #bbb;box-shadow:0 3px 12px rgba(0,0,0,.12);flex-shrink:0}
+  .it{position:absolute;overflow:hidden;cursor:move}.it img{width:100%;height:100%;pointer-events:none}
+  .it.sel{outline:2px solid var(--bordeaux);outline-offset:1px}
+  .it .ol{position:absolute;inset:0;pointer-events:none}
+  .panel{width:280px;flex-shrink:0;border-left:1px solid var(--line);background:var(--cream-warm);padding:12px;overflow:auto}
+  .empty{color:var(--ink-mute);text-align:center;margin-top:40px;font-size:12px}
+  .lab{font-size:10px;font-weight:700;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px;display:block}
+  .mb{margin-bottom:8px}.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+  select.sel2{width:100%;padding:6px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:12px}
+  .mini{display:flex;align-items:center;gap:4px}.mini button{width:24px;height:24px;border-radius:6px;border:1px solid var(--bordeaux);background:#fff;color:var(--bordeaux);font-size:14px;font-weight:800;cursor:pointer;padding:0;line-height:1}
+  .mini input{width:42px;text-align:center;font-weight:700;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:3px}
+  .tgl{padding:5px 8px;border-radius:7px;border:1px solid var(--bordeaux);background:#fff;color:var(--bordeaux);font-weight:700;font-size:11px;cursor:pointer}
+  .dim{text-align:center;font-weight:800;color:var(--bordeaux);font-size:14px;margin:6px 0}
+  .pbtn{width:100%;padding:9px;border-radius:9px;font-weight:700;border:none;cursor:pointer;margin-top:6px}
+  .danger{background:#fff;border:1px solid #d88;color:#b42424}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <clipPath id="clpHeart" clipPathUnits="objectBoundingBox"><path d="M0.5,0.97 C0.5,0.97,0.03,0.62,0.03,0.32 C0.03,0.14,0.18,0.03,0.34,0.03 C0.43,0.03,0.5,0.1,0.5,0.18 C0.5,0.1,0.57,0.03,0.66,0.03 C0.82,0.03,0.97,0.14,0.97,0.32 C0.97,0.62,0.5,0.97,0.5,0.97 Z"/></clipPath>
+</defs></svg>
+<header><h1>🎂 Composeur de page — ${stem}</h1>
+  <div class="toolbar"><button class="tb" onclick="addText()">✍️ Texte</button><button class="tb" onclick="addShape()">⬤ Forme</button><button class="tb" onclick="arrange()">🪄 Ranger auto</button><button class="tb" onclick="addPage()">＋ Page</button><button class="tb" onclick="alert('(maquette) impression')">🖨️ Imprimer</button></div>
+</header>
+<div class="wrap">
+  <div class="lib"><input class="search" id="q" placeholder="Chercher…" oninput="renderLib()"><div class="grid" id="grid"></div>
+    <input type="file" id="addInput" accept="image/*" multiple style="display:none" onchange="addPhotos(event)"></div>
+  <div class="center" id="center"></div>
+  <div class="panel"><div class="empty" id="empty">Clique un élément à gauche pour l'ajouter à la page.<br><br>Puis glisse-le pour le placer, ou règle-le ici.</div>
+    <div id="ed" style="display:none">
+      <div class="dim" id="dim"></div>
+      <div class="mb"><span class="lab">Taille (%) : <span id="pctlbl">100</span>%</span><input id="fpct" type="range" min="10" max="300" value="100" oninput="setPct(this.value)" style="width:100%"></div>
+      <div id="edPhoto">
+      <div class="mb"><span class="lab">Forme</span><select class="sel2" id="fForme" onchange="upd('forme',this.value)">
+        <option value="none">Aucune (photo détourée)</option><option value="rond">Rond / ovale</option><option value="carre">Carré</option><option value="arrondi">Carré arrondi</option><option value="coeur">Cœur</option><option value="losange">Losange</option><option value="hexagone">Hexagone</option></select></div>
+      <div class="mb" id="fitField"><span class="lab">Photo dans la forme</span><select class="sel2" id="fFit" onchange="upd('fit',this.value)">
+        <option value="cover">Remplir</option><option value="contain">Entière</option><option value="fill">Déformer</option></select></div>
+      <div class="mb" id="zoomRow"><span class="lab">Zoom photo (dé/zoom) : <span id="zlbl">100</span>%</span><input id="fz" type="range" min="20" max="300" value="100" oninput="$('zlbl').textContent=this.value;upd('zoom',parseInt(this.value)||100)" style="width:100%"></div>
+      <div class="mb" id="shapeColorRow" style="display:none"><span class="lab">Couleur de la forme</span><input id="fshcol" type="color" value="#fce8ef" oninput="upd('color',this.value)" style="width:44px;height:32px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:2px"></div>
+      <div class="row mb">
+        <div><span class="lab" id="wLab">Largeur (cm)</span><div class="mini"><button onclick="bump('w',-0.5)">−</button><input id="fw" type="number" step="0.5" oninput="setDim('w',this.value)"><button onclick="bump('w',0.5)">+</button></div></div>
+        <div><span class="lab">Hauteur (cm)</span><div class="mini"><button onclick="bump('h',-0.5)">−</button><input id="fh" type="number" step="0.5" oninput="setDim('h',this.value)"><button onclick="bump('h',0.5)">+</button></div></div>
+        <button class="tgl" id="propBtn" onclick="toggleProp()">🔒 Prop.</button>
+      </div>
+      </div>
+      <div id="edText" style="display:none">
+        <div class="mb"><span class="lab">Texte (Entrée = nouvelle ligne)</span><textarea class="sel2" id="ftxt" rows="2" style="resize:vertical;font-family:inherit" oninput="upd('txt',this.value)"></textarea></div>
+        <div class="mb"><span class="lab">Police</span><select class="sel2" id="ffont" onchange="upd('font',this.value)">
+          <option value="'Dancing Script',cursive">Dancing Script (manuscrite)</option>
+          <option value="'Great Vibes',cursive">Great Vibes (élégante)</option>
+          <option value="'Satisfy',cursive">Satisfy (décontractée)</option>
+          <option value="'Pacifico',cursive">Pacifico (ronde)</option>
+          <option value="'Lobster',cursive">Lobster (épaisse)</option>
+          <option value="'Playfair Display',serif">Playfair (chic serif)</option>
+          <option value="'Montserrat',sans-serif">Montserrat (moderne)</option>
+          <option value="Georgia,serif">Georgia (classique)</option>
+        </select></div>
+        <div class="row mb">
+          <div><span class="lab">Couleur</span><input id="fcol" type="color" value="#7a1f3d" oninput="upd('color',this.value)" style="width:44px;height:32px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:2px"></div>
+          <div><span class="lab">Taille texte (cm)</span><div class="mini"><button onclick="bumpText(-0.3)">−</button><input id="ftsize" type="number" step="0.3" oninput="setTextSize(this.value)"><button onclick="bumpText(0.3)">+</button></div></div>
+        </div>
+      </div>
+      <div class="row mb"><div><span class="lab">Rotation (°)</span><div class="mini"><button onclick="rot(-90)">↺</button><input id="frot" type="number" step="5" oninput="upd('rot',parseFloat(this.value)||0)"><button onclick="rot(90)">↻</button></div></div></div>
+      <div class="mb"><span class="lab">Calque (devant / derrière la photo)</span><div class="row"><button class="pbtn" style="margin:0;flex:1" onclick="toFront()">⬆️ Devant</button><button class="pbtn" style="margin:0;flex:1" onclick="toBack()">⬇️ Derrière</button></div></div>
+      <button class="pbtn" style="background:var(--bordeaux);color:#fff" onclick="dup()">✦ Dupliquer cet élément</button>
+      <button class="pbtn danger" onclick="delSel()">🗑️ Retirer de la page</button>
+    </div>
+    <div id="grpPanel" style="display:none">
+      <div class="dim"><span id="grpCount">2</span> éléments sélectionnés</div>
+      <p id="grpHint" style="color:var(--ink-soft);font-size:12px;margin:.4em 0 1em">Maj+clic pour ajouter/enlever. Puis « Grouper ».</p>
+      <button class="pbtn" style="background:var(--bordeaux);color:#fff" onclick="groupSel()">🔗 Grouper</button>
+      <button class="pbtn" onclick="ungroupSel()">⛓️‍💥 Dégrouper</button>
+      <button class="pbtn" style="background:var(--bordeaux);color:#fff" onclick="dup()">✦ Dupliquer la sélection (ensemble)</button>
+      <button class="pbtn danger" onclick="delSel()">🗑️ Retirer la sélection</button>
+    </div>
+  </div>
+</div>
+<script>
+  var LIB=${JSON.stringify(items)};
+  var CMW=21, CMH=29.7, MARG=1, PW=520;              // PW = largeur affichée d'une page (px)
+  var PLACED=[], selUids=[], grpSeq=0, uid=0, prop=true, npages=1, ratios={}, ref={w:5,h:5,size:1.5};
+  function $(id){return document.getElementById(id)}
+  function shapeCss(f){ if(f==='rond')return 'border-radius:50%'; if(f==='arrondi')return 'border-radius:16%';
+    if(f==='losange')return 'clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)';
+    if(f==='hexagone')return 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)';
+    if(f==='coeur')return 'clip-path:url(#clpHeart)'; return ''; }
+  function fitNow(it){ return it.forme==='none'?'fill':it.fit }
+  function imgStyle(it){ return 'object-fit:'+fitNow(it)+';transform:scale('+((it.zoom||100)/100)+')' }   // zoom photo (rotation = sur le bloc entier)
+  function outline(f){ if(f==='none')return ''; var s='stroke=\\'#cfc7ba\\' fill=\\'none\\' stroke-width=\\'1\\' vector-effect=\\'non-scaling-stroke\\''; var p='';
+    if(f==='rond')p='<ellipse cx=50 cy=50 rx=49.5 ry=49.5 '+s+'/>'; else if(f==='carre')p='<rect x=0.5 y=0.5 width=99 height=99 '+s+'/>';
+    else if(f==='arrondi')p='<rect x=0.5 y=0.5 width=99 height=99 rx=16 ry=16 '+s+'/>';
+    else if(f==='losange')p='<polygon points=\\'50,0.5 99.5,50 50,99.5 0.5,50\\' '+s+'/>';
+    else if(f==='hexagone')p='<polygon points=\\'25,0.5 75,0.5 99.5,50 75,99.5 25,99.5 0.5,50\\' '+s+'/>';
+    else if(f==='coeur')p='<path d=\\'M50,97 C50,97,3,62,3,32 C3,14,18,3,34,3 C43,3,50,10,50,18 C50,10,57,3,66,3 C82,3,97,14,97,32 C97,62,50,97,50,97 Z\\' '+s+'/>';
+    return '<svg class=ol viewBox=\\'0 0 100 100\\' preserveAspectRatio=none>'+p+'</svg>'; }
+
+  function renderLib(){ var q=($('q').value||'').toLowerCase();
+    $('grid').innerHTML='<div class=add onclick="$(\\'addInput\\').click()">＋ Ajouter</div>'+LIB.filter(function(x){return x.nom.toLowerCase().indexOf(q)>=0}).map(function(x){
+      return '<div class=card onclick="addItem('+x.id+')"><img src="'+x.src+'" loading=lazy><div class=nm>'+x.nom+'</div></div>'}).join(''); }
+  function addPhotos(e){ for(var i=0;i<e.target.files.length;i++){ var f=e.target.files[i];
+      var def=f.name.replace(/\\.[^.]+$/,''); var nm=prompt('Nom de cette photo ?', def); if(nm===null) continue;
+      var id=Math.max(0,...LIB.map(function(x){return x.id}))+1;
+      LIB.unshift({id:id,nom:(nm||def),src:URL.createObjectURL(f)}); }   // unshift = reste en premier
+    e.target.value=''; renderLib(); }
+
+  function addItem(libId){ var l=LIB.find(function(x){return x.id===libId}); var it={uid:++uid,src:l.src,nom:l.nom,forme:'none',fit:'contain',w:5,h:5,rot:0,zoom:100,ratio:1,x:MARG,y:MARG,page:0};
+    var img=new Image(); img.onload=function(){ it.ratio=img.naturalWidth/img.naturalHeight||1; it.h=Math.max(0.5,Math.round(it.w/it.ratio*2)/2);
+      var s=freeSpot(it.w,it.h); it.page=s.page; it.x=s.x; it.y=s.y; renderPages(); selItem(it.uid); };
+    img.src=l.src; PLACED.push(it); }
+  function addShape(){ var it={uid:++uid,type:'shape',forme:'rond',color:'#fce8ef',w:5,h:5,ratio:1,rot:0};
+    var s=freeSpot(it.w,it.h); it.page=s.page; it.x=s.x; it.y=s.y; PLACED.push(it); renderPages(); selItem(it.uid); }
+
+  // rangement automatique : étagères (shelf packing) sur la zone utile de l'A4
+  function arrange(){ var ux=MARG, uy=MARG, rowH=0, page=0; var UW=CMW-2*MARG, GAP=0.4;
+    PLACED.forEach(function(it){ if(ux+it.w > MARG+UW+0.001){ ux=MARG; uy+=rowH+GAP; rowH=0; } if(uy+it.h > CMH-MARG+0.001){ page++; ux=MARG; uy=MARG; rowH=0; }
+      it.page=page; it.x=ux; it.y=uy; ux+=it.w+GAP; rowH=Math.max(rowH,it.h); });
+    npages=Math.max(1,page+1); renderPages(); }
+  function addPage(){ npages++; renderPages(); }
+
+  function renderPages(){ var html='';
+    for(var p=0;p<npages;p++){ var cells='';
+      PLACED.filter(function(it){return it.page===p}).forEach(function(it){
+        if(it.type==='text'){ var fs=it.size/CMW*PW;
+          cells+='<div class="it'+(isSel(it.uid)?' sel':'')+'" data-uid="'+it.uid+'" style="left:'+(it.x/CMW*100)+'%;top:'+(it.y/CMH*100)+'%;overflow:visible;transform:rotate('+(it.rot||0)+'deg);font-size:'+fs+'px;line-height:1.1;color:'+it.color+';font-weight:700;white-space:pre;text-align:center;font-family:'+(it.font||"'Dancing Script',cursive")+'">'+esc(it.txt)+'</div>';
+        } else if(it.type==='shape'){
+          var posS='left:'+(it.x/CMW*100)+'%;top:'+(it.y/CMH*100)+'%;width:'+(it.w/CMW*100)+'%;height:'+(it.h/CMH*100)+'%';
+          cells+='<div class="it'+(isSel(it.uid)?' sel':'')+'" data-uid="'+it.uid+'" style="'+posS+';'+shapeCss(it.forme)+';background:'+it.color+';transform:rotate('+(it.rot||0)+'deg)">'+outline(it.forme)+'</div>';
+        } else {
+          var pos='left:'+(it.x/CMW*100)+'%;top:'+(it.y/CMH*100)+'%;width:'+(it.w/CMW*100)+'%;height:'+(it.h/CMH*100)+'%';
+          cells+='<div class="it'+(isSel(it.uid)?' sel':'')+'" data-uid="'+it.uid+'" style="'+pos+';'+shapeCss(it.forme)+';transform:rotate('+(it.rot||0)+'deg)"><img src="'+it.src+'" style="'+imgStyle(it)+'">'+outline(it.forme)+'</div>';
+        } });
+      html+='<div class=page data-page="'+p+'">'+cells+'</div>'; }
+    $('center').innerHTML=html; bindDrag(); }
+
+  // glisser-déposer : on déplace TOUTE la sélection EN DIRECT (fluide)
+  var drag=null;
+  function elFor(u){ return $('center').querySelector('.it[data-uid="'+u+'"]'); }
+  function bindDrag(){ Array.prototype.forEach.call($('center').querySelectorAll('.it'),function(el){
+    el.addEventListener('pointerdown',function(ev){ var it=PLACED.find(function(x){return x.uid==el.dataset.uid}); if(!it)return;
+      if(ev.shiftKey){ selItem(it.uid,true); ev.preventDefault(); return; }      // Maj+clic = ajouter/enlever de la sélection
+      if(!isSel(it.uid)) selItem(it.uid,false);
+      var pageEl=el.closest('.page');
+      var set=selUids.map(function(u){ var p=PLACED.find(function(x){return x.uid===u}); return p?{it:p,el:elFor(u),x0:p.x,y0:p.y}:null }).filter(Boolean);
+      drag={pageEl:pageEl,sx:ev.clientX,sy:ev.clientY,set:set};
+      el.setPointerCapture(ev.pointerId); ev.preventDefault(); }); }); }
+  document.addEventListener('pointermove',function(ev){ if(!drag)return; var r=drag.pageEl.getBoundingClientRect();
+    var dxcm=(ev.clientX-drag.sx)/r.width*CMW, dycm=(ev.clientY-drag.sy)/r.height*CMH;
+    drag.set.forEach(function(d){ d.it.x=Math.max(0,Math.min(CMW-d.it.w,Math.round((d.x0+dxcm)*10)/10)); d.it.y=Math.max(0,Math.min(CMH-d.it.h,Math.round((d.y0+dycm)*10)/10));
+      if(d.el){ d.el.style.left=(d.it.x/CMW*100)+'%'; d.el.style.top=(d.it.y/CMH*100)+'%'; } }); });
+  document.addEventListener('pointerup',function(){ drag=null; });
+  document.addEventListener('keydown',function(ev){ if(ev.key!=='Backspace'&&ev.key!=='Delete')return;
+    var t=document.activeElement, tg=t&&t.tagName; if(tg==='INPUT'||tg==='TEXTAREA'||tg==='SELECT')return;
+    if(selUids.length){ ev.preventDefault(); delSel(); } });
+
+  function isSel(u){ return selUids.some(function(x){return x==u}) }
+  function markSel(){ Array.prototype.forEach.call($('center').querySelectorAll('.it'),function(e){ e.classList.toggle('sel', isSel(e.dataset.uid)); }); }
+  function groupMembers(u){ var it=PLACED.find(function(x){return x.uid===u}); if(it&&it.grp!=null) return PLACED.filter(function(x){return x.grp===it.grp}).map(function(x){return x.uid}); return [u]; }
+  function selItem(u,additive){
+    if(additive){ var i=selUids.indexOf(u); if(i>=0)selUids.splice(i,1); else selUids.push(u); }
+    else { selUids=groupMembers(u); }
+    refreshPanel(); markSel(); }
+  function refreshPanel(){
+    if(!selUids.length){ $('ed').style.display='none'; $('grpPanel').style.display='none'; $('empty').style.display='block'; return; }
+    if(selUids.length===1){ $('empty').style.display='none'; $('grpPanel').style.display='none'; $('ed').style.display='block'; fillEditor(curr()); }
+    else { $('empty').style.display='none'; $('ed').style.display='none'; $('grpPanel').style.display='block'; $('grpCount').textContent=selUids.length;
+      var first=PLACED.find(function(x){return x.uid===selUids[0]});
+      var grouped=first&&first.grp!=null&&selUids.every(function(u){var it=PLACED.find(function(x){return x.uid===u});return it&&it.grp===first.grp});
+      $('grpHint').textContent=grouped?'Ces éléments sont groupés (déplacés/dupliqués ensemble).':'Maj+clic pour ajouter/enlever. Puis « Grouper ».'; } }
+  function fillEditor(it){ if(!it)return;
+    var isText=it.type==='text';
+    $('edPhoto').style.display=isText?'none':''; $('edText').style.display=isText?'':'none';
+    $('frot').value=it.rot;
+    if(isText){ $('ftxt').value=it.txt; $('fcol').value=it.color; $('ftsize').value=it.size; $('ffont').value=it.font||"'Dancing Script',cursive"; }
+    else{ $('fForme').value=it.forme; $('fw').value=it.w; $('fh').value=it.h;
+      if(it.type==='shape'){ $('fshcol').value=it.color; } else { $('fFit').value=it.fit; $('fz').value=it.zoom||100; $('zlbl').textContent=it.zoom||100; }
+      fieldVis(it); }
+    ref={w:it.w,h:it.h,size:it.size}; $('fpct').value=100; $('pctlbl').textContent=100; refreshDim(); }
+  function setPct(v){ var it=curr(); if(!it)return; var p=parseInt(v)||100; $('pctlbl').textContent=p;
+    if(it.type==='text'){ it.size=Math.max(0.3,Math.round((ref.size||1.5)*p/100*10)/10); it.h=it.size; $('ftsize').value=it.size; }
+    else{ it.w=Math.max(0.5,Math.round(ref.w*p/100*10)/10); it.h=Math.max(0.5,Math.round(ref.h*p/100*10)/10); $('fw').value=it.w; $('fh').value=it.h; }
+    renderPages(); refreshDim(); }
+  function curr(){ return selUids.length===1 ? PLACED.find(function(x){return x.uid===selUids[0]}) : null }
+  function refreshDim(){ var it=curr(); if(!it)return; $('dim').textContent = it.type==='text' ? '✍️ Texte • '+it.size+' cm' : '📐 '+it.w+' × '+it.h+' cm'; }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function addText(){ var it={uid:++uid,type:'text',txt:'Joyeux\\nanniversaire',color:'#7a1f3d',size:1.5,rot:0,w:6,h:1.5,page:0,font:"'Dancing Script',cursive"};
+    var s=freeSpot(it.w,it.h); it.page=s.page; it.x=s.x; it.y=s.y; PLACED.push(it); renderPages(); selItem(it.uid); }
+  function setTextSize(v){ var it=curr(); if(!it)return; it.size=Math.max(0.3,parseFloat(v)||1); it.h=it.size; ref={w:it.w,h:it.h,size:it.size}; $('fpct').value=100; $('pctlbl').textContent=100; renderPages(); refreshDim(); }
+  function bumpText(d){ var it=curr(); if(!it)return; $('ftsize').value=Math.max(0.3,(parseFloat(it.size)||1)+d); setTextSize($('ftsize').value); }
+  function fieldVis(it){ var isShape=it.type==='shape'; var none=it.forme==='none';
+    $('fitField').style.display=(isShape||none)?'none':''; $('zoomRow').style.display=(isShape||none)?'none':'';
+    $('shapeColorRow').style.display=isShape?'':'none';
+    $('wLab').textContent=isShape?'Largeur (cm)':(none?'Largeur photo (cm)':'Largeur forme (cm)');
+    $('propBtn').style.background=prop?'#fbeef2':'#fff'; $('propBtn').textContent=prop?'🔒 Prop.':'🔓 Libre'; }
+  // placement dans le premier espace libre (sans déplacer les éléments déjà posés)
+  function collides(p,x,y,w,h){ return PLACED.some(function(it){ if(it.page!==p)return false; return x<it.x+it.w && x+w>it.x && y<it.y+it.h && y+h>it.y; }); }
+  function freeSpot(w,h){ var step=0.5;
+    for(var p=0;p<npages;p++){ for(var y=MARG;y+h<=CMH-MARG+0.01;y+=step){ for(var x=MARG;x+w<=CMW-MARG+0.01;x+=step){
+      if(!collides(p,x,y,w,h)) return {page:p,x:Math.round(x*10)/10,y:Math.round(y*10)/10}; } } }
+    var np=npages; npages++; return {page:np,x:MARG,y:MARG}; }
+
+  function upd(k,v){ var it=curr(); if(!it)return; it[k]=v;
+    if(k==='forme'){ if(v!=='none'){ it.h=it.w; $('fh').value=it.h; it.fit='contain'; $('fFit').value='contain'; } fieldVis(it); }
+    renderPages(); refreshDim(); }
+  function setDim(k,v){ var it=curr(); if(!it)return; v=Math.max(0.5,parseFloat(v)||1);
+    if(k==='w'){ it.w=v; if(prop) it.h=Math.max(0.5,Math.round(it.w/it.ratio*2)/2); }
+    else{ it.h=v; if(prop) it.w=Math.max(0.5,Math.round(it.h*it.ratio*2)/2); }
+    $('fw').value=it.w; $('fh').value=it.h; ref={w:it.w,h:it.h,size:it.size}; $('fpct').value=100; $('pctlbl').textContent=100; renderPages(); refreshDim(); }
+  function bump(k,d){ var it=curr(); if(!it)return; setDim(k,(k==='w'?it.w:it.h)+d); }
+  function rot(d){ var it=curr(); if(!it)return; it.rot=((((it.rot||0)+d)%360)+360)%360; $('frot').value=it.rot; renderPages(); }
+  function toggleProp(){ prop=!prop; var it=curr(); if(it)fieldVis(it); if(prop&&it&&it.ratio){ it.h=Math.max(0.5,Math.round(it.w/it.ratio*2)/2); $('fh').value=it.h; renderPages(); refreshDim(); } }
+  function toFront(){ if(!selUids.length)return; var mv=PLACED.filter(function(x){return isSel(x.uid)}); PLACED=PLACED.filter(function(x){return !isSel(x.uid)}).concat(mv); renderPages(); markSel(); }
+  function toBack(){ if(!selUids.length)return; var mv=PLACED.filter(function(x){return isSel(x.uid)}); PLACED=mv.concat(PLACED.filter(function(x){return !isSel(x.uid)})); renderPages(); markSel(); }
+  function dup(){ if(!selUids.length)return; var idx={}; PLACED.forEach(function(x,i){idx[x.uid]=i});
+    var members=selUids.map(function(u){return PLACED.find(function(x){return x.uid===u})}).filter(Boolean).sort(function(a,b){return idx[a.uid]-idx[b.uid]});
+    if(!members.length)return;
+    var minx=Math.min.apply(null,members.map(function(m){return m.x})), miny=Math.min.apply(null,members.map(function(m){return m.y}));
+    var maxx=Math.max.apply(null,members.map(function(m){return m.x+m.w})), maxy=Math.max.apply(null,members.map(function(m){return m.y+m.h}));
+    var s=freeSpot(maxx-minx,maxy-miny); var gid=members.length>1?(++grpSeq):null;
+    var copies=members.map(function(m){ var c=Object.assign({},m); c.uid=++uid; c.page=s.page; c.x=Math.round((s.x+(m.x-minx))*10)/10; c.y=Math.round((s.y+(m.y-miny))*10)/10; if(gid!=null)c.grp=gid; else delete c.grp; return c; });
+    copies.forEach(function(c){PLACED.push(c)}); selUids=copies.map(function(c){return c.uid}); renderPages(); refreshPanel(); markSel(); }
+  function delSel(){ PLACED=PLACED.filter(function(x){return !isSel(x.uid)}); selUids=[]; refreshPanel(); renderPages(); }
+  function groupSel(){ if(selUids.length<2)return; var gid=++grpSeq; selUids.forEach(function(u){var it=PLACED.find(function(x){return x.uid===u}); if(it)it.grp=gid;}); refreshPanel(); }
+  function ungroupSel(){ selUids.forEach(function(u){var it=PLACED.find(function(x){return x.uid===u}); if(it)delete it.grp;}); refreshPanel(); }
+
+  renderLib(); renderPages();
+</script></body></html>`
+writeFileSync('mockups/photos-gateaux-composeur.html', html)
+console.log('Composeur écrit: mockups/photos-gateaux-composeur.html ('+items.length+' éléments)')

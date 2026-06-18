@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Photos gâteaux (planches d'impression)</title>
+<style>
+  :root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;
+    --bordeaux:#993556;--bordeaux-deep:#7a2942;--line:#e8dcc9;--green:#6f9171;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px}
+  .serif{font-family:Georgia,serif;font-style:italic}
+  header{background:var(--bordeaux);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header h1{margin:0;font-size:17px;font-weight:600}
+  .tag{font-size:11px;background:rgba(255,255,255,.18);padding:3px 9px;border-radius:20px}
+  .wrap{display:flex;gap:0;align-items:stretch;min-height:calc(100vh - 52px)}
+  /* ---- bibliothèque (gauche) ---- */
+  .lib{flex:1;padding:14px 16px;min-width:0}
+  .filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{padding:7px 13px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);font-size:12px;font-weight:600;cursor:pointer}
+  .chip.on{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px;cursor:pointer;box-shadow:0 2px 8px rgba(122,42,68,.05);transition:.12s}
+  .card:hover{border-color:var(--bordeaux)}
+  .card.sel{outline:2px solid var(--bordeaux);outline-offset:1px}
+  .thumb{aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:34px;color:#fff;text-align:center;font-weight:700}
+  .card .nm{font-size:12.5px;font-weight:700;margin-top:6px;line-height:1.15}
+  .card .meta{font-size:11px;color:var(--ink-mute);margin-top:2px}
+  .card .grp{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:#f3e7ee;color:var(--bordeaux);padding:2px 7px;border-radius:20px;margin-top:5px}
+  .add{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--bordeaux);color:var(--bordeaux);font-weight:700;font-size:13px;border-radius:14px;min-height:120px;cursor:pointer;background:#faf4ee;text-align:center}
+  /* ---- atelier (droite) ---- */
+  .panel{width:430px;flex-shrink:0;border-left:1px solid var(--line);background:var(--cream-warm);padding:16px;position:sticky;top:0;height:calc(100vh - 52px);overflow:auto}
+  .empty{color:var(--ink-mute);text-align:center;margin-top:60px;font-size:13px}
+  .preview{aspect-ratio:1;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:60px;color:#fff;font-weight:800;margin-bottom:12px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+  .field input,.field select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:#fff}
+  .stepper{display:flex;align-items:center;gap:10px}
+  .stepper button{width:40px;height:40px;border-radius:10px;border:1.5px solid var(--bordeaux);background:#fff;color:var(--bordeaux);font-size:22px;font-weight:800;cursor:pointer;flex-shrink:0}
+  .stepper input{text-align:center;font-weight:800;font-size:16px}
+  .calc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+  .calc b{color:var(--bordeaux)}
+  /* feuille A4 */
+  .sheet-box{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:14px}
+  .sheet-lbl{font-size:11px;color:var(--ink-mute);margin-bottom:6px}
+  .a4{aspect-ratio:210/297;background:#fff;border:1px solid #ddd;box-shadow:inset 0 0 0 6px #fff;display:grid;gap:2%;padding:4%;align-content:start}
+  .a4 .cell{border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;aspect-ratio:1}
+  .btns{display:flex;gap:8px}
+  .btn{flex:1;padding:12px;border-radius:12px;font-size:14px;font-weight:700;border:none;cursor:pointer}
+  .btn-primary{background:var(--bordeaux);color:#fff}.btn-primary:hover{background:var(--bordeaux-deep)}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink-soft)}
+  .note{font-size:11px;color:var(--ink-mute);margin-top:10px;text-align:center}
+  @media(max-width:780px){.wrap{flex-direction:column}.panel{width:auto;position:static;height:auto;border-left:none;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎂 Photos gâteaux — planches d'impression</h1>
+  <span class="tag">maquette</span>
+</header>
+
+<div class="wrap">
+  <!-- BIBLIOTHÈQUE -->
+  <div class="lib">
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- ATELIER -->
+  <div class="panel" id="panel">
+    <div class="empty" id="empty">👈 Choisis une photo dans la bibliothèque<br>pour régler la taille et la quantité.</div>
+    <div id="editor" style="display:none">
+      <div class="preview" id="prev"></div>
+      <div class="field"><label>Nom</label><input id="fNom"></div>
+      <div class="field"><label>Groupe</label>
+        <select id="fGrp"></select>
+      </div>
+      <div class="field"><label>Taille (cm)</label>
+        <div class="stepper">
+          <button onclick="bump('size',-1)">−</button>
+          <input id="fSize" class="" type="number" step="0.5" oninput="recalc()">
+          <button onclick="bump('size',1)">+</button>
+        </div>
+      </div>
+      <div class="field"><label>Quantité</label>
+        <div class="stepper">
+          <button onclick="bump('qty',-1)">−</button>
+          <input id="fQty" type="number" oninput="recalc()">
+          <button onclick="bump('qty',1)">+</button>
+        </div>
+      </div>
+      <div class="calc" id="calc"></div>
+      <div class="sheet-box">
+        <div class="sheet-lbl" id="sheetLbl">Aperçu page 1 :</div>
+        <div class="a4" id="a4"></div>
+      </div>
+      <div class="btns">
+        <button class="btn btn-ghost" onclick="save()">💾 Enregistrer</button>
+        <button class="btn btn-primary" onclick="alert('(maquette) Impression de '+state.qty+' × '+state.nom+' en '+state.size+' cm')">🖨️ Imprimer</button>
+      </div>
+      <div class="note">Les réglages (taille + quantité) sont mémorisés sur la photo → plus besoin de reparamétrer.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const GROUPS = ['Tous','Anniversaire','Mariage','OCP','Bébé','Logo / Pro','Divers'];
+  const COLORS = ['#C4607F','#7a2942','#6f9171','#B36B00','#3E6B89','#8a5a9e'];
+  // Bibliothèque d'exemple (plus tard : vraies photos extraites des PSD)
+  let lib = [
+    {id:1,nom:'Joyeux anniversaire fleurs',grp:'Anniversaire',size:5,qty:30,c:0},
+    {id:2,nom:'Happy Birthday doré',grp:'Anniversaire',size:6,qty:20,c:1},
+    {id:3,nom:'Mr & Mrs',grp:'Mariage',size:8,qty:12,c:2},
+    {id:4,nom:'Logo OCP',grp:'OCP',size:4,qty:48,c:3},
+    {id:5,nom:'Baby boy nuage',grp:'Bébé',size:5,qty:30,c:4},
+    {id:6,nom:'Licorne',grp:'Anniversaire',size:7,qty:15,c:5},
+    {id:7,nom:'Logo entreprise',grp:'Logo / Pro',size:4,qty:40,c:1},
+    {id:8,nom:'Roses rouges',grp:'Mariage',size:6,qty:24,c:0},
+  ];
+  let filter='Tous', state=null;
+
+  function renderFilters(){
+    document.getElementById('filters').innerHTML = GROUPS.map(g=>
+      `<div class="chip ${g===filter?'on':''}" onclick="filter='${g}';renderFilters();renderGrid()">${g}</div>`).join('');
+  }
+  function renderGrid(){
+    const items = lib.filter(x=>filter==='Tous'||x.grp===filter);
+    document.getElementById('grid').innerHTML =
+      items.map(x=>`
+        <div class="card ${state&&state.id===x.id?'sel':''}" onclick="open(${x.id})">
+          <div class="thumb" style="background:${COLORS[x.c]}">🎂</div>
+          <div class="nm">${x.nom}</div>
+          <div class="meta">${x.size} cm · ×${x.qty}</div>
+          <div class="grp">${x.grp}</div>
+        </div>`).join('')
+      + `<div class="add" onclick="alert('(maquette) Ici tu chargeras une photo PNG / un calque PSD')">+ Ajouter<br>une photo</div>`;
+  }
+  window.open = function(id){
+    state = {...lib.find(x=>x.id===id)};
+    document.getElementById('empty').style.display='none';
+    document.getElementById('editor').style.display='block';
+    document.getElementById('fGrp').innerHTML = GROUPS.filter(g=>g!=='Tous').map(g=>`<option ${g===state.grp?'selected':''}>${g}</option>`).join('');
+    document.getElementById('fNom').value=state.nom;
+    document.getElementById('fSize').value=state.size;
+    document.getElementById('fQty').value=state.qty;
+    document.getElementById('prev').style.background=COLORS[state.c];
+    document.getElementById('prev').textContent='🎂';
+    recalc(); renderGrid();
+  }
+  function bump(k,d){
+    if(k==='size'){ state.size=Math.max(1,Math.round((state.size+d*0.5)*2)/2); document.getElementById('fSize').value=state.size; }
+    else{ state.qty=Math.max(1,state.qty+d); document.getElementById('fQty').value=state.qty; }
+    recalc();
+  }
+  function recalc(){
+    state.size=Math.max(1,parseFloat(document.getElementById('fSize').value)||1);
+    state.qty=Math.max(1,parseInt(document.getElementById('fQty').value)||1);
+    state.nom=document.getElementById('fNom').value;
+    state.grp=document.getElementById('fGrp').value;
+    // A4 imprimable ~ 19 × 27 cm, petit espace 0.3 cm
+    const g=0.3, W=19, H=27, s=state.size;
+    const perRow=Math.max(1,Math.floor((W+g)/(s+g)));
+    const perCol=Math.max(1,Math.floor((H+g)/(s+g)));
+    const perPage=perRow*perCol;
+    const pages=Math.ceil(state.qty/perPage);
+    document.getElementById('calc').innerHTML =
+      `<b>${perRow}×${perCol} = ${perPage}</b> photos par page (A4) · <b>${pages}</b> page(s) pour ${state.qty} photos`;
+    // aperçu page 1
+    const onPage=Math.min(state.qty,perPage);
+    const a4=document.getElementById('a4');
+    a4.style.gridTemplateColumns=`repeat(${perRow},1fr)`;
+    a4.innerHTML=Array.from({length:onPage}).map(()=>`<div class="cell" style="background:${COLORS[state.c]}">🎂</div>`).join('');
+    document.getElementById('sheetLbl').textContent=`Aperçu page 1 (${onPage} sur ${state.qty}) :`;
+  }
+  function save(){
+    const i=lib.findIndex(x=>x.id===state.id);
+    lib[i]={...lib[i],nom:state.nom,grp:state.grp,size:state.size,qty:state.qty};
+    renderGrid();
+    const c=document.getElementById('calc'); c.style.outline='2px solid var(--green)';
+    setTimeout(()=>c.style.outline='none',700);
+  }
+  renderFilters(); renderGrid();
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Maquette — Photos gâteaux (Spiderman LS)</title>
+<style>
+  :root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;--bordeaux:#993556;--line:#e8dcc9}
+  *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px}
+  header{background:var(--bordeaux);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+  header h1{margin:0;font-size:16px}.tag{font-size:11px;background:rgba(255,255,255,.18);padding:3px 9px;border-radius:20px}
+  .wrap{display:flex;min-height:calc(100vh - 48px)}
+  .lib{flex:1;padding:12px;min-width:0}
+  .search{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;font-size:13px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+  .card{position:relative;background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px;cursor:pointer;text-align:center}
+  .card:hover{border-color:var(--bordeaux)}.card.sel{outline:2px solid var(--bordeaux)}
+  .card img{width:100%;height:90px;object-fit:contain}
+  .card .nm{font-size:10.5px;color:var(--ink-soft);margin-top:4px;line-height:1.1;height:24px;overflow:hidden}
+  .del{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;border:none;background:#b42424;color:#fff;font-size:13px;font-weight:800;cursor:pointer;line-height:1;display:none}
+  .card:hover .del{display:block}
+  .add{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1.5px dashed var(--bordeaux);color:var(--bordeaux);font-weight:800;font-size:13px;border-radius:12px;min-height:120px;cursor:pointer;background:#faf4ee;text-align:center}
+  .panel{width:455px;flex-shrink:0;border-left:1px solid var(--line);background:var(--cream-warm);padding:14px;position:sticky;top:0;height:calc(100vh - 48px);overflow:auto}
+  .empty{color:var(--ink-mute);text-align:center;margin-top:50px}
+  .prev{height:150px;display:flex;align-items:center;justify-content:center;background:#efe7d8;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
+  .pcell{overflow:hidden}.pcell img{width:100%;height:100%}
+  .lab{font-size:10.5px;font-weight:700;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px;display:block}
+  .mb{margin-bottom:9px}.row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  select.sel{width:100%;padding:7px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px}
+  .mini{display:flex;align-items:center;gap:5px}
+  .mini button{width:26px;height:26px;border-radius:7px;border:1px solid var(--bordeaux);background:#fff;color:var(--bordeaux);font-size:15px;font-weight:800;cursor:pointer;line-height:1;padding:0}
+  .mini input{width:46px;text-align:center;font-weight:700;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:4px}
+  .tgl{padding:6px 9px;border-radius:8px;border:1px solid var(--bordeaux);background:#fff;color:var(--bordeaux);font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap}
+  .calc{background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:12.5px;margin:9px 0}.calc b{color:var(--bordeaux)}
+  .pages{display:flex;flex-direction:column;gap:14px;margin-bottom:12px}
+  .pglbl{font-size:11px;color:var(--ink-mute);margin-bottom:4px}
+  .page{position:relative;width:100%;aspect-ratio:210/297;background:#fff;border:1px solid #ccc;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+  .page .cell{position:absolute;overflow:hidden}.page .cell img{width:100%;height:100%}
+  .btns{display:flex;gap:8px}.btn{flex:1;padding:10px;border-radius:11px;font-weight:700;border:none;cursor:pointer}.btn-primary{background:var(--bordeaux);color:#fff}.btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink-soft)}
+  @media(max-width:780px){.wrap{flex-direction:column}.panel{width:auto;position:static;height:auto}}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <clipPath id="clpHeart" clipPathUnits="objectBoundingBox"><path d="M0.5,1 C0.5,1,0.02,0.68,0.02,0.3 C0.02,0.1,0.2,0.0,0.35,0.0 C0.45,0.0,0.5,0.09,0.5,0.16 C0.5,0.09,0.55,0.0,0.65,0.0 C0.8,0.0,0.98,0.1,0.98,0.3 C0.98,0.68,0.5,1,0.5,1 Z"/></clipPath>
+</defs></svg>
+<header><h1>🎂 Photos gâteaux — Spiderman LS</h1><span class="tag">maquette</span></header>
+<div class="wrap">
+  <div class="lib"><input class="search" id="q" placeholder="Chercher (masque, drapeau, chiffre, BOOM…)" oninput="render()"><div class="grid" id="grid"></div>
+    <input type="file" id="addInput" accept="image/*" multiple style="display:none" onchange="addPhotos(event)"></div>
+  <div class="panel"><div class="empty" id="empty">👈 Choisis un élément.</div>
+    <div id="ed" style="display:none">
+      <div class="prev"><div id="pwrap" style="position:relative"><div class="pcell" id="pcell"><img id="pimg"></div><span id="pout"></span></div></div>
+      <div id="dim" style="text-align:center;font-weight:800;color:var(--bordeaux);font-size:15px;margin-bottom:8px"></div>
+      <div class="row mb">
+        <div style="flex:1"><span class="lab">Forme</span>
+          <select class="sel" id="fForme" onchange="onForme()">
+            <option value="none">Aucune (photo détourée)</option><option value="rond">Rond / ovale</option>
+            <option value="carre">Carré</option><option value="arrondi">Carré arrondi</option>
+            <option value="coeur">Cœur</option><option value="losange">Losange</option><option value="hexagone">Hexagone</option>
+          </select>
+        </div>
+        <div style="flex:1" id="fitField"><span class="lab">Photo dans la forme</span>
+          <select class="sel" id="fFit" onchange="onFit()">
+            <option value="cover">Remplir (proportions gardées)</option><option value="contain">Entière (tout visible)</option><option value="fill">Déformer (étirer)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row mb">
+        <div><span class="lab" id="wLab">Largeur (cm)</span><div class="mini"><button onclick="bump('w',-1)">−</button><input id="fw" type="number" step="0.5" oninput="onDim('w')"><button onclick="bump('w',1)">+</button></div></div>
+        <div><span class="lab">Hauteur (cm)</span><div class="mini"><button onclick="bump('h',-1)">−</button><input id="fh" type="number" step="0.5" oninput="onDim('h')"><button onclick="bump('h',1)">+</button></div></div>
+        <button class="tgl" id="propBtn" onclick="toggleProp()">🔓 Déformer</button>
+      </div>
+      <div class="mb" id="zoomRow"><span class="lab">Zoom photo dans la forme : <span id="zlbl">100</span>%</span><input id="fz" type="range" min="40" max="320" value="100" oninput="onZoom()" style="width:100%"></div>
+      <div class="row mb">
+        <div><span class="lab">Rotation (°)</span><div class="mini"><button onclick="rot(-90)">↺</button><input id="frot" type="number" step="5" oninput="onRot()"><button onclick="rot(90)">↻</button></div></div>
+        <div><span class="lab">Quantité</span><div class="mini"><button onclick="bump('q',-1)">−</button><input id="fq" type="number" oninput="onDim('q')"><button onclick="bump('q',1)">+</button></div></div>
+      </div>
+      <div class="pages" id="pages"></div>
+      <div class="btns"><button class="btn btn-ghost" onclick="alert('(maquette) réglages mémorisés')">💾 Enregistrer</button><button class="btn btn-primary" onclick="alert('(maquette) impression')">🖨️ Imprimer</button></div>
+    </div>
+  </div>
+</div>
+<script>
+  let ITEMS=[{"id":1,"nom":"Bulle explosion (vide)","src":"../cake-photos/Spiderman%20LS/001%20Bulle%20explosion%20(vide).png"},{"id":2,"nom":"Chiffre 4 (rouge)","src":"../cake-photos/Spiderman%20LS/002%20Chiffre%204%20(rouge).png"},{"id":3,"nom":"Chiffre 4 (rouge)","src":"../cake-photos/Spiderman%20LS/003%20Chiffre%204%20(rouge).png"},{"id":4,"nom":"Petits chiffres 1-9","src":"../cake-photos/Spiderman%20LS/004%20Petits%20chiffres%201-9.png"},{"id":5,"nom":"BOOM","src":"../cake-photos/Spiderman%20LS/005%20BOOM.png"},{"id":6,"nom":"Chiffre 5 (bulle)","src":"../cake-photos/Spiderman%20LS/006%20Chiffre%205%20(bulle).png"},{"id":7,"nom":"Araignee (logo)","src":"../cake-photos/Spiderman%20LS/007%20Araignee%20(logo).png"},{"id":8,"nom":"Bulles BD assorties","src":"../cake-photos/Spiderman%20LS/008%20Bulles%20BD%20assorties.png"},{"id":9,"nom":"BAM","src":"../cake-photos/Spiderman%20LS/009%20BAM.png"},{"id":10,"nom":"SLASH","src":"../cake-photos/Spiderman%20LS/010%20SLASH.png"},{"id":11,"nom":"BAM","src":"../cake-photos/Spiderman%20LS/011%20BAM.png"},{"id":12,"nom":"Spiderman (figurine)","src":"../cake-photos/Spiderman%20LS/012%20Spiderman%20(figurine).png"},{"id":13,"nom":"Ville (cercle jaune)","src":"../cake-photos/Spiderman%20LS/013%20Ville%20(cercle%20jaune).png"},{"id":14,"nom":"KA-POW","src":"../cake-photos/Spiderman%20LS/014%20KA-POW.png"},{"id":15,"nom":"BOOM","src":"../cake-photos/Spiderman%20LS/015%20BOOM.png"},{"id":16,"nom":"Spiderman saut","src":"../cake-photos/Spiderman%20LS/016%20Spiderman%20saut.png"},{"id":17,"nom":"Masque Spiderman","src":"../cake-photos/Spiderman%20LS/017%20Masque%20Spiderman.png"},{"id":18,"nom":"Ville coloree","src":"../cake-photos/Spiderman%20LS/018%20Ville%20coloree.png"},{"id":19,"nom":"ZAP","src":"../cake-photos/Spiderman%20LS/019%20ZAP.png"},{"id":20,"nom":"BOOM","src":"../cake-photos/Spiderman%20LS/020%20BOOM.png"},{"id":21,"nom":"Ville coloree","src":"../cake-photos/Spiderman%20LS/021%20Ville%20coloree.png"},{"id":22,"nom":"Spiderman saut","src":"../cake-photos/Spiderman%20LS/022%20Spiderman%20saut.png"},{"id":23,"nom":"Iron Man","src":"../cake-photos/Spiderman%20LS/023%20Iron%20Man.png"},{"id":24,"nom":"Iron Man (cercle)","src":"../cake-photos/Spiderman%20LS/024%20Iron%20Man%20(cercle).png"},{"id":25,"nom":"Prenom Simo","src":"../cake-photos/Spiderman%20LS/025%20Prenom%20Simo.png"},{"id":26,"nom":"Cercle vide","src":"../cake-photos/Spiderman%20LS/026%20Cercle%20vide.png"},{"id":27,"nom":"Spiderman (cercle)","src":"../cake-photos/Spiderman%20LS/027%20Spiderman%20(cercle).png"},{"id":28,"nom":"Prenom Haron","src":"../cake-photos/Spiderman%20LS/028%20Prenom%20Haron.png"},{"id":29,"nom":"Cercle vide","src":"../cake-photos/Spiderman%20LS/029%20Cercle%20vide.png"},{"id":30,"nom":"Cercle vide","src":"../cake-photos/Spiderman%20LS/030%20Cercle%20vide.png"},{"id":31,"nom":"Cercle vide","src":"../cake-photos/Spiderman%20LS/031%20Cercle%20vide.png"},{"id":32,"nom":"Spiderman debout","src":"../cake-photos/Spiderman%20LS/032%20Spiderman%20debout.png"},{"id":33,"nom":"Spidey (cartoon)","src":"../cake-photos/Spiderman%20LS/033%20Spidey%20(cartoon).png"},{"id":34,"nom":"Toile araignee","src":"../cake-photos/Spiderman%20LS/034%20Toile%20araignee.png"},{"id":35,"nom":"Toile araignee","src":"../cake-photos/Spiderman%20LS/035%20Toile%20araignee.png"},{"id":36,"nom":"Spidey (cartoon)","src":"../cake-photos/Spiderman%20LS/036%20Spidey%20(cartoon).png"},{"id":37,"nom":"Logo PAPA","src":"../cake-photos/Spiderman%20LS/037%20Logo%20PAPA.png"},{"id":38,"nom":"Planche badges Spiderman","src":"../cake-photos/Spiderman%20LS/038%20Planche%20badges%20Spiderman.png"},{"id":39,"nom":"Badge Spiderman (cercle)","src":"../cake-photos/Spiderman%20LS/039%20Badge%20Spiderman%20(cercle).png"},{"id":40,"nom":"Planche mini Spiderman","src":"../cake-photos/Spiderman%20LS/040%20Planche%20mini%20Spiderman.png"},{"id":41,"nom":"Planche badges araignee","src":"../cake-photos/Spiderman%20LS/041%20Planche%20badges%20araignee.png"},{"id":42,"nom":"Planche badges araignee","src":"../cake-photos/Spiderman%20LS/042%20Planche%20badges%20araignee.png"},{"id":43,"nom":"Planche badges (bleu)","src":"../cake-photos/Spiderman%20LS/043%20Planche%20badges%20(bleu).png"},{"id":44,"nom":"Planche badges","src":"../cake-photos/Spiderman%20LS/044%20Planche%20badges.png"},{"id":45,"nom":"Planche bulles BD","src":"../cake-photos/Spiderman%20LS/045%20Planche%20bulles%20BD.png"},{"id":46,"nom":"Ville (silhouette noire)","src":"../cake-photos/Spiderman%20LS/046%20Ville%20(silhouette%20noire).png"},{"id":47,"nom":"Spiderman saut","src":"../cake-photos/Spiderman%20LS/047%20Spiderman%20saut.png"},{"id":48,"nom":"Masque Spiderman","src":"../cake-photos/Spiderman%20LS/048%20Masque%20Spiderman.png"},{"id":49,"nom":"Toile araignee (noire)","src":"../cake-photos/Spiderman%20LS/049%20Toile%20araignee%20(noire).png"},{"id":50,"nom":"Spiderman court","src":"../cake-photos/Spiderman%20LS/050%20Spiderman%20court.png"},{"id":51,"nom":"Araignee (logo)","src":"../cake-photos/Spiderman%20LS/051%20Araignee%20(logo).png"},{"id":52,"nom":"Ville (silhouette noire)","src":"../cake-photos/Spiderman%20LS/052%20Ville%20(silhouette%20noire).png"},{"id":53,"nom":"Happy Birthday (bulle)","src":"../cake-photos/Spiderman%20LS/053%20Happy%20Birthday%20(bulle).png"},{"id":54,"nom":"Spiderman","src":"../cake-photos/Spiderman%20LS/054%20Spiderman.png"},{"id":55,"nom":"Spiderman","src":"../cake-photos/Spiderman%20LS/055%20Spiderman.png"},{"id":56,"nom":"BAM","src":"../cake-photos/Spiderman%20LS/056%20BAM.png"},{"id":57,"nom":"Point exclamation (BD)","src":"../cake-photos/Spiderman%20LS/057%20Point%20exclamation%20(BD).png"},{"id":58,"nom":"Toile araignee","src":"../cake-photos/Spiderman%20LS/058%20Toile%20araignee.png"},{"id":59,"nom":"BOOM","src":"../cake-photos/Spiderman%20LS/059%20BOOM.png"},{"id":60,"nom":"Voiture bleue","src":"../cake-photos/Spiderman%20LS/060%20Voiture%20bleue.png"},{"id":61,"nom":"Logo Chanel","src":"../cake-photos/Spiderman%20LS/061%20Logo%20Chanel.png"},{"id":62,"nom":"Logo Prada","src":"../cake-photos/Spiderman%20LS/062%20Logo%20Prada.png"},{"id":63,"nom":"Logo Gucci","src":"../cake-photos/Spiderman%20LS/063%20Logo%20Gucci.png"},{"id":64,"nom":"Logo Hermes","src":"../cake-photos/Spiderman%20LS/064%20Logo%20Hermes.png"},{"id":65,"nom":"Logo Louis Vuitton","src":"../cake-photos/Spiderman%20LS/065%20Logo%20Louis%20Vuitton.png"},{"id":66,"nom":"Fond vert","src":"../cake-photos/Spiderman%20LS/066%20Fond%20vert.png"},{"id":67,"nom":"Texte Gucci","src":"../cake-photos/Spiderman%20LS/067%20Texte%20Gucci.png"},{"id":68,"nom":"Cadre vide","src":"../cake-photos/Spiderman%20LS/068%20Cadre%20vide.png"},{"id":69,"nom":"Texte Chanel","src":"../cake-photos/Spiderman%20LS/069%20Texte%20Chanel.png"},{"id":70,"nom":"Monogramme LV","src":"../cake-photos/Spiderman%20LS/070%20Monogramme%20LV.png"},{"id":71,"nom":"Texte Netherlands","src":"../cake-photos/Spiderman%20LS/071%20Texte%20Netherlands.png"},{"id":72,"nom":"Drapeau Pays-Bas","src":"../cake-photos/Spiderman%20LS/072%20Drapeau%20Pays-Bas.png"},{"id":73,"nom":"Texte Germany","src":"../cake-photos/Spiderman%20LS/073%20Texte%20Germany.png"},{"id":74,"nom":"Drapeau Allemagne","src":"../cake-photos/Spiderman%20LS/074%20Drapeau%20Allemagne.png"},{"id":75,"nom":"Texte Belgium","src":"../cake-photos/Spiderman%20LS/075%20Texte%20Belgium.png"},{"id":76,"nom":"Drapeau Belgique","src":"../cake-photos/Spiderman%20LS/076%20Drapeau%20Belgique.png"},{"id":77,"nom":"Texte Portugal","src":"../cake-photos/Spiderman%20LS/077%20Texte%20Portugal.png"},{"id":78,"nom":"Drapeau Portugal","src":"../cake-photos/Spiderman%20LS/078%20Drapeau%20Portugal.png"},{"id":79,"nom":"Drapeau Espagne","src":"../cake-photos/Spiderman%20LS/079%20Drapeau%20Espagne.png"},{"id":80,"nom":"Texte Spain","src":"../cake-photos/Spiderman%20LS/080%20Texte%20Spain.png"},{"id":81,"nom":"Drapeau Irlande","src":"../cake-photos/Spiderman%20LS/081%20Drapeau%20Irlande.png"},{"id":82,"nom":"Texte Ireland","src":"../cake-photos/Spiderman%20LS/082%20Texte%20Ireland.png"},{"id":83,"nom":"Toile araignee","src":"../cake-photos/Spiderman%20LS/083%20Toile%20araignee.png"},{"id":84,"nom":"Araignee (logo)","src":"../cake-photos/Spiderman%20LS/084%20Araignee%20(logo).png"},{"id":85,"nom":"Chiffres (rouge toile)","src":"../cake-photos/Spiderman%20LS/085%20Chiffres%20(rouge%20toile).png"},{"id":86,"nom":"Chiffre 5 (Spiderman)","src":"../cake-photos/Spiderman%20LS/086%20Chiffre%205%20(Spiderman).png"},{"id":87,"nom":"Chiffre 6 (Spiderman)","src":"../cake-photos/Spiderman%20LS/087%20Chiffre%206%20(Spiderman).png"},{"id":88,"nom":"Chiffre 2 (Spiderman)","src":"../cake-photos/Spiderman%20LS/088%20Chiffre%202%20(Spiderman).png"},{"id":89,"nom":"ZAP","src":"../cake-photos/Spiderman%20LS/089%20ZAP.png"},{"id":90,"nom":"POW","src":"../cake-photos/Spiderman%20LS/090%20POW.png"},{"id":91,"nom":"Chiffre 7 (Spiderman)","src":"../cake-photos/Spiderman%20LS/091%20Chiffre%207%20(Spiderman).png"},{"id":92,"nom":"Masque Spiderman","src":"../cake-photos/Spiderman%20LS/092%20Masque%20Spiderman.png"},{"id":93,"nom":"Spiderman","src":"../cake-photos/Spiderman%20LS/093%20Spiderman.png"},{"id":94,"nom":"Ville coloree","src":"../cake-photos/Spiderman%20LS/094%20Ville%20coloree.png"},{"id":95,"nom":"Spiderman accroupi","src":"../cake-photos/Spiderman%20LS/095%20Spiderman%20accroupi.png"},{"id":96,"nom":"Badge Spiderman (cercle)","src":"../cake-photos/Spiderman%20LS/096%20Badge%20Spiderman%20(cercle).png"},{"id":97,"nom":"Badge Spiderman (cercle)","src":"../cake-photos/Spiderman%20LS/097%20Badge%20Spiderman%20(cercle).png"},{"id":98,"nom":"Planche badges Spiderman","src":"../cake-photos/Spiderman%20LS/098%20Planche%20badges%20Spiderman.png"},{"id":99,"nom":"Badge araignee (cercle)","src":"../cake-photos/Spiderman%20LS/099%20Badge%20araignee%20(cercle).png"},{"id":100,"nom":"Masque Spiderman","src":"../cake-photos/Spiderman%20LS/100%20Masque%20Spiderman.png"},{"id":101,"nom":"Masque Spiderman (incline)","src":"../cake-photos/Spiderman%20LS/101%20Masque%20Spiderman%20(incline).png"},{"id":102,"nom":"Spiderman accroupi","src":"../cake-photos/Spiderman%20LS/102%20Spiderman%20accroupi.png"},{"id":103,"nom":"Masque Spiderman","src":"../cake-photos/Spiderman%20LS/103%20Masque%20Spiderman.png"},{"id":104,"nom":"Masque Spiderman","src":"../cake-photos/Spiderman%20LS/104%20Masque%20Spiderman.png"},{"id":105,"nom":"Badge araignee (cercle)","src":"../cake-photos/Spiderman%20LS/105%20Badge%20araignee%20(cercle).png"},{"id":106,"nom":"Rond Spider-Man (texte)","src":"../cake-photos/Spiderman%20LS/106%20Rond%20Spider-Man%20(texte).png"},{"id":107,"nom":"Masque Spiderman","src":"../cake-photos/Spiderman%20LS/107%20Masque%20Spiderman.png"},{"id":108,"nom":"Spiderman visage (cercle)","src":"../cake-photos/Spiderman%20LS/108%20Spiderman%20visage%20(cercle).png"},{"id":109,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/109%20Spiderman%20BD%20(cercle).png"},{"id":110,"nom":"BAM","src":"../cake-photos/Spiderman%20LS/110%20BAM.png"},{"id":111,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/111%20Spiderman%20BD%20(cercle).png"},{"id":112,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/112%20Spiderman%20BD%20(cercle).png"},{"id":113,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/113%20Spiderman%20BD%20(cercle).png"},{"id":114,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/114%20Spiderman%20BD%20(cercle).png"},{"id":115,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/115%20Spiderman%20BD%20(cercle).png"},{"id":116,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/116%20Spiderman%20BD%20(cercle).png"},{"id":117,"nom":"Spiderman (gros plan)","src":"../cake-photos/Spiderman%20LS/117%20Spiderman%20(gros%20plan).png"},{"id":118,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/118%20Spiderman%20BD%20(cercle).png"},{"id":119,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/119%20Spiderman%20BD%20(cercle).png"},{"id":120,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/120%20Spiderman%20BD%20(cercle).png"},{"id":121,"nom":"Spiderman (gros plan)","src":"../cake-photos/Spiderman%20LS/121%20Spiderman%20(gros%20plan).png"},{"id":122,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/122%20Spiderman%20BD%20(cercle).png"},{"id":123,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/123%20Spiderman%20BD%20(cercle).png"},{"id":124,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/124%20Spiderman%20BD%20(cercle).png"},{"id":125,"nom":"Spiderman (gros plan)","src":"../cake-photos/Spiderman%20LS/125%20Spiderman%20(gros%20plan).png"},{"id":126,"nom":"Spiderman (gros plan)","src":"../cake-photos/Spiderman%20LS/126%20Spiderman%20(gros%20plan).png"},{"id":127,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/127%20Spiderman%20BD%20(cercle).png"},{"id":128,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/128%20Spiderman%20BD%20(cercle).png"},{"id":129,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/129%20Spiderman%20BD%20(cercle).png"},{"id":130,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/130%20Spiderman%20BD%20(cercle).png"},{"id":131,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/131%20Spiderman%20BD%20(cercle).png"},{"id":132,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/132%20Spiderman%20BD%20(cercle).png"},{"id":133,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/133%20Spiderman%20BD%20(cercle).png"},{"id":134,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/134%20Spiderman%20BD%20(cercle).png"},{"id":135,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/135%20Spiderman%20BD%20(cercle).png"},{"id":136,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/136%20Spiderman%20BD%20(cercle).png"},{"id":137,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/137%20Spiderman%20BD%20(cercle).png"},{"id":138,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/138%20Spiderman%20BD%20(cercle).png"},{"id":139,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/139%20Spiderman%20BD%20(cercle).png"},{"id":140,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/140%20Spiderman%20BD%20(cercle).png"},{"id":141,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/141%20Spiderman%20BD%20(cercle).png"},{"id":142,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/142%20Spiderman%20BD%20(cercle).png"},{"id":143,"nom":"Spiderman BD (cercle)","src":"../cake-photos/Spiderman%20LS/143%20Spiderman%20BD%20(cercle).png"},{"id":144,"nom":"Happy Birthday (texte)","src":"../cake-photos/Spiderman%20LS/144%20Happy%20Birthday%20(texte).png"}];
+  const CMW=21, CMH=29.7, MARG=1, GAP=0.3;
+  let st=null, prop=false;
+  const $=id=>document.getElementById(id);
+  function shapeCss(f){
+    if(f==='rond') return 'border-radius:50%'; if(f==='arrondi') return 'border-radius:16%';
+    if(f==='losange') return 'clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)';
+    if(f==='hexagone') return 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)';
+    if(f==='coeur') return 'clip-path:url(#clpHeart)'; return '';
+  }
+  function fitNow(){ return st.forme==='none' ? 'fill' : st.fit; }   // photo libre = remplit sa case (déformable)
+  function imgStyle(){ return 'object-fit:'+fitNow()+';transform:rotate('+(st.rot||0)+'deg) scale('+(st.zoom/100)+')'; }
+  function outlineSvg(f, style){
+    if(f==='none') return '';
+    const s='stroke="#cfc7ba" fill="none" stroke-width="1" vector-effect="non-scaling-stroke"'; let shp='';
+    if(f==='rond') shp='<ellipse cx="50" cy="50" rx="49.5" ry="49.5" '+s+'/>';
+    else if(f==='carre') shp='<rect x="0.5" y="0.5" width="99" height="99" '+s+'/>';
+    else if(f==='arrondi') shp='<rect x="0.5" y="0.5" width="99" height="99" rx="16" ry="16" '+s+'/>';
+    else if(f==='losange') shp='<polygon points="50,0.5 99.5,50 50,99.5 0.5,50" '+s+'/>';
+    else if(f==='hexagone') shp='<polygon points="25,0.5 75,0.5 99.5,50 75,99.5 25,99.5 0.5,50" '+s+'/>';
+    else if(f==='coeur') shp='<path d="M50,99 C50,99,2.5,68,2.5,30 C2.5,11,20,1,35,1 C45,1,50,9.5,50,16 C50,9.5,55,1,65,1 C80,1,97.5,11,97.5,30 C97.5,68,50,99,50,99 Z" '+s+'/>';
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="'+style+';pointer-events:none">'+shp+'</svg>';
+  }
+
+  function render(){const q=($('q').value||'').toLowerCase();
+    $('grid').innerHTML='<div class="add" onclick="$(\'addInput\').click()">＋<br>Ajouter<br>une photo</div>'
+      + ITEMS.filter(x=>x.nom.toLowerCase().includes(q)).map(x=>
+      '<div class="card '+(st&&st.id===x.id?'sel':'')+'" onclick="pick('+x.id+')"><button class="del" onclick="event.stopPropagation();delItem('+x.id+')">✕</button><img src="'+x.src+'" loading="lazy"><div class="nm">'+x.nom+'</div></div>').join('');}
+  function addPhotos(e){ for(const f of e.target.files){ const id=Math.max(0,...ITEMS.map(i=>i.id))+1; ITEMS.push({id,nom:f.name.replace(/\.[^.]+$/,''),src:URL.createObjectURL(f)}); } e.target.value=''; render(); }
+  function delItem(id){ if(!confirm('Supprimer cet élément de la bibliothèque ?'))return; ITEMS=ITEMS.filter(x=>x.id!==id); if(st&&st.id===id){st=null;$('ed').style.display='none';$('empty').style.display='block';} render(); }
+
+  function propLabel(){ const none=st.forme==='none', b=$('propBtn');
+    if(prop){ b.style.background='#fbeef2'; b.textContent= none?'🔒 Proportions':'🔒 Carrée/ronde'; }
+    else{ b.style.background='#fff'; b.textContent= none?'🔓 Déformer':'⬜ Forme libre'; } }
+  function snapProp(){ if(!prop)return; const none=st.forme==='none';
+    st.h = none ? Math.max(0.5,Math.round(st.w/st.ratio*2)/2) : st.w; $('fh').value=st.h; }
+  function applyVis(none){ $('fitField').style.display=none?'none':''; $('zoomRow').style.display=none?'none':'';
+    $('wLab').textContent=none?'Largeur photo (cm)':'Largeur forme (cm)'; propLabel(); }
+
+  function pick(id){const it=ITEMS.find(x=>x.id===id); prop=true; st={id,src:it.src,forme:'none',fit:'cover',w:5,h:5,zoom:100,rot:0,q:1,ratio:1};
+    $('empty').style.display='none';$('ed').style.display='block';$('fForme').value='none';$('fFit').value='cover';
+    const pimg=$('pimg'); pimg.onload=()=>{ st.ratio=pimg.naturalWidth/pimg.naturalHeight||1; st.h=Math.max(0.5,Math.round(st.w/st.ratio*2)/2); $('fh').value=st.h; draw(); };
+    pimg.src=it.src; $('fw').value=st.w;$('fh').value=st.h;$('fz').value=100;$('zlbl').textContent='100';$('frot').value=0;$('fq').value=st.q;
+    applyVis(true); draw(); render();}
+
+  function onForme(){ st.forme=$('fForme').value; applyVis(st.forme==='none'); snapProp(); draw(); }
+  function onFit(){ st.fit=$('fFit').value; draw(); }
+  function onZoom(){ st.zoom=parseInt($('fz').value)||100; $('zlbl').textContent=st.zoom; draw(); }
+  function onRot(){ st.rot=parseFloat($('frot').value)||0; draw(); }
+  function rot(d){ st.rot=((((st.rot||0)+d)%360)+360)%360; $('frot').value=st.rot; draw(); }
+  function toggleProp(){ prop=!prop; propLabel(); snapProp(); draw(); }
+  function onDim(k){
+    if(k==='q'){ st.q=Math.max(1,parseInt($('fq').value)||1); draw(); return; }
+    if(k==='w'){ st.w=Math.max(0.5,parseFloat($('fw').value)||1); if(prop) snapProp(); }
+    else{ st.h=Math.max(0.5,parseFloat($('fh').value)||1); if(prop){ const none=st.forme==='none'; st.w=none?Math.max(0.5,Math.round(st.h*st.ratio*2)/2):st.h; $('fw').value=st.w; } }
+    draw();
+  }
+  function bump(k,d){
+    if(k==='q'){ st.q=Math.max(1,st.q+d); $('fq').value=st.q; draw(); return; }
+    const id=k==='w'?'fw':'fh', cur=parseFloat($(id).value)||1; $(id).value=Math.max(0.5,Math.round((cur+d*0.5)*2)/2); onDim(k);
+  }
+
+  function draw(){
+    const sc=Math.min(130/st.w,130/st.h), pw=$('pwrap'); pw.style.width=(st.w*sc)+'px'; pw.style.height=(st.h*sc)+'px';
+    $('pcell').style.cssText='overflow:hidden;width:100%;height:100%;background:'+(st.forme==='none'?'transparent':'#fff')+';'+shapeCss(st.forme);
+    $('pimg').style.cssText=imgStyle();
+    $('pout').innerHTML=outlineSvg(st.forme,'position:absolute;inset:0;width:100%;height:100%');
+    $('dim').textContent='📐 '+st.w+' × '+st.h+' cm';
+    const w=st.w,h=st.h;
+    const perRow=Math.max(1,Math.floor((CMW-2*MARG+GAP)/(w+GAP)));
+    const perCol=Math.max(1,Math.floor((CMH-2*MARG+GAP)/(h+GAP)));
+    const perPage=perRow*perCol, pages=Math.ceil(st.q/perPage);
+    let html='';
+    for(let p=0;p<pages;p++){
+      const count=Math.min(perPage, st.q - p*perPage); let cells='';
+      for(let k=0;k<count;k++){
+        const row=Math.floor(k/perRow), col=k%perRow, x=MARG+col*(w+GAP), y=MARG+row*(h+GAP);
+        const pos='left:'+(x/CMW*100)+'%;top:'+(y/CMH*100)+'%;width:'+(w/CMW*100)+'%;height:'+(h/CMH*100)+'%';
+        cells+='<div class="cell" style="'+pos+';'+shapeCss(st.forme)+'"><img src="'+st.src+'" style="'+imgStyle()+'"></div>'+outlineSvg(st.forme,'position:absolute;'+pos);
+      }
+      html+='<div><div class="pglbl">Page '+(p+1)+'/'+pages+' — '+count+'</div><div class="page">'+cells+'</div></div>';
+    }
+    $('pages').innerHTML=html;
+  }
+  render();
+</script></body></html>
