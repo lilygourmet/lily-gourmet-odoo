@@ -622,7 +622,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user), badge: convBadge.unassigned + convBadge.unread, convBadge },
     { view: 'devis',            emoji: '📄', label: 'Commandes',        visible: !isLivreur(user) && canSeeDevis(user), badge: 0 },
-    { view: 'ocp-link',         emoji: '🍽️', label: 'Lien OCP',         visible: !isLivreur(user) && (admin || canSeeDevis(user)) },
+    { view: 'ocp-link',         emoji: '🍽️', label: 'Lien OCP',         visible: admin },
     { view: 'devis-internet',   emoji: '🌐', label: 'Devis internet',   visible: !isLivreur(user) && canSeeDevis(user), badge: devisInternetBadge },
     { view: 'modifications',    emoji: '✏️', label: 'Modifications',    visible: !isLivreur(user) && canSeeModifications(user), badge: modifBadge },
     { view: 'livraisons',       emoji: '🚚', label: 'Livraisons',       visible: canSeeLivraisons(user), badge: livraisonsBadge },
