@@ -272,7 +272,7 @@ export default function ClientOrderView() {
   async function submit() {
     // Liste claire de TOUT ce qui manque pour pouvoir commander.
     const missing = []
-    if (!name.trim()) missing.push('votre nom')
+    if (name.trim().split(/\s+/).filter(Boolean).length < 2) missing.push('votre nom ET prénom')
     if (!phone.trim()) missing.push('votre numéro')
     if (!date) missing.push('la date')
     else if (date < new Date().toLocaleDateString('en-CA')) { alert('La date choisie est déjà passée. Choisissez une date à venir 🙂'); return }
@@ -531,7 +531,7 @@ export default function ClientOrderView() {
           <button onClick={() => setScreen('list')} style={{ background: 'none', border: 'none', color: B, fontSize: 14, fontWeight: 600, padding: '8px 2px', cursor: 'pointer' }}>‹ Ajouter autre chose</button>
           <h2 style={h2}>Finaliser ma commande</h2>
           <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 18, padding: 16 }}>
-            <div style={{ marginBottom: 15 }}><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Votre nom</div><input value={name} onChange={e => setName(e.target.value)} style={inp} /></div>
+            <div style={{ marginBottom: 15 }}><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Votre nom et prénom</div><input value={name} onChange={e => setName(e.target.value)} placeholder="Prénom Nom" style={inp} /></div>
             <div style={{ marginBottom: 15 }}><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Votre téléphone</div><input value={phone} onChange={e => setPhone(e.target.value)} type="tel" placeholder="06…" style={inp} /></div>
             <div style={{ marginBottom: 15 }}>
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>🏬 Retrait en boutique</div>

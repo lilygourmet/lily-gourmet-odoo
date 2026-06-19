@@ -165,6 +165,10 @@ export default function NewOrderView({ user, initialClient = null }) {
 
   async function handleCreate() {
     if (!client) { toast.error('Choisis ou crée un client d\'abord.'); return }
+    if ((client.name || '').trim().split(/\s+/).filter(Boolean).length < 2) {
+      toast.error('Le client doit avoir un nom ET un prénom (2 mots). Corrige sa fiche ou crée un client complet.')
+      return
+    }
     if (cart.length === 0) return
     if (hasLivraison && !livreurId) { toast.error('Assigne un livreur avant de créer (ligne Livraison).'); return }
     if (!deliveryDate) { toast.error('La date de retrait/livraison est obligatoire (sinon la commande n\'apparaît pas au calendrier).'); return }
