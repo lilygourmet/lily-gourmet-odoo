@@ -52,6 +52,16 @@ export async function uploadPhoto(fileOrBlob, { theme = null, nom = null, create
   return { ...data, url: photoUrl(data.path) }
 }
 
+/** Remplace l'image stockée par une nouvelle (retouche gardée). Renvoie {path, url}. */
+export async function replacePhotoImage(id, blob, theme) {
+  const path = `${slug(theme || '_retouches')}/${id}_${Date.now()}.png`
+  const { error: up } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: 'image/png', upsert: true })
+  if (up) throw up
+  const { error } = await supabase.from('ps_photos').update({ path }).eq('id', id)
+  if (error) throw error
+  return { path, url: photoUrl(path) }
+}
+
 /** Mémorise la dernière taille (cm) utilisée pour cette image. Silencieux si la colonne n'existe pas. */
 export async function setPhotoSize(id, w, h) {
   const { error } = await supabase.from('ps_photos').update({ last_w: w, last_h: h }).eq('id', id)

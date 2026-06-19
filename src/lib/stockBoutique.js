@@ -7,6 +7,7 @@
 // =============================================================
 
 import { supabase } from './supabase'
+import { isGsSucre } from '../components/StockBoutique/ProductGrid'
 
 // =============================================================
 // HELPERS DATE
@@ -352,11 +353,38 @@ export async function sendMorningItem(stockDayId, productName, productCode, qty,
 // =============================================================
 
 export async function confirmReception(itemId, qtyReceived, userId) {
-  return updateItem(itemId, {
+  const updated = await updateItem(itemId, {
     qty_received: qtyReceived,
     reception_status: 'confirmed',
     received_by: userId,
     received_at: new Date().toISOString(),
+  })
+  // Article validé par le café → on l'ajoute à la commande client Odoo du jour (selon son type).
+  // Tâche de fond : un échec Odoo ne doit JAMAIS bloquer la validation du café.
+  if (updated && Number(qtyReceived) > 0) {
+    pushVitrineOrder(updated, qtyReceived).catch(e => console.warn('[vitrine-order-add]', e?.message || e))
+  }
+  return updated
+}
+
+// Type de produit → client Odoo + repère de la commande.
+//  - SU-            → « vitrine salé »
+//  - GS- (salé)     → « vitrine GS »
+//  - reste (sucré)  → « vitrine »
+function vitrineRoute(productName) {
+  const c = String(productName || '').replace(/^\[\d+\]\s*/, '').trim()
+  if (c.startsWith('SU-')) return { partnerName: 'vitrine salé', label: 'salé' }
+  if (c.startsWith('GS-') && !isGsSucre(c)) return { partnerName: 'vitrine GS', label: 'GS' }
+  return { partnerName: 'vitrine', label: 'sucré' }
+}
+
+// Ajoute (en tâche de fond) un article reçu à la bonne commande client Odoo du jour.
+async function pushVitrineOrder(item, qty) {
+  const { partnerName, label } = vitrineRoute(item.product_name)
+  await fetch('/api/wati-webhook?action=vitrine-order-add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ day: todayISO(), code: item.product_code, name: item.product_name, qty, partnerName, label }),
   })
 }
 

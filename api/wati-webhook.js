@@ -78,6 +78,7 @@ export default async function handler(req, res) {
   if (action === 'order-set-warehouse') return handleSetWarehouse(req, res)
   if (action === 'vitrine-reserved') return handleVitrineReserved(req, res)
   if (action === 'vitrine-reservations') return handleVitrineReservations(req, res)
+  if (action === 'vitrine-order-add') return handleVitrineOrderAdd(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
   if (action === 'count-devis-internet') return handleCountDevisInternet(req, res)
   return handleInbound(req, res)
@@ -1591,6 +1592,74 @@ async function handleVitrineReservations(req, res) {
     return res.status(200).json({ orders: result })
   } catch (e) {
     console.error('[vitrine-reservations]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Un envoi sucré validé par le café → l'ajoute à la commande client « vitrine » du jour.
+// Toutes les validations d'une même journée se cumulent sur UNE seule commande
+// (client « vitrine » + commitment_date = minuit du jour). Même article 2x → la ligne s'additionne.
+async function handleVitrineOrderAdd(req, res) {
+  const { day, code, name, qty, partnerName = 'vitrine', label = 'sucré' } = req.body || {}
+  const q = Number(qty)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return res.status(400).json({ error: 'jour invalide (YYYY-MM-DD)' })
+  if (!code || !Number.isFinite(q) || q <= 0) return res.status(400).json({ error: 'code et qty requis' })
+  const clean = s => String(s || '').replace(/^\[\d+\]\s*/, '').trim().toLowerCase()
+  try {
+    const uid = await odooAuthenticate()
+
+    // 1) Client destinataire (« vitrine » / « vitrine GS » / « vitrine salé » selon le type de produit).
+    // « vitrine » a plusieurs doublons : on prend celui qui a la commande la PLUS RÉCENTE (= en service).
+    // « =ilike » = nom exact (insensible à la casse), exclut « ... Vitrine ... ».
+    const partners = await odooSearchRead(uid, 'res.partner', [['name', '=ilike', partnerName]], ['id'])
+    if (!partners.length) return res.status(404).json({ error: `client « ${partnerName} » introuvable dans Odoo` })
+    const partnerIds = partners.map(p => p.id)
+    let partnerId = partnerIds[0]
+    const recent = await odooSearchRead(uid, 'sale.order', [['partner_id', 'in', partnerIds]], ['partner_id'], { order: 'date_order desc', limit: 1 })
+    if (recent.length) partnerId = Array.isArray(recent[0].partner_id) ? recent[0].partner_id[0] : recent[0].partner_id
+
+    // 2) Variante : depuis l'id du modèle (code), on prend la bonne taille en croisant le nom
+    const variants = await odooSearchRead(uid, 'product.product', [['product_tmpl_id', '=', Number(code)]],
+      ['id', 'display_name', 'list_price'])
+    if (!variants.length) return res.status(404).json({ error: `produit introuvable (modèle ${code})` })
+    const variant = variants.length === 1
+      ? variants[0]
+      : (variants.find(v => clean(v.display_name) === clean(name)) || variants[0])
+
+    // 3) Commande « vitrine » du jour (clé = partner + minuit du jour)
+    const dayMidnight = moroccoLocalToUtc(day, '00:00')
+    const existing = await odooSearchRead(uid, 'sale.order',
+      [['partner_id', '=', partnerId], ['commitment_date', '=', dayMidnight], ['state', 'in', ['draft', 'sent', 'sale']]],
+      ['id', 'order_line'], { order: 'id desc', limit: 1 })
+
+    const lineName = clean(name) ? (name || variant.display_name) : variant.display_name
+
+    if (existing.length) {
+      const orderId = existing[0].id
+      // Ligne existante pour ce produit ? → on additionne la quantité.
+      const lineIds = existing[0].order_line || []
+      const lines = lineIds.length
+        ? await odooSearchRead(uid, 'sale.order.line', [['id', 'in', lineIds]], ['id', 'product_id', 'product_uom_qty', 'display_type'])
+        : []
+      const same = lines.find(l => !l.display_type && (Array.isArray(l.product_id) ? l.product_id[0] : l.product_id) === variant.id)
+      const op = same
+        ? [[1, same.id, { product_uom_qty: (Number(same.product_uom_qty) || 0) + q }]]
+        : [[0, 0, { product_id: variant.id, product_uom_qty: q, price_unit: Number(variant.list_price) || 0, name: lineName }]]
+      await odooJsonRpc('object', 'execute_kw', [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, 'sale.order', 'write', [[orderId], { order_line: op }]])
+      return res.status(200).json({ ok: true, orderId })
+    }
+
+    // Sinon : on crée la commande du jour
+    const [yy, mm, dd] = day.split('-')
+    const orderId = await odooCreate(uid, 'sale.order', {
+      partner_id: partnerId,
+      commitment_date: dayMidnight,
+      client_order_ref: `Vitrine ${label} ${dd}/${mm}/${yy}`,
+      order_line: [[0, 0, { product_id: variant.id, product_uom_qty: q, price_unit: Number(variant.list_price) || 0, name: lineName }]],
+    })
+    return res.status(200).json({ ok: true, orderId, created: true })
+  } catch (e) {
+    console.error('[vitrine-order-add]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

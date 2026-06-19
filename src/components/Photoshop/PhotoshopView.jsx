@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { listPhotos, uploadPhoto, deletePhoto, renamePhoto, setPhotoSize } from '../../lib/photoshop'
+import { listPhotos, uploadPhoto, deletePhoto, renamePhoto, setPhotoSize, replacePhotoImage } from '../../lib/photoshop'
 import RegionEditor from './RegionEditor'
 import { loadImg, trimToContent } from './imgutil'
+import { extractPsdLayers } from '../../lib/psdImport'
 
 // ====== Studio photos : composer une planche A4 d'images imprimables pour gâteaux ======
 // Porté de la maquette validée (mockups/photos-gateaux-composeur.html).
@@ -78,8 +79,10 @@ export default function PhotoshopView({ user, onNavigate }) {
   const [qNewTheme, setQNewTheme] = useState('')
   const lastTheme = useRef('__temp__')
   const [cleanMode, setCleanMode] = useState(false)   // nettoyage : 1 clic = supprimer
+  const [bulk, setBulk] = useState(null)              // import en lot : { files, theme, newTheme }
   const [regionSrc, setRegionSrc] = useState(null)    // éditeur de zone (recolorer/effacer)
   const [regionUid, setRegionUid] = useState(null)
+  const [regionTools, setRegionTools] = useState(['erase', 'recolor'])
 
   const uid = useRef(1), grpSeq = useRef(0)
   const sizeSave = useRef({ timer: null, pending: {} })   // sauvegarde (débounce) de la taille par photo
@@ -88,6 +91,8 @@ export default function PhotoshopView({ user, onNavigate }) {
   const drag = useRef(null)
   const fileInput = useRef(null)
   const folderInput = useRef(null)
+  const bulkInput = useRef(null)
+  const psdInput = useRef(null)
 
   const sel = selUids.length === 1 ? placed.find(p => p.uid === selUids[0]) : null
   const isSel = u => selUids.some(x => x === u)
@@ -140,6 +145,40 @@ export default function PhotoshopView({ user, onNavigate }) {
     setSelUids([it.uid]); return [...list, it]
   })
 
+  // ---------- impression (vraies pages A4) ----------
+  const printPages = () => {
+    const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const shapeStr = f => f === 'rond' ? 'border-radius:50%' : f === 'arrondi' ? 'border-radius:16%'
+      : f === 'losange' ? 'clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)'
+      : f === 'hexagone' ? 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)'
+      : f === 'coeur' ? 'clip-path:url(#psHeart)' : ''
+    const pagesHtml = Array.from({ length: npages }).map((_, p) => {
+      const items = placed.filter(it => it.page === p).map(it => {
+        const pos = `position:absolute;left:${it.x}cm;top:${it.y}cm;transform:rotate(${it.rot || 0}deg);`
+        if (it.type === 'text') return `<div style="${pos}font-size:${it.size}cm;line-height:1.1;color:${it.color};font-weight:700;white-space:pre;text-align:center;font-family:${it.font || "'Dancing Script',cursive"}">${esc(it.txt)}</div>`
+        const box = `${pos}width:${it.w}cm;height:${it.h}cm;overflow:hidden;${shapeStr(it.forme)}`
+        if (it.type === 'shape') return `<div style="${box};background:${it.color}"></div>`
+        const fit = it.forme === 'none' ? 'fill' : it.fit
+        const ms = fit === 'fill' ? '100% 100%' : fit
+        const crop = (it.ct || it.cr || it.cb || it.cl) ? `clip-path:inset(${it.ct || 0}% ${it.cr || 0}% ${it.cb || 0}% ${it.cl || 0}%);` : ''
+        const tint = it.tintA > 0 ? `<div style="position:absolute;inset:0;background:${it.tint};opacity:${it.tintA / 100};mix-blend-mode:multiply;-webkit-mask:url('${it.src}') center/${ms} no-repeat;mask:url('${it.src}') center/${ms} no-repeat;${crop}"></div>` : ''
+        return `<div style="${box}"><img src="${it.src}" style="width:100%;height:100%;object-fit:${fit};transform:scale(${(it.zoom || 100) / 100});${crop}">${tint}</div>`
+      }).join('')
+      return `<div class="page">${items}</div>`
+    }).join('')
+    const heart = '<svg width="0" height="0"><defs><clipPath id="psHeart" clipPathUnits="objectBoundingBox"><path d="M0.5,0.97 C0.5,0.97,0.03,0.62,0.03,0.32 C0.03,0.14,0.18,0.03,0.34,0.03 C0.43,0.03,0.5,0.1,0.5,0.18 C0.5,0.1,0.57,0.03,0.66,0.03 C0.82,0.03,0.97,0.14,0.97,0.32 C0.97,0.62,0.5,0.97,0.5,0.97 Z"/></clipPath></defs></svg>'
+    const html = `<!doctype html><html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Pacifico&family=Lobster&family=Playfair+Display:wght@700&family=Montserrat:wght@800&family=Satisfy&display=swap" rel="stylesheet">
+<style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0}.page{position:relative;width:21cm;height:29.7cm;overflow:hidden;page-break-after:always}</style>
+</head><body>${heart}${pagesHtml}
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},400)})</script>
+</body></html>`
+    const w = window.open('', '_blank')
+    if (!w) { alert("Autorise les fenêtres pop-up pour imprimer."); return }
+    w.document.write(html); w.document.close()
+  }
+
   // rangement auto (étagères)
   const arrange = () => setPlaced(list => {
     let ux = MARG, uy = MARG, rowH = 0, page = 0; const UW = CMW - 2 * MARG, GAP = 0.4
@@ -173,6 +212,16 @@ export default function PhotoshopView({ user, onNavigate }) {
       const pend = sizeSave.current.pending; sizeSave.current.pending = {}
       Object.entries(pend).forEach(([id, s]) => setPhotoSize(id, s.w, s.h).catch(() => {}))
     }, 700)
+  }
+  // réenregistre l'image retouchée dans la bibliothèque (gardée pour les prochaines fois)
+  const persistEdit = async (libId, dataURL) => {
+    if (!libId || !String(dataURL || '').startsWith('data:')) return
+    const ph = allPhotos.find(x => x.id === libId)
+    try {
+      const blob = await (await fetch(dataURL)).blob()
+      const res = await replacePhotoImage(libId, blob, ph?.theme)
+      setAllPhotos(p => p.map(x => x.id === libId ? { ...x, path: res.path, url: res.url } : x))
+    } catch (e) { /* silencieux : la retouche reste au moins sur la page */ }
   }
   const setDim = (k, v) => {
     if (!sel) return; v = Math.max(0.5, parseFloat(v) || 1)
@@ -235,7 +284,9 @@ export default function PhotoshopView({ user, onNavigate }) {
       }
       ctx.putImageData(im, 0, 0)
       const r = trimToContent(cv)   // resserre le cadre sur le dessin restant
-      patch(sel.uid, { src: r.dataURL, ratio: r.w / r.h, h: Math.max(0.5, Math.round(sel.w / (r.w / r.h) * 2) / 2) })
+      const nh = Math.max(0.5, Math.round(sel.w / (r.w / r.h) * 2) / 2)
+      patch(sel.uid, { src: r.dataURL, ratio: r.w / r.h, h: nh })
+      rememberSize(sel.libId, sel.w, nh); persistEdit(sel.libId, r.dataURL)
     } catch (e) {
       alert("Détourage impossible sur cette image (image externe protégée). Ça marche sur les photos que tu importes/colles.")
     } finally { setBusy('') }
@@ -252,7 +303,9 @@ export default function PhotoshopView({ user, onNavigate }) {
       const cv = document.createElement('canvas'); cv.width = sw; cv.height = sh
       cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
       const r = trimToContent(cv)
-      patch(sel.uid, { src: r.dataURL, ratio: r.w / r.h, h: Math.max(0.5, Math.round(sel.w / (r.w / r.h) * 2) / 2), ct: 0, cr: 0, cb: 0, cl: 0 })
+      const nh = Math.max(0.5, Math.round(sel.w / (r.w / r.h) * 2) / 2)
+      patch(sel.uid, { src: r.dataURL, ratio: r.w / r.h, h: nh, ct: 0, cr: 0, cb: 0, cl: 0 })
+      rememberSize(sel.libId, sel.w, nh); persistEdit(sel.libId, r.dataURL)
     } catch (e) { alert('Rognage impossible (image externe protégée).') } finally { setBusy('') }
   }
 
@@ -366,6 +419,46 @@ export default function PhotoshopView({ user, onNavigate }) {
     setQueue(q => q.slice(1))
   }
   const skipAdd = () => setQueue(q => q.slice(1))
+  // import en lot rapide : 1 seule catégorie pour tout, sans nommer chaque photo
+  const onBulkPick = e => {
+    const files = [...(e.target.files || [])]; e.target.value = ''
+    if (files.length) setBulk({ files, theme: lastTheme.current === '__temp__' ? '' : lastTheme.current, newTheme: '' })
+  }
+  const onPsdPick = e => {
+    const files = [...(e.target.files || [])].filter(f => /\.psd$/i.test(f.name)); e.target.value = ''
+    if (files.length) setBulk({ files, theme: '', newTheme: '', psd: true })
+  }
+  const runBulk = async () => {
+    const b = bulk; if (!b) return
+    let th = b.theme; if (th === '__new__' || !th) th = (b.newTheme || '').trim() || 'Temporaire'
+    setBulk(null)
+    if (b.psd) {   // éclater chaque PSD en éléments
+      const seen = new Set(); let ok = 0, fail = 0, lastErr = ''; const added = []
+      for (let fi = 0; fi < b.files.length; fi++) {
+        setBusy(`PSD ${fi + 1}/${b.files.length} : lecture des calques…`)
+        let layers = []
+        try { layers = await extractPsdLayers(b.files[fi], seen) } catch (e2) { fail++; lastErr = e2?.message || String(e2); continue }
+        for (let i = 0; i < layers.length; i++) {
+          try { const r = await uploadPhoto(layers[i].blob, { theme: th, nom: layers[i].nom, createdBy: user?.id }); added.push(r); ok++ } catch (e2) { fail++; lastErr = e2?.message || String(e2) }
+          if (i % 5 === 0) setBusy(`PSD ${fi + 1}/${b.files.length} : ${ok} éléments ajoutés…`)
+        }
+      }
+      setBusy(''); setAllPhotos(p => [...added, ...p]); lastTheme.current = th
+      alert(`PSD terminés : ${ok} élément(s) ajouté(s) dans « ${th} »${fail ? `, ${fail} échec(s).\n${lastErr}` : ' ✅'}`)
+      return
+    }
+    let ok = 0, fail = 0, lastErr = ''; const total = b.files.length, added = []
+    setBusy(`Import… 0/${total}`)
+    for (let i = 0; i < total; i += 6) {
+      await Promise.all(b.files.slice(i, i + 6).map(async f => {
+        try { const r = await uploadPhoto(f, { theme: th, nom: f.name.replace(/\.[^.]+$/, ''), createdBy: user?.id }); added.push(r); ok++ }
+        catch (e2) { fail++; lastErr = e2?.message || String(e2) }
+      }))
+      setBusy(`Import… ${ok + fail}/${total}`)
+    }
+    setBusy(''); setAllPhotos(p => [...added, ...p]); lastTheme.current = th
+    alert(`Import terminé : ${ok} ajoutée(s) dans « ${th} »${fail ? `, ${fail} échec(s).\n${lastErr}` : ' ✅'}`)
+  }
   const onPickFolder = e => {
     const files = [...(e.target.files || [])].filter(f => /\.(png|jpe?g|webp)$/i.test(f.name) && !/(^|\/)_apercus\//.test(f.webkitRelativePath || ''))
     e.target.value = ''; importFiles(files, true)
@@ -426,17 +519,22 @@ export default function PhotoshopView({ user, onNavigate }) {
         <button onClick={addShape} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">⬤ Forme</button>
         <button onClick={arrange} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🪄 Ranger</button>
         <button onClick={() => setNpages(n => n + 1)} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">＋ Page</button>
+        <button onClick={printPages} className="bg-white text-bordeaux rounded-lg px-3 py-1.5 text-[12px] font-bold">🖨️ Imprimer</button>
       </header>
 
       <div className="flex-1 flex min-h-0">
         {/* Bibliothèque */}
         <aside className="w-[240px] flex-shrink-0 border-r border-line bg-cream p-2.5 overflow-auto">
-          <div className="flex gap-1.5 mb-2">
+          <div className="flex gap-1.5 mb-1">
             <button onClick={() => fileInput.current?.click()} className="flex-1 bg-bordeaux text-white rounded-lg py-1.5 text-[12px] font-bold">＋ Charger</button>
             <button onClick={() => folderInput.current?.click()} title="Importer un dossier entier" className="bg-white border border-line rounded-lg py-1.5 px-2 text-[12px]">📁</button>
           </div>
+          <button onClick={() => bulkInput.current?.click()} className="w-full bg-white border border-bordeaux text-bordeaux rounded-lg py-1.5 text-[12px] font-bold mb-1">📥 Import lot (1 catégorie, rapide)</button>
+          <button onClick={() => psdInput.current?.click()} className="w-full bg-white border border-bordeaux text-bordeaux rounded-lg py-1.5 text-[12px] font-bold mb-2">🧩 Importer des PSD (éclate les calques)</button>
           <input ref={fileInput} type="file" accept="image/*" multiple className="hidden" onChange={onPickFiles} />
           <input ref={folderInput} type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={onPickFolder} />
+          <input ref={bulkInput} type="file" accept="image/*" multiple className="hidden" onChange={onBulkPick} />
+          <input ref={psdInput} type="file" accept=".psd" multiple className="hidden" onChange={onPsdPick} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher (nom ou catégorie)…" className={inp + ' mb-2'} />
           <select value={theme || ''} onChange={e => setTheme(e.target.value || null)} className={inp + ' mb-2'}>
             <option value="">Tous les thèmes ({themes.reduce((a, t) => a + t.n, 0)})</option>
@@ -540,7 +638,8 @@ export default function PhotoshopView({ user, onNavigate }) {
                     <button onClick={resetCrop} className="bg-white border border-line rounded-lg px-2 py-2 text-[12px]">↺ Annuler</button>
                   </div>
                   <button onClick={removeBg} className={btn + ' bg-white border border-line'}>🪄 Enlever le fond</button>
-                  <button onClick={() => { setRegionUid(sel.uid); setRegionSrc(sel.src) }} className={btn + ' bg-white border border-line'}>🖌️ Modifier une zone (couleur / effacer)</button>
+                  <button onClick={() => { setRegionUid(sel.uid); setRegionTools(['brush']); setRegionSrc(sel.src) }} className={btn + ' bg-white border border-line'}>🧽 Gomme</button>
+                  <button onClick={() => { setRegionUid(sel.uid); setRegionTools(['erase', 'recolor']); setRegionSrc(sel.src) }} className={btn + ' bg-white border border-line'}>🖌️ Modifier une zone (couleur / effacer)</button>
                 </>}
               </>}
 
@@ -596,10 +695,30 @@ export default function PhotoshopView({ user, onNavigate }) {
         </div>
       )}
 
-      {regionSrc && <RegionEditor src={regionSrc} onClose={res => {
-        if (res) { const it = placed.find(p => p.uid === regionUid); const w = it ? it.w : 5; patch(regionUid, { src: res.src, ratio: res.ratio, h: Math.max(0.5, Math.round(w / res.ratio * 2) / 2), ct: 0, cr: 0, cb: 0, cl: 0 }) }
+      {regionSrc && <RegionEditor src={regionSrc} tools={regionTools} onClose={res => {
+        if (res) { const it = placed.find(p => p.uid === regionUid); const w = it ? it.w : 5; const nh = Math.max(0.5, Math.round(w / res.ratio * 2) / 2); patch(regionUid, { src: res.src, ratio: res.ratio, h: nh, ct: 0, cr: 0, cb: 0, cl: 0 }); rememberSize(it?.libId, w, nh); persistEdit(it?.libId, res.src) }
         setRegionSrc(null)
       }} />}
+
+      {bulk && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl p-4 w-[360px] max-w-full">
+            <div className="font-fraunces text-[15px] mb-1">{bulk.psd ? `🧩 Éclater ${bulk.files.length} PSD` : `📥 Importer ${bulk.files.length} photos`}</div>
+            <p className="text-[12px] text-ink-soft mb-2">{bulk.psd ? 'Chaque PSD sera éclaté en éléments (doublons/fonds/planches écartés). Choisis UNE catégorie.' : 'Choisis UNE catégorie pour tout le lot (les noms = noms des fichiers, modifiables ensuite).'}</p>
+            <label className={lab}>Catégorie</label>
+            <select value={bulk.theme} onChange={e => setBulk({ ...bulk, theme: e.target.value })} className={inp + ' mb-2'}>
+              <option value="">🕒 Temporaire</option>
+              <option value="__new__">➕ Nouvelle catégorie…</option>
+              <optgroup label="Catégories existantes">{themes.map(t => <option key={t.theme} value={t.theme}>{t.theme}</option>)}</optgroup>
+            </select>
+            {(bulk.theme === '__new__') && <input autoFocus value={bulk.newTheme} onChange={e => setBulk({ ...bulk, newTheme: e.target.value })} className={inp + ' mb-2'} placeholder="Nom de la nouvelle catégorie" />}
+            <div className="flex gap-2 mt-2">
+              <button onClick={runBulk} className="flex-1 bg-bordeaux text-white rounded-lg py-2 text-[13px] font-bold">{bulk.psd ? 'Éclater les PSD' : 'Importer le lot'}</button>
+              <button onClick={() => setBulk(null)} className="bg-white border border-line rounded-lg py-2 px-3 text-[13px]">Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {busy && <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"><div className="bg-white rounded-xl px-6 py-4 text-[14px] font-semibold">{busy}</div></div>}
     </div>

@@ -5,12 +5,12 @@ import { trimToContent } from './imgutil'
 // onClose({ src, ratio } | null) — le cadre est rogné au contenu. null = annulé.
 const DISP = 520
 
-export default function RegionEditor({ src, onClose }) {
+export default function RegionEditor({ src, tools = ['brush', 'erase', 'recolor'], onClose }) {
   const cvRef = useRef(null)
   const scaleRef = useRef(1)
   const draw = useRef(null)
   const [ready, setReady] = useState(false)
-  const [mode, setMode] = useState('brush')      // 'brush' | 'erase' | 'recolor'
+  const [mode, setMode] = useState(tools[0])     // 'brush' | 'erase' | 'recolor'
   const [color, setColor] = useState('#ff5aa0')
   const [brush, setBrush] = useState(30)         // taille gomme (px affichés)
   const [rect, setRect] = useState(null)
@@ -43,20 +43,24 @@ export default function RegionEditor({ src, onClose }) {
   const onDown = e => {
     const p = pos(e); e.target.setPointerCapture(e.pointerId)
     if (mode === 'brush') { erodeAt(p, p); draw.current = { brush: true, last: p } }
-    else { draw.current = p; setRect({ x: p.x, y: p.y, w: 0, h: 0 }) }
+    else { draw.current = { start: p, rect: { x: p.x, y: p.y, w: 0, h: 0 } }; setRect(draw.current.rect) }
   }
   const onMove = e => {
     const p = pos(e); setCur(p)
     if (!draw.current) return
     if (draw.current.brush) { erodeAt(draw.current.last, p); draw.current.last = p }
-    else { const d = draw.current; setRect({ x: Math.min(d.x, p.x), y: Math.min(d.y, p.y), w: Math.abs(p.x - d.x), h: Math.abs(p.y - d.y) }) }
+    else { const s = draw.current.start; const r = { x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) }; draw.current.rect = r; setRect(r) }
   }
-  const onUp = () => { draw.current = null }
-
-  const applyRect = () => {
-    if (!rect || rect.w < 3 || rect.h < 3) return
+  const onUp = () => {
+    const d = draw.current; draw.current = null
+    if (d && !d.brush && d.rect && d.rect.w >= 3 && d.rect.h >= 3) applyRect(d.rect)   // applique direct au relâchement
+  }
+  const applyRect = (r) => {
+    const z = r && r.w ? r : rect
+    if (!z || z.w < 3 || z.h < 3) return
     const s = scaleRef.current
-    const cx = Math.round(rect.x / s), cy = Math.round(rect.y / s), cw = Math.round(rect.w / s), ch = Math.round(rect.h / s)
+    const cx = Math.max(0, Math.round(z.x / s)), cy = Math.max(0, Math.round(z.y / s))
+    const cw = Math.max(1, Math.round(z.w / s)), ch = Math.max(1, Math.round(z.h / s))
     const ctx = cvRef.current.getContext('2d')
     if (mode === 'erase') ctx.clearRect(cx, cy, cw, ch)
     else {
@@ -73,13 +77,12 @@ export default function RegionEditor({ src, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onPointerDown={e => { if (e.target === e.currentTarget) onClose(null) }}>
       <div className="bg-white rounded-xl p-4 max-w-[92vw] max-h-[92vh] overflow-auto">
-        <div className="font-fraunces text-[15px] mb-1">🖌️ Modifier une zone de la photo</div>
+        <div className="font-fraunces text-[15px] mb-1">{tools.length === 1 && tools[0] === 'brush' ? '🧽 Gomme' : '🖌️ Modifier une zone de la photo'}</div>
         <div className="flex flex-wrap gap-2 items-center mb-2">
-          <button onClick={() => setMode('brush')} className={tb + (mode === 'brush' ? ' bg-bordeaux text-white' : ' bg-white border border-line')}>🧽 Gomme</button>
-          <button onClick={() => setMode('erase')} className={tb + (mode === 'erase' ? ' bg-bordeaux text-white' : ' bg-white border border-line')}>⬚ Effacer un rectangle</button>
-          <button onClick={() => setMode('recolor')} className={tb + (mode === 'recolor' ? ' bg-bordeaux text-white' : ' bg-white border border-line')}>🎨 Recolorer un rectangle</button>
+          {tools.includes('brush') && <button onClick={() => setMode('brush')} className={tb + (mode === 'brush' ? ' bg-bordeaux text-white' : ' bg-white border border-line')}>🧽 Gomme</button>}
+          {tools.includes('erase') && <button onClick={() => setMode('erase')} className={tb + (mode === 'erase' ? ' bg-bordeaux text-white' : ' bg-white border border-line')}>⬚ Effacer un rectangle</button>}
+          {tools.includes('recolor') && <button onClick={() => setMode('recolor')} className={tb + (mode === 'recolor' ? ' bg-bordeaux text-white' : ' bg-white border border-line')}>🎨 Recolorer un rectangle</button>}
           {mode === 'recolor' && <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-11 h-9 border border-line rounded-md bg-white p-0.5" />}
-          {mode !== 'brush' && <button onClick={applyRect} disabled={!rect || rect.w < 3} className={tb + ' text-white disabled:opacity-40'} style={{ background: '#1a0f0a' }}>✓ Appliquer</button>}
         </div>
         {mode === 'brush' && <div className="flex items-center gap-2 mb-2 text-[12px] text-ink-soft"><span>Taille gomme</span><input type="range" min="4" max="200" value={brush} onChange={e => setBrush(+e.target.value)} className="flex-1" /><span>{brush}px</span></div>}
         <p className="text-[12px] text-ink-soft mb-2">{mode === 'brush' ? "Passe la gomme sur les parties à enlever." : 'Dessine un rectangle puis « Appliquer ». Répétable.'}</p>
