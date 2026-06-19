@@ -18,6 +18,7 @@ const StockGS = lazy(() => import('./components/StockBoutique/StockGS'))
 const StockProd = lazy(() => import('./components/StockProd'))
 const ChecklistView = lazy(() => import('./components/ChecklistView'))
 const EconomatView = lazy(() => import('./components/Economat/EconomatView'))
+const PhotoshopView = lazy(() => import('./components/Photoshop/PhotoshopView'))
 const CaisseView = lazy(() => import('./components/Caisse/CaisseView'))
 import TasksView from './components/Tasks/TasksView'
 const HRView = lazy(() => import('./components/HR/HRView'))
@@ -330,6 +331,7 @@ function App() {
     if (activeView === 'caisse') return <CaisseView {...navProps} />
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
     if (activeView === 'economat') return <EconomatView {...navProps} />
+    if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
     // exposer le calendrier à un user sans perm_calendar.

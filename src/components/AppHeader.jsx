@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -632,6 +632,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users) },
     { view: 'absences',         emoji: '🌴', label: 'Congés',           visible: !isLivreur(user) && (admin || !!user?.perm_hr), badge: congesBadge },
     { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil || !!user?.perm_econome) },
+    { view: 'photoshop',        emoji: '🎨', label: 'Studio photos',    visible: !isLivreur(user) && canSeePhotoshop(user) },
   ].filter(i => i.visible)
 
   // ============================================================

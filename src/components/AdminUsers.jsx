@@ -147,6 +147,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_commande: formData.permCommande,
         perm_notif_modif: formData.permNotifModif,
         perm_notif_ocp: formData.permNotifOcp,
+        perm_photoshop: formData.permPhotoshop,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -211,6 +212,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_commande: formData.permCommande,
         perm_notif_modif: formData.permNotifModif,
         perm_notif_ocp: formData.permNotifOcp,
+        perm_photoshop: formData.permPhotoshop,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -757,6 +759,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permCommande: initialData?.perm_commande !== undefined ? initialData.perm_commande : false,
     permNotifModif: initialData?.perm_notif_modif !== undefined ? initialData.perm_notif_modif : false,
     permNotifOcp: initialData?.perm_notif_ocp !== undefined ? initialData.perm_notif_ocp : false,
+    permPhotoshop: initialData?.perm_photoshop !== undefined ? initialData.perm_photoshop : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
     permLivraisonsDispatch: initialData?.perm_livraisons_dispatch || false,
@@ -955,6 +958,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-labels" label="Étiquettes gâteaux (Zebra)" desc="Imprimer les étiquettes cake design sur l'imprimante Zebra." checked={isAdmin || formData.permLabels} onChange={v => update('permLabels', v)} />
             <PermCheckbox id="perm-etiquettes" label="Étiquettes café & produits" desc="Onglets « Étiquettes Café » et « Étiquettes produits » (prix vitrine)." checked={isAdmin || formData.permEtiquettes} onChange={v => update('permEtiquettes', v)} />
             <PermCheckbox id="perm-cake-vision" label="Galerie CD" desc="Accès à la galerie des modèles de gâteaux." checked={isAdmin || formData.permCakeVision} onChange={v => update('permCakeVision', v)} />
+            <PermCheckbox id="perm-photoshop" label="🎨 Studio photos" desc="Composer/éditer des photos imprimables pour gâteaux (bibliothèque, texte, formes, découpe…)." checked={isAdmin || formData.permPhotoshop} onChange={v => update('permPhotoshop', v)} />
           </PermGroup>
 
           <PermGroup emoji="💬" title="Clients & Ventes">

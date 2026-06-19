@@ -8,6 +8,7 @@ import {
   isAdmin, isLivreur, canRecaps, canSeeCalendar, canSeeFreezer, canSeeMessages,
   canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, canStockPatissier, canStockCafe,
   canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canViewPayments,
+  canSeePhotoshop,
 } from './auth'
 
 const TAB_DEFS = [
@@ -39,6 +40,7 @@ const TAB_DEFS = [
   { view: 'hr',                emoji: '🏢', label: 'RH',                can: u => (isAdmin(u) || !!u?.perm_hr) && (isAdmin(u) || !u?.perm_admin_users) },
   { view: 'absences',          emoji: '🌴', label: 'Congés',            can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_hr) },
   { view: 'economat',          emoji: '🧾', label: 'Économat',          can: u => !isLivreur(u) && (isAdmin(u) || !!u?.economat_profil || !!u?.perm_econome) },
+  { view: 'photoshop',         emoji: '🎨', label: 'Studio photos',     can: u => !isLivreur(u) && canSeePhotoshop(u) },
 ]
 
 // Onglets autorisés pour cet utilisateur : [{ view, emoji, label }]
