@@ -14,6 +14,38 @@ import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
+import { supabase } from '../lib/supabase'
+
+// Normalise un libellé produit pour rapprocher récap ↔ commande (insensible casse/espaces/préfixe).
+const normProd = s => stripOdooPrefix(String(s || '')).toLowerCase().replace(/\s+/g, ' ').trim()
+
+// Charge le statut « rangé » du jour : prod/salé reçus (cafe_received) + commandes CD/GM rangées (item_steps 'range').
+// Renvoie un Set de clés : 'L:<odoo_line_id>' et 'C:<order_num>|<produit normalisé>'.
+async function loadRangedForDate(date, lineIds) {
+  const set = new Set()
+  try {
+    if (lineIds.length) {
+      const { data: recv } = await supabase.from('cafe_received').select('odoo_line_id').in('odoo_line_id', lineIds)
+      ;(recv || []).forEach(r => set.add('L:' + r.odoo_line_id))
+    }
+    const [y, m, d] = date.split('-').map(Number)
+    const next = new Date(y, m - 1, d + 1)
+    const dayEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+    const { data: orders } = await supabase.from('orders')
+      .select('order_num, order_items(id, title)')
+      .gte('delivery_at', `${date}T00:00:00`).lt('delivery_at', `${dayEnd}T00:00:00`)
+    const itemIds = (orders || []).flatMap(o => (o.order_items || []).map(i => i.id))
+    if (itemIds.length) {
+      const { data: steps } = await supabase.from('item_steps')
+        .select('item_id').eq('step_key', 'range').eq('done', true).in('item_id', itemIds)
+      const rangedIds = new Set((steps || []).map(s => s.item_id))
+      ;(orders || []).forEach(o => (o.order_items || []).forEach(it => {
+        if (rangedIds.has(it.id)) set.add('C:' + o.order_num + '|' + normProd(it.title))
+      }))
+    }
+  } catch { /* pas bloquant */ }
+  return set
+}
 
 // ============================================================
 // Helpers etiquettes par commande
@@ -310,7 +342,7 @@ function OdooTableView({ lines }) {
 function CategoryPopup({
   cat, lines, allLines, dateLabel, onClose,
   cart, onAddToCart, onRemoveFromCart, onClearCart, onDownloadCart, downloadingCart,
-  onAddToPrintCart, printCartCount,
+  onAddToPrintCart, printCartCount, isRanged,
 }) {
   const isProductMode = cat.viewMode === 'product'
   const isDeliveryMode = cat.viewMode === 'delivery'
@@ -445,6 +477,7 @@ function CategoryPopup({
                       onPickItem={onPickItem}
                       onPickIndiv={onPickIndiv}
                       onAddToPrintCart={onAddToPrintCart}
+                      isRanged={isRanged}
                     />
                   ))}
                 </div>
@@ -494,7 +527,9 @@ function CategoryPopup({
 // ============================================================
 // Bloc client : entete + items (clickable ou non) + indiv groupes
 // ============================================================
-function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, onAddToPrintCart }) {
+// Style « coup de fluo » (surligneur) sur une ligne rangée.
+const FLUO = { background: '#f6ff5c', borderRadius: 3, padding: '0 3px', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }
+function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, onAddToPrintCart, isRanged }) {
   const { normal, indiv } = splitItems(entry.items)
   const indivQty = sumIndivQty(indiv)
   const orderNum = entry.orderNum || ''
@@ -625,8 +660,10 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
         )
       })()}
 
-      {/* Items normaux : cliquables si la categorie le permet */}
-      {normal.map(item => (
+      {/* Items normaux : cliquables si la categorie le permet. Surligné (fluo) si rangé. */}
+      {normal.map(item => {
+        const ranged = isRanged && isRanged(item, orderNum)
+        return (
         clickable ? (
           <button
             key={item.id}
@@ -634,15 +671,15 @@ function ClientBlock({ entry, clickable, showContact, onPickItem, onPickIndiv, o
             className="ml-4 text-[12px] text-bordeaux font-medium flex gap-2 hover:bg-bordeaux/10 px-2 py-1 rounded transition-colors text-left w-full"
           >
             <span className="font-mono min-w-[32px]">×{item.quantity}</span>
-            <span className="whitespace-pre-line">{item.product_name}</span>
+            <span className="whitespace-pre-line" style={ranged ? FLUO : undefined}>{item.product_name}</span>
           </button>
         ) : (
           <div key={item.id} className="ml-4 text-[12px] text-ink-soft flex gap-2">
             <span className="font-bold text-bordeaux min-w-[32px]">×{item.quantity}</span>
-            <span className="whitespace-pre-line">{item.product_name}</span>
+            <span className="whitespace-pre-line" style={ranged ? FLUO : undefined}>{item.product_name}</span>
           </div>
         )
-      ))}
+      )})}
 
       {/* Indiv : ligne unique cliquable + detail dessous */}
       {indiv.length > 0 && (
@@ -1145,14 +1182,24 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
 
   const totalLabels = cart.reduce((s, e) => s + (e.labelCount || 1), 0)
 
+  const [rangedSet, setRangedSet] = useState(() => new Set())
   useEffect(() => {
     (async () => {
       setLoading(true)
       const data = await loadSalesLinesForDate(date)
       setLines(data)
       setLoading(false)
+      const lineIds = (data || []).map(l => l.odoo_line_id).filter(Boolean)
+      setRangedSet(await loadRangedForDate(date, lineIds))
     })()
   }, [date])
+
+  // Une ligne du récap est « rangée » (→ coup de fluo) si reçue (prod/salé) ou rangée (commande CD/GM).
+  function isLineRanged(item, orderNum) {
+    if (!item) return false
+    if (item.odoo_line_id && rangedSet.has('L:' + item.odoo_line_id)) return true
+    return rangedSet.has('C:' + (orderNum || item.order_num || '') + '|' + normProd(item.product_name))
+  }
 
   // Lignes apres application des filtres (utilise pour les vues + popups + impression)
   const filteredLines = filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms })
@@ -1493,6 +1540,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           downloadingCart={downloadingCart}
           onAddToPrintCart={addToPrintCart}
           printCartCount={printCart.length}
+          isRanged={isLineRanged}
         />
       )}
 
