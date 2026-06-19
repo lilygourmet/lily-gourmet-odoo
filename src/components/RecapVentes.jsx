@@ -21,13 +21,12 @@ const normProd = s => stripOdooPrefix(String(s || '')).toLowerCase().replace(/\s
 
 // Charge le statut « rangé » du jour : prod/salé reçus (cafe_received) + commandes CD/GM rangées (item_steps 'range').
 // Renvoie un Set de clés : 'L:<odoo_line_id>' et 'C:<order_num>|<produit normalisé>'.
-async function loadRangedForDate(date, lineIds) {
+async function loadRangedForDate(date) {
   const set = new Set()
   try {
-    if (lineIds.length) {
-      const { data: recv } = await supabase.from('cafe_received').select('odoo_line_id').in('odoo_line_id', lineIds)
-      ;(recv || []).forEach(r => set.add('L:' + r.odoo_line_id))
-    }
+    const { data: recv } = await supabase.from('cafe_received')
+      .select('odoo_line_id').order('received_at', { ascending: false }).limit(3000)
+    ;(recv || []).forEach(r => set.add('L:' + r.odoo_line_id))
     const [y, m, d] = date.split('-').map(Number)
     const next = new Date(y, m - 1, d + 1)
     const dayEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
@@ -1041,6 +1040,8 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
   const [popupCat, setPopupCat] = useState(null)
+  // Recharge le statut « rangé » à chaque ouverture d'une catégorie (fluo à jour même après un rangement récent).
+  useEffect(() => { if (popupCat) loadRangedForDate(date).then(setRangedSet).catch(() => {}) }, [popupCat, date])
   const [showFactures, setShowFactures] = useState(false)
   // Filtres : pour chaque (clients/articles) un mode + un champ de termes
   // mode : 'contains' (=garder uniquement les lignes qui matchent)
@@ -1193,8 +1194,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
       const data = await loadSalesLinesForDate(date)
       setLines(data)
       setLoading(false)
-      const lineIds = (data || []).map(l => l.odoo_line_id).filter(Boolean)
-      setRangedSet(await loadRangedForDate(date, lineIds))
+      setRangedSet(await loadRangedForDate(date))
     })()
   }, [date])
 
