@@ -143,13 +143,14 @@ async function loadOrdersForRange(fromStr, toStr) {
 // Pour chaque item d'une commande, on determine si l'item est "a ranger" :
 // - Type GM/GMD : etape 'fait' cochee mais 'range' pas cochee
 // - Type CD     : etape 'fini' cochee mais 'range' pas cochee
-function isItemToRange(item, steps) {
+function isItemToRange(item, steps, gmDoneNoFiche) {
   const fini = !!steps[`${item.id}_fini`]
   const fait = !!steps[`${item.id}_fait`]
   const range = !!steps[`${item.id}_range`]
   if (range) return false
   if (item.type === 'CD') return fini
-  return fait // GM, GMD, autres
+  // GM/GMD : « fait » via item_steps OU via le lot « à définir » des accessoires (articles sans fiche, ex. macarons)
+  return fait || !!(gmDoneNoFiche && gmDoneNoFiche.has(item.id))
 }
 function isItemRanged(item, steps) {
   return !!steps[`${item.id}_range`]
@@ -269,6 +270,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         }
       }
       const itemIds = allOrderItems.map(i => i.id)
+      // GM/GMD sans fiche : marqués « fait » par les accessoires via le lot « à définir » (lot_idx = -1).
+      const gmIds = allOrderItems.filter(i => i.type === 'GM' || i.type === 'GMD').map(i => i.id)
 
       // ============================================================
       // PHASE 2 : 5 requetes qui dependent de phase 1, en parallele
@@ -280,6 +283,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         receiveds,
         stepsMap,
         linesDoneResult,
+        gmDoneNoFicheResult,
       ] = await Promise.all([
         // 2a) Vitrine "A ranger" : items pending
         sd?.id
@@ -314,6 +318,10 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
               .select('odoo_line_id, product_name, quantity, client_name, order_num, delivery_at')
               .in('odoo_line_id', allReceivedIds)
           : Promise.resolve({ data: [] }),
+        // 2g) GM/GMD sans fiche faits par les accessoires (lot_idx = -1) → à ranger dans la checklist
+        gmIds.length > 0
+          ? supabase.from('gm_done').select('order_item_id').in('order_item_id', gmIds).eq('lot_idx', -1)
+          : Promise.resolve({ data: [] }),
       ])
 
       // ============================================================
@@ -335,7 +343,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       setSaleLines(eligibleLines.filter(l => startsWithAny(l.product_name, SALE_PREFIXES)))
 
       // 3c) COMMANDES a ranger
-      const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap))
+      const gmDoneNoFiche = new Set((gmDoneNoFicheResult?.data || []).map(r => r.order_item_id))
+      const todoCommandes = allOrderItems.filter(i => isItemToRange(i, stepsMap, gmDoneNoFiche))
       setCommandeItems(todoCommandes)
 
       // 3d) VITRINE rangee
