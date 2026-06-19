@@ -1047,6 +1047,7 @@ async function syncToSupabase(supabase, parsedOrders) {
           warnings: item.warnings || [],
           image_urls: item.image_urls || [],
           quantity: item.quantity,
+          odoo_line_id: item.lineId || null,
         }
 
         const existing = existingByIdx.get(idx)

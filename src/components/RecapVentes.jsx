@@ -32,7 +32,7 @@ async function loadRangedForDate(date, lineIds) {
     const next = new Date(y, m - 1, d + 1)
     const dayEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
     const { data: orders } = await supabase.from('orders')
-      .select('order_num, order_items(id, title)')
+      .select('order_num, order_items(id, title, odoo_line_id)')
       .gte('delivery_at', `${date}T00:00:00`).lt('delivery_at', `${dayEnd}T00:00:00`)
     const itemIds = (orders || []).flatMap(o => (o.order_items || []).map(i => i.id))
     if (itemIds.length) {
@@ -40,7 +40,9 @@ async function loadRangedForDate(date, lineIds) {
         .select('item_id').eq('step_key', 'range').eq('done', true).in('item_id', itemIds)
       const rangedIds = new Set((steps || []).map(s => s.item_id))
       ;(orders || []).forEach(o => (o.order_items || []).forEach(it => {
-        if (rangedIds.has(it.id)) set.add('C:' + o.order_num + '|' + normProd(it.title))
+        if (!rangedIds.has(it.id)) return
+        if (it.odoo_line_id) set.add('L:' + it.odoo_line_id)   // lien exact (après synchro)
+        set.add('C:' + o.order_num + '|' + normProd(it.title))  // repli par nom (avant synchro)
       }))
     }
   } catch { /* pas bloquant */ }
@@ -453,12 +455,14 @@ function CategoryPopup({
           ) : isProductMode ? (
             // Vue agregee par produit (PROD)
             <div className="space-y-1">
-              {[...groupByProduct(lines).entries()].map(([name, entry]) => (
+              {[...groupByProduct(lines).entries()].map(([name, entry]) => {
+                const allRanged = isRanged && entry.lines.length > 0 && entry.lines.every(l => isRanged(l))
+                return (
                 <div key={name} className="flex gap-3 py-1.5 border-b border-line/30 last:border-0">
                   <span className="font-bold text-bordeaux min-w-[40px] text-[14px]">×{entry.totalQty}</span>
-                  <span className="text-[13px] text-ink">{entry.product_name}</span>
+                  <span className="text-[13px] text-ink" style={allRanged ? FLUO : undefined}>{entry.product_name}</span>
                 </div>
-              ))}
+              )})}
             </div>
           ) : (
             // Vue heure -> (client+orderNum) -> produits — utilisee par hour-client ET delivery
