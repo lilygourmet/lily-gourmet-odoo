@@ -1198,6 +1198,17 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
     })()
   }, [date])
 
+  // Temps réel : dès qu'on coche/décoche un rangement dans la Checklist (cafe_received / item_steps),
+  // on recharge le statut → le fluo apparaît/disparaît tout seul, sans rouvrir.
+  useEffect(() => {
+    const reload = () => loadRangedForDate(date).then(setRangedSet).catch(() => {})
+    const ch = supabase.channel('recap-ranged-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cafe_received' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'item_steps' }, reload)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [date])
+
   // Une ligne du récap est « rangée » (→ coup de fluo) si reçue (prod/salé) ou rangée (commande CD/GM).
   function isLineRanged(item, orderNum) {
     if (!item) return false

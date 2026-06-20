@@ -129,7 +129,7 @@ export function statutPrevu(date, employe, feriesMap, congesByEmp) {
   }
 
   // 2) Congé ?
-  const conges = congesByEmp.get(employe.id) || []
+  const conges = congesByEmp.get(String(employe.id)) || []
   for (const c of conges) {
     if (ymd >= c.date_debut && ymd <= c.date_fin) {
       const typeLower = (c.type_conge || '').toLowerCase()
@@ -368,14 +368,18 @@ export function calculerMois(employe, mois, annee, data) {
   // Index : congés par employé
   const congesByEmp = new Map()
   for (const c of conges) {
-    if (!congesByEmp.has(c.employe_id)) congesByEmp.set(c.employe_id, [])
-    congesByEmp.get(c.employe_id).push(c)
+    const cid = String(c.employe_id)
+    if (!congesByEmp.has(cid)) congesByEmp.set(cid, [])
+    congesByEmp.get(cid).push(c)
   }
 
+  // Comparaison d'id tolérante au type : Supabase renvoie les bigint en STRING ("4")
+  // et les int en NUMBER (4) → l'égalité stricte échouait et ignorait les pointages.
+  const empId = String(employe.id)
   // Index : pointages par employé+date
   const pointagesByDate = new Map()
   for (const p of pointages) {
-    if (p.employe_id !== employe.id) continue
+    if (String(p.employe_id) !== empId) continue
     const key = p.date_pointage
     if (!pointagesByDate.has(key)) pointagesByDate.set(key, [])
     pointagesByDate.get(key).push({
@@ -388,14 +392,14 @@ export function calculerMois(employe, mois, annee, data) {
   // Index : ajustements par date
   const ajustByDate = new Map()
   for (const a of ajustements) {
-    if (a.employe_id !== employe.id) continue
+    if (String(a.employe_id) !== empId) continue
     const key = a.date_jour
     if (!ajustByDate.has(key)) ajustByDate.set(key, {})
     ajustByDate.get(key)[a.champ] = a.valeur
   }
 
   // Solde reporté du mois précédent
-  const prev = prevSynthese.find(s => s.employe_id === employe.id)
+  const prev = prevSynthese.find(s => String(s.employe_id) === empId)
   const solde_reporte = prev ? Number(prev.solde_mois) : 0
 
   // Boucle sur tous les jours du mois

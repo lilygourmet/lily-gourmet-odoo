@@ -97,7 +97,7 @@ export async function loadATraiter() {
     )
     // Employés qui POINTENT réellement ce mois (au moins 1 pointage). Ceux qui ne
     // pointent jamais (ex: Badea Bahri, Rachida Haimer) ne sont PAS comptés absents.
-    const aPointe = new Set((data.pointages || []).map(p => p.employe_id))
+    const aPointe = new Set((data.pointages || []).map(p => String(p.employe_id)))
     // Jours où l'employé a pointé quelque chose (même le matin / pointage incomplet)
     // → ces jours ne sont JAMAIS comptés absents.
     const pointeCeJour = new Set(
@@ -116,7 +116,7 @@ export async function loadATraiter() {
           // depuis Odoo) → on attend le lendemain pour éviter les fausses absences.
           if (d.date === today) continue
           const aPointeCeJour = pointeCeJour.has(`${emp.id}|${d.date}`)
-          if (aPointe.has(emp.id) && !aPointeCeJour && !couvertParDemande(emp.id, d.date) && !absIgnorees.has(`${emp.id}|${d.date}`)) {
+          if (aPointe.has(String(emp.id)) && !aPointeCeJour && !couvertParDemande(emp.id, d.date) && !absIgnorees.has(`${emp.id}|${d.date}`)) {
             absences.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, heures_prevues: d.heures_prevues, solde: await soldeFor(emp) })
           }
         } else if (Number(d.jours_recup) > 0) {
