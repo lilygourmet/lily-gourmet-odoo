@@ -26,11 +26,16 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   } else if (allChosen) {
     resolved = variants.find(v => optionAttrs.every(a => v.values[a.attrId] === sel[a.attrId]))
     if (!resolved && variants.length) {
-      // Variantes « dynamiques » Odoo : combo pas pré-créé → on prend la variante la
-      // plus proche (le prix dépend des attributs tarifaires, pas du parfum).
-      let bestScore = -1
+      // Combo exact pas pré-créé (variantes « dynamiques » Odoo) → on prend la variante la plus proche,
+      // mais en PRIORISANT la forme + le nombre de personnes (ils déterminent le fond surgelé / la production).
+      // Sinon on risquait d'envoyer une variante d'une autre forme (ex. rond) → mauvaise pièce en prod.
+      const structIds = new Set(optionAttrs.filter(a => /forme|taille|type|personne|portion|\bpart/i.test(a.name)).map(a => a.attrId))
+      let bestScore = -Infinity
       for (const v of variants) {
-        const score = optionAttrs.reduce((s, a) => s + (v.values[a.attrId] === sel[a.attrId] ? 1 : 0), 0)
+        let score = 0
+        for (const a of optionAttrs) {
+          if (v.values[a.attrId] === sel[a.attrId]) score += structIds.has(a.attrId) ? 1000 : 1
+        }
         if (score > bestScore) { bestScore = score; resolved = v }
       }
     }
@@ -139,6 +144,10 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       lineDesc = [...cdTextLines, modeleLine, ...decorLines, fleursLine].filter(Boolean).join('\n')
     }
 
+    // Combinaison d'attributs choisie → le serveur peut créer/retrouver la VRAIE variante Odoo
+    // même si elle n'existe pas encore (ex. « coeur 10 pers » pas pré-créée).
+    const combo = optionAttrs.filter(a => sel[a.attrId]).map(a => ({ attrId: a.attrId, value: sel[a.attrId] }))
+
     onAdd({
       name: lineName,
       desc: lineDesc,
@@ -150,6 +159,8 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       editable: priceEditable,
       catKey: cfg.catKey,
       variantId: resolved?.id || null,
+      tmplId: item.tmplId || null,
+      combo: combo.length ? combo : null,
     })
   }
 

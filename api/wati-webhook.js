@@ -1664,12 +1664,43 @@ async function handleVitrineOrderAdd(req, res) {
   }
 }
 
+// Trouve (ou CRÉE) la variante Odoo exacte pour une combinaison d'attributs (forme, personnes, parfum…),
+// même si elle n'est pas pré-créée — comme Odoo en direct. Renvoie l'id, ou null (→ on garde la variante par défaut).
+async function resolveExactVariant(uid, tmplId, combo) {
+  try {
+    if (!tmplId || !Array.isArray(combo) || !combo.length) return null
+    const DB = process.env.ODOO_DB, PWD = process.env.ODOO_PASSWORD
+    const ptav = await odooSearchRead(uid, 'product.template.attribute.value', [['product_tmpl_id', '=', tmplId]], ['id', 'name', 'attribute_id'])
+    const ptavIds = []
+    for (const c of combo) {
+      const m = ptav.find(p => (Array.isArray(p.attribute_id) ? p.attribute_id[0] : p.attribute_id) === c.attrId && String(p.name) === String(c.value))
+      if (!m) return null
+      ptavIds.push(m.id)
+    }
+    const domain = [['product_tmpl_id', '=', tmplId], ...ptavIds.map(id => ['product_template_attribute_value_ids', '=', id])]
+    let found = await odooSearchRead(uid, 'product.product', domain, ['id'], { limit: 1 })
+    if (found && found.length) return found[0].id
+    // Pas pré-créée → méthode publique Odoo (configurateur web) : crée et renvoie l'id de la variante.
+    const created = await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'product.template', 'create_product_variant', [[tmplId], JSON.stringify(ptavIds)]])
+    if (created && Number(created)) return Number(created)
+    found = await odooSearchRead(uid, 'product.product', domain, ['id'], { limit: 1 })
+    return found && found.length ? found[0].id : null
+  } catch (e) { console.warn('[resolveExactVariant]', e?.message || e); return null }
+}
+
 async function handleOrderCreateDevis(req, res) {
   const { partnerId, lines, deliveryDate, deliveryTime, note, warehouseId, clientPhone } = req.body || {}
   if (!partnerId) return res.status(400).json({ error: 'client requis' })
   if (!Array.isArray(lines) || lines.length === 0) return res.status(400).json({ error: 'aucune ligne' })
   try {
     const uid = await odooAuthenticate()
+    // Variante exacte (création à la volée si besoin) pour les lignes qui portent une combinaison.
+    for (const l of lines) {
+      if (l.tmplId && l.combo) {
+        const exact = await resolveExactVariant(uid, l.tmplId, l.combo)
+        if (exact) l.variantId = exact
+      }
+    }
     const orderLines = lines.map(l => [0, 0, {
       product_id: l.variantId,
       product_uom_qty: l.qty || 1,

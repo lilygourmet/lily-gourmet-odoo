@@ -179,7 +179,7 @@ export default function NewOrderView({ user, initialClient = null }) {
     try {
       // Lignes structurées (description aérée + warning + photo base64)
       const lines = await Promise.all(cart.map(async l => {
-        const base = { variantId: l.variantId, qty: l.qty, price: l.price, discount: Number(l.discount) || 0, name: l.name, desc: l.desc || '', warn: l.warn || '' }
+        const base = { variantId: l.variantId, qty: l.qty, price: l.price, discount: Number(l.discount) || 0, name: l.name, desc: l.desc || '', warn: l.warn || '', tmplId: l.tmplId || null, combo: l.combo || null }
         if (l.photoFile) {
           const data = await fileToBase64(l.photoFile)
           base.photo = { name: l.photoName || l.photoFile.name, data, mimetype: l.photoFile.type || 'image/jpeg' }
