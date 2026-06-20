@@ -434,9 +434,11 @@ function CdItemPrint({ item, index, totalCdItems }) {
         {item.theme && <div>Theme : {item.theme}</div>}
         {item.age && <div>Age : {item.age}</div>}
         {item.message && <div>Message : « {item.message} »</div>}
+        {item.modele && <div style={{ fontWeight: 'bold' }}>📷 Modèle : {item.modele}</div>}
         {item.modelage && <div style={{ fontWeight: 'bold' }}>🖐️ Modelage : {item.modelage}</div>}
         {item.impression && <div style={{ fontWeight: 'bold' }}>🖨️ Impression : {item.impression}</div>}
         {item.decor && !item.modelage && !item.impression && <div>🎨 Décor : {item.decor}</div>}
+        {item.fleurs && <div style={{ fontWeight: 'bold' }}>🌸 Fleurs : {item.fleurs}</div>}
         {polysList.length > 0 && (
           <div>
             Polys :{' '}

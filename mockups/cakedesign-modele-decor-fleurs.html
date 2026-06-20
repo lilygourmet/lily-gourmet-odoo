@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cake design — Modèle / Décor / Fleurs (anti-erreur)</title>
+<style>
+  :root { --bordeaux:#7a1f3d; --cream:#FBF6EE; --line:#e7dccb; --soft:#6b5f57; --green:#1e7e4f; --warn:#b42424; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:#efe7da; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; color:#2b2522; padding:18px; }
+  .card { max-width:480px; margin:0 auto; background:#fff; border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 12px 32px -14px rgba(0,0,0,.3); }
+  h2 { font-size:18px; margin:0 0 2px; } .sub { font-size:12px; color:var(--soft); margin:0 0 14px; }
+  .block { border:1.5px solid var(--bordeaux); border-radius:14px; padding:13px; margin-bottom:13px; background:#fdf3f6; }
+  .lbl { font-size:12px; font-weight:800; color:var(--bordeaux); margin-bottom:8px; text-transform:uppercase; letter-spacing:.4px; }
+  .req { color:var(--warn); }
+  .chips { display:flex; gap:7px; flex-wrap:wrap; }
+  .chip { flex:1 1 auto; min-width:84px; text-align:center; border:1.5px solid var(--line); background:#fff; border-radius:11px; padding:9px 6px; font-size:12.5px; font-weight:700; color:var(--soft); cursor:pointer; }
+  .chip .ic { display:block; font-size:19px; margin-bottom:3px; }
+  .chip.on { border-color:var(--bordeaux); background:#fbeef2; color:var(--bordeaux); box-shadow:0 0 0 1.5px var(--bordeaux) inset; }
+  .detail { margin-top:10px; }
+  .detail textarea, .detail input { width:100%; border:1px solid var(--line); border-radius:10px; padding:9px 11px; font-size:13.5px; font-family:inherit; background:#fff; }
+  .detail textarea { min-height:46px; resize:vertical; }
+  .hint { font-size:11px; color:var(--soft); margin:3px 2px 0; }
+  .photo { margin-top:10px; border:1.5px dashed var(--warn); border-radius:10px; padding:10px; text-align:center; color:var(--warn); font-size:12.5px; font-weight:700; background:#fff5f5; }
+  .hidden { display:none; }
+  .preview { max-width:480px; margin:16px auto 0; background:#fff; border:1px dashed var(--bordeaux); border-radius:14px; padding:14px; }
+  .preview h3 { margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--bordeaux); }
+  .preview pre { margin:0; font-size:12.5px; line-height:1.55; white-space:pre-wrap; font-family:ui-monospace,Menlo,monospace; }
+  .addbtn { width:100%; margin-top:4px; background:var(--green); color:#fff; border:none; border-radius:24px; padding:13px; font-size:15px; font-weight:800; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>Gâteau personnalisé — Licorne</h2>
+    <p class="sub">Cake design · prise de commande — <b style="color:var(--warn)">tous ces points sont obligatoires</b></p>
+
+    <!-- 1. LE MODÈLE -->
+    <div class="block">
+      <div class="lbl">1 · Le modèle du client <span class="req">*</span></div>
+      <div class="chips" id="modele">
+        <div class="chip on" data-v="identique" onclick="pick('modele',this)"><span class="ic">📷</span>À l'identique</div>
+        <div class="chip" data-v="inspire" onclick="pick('modele',this)"><span class="ic">✨</span>Inspiration / adapté</div>
+      </div>
+      <div class="photo" id="photoReq">📷 Photo de référence <b>obligatoire</b> (à reproduire fidèlement) — joindre / coller</div>
+    </div>
+
+    <!-- 2. DÉCOR -->
+    <div class="block">
+      <div class="lbl">2 · Décor — comment ? <span class="req">*</span></div>
+      <div class="chips" id="decor">
+        <div class="chip" data-v="main" onclick="pick('decor',this)"><span class="ic">🖐️</span>Modelage main</div>
+        <div class="chip" data-v="imp" onclick="pick('decor',this)"><span class="ic">🖨️</span>Impression</div>
+        <div class="chip on" data-v="both" onclick="pick('decor',this)"><span class="ic">🤝</span>Les deux</div>
+        <div class="chip" data-v="rien" onclick="pick('decor',this)"><span class="ic">🚫</span>Rien</div>
+      </div>
+      <div class="detail" id="d-main"><div class="hint" style="font-weight:700;color:var(--soft)">À modeler à la main</div>
+        <textarea placeholder="ex : licorne 3D, étoiles, nœud…">Licorne 3D en pâte à sucre</textarea></div>
+      <div class="detail" id="d-imp"><div class="hint" style="font-weight:700;color:var(--soft)">À imprimer</div>
+        <textarea placeholder="ex : photo du visage, logo, fond…">Fond arc-en-ciel + prénom « Lina »</textarea></div>
+    </div>
+
+    <!-- 3. FLEURS -->
+    <div class="block">
+      <div class="lbl">3 · Fleurs <span class="req">*</span> <span style="font-weight:600;text-transform:none;color:var(--soft)">(plusieurs possibles)</span></div>
+      <div class="chips" id="fleurs">
+        <div class="chip on" data-v="aucune" onclick="pickFleur(this)"><span class="ic">🚫</span>Aucune</div>
+        <div class="chip" data-v="sucre" onclick="pickFleur(this)"><span class="ic">🍬</span>Pâte à sucre</div>
+        <div class="chip" data-v="artif" onclick="pickFleur(this)"><span class="ic">🌸</span>Artificielles</div>
+        <div class="chip" data-v="vraies" onclick="pickFleur(this)"><span class="ic">🌹</span>Vraies fleurs</div>
+      </div>
+      <div class="detail hidden" id="fleursDetail"><textarea placeholder="Lesquelles ? couleurs ? (ex : 3 roses blanches + eucalyptus)"></textarea>
+        <div class="hint">⚠️ Vraies fleurs = à prévoir frais ; artificielles = à commander ; pâte à sucre = faites main (temps).</div></div>
+    </div>
+
+    <button class="addbtn">Ajouter à la commande</button>
+  </div>
+
+  <div class="preview"><h3>📋 Ce que voit la prod (fiche)</h3><pre id="prev"></pre></div>
+
+<script>
+  const state = { modele:'identique', decor:'both', fleurs:new Set(['aucune']) };
+  function pick(group, el){ document.querySelectorAll('#'+group+' .chip').forEach(c=>c.classList.remove('on')); el.classList.add('on'); state[group]=el.dataset.v; render(); }
+  function pickFleur(el){ const v=el.dataset.v; const s=state.fleurs;
+    if(v==='aucune'){ s.clear(); s.add('aucune'); } else { s.delete('aucune'); s.has(v)?s.delete(v):s.add(v); if(s.size===0)s.add('aucune'); }
+    document.querySelectorAll('#fleurs .chip').forEach(c=>c.classList.toggle('on', s.has(c.dataset.v))); render(); }
+  function render(){
+    document.getElementById('photoReq').classList.toggle('hidden', state.modele!=='identique');
+    document.getElementById('d-main').classList.toggle('hidden', state.decor==='imp'||state.decor==='rien');
+    document.getElementById('d-imp').classList.toggle('hidden', state.decor==='main'||state.decor==='rien');
+    const hasFleur = !(state.fleurs.size===1 && state.fleurs.has('aucune'));
+    document.getElementById('fleursDetail').classList.toggle('hidden', !hasFleur);
+    const FL={aucune:'aucune',sucre:'pâte à sucre',artif:'artificielles',vraies:'vraies fleurs'};
+    const lines=['CD- Licorne (20 pers, Vanille/Fraise)'];
+    lines.push('Modèle : '+(state.modele==='identique'?'À L’IDENTIQUE (voir photo réf.)':'inspiration / adapté'));
+    if(state.decor!=='rien'){ if(state.decor!=='imp')lines.push('🖐️ Modelage : Licorne 3D en pâte à sucre'); if(state.decor!=='main')lines.push('🖨️ Impression : Fond arc-en-ciel + prénom « Lina »'); } else lines.push('Décor : rien à faire');
+    lines.push('Fleurs : '+[...state.fleurs].map(f=>FL[f]).join(' + '));
+    document.getElementById('prev').textContent=lines.join('\n');
+  }
+  render();
+</script>
+</body>
+</html>

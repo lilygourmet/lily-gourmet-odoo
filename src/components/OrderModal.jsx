@@ -990,9 +990,11 @@ function ItemBlock({
             <InfoRow label="Thème" value={item.theme || '—'} />
             <InfoRow label="Âge" value={item.age || '—'} />
             <InfoRow label="Message" value={item.message || '—'} />
+            {item.modele && <InfoRow label="📷 Modèle" value={item.modele} />}
             {item.modelage && <InfoRow label="🖐️ Modelage" value={item.modelage} />}
             {item.impression && <InfoRow label="🖨️ Impression" value={item.impression} />}
             {item.decor && !item.modelage && !item.impression && <InfoRow label="🎨 Décor" value={item.decor} />}
+            {item.fleurs && <InfoRow label="🌸 Fleurs" value={item.fleurs} />}
           </div>
         </>
       )}

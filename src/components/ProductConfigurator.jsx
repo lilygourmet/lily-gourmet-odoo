@@ -40,16 +40,35 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   function pick(attrId, val) { onChange(c => ({ ...c, sel: { ...c.sel, [attrId]: val } })) }
   function setText(attrId, val) { onChange(c => ({ ...c, text: { ...c.text, [attrId]: val } })) }
 
-  // Décor cake design : modelage main / impression / les deux / rien (obligatoire pour CD-).
-  const isCD = cfg.catKey === 'cd'
+  // Blocs « anti-erreur » pour les produits décorés (cake design CD- ET GM-/GMD-).
+  const isDecorated = cfg.catKey === 'cd' || cfg.catKey === 'gm'
+  // 1) Modèle du client (choix forcé, rien par défaut)
+  const modele = cfg.modele || ''   // 'identique' | 'inspire'
+  function setModele(v) { onChange(c => ({ ...c, modele: v })) }
+  // 2) Décor : modelage main / impression / les deux / rien
   const decor = cfg.decor || { mode: '', main: '', imp: '' }
   function setDecor(patch) { onChange(c => ({ ...c, decor: { ...(c.decor || { mode: '', main: '', imp: '' }), ...patch } })) }
   const showMain = decor.mode === 'main' || decor.mode === 'both'
   const showImp = decor.mode === 'imp' || decor.mode === 'both'
-  const decorOk = !isCD || decor.mode === 'rien'
+  const decorOk = decor.mode === 'rien'
     || (showMain && !showImp && decor.main.trim())
     || (showImp && !showMain && decor.imp.trim())
     || (showMain && showImp && decor.main.trim() && decor.imp.trim())
+  // 3) Fleurs (multi-choix : aucune / pâte à sucre / artificielles / vraies)
+  const fleurs = cfg.fleurs || { types: [], detail: '' }
+  function toggleFleur(v) {
+    onChange(c => {
+      const f = c.fleurs || { types: [], detail: '' }
+      let types
+      if (v === 'aucune') types = ['aucune']
+      else { const base = (f.types || []).filter(t => t !== 'aucune'); types = base.includes(v) ? base.filter(t => t !== v) : [...base, v] }
+      return { ...c, fleurs: { ...f, types } }
+    })
+  }
+  function setFleurDetail(val) { onChange(c => ({ ...c, fleurs: { ...(c.fleurs || { types: [], detail: '' }), detail: val } })) }
+  const fleursReelles = (fleurs.types || []).some(t => t !== 'aucune')
+  // Validation : pour les produits décorés, modèle + décor + fleurs sont obligatoires (choix forcé).
+  const decoratedOk = !isDecorated || (!!modele && !!decor.mode && decorOk && (fleurs.types || []).length > 0)
 
   // Prix final : pour CD-, on prend le prix saisi à la main s'il existe.
   const finalPrice = priceEditable && cfg.priceOverride != null && cfg.priceOverride !== ''
@@ -59,7 +78,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   const requireAll = cfg.catKey === 'cd'
   const allOptionsChosen = optionAttrs.every(a => sel[a.attrId])
   const allTextFilled = textAttrs.every(a => (text[a.attrId] || '').trim())
-  const requiredOk = (!requireAll || (allOptionsChosen && allTextFilled)) && decorOk
+  const requiredOk = (!requireAll || (allOptionsChosen && allTextFilled)) && decoratedOk
 
   function add() {
     // Description aérée : chaque attribut (parfum, thème, âge, message) sur sa ligne.
@@ -67,7 +86,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       ...optionAttrs.filter(a => sel[a.attrId]).map(a => `${dispLabel(a)} : ${sel[a.attrId]}`),
       ...textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`),
     ]
-    const decorSub = isCD
+    const decorSub = isDecorated
       ? (decor.mode === 'rien' ? 'Décor : rien'
         : [showMain && decor.main.trim() && `🖐️ ${decor.main.trim()}`, showImp && decor.imp.trim() && `🖨️ ${decor.imp.trim()}`].filter(Boolean).join(' · '))
       : ''
@@ -99,14 +118,25 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       lineName = `${prefix}${item.name}${parts.length ? ` (${parts.join(', ')})` : ''}`
       const cdTextLines = textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`)
       const decorLines = []
-      if (isCD) {
+      let modeleLine = '', fleursLine = ''
+      if (isDecorated) {
+        // Modèle
+        if (modele === 'identique') modeleLine = 'Modèle : à l\'identique (voir photo réf.)'
+        else if (modele === 'inspire') modeleLine = 'Modèle : inspiration / adapté'
+        // Décor
         if (decor.mode === 'rien') decorLines.push('Décor : rien à faire')
         else {
           if (showMain && decor.main.trim()) decorLines.push(`Modelage : ${decor.main.trim()}`)
           if (showImp && decor.imp.trim()) decorLines.push(`Impression : ${decor.imp.trim()}`)
         }
+        // Fleurs
+        const FLEUR_LBL = { aucune: 'aucune', sucre: 'pâte à sucre', artif: 'artificielles', vraies: 'vraies fleurs' }
+        if ((fleurs.types || []).length) {
+          const noms = fleurs.types.map(t => FLEUR_LBL[t] || t).join(' + ')
+          fleursLine = `Fleurs : ${noms}${fleurs.detail && fleurs.detail.trim() ? ` (${fleurs.detail.trim()})` : ''}`
+        }
       }
-      lineDesc = [...cdTextLines, ...decorLines].join('\n')
+      lineDesc = [...cdTextLines, modeleLine, ...decorLines, fleursLine].filter(Boolean).join('\n')
     }
 
     onAdd({
@@ -155,34 +185,69 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                 </div>
               ))}
 
-              {isCD && (
-                <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
-                  <div className="text-[12px] font-bold text-bordeaux mb-2">🎨 Décor — comment ? <span className="text-bordeaux">*</span></div>
-                  <div className="flex gap-1.5 mb-1">
-                    {[['main', '🖐️', 'Modelage main'], ['imp', '🖨️', 'Impression'], ['both', '🤝', 'Les deux'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
-                      <button key={m} type="button" onClick={() => setDecor({ mode: m })}
-                        className={`flex-1 rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${decor.mode === m ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
-                        <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
-                      </button>
-                    ))}
+              {isDecorated && (
+                <>
+                  {/* 1 · Le modèle */}
+                  <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
+                    <div className="text-[12px] font-bold text-bordeaux mb-2">1 · Le modèle du client <span className="text-bordeaux">*</span></div>
+                    <div className="flex gap-1.5">
+                      {[['identique', '📷', 'À l’identique'], ['inspire', '✨', 'Inspiration / adapté']].map(([v, ic, lbl]) => (
+                        <button key={v} type="button" onClick={() => setModele(v)}
+                          className={`flex-1 rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${modele === v ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
+                          <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
+                        </button>
+                      ))}
+                    </div>
+                    {modele === 'identique' && <div className="text-[11px] text-bordeaux mt-1.5">📷 Joins une photo de référence ci-dessous (à reproduire fidèlement).</div>}
                   </div>
-                  {showMain && (
-                    <div className="mt-2">
-                      <div className="text-[12px] font-bold text-ink-soft mb-1">À modeler à la main <span className="text-bordeaux">*</span></div>
-                      <textarea value={decor.main} onChange={e => setDecor({ main: e.target.value })}
-                        placeholder="ex : licorne 3D, fleurs en pâte à sucre, logo"
-                        className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
+
+                  {/* 2 · Décor */}
+                  <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
+                    <div className="text-[12px] font-bold text-bordeaux mb-2">2 · Décor — comment ? <span className="text-bordeaux">*</span></div>
+                    <div className="flex gap-1.5 mb-1">
+                      {[['main', '🖐️', 'Modelage main'], ['imp', '🖨️', 'Impression'], ['both', '🤝', 'Les deux'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
+                        <button key={m} type="button" onClick={() => setDecor({ mode: m })}
+                          className={`flex-1 rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${decor.mode === m ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
+                          <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                  {showImp && (
-                    <div className="mt-2">
-                      <div className="text-[12px] font-bold text-ink-soft mb-1">À imprimer <span className="text-bordeaux">*</span></div>
-                      <textarea value={decor.imp} onChange={e => setDecor({ imp: e.target.value })}
-                        placeholder="ex : photo du visage, logo, fond arc-en-ciel"
-                        className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
+                    {showMain && (
+                      <div className="mt-2">
+                        <div className="text-[12px] font-bold text-ink-soft mb-1">À modeler à la main <span className="text-bordeaux">*</span></div>
+                        <textarea value={decor.main} onChange={e => setDecor({ main: e.target.value })}
+                          placeholder="ex : licorne 3D, logo en pâte à sucre"
+                          className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
+                      </div>
+                    )}
+                    {showImp && (
+                      <div className="mt-2">
+                        <div className="text-[12px] font-bold text-ink-soft mb-1">À imprimer <span className="text-bordeaux">*</span></div>
+                        <textarea value={decor.imp} onChange={e => setDecor({ imp: e.target.value })}
+                          placeholder="ex : photo du visage, logo, fond arc-en-ciel"
+                          className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3 · Fleurs */}
+                  <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
+                    <div className="text-[12px] font-bold text-bordeaux mb-2">3 · Fleurs <span className="text-bordeaux">*</span> <span className="font-normal text-ink-soft normal-case">(plusieurs possibles)</span></div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {[['aucune', '🚫', 'Aucune'], ['sucre', '🍬', 'Pâte à sucre'], ['artif', '🌸', 'Artificielles'], ['vraies', '🌹', 'Vraies']].map(([v, ic, lbl]) => (
+                        <button key={v} type="button" onClick={() => toggleFleur(v)}
+                          className={`flex-1 min-w-[70px] rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${(fleurs.types || []).includes(v) ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
+                          <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                </div>
+                    {fleursReelles && (
+                      <textarea value={fleurs.detail} onChange={e => setFleurDetail(e.target.value)}
+                        placeholder="Lesquelles ? couleurs ? (ex : 3 roses blanches + eucalyptus)"
+                        className="w-full mt-2 px-3 py-2 border border-line rounded-lg text-[13px] min-h-[44px]" />
+                    )}
+                  </div>
+                </>
               )}
 
               <div className="mb-3">
@@ -248,7 +313,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                 {addLabel}
               </button>
               {!requiredOk && (
-                <div className="text-[11px] text-bordeaux text-center mt-2">Cake design : remplis tous les champs (parfums, personnes, thème, âge, message) et le <b>décor</b> (modelage / impression / rien) avant d'ajouter.</div>
+                <div className="text-[11px] text-bordeaux text-center mt-2">Avant d'ajouter, remplis les champs obligatoires : {requireAll && <>parfums, personnes, thème/âge/message, </>}le <b>modèle</b>, le <b>décor</b> et les <b>fleurs</b>.</div>
               )}
             </>
           )}
