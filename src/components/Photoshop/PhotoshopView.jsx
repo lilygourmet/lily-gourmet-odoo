@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { listPhotos, uploadPhoto, deletePhoto, renamePhoto, setPhotoSize, replacePhotoImage } from '../../lib/photoshop'
+import { listPhotos, uploadPhoto, trashPhoto, restorePhoto, renamePhoto, setPhotoSize, replacePhotoImage } from '../../lib/photoshop'
 import RegionEditor from './RegionEditor'
+import RemoveBgModal from './RemoveBgModal'
 import { loadImg, trimToContent } from './imgutil'
 import { extractPsdLayers } from '../../lib/psdImport'
 
 // ====== Studio photos : composer une planche A4 d'images imprimables pour gâteaux ======
 // Porté de la maquette validée (mockups/photos-gateaux-composeur.html).
 const CMW = 21, CMH = 29.7, MARG = 1, PW = 480           // PW = largeur affichée d'une page (px)
+const TRASH = '🗑️ Poubelle'                              // catégorie corbeille (à part, hors thèmes)
 const FONT_LIST = [
   { v: "'Dancing Script',cursive", l: 'Dancing Script (manuscrite)' },
   { v: "'Great Vibes',cursive", l: 'Great Vibes (élégante)' },
@@ -82,7 +84,8 @@ export default function PhotoshopView({ user, onNavigate }) {
   const [bulk, setBulk] = useState(null)              // import en lot : { files, theme, newTheme }
   const [regionSrc, setRegionSrc] = useState(null)    // éditeur de zone (recolorer/effacer)
   const [regionUid, setRegionUid] = useState(null)
-  const [regionTools, setRegionTools] = useState(['erase', 'recolor'])
+  const [removeBgSrc, setRemoveBgSrc] = useState(null)
+  const [removeBgUid, setRemoveBgUid] = useState(null)
 
   const uid = useRef(1), grpSeq = useRef(0)
   const sizeSave = useRef({ timer: null, pending: {} })   // sauvegarde (débounce) de la taille par photo
@@ -101,13 +104,14 @@ export default function PhotoshopView({ user, onNavigate }) {
   const loadAll = useCallback(async () => { setLibLoading(true); setAllPhotos(await listPhotos({ limit: 5000 })); setLibLoading(false) }, [])
   useEffect(() => { loadAll() }, [loadAll])
   useEffect(() => { const el = folderInput.current; if (el) { el.setAttribute('webkitdirectory', ''); el.setAttribute('directory', ''); el.setAttribute('mozdirectory', '') } }, [])
-  const themes = useMemo(() => {
-    const c = {}; allPhotos.forEach(p => { const t = p.theme || '_divers'; c[t] = (c[t] || 0) + 1 })
+  const themes = useMemo(() => {   // hors Poubelle (à part)
+    const c = {}; allPhotos.forEach(p => { const t = p.theme || '_divers'; if (t === TRASH) return; c[t] = (c[t] || 0) + 1 })
     return Object.entries(c).map(([theme, n]) => ({ theme, n })).sort((a, b) => a.theme.localeCompare(b.theme))
   }, [allPhotos])
+  const trashCount = useMemo(() => allPhotos.filter(p => p.theme === TRASH).length, [allPhotos])
   const photos = useMemo(() => {
-    let r = allPhotos
-    if (theme) r = r.filter(p => p.theme === theme)
+    let r = theme === TRASH ? allPhotos.filter(p => p.theme === TRASH) : allPhotos.filter(p => p.theme !== TRASH)
+    if (theme && theme !== TRASH) r = r.filter(p => p.theme === theme)
     if (search.trim()) r = r.filter(p => matchText(search, (p.nom || '') + ' ' + (p.theme || '')))
     return r.slice(0, 500)
   }, [allPhotos, theme, search])
@@ -125,7 +129,7 @@ export default function PhotoshopView({ user, onNavigate }) {
     img.onload = () => {
       const ratio = img.naturalWidth / img.naturalHeight || 1
       const w = libPhoto?.last_w || 5                                  // taille mémorisée pour CETTE photo
-      const h = libPhoto?.last_h || Math.max(0.5, Math.round(w / ratio * 2) / 2)
+      const h = libPhoto?.last_h || Math.max(0.5, Math.round(w / ratio * 10) / 10)
       setPlaced(list => {
         const s = freeSpot(list, w, h)
         const it = { uid: uid.current++, type: 'photo', src, nom: nom || 'photo', libId: libPhoto?.id || null, forme: 'none', fit: 'contain', w, h, rot: 0, zoom: 100, ratio, x: s.x, y: s.y, page: s.page, tint: '#ff5aa0', tintA: 0, ct: 0, cr: 0, cb: 0, cl: 0 }
@@ -213,7 +217,7 @@ export default function PhotoshopView({ user, onNavigate }) {
       Object.entries(pend).forEach(([id, s]) => setPhotoSize(id, s.w, s.h).catch(() => {}))
     }, 700)
   }
-  // réenregistre l'image retouchée dans la bibliothèque (gardée pour les prochaines fois)
+  // enregistre la retouche dans la bibliothèque (cloud) + met à jour la vignette → la modif RESTE
   const persistEdit = async (libId, dataURL) => {
     if (!libId || !String(dataURL || '').startsWith('data:')) return
     const ph = allPhotos.find(x => x.id === libId)
@@ -226,8 +230,8 @@ export default function PhotoshopView({ user, onNavigate }) {
   const setDim = (k, v) => {
     if (!sel) return; v = Math.max(0.5, parseFloat(v) || 1)
     let nw, nh
-    if (k === 'w') { nw = v; nh = prop ? Math.max(0.5, Math.round(v / sel.ratio * 2) / 2) : sel.h; patch(sel.uid, { w: nw, ...(prop ? { h: nh } : {}) }) }
-    else { nh = v; nw = prop ? Math.max(0.5, Math.round(v * sel.ratio * 2) / 2) : sel.w; patch(sel.uid, { h: nh, ...(prop ? { w: nw } : {}) }) }
+    if (k === 'w') { nw = v; nh = prop ? Math.max(0.5, Math.round(v / sel.ratio * 10) / 10) : sel.h; patch(sel.uid, { w: nw, ...(prop ? { h: nh } : {}) }) }
+    else { nh = v; nw = prop ? Math.max(0.5, Math.round(v * sel.ratio * 10) / 10) : sel.w; patch(sel.uid, { h: nh, ...(prop ? { w: nw } : {}) }) }
     if (sel.type === 'photo') rememberSize(sel.libId, nw, nh)
   }
   const setTextSize = v => { if (!sel) return; const s = Math.max(0.3, parseFloat(v) || 1); patch(sel.uid, { size: s, h: s }) }
@@ -257,40 +261,7 @@ export default function PhotoshopView({ user, onNavigate }) {
   const delSel = useCallback(() => { setPlaced(p => p.filter(x => !selUids.includes(x.uid))); setSelUids([]) }, [selUids])
 
   // ---------- baguette magique : enlève le fond uni (flood-fill depuis les coins) ----------
-  const removeBg = async () => {
-    if (!sel || sel.type !== 'photo') return
-    setBusy('Détourage…')
-    try {
-      const img = await new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = sel.src })
-      const cap = 1200; const sc = Math.min(1, cap / Math.max(img.naturalWidth, img.naturalHeight))
-      const W = Math.max(1, Math.round(img.naturalWidth * sc)), H = Math.max(1, Math.round(img.naturalHeight * sc))
-      const cv = document.createElement('canvas'); cv.width = W; cv.height = H
-      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0, W, H)
-      const im = ctx.getImageData(0, 0, W, H); const d = im.data
-      const corners = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]]
-      const tol = 38, visited = new Uint8Array(W * H), stack = []
-      const ref = corners.map(([x, y]) => { const i = (y * W + x) * 4; return [d[i], d[i + 1], d[i + 2]] })
-      const close = (i) => ref.some(c => Math.abs(d[i] - c[0]) + Math.abs(d[i + 1] - c[1]) + Math.abs(d[i + 2] - c[2]) < tol * 3)
-      for (const [x, y] of corners) { const p = y * W + x; if (!visited[p]) { visited[p] = 1; stack.push(p) } }
-      while (stack.length) {
-        const p = stack.pop(); const i = p * 4
-        if (!close(i)) continue
-        d[i + 3] = 0
-        const x = p % W, y = (p / W) | 0
-        if (x > 0 && !visited[p - 1]) { visited[p - 1] = 1; stack.push(p - 1) }
-        if (x < W - 1 && !visited[p + 1]) { visited[p + 1] = 1; stack.push(p + 1) }
-        if (y > 0 && !visited[p - W]) { visited[p - W] = 1; stack.push(p - W) }
-        if (y < H - 1 && !visited[p + W]) { visited[p + W] = 1; stack.push(p + W) }
-      }
-      ctx.putImageData(im, 0, 0)
-      const r = trimToContent(cv)   // resserre le cadre sur le dessin restant
-      const nh = Math.max(0.5, Math.round(sel.w / (r.w / r.h) * 2) / 2)
-      patch(sel.uid, { src: r.dataURL, ratio: r.w / r.h, h: nh })
-      rememberSize(sel.libId, sel.w, nh); persistEdit(sel.libId, r.dataURL)
-    } catch (e) {
-      alert("Détourage impossible sur cette image (image externe protégée). Ça marche sur les photos que tu importes/colles.")
-    } finally { setBusy('') }
-  }
+  const removeBg = () => { if (sel && sel.type === 'photo') { setRemoveBgUid(sel.uid); setRemoveBgSrc(sel.src) } }   // ouvre le dialogue (tolérance + aperçu)
   // rogne en pixels (insets) + resserre le cadre au contenu
   const bakeCrop = async () => {
     if (!sel || sel.type !== 'photo' || !(sel.ct || sel.cr || sel.cb || sel.cl)) return
@@ -303,7 +274,7 @@ export default function PhotoshopView({ user, onNavigate }) {
       const cv = document.createElement('canvas'); cv.width = sw; cv.height = sh
       cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
       const r = trimToContent(cv)
-      const nh = Math.max(0.5, Math.round(sel.w / (r.w / r.h) * 2) / 2)
+      const nh = Math.max(0.5, Math.round(sel.w / (r.w / r.h) * 10) / 10)
       patch(sel.uid, { src: r.dataURL, ratio: r.w / r.h, h: nh, ct: 0, cr: 0, cb: 0, cl: 0 })
       rememberSize(sel.libId, sel.w, nh); persistEdit(sel.libId, r.dataURL)
     } catch (e) { alert('Rognage impossible (image externe protégée).') } finally { setBusy('') }
@@ -320,20 +291,57 @@ export default function PhotoshopView({ user, onNavigate }) {
     try { ev.target.setPointerCapture(ev.pointerId) } catch (e) { /* ignore */ }
     ev.preventDefault()
   }
+  const onRotDown = (ev, it) => {
+    ev.stopPropagation(); ev.preventDefault()
+    const pageEl = pageMap.current.get(it.page); if (!pageEl) return
+    const r = pageEl.getBoundingClientRect()
+    const cx = r.left + (it.x + it.w / 2) / CMW * r.width, cy = r.top + (it.y + it.h / 2) / CMH * r.height
+    drag.current = { rot: true, uid: it.uid, el: elMap.current.get(it.uid), cx, cy, flipH: it.flipH, flipV: it.flipV }
+    try { ev.target.setPointerCapture(ev.pointerId) } catch (e) { /* */ }
+  }
+  const onResizeDown = (ev, it, sx, sy) => {   // coin : redimensionne LIBRE (ancré au coin opposé) ; Shift = proportionnel
+    ev.stopPropagation(); ev.preventDefault()
+    const pageEl = pageMap.current.get(it.page); if (!pageEl) return
+    const r = pageEl.getBoundingClientRect()
+    const rot = (it.rot || 0) * Math.PI / 180, cos = Math.cos(rot), sin = Math.sin(rot)
+    const cx = it.x + it.w / 2, cy = it.y + it.h / 2
+    const ax = cx - sx * (it.w / 2) * cos + sy * (it.h / 2) * sin   // coin opposé (fixe)
+    const ay = cy - sx * (it.w / 2) * sin - sy * (it.h / 2) * cos
+    drag.current = { resize: true, uid: it.uid, libId: it.libId, isPhoto: it.type === 'photo', el: elMap.current.get(it.uid), isText: it.type === 'text', sx, sy, cos, sin, ax, ay, rl: r.left, rt: r.top, rw: r.width, rh: r.height, w0: it.w, h0: it.h, size0: it.size, cur: null }
+    try { ev.target.setPointerCapture(ev.pointerId) } catch (e) { /* */ }
+  }
   useEffect(() => {
     const move = ev => {
-      const dr = drag.current; if (!dr || !dr.pageEl) return
+      const dr = drag.current; if (!dr) return
+      if (dr.rot) { const ang = Math.round(Math.atan2(ev.clientY - dr.cy, ev.clientX - dr.cx) * 180 / Math.PI + 90); dr.curRot = ((ang % 360) + 360) % 360; if (dr.el) dr.el.style.transform = `rotate(${dr.curRot}deg) scaleX(${dr.flipH ? -1 : 1}) scaleY(${dr.flipV ? -1 : 1})`; return }
+      if (dr.resize) {
+        const Px = (ev.clientX - dr.rl) / dr.rw * CMW, Py = (ev.clientY - dr.rt) / dr.rh * CMH
+        const ex = Px - dr.ax, ey = Py - dr.ay
+        const du = ex * dr.cos + ey * dr.sin, dv = -ex * dr.sin + ey * dr.cos
+        let nw = Math.max(0.5, dr.sx * du), nh = Math.max(0.5, dr.sy * dv)
+        if (dr.isText || ev.shiftKey) { const s = Math.max(nw / dr.w0, nh / dr.h0); nw = Math.max(0.5, dr.w0 * s); nh = Math.max(0.5, dr.h0 * s) }
+        nw = Math.round(nw * 10) / 10; nh = Math.round(nh * 10) / 10
+        const ncx = dr.ax + dr.sx * (nw / 2) * dr.cos - dr.sy * (nh / 2) * dr.sin
+        const ncy = dr.ay + dr.sx * (nw / 2) * dr.sin + dr.sy * (nh / 2) * dr.cos
+        const nx = Math.round((ncx - nw / 2) * 10) / 10, ny = Math.round((ncy - nh / 2) * 10) / 10
+        dr.cur = { x: nx, y: ny, w: nw, h: nh }
+        if (dr.isText) { dr.cur.size = Math.max(0.3, Math.round(dr.size0 * (nw / dr.w0) * 10) / 10); dr.cur.h = dr.cur.size }
+        if (dr.el) { dr.el.style.left = (nx / CMW * 100) + '%'; dr.el.style.top = (ny / CMH * 100) + '%'; if (dr.isText) dr.el.style.fontSize = (dr.cur.size / CMW * PW) + 'px'; else { dr.el.style.width = (nw / CMW * 100) + '%'; dr.el.style.height = (nh / CMH * 100) + '%' } }
+        return
+      }
+      if (!dr.pageEl) return
       const r = dr.pageEl.getBoundingClientRect()
       const dxcm = (ev.clientX - dr.sx) / r.width * CMW, dycm = (ev.clientY - dr.sy) / r.height * CMH
       dr.set.forEach(d => {
         const p = placed.find(x => x.uid === d.uid); if (!p) return
-        const x = Math.max(0, Math.min(CMW - p.w, Math.round((d.x0 + dxcm) * 10) / 10))
-        const y = Math.max(0, Math.min(CMH - p.h, Math.round((d.y0 + dycm) * 10) / 10))
+        // on autorise à dépasser hors page (on garde juste ~1 cm visible pour pouvoir la rattraper)
+        const x = Math.max(-(p.w - 1), Math.min(CMW - 1, Math.round((d.x0 + dxcm) * 10) / 10))
+        const y = Math.max(-(p.h - 1), Math.min(CMH - 1, Math.round((d.y0 + dycm) * 10) / 10))
         dr.cur[d.uid] = { x, y }
         if (d.el) { d.el.style.left = (x / CMW * 100) + '%'; d.el.style.top = (y / CMH * 100) + '%' }
       })
     }
-    const up = () => { const dr = drag.current; if (dr && Object.keys(dr.cur).length) { const cur = dr.cur; setPlaced(p => p.map(it => cur[it.uid] ? { ...it, ...cur[it.uid] } : it)) } drag.current = null }
+    const up = () => { const dr = drag.current; if (dr) { if (dr.rot) { if (dr.curRot != null) setPlaced(p => p.map(it => it.uid === dr.uid ? { ...it, rot: dr.curRot } : it)) } else if (dr.resize) { if (dr.cur) { setPlaced(p => p.map(it => it.uid === dr.uid ? { ...it, ...dr.cur } : it)); if (dr.isPhoto && dr.libId) rememberSize(dr.libId, dr.cur.w, dr.cur.h) } } else if (dr.cur && Object.keys(dr.cur).length) { const cur = dr.cur; setPlaced(p => p.map(it => cur[it.uid] ? { ...it, ...cur[it.uid] } : it)) } } drag.current = null }
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
     return () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up) }
   }, [placed])
@@ -369,7 +377,7 @@ export default function PhotoshopView({ user, onNavigate }) {
     if (undoingRef.current) { undoingRef.current = false; return }
     const t = setTimeout(() => {
       const h = histRef.current, snap = JSON.stringify(placed)
-      if (h[h.length - 1] !== snap) { h.push(snap); if (h.length > 60) h.shift() }
+      if (h[h.length - 1] !== snap) { h.push(snap); if (h.length > 16) h.shift() }
     }, 350)
     return () => clearTimeout(t)
   }, [placed])
@@ -466,7 +474,10 @@ export default function PhotoshopView({ user, onNavigate }) {
   const onDeletePhoto = async (ph, skipConfirm) => {
     if (!skipConfirm && !confirm(`Supprimer « ${ph.nom} » de la bibliothèque ?`)) return
     setAllPhotos(p => { const np = p.filter(x => x.id !== ph.id); if (theme && !np.some(x => x.theme === theme)) setTheme(null); return np })   // catégorie vidée → disparaît + on la quitte
-    try { await deletePhoto(ph.id, ph.path) } catch (e) { alert('Suppression impossible : ' + e.message); loadAll() }
+    try { await trashPhoto(ph.id) } catch (e) { alert('Suppression impossible : ' + e.message); loadAll() }   // → corbeille (garde les 5 dernières)
+  }
+  const onRestorePhoto = async (ph) => {
+    try { const t = await restorePhoto(ph.id); setAllPhotos(p => p.map(x => x.id === ph.id ? { ...x, theme: t } : x)) } catch (e) { alert('Restauration impossible : ' + e.message); loadAll() }
   }
   const onRenamePhoto = async (ph) => {
     const nom = prompt('Nouveau nom :', ph.nom || '')
@@ -481,7 +492,7 @@ export default function PhotoshopView({ user, onNavigate }) {
       key: it.uid, 'data-uid': it.uid,
       ref: el => { if (el) elMap.current.set(it.uid, el); else elMap.current.delete(it.uid) },
       onPointerDown: e => onItemPointerDown(e, it),
-      style: { position: 'absolute', left: `${it.x / CMW * 100}%`, top: `${it.y / CMH * 100}%`, cursor: 'move', transform: `rotate(${it.rot || 0}deg)` },
+      style: { position: 'absolute', left: `${it.x / CMW * 100}%`, top: `${it.y / CMH * 100}%`, cursor: 'move', transform: `rotate(${it.rot || 0}deg) scaleX(${it.flipH ? -1 : 1}) scaleY(${it.flipV ? -1 : 1})` },
       className: isSel(it.uid) ? 'ps-it ps-sel' : 'ps-it',
     }
     if (it.type === 'text') {
@@ -492,7 +503,7 @@ export default function PhotoshopView({ user, onNavigate }) {
     if (it.type === 'shape') return <div {...common} style={{ ...box, background: it.color }}><Outline forme={it.forme} /></div>
     return (
       <div {...common} style={box}>
-        <img src={it.src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: fitNow(it), transform: `scale(${(it.zoom || 100) / 100})`, clipPath: cropInset(it), pointerEvents: 'none' }} />
+        <img src={it.src} alt="" draggable={false} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: fitNow(it), transform: `scale(${(it.zoom || 100) / 100})`, clipPath: cropInset(it), pointerEvents: 'none' }} />
         {it.tintA > 0 && <div style={{ position: 'absolute', inset: 0, background: it.tint, opacity: it.tintA / 100, mixBlendMode: 'multiply', WebkitMaskImage: `url("${it.src}")`, maskImage: `url("${it.src}")`, WebkitMaskSize: maskSize(it), maskSize: maskSize(it), WebkitMaskPosition: 'center', maskPosition: 'center', WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat', clipPath: cropInset(it), pointerEvents: 'none' }} />}
         <Outline forme={it.forme} />
       </div>
@@ -528,6 +539,7 @@ export default function PhotoshopView({ user, onNavigate }) {
           <div className="flex gap-1.5 mb-1">
             <button onClick={() => fileInput.current?.click()} className="flex-1 bg-bordeaux text-white rounded-lg py-1.5 text-[12px] font-bold">＋ Charger</button>
             <button onClick={() => folderInput.current?.click()} title="Importer un dossier entier" className="bg-white border border-line rounded-lg py-1.5 px-2 text-[12px]">📁</button>
+            <button onClick={() => setTheme(theme === TRASH ? null : TRASH)} title={`Poubelle (${trashCount})`} className={'rounded-lg py-1.5 px-2 text-[12px] border ' + (theme === TRASH ? 'bg-ink text-white border-ink' : 'bg-white border-line')} style={theme === TRASH ? { background: '#1a0f0a', color: '#fff' } : {}}>🗑️</button>
           </div>
           <button onClick={() => bulkInput.current?.click()} className="w-full bg-white border border-bordeaux text-bordeaux rounded-lg py-1.5 text-[12px] font-bold mb-1">📥 Import lot (1 catégorie, rapide)</button>
           <button onClick={() => psdInput.current?.click()} className="w-full bg-white border border-bordeaux text-bordeaux rounded-lg py-1.5 text-[12px] font-bold mb-2">🧩 Importer des PSD (éclate les calques)</button>
@@ -536,7 +548,7 @@ export default function PhotoshopView({ user, onNavigate }) {
           <input ref={bulkInput} type="file" accept="image/*" multiple className="hidden" onChange={onBulkPick} />
           <input ref={psdInput} type="file" accept=".psd" multiple className="hidden" onChange={onPsdPick} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher (nom ou catégorie)…" className={inp + ' mb-2'} />
-          <select value={theme || ''} onChange={e => setTheme(e.target.value || null)} className={inp + ' mb-2'}>
+          <select value={theme === TRASH ? '' : (theme || '')} onChange={e => setTheme(e.target.value || null)} className={inp + ' mb-1'}>
             <option value="">Tous les thèmes ({themes.reduce((a, t) => a + t.n, 0)})</option>
             {themes.map(t => <option key={t.theme} value={t.theme}>{t.theme} ({t.n})</option>)}
           </select>
@@ -548,14 +560,16 @@ export default function PhotoshopView({ user, onNavigate }) {
             <div className="grid grid-cols-2 gap-1.5">
               {photos.map(ph => (
                 <div key={ph.id} className={'relative bg-white border rounded-lg p-1 cursor-pointer group ' + (cleanMode ? 'border-red-200 hover:border-red-500 hover:bg-red-50' : 'border-line hover:border-bordeaux')} onClick={() => cleanMode ? onDeletePhoto(ph, true) : addPhoto(ph.url, ph.nom, ph)} title={cleanMode ? 'Cliquer pour supprimer' : ph.nom}>
-                  <img src={ph.url} alt={ph.nom} loading="lazy" className="w-full h-16 object-contain" />
+                  <img src={ph.url} alt={ph.nom} loading="lazy" crossOrigin="anonymous" className="w-full h-16 object-contain" />
                   <div className="text-[9px] text-ink-soft h-6 overflow-hidden leading-tight mt-0.5">{ph.nom}</div>
-                  {cleanMode
-                    ? <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-red-500/10 rounded-lg text-[18px]">🗑️</div>
-                    : <>
-                      <button onClick={e => { e.stopPropagation(); onRenamePhoto(ph) }} title="Renommer" className="absolute top-0.5 left-0.5 bg-white/90 border border-line rounded w-5 h-5 text-[11px] opacity-0 group-hover:opacity-100">✏️</button>
-                      <button onClick={e => { e.stopPropagation(); onDeletePhoto(ph) }} title="Supprimer" className="absolute top-0.5 right-0.5 bg-white/90 border border-line rounded w-5 h-5 text-[11px] opacity-0 group-hover:opacity-100">🗑️</button>
-                    </>}
+                  {theme === TRASH
+                    ? <button onClick={e => { e.stopPropagation(); onRestorePhoto(ph) }} title="Remettre à sa place" className="absolute top-0.5 right-0.5 bg-white/90 border border-line rounded px-1 h-5 text-[10px] opacity-0 group-hover:opacity-100">↩️</button>
+                    : cleanMode
+                      ? <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-red-500/10 rounded-lg text-[18px]">🗑️</div>
+                      : <>
+                        <button onClick={e => { e.stopPropagation(); onRenamePhoto(ph) }} title="Renommer" className="absolute top-0.5 left-0.5 bg-white/90 border border-line rounded w-5 h-5 text-[11px] opacity-0 group-hover:opacity-100">✏️</button>
+                        <button onClick={e => { e.stopPropagation(); onDeletePhoto(ph) }} title="Supprimer" className="absolute top-0.5 right-0.5 bg-white/90 border border-line rounded w-5 h-5 text-[11px] opacity-0 group-hover:opacity-100">🗑️</button>
+                      </>}
                 </div>
               ))}
               {!photos.length && <p className="col-span-2 text-[12px] text-ink-mute">Aucune image. Charge, colle (Ctrl+V) ou importe un dossier.</p>}
@@ -570,6 +584,16 @@ export default function PhotoshopView({ user, onNavigate }) {
               data-page={p} className="relative bg-white border border-[#bbb] shadow-md flex-shrink-0"
               style={{ width: PW, height: PW * 297 / 210 }}>
               {placed.filter(it => it.page === p).map(renderItem)}
+              {selUids.length === 1 && (() => { const it = placed.find(x => x.uid === selUids[0]); if (!it || it.page !== p) return null; const pageHpx = PW * 297 / 210, halfH = (it.h / 2) / CMH * pageHpx; return (
+                <>
+                  <div onPointerDown={e => onRotDown(e, it)} title="Tourner (attrape et fais pivoter)"
+                    style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translateY(${-(halfH + 20)}px)`, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'grab', zIndex: 6, touchAction: 'none' }} />
+                  {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy], i) => (
+                    <div key={i} onPointerDown={e => onResizeDown(e, it, sx, sy)} title="Étirer (Shift = garder les proportions)"
+                      style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translate(${sx * (it.w / 2) / CMW * PW}px, ${sy * (it.h / 2) / CMH * pageHpx}px)`, width: 22, height: 22, cursor: 'nwse-resize', zIndex: 6, touchAction: 'none' }} />
+                  ))}
+                </>
+              ) })()}
             </div>
           ))}
         </main>
@@ -591,10 +615,9 @@ export default function PhotoshopView({ user, onNavigate }) {
 
           {sel && (
             <div>
-              <div className="text-[12px] text-ink-soft mb-2">{isText ? `✍️ Texte • ${sel.size} cm` : `📐 ${sel.w} × ${sel.h} cm`}</div>
 
               <label className={lab}>Taille (%) : {pctSlider}%</label>
-              <input type="range" min="10" max="300" value={pctSlider} onChange={e => { setPctSlider(+e.target.value); setPct(e.target.value) }} className="w-full mb-3" />
+              <input type="range" min="10" max="1000" value={pctSlider} onChange={e => { setPctSlider(+e.target.value); setPct(e.target.value) }} className="w-full mb-3" />
 
               {!isText && <>
                 <label className={lab}>Forme</label>
@@ -638,8 +661,7 @@ export default function PhotoshopView({ user, onNavigate }) {
                     <button onClick={resetCrop} className="bg-white border border-line rounded-lg px-2 py-2 text-[12px]">↺ Annuler</button>
                   </div>
                   <button onClick={removeBg} className={btn + ' bg-white border border-line'}>🪄 Enlever le fond</button>
-                  <button onClick={() => { setRegionUid(sel.uid); setRegionTools(['brush']); setRegionSrc(sel.src) }} className={btn + ' bg-white border border-line'}>🧽 Gomme</button>
-                  <button onClick={() => { setRegionUid(sel.uid); setRegionTools(['erase', 'recolor']); setRegionSrc(sel.src) }} className={btn + ' bg-white border border-line'}>🖌️ Modifier une zone (couleur / effacer)</button>
+                  <button onClick={() => { setRegionUid(sel.uid); setRegionSrc(sel.src) }} className={btn + ' bg-white border border-line'}>🖌️ Modifier une zone (gomme, sélection, couleur)</button>
                 </>}
               </>}
 
@@ -661,6 +683,10 @@ export default function PhotoshopView({ user, onNavigate }) {
                 <button onClick={() => rot(-90)} className="border border-line rounded-lg px-2 py-1.5">↺</button>
                 <input type="number" step="5" value={sel.rot || 0} onChange={e => patch(sel.uid, { rot: parseFloat(e.target.value) || 0 })} className={inp} />
                 <button onClick={() => rot(90)} className="border border-line rounded-lg px-2 py-1.5">↻</button>
+              </div>
+              <div className="flex gap-1.5 mb-2">
+                <button onClick={() => patch(sel.uid, { flipH: !sel.flipH })} className={'flex-1 rounded-lg py-2 text-[12px] border ' + (sel.flipH ? 'bg-bordeaux text-white border-bordeaux' : 'bg-white border-line')}>⇄ Miroir H</button>
+                <button onClick={() => patch(sel.uid, { flipV: !sel.flipV })} className={'flex-1 rounded-lg py-2 text-[12px] border ' + (sel.flipV ? 'bg-bordeaux text-white border-bordeaux' : 'bg-white border-line')}>⇅ Miroir V</button>
               </div>
               <div className="flex gap-1.5 mb-2">
                 <button onClick={toFront} className="flex-1 bg-white border border-line rounded-lg py-2 text-[12px]">⬆️ Devant</button>
@@ -695,8 +721,13 @@ export default function PhotoshopView({ user, onNavigate }) {
         </div>
       )}
 
-      {regionSrc && <RegionEditor src={regionSrc} tools={regionTools} onClose={res => {
-        if (res) { const it = placed.find(p => p.uid === regionUid); const w = it ? it.w : 5; const nh = Math.max(0.5, Math.round(w / res.ratio * 2) / 2); patch(regionUid, { src: res.src, ratio: res.ratio, h: nh, ct: 0, cr: 0, cb: 0, cl: 0 }); rememberSize(it?.libId, w, nh); persistEdit(it?.libId, res.src) }
+      {removeBgSrc && <RemoveBgModal src={removeBgSrc} onClose={res => {
+        if (res) { const it = placed.find(p => p.uid === removeBgUid); const w = it ? it.w : 5; const nh = Math.max(0.5, Math.round(w / res.ratio * 10) / 10); patch(removeBgUid, { src: res.src, ratio: res.ratio, h: nh }); rememberSize(it?.libId, w, nh); persistEdit(it?.libId, res.src) }
+        setRemoveBgSrc(null)
+      }} />}
+
+      {regionSrc && <RegionEditor src={regionSrc} onClose={res => {
+        if (res) { const it = placed.find(p => p.uid === regionUid); const w = it ? it.w : 5; const nh = Math.max(0.5, Math.round(w / res.ratio * 10) / 10); patch(regionUid, { src: res.src, ratio: res.ratio, h: nh, ct: 0, cr: 0, cb: 0, cl: 0 }); rememberSize(it?.libId, w, nh); persistEdit(it?.libId, res.src) }
         setRegionSrc(null)
       }} />}
 
