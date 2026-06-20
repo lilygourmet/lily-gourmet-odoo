@@ -1669,7 +1669,6 @@ async function handleVitrineOrderAdd(req, res) {
 async function resolveExactVariant(uid, tmplId, combo) {
   try {
     if (!tmplId || !Array.isArray(combo) || !combo.length) return null
-    const DB = process.env.ODOO_DB, PWD = process.env.ODOO_PASSWORD
     const ptav = await odooSearchRead(uid, 'product.template.attribute.value', [['product_tmpl_id', '=', tmplId]], ['id', 'name', 'attribute_id'])
     const ptavIds = []
     for (const c of combo) {
@@ -1678,13 +1677,12 @@ async function resolveExactVariant(uid, tmplId, combo) {
       ptavIds.push(m.id)
     }
     const domain = [['product_tmpl_id', '=', tmplId], ...ptavIds.map(id => ['product_template_attribute_value_ids', '=', id])]
-    let found = await odooSearchRead(uid, 'product.product', domain, ['id'], { limit: 1 })
+    const found = await odooSearchRead(uid, 'product.product', domain, ['id'], { limit: 1 })
     if (found && found.length) return found[0].id
-    // Pas pré-créée → méthode publique Odoo (configurateur web) : crée et renvoie l'id de la variante.
-    const created = await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'product.template', 'create_product_variant', [[tmplId], JSON.stringify(ptavIds)]])
-    if (created && Number(created)) return Number(created)
-    found = await odooSearchRead(uid, 'product.product', domain, ['id'], { limit: 1 })
-    return found && found.length ? found[0].id : null
+    // Pas pré-créée → on crée directement la variante avec sa combinaison d'attributs
+    // (create_product_variant refuse les attributs non dynamiques ; la création directe, elle, marche).
+    const newId = await odooCreate(uid, 'product.product', { product_tmpl_id: tmplId, product_template_attribute_value_ids: [[6, 0, ptavIds]] })
+    return newId || null
   } catch (e) { console.warn('[resolveExactVariant]', e?.message || e); return null }
 }
 
