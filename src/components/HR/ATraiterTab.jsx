@@ -107,10 +107,7 @@ export default function ATraiterTab({ user, onChange }) {
   async function handleRecup(r, action) {
     const key = `${r.employe_id}|${r.date}`
     const f = form[key] || {}
-    if (action === 'valider' && (!f.raison || !f.raison.trim())) {
-      const msg = `Écris d'abord la raison (pourquoi a-t-il travaillé ?) pour valider la récup de ${r.nom}.`
-      setErr(msg); toast.error(msg); return
-    }
+    // La raison est facultative : on peut valider une récup sans l'écrire (elle est juste enregistrée si remplie).
     setBusyKey(key); setErr('')
     try {
       const args = { employe_id: r.employe_id, date: r.date, raison: (f.raison || '').trim() || null, userId: user.id }
@@ -208,7 +205,7 @@ export default function ATraiterTab({ user, onChange }) {
                   <div style={{ fontSize: 12, color: '#3C3489' }}>{r.label} travaillé le {r.jour} {fmtJour(r.date)} → +1 récup</div>
                 </div>
                 <input value={f.raison || ''} onChange={e => setField(key, 'raison', e.target.value)}
-                  placeholder="Pourquoi a-t-il travaillé ?"
+                  placeholder="Pourquoi a-t-il travaillé ? (facultatif)"
                   style={{ flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
                 <button onClick={() => handleRecup(r, 'valider')} disabled={busyKey === key}
                   style={{ padding: '8px 12px', fontSize: 13, background: '#27500A', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
