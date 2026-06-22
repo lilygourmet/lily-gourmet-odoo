@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cake Vision — Test</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --ink:#2b2320; --line:#e4dad0; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:var(--cream); color:var(--ink); }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 22px; margin: 8px 0 2px; }
+  .sub { color:#8a7d72; font-size: 13px; margin-bottom: 18px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:16px; }
+  label { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#8a7d72; display:block; margin-bottom:6px; }
+  input[type=password], textarea, select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font-size:14px; font-family:inherit; }
+  textarea { min-height:70px; resize:vertical; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:200px; }
+  button { cursor:pointer; border:none; border-radius:999px; font-weight:600; transition:.15s; }
+  .btn-main { background:var(--bordeaux); color:#fff; padding:12px 22px; font-size:15px; }
+  .btn-main:disabled { opacity:.5; cursor:not-allowed; }
+  .chip { background:#f1e9e0; color:var(--bordeaux); padding:7px 12px; font-size:12px; margin:4px 4px 0 0; display:inline-block; }
+  .chip:hover { background:#e7dccf; }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:24px; text-align:center; color:#8a7d72; font-size:13px; cursor:pointer; }
+  .drop:hover { border-color:var(--bordeaux); }
+  .imgs { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .imgbox { text-align:center; }
+  .imgbox img { max-width:100%; border-radius:12px; border:1px solid var(--line); background:#fff; }
+  .imgbox .cap { font-size:12px; color:#8a7d72; margin-top:6px; }
+  .small { font-size:12px; color:#8a7d72; }
+  .err { background:#fde8e8; color:#a11; padding:10px 12px; border-radius:10px; font-size:13px; margin-top:10px; display:none; }
+  .spin { display:inline-block; width:16px; height:16px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:s 1s linear infinite; vertical-align:-3px; margin-right:8px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .btn-ghost { background:#f1e9e0; color:var(--ink); padding:10px 16px; font-size:13px; }
+  .thumb { position:relative; width:74px; height:74px; border-radius:10px; overflow:hidden; border:1px solid var(--line); }
+  .thumb img { width:100%; height:100%; object-fit:cover; }
+  .thumb .x { position:absolute; top:-7px; right:-7px; background:#a11; color:#fff; width:20px; height:20px; border-radius:50%; font-size:14px; line-height:20px; text-align:center; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎂 Cake Vision — page de test</h1>
+  <div class="sub">Mets une photo de gâteau, décris ce que le client veut, l'IA te montre le rendu. (Test local — ta clé reste sur ton ordinateur.)</div>
+
+  <div class="card">
+    <div class="row">
+      <div style="flex:0 0 240px">
+        <label>IA à utiliser</label>
+        <select id="provider">
+          <option value="vercel">Vercel · Gemini (sans clé — gratuit)</option>
+          <option value="openai">OpenAI (gpt-image-1)</option>
+          <option value="gemini">Google Gemini (clé perso)</option>
+        </select>
+      </div>
+      <div id="keyOpenaiWrap">
+        <label>Clé OpenAI (sk-…)</label>
+        <input type="password" id="key" placeholder="sk-..." />
+      </div>
+      <div id="keyGeminiWrap" style="display:none">
+        <label>Clé Google Gemini (AIza…)</label>
+        <input type="password" id="gkey" placeholder="AIza..." />
+      </div>
+    </div>
+    <div class="small" style="margin-top:6px">⚠️ Tes clés restent sur ton navigateur. Tu peux comparer les 2 IA avec la même photo. Ne partage pas ce fichier après avoir collé tes clés.</div>
+  </div>
+
+  <div class="card">
+    <label>1. Photo du gâteau (le modèle de base à modifier)</label>
+    <div class="drop" id="drop">Clique, glisse, ou <b>colle</b> (Ctrl+V) une photo ici</div>
+    <input type="file" id="file" accept="image/*" style="display:none" />
+    <div class="small" style="margin-top:8px">📋 Tu peux <b>coller</b> une image (Ctrl+V / Cmd+V) : la 1ère collée = photo de base, les suivantes = références.</div>
+  </div>
+
+  <div class="card">
+    <label>+ Photos à intégrer / mixer (facultatif)</label>
+    <div class="small" style="margin-bottom:10px">Ajoute d'autres photos pour en prendre des éléments (fleurs, déco…) ou mixer un 2e modèle. Dis ensuite dans la consigne quoi prendre (ex : « ajoute les fleurs de la photo de référence »).</div>
+    <div id="refsrow" style="display:flex; flex-wrap:wrap; gap:10px"></div>
+    <button class="btn-ghost" id="addref" style="margin-top:10px">+ Ajouter une photo</button>
+    <input type="file" id="reffile" accept="image/*" multiple style="display:none" />
+  </div>
+
+  <div class="card">
+    <label>2. Qu'est-ce que le client veut ?</label>
+    <textarea id="prompt" placeholder="Ex : mets-le sur 2 étages, couleur rose poudré, et écris « Joyeux anniversaire Sara » sur la façade"></textarea>
+    <div style="margin-top:8px">
+      <span class="chip" data-add="transforme-le en gâteau à 2 étages">+ 2 étages</span>
+      <span class="chip" data-add="change la couleur principale en ">+ couleur</span>
+      <span class="chip" data-add="écris « MESSAGE » sur la façade en lettres élégantes">+ message façade</span>
+      <span class="chip" data-add="ajoute des fleurs fraîches sur le dessus">+ fleurs</span>
+      <span class="chip" data-add="ajoute un topper doré">+ topper</span>
+      <span class="chip" data-add="intègre les éléments de la photo de référence sur ce gâteau">+ intégrer une référence</span>
+      <span class="chip" data-add="garde exactement comme sur la photo d'origine : ">↩ garder de l'origine</span>
+      <span class="chip" data-add="tu as oublié ">⚠ tu as oublié…</span>
+      <span class="chip" data-add="enlève ">− enlever un élément</span>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div style="flex:0 0 180px">
+        <label>Taille</label>
+        <select id="size">
+          <option value="1024x1024">Carré</option>
+          <option value="1024x1536">Portrait</option>
+          <option value="1536x1024">Paysage</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-main" id="go" disabled>Générer le visuel</button>
+    </div>
+    <div class="small" id="iterhint" style="margin-top:8px; display:none">💡 Après un rendu, écris un nouvel ajustement et reclique « Générer » : ça part du <b>dernier résultat</b> (les modifs s'accumulent). Pour recommencer, clique « Repartir de la photo d'origine ».</div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="card" id="results" style="display:none">
+    <div class="imgs">
+      <div class="imgbox"><img id="before" /><div class="cap">Base utilisée</div></div>
+      <div class="imgbox"><img id="after" /><div class="cap">Proposition IA</div></div>
+    </div>
+    <div class="small" id="baseinfo" style="margin-top:10px"></div>
+    <div class="actions">
+      <button class="btn-ghost" id="reset">↺ Repartir de la photo d'origine</button>
+      <button class="btn-ghost" id="download">⬇ Télécharger</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let originalDataUrl = null;  // la photo d'origine (pour « recommencer »)
+let currentDataUrl = null;   // base de la prochaine génération = dernier résultat (ou l'origine)
+let refs = [];               // photos de référence à intégrer/mixer (dataURLs)
+
+// --- clés mémorisées + choix de l'IA ---
+$('key').value = localStorage.getItem('cv_key') || '';
+$('gkey').value = localStorage.getItem('cv_gkey') || '';
+$('provider').value = localStorage.getItem('cv_provider') || 'vercel';
+$('key').addEventListener('input', () => { localStorage.setItem('cv_key', $('key').value.trim()); refreshGo(); });
+$('gkey').addEventListener('input', () => { localStorage.setItem('cv_gkey', $('gkey').value.trim()); refreshGo(); });
+$('provider').addEventListener('change', () => {
+  localStorage.setItem('cv_provider', $('provider').value);
+  const p = $('provider').value;
+  $('keyOpenaiWrap').style.display = p === 'openai' ? '' : 'none';
+  $('keyGeminiWrap').style.display = p === 'gemini' ? '' : 'none';
+  refreshGo();
+});
+$('provider').dispatchEvent(new Event('change'));   // applique l'état initial
+
+// --- chips ---
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+  const t = $('prompt'); const add = c.dataset.add;
+  t.value = (t.value ? t.value.replace(/\s*$/,'') + ', ' : '') + add;
+  t.focus();
+}));
+
+// --- upload + redimensionnement (max 1024px pour rester rapide/léger) ---
+$('drop').addEventListener('click', () => $('file').click());
+$('drop').addEventListener('dragover', e => { e.preventDefault(); });
+$('drop').addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+$('file').addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+// --- photos de référence (à intégrer / mixer) ---
+$('addref').addEventListener('click', () => $('reffile').click());
+$('reffile').addEventListener('change', e => {
+  [...e.target.files].forEach(f => {
+    const reader = new FileReader();
+    reader.onload = () => resizeDataUrl(reader.result, 1024, (resized) => { refs.push(resized); renderRefs(); });
+    reader.readAsDataURL(f);
+  });
+  e.target.value = '';
+});
+function renderRefs() {
+  $('refsrow').innerHTML = '';
+  refs.forEach((u, i) => {
+    const d = document.createElement('div'); d.className = 'thumb';
+    d.innerHTML = `<img src="${u}" /><span class="x">×</span>`;
+    d.querySelector('.x').addEventListener('click', () => { refs.splice(i, 1); renderRefs(); });
+    $('refsrow').appendChild(d);
+  });
+}
+
+// --- coller une image (Ctrl+V / Cmd+V) : 1ère = photo de base, suivantes = références ---
+document.addEventListener('paste', e => {
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (!item) return;
+  const file = item.getAsFile();
+  if (!file) return;
+  if (!originalDataUrl) {
+    loadFile(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = () => resizeDataUrl(reader.result, 1024, r => { refs.push(r); renderRefs(); });
+    reader.readAsDataURL(file);
+  }
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => resizeDataUrl(reader.result, 1024, (resized) => {
+    originalDataUrl = resized;
+    currentDataUrl = resized;
+    $('before').src = resized;
+    $('drop').textContent = '✓ Photo chargée (clique pour changer)';
+    refreshGo();
+  });
+  reader.readAsDataURL(file);
+}
+
+function resizeDataUrl(dataUrl, max, cb) {
+  const img = new Image();
+  img.onload = () => {
+    let { width:w, height:h } = img;
+    if (w > max || h > max) { const r = Math.min(max/w, max/h); w = Math.round(w*r); h = Math.round(h*r); }
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+    cb(cv.toDataURL('image/jpeg', 0.9));
+  };
+  img.src = dataUrl;
+}
+
+function refreshGo() {
+  const p = $('provider').value;
+  const hasKey = p === 'vercel' ? true : (p === 'gemini' ? $('gkey').value.trim() : $('key').value.trim());
+  $('go').disabled = !(currentDataUrl && hasKey);
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [head, b64] = dataUrl.split(',');
+  const mime = head.match(/:(.*?);/)[1];
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+// --- génération ---
+$('go').addEventListener('click', generate);
+async function generate() {
+  const provider = $('provider').value;
+  const key = $('key').value.trim();
+  const gkey = $('gkey').value.trim();
+  const userPrompt = $('prompt').value.trim();
+  if (!userPrompt) { showErr('Écris d\'abord ce que le client veut.'); return; }
+  $('err').style.display = 'none';
+  $('go').disabled = true;
+  const old = $('go').innerHTML;
+  $('go').innerHTML = '<span class="spin"></span>Génération… (10-30 s)';
+
+  const iterating = !!originalDataUrl && currentDataUrl !== originalDataUrl;
+  let refNote = "";
+  if (iterating) refNote += "La 1ère image est la version EN COURS (à modifier). La 2e image est la PHOTO D'ORIGINE du gâteau : utilise-la comme référence pour garder ou restaurer les détails d'origine si on te le demande. ";
+  if (refs.length) refNote += "La/les dernière(s) image(s) sont des références : inspire-toi de leurs éléments pour les intégrer selon la demande. ";
+  const fullPrompt =
+    "Édite cette photo de gâteau de pâtisserie de façon photoréaliste et professionnelle, " +
+    "comme une vraie photo de présentation. Garde l'aspect appétissant et soigné, éclairage studio, fond neutre. " +
+    refNote +
+    "Demande du client : " + userPrompt;
+
+  try {
+    const allImages = [currentDataUrl];
+    if (iterating) allImages.push(originalDataUrl);
+    allImages.push(...refs);
+    let resultUrl;
+
+    if (provider === 'vercel') {
+      // Via le serveur (Vercel AI Gateway, Gemini) — aucune clé, facturé sur les crédits gratuits Vercel.
+      const r = await fetch('https://lily-gourmet-odoo.vercel.app/api/wati-webhook?action=cake-vision', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: fullPrompt, images: allImages }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || ('Erreur ' + r.status));
+      resultUrl = data.image;
+    } else if (provider === 'openai') {
+      const form = new FormData();
+      form.append('model', 'gpt-image-1');
+      if (allImages.length === 1) {
+        form.append('image', dataUrlToBlob(currentDataUrl), 'cake.png');
+      } else {
+        allImages.forEach((u, i) => form.append('image[]', dataUrlToBlob(u), 'img' + i + '.png'));
+      }
+      form.append('prompt', fullPrompt);
+      form.append('size', $('size').value);
+      const r = await fetch('https://api.openai.com/v1/images/edits', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + key }, body: form,
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error?.message || ('Erreur ' + r.status));
+      resultUrl = 'data:image/png;base64,' + data.data[0].b64_json;
+    } else {
+      // Google Gemini 2.5 Flash Image (« Nano Banana »)
+      const parts = [{ text: fullPrompt }];
+      allImages.forEach(u => parts.push({ inline_data: { mime_type: 'image/png', data: u.split(',')[1] } }));
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=' + encodeURIComponent(gkey), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error?.message || ('Erreur ' + r.status));
+      const p = (data.candidates?.[0]?.content?.parts || []).find(x => x.inline_data || x.inlineData);
+      if (!p) throw new Error('Gemini n\'a pas renvoyé d\'image (réessaie ou reformule la demande).');
+      const inl = p.inline_data || p.inlineData;
+      resultUrl = 'data:' + (inl.mime_type || inl.mimeType || 'image/png') + ';base64,' + inl.data;
+    }
+
+    $('before').src = currentDataUrl;     // la base qui vient d'être utilisée
+    $('after').src = resultUrl;
+    currentDataUrl = resultUrl;           // le résultat devient la base de la prochaine modif
+    $('prompt').value = '';               // prêt pour le prochain ajustement
+    $('results').style.display = 'block';
+    $('iterhint').style.display = 'block';
+    $('baseinfo').textContent = '➡️ Prochaine modification : part de CE résultat.';
+    $('results').scrollIntoView({ behavior:'smooth' });
+  } catch (e) {
+    showErr(e.message);
+  } finally {
+    $('go').innerHTML = old;
+    refreshGo();
+  }
+}
+
+function showErr(m) { $('err').textContent = '⚠️ ' + m; $('err').style.display = 'block'; }
+
+// --- repartir de la photo d'origine ---
+$('reset').addEventListener('click', () => {
+  currentDataUrl = originalDataUrl;
+  $('before').src = originalDataUrl;
+  $('baseinfo').textContent = '➡️ Prochaine modification : part de la photo d\'origine.';
+  $('prompt').value = '';
+  window.scrollTo({ top: 0, behavior:'smooth' });
+  $('prompt').focus();
+});
+
+// --- télécharger ---
+$('download').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = $('after').src; a.download = 'cake-vision.png'; a.click();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aperçu — Studio photos</title>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<style>
+:root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;--bordeaux:#993556;--line:#e8dcc9}
+*{box-sizing:border-box}body{margin:0;background:#e9e2d6;color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px}
+.fr{font-family:'Fraunces',serif}
+header{background:var(--bordeaux);color:#fff;padding:9px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tb{background:rgba(255,255,255,.18);border:none;color:#fff;padding:6px 11px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer}
+.tbw{background:#fff;color:var(--bordeaux)}
+.wrap{display:flex;height:calc(100vh - 46px)}
+.col{padding:10px;overflow:auto}
+.lib{width:230px;flex-shrink:0;border-right:1px solid var(--line);background:var(--cream)}
+.panel{width:270px;flex-shrink:0;border-left:1px solid var(--line);background:var(--cream-warm)}
+.center{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:18px;overflow:auto}
+.btn{display:block;width:100%;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px;margin-bottom:7px;font-size:12px;text-align:left;cursor:pointer}
+.btn.p{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux);font-weight:700}
+.row{display:flex;gap:6px}.row .btn{margin-bottom:0}
+.inp{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px;margin-bottom:7px;font-size:12px;background:#fff}
+.lab{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin:6px 0 3px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.card{background:#fff;border:1px solid var(--line);border-radius:9px;padding:5px;text-align:center}
+.card .ph{height:58px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.card .nm{font-size:9px;color:var(--ink-soft);margin-top:3px;height:20px;overflow:hidden}
+.page{position:relative;width:430px;height:608px;background:#fff;border:1px solid #bbb;box-shadow:0 4px 16px rgba(0,0,0,.14);flex-shrink:0}
+.el{position:absolute;overflow:hidden;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:40px}
+.sel{outline:2px solid var(--bordeaux);outline-offset:1px}
+.h{position:absolute;width:13px;height:13px;background:#fff;border:2px solid var(--bordeaux);border-radius:3px}
+.hr{position:absolute;width:15px;height:15px;background:#fff;border:2px solid var(--bordeaux);border-radius:50%}
+.chip{display:inline-block;background:#fbeef2;color:var(--bordeaux);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;margin:0 4px 4px 0}
+.note{font-size:11px;color:var(--ink-mute);line-height:1.5}
+h3{font-size:12px;margin:14px 0 6px;color:var(--bordeaux);text-transform:uppercase;letter-spacing:.5px}
+.sliderbar{height:6px;background:var(--line);border-radius:4px;position:relative;margin:6px 0 10px}
+.sliderbar i{position:absolute;top:-4px;width:14px;height:14px;border-radius:50%;background:var(--bordeaux)}
+</style></head><body>
+
+<header>
+  <button class="tb">← Retour</button>
+  <span class="fr" style="font-size:15px">🎨 Studio photos</span>
+  <span style="flex:1"></span>
+  <button class="tb">✍️ Texte</button>
+  <button class="tb">⬤ Forme</button>
+  <button class="tb">🪄 Ranger</button>
+  <button class="tb">＋ Page</button>
+  <button class="tb tbw">🖨️ Imprimer</button>
+</header>
+
+<div class="wrap">
+  <!-- BIBLIOTHÈQUE -->
+  <div class="col lib">
+    <div class="row" style="margin-bottom:6px">
+      <button class="btn p" style="flex:1;text-align:center">＋ Charger</button>
+      <button class="btn" style="width:38px;text-align:center">📁</button>
+      <button class="btn" style="width:38px;text-align:center" title="Poubelle">🗑️</button>
+    </div>
+    <button class="btn" style="text-align:center;color:var(--bordeaux);border-color:var(--bordeaux);font-weight:700">📥 Import lot (rapide)</button>
+    <button class="btn" style="text-align:center;color:var(--bordeaux);border-color:var(--bordeaux);font-weight:700">🧩 Importer des PSD</button>
+    <input class="inp" placeholder="Rechercher (nom ou catégorie)…">
+    <select class="inp"><option>Tous les thèmes (6 527)</option><option>Disney (905)</option><option>Dessins animés (1 205)</option><option>Super-héros (195)</option><option>Animaux (474)</option><option>Foot &amp; Sport (276)</option></select>
+    <button class="btn" style="text-align:center">🧹 Nettoyer (1 clic = supprimer)</button>
+    <div class="grid">
+      <div class="card"><div class="ph" style="background:#ffe3ef">🕷️</div><div class="nm">Masque Spiderman</div></div>
+      <div class="card"><div class="ph" style="background:#e3f0ff">❄️</div><div class="nm">Elsa</div></div>
+      <div class="card"><div class="ph" style="background:#fff2d6">🦁</div><div class="nm">Roi Lion</div></div>
+      <div class="card"><div class="ph" style="background:#e8ffe6">🐢</div><div class="nm">Pikachu</div></div>
+      <div class="card"><div class="ph" style="background:#ffe6e6">⚽</div><div class="nm">Logo Real Madrid</div></div>
+      <div class="card"><div class="ph" style="background:#f0e6ff">👑</div><div class="nm">Princesse Cendrillon</div></div>
+    </div>
+  </div>
+
+  <!-- PAGE A4 -->
+  <div class="center">
+    <div class="page">
+      <div class="el" style="left:30px;top:34px;width:150px;height:150px;background:#ffe3ef;border-radius:50%">🕷️</div>
+      <div class="el" style="left:210px;top:60px;width:170px;height:120px;background:#e3f0ff">❄️</div>
+      <div class="el" style="left:60px;top:230px;font-size:30px;font-family:'Dancing Script',cursive;color:#7a1f3d;background:none">Joyeux anniversaire</div>
+      <!-- élément sélectionné avec poignées -->
+      <div class="el sel" style="left:120px;top:330px;width:180px;height:130px;background:#fff2d6">🦁</div>
+      <div class="hr" style="left:202px;top:300px"></div>
+      <div class="h" style="left:114px;top:324px"></div><div class="h" style="left:294px;top:324px"></div>
+      <div class="h" style="left:114px;top:454px"></div><div class="h" style="left:294px;top:454px"></div>
+    </div>
+  </div>
+
+  <!-- PANNEAU RÉGLAGES -->
+  <div class="col panel">
+    <div class="note" style="margin-bottom:8px"><b>Photo sélectionnée</b> — poignée ronde = tourner, coins = agrandir (Shift = proportions).</div>
+    <span class="lab">Taille (%)</span><div class="sliderbar"><i style="left:38%"></i></div>
+    <span class="lab">Forme</span>
+    <select class="inp"><option>Aucune (détourée)</option><option>Rond / ovale</option><option>Carré</option><option>Cœur</option><option>Losange</option><option>Hexagone</option></select>
+    <div class="row"><div style="flex:1"><span class="lab">Largeur (cm)</span><input class="inp" value="6"></div><div style="flex:1"><span class="lab">Hauteur (cm)</span><input class="inp" value="4,3"></div><button class="btn" style="width:42px;text-align:center;margin-top:18px">🔒</button></div>
+    <span class="lab">🎨 Colorer (teinte)</span><div class="sliderbar"><i style="left:0"></i></div>
+    <span class="lab">✂️ Rogner les bords (%)</span>
+    <div class="row" style="margin-bottom:7px"><div class="sliderbar" style="flex:1"><i style="left:0"></i></div><div class="sliderbar" style="flex:1"><i style="left:0"></i></div></div>
+    <button class="btn">🪄 Enlever le fond <span style="color:var(--ink-mute)">(tolérance)</span></button>
+    <button class="btn">🖌️ Modifier une zone <span style="color:var(--ink-mute)">(gomme, sélection, couleur)</span></button>
+    <span class="lab">Rotation (°)</span>
+    <div class="row" style="margin-bottom:7px"><button class="btn" style="width:40px;text-align:center">↺</button><input class="inp" value="0" style="margin:0"><button class="btn" style="width:40px;text-align:center">↻</button></div>
+    <div class="row"><button class="btn" style="flex:1;text-align:center">⇄ Miroir H</button><button class="btn" style="flex:1;text-align:center">⇅ Miroir V</button></div>
+    <div class="row"><button class="btn" style="flex:1;text-align:center">⬆️ Devant</button><button class="btn" style="flex:1;text-align:center">⬇️ Derrière</button></div>
+    <button class="btn p" style="text-align:center">✦ Dupliquer</button>
+    <button class="btn" style="text-align:center;color:#b3261e;border-color:#f3c2bd">🗑️ Retirer</button>
+  </div>
+</div>
+
+<div style="padding:14px 18px;background:#fff;border-top:1px solid var(--line)">
+  <h3>Fonctions disponibles</h3>
+  <span class="chip">✍️ Texte multi-lignes + 8 polices</span><span class="chip">⬤ Formes</span><span class="chip">🎨 Colorer</span>
+  <span class="chip">✂️ Rogner</span><span class="chip">🪄 Enlever le fond (tolérance)</span><span class="chip">🖌️ Gomme + sélection (rect/rond/lasso/baguette)</span>
+  <span class="chip">🔄 Rotation libre</span><span class="chip">⇄⇅ Miroir</span><span class="chip">↕️ Coins = redimensionner (Shift=proportions)</span>
+  <span class="chip">🔗 Groupes</span><span class="chip">↩️ Ctrl+Z</span><span class="chip">📋 Copier sélection</span>
+  <span class="chip">🗑️ Corbeille (5 dernières, restaurer)</span><span class="chip">📥 Import lot</span><span class="chip">🧩 Import PSD</span>
+  <span class="chip">🖨️ Impression A4</span><span class="chip">🔎 Recherche tolérante</span><span class="chip">🗂️ 19 familles</span>
+  <p class="note" style="margin-top:8px">Aperçu statique — l'app réelle : <b>lily-gourmet-odoo.vercel.app</b> → Outils → 🎨 Studio photos.</p>
+</div>
+</body></html>

@@ -8,7 +8,7 @@ const sb = createClient(env.VITE_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { 
 const APPLY = process.argv.includes('--apply')
 
 const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-const PERSO = /perso/
+const PERSO = /perso\b/
 const ETIQ = /etiquette/
 const CAPTURE = /capture|screen ?shot|screenshot|capture.?d.?ecran|img[-_ ]?\d{8}|photo[-_ ]?\d{6}/
 
