@@ -201,6 +201,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const [detailEmp, setDetailEmp]         = useState(null)  // employé sélectionné pour voir le détail
   const [editAlloc, setEditAlloc]         = useState(null)  // allocation en cours d'édition
   const [editConge, setEditConge]         = useState(null)  // congé en cours d'édition
+  const [selDem, setSelDem]               = useState(() => new Set())  // demandes cochées (validation groupée)
+  const [selAlloc, setSelAlloc]           = useState(() => new Set())  // allocations cochées (validation groupée)
   const [joursFeries, setJoursFeries]     = useState([])    // table jours_feries
   const [feriesYear, setFeriesYear]       = useState(new Date().getFullYear())
   const [showFerieForm, setShowFerieForm] = useState(false)
@@ -347,6 +349,17 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
+  const toggleSel = (set, setter, id) => { const n = new Set(set); n.has(id) ? n.delete(id) : n.add(id); setter(n) }
+  // validation GROUPÉE des demandes de congé cochées
+  async function handleValiderLot() {
+    const list = demandes.filter(c => selDem.has(c.id))
+    if (!list.length) return
+    if (!await confirmDialog(`Valider ${list.length} demande(s) de congé ?\n\nUne notification WhatsApp sera envoyée à chaque employé.`, { confirmLabel: 'Tout valider' })) return
+    try {
+      for (const c of list) { const jd = joursDecomptesCalcul(c, empById[c.employe_id], feriesSet); await validerConge(c.id, user.id, jd) }
+      setSelDem(new Set()); await reload(); toast.success(`${list.length} congé(s) validé(s).`)
+    } catch (e) { toast.error('Erreur : ' + e.message); await reload() }
+  }
   async function handleRejeter(c) {
     if (!await confirmDialog(`Rejeter cette demande ?\n\nUne notification WhatsApp sera envoyée à l'employé.`, { danger: true, confirmLabel: 'Rejeter' })) return
     try { await rejeterConge(c.id, user.id); await reload() }
@@ -381,6 +394,14 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     if (!await confirmDialog(`Valider l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`, { confirmLabel: 'Valider' })) return
     try { await validerAllocation(a.id, user.id); await reload() }
     catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+  // validation GROUPÉE des allocations cochées
+  async function handleValiderAllocLot() {
+    const list = allocations.filter(a => a.statut === 'attente' && selAlloc.has(a.id))
+    if (!list.length) return
+    if (!await confirmDialog(`Valider ${list.length} allocation(s) ?`, { confirmLabel: 'Tout valider' })) return
+    try { for (const a of list) await validerAllocation(a.id, user.id); setSelAlloc(new Set()); await reload(); toast.success(`${list.length} allocation(s) validée(s).`) }
+    catch (e) { toast.error('Erreur : ' + e.message); await reload() }
   }
   async function handleRejeterAlloc(a) {
     if (!await confirmDialog(`Rejeter l'allocation de ${empById[a.employe_id]?.nom || '?'} (${a.jours} j · ${a.type}) ?`, { danger: true, confirmLabel: 'Rejeter' })) return
@@ -473,19 +494,33 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
           demandes.length === 0
             ? <div style={emptyBox}>Aucune demande en attente.</div>
             : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '4px 2px' }}>
+                    <label style={{ fontSize: 12, display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer', color: '#4a3a30' }}>
+                      <input type="checkbox" checked={selDem.size === demandes.length && demandes.length > 0} onChange={e => setSelDem(e.target.checked ? new Set(demandes.map(c => c.id)) : new Set())} style={{ width: 16, height: 16 }} />
+                      Tout cocher
+                    </label>
+                    <button onClick={handleValiderLot} disabled={!selDem.size} style={{ ...btnValider, opacity: selDem.size ? 1 : 0.45, cursor: selDem.size ? 'pointer' : 'default' }}><Check size={14} /> Valider la sélection ({selDem.size})</button>
+                  </div>
+                )}
                 {demandes.map(c => (
-                  <CongeCard
-                    key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
-                    actions={canImprimerFeuille ? (
-                      <>
-                        <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
-                        {canManagePending && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier (non validé)"><Pencil size={13} /></button>}
-                        {isAdmin && <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>}
-                        {isAdmin && <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>}
-                        {canManagePending && <button onClick={() => handleDeletePending(c)} style={btnRejeter} title="Supprimer la demande"><Trash2 size={14} /></button>}
-                      </>
-                    ) : null}
-                  />
+                  <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    {isAdmin && <input type="checkbox" checked={selDem.has(c.id)} onChange={() => toggleSel(selDem, setSelDem, c.id)} style={{ width: 18, height: 18, marginTop: 14, flexShrink: 0 }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <CongeCard
+                        c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
+                        actions={canImprimerFeuille ? (
+                          <>
+                            <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
+                            {canManagePending && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier (non validé)"><Pencil size={13} /></button>}
+                            {isAdmin && <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>}
+                            {isAdmin && <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>}
+                            {canManagePending && <button onClick={() => handleDeletePending(c)} style={btnRejeter} title="Supprimer la demande"><Trash2 size={14} /></button>}
+                          </>
+                        ) : null}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
         )}
@@ -581,8 +616,16 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
             {/* Allocations en ATTENTE de validation (visibles seulement pour admin) */}
             {isAdmin && allocations.some(a => a.statut === 'attente') && (
               <div style={{ background: '#FFF7E0', border: '0.5px solid #F0D89A', borderRadius: 12, padding: 12, marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#854F0B', marginBottom: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#854F0B', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   ⏳ Allocations en attente de validation
+                  {(() => { const pend = allocations.filter(a => a.statut === 'attente'); return (
+                    <>
+                      <label style={{ fontSize: 11, fontWeight: 500, display: 'flex', gap: 4, alignItems: 'center', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={selAlloc.size === pend.length && pend.length > 0} onChange={e => setSelAlloc(e.target.checked ? new Set(pend.map(a => a.id)) : new Set())} /> Tout
+                      </label>
+                      <button onClick={handleValiderAllocLot} disabled={!selAlloc.size} style={{ ...btnValider, padding: '4px 10px', fontSize: 11, opacity: selAlloc.size ? 1 : 0.45, cursor: selAlloc.size ? 'pointer' : 'default' }}><Check size={12} /> Valider la sélection ({selAlloc.size})</button>
+                    </>
+                  ) })()}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {allocations.filter(a => a.statut === 'attente').map(a => {
@@ -592,6 +635,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                     const finAlloc   = `${a.annee}-12-31`
                     return (
                       <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, background: 'white', padding: '6px 10px', borderRadius: 8 }}>
+                        <input type="checkbox" checked={selAlloc.has(a.id)} onChange={() => toggleSel(selAlloc, setSelAlloc, a.id)} style={{ width: 16, height: 16 }} />
                         <strong>{emp?.nom || `#${a.employe_id}`}</strong>
                         <span>· {t?.label || a.type}</span>
                         <span style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</span>
