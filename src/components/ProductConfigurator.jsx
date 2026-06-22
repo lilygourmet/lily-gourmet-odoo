@@ -51,16 +51,23 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   const modele = cfg.modele || ''   // 'identique' | 'inspire'
   function setModele(v) { onChange(c => ({ ...c, modele: v })) }
   // 2) Décor : modelage main / impression / les deux / rien
-  const decor = cfg.decor || { mode: '', main: '', imp: '', moule: '' }
-  function setDecor(patch) { onChange(c => ({ ...c, decor: { ...(c.decor || { mode: '', main: '', imp: '', moule: '' }), ...patch } })) }
-  const showMain = decor.mode === 'main' || decor.mode === 'both'
-  const showImp = decor.mode === 'imp' || decor.mode === 'both'
-  const showMoule = decor.mode === 'moule'
-  const decorOk = decor.mode === 'rien'
-    || (showMoule && (decor.moule || '').trim())
-    || (showMain && !showImp && decor.main.trim())
-    || (showImp && !showMain && decor.imp.trim())
-    || (showMain && showImp && decor.main.trim() && decor.imp.trim())
+  // Décor : multi-sélection (Modelage / Impression / Moule cumulables) OU « Rien » (exclusif).
+  const decor = cfg.decor || { modes: [], main: '', imp: '', moule: '' }
+  const decorModes = Array.isArray(decor.modes) ? decor.modes : []
+  function setDecor(patch) { onChange(c => ({ ...c, decor: { ...(c.decor || { modes: [], main: '', imp: '', moule: '' }), ...patch } })) }
+  function toggleDecorMode(m) {
+    if (m === 'rien') { setDecor({ modes: decorModes.includes('rien') ? [] : ['rien'] }); return }
+    const cur = decorModes.filter(x => x !== 'rien')
+    setDecor({ modes: cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m] })
+  }
+  const showMain = decorModes.includes('main')
+  const showImp = decorModes.includes('imp')
+  const showMoule = decorModes.includes('moule')
+  const decorOk = decorModes.includes('rien')
+    || (decorModes.length > 0
+      && (!showMain || decor.main.trim())
+      && (!showImp || decor.imp.trim())
+      && (!showMoule || (decor.moule || '').trim()))
   // 3) Fleurs (multi-choix : aucune / pâte à sucre / artificielles / vraies)
   const fleurs = cfg.fleurs || { types: [], detail: '' }
   function toggleFleur(v) {
@@ -75,7 +82,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   function setFleurDetail(val) { onChange(c => ({ ...c, fleurs: { ...(c.fleurs || { types: [], detail: '' }), detail: val } })) }
   const fleursReelles = (fleurs.types || []).some(t => t !== 'aucune')
   // Validation : pour les produits décorés, modèle + décor + fleurs sont obligatoires (choix forcé).
-  const decoratedOk = !isDecorated || (!!modele && !!decor.mode && decorOk && (fleurs.types || []).length > 0)
+  const decoratedOk = !isDecorated || (modele === 'identique') || (!!modele && decorOk && (fleurs.types || []).length > 0)
 
   // Prix final : pour CD-, on prend le prix saisi à la main s'il existe.
   const finalPrice = priceEditable && cfg.priceOverride != null && cfg.priceOverride !== ''
@@ -94,7 +101,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       ...textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`),
     ]
     const decorSub = isDecorated
-      ? (decor.mode === 'rien' ? 'Décor : rien'
+      ? (decorModes.includes('rien') ? 'Décor : rien'
         : [showMain && decor.main.trim() && `🖐️ ${decor.main.trim()}`, showImp && decor.imp.trim() && `🖨️ ${decor.imp.trim()}`, showMoule && (decor.moule || '').trim() && `🧊 ${(decor.moule || '').trim()}`].filter(Boolean).join(' · '))
       : ''
     const subDisplay = [
@@ -130,18 +137,21 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
         // Modèle
         if (modele === 'identique') modeleLine = 'Modèle : à l\'identique (voir photo réf.)'
         else if (modele === 'inspire') modeleLine = 'Modèle : inspiration / adapté'
-        // Décor
-        if (decor.mode === 'rien') decorLines.push('Décor : rien à faire')
-        else {
-          if (showMain && decor.main.trim()) decorLines.push(`Modelage : ${decor.main.trim()}`)
-          if (showImp && decor.imp.trim()) decorLines.push(`Impression : ${decor.imp.trim()}`)
-          if (showMoule && (decor.moule || '').trim()) decorLines.push(`Moule : ${(decor.moule || '').trim()}`)
-        }
-        // Fleurs
-        const FLEUR_LBL = { aucune: 'aucune', sucre: 'pâte à sucre', artif: 'artificielles', vraies: 'vraies fleurs' }
-        if ((fleurs.types || []).length) {
-          const noms = fleurs.types.map(t => FLEUR_LBL[t] || t).join(' + ')
-          fleursLine = `Fleurs : ${noms}${fleurs.detail && fleurs.detail.trim() ? ` (${fleurs.detail.trim()})` : ''}`
+        // À l'identique → on reproduit la photo : pas de décor/fleurs à détailler.
+        if (modele !== 'identique') {
+          // Décor
+          if (decorModes.includes('rien')) decorLines.push('Décor : rien à faire')
+          else {
+            if (showMain && decor.main.trim()) decorLines.push(`Modelage : ${decor.main.trim()}`)
+            if (showImp && decor.imp.trim()) decorLines.push(`Impression : ${decor.imp.trim()}`)
+            if (showMoule && (decor.moule || '').trim()) decorLines.push(`Moule : ${(decor.moule || '').trim()}`)
+          }
+          // Fleurs
+          const FLEUR_LBL = { aucune: 'aucune', sucre: 'pâte à sucre', artif: 'artificielles', vraies: 'vraies fleurs' }
+          if ((fleurs.types || []).length) {
+            const noms = fleurs.types.map(t => FLEUR_LBL[t] || t).join(' + ')
+            fleursLine = `Fleurs : ${noms}${fleurs.detail && fleurs.detail.trim() ? ` (${fleurs.detail.trim()})` : ''}`
+          }
         }
       }
       lineDesc = [...cdTextLines, modeleLine, ...decorLines, fleursLine].filter(Boolean).join('\n')
@@ -215,13 +225,15 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                     {modele === 'identique' && <div className="text-[11px] text-bordeaux mt-1.5">📷 Joins une photo de référence ci-dessous (à reproduire fidèlement).</div>}
                   </div>
 
+                  {/* « À l'identique » → on reproduit la photo : pas besoin de détailler décor/fleurs. */}
+                  {modele !== 'identique' && (<>
                   {/* 2 · Décor */}
                   <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
-                    <div className="text-[12px] font-bold text-bordeaux mb-2">2 · Décor — comment ? <span className="text-bordeaux">*</span></div>
+                    <div className="text-[12px] font-bold text-bordeaux mb-2">2 · Décor — comment ? <span className="text-bordeaux">*</span> <span className="font-normal text-ink-soft normal-case">(plusieurs possibles)</span></div>
                     <div className="flex gap-1.5 mb-1">
-                      {[['main', '🖐️', 'Modelage main'], ['imp', '🖨️', 'Impression'], ['both', '🤝', 'Les deux'], ['moule', '🧊', 'Moule'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
-                        <button key={m} type="button" onClick={() => setDecor({ mode: m })}
-                          className={`flex-1 rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${decor.mode === m ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
+                      {[['main', '🖐️', 'Modelage'], ['imp', '🖨️', 'Impression'], ['moule', '🧊', 'Moule'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
+                        <button key={m} type="button" onClick={() => toggleDecorMode(m)}
+                          className={`flex-1 rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${decorModes.includes(m) ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
                           <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
                         </button>
                       ))}
@@ -269,6 +281,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                         className="w-full mt-2 px-3 py-2 border border-line rounded-lg text-[13px] min-h-[44px]" />
                     )}
                   </div>
+                  </>)}
                 </>
               )}
 

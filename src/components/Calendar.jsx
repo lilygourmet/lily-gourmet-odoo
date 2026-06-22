@@ -1574,17 +1574,30 @@ function DiffPopup({ order, onClose, onViewDetails }) {
               <div className="space-y-1.5">
                 {Object.entries(item.last_changes).map(([field, change]) => (
                   <div key={field} className="text-[12px] leading-snug">
-                    <span className="font-medium text-ink">
-                      {DIFF_FIELD_LABELS[field] || field}
-                    </span>
-                    <span className="text-ink-mute"> : </span>
-                    <span className="text-bordeaux line-through">
-                      {formatDiffValue(change.from)}
-                    </span>
-                    <span className="text-ink-mute mx-1">→</span>
-                    <span className="text-ok font-medium">
-                      {formatDiffValue(change.to)}
-                    </span>
+                    {field === 'image_urls' ? (
+                      // Photos : on ne montre PAS les liens, juste « ajoutée » ou « changée ».
+                      <span className="text-ink font-medium">
+                        📷 {(() => {
+                          const fromN = Array.isArray(change.from) ? change.from.length : (change.from ? 1 : 0)
+                          const toN = Array.isArray(change.to) ? change.to.length : (change.to ? 1 : 0)
+                          return toN > fromN ? 'Photo ajoutée' : 'Photo changée'
+                        })()}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="font-medium text-ink">
+                          {DIFF_FIELD_LABELS[field] || field}
+                        </span>
+                        <span className="text-ink-mute"> : </span>
+                        <span className="text-bordeaux line-through">
+                          {formatDiffValue(change.from)}
+                        </span>
+                        <span className="text-ink-mute mx-1">→</span>
+                        <span className="text-ok font-medium">
+                          {formatDiffValue(change.to)}
+                        </span>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
