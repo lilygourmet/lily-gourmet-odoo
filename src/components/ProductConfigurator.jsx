@@ -51,11 +51,13 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   const modele = cfg.modele || ''   // 'identique' | 'inspire'
   function setModele(v) { onChange(c => ({ ...c, modele: v })) }
   // 2) Décor : modelage main / impression / les deux / rien
-  const decor = cfg.decor || { mode: '', main: '', imp: '' }
-  function setDecor(patch) { onChange(c => ({ ...c, decor: { ...(c.decor || { mode: '', main: '', imp: '' }), ...patch } })) }
+  const decor = cfg.decor || { mode: '', main: '', imp: '', moule: '' }
+  function setDecor(patch) { onChange(c => ({ ...c, decor: { ...(c.decor || { mode: '', main: '', imp: '', moule: '' }), ...patch } })) }
   const showMain = decor.mode === 'main' || decor.mode === 'both'
   const showImp = decor.mode === 'imp' || decor.mode === 'both'
+  const showMoule = decor.mode === 'moule'
   const decorOk = decor.mode === 'rien'
+    || (showMoule && (decor.moule || '').trim())
     || (showMain && !showImp && decor.main.trim())
     || (showImp && !showMain && decor.imp.trim())
     || (showMain && showImp && decor.main.trim() && decor.imp.trim())
@@ -93,7 +95,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
     ]
     const decorSub = isDecorated
       ? (decor.mode === 'rien' ? 'Décor : rien'
-        : [showMain && decor.main.trim() && `🖐️ ${decor.main.trim()}`, showImp && decor.imp.trim() && `🖨️ ${decor.imp.trim()}`].filter(Boolean).join(' · '))
+        : [showMain && decor.main.trim() && `🖐️ ${decor.main.trim()}`, showImp && decor.imp.trim() && `🖨️ ${decor.imp.trim()}`, showMoule && (decor.moule || '').trim() && `🧊 ${(decor.moule || '').trim()}`].filter(Boolean).join(' · '))
       : ''
     const subDisplay = [
       ...optionAttrs.map(a => sel[a.attrId]).filter(Boolean),
@@ -133,6 +135,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
         else {
           if (showMain && decor.main.trim()) decorLines.push(`Modelage : ${decor.main.trim()}`)
           if (showImp && decor.imp.trim()) decorLines.push(`Impression : ${decor.imp.trim()}`)
+          if (showMoule && (decor.moule || '').trim()) decorLines.push(`Moule : ${(decor.moule || '').trim()}`)
         }
         // Fleurs
         const FLEUR_LBL = { aucune: 'aucune', sucre: 'pâte à sucre', artif: 'artificielles', vraies: 'vraies fleurs' }
@@ -216,7 +219,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                   <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
                     <div className="text-[12px] font-bold text-bordeaux mb-2">2 · Décor — comment ? <span className="text-bordeaux">*</span></div>
                     <div className="flex gap-1.5 mb-1">
-                      {[['main', '🖐️', 'Modelage main'], ['imp', '🖨️', 'Impression'], ['both', '🤝', 'Les deux'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
+                      {[['main', '🖐️', 'Modelage main'], ['imp', '🖨️', 'Impression'], ['both', '🤝', 'Les deux'], ['moule', '🧊', 'Moule'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
                         <button key={m} type="button" onClick={() => setDecor({ mode: m })}
                           className={`flex-1 rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${decor.mode === m ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
                           <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
@@ -236,6 +239,14 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                         <div className="text-[12px] font-bold text-ink-soft mb-1">À imprimer <span className="text-bordeaux">*</span></div>
                         <textarea value={decor.imp} onChange={e => setDecor({ imp: e.target.value })}
                           placeholder="ex : photo du visage, logo, fond arc-en-ciel"
+                          className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
+                      </div>
+                    )}
+                    {showMoule && (
+                      <div className="mt-2">
+                        <div className="text-[12px] font-bold text-ink-soft mb-1">À faire au moule <span className="text-bordeaux">*</span></div>
+                        <textarea value={decor.moule || ''} onChange={e => setDecor({ moule: e.target.value })}
+                          placeholder="ex : ourson au moule, étoile au moule"
                           className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[48px]" />
                       </div>
                     )}

@@ -86,7 +86,7 @@ export async function saveOrdersFromPdf(parsedOrders, pdfFilename, userId, force
         .from('orders')
         .select(`
           id, client_name, delivery_at, seller_name,
-          order_items (id, type, title, etages_count, pers, parfums, theme, message, age, modele, modelage, impression, decor, fleurs, warnings, image_urls, quantity)
+          order_items (id, type, title, etages_count, pers, parfums, theme, message, age, modele, modelage, impression, moule, decor, fleurs, warnings, image_urls, quantity)
         `)
         .eq('order_num', order.orderNum)
         .maybeSingle()
@@ -315,7 +315,7 @@ export async function loadOrdersByIds(ids) {
       order_items (
         id, item_idx, type, title, etages_count, pers, parfums,
         taille_value, taille_unit,
-        theme, message, age, modele, modelage, impression, decor, fleurs, warnings, image_urls, polys, quantity,
+        theme, message, age, modele, modelage, impression, moule, decor, fleurs, warnings, image_urls, polys, quantity,
         modified_at, last_changes
       )
     `)
@@ -340,7 +340,7 @@ export async function loadOrdersForWeek(monday) {
       order_items (
         id, item_idx, type, title, etages_count, pers, parfums,
         taille_value, taille_unit,
-        theme, message, age, modele, modelage, impression, decor, fleurs, warnings, image_urls, polys, quantity,
+        theme, message, age, modele, modelage, impression, moule, decor, fleurs, warnings, image_urls, polys, quantity,
         modified_at, last_changes
       )
     `)
@@ -368,7 +368,7 @@ export async function loadAllOrders() {
       order_items (
         id, item_idx, type, title, etages_count, pers, parfums,
         taille_value, taille_unit,
-        theme, message, age, modele, modelage, impression, decor, fleurs, warnings, image_urls, polys, quantity,
+        theme, message, age, modele, modelage, impression, moule, decor, fleurs, warnings, image_urls, polys, quantity,
         modified_at, last_changes
       )
     `)

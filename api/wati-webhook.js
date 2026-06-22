@@ -20,6 +20,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { sendPushToTargets } from './push.js'
+import { generateText } from 'ai'
 import crypto from 'crypto'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -79,6 +80,7 @@ export default async function handler(req, res) {
   if (action === 'vitrine-reserved') return handleVitrineReserved(req, res)
   if (action === 'vitrine-reservations') return handleVitrineReservations(req, res)
   if (action === 'vitrine-order-add') return handleVitrineOrderAdd(req, res)
+  if (action === 'cake-vision') return handleCakeVision(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
   if (action === 'count-devis-internet') return handleCountDevisInternet(req, res)
   return handleInbound(req, res)
@@ -1686,6 +1688,35 @@ async function resolveExactVariant(uid, tmplId, combo) {
   } catch (e) { console.warn('[resolveExactVariant]', e?.message || e); return null }
 }
 
+// Cake Vision : modifie une (des) photo(s) de gâteau selon une consigne, via Vercel AI Gateway
+// (modèle image Gemini). Auth Gateway = OIDC automatique sur Vercel (aucune clé à gérer).
+async function handleCakeVision(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST requis' })
+
+  const { prompt, images } = req.body || {}
+  if (!prompt || !Array.isArray(images) || images.length === 0) {
+    return res.status(400).json({ error: 'prompt et images requis' })
+  }
+  try {
+    const content = [{ type: 'text', text: prompt }]
+    for (const img of images) content.push({ type: 'image', image: img })
+    const result = await generateText({
+      model: 'google/gemini-3.1-flash-image-preview',
+      messages: [{ role: 'user', content }],
+    })
+    const file = (result.files || []).find(f => f.mediaType?.startsWith('image/'))
+    if (!file) return res.status(502).json({ error: "Le modèle n'a pas renvoyé d'image (réessaie ou reformule)." })
+    return res.status(200).json({ image: `data:${file.mediaType};base64,${file.base64}` })
+  } catch (e) {
+    console.error('[cake-vision]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
 async function handleOrderCreateDevis(req, res) {
   const { partnerId, lines, deliveryDate, deliveryTime, note, warehouseId, clientPhone } = req.body || {}
   if (!partnerId) return res.status(400).json({ error: 'client requis' })
@@ -1826,6 +1857,10 @@ async function handleOrderCreateDevis(req, res) {
           // Devis DÉTAILLÉ, sans émoticônes (un article par ligne, comme l'onglet Devis).
           const retrait = note ? String(note).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : `${deliveryDate || ''} ${deliveryTime || ''}`.trim()
           // En cas de fusion, on recalcule total + détail sur la commande COMPLÈTE (tous les articles).
+          // Message client : on retire les consignes de prod (déco) — le client voit nom + thème + message.
+          const stripDeco = (txt) => String(txt || '').split('\n')
+            .filter(s => !/^\s*(Modèle|Modelage|Impression|Moule|Décor|Fleurs)\s*:/i.test(s))
+            .join(', ')
           let total, detailLignes
           if (merged) {
             const full = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['amount_total'])
@@ -1833,10 +1868,10 @@ async function handleOrderCreateDevis(req, res) {
             const allLines = await odooSearchRead(uid, 'sale.order.line',
               [['order_id', '=', orderId], ['display_type', '=', false], ['product_uom_qty', '>', 0]],
               ['name', 'product_uom_qty', 'price_subtotal'])
-            detailLignes = allLines.map(l => `- ${Number(l.product_uom_qty) > 1 ? `${Math.round(l.product_uom_qty)}x ` : ''}${String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, '').replace(/\n/g, ', ')} : ${Math.round(l.price_subtotal || 0)} DH`).join('\n')
+            detailLignes = allLines.map(l => `- ${Number(l.product_uom_qty) > 1 ? `${Math.round(l.product_uom_qty)}x ` : ''}${stripDeco(String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, ''))} : ${Math.round(l.price_subtotal || 0)} DH`).join('\n')
           } else {
             total = lines.reduce((s, l) => s + (Number(l.price) || 0) * (Number(l.qty) || 1), 0)
-            detailLignes = lines.map(l => `- ${Number(l.qty) > 1 ? `${l.qty}x ` : ''}${String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, '')}${l.desc ? ` (${String(l.desc).replace(/\n/g, ', ')})` : ''} : ${Math.round(Number(l.price) || 0)} DH`).join('\n')
+            detailLignes = lines.map(l => { const d = stripDeco(l.desc); return `- ${Number(l.qty) > 1 ? `${l.qty}x ` : ''}${String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, '')}${d ? ` (${d})` : ''} : ${Math.round(Number(l.price) || 0)} DH` }).join('\n')
           }
           const clientText = `Bonjour ${clientName.split(/\s+/)[0] || ''},\nVoici votre devis ${orderName}${merged ? ' (mis à jour)' : ''} :\n${detailLignes}\nMontant total : ${Math.round(total)} DH\nRetrait : ${retrait}\n\nMerci de nous confirmer pour valider.`
           const tmplDetail = lines.map(l => `${String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, '')} x${l.qty || 1} - ${Math.round(Number(l.price) || 0)} DH`).join(' ; ')

@@ -1041,6 +1041,7 @@ async function syncToSupabase(supabase, parsedOrders) {
           modele: item.modele || null,
           modelage: item.modelage || null,
           impression: item.impression || null,
+          moule: item.moule || null,
           decor: item.decor || null,
           fleurs: item.fleurs || null,
           parfum: item.parfums?.length === 1 ? item.parfums[0] : null,

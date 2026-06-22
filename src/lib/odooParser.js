@@ -144,16 +144,17 @@ function parseItems(odooLines) {
       const title = extractTitle(cleanName)
       if (!title) continue
 
-      const DECOR_STOPS = ['Modèle', 'Modelage', 'Impression', 'Décor', 'Fleurs']
+      const DECOR_STOPS = ['Modèle', 'Modelage', 'Impression', 'Moule', 'Décor', 'Fleurs']
       const OTHER = ['Thème', 'Age', 'Message', 'Option']
       const theme = extractField(cleanName, 'Thème', ['Age', 'Message', 'Option', ...DECOR_STOPS])
       const age = extractField(cleanName, 'Age', ['Message', 'Option', ...DECOR_STOPS])
       const message = extractField(cleanName, 'Message', ['Age', 'Option', 'Acompte', ...DECOR_STOPS])
-      const modele = extractField(cleanName, 'Modèle', ['Modelage', 'Impression', 'Décor', 'Fleurs', ...OTHER])
-      const modelage = extractField(cleanName, 'Modelage', ['Modèle', 'Impression', 'Décor', 'Fleurs', ...OTHER])
-      const impression = extractField(cleanName, 'Impression', ['Modèle', 'Modelage', 'Décor', 'Fleurs', ...OTHER])
-      const decor = extractField(cleanName, 'Décor', ['Modèle', 'Modelage', 'Impression', 'Fleurs', ...OTHER])
-      const fleurs = extractField(cleanName, 'Fleurs', ['Modèle', 'Modelage', 'Impression', 'Décor', ...OTHER])
+      const modele = extractField(cleanName, 'Modèle', ['Modelage', 'Impression', 'Moule', 'Décor', 'Fleurs', ...OTHER])
+      const modelage = extractField(cleanName, 'Modelage', ['Modèle', 'Impression', 'Moule', 'Décor', 'Fleurs', ...OTHER])
+      const impression = extractField(cleanName, 'Impression', ['Modèle', 'Modelage', 'Moule', 'Décor', 'Fleurs', ...OTHER])
+      const moule = extractField(cleanName, 'Moule', ['Modèle', 'Modelage', 'Impression', 'Décor', 'Fleurs', ...OTHER])
+      const decor = extractField(cleanName, 'Décor', ['Modèle', 'Modelage', 'Impression', 'Moule', 'Fleurs', ...OTHER])
+      const fleurs = extractField(cleanName, 'Fleurs', ['Modèle', 'Modelage', 'Impression', 'Moule', 'Décor', ...OTHER])
 
       const decomposed = decomposeTitle(title, type)
 
@@ -173,6 +174,7 @@ function parseItems(odooLines) {
         modele,
         modelage,
         impression,
+        moule,
         decor,
         fleurs,
         warnings: embeddedWarns,
@@ -221,7 +223,7 @@ function extractTitle(productName) {
   // productName est deja trim()
   let cleaned = productName.replace(/^(CD-|GM-|GMD-)\s*/i, '')
 
-  const stopMatch = cleaned.match(/^([\s\S]*?)(?:\n\s*)?(?:Thème|Age|Message|Option|Modèle|Modelage|Impression|Décor|Fleurs)\s*:/m)
+  const stopMatch = cleaned.match(/^([\s\S]*?)(?:\n\s*)?(?:Thème|Age|Message|Option|Modèle|Modelage|Impression|Moule|Décor|Fleurs)\s*:/m)
   if (stopMatch) {
     cleaned = stopMatch[1]
   }
@@ -321,7 +323,7 @@ function extractField(text, fieldName, stopWords) {
     if (stopIdx !== -1) value = value.substring(0, stopIdx).trim()
   }
 
-  if (/^(Age|Message|Thème|Option|Modèle|Modelage|Impression|Décor|Fleurs)\s*:?\s*$/i.test(value)) return null
+  if (/^(Age|Message|Thème|Option|Modèle|Modelage|Impression|Moule|Décor|Fleurs)\s*:?\s*$/i.test(value)) return null
 
   return cleanText(value)
 }

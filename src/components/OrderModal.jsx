@@ -825,6 +825,17 @@ function ItemBlock({
         </div>
       )}
 
+      {isCD && (item.modele || item.modelage || item.impression || item.moule || item.fleurs || item.decor) && (
+        <div className="mb-4 space-y-2.5">
+          {item.modele && <InfoRow label="📷 Modèle" value={item.modele} />}
+          {item.modelage && <InfoRow label="🖐️ Modelage" value={item.modelage} />}
+          {item.impression && <InfoRow label="🖨️ Impression" value={item.impression} />}
+          {item.moule && <InfoRow label="🧊 Moule" value={item.moule} />}
+          {item.decor && !item.modelage && !item.impression && !item.moule && <InfoRow label="🎨 Décor" value={item.decor} />}
+          {item.fleurs && <InfoRow label="🌸 Fleurs" value={item.fleurs} />}
+        </div>
+      )}
+
       {photos.length > 0 && (
         <div className="mb-4">
           <div className="text-[10px] font-mono tracking-[0.15em] uppercase text-ink-mute mb-2 flex items-center gap-2">
@@ -991,11 +1002,6 @@ function ItemBlock({
             <InfoRow label="Thème" value={item.theme || '—'} />
             <InfoRow label="Âge" value={item.age || '—'} />
             <InfoRow label="Message" value={item.message || '—'} />
-            {item.modele && <InfoRow label="📷 Modèle" value={item.modele} />}
-            {item.modelage && <InfoRow label="🖐️ Modelage" value={item.modelage} />}
-            {item.impression && <InfoRow label="🖨️ Impression" value={item.impression} />}
-            {item.decor && !item.modelage && !item.impression && <InfoRow label="🎨 Décor" value={item.decor} />}
-            {item.fleurs && <InfoRow label="🌸 Fleurs" value={item.fleurs} />}
           </div>
         </>
       )}
