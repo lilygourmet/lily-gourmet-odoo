@@ -29,7 +29,12 @@ export default async function handler(req, res) {
   if (!process.env.SYNC_SECRET_TOKEN) {
     return res.status(500).json({ error: 'Server misconfigured: SYNC_SECRET_TOKEN missing' })
   }
-  if (providedToken !== process.env.SYNC_SECRET_TOKEN) {
+  // Autorisé si : déclenché par le cron Vercel (en-tête x-vercel-cron / CRON_SECRET),
+  // OU avec le bon SYNC_SECRET_TOKEN (bouton « Synchroniser » manuel).
+  const cronSecret = process.env.CRON_SECRET
+  const isCron = !!req.headers['x-vercel-cron']
+    || (cronSecret && (authHeader === `Bearer ${cronSecret}` || (req.query?.secret || '') === cronSecret))
+  if (!isCron && providedToken !== process.env.SYNC_SECRET_TOKEN) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
