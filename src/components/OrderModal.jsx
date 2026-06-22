@@ -17,6 +17,7 @@ import {
   deleteOrder,
   getPolyValue,
   getPolyInfo,
+  cleanOrderComment,
 } from '../lib/orders'
 import {
   canEditPolys,
@@ -589,10 +590,10 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
           </div>
 
           <div className="px-6 py-5 space-y-6">
-            {orderNote && (
+            {cleanOrderComment(orderNote) && (
               <div className="rounded-lg border-l-4 border-bordeaux bg-bordeaux/5 px-3 py-2">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-bordeaux mb-1">💬 Commentaire</div>
-                <div className="text-[13px] text-ink whitespace-pre-wrap leading-snug">{orderNote}</div>
+                <div className="text-[13px] text-ink whitespace-pre-wrap leading-snug">{cleanOrderComment(orderNote)}</div>
               </div>
             )}
             {displayedItems.map((item, idx) => (

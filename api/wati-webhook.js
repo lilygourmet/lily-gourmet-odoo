@@ -1699,14 +1699,20 @@ async function handleOrderCreateDevis(req, res) {
         if (exact) l.variantId = exact
       }
     }
-    const orderLines = lines.map(l => [0, 0, {
-      product_id: l.variantId,
-      product_uom_qty: l.qty || 1,
-      price_unit: Number(l.price) || 0,
-      discount: Number(l.discount) || 0,
+    const orderLines = lines.map(l => {
       // Nom de produit + détails (parfums, thème, âge, message) chacun sur sa ligne.
-      name: [l.name || '', l.desc || ''].filter(Boolean).join('\n'),
-    }])
+      const base = [l.name || '', l.desc || ''].filter(Boolean).join('\n')
+      // Warning (⚠️) écrit DANS la ligne de l'article (comme une modification) → vrai
+      // warning d'article : calendrier, impression sous l'article, floute la photo.
+      const name = l.warn ? `${base}\n⚠️ ${String(l.warn).trim()}` : base
+      return [0, 0, {
+        product_id: l.variantId,
+        product_uom_qty: l.qty || 1,
+        price_unit: Number(l.price) || 0,
+        discount: Number(l.discount) || 0,
+        name,
+      }]
+    })
     const vals = { partner_id: partnerId, order_line: orderLines }
     if (warehouseId) vals.warehouse_id = warehouseId   // entrepôt choisi (ex. Vitrine), sinon défaut Odoo
 
@@ -1719,10 +1725,13 @@ async function handleOrderCreateDevis(req, res) {
       if (Number.isFinite(hh)) vals.livraison_hour = `${d}-${m}-${y.slice(2)} ${hh}h-${hh + 1}h`
     }
 
-    // Note = note générale + warnings (⚠️) → visibles sur le devis ET au calendrier
-    const warns = lines.filter(l => l.warn).map(l => `⚠️ ${escapeHtml(l.name)} : ${escapeHtml(l.warn)}`)
+    // Note = logistique (param note) + commentaires libres du client (par article).
+    // Les commentaires NE sont PAS des warnings : ils ne floutent pas la photo. Les
+    // warnings (⚠️) du commercial, eux, sont écrits dans la ligne de l'article.
+    const comments = lines.filter(l => l.comment && String(l.comment).trim())
+      .map(l => `${escapeHtml(l.name)} : ${escapeHtml(String(l.comment).trim())}`)
     let noteHtml = note ? escapeHtml(note).replace(/\n/g, '<br/>') : ''
-    if (warns.length) noteHtml += (noteHtml ? '<br/><br/>' : '') + warns.join('<br/>')
+    if (comments.length) noteHtml += (noteHtml ? '<br/><br/>' : '') + comments.join('<br/>')
     if (noteHtml) vals.note = noteHtml
 
     // Regroupement : si ce client a déjà une commande/devis pour la MÊME date + heure
@@ -1757,26 +1766,29 @@ async function handleOrderCreateDevis(req, res) {
     // Photos (modèle de gâteau) → attachées à CHAQUE ARTICLE précis (sa ligne), pas à
     // la commande entière. Ainsi chaque gâteau/accessoire montre UNIQUEMENT sa photo
     // (fiche, calendrier, impression), sans déborder sur les autres articles.
-    const created = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['name', 'order_line'])
-    const allLineIds = (created[0]?.order_line) || []
-    // Nos lignes = les dernières créées (en cas de fusion, elles sont ajoutées à la fin).
-    const newLineIds = allLineIds.slice(Math.max(0, allLineIds.length - lines.length))
+    // On retrouve chaque article par son LIBELLÉ exact (pas par position) → la photo
+    // tombe toujours sur le bon article, même si Odoo intercale/réordonne une ligne
+    // (acompte POS, fusion de commandes…).
+    const createdLines = await odooSearchRead(uid, 'sale.order.line', [['order_id', '=', orderId]], ['id', 'name'])
+    const usedLineIds = new Set()
     let nbPhotos = 0
     for (let i = 0; i < lines.length; i++) {
       const ph = lines[i].photo
-      const lineId = newLineIds[i]
-      if (ph?.data && lineId) {
-        try {
-          await odooCreate(uid, 'ir.attachment', {
-            name: ph.name || `photo-${i + 1}.jpg`,
-            datas: ph.data,
-            res_model: 'sale.order.line',
-            res_id: lineId,
-            mimetype: ph.mimetype || 'image/jpeg',
-          })
-          nbPhotos++
-        } catch (e) { console.warn('[order-photo]', e?.message || e) }
-      }
+      if (!ph?.data) continue
+      const wantName = orderLines[i][2].name
+      const match = createdLines.find(cl => !usedLineIds.has(cl.id) && cl.name === wantName)
+      if (!match) continue
+      usedLineIds.add(match.id)
+      try {
+        await odooCreate(uid, 'ir.attachment', {
+          name: ph.name || `photo-${i + 1}.jpg`,
+          datas: ph.data,
+          res_model: 'sale.order.line',
+          res_id: match.id,
+          mimetype: ph.mimetype || 'image/jpeg',
+        })
+        nbPhotos++
+      } catch (e) { console.warn('[order-photo]', e?.message || e) }
     }
     if (nbPhotos) {
       try {

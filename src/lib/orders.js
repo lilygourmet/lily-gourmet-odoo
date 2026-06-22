@@ -554,3 +554,22 @@ export async function loadAllProfiles() {
 export function clearProfilesCache() {
   profilesCache = null
 }
+
+// Bloc « 💬 Commentaire » : ne garde que le vrai commentaire libre du client.
+// Retire la logistique auto (Retrait/Livraison · zone · …) et l'ancienne phrase
+// « Client a lu/accepté la hauteur » — ces infos restent dans la commande (ligne
+// Livraison, date/heure), elles ne sont juste pas affichées comme commentaire.
+export function cleanOrderComment(note) {
+  if (!note) return ''
+  return String(note)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .split('\n')
+    .map(s => s.trim())
+    // On retire : la logistique (Retrait/Livraison), la phrase hauteur, ET les warnings
+    // (⚠️) — qui ne sont pas des commentaires et s'affichent déjà sur l'article.
+    .filter(s => s && !/^(Retrait|Livraison)\b/i.test(s) && !/^Client a (lu|accept)/i.test(s) && !/^\s*⚠/.test(s))
+    .join('\n')
+    .trim()
+}

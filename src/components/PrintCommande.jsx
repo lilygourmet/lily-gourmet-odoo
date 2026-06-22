@@ -1,5 +1,6 @@
 import { TYPE_LABELS, TYPE_EMOJIS, getSableDimensionLabel } from '../lib/gmFiches'
 import { computeSizesForCake } from '../lib/cakeSizes'
+import { cleanOrderComment } from '../lib/orders'
 
 
 function cleanParfums(parfumsArray) {
@@ -263,11 +264,11 @@ function PrintSingleOrder({ order, fichesByItemId, palette, pageNumber, totalPag
         </div>
       </div>
 
-      {/* Note / commentaire de la commande (ex. « ⚠️ … chocolat blanc… ») */}
-      {order.order_note && (
+      {/* Commentaire libre du client (sans la logistique auto retrait/livraison/heure) */}
+      {cleanOrderComment(order.order_note) && (
         <div style={{ margin: '0 0 16px', padding: '8px 12px', background: '#fce4ec', borderLeft: '3px solid #c2185b', borderRadius: '3px' }}>
           <div style={{ fontSize: '9.5px', fontWeight: 'bold', color: '#c2185b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '3px' }}>💬 Commentaire</div>
-          <div style={{ fontSize: '12px', color: '#333', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{order.order_note}</div>
+          <div style={{ fontSize: '12px', color: '#333', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{cleanOrderComment(order.order_note)}</div>
         </div>
       )}
 

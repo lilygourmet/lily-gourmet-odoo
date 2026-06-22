@@ -245,7 +245,7 @@ export default function ClientOrderView() {
       variantId: resolved.id, name: lineName, price,
       desc: lineDesc,
       detail: [...opts, ...txt].join(' · '),
-      warn: cfg.comment.trim(),
+      comment: cfg.comment.trim(),
       photoFile: cfg.photoFile, photoName: cfg.photoName, qty: 1,
       fraisier: /fraisier/i.test(cfg.item.name + ' ' + [...opts].join(' ')),
       isCake: cfg.kind === 'cake',
@@ -303,17 +303,16 @@ export default function ClientOrderView() {
     try {
       const c = await createClient(name.trim(), phone.trim())
       const lines = await Promise.all(cart.map(async l => {
-        const base = { variantId: l.variantId, qty: l.qty || 1, price: l.price, name: l.name, desc: l.desc || '', warn: l.warn || '' }
+        const base = { variantId: l.variantId, qty: l.qty || 1, price: l.price, name: l.name, desc: l.desc || '', comment: l.comment || '' }
         if (l.photoFile) { const data = await fileToBase64(l.photoFile); base.photo = { name: l.photoName || l.photoFile.name, data, mimetype: l.photoFile.type || 'image/jpeg' } }
         return base
       }))
       // Livraison = vraie ligne dans le devis (variante zone + tarif réel).
       if (mode === 'livraison' && quartier?.variantId) {
-        lines.push({ variantId: quartier.variantId, qty: 1, price: quartier.price, name: 'Livraison', desc: quartier.zone, warn: '' })
+        lines.push({ variantId: quartier.variantId, qty: 1, price: quartier.price, name: 'Livraison', desc: quartier.zone, comment: '' })
       }
       const jour = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-      let note = mode === 'livraison' ? `Livraison · ${quartier?.zone || ''} · ${jour} · ${creneau}` : `Retrait boutique · ${jour} · ${heure}`
-      if (hasCake && heightOk) note += ' · Client a lu et accepté la hauteur des gâteaux (5cm + support polystyrène)'
+      const note = mode === 'livraison' ? `Livraison · ${quartier?.zone || ''} · ${jour} · ${creneau}` : `Retrait boutique · ${jour} · ${heure}`
       const deliveryTime = mode === 'livraison' ? (creneau.match(/(\d+)h/) ? creneau.match(/(\d+)h/)[1].padStart(2, '0') + ':00' : '16:00') : heure
       await createDevis({
         partnerId: c.id, deliveryDate: date, deliveryTime, note, lines, clientPhone: phone.trim(),

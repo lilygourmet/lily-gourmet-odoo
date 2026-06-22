@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route d'affichage des commandes — diagnostic</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background:#f4f5f7; color:#222; margin:0; padding:24px; line-height:1.5; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:17px; margin:28px 0 12px; padding-bottom:6px; border-bottom:2px solid #ddd; }
+  .sub { color:#666; font-size:13px; margin-bottom:18px; }
+  .legend { display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 24px; }
+  .chip { padding:6px 12px; border-radius:20px; font-size:13px; font-weight:600; color:#fff; }
+  .c-photo{background:#2e7d32;} .c-warn{background:#e65100;} .c-comm{background:#6a1b9a;} .c-heure{background:#1565c0;} .c-msg{background:#00838f;}
+
+  .route { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin:10px 0 18px; }
+  .box { background:#fff; border:2px solid #ccc; border-radius:10px; padding:10px 12px; min-width:150px; max-width:230px; font-size:12.5px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .box b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:#888; margin-bottom:4px; }
+  .arrow { display:flex; align-items:center; padding:0 8px; color:#999; font-size:22px; }
+  .b-photo{border-color:#2e7d32;} .b-warn{border-color:#e65100;} .b-comm{border-color:#6a1b9a;} .b-heure{border-color:#1565c0;} .b-msg{border-color:#00838f;}
+  .ok{color:#2e7d32;font-weight:600;} .bad{color:#c62828;font-weight:600;}
+
+  .problem { background:#fff; border-left:5px solid #c62828; border-radius:8px; padding:12px 16px; margin:12px 0; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .problem h3 { margin:0 0 6px; font-size:15px; color:#c62828; }
+  .problem .where { font-size:12px; color:#666; }
+  .good { background:#fff; border-left:5px solid #2e7d32; border-radius:8px; padding:12px 16px; margin:12px 0; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .good h3 { margin:0 0 6px; font-size:15px; color:#2e7d32; }
+  code { background:#eee; padding:1px 5px; border-radius:4px; font-size:12px; }
+  .ex { background:#fafafa; border:1px dashed #bbb; border-radius:6px; padding:10px; font-size:12px; margin-top:8px; white-space:pre-wrap; font-family:monospace; }
+  .tag { display:inline-block; background:#eee; border-radius:4px; padding:1px 6px; font-size:11px; margin-left:6px; }
+</style>
+</head>
+<body>
+
+<h1>🔎 La route de chaque chose sur une commande</h1>
+<div class="sub">Exemple réel testé : commande <b>S49983</b> (Cake Design 2 étages + Cake pops + Sablés + support). Source → où c'est stocké dans Odoo → synchro → où ça s'affiche.</div>
+
+<div class="legend">
+  <span class="chip c-photo">🖼️ Photo article</span>
+  <span class="chip c-warn">⚠️ Warning (consigne)</span>
+  <span class="chip c-comm">💬 Commentaire client</span>
+  <span class="chip c-heure">🕐 Heure</span>
+  <span class="chip c-msg">📱 Message WhatsApp</span>
+</div>
+
+<!-- PHOTO -->
+<h2>🖼️ Photo de l'article (modèle de gâteau)</h2>
+<div class="route">
+  <div class="box b-photo"><b>1. Source</b>Prise de commande : le commercial ajoute une photo <i>par article</i> (configurateur). Ou ajout via Modifications.</div>
+  <div class="arrow">→</div>
+  <div class="box b-photo"><b>2. Odoo</b>Photo collée sur la <b>ligne</b> de l'article (<code>ir.attachment</code> res_model = sale.order.line).</div>
+  <div class="arrow">→</div>
+  <div class="box b-photo"><b>3. Synchro</b><code>getOrderPhotos</code> lit les pièces jointes → <code>image_urls</code> rangé par article.</div>
+  <div class="arrow">→</div>
+  <div class="box b-photo"><b>4. Affichage</b>• <b>Calendrier</b> : 1 seule photo / commande (la 1ʳᵉ CD)<br>• <b>Impression</b> : chaque photo sous son article<br>• <b>Modal</b> : par article (floutée si warning)</div>
+</div>
+
+<!-- WARNING -->
+<h2>⚠️ Warning / consigne spéciale</h2>
+<div class="route">
+  <div class="box b-warn"><b>1. Source</b>« Instruction spéciale » à la prise de commande, OU ⚠️ écrit dans la description de l'article.</div>
+  <div class="arrow">→</div>
+  <div class="box b-warn"><b>2. Odoo — 2 endroits !</b>(a) ajouté à la <b>NOTE</b> de la commande<br>(b) ET collé dans le <b>texte de la ligne</b> de l'article</div>
+  <div class="arrow">→</div>
+  <div class="box b-warn"><b>3. Synchro</b><code>odooParser</code> extrait les ⚠️ de la ligne → <code>item.warnings</code>. La note part dans <code>order_note</code>.</div>
+  <div class="arrow">→</div>
+  <div class="box b-warn"><b>4. Affichage</b>• <b>Calendrier</b> : texte du warning sur la carte<br>• <b>Impression</b> : sous l'article <span class="bad">+ encore dans le bloc Commentaire</span><br>• <b>Modal</b> : floute la photo</div>
+</div>
+
+<!-- COMMENTAIRE -->
+<h2>💬 Commentaire client + 🕐 Heure (la « note » de la commande)</h2>
+<div class="route">
+  <div class="box b-comm"><b>1. Source</b>Construit automatiquement à la création du devis : retrait/livraison, date, <span class="c-heure" style="color:#1565c0">heure</span>, phrase « hauteur acceptée », <span class="c-warn" style="color:#e65100">+ les ⚠️</span>.</div>
+  <div class="arrow">→</div>
+  <div class="box b-comm"><b>2. Odoo</b>Tout est mis ensemble dans <b>un seul champ</b> : <code>note</code> de la commande.</div>
+  <div class="arrow">→</div>
+  <div class="box b-comm"><b>3. Synchro</b>Copié tel quel dans <code>order_note</code>.</div>
+  <div class="arrow">→</div>
+  <div class="box b-comm"><b>4. Affichage</b>• <b>Calendrier</b> : <span class="ok">PAS affiché</span> ✅<br>• <b>Impression</b> : tout le bloc en « 💬 Commentaire » <span class="bad">(logistique + heure + hauteur + warnings)</span><br>• <b>Modal</b> : pareil</div>
+</div>
+
+<div class="ex">NOTE réelle de S49983 (ce qui s'imprime en « Commentaire ») :
+Retrait boutique · mercredi 24 juin · 14:00 · Client a lu et accepté la hauteur des gâteaux (5cm + support polystyrène)
+⚠️ CD- Cake Design 2 étages (15, Citron, Citron) : détails des figurines envoyés par WhatsApp
+
+Retrait boutique · mercredi 24 juin · 14:00          ← logistique répétée (commande fusionnée)
+⚠️ Sablés boite de 12 : le fond peut etre blanc</div>
+
+<!-- MESSAGE -->
+<h2>📱 Message WhatsApp du client</h2>
+<div class="route">
+  <div class="box b-msg"><b>1. Source</b>Le client écrit sur WhatsApp.</div>
+  <div class="arrow">→</div>
+  <div class="box b-msg"><b>2. Stockage</b>Table <code>messages</code> (module Conversations). <b>Séparé</b> de la commande.</div>
+  <div class="arrow">→</div>
+  <div class="box b-msg"><b>3. Affichage</b>Onglet <b>Conversations</b> uniquement.</div>
+  <div class="arrow">→</div>
+  <div class="box b-msg"><b>4. Lien avec la commande</b><span class="ok">Aucun automatique</span> ✅ — sauf si un commercial recopie « détails envoyés par WhatsApp » dans un warning à la main.</div>
+</div>
+
+<h2>🚨 Ce qui ne va pas (prouvé sur S49983)</h2>
+
+<div class="problem">
+  <h3>1. Une photo est sur le MAUVAIS article</h3>
+  La photo « modèle » (image générée) est rattachée à la ligne <b>« support de cake pops » (30 dh)</b> au lieu du gâteau Cake Design.
+  <div class="where">Cause : à la création, les photos sont collées <b>par position</b> dans la liste (<code>newLineIds[i]</code>). Dès qu'une ligne s'intercale ou qu'Odoo réordonne (ici il y a une ligne « Acompte POS » en plus), tout se décale d'un cran.</div>
+</div>
+
+<div class="problem">
+  <h3>2. Le calendrier ne montre qu'1 photo par commande</h3>
+  <code>getAnyOrderPhoto</code> prend la 1ʳᵉ photo trouvée (1er gâteau CD). Les autres articles photographiés n'apparaissent pas sur la carte ; et si la 1ʳᵉ est mal placée (point 1), la carte montre la mauvaise.
+  <div class="where">Où : carte du calendrier.</div>
+</div>
+
+<div class="problem">
+  <h3>3. Les warnings s'affichent EN DOUBLE à l'impression</h3>
+  Le même ⚠️ est écrit dans la <b>note</b> ET dans la <b>ligne</b> de l'article → l'impression le montre 2 fois (une fois sous l'article, une fois dans le bloc « Commentaire »).
+  <div class="where">Où : fiche d'impression.</div>
+</div>
+
+<div class="problem">
+  <h3>4. La fiche prod affiche la logistique + l'heure + la phrase hauteur (ce que tu ne veux pas)</h3>
+  Le bloc « 💬 Commentaire » imprime TOUTE la note : « Retrait boutique · mercredi 24 juin · 14:00 · Client a lu et accepté la hauteur… ». Donc l'heure et les infos client/logistique se retrouvent sur la fiche, mélangées aux vraies consignes.
+  <div class="where">Où : impression + modal.</div>
+</div>
+
+<div class="problem">
+  <h3>5. Heure incohérente + logistique répétée</h3>
+  Le champ structuré dit <b>13:00</b> mais la note dit <b>14:00</b>. Et la ligne « Retrait boutique · … · 14:00 » apparaît <b>2 fois</b> (commande fusionnée : chaque ajout recolle sa note).
+  <div class="where">Où : impression + modal.</div>
+</div>
+
+<h2>✅ Ce qui marche bien (à ne pas casser)</h2>
+<div class="good">
+  <h3>Le calendrier est déjà « propre »</h3>
+  Il n'affiche PAS la note client (logistique/heure/hauteur). Il ne montre que le texte des warnings de l'article. Le problème « commentaire/heure en warning » se voit surtout à l'<b>impression</b> et dans le <b>modal</b>, pas sur le calendrier.
+</div>
+<div class="good">
+  <h3>Le message WhatsApp ne pollue pas la commande</h3>
+  Il reste dans Conversations. Rien à corriger de ce côté.
+</div>
+
+<h2>🎯 Pistes (à valider AVANT que je code)</h2>
+<div class="good">
+  <h3>Pour les photos (points 1 & 2)</h3>
+  Rattacher la photo à la <b>bonne ligne par son identité</b> (nom/variante de l'article) au lieu de la position. Et faire que le calendrier puisse montrer la photo de chaque gâteau.
+</div>
+<div class="good">
+  <h3>Pour la note (points 3, 4, 5)</h3>
+  Séparer dans la fiche prod : garder les <b>vraies consignes ⚠️</b>, mais ne PAS réimprimer la logistique/heure/hauteur déjà présentes ailleurs, et ne pas dupliquer les warnings note + ligne.
+</div>
+
+</body>
+</html>
