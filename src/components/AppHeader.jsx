@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, isCommercial, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -783,9 +783,12 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     )
   }
 
+  // Commerciaux : barre du haut sur UNE seule ligne (défilement horizontal) au lieu de passer à la ligne.
+  const oneLine = isCommercial(user)
+
   return (
     <>
-      <div id="app-header" className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-2 flex-wrap">
+      <div id="app-header" className={`sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-2 ${oneLine ? 'flex-nowrap' : 'flex-wrap'}`}>
         {/* Logo cliquable -> calendrier */}
         <button
           onClick={() => !isLivreur(user) && canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
@@ -801,7 +804,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         </button>
 
         {/* Navigation : 3 boutons fixes + 3 menus deroulants */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className={`flex items-center gap-1.5 ${oneLine ? 'flex-nowrap flex-1 min-w-0 overflow-x-auto [&>*]:flex-shrink-0' : 'flex-wrap'}`}>
           {customActive ? (
             <>
               {/* Mode perso : onglets seuls + dossiers, dans l'ordre choisi */}
@@ -913,10 +916,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {userCanSeeConv && (
             <button
               onClick={() => setShowQuickSend(true)}
-              className="flex items-center gap-1.5 h-9 px-3 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full transition-all flex-shrink-0 text-[11px] font-medium tracking-wider"
+              className="w-9 h-9 flex items-center justify-center bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full transition-all flex-shrink-0"
               title="Envoyer un devis ou une confirmation par WhatsApp"
             >
-              <WhatsAppLogo size={16} /> <span>Envoi devis</span>
+              <WhatsAppLogo size={16} />
             </button>
           )}
           {canSeeCommande(user) && (

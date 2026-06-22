@@ -93,6 +93,11 @@ export function isLivreur(user) {
   return !!user && user.role === 'livreur'
 }
 
+// Commercial : pas un rôle dédié — un non-admin qui gère les Conversations WhatsApp.
+export function isCommercial(user) {
+  return !!user && user.role !== 'admin' && user.perm_conversations === true
+}
+
 // Permissions granulaires
 export function canSync(user) {
   if (!user) return false
