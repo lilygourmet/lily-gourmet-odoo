@@ -61,7 +61,11 @@ function App() {
   function setActiveView(view) {
     setActiveViewRaw(view)
     try {
-      if (view) localStorage.setItem('lily.activeView', view)
+      if (view) {
+        localStorage.setItem('lily.activeView', view)
+        // Met l'onglet dans l'URL (ex. ?view=caisse) → bookmarkable, on revient direct dessus.
+        window.history.replaceState({}, '', '?view=' + view)
+      }
     } catch (e) { /* ignore */ }
   }
 
@@ -146,6 +150,9 @@ function App() {
       setActiveView('nouvelle-commande')
       setDeepLinkNewCmd({ phone: sp.get('cmdphone') || '', name: sp.get('cmdname') || '' })
       try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
+    } else if (sp.get('view')) {
+      // Favori / lien direct vers un onglet précis (ex. ?view=caisse)
+      setActiveView(sp.get('view'))
     } else if (persisted) {
       setActiveView(persisted)
     } else {
