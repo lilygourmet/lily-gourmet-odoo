@@ -699,7 +699,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${
           isActive
             ? 'max-w-[170px] opacity-100 pr-3'
-            : 'max-w-0 opacity-0 pr-0 group-hover:max-w-[170px] group-hover:opacity-100 group-hover:pr-3'
+            : 'max-w-0 opacity-0 pr-0'
         }`}>{label}</span>
         {convBadge ? (
           <span className="pr-2 flex-shrink-0"><ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} /></span>
