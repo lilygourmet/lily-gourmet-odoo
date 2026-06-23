@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import Skeleton from './Skeleton'
 import { loadDevis, loadConfirmedOrders, loadDevisPhotos, loadDevisEnvois, recordDevisEnvoi, confirmDevis, cancelDevis, restoreDevis, loadContactedOrderRefs, recordDevisTraitement, loadDevisTraitements } from '../lib/conversations'
 import { createModification } from '../lib/modifications'
 import NewConversationModal from './Conversations/NewConversationModal'
@@ -290,8 +291,8 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
               {d.sellerName && !/API|Planning/i.test(d.sellerName) && <span className="px-2 py-1 rounded-full bg-cream-warm/60 text-ink-soft">🧑‍💼 {d.sellerName}</span>}
             </div>
           </div>
-          <CardThumb orderId={d.id} hasPhoto={d.hasPhoto} onClick={() => setLightbox(d.id)} />
         </div>
+        <CardPhotos orderId={d.id} hasPhoto={d.hasPhoto} onOpen={() => setLightbox(d.id)} />
 
         {/* Produits */}
         {Array.isArray(d.productLines) && d.productLines.length > 0 && (
@@ -351,29 +352,29 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
         <span className="font-mono text-[11px] tracking-wider uppercase text-ink-mute">{isCancelled ? `${annulations.length} annulés` : `${shown.length} devis`}</span>
       </div>
 
-      <input
-        value={query} onChange={e => setQuery(e.target.value)}
-        placeholder="Rechercher : nom client, n° devis (S…) ou téléphone…"
-        className="w-full px-3 py-2 text-[13px] border border-line rounded-lg bg-white focus:outline-none focus:border-bordeaux mb-2"
-      />
-      <input
-        value={articleFilter} onChange={e => setArticleFilter(e.target.value)}
-        placeholder="🔎 Filtrer par article ou thème (ex : Tiramisu, Licorne…)"
-        className="w-full px-3 py-2 text-[13px] border border-line rounded-lg bg-white focus:outline-none focus:border-bordeaux mb-3"
-      />
+      {!internetOnly && (
+        <input
+          value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Rechercher : nom client, n° devis (S…) ou téléphone…"
+          className="w-full px-3 py-2 text-[13px] border border-line rounded-lg bg-white focus:outline-none focus:border-bordeaux mb-2"
+        />
+      )}
+      {!internetOnly && (
+        <input
+          value={articleFilter} onChange={e => setArticleFilter(e.target.value)}
+          placeholder="🔎 Filtrer par article ou thème (ex : Tiramisu, Licorne…)"
+          className="w-full px-3 py-2 text-[13px] border border-line rounded-lg bg-white focus:outline-none focus:border-bordeaux mb-3"
+        />
+      )}
 
-      <div className="flex gap-2 mb-3 flex-wrap">
-        {FILTERS.map(([k, lab]) => (
-          <button key={k} onClick={() => setFilter(k)}
-            className={`px-3 py-1.5 rounded-full text-[12px] font-medium border transition-all ${filter === k ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line text-ink-soft hover:border-bordeaux'}`}>
-            {lab}
-          </button>
-        ))}
-      </div>
-
-      {filter === 'sent' && (
-        <div className="mb-3 text-[12px] text-ink-soft">
-          Seuls les devis internet <b className="text-ink">non traités</b> apparaissent ici. Une fois traité (contacté / relancé / confirmé), un devis passe dans <b className="text-ink">Commandes</b>.
+      {!internetOnly && (
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {FILTERS.map(([k, lab]) => (
+            <button key={k} onClick={() => setFilter(k)}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-medium border transition-all ${filter === k ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line text-ink-soft hover:border-bordeaux'}`}>
+              {lab}
+            </button>
+          ))}
         </div>
       )}
 
@@ -406,7 +407,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
       )}
 
       {loading ? (
-        <div className="text-center text-ink-mute py-10 text-[13px]">Chargement…</div>
+        <Skeleton rows={6} />
       ) : isCancelled ? (
         annulations.length === 0 ? (
           <div className="text-center text-ink-mute py-10 text-[13px]">Aucune annulation enregistrée.</div>
@@ -431,7 +432,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
       ) : shown.length === 0 ? (
         <div className="text-center text-ink-mute py-10 text-[13px]">{isList ? 'Aucun devis internet.' : searching ? 'Aucune commande ne correspond à la recherche.' : `${filter === 'confirmed' ? 'Aucune commande confirmée' : 'Aucun devis'} sur ${WINDOW === 1 ? 'ce jour' : WINDOW === 7 ? 'cette semaine' : 'ces 4 jours'} (${winLabel}). Utilise ◀ ▶ pour changer.`}</div>
       ) : (isList || searching) ? (
-        <div className="space-y-4 max-w-3xl">
+        <div className={`space-y-4 max-w-3xl ${internetOnly ? 'mx-auto' : ''}`}>
           {dayKeys.map(k => (
             <div key={k}>
               <div className="font-mono text-[11px] uppercase tracking-wider text-bordeaux font-semibold mb-1.5 capitalize">{dayLabel(k)} <span className="text-ink-mute">· {groups[k].length}</span></div>
@@ -483,21 +484,42 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
   )
 }
 
-// Vignette de la 1ʳᵉ photo (cake design) sur la carte, à côté des boutons.
-// Chargée à la demande (1 seule photo) pour ne pas alourdir la liste.
-function CardThumb({ orderId, hasPhoto, onClick }) {
-  const [url, setUrl] = useState(null)
+// TOUTES les photos (cake design) d'une commande, en bande sous la carte.
+// Chargées en LAZY (quand la carte devient visible) pour ne pas alourdir la liste.
+// Triées de l'ancienne → la plus récente ; les photos ajoutées il y a < 3 j sont marquées 🆕.
+function CardPhotos({ orderId, hasPhoto, onOpen }) {
+  const ref = useRef(null)
+  const [vis, setVis] = useState(false)
+  const [photos, setPhotos] = useState(null)
   useEffect(() => {
-    if (hasPhoto === false) return   // pas de photo connue → on n'appelle pas Odoo (perf)
+    const el = ref.current; if (!el || hasPhoto === false) return
+    const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { setVis(true); io.disconnect() } }, { rootMargin: '250px' })
+    io.observe(el); return () => io.disconnect()
+  }, [hasPhoto])
+  useEffect(() => {
+    if (!vis) return
     let on = true
-    loadDevisPhotos(orderId, 1).then(ph => { if (on) setUrl(ph?.[0]?.dataUrl || null) }).catch(() => {})
+    loadDevisPhotos(orderId).then(ph => { if (on) setPhotos(ph || []) }).catch(() => { if (on) setPhotos([]) })
     return () => { on = false }
-  }, [orderId, hasPhoto])
-  if (!url) return null
+  }, [vis, orderId])
+  if (hasPhoto === false) return null
+  const recent = ts => { if (!ts) return false; return Date.now() - new Date(String(ts).replace(' ', 'T') + 'Z').getTime() < 3 * 86400000 }
   return (
-    <button type="button" onClick={onClick} className="flex-shrink-0" title="Voir la photo en grand">
-      <img src={url} alt="cake" className="w-20 h-20 rounded-lg object-cover border border-line" />
-    </button>
+    <div ref={ref} className="mt-3">
+      {photos === null ? <div className="text-[11px] text-ink-mute">📷 …</div>
+        : photos.length === 0 ? null
+        : (
+          <div className="flex flex-wrap gap-1.5">
+            {photos.map((p, i) => (
+              <button key={i} type="button" onClick={onOpen} title="Voir en grand"
+                className="relative w-[54px] h-[54px] rounded-lg overflow-hidden border border-line hover:outline hover:outline-2 hover:outline-bordeaux flex-shrink-0">
+                <img src={p.dataUrl} alt={p.name || 'photo'} className="w-full h-full object-cover" />
+                {recent(p.create_date) && <span className="absolute bottom-0 inset-x-0 text-[8px] font-bold text-white text-center bg-emerald-600/90 leading-tight">🆕</span>}
+              </button>
+            ))}
+          </div>
+        )}
+    </div>
   )
 }
 
