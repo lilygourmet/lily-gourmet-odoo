@@ -5,7 +5,7 @@ import { loadConversations } from '../lib/conversations'
 function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') }
 
 // Recherche universelle (Ctrl/Cmd + K) : commandes + conversations, depuis n'importe quel onglet.
-export default function GlobalSearch({ onClose, onOpenOrder, onNavigate }) {
+export default function GlobalSearch({ onClose, onOpenOrder, onOpenConv, onNavigate }) {
   const [query, setQuery] = useState('')
   const [orders, setOrders] = useState([])
   const [convs, setConvs] = useState([])
@@ -32,7 +32,7 @@ export default function GlobalSearch({ onClose, onOpenOrder, onNavigate }) {
     const cv = (convs || [])
       .filter(c => norm(c.client_name).includes(q) || norm(c.client_phone).includes(q))
       .slice(0, 4)
-      .map(c => ({ key: 'c_' + c.id, kind: 'conv', title: c.client_name || c.client_phone || 'Conversation', sub: 'WhatsApp' }))
+      .map(c => ({ key: 'c_' + c.id, kind: 'conv', convId: c.id, title: c.client_name || c.client_phone || 'Conversation', sub: c.client_phone || 'WhatsApp' }))
     return [...ord, ...cv]
   }, [q, orders, convs])
 
@@ -41,7 +41,7 @@ export default function GlobalSearch({ onClose, onOpenOrder, onNavigate }) {
   function activate(r) {
     if (!r) return
     if (r.kind === 'order') onOpenOrder(r.orderNum)
-    else if (r.kind === 'conv') onNavigate('conversations')
+    else if (r.kind === 'conv') { if (onOpenConv) onOpenConv(r.convId); else onNavigate('conversations') }
   }
 
   function onKey(e) {

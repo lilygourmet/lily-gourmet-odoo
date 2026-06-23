@@ -382,6 +382,7 @@ function App() {
         <GlobalSearch
           onClose={() => setShowSearch(false)}
           onOpenOrder={(num) => { setDeepLinkOrder(num); setActiveView('calendar'); setShowSearch(false) }}
+          onOpenConv={(id) => { openConversation(id); setShowSearch(false) }}
           onNavigate={(v) => { setActiveView(v); setShowSearch(false) }}
         />
       )}
