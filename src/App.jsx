@@ -31,6 +31,8 @@ import LivraisonsView from './components/LivraisonsView'
 const PaymentsView = lazy(() => import('./components/Conversations/PaymentsView'))
 const AbsencesView = lazy(() => import('./components/AbsencesView'))
 const CongesView = lazy(() => import('./components/CongesView'))
+const PresenceView = lazy(() => import('./components/PresenceView'))
+const CakeVisionView = lazy(() => import('./components/CakeVision/CakeVisionView'))
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
@@ -313,12 +315,14 @@ function App() {
     if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
     if (activeView === 'freezer') return <FreezerView {...navProps} />
     if (activeView === 'messages') return <MessagesView {...navProps} />
+    if (activeView === 'cake-vision-edit') return <CakeVisionView {...navProps} />
     if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
     if (activeView === 'etiquettes-prix') return <ProductLabelsView {...navProps} />
     if (activeView === 'vitrine') return <StockMorning {...navProps} mode="sucre" />
     if (activeView === 'vitrine-previsions') return <StockPrevisions {...navProps} />
     if (activeView === 'vitrine-sale') return <StockMorning {...navProps} mode="sale" />
     if (activeView === 'reception-vitrine') return <StockReception {...navProps} />
+    if (activeView === 'presence') return <PresenceView {...navProps} />
     if (activeView === 'fin-journee') return <StockEvening {...navProps} />
     if (activeView === 'stock') return <StockAudit {...navProps} />
     if (activeView === 'stock-gs') return <StockGS {...navProps} />

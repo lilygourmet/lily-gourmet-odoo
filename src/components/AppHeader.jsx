@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, isLivreur, isCommercial, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -20,7 +20,7 @@ import {
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
   MessageCircle, Wallet, CreditCard, Snowflake, Banknote, Users, Plane, Receipt,
   Settings, RefreshCw, LogOut, KeyRound, Printer, Wrench, Palette, Circle, ChevronDown,
-  Sliders, MoreHorizontal, Pencil, Truck, Bell,
+  Sliders, MoreHorizontal, Pencil, Truck, Bell, ShoppingBag, Send,
 } from 'lucide-react'
 
 // Icône (Lucide) par vue / menu / action — remplace les émoticônes du header.
@@ -32,6 +32,7 @@ const HEADER_ICONS = {
   etiquettes: Tag, 'etiquettes-prix': Tag, 'cake-vision-link': Camera, messages: MessageSquare,
   conversations: MessageCircle, modifications: Pencil, livraisons: Truck, paiements: CreditCard, freezer: Snowflake,
   caisse: Banknote, hr: Users, absences: Plane, economat: Receipt,
+  devis: ShoppingBag, photoshop: Palette,
   // menus déroulants
   menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench, menu_more: MoreHorizontal,
   // actions
@@ -40,7 +41,6 @@ const HEADER_ICONS = {
 }
 
 // Boutons affichés en LOGO SEUL (nom au survol) pour désencombrer la barre.
-const ICON_ONLY_VIEWS = new Set(['tasks', 'conversations', 'cake-vision-link', 'messages'])
 function Ico({ name, size = 16, className = '' }) {
   const C = HEADER_ICONS[name] || Circle
   return <C size={size} strokeWidth={1.8} className={className} />
@@ -619,6 +619,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     // Galerie CD : pour les admins, c'est le bouton principal donc on l'enleve d'ici.
     // Pour les non-admins qui ont la perm, on la garde dans Outils.
     { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && !admin && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },
+    { view: 'cake-vision-edit', emoji: '🎂', label: 'Cake Vision',       visible: !isLivreur(user) && canEditCakeVision(user) },
     { view: 'messages',         emoji: '💬', label: 'Messages',         visible: !isLivreur(user) && canSeeMessages(user) },
     { view: 'conversations',    emoji: '📱', label: 'Conversations',    visible: !isLivreur(user) && canSeeConversations(user), badge: convBadge.unassigned + convBadge.unread, convBadge },
     { view: 'devis',            emoji: '📄', label: 'Commandes',        visible: !isLivreur(user) && canSeeDevis(user), badge: 0 },
@@ -680,22 +681,28 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // ============================================================
   // Composants helper
   // ============================================================
+  // Onglet = icône seule ; au survol le nom se déploie (l'onglet actif reste ouvert).
   function NavButton({ view, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
-    const iconOnly = ICON_ONLY_VIEWS.has(view)
     return (
       <button
         onClick={onClick}
-        title={iconOnly ? label : undefined}
-        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
+        title={label}
+        className={`group relative flex items-center h-[30px] rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
           isActive
             ? 'bg-bordeaux text-cream border border-bordeaux'
             : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
         }`}
       >
-        {view === 'conversations' ? <WhatsAppLogo size={15} /> : <Ico name={view} size={15} />}
-        {!iconOnly && <span>{label}</span>}
+        <span className="w-[28px] h-[28px] flex items-center justify-center flex-shrink-0">
+          {view === 'conversations' ? <WhatsAppLogo size={15} /> : <Ico name={view} size={15} />}
+        </span>
+        <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${
+          isActive
+            ? 'max-w-[170px] opacity-100 pr-3'
+            : 'max-w-0 opacity-0 pr-0 group-hover:max-w-[170px] group-hover:opacity-100 group-hover:pr-3'
+        }`}>{label}</span>
         {convBadge ? (
-          <ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} />
+          <span className="pr-2 flex-shrink-0"><ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} /></span>
         ) : badgeCount > 0 && (
           <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center text-[12px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
             {badgeCount > 99 ? '99+' : badgeCount}
@@ -783,12 +790,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     )
   }
 
-  // Commerciaux : barre du haut sur UNE seule ligne (défilement horizontal) au lieu de passer à la ligne.
-  const oneLine = isCommercial(user)
-
   return (
     <>
-      <div id="app-header" className={`sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-2 ${oneLine ? 'flex-nowrap' : 'flex-wrap'}`}>
+      <div id="app-header" className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-2 flex-wrap">
         {/* Logo cliquable -> calendrier */}
         <button
           onClick={() => !isLivreur(user) && canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
@@ -804,7 +808,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         </button>
 
         {/* Navigation : 3 boutons fixes + 3 menus deroulants */}
-        <div className={`flex items-center gap-1.5 ${oneLine ? 'flex-nowrap flex-1 min-w-0 overflow-x-auto [&>*]:flex-shrink-0' : 'flex-wrap'}`}>
+        <div className="flex items-center gap-1.5 flex-wrap">
           {customActive ? (
             <>
               {/* Mode perso : onglets seuls + dossiers, dans l'ordre choisi */}
@@ -913,13 +917,20 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Actions : sync + roue + logout */}
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+          <button
+            onClick={() => onNavigate('presence')}
+            className={`w-9 h-9 flex items-center justify-center rounded-full transition-all flex-shrink-0 ${activeView === 'presence' ? 'bg-bordeaux text-cream' : 'bg-white border border-line text-bordeaux hover:bg-bordeaux hover:text-cream'}`}
+            title="Présence — qui est là aujourd'hui"
+          >
+            <Users size={16} />
+          </button>
           {userCanSeeConv && (
             <button
               onClick={() => setShowQuickSend(true)}
               className="w-9 h-9 flex items-center justify-center bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full transition-all flex-shrink-0"
               title="Envoyer un devis ou une confirmation par WhatsApp"
             >
-              <WhatsAppLogo size={16} />
+              <Send size={16} />
             </button>
           )}
           {canSeeCommande(user) && (

@@ -61,14 +61,14 @@ export function getCurrentUser() {
 // Retourne le user frais OU null si l'utilisateur a ete desactive/supprime
 export async function loadFreshUser(userId) {
   if (!userId) return null
-  const SELECT = 'id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_wati_info, perm_commande, perm_photoshop, employe_id, last_visited_conversations, navbar_config'
+  const SELECT = 'id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_wati_info, perm_commande, perm_photoshop, employe_id, last_visited_conversations, navbar_config'
   try {
     let { data, error } = await supabase
       .from('profiles').select(SELECT).eq('id', userId).maybeSingle()
     // Repli si une colonne perm récente n'existe pas encore (SQL pas lancé) → on ne déconnecte personne.
-    if (error && /perm_devis|perm_wati_info|perm_commande|perm_photoshop/.test(error.message || '')) {
+    if (error && /perm_devis|perm_wati_info|perm_commande|perm_photoshop|perm_cake_vision_edit/.test(error.message || '')) {
       ;({ data, error } = await supabase
-        .from('profiles').select(SELECT.replace('perm_devis, ', '').replace('perm_wati_info, ', '').replace('perm_commande, ', '').replace('perm_photoshop, ', '')).eq('id', userId).maybeSingle())
+        .from('profiles').select(SELECT.replace('perm_devis, ', '').replace('perm_wati_info, ', '').replace('perm_commande, ', '').replace('perm_photoshop, ', '').replace('perm_cake_vision_edit, ', '')).eq('id', userId).maybeSingle())
     }
     if (error) {
       console.warn('[loadFreshUser]', error.message)
@@ -224,6 +224,12 @@ export function canSeeEtiquettes(user) {
 export function canSeeCakeVision(user) {
   if (!user) return false
   return user.role === 'admin' || user.perm_cake_vision === true
+}
+
+// Cake Vision = éditeur IA de photos de gâteaux (coûte du crédit) → permission dédiée.
+export function canEditCakeVision(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_cake_vision_edit === true
 }
 
 // User peut voir l'onglet Checklist (articles a ranger pour le cafe)
