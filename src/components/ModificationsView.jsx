@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle2, Pencil, Clock, Plus } from 'lucide-react'
+import Skeleton from './Skeleton'
 import { loadModificationsATraiter, markModificationFaite, loadModificationsFaites, createModification } from '../lib/modifications'
 import { getJustificatifUrl } from '../lib/conges'
 
@@ -101,7 +102,7 @@ export default function ModificationsView({ user }) {
       {err && <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded-lg mb-3 text-[13px]">{err}</div>}
 
       {loading ? (
-        <div className="text-center text-ink-mute py-10 text-[13px]">Chargement…</div>
+        <Skeleton rows={5} />
       ) : tab === 'a_traiter' ? (
         list.length === 0 ? (
           <div className="text-center text-green-700 bg-green-50 rounded-xl py-10 text-[14px] flex items-center justify-center gap-2">
