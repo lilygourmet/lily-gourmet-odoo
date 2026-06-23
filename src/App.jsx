@@ -288,6 +288,15 @@ function App() {
     setActiveView(view)
   }
 
+  // Raccourci Ctrl/Cmd + K → ouvre/ferme la recherche universelle. (Hook AVANT tout return conditionnel.)
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setShowSearch(s => !s) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream">
@@ -300,15 +309,6 @@ function App() {
 
   // Communs : passer activeView, onNavigate, onLogout, user
   const navProps = { user, activeView, onNavigate: handleNavigate, onLogout: handleLogout }
-
-  // Raccourci Ctrl/Cmd + K → ouvre/ferme la recherche universelle.
-  useEffect(() => {
-    function onKey(e) {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setShowSearch(s => !s) }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
 
   // Ouvre une conversation précise (depuis un toast)
   function openConversation(convId) {
