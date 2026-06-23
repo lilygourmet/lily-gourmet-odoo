@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recherche universelle — maquette</title>
+<style>
+  :root{ --bordeaux:#7a1f3d; --cream:#fdfaf5; --warm:#f3ece2; --line:#e3dcd2; --ink:#3a2b25; --soft:#6a5d54; }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#2c2024;margin:0;padding:30px;color:var(--ink);}
+  .hint{color:#cbb;text-align:center;font-size:13px;margin-bottom:18px;}
+  .palette{background:var(--cream);border-radius:16px;max-width:560px;margin:0 auto;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;}
+  .sbar{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);}
+  .sbar input{border:none;outline:none;flex:1;font-size:17px;background:transparent;color:var(--ink);}
+  .kbd{font-size:10px;border:1px solid var(--line);border-radius:5px;padding:2px 6px;color:var(--soft);background:#fff;}
+  .scope{display:flex;gap:0;border:1px solid var(--line);border-radius:20px;overflow:hidden;font-size:11px;}
+  .scope span{padding:5px 12px;cursor:pointer;color:var(--soft);} .scope .on{background:var(--bordeaux);color:#fff;font-weight:700;}
+  .group{padding:6px 0;}
+  .glabel{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#a99;padding:6px 18px 2px;}
+  .row{display:flex;align-items:center;gap:11px;padding:9px 18px;cursor:pointer;}
+  .row:hover,.row.sel{background:var(--warm);}
+  .ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .ic.cmd{background:#fce4ec;} .ic.conv{background:#e3f2e8;} .ic.cli{background:#e6f0fb;} .ic.act{background:#fff3d6;}
+  .txt{flex:1;min-width:0;} .txt .t{font-size:14px;font-weight:600;} .txt .s{font-size:11.5px;color:var(--soft);}
+  .meta{font-size:10.5px;color:var(--soft);text-align:right;flex-shrink:0;}
+  .foot{display:flex;gap:16px;padding:9px 18px;border-top:1px solid var(--line);font-size:10.5px;color:var(--soft);background:#fbf6ef;}
+  .foot b{color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="hint">S'ouvre de partout avec <b style="color:#fff">Ctrl/Cmd + K</b> (ou un bouton 🔍 dans le header)</div>
+
+<div class="palette">
+  <div class="sbar">
+    🔍 <input value="mouna" readonly>
+    <div class="scope"><span class="on">Toute l'app</span><span>Onglet en cours</span></div>
+    <span class="kbd">Échap</span>
+  </div>
+
+  <div class="group">
+    <div class="glabel">Commandes</div>
+    <div class="row sel">
+      <div class="ic cmd">🎂</div>
+      <div class="txt"><div class="t">Mouna benmoussa — S49980</div><div class="s">5× Gâteau Forme · 27 juin 12h · devis</div></div>
+      <div class="meta">Ouvre la commande →</div>
+    </div>
+    <div class="row">
+      <div class="ic cmd">🎂</div>
+      <div class="txt"><div class="t">Mouna B. — S49612</div><div class="s">Cake Design 2 étages · 14 juin · confirmé</div></div>
+      <div class="meta">Ouvre la commande →</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="glabel">Conversations</div>
+    <div class="row">
+      <div class="ic conv">💬</div>
+      <div class="txt"><div class="t">Mouna benmoussa</div><div class="s">WhatsApp · 🏷️ Devis envoyé · dernier msg il y a 2 h</div></div>
+      <div class="meta">Ouvre la conv →</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="glabel">Clients</div>
+    <div class="row">
+      <div class="ic cli">👤</div>
+      <div class="txt"><div class="t">Mouna benmoussa</div><div class="s">06 12 34 56 78 · 4 commandes</div></div>
+      <div class="meta">Historique →</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="glabel">Aller à…</div>
+    <div class="row">
+      <div class="ic act">📅</div>
+      <div class="txt"><div class="t">Calendrier</div><div class="s">aller à l'onglet</div></div>
+    </div>
+  </div>
+
+  <div class="foot"><span><b>↑ ↓</b> naviguer</span><span><b>Entrée</b> ouvrir</span><span><b>Échap</b> fermer</span></div>
+</div>
+</body>
+</html>
