@@ -4,6 +4,7 @@ import { detectTypeFromName, TYPE_EMOJIS, loadFichesForOrder } from '../lib/gmFi
 import { loadDoneByItemIds, markItemDone, unmarkItemDone } from '../lib/gmDone'
 import { loadPalette } from '../lib/palette'
 import PrintCommande from './PrintCommande'
+import CopyButton from './CopyButton'
 import { markOrderPrinted } from '../lib/printOrders'
 import { computeSizesForCake } from '../lib/cakeSizes'
 import { loadCakeDesignPrice, loadSalesLinesForOrders, stripOdooPrefix } from '../lib/salesLines'
@@ -291,7 +292,6 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     loadOrderPhotosByNum(order.order_num).then(ph => { if (!off) setChatterPhotos((ph || []).map(p => p.dataUrl).filter(Boolean)) }).catch(() => {})
     return () => { off = true }
   }, [order?.order_num, sharedPhotos.length])
-  const displayPhotos = sharedPhotos.length ? sharedPhotos : chatterPhotos
 
   useEffect(() => {
     if (!order) return
@@ -501,8 +501,9 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
         >
           <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-start justify-between gap-4 z-10">
             <div className="min-w-0 flex-1">
-              <div className="font-mono text-[11px] tracking-[0.2em] text-bordeaux font-semibold mb-1">
+              <div className="font-mono text-[11px] tracking-[0.2em] text-bordeaux font-semibold mb-1 flex items-center gap-1.5">
                 {order.order_num}
+                <CopyButton text={order.order_num} />
               </div>
               <div className={`font-fraunces italic text-[22px] font-medium text-ink leading-tight truncate ${order.odoo_state === 'cancel' ? 'line-through' : ''}`}>
                 {isPatissierMode ? `Commande ${order.order_num}` : (order.client_name || '—')}
@@ -600,7 +601,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
               <ItemBlock
                 key={item.id}
                 item={item}
-                sharedPhotos={displayPhotos}
+                sharedPhotos={item.image_urls?.length ? item.image_urls : (sharedPhotos.length ? [] : (idx === 0 ? chatterPhotos : []))}
                 isLast={idx === displayedItems.length - 1}
                 onPhotoClick={setZoomUrl}
                 isReadThisSession={readThisSession.has(item.id)}
