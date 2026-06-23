@@ -199,7 +199,7 @@ function filterOrderItemsForView(order, isPatissierMode) {
   return { ...order, order_items: filteredItems }
 }
 
-export default function Calendar({ user, onLogout, activeView, onNavigate }) {
+export default function Calendar({ user, onLogout, activeView, onNavigate, openOrderNum, onOrderOpened }) {
   // Helpers nav
   const goPatissier = () => onNavigate && onNavigate('patissier')
   const goProd = () => onNavigate && onNavigate('prod')
@@ -572,6 +572,14 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
       setSelected({ order, focusItemId: null })
     }
   }
+
+  // Ouverture d'une commande depuis la recherche universelle (par n°).
+  useEffect(() => {
+    if (!openOrderNum) return
+    const o = allOrders.find(x => x.order_num === openOrderNum) || orders.find(x => x.order_num === openOrderNum)
+    if (o) { openOrder(o); onOrderOpened?.() }
+    else if (allOrders.length > 0) { onOrderOpened?.() }   // chargé mais introuvable → on abandonne
+  }, [openOrderNum, allOrders, orders])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Affiche les capsules (commandes) d'un jour — utilisé en vue ordinateur et téléphone
   function renderDayCapsules(day) {

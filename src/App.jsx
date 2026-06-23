@@ -36,6 +36,7 @@ const CakeVisionView = lazy(() => import('./components/CakeVision/CakeVisionView
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
+import GlobalSearch from './components/GlobalSearch'
 import LazyBoundary from './components/LazyBoundary'
 import ToastHost from './components/ToastHost'
 import ConfirmHost from './components/ConfirmHost'
@@ -57,6 +58,9 @@ function App() {
   const [deepLinkDevis, setDeepLinkDevis] = useState(null)
   // Client (nom + téléphone) à pré-remplir dans « Nouvelle commande » (depuis une conversation)
   const [deepLinkNewCmd, setDeepLinkNewCmd] = useState(null)
+  // Recherche universelle (Ctrl/Cmd+K) + commande à ouvrir dans le calendrier depuis un résultat
+  const [showSearch, setShowSearch] = useState(false)
+  const [deepLinkOrder, setDeepLinkOrder] = useState(null)
 
   // Wrapper pour setActiveView : persiste dans localStorage pour que Cmd+R
   // ramene l'utilisateur sur la meme page
@@ -297,6 +301,15 @@ function App() {
   // Communs : passer activeView, onNavigate, onLogout, user
   const navProps = { user, activeView, onNavigate: handleNavigate, onLogout: handleLogout }
 
+  // Raccourci Ctrl/Cmd + K → ouvre/ferme la recherche universelle.
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setShowSearch(s => !s) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Ouvre une conversation précise (depuis un toast)
   function openConversation(convId) {
     setDeepLinkConv(convId)
@@ -346,7 +359,7 @@ function App() {
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
     // exposer le calendrier à un user sans perm_calendar.
-    if (canSeeCalendar(user)) return <Calendar {...navProps} />
+    if (canSeeCalendar(user)) return <Calendar {...navProps} openOrderNum={deepLinkOrder} onOrderOpened={() => setDeepLinkOrder(null)} />
     if (isLivreur(user)) return <LivraisonsWrapper {...navProps} />
     return <TasksWrapper {...navProps} welcome />
   }
@@ -361,6 +374,17 @@ function App() {
       )}
       <LazyBoundary>{renderActiveView()}</LazyBoundary>
       <MobileBottomNav user={user} activeView={activeView} onNavigate={handleNavigate} />
+      {!isLivreur(user) && (
+        <button onClick={() => setShowSearch(true)} title="Rechercher (Ctrl/Cmd + K)"
+          className="fixed bottom-20 sm:bottom-5 right-5 z-[120] w-12 h-12 rounded-full bg-bordeaux text-cream shadow-lg flex items-center justify-center text-[19px] hover:bg-bordeaux-deep transition-colors">🔍</button>
+      )}
+      {showSearch && (
+        <GlobalSearch
+          onClose={() => setShowSearch(false)}
+          onOpenOrder={(num) => { setDeepLinkOrder(num); setActiveView('calendar'); setShowSearch(false) }}
+          onNavigate={(v) => { setActiveView(v); setShowSearch(false) }}
+        />
+      )}
     </>
   )
 }
