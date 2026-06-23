@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadConvLabels, createConvLabel, updateConvLabel, deleteConvLabel, LABEL_PALETTE } from '../../lib/conversations'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 /**
  * Gestion des étiquettes de conversation (admin) : ajouter, renommer, recolorer, supprimer.
@@ -43,7 +44,7 @@ export default function LabelsManager({ onClose, onSaved }) {
   }
 
   async function handleDelete(key) {
-    if (!window.confirm('Supprimer cette étiquette ? Elle disparaîtra des conversations.')) return
+    if (!await confirmDialog('Supprimer cette étiquette ? Elle disparaîtra des conversations.', { danger: true, confirmLabel: 'Supprimer' })) return
     try { await deleteConvLabel(key); await reload(); notify() }
     catch (e) { setErr(e?.message || 'Erreur') }
   }
