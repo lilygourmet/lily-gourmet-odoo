@@ -38,9 +38,11 @@ export default function UpdateBanner() {
     }
 
     check()
+    const interval = setInterval(check, 90 * 1000)   // vérifie en continu → bandeau auto après déploiement
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       cancelled = true
+      clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [hasUpdate])

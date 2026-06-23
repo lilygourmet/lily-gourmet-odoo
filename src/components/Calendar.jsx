@@ -866,7 +866,16 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
         )
       })()}
 
-      {showCharge && <CakeChargeModal onClose={() => setShowCharge(false)} />}
+      {showCharge && (
+        <CakeChargeModal
+          onClose={() => setShowCharge(false)}
+          onOpenOrder={(num) => {
+            const o = allOrders.find(x => x.order_num === num) || orders.find(x => x.order_num === num)
+            if (o) openOrder(o)
+            else toast(`Commande ${num} en devis — pas encore dans le calendrier.`)
+          }}
+        />
+      )}
 
       {showBatchPrint && (
         <PrintBatchModal

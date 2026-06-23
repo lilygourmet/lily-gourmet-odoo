@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { loadCdDay } from '../lib/commande'
 import { CD_MAX_PER_SLOT } from './CakeDayPlanning'
+import Skeleton from './Skeleton'
 
 // Planning « charge Cake Design » d'un jour : par créneau horaire, les gâteaux (photo + nb pers).
 // Cadre ROUGE = confirmé · cadre JAUNE = devis. Créneau complet (≥ CD_MAX_PER_SLOT) → fond rouge.
@@ -21,10 +22,10 @@ function groupCakes(cakes) {
   return [...map.values()]
 }
 
-function CakeThumb({ cake }) {
+function CakeThumb({ cake, onClick }) {
   const border = cake.isDevis ? 'border-amber-400' : 'border-red-500'
   return (
-    <div className="w-[62px] text-center flex-shrink-0">
+    <button type="button" onClick={onClick} title="Voir la commande" className="w-[62px] text-center flex-shrink-0 hover:opacity-80 transition-opacity cursor-zoom-in">
       <div className="relative">
         {cake.photo
           ? <img src={cake.photo} alt="" className={`w-[62px] h-[62px] rounded-[10px] object-cover border-[3px] ${border}`} />
@@ -37,21 +38,33 @@ function CakeThumb({ cake }) {
       <div className={`text-[8.5px] uppercase tracking-wide ${cake.isDevis ? 'text-amber-600' : 'text-red-600'}`}>
         {cake.isDevis ? 'devis' : 'confirmé'}
       </div>
-    </div>
+    </button>
   )
 }
 
-export default function CakeChargeModal({ initialDate, onClose }) {
+export default function CakeChargeModal({ initialDate, onClose, onOpenOrder }) {
   const [date, setDate] = useState(() => initialDate ? new Date(initialDate + 'T12:00:00') : new Date())
   const iso = toISO(date)
-  const [byHour, setByHour] = useState(null)
+  const [confirmed, setConfirmed] = useState(null)   // rapide (Supabase)
+  const [devis, setDevis] = useState(null)           // lent (Odoo) — ajouté après
 
   useEffect(() => {
     let off = false
-    setByHour(null)
-    loadCdDay(iso).then(d => { if (!off) setByHour(d || {}) }).catch(() => { if (!off) setByHour({}) })
+    setConfirmed(null); setDevis(null)
+    loadCdDay(iso, 'confirmed').then(d => { if (!off) setConfirmed(d || {}) }).catch(() => { if (!off) setConfirmed({}) })
+    loadCdDay(iso, 'devis').then(d => { if (!off) setDevis(d || {}) }).catch(() => { if (!off) setDevis({}) })
     return () => { off = true }
   }, [iso])
+
+  // Affiché dès que les confirmés sont là ; les devis se fondent ensuite.
+  const byHour = useMemo(() => {
+    if (confirmed === null) return null
+    const m = {}
+    for (const h in confirmed) m[h] = [...confirmed[h]]
+    for (const h in (devis || {})) m[h] = [...(m[h] || []), ...devis[h]]
+    return m
+  }, [confirmed, devis])
+  const devisLoading = devis === null
 
   function shiftDay(n) { const d = new Date(date); d.setDate(d.getDate() + n); setDate(d) }
 
@@ -60,8 +73,8 @@ export default function CakeChargeModal({ initialDate, onClose }) {
   const totalDevis = allCakes.filter(c => c.isDevis).length
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-ink/40" onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-md max-h-[88vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[40] flex items-center justify-center p-4 bg-ink/40" onClick={onClose}>
+      <div className="bg-cream rounded-2xl w-full max-w-2xl h-[92vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="bg-bordeaux text-cream px-4 py-3 flex items-center justify-between sticky top-0 z-10">
           <h3 className="font-fraunces italic text-[17px]">🎂 Charge Cake Design</h3>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-cream/20">✕</button>
@@ -83,10 +96,11 @@ export default function CakeChargeModal({ initialDate, onClose }) {
             <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded border-2 border-red-500"></span> confirmé</span>
             <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded border-2 border-amber-400"></span> devis</span>
             <span className="text-ink-mute">max {CD_MAX_PER_SLOT}/créneau</span>
+            {byHour !== null && devisLoading && <span className="text-amber-600 animate-pulse">⏳ devis…</span>}
           </div>
 
           {byHour === null ? (
-            <div className="text-center text-ink-mute py-6 text-[13px]">Chargement…</div>
+            <Skeleton rows={7} className="!p-0" />
           ) : (
             <div className="space-y-2">
               {HOURS.map(h => {
@@ -102,7 +116,7 @@ export default function CakeChargeModal({ initialDate, onClose }) {
                       <div className="text-[12px] text-ink-mute pt-4">libre</div>
                     ) : (
                       <div className="flex gap-2 flex-wrap flex-1 min-w-0">
-                        {groupCakes(cakes).map((c, i) => <CakeThumb key={i} cake={c} />)}
+                        {groupCakes(cakes).map((c, i) => <CakeThumb key={i} cake={c} onClick={() => onOpenOrder?.(c.orderRef)} />)}
                       </div>
                     )}
                     <div className="text-[10.5px] text-right flex-shrink-0 pt-4">

@@ -222,7 +222,8 @@ export async function assignConversation(conversationId, userId) {
 export async function closeConversation(conversationId, userId) {
   const { data, error } = await supabase
     .from('conversations')
-    .update({ status: 'fermee', assigned_to: null, updated_at: new Date().toISOString() })
+    // Clôture = conversation terminée → on retire toutes les étiquettes (devis envoyé, important…).
+    .update({ status: 'fermee', assigned_to: null, labels: [], updated_at: new Date().toISOString() })
     .eq('id', conversationId)
     .select(CONV_SEL)
     .single()
@@ -742,6 +743,7 @@ export async function confirmDevis(id, actorId = null) {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
+  if (data?.name) untagDevisEnvoye(data.name)   // confirmé → l'étiquette « Devis envoyé » part
   return data
 }
 
@@ -781,10 +783,49 @@ export async function loadDevisEnvois() {
   return map
 }
 
-/** Enregistre l'envoi d'un devis (pour le marquer "déjà envoyé"). */
+/** Enregistre l'envoi d'un devis (pour le marquer "déjà envoyé") + étiquette « Devis envoyé ». */
 export async function recordDevisEnvoi(orderNum, clientPhone, userId) {
   try {
     await supabase.from('devis_envois').insert({ order_num: orderNum, client_phone: clientPhone || null, sent_by: userId || null })
+  } catch (_) { /* non bloquant */ }
+  await tagDevisEnvoye(orderNum, clientPhone)
+}
+
+// Retrouve la conversation d'un client (par tél, repli sur le n° de commande lié).
+async function convIdForDevis(orderNum, clientPhone) {
+  const last9 = String(clientPhone || '').replace(/\D/g, '').slice(-9)
+  if (last9) {
+    const { data } = await supabase.from('conversations').select('id').ilike('client_phone', `%${last9}%`).limit(1)
+    if (data?.[0]) return data[0].id
+  }
+  if (orderNum) {
+    const { data } = await supabase.from('conversations').select('id').eq('link_order_ref', orderNum).limit(1)
+    if (data?.[0]) return data[0].id
+  }
+  return null
+}
+
+/** Ajoute l'étiquette « Devis envoyé » à la conversation du client. */
+export async function tagDevisEnvoye(orderNum, clientPhone = null) {
+  try {
+    const id = await convIdForDevis(orderNum, clientPhone)
+    if (!id) return
+    const { data } = await supabase.from('conversations').select('labels').eq('id', id).single()
+    const cur = Array.isArray(data?.labels) ? data.labels : []
+    if (cur.includes('devis_envoye')) return
+    await supabase.from('conversations').update({ labels: [...cur, 'devis_envoye'], updated_at: new Date().toISOString() }).eq('id', id)
+  } catch (_) { /* non bloquant */ }
+}
+
+/** Retire l'étiquette « Devis envoyé » (devis confirmé) des conversations liées au n°. */
+export async function untagDevisEnvoye(orderNum) {
+  try {
+    if (!orderNum) return
+    const { data } = await supabase.from('conversations').select('id, labels').eq('link_order_ref', orderNum)
+    for (const c of (data || [])) {
+      const cur = Array.isArray(c.labels) ? c.labels : []
+      if (cur.includes('devis_envoye')) await supabase.from('conversations').update({ labels: cur.filter(l => l !== 'devis_envoye'), updated_at: new Date().toISOString() }).eq('id', c.id)
+    }
   } catch (_) { /* non bloquant */ }
 }
 

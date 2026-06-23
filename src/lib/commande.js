@@ -158,12 +158,12 @@ export async function loadCdLoad(date) {
 
 // Charge CD- du jour groupée par heure : { byHour: { 12:[{photo,pers,isDevis,orderRef}], ... } }
 // Pour le planning « Charge CD » du calendrier (vignettes photo + nb pers).
-export async function loadCdDay(date) {
+export async function loadCdDay(date, part) {
   if (!date) return {}
   try {
     const res = await fetch('/api/wati-webhook?action=cd-day', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date }),
+      body: JSON.stringify({ date, part }),
     })
     const d = await res.json().catch(() => ({}))
     return d?.byHour || {}

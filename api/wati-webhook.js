@@ -1915,6 +1915,12 @@ async function handleOrderCreateDevis(req, res) {
           try { await sendReminderWhatsapp(supabase, number, clientText, { name: 'devis_validation', parameters: tmplParams }) } catch (e) { console.warn('[client-devis-wa]', e?.message || e) }
           const flag = mergedConfirmed ? ' ⚠️ AJOUT à une commande DÉJÀ CONFIRMÉE — à vérifier en cuisine.' : ''
           await supabase.from('messages').insert({ conversation_id: conv.id, sender_type: 'agent', body: `Commande en ligne : devis ${orderName} envoye au client (total ${Math.round(total)} DH).${flag}`, sent_at: sentAt })
+          // Étiquette « Devis envoyé » sur la conversation (devis ferme envoyé au client).
+          try {
+            const { data: cc } = await supabase.from('conversations').select('labels').eq('id', conv.id).single()
+            const cur = Array.isArray(cc?.labels) ? cc.labels : []
+            if (!cur.includes('devis_envoye')) await supabase.from('conversations').update({ labels: [...cur, 'devis_envoye'] }).eq('id', conv.id)
+          } catch (e) { console.warn('[devis-envoye label]', e?.message || e) }
         } else {
           const flag = mergedConfirmed ? ' ⚠️ AJOUT à une commande DÉJÀ CONFIRMÉE — à vérifier en cuisine.' : ''
           await supabase.from('messages').insert({ conversation_id: conv.id, sender_type: 'agent', body: `Commande en ligne recue : devis ${orderName} A CHIFFRER (le client a rempli sa commande, prix a confirmer).${flag}`, sent_at: sentAt })
@@ -1966,14 +1972,14 @@ async function handleDevisPhotos(req, res) {
       '&', ['res_model', '=', 'sale.order'], ['res_id', '=', orderId],
       '&', ['res_model', '=', 'sale.order.line'], ['res_id', 'in', lineIds]]
     const atts = await odooSearchRead(uid, 'ir.attachment', domain,
-      ['id', 'name', 'mimetype', 'datas'], { limit })
+      ['id', 'name', 'mimetype', 'datas', 'create_date'], { limit, order: 'create_date asc' })
     // Dedup : la même image peut être attachée 2 fois (lien client + Articles…).
     // Même contenu base64 = même photo → on ne la garde qu'une fois.
     const seenData = new Set()
     const photos = (atts || [])
       .filter(a => a.datas)
       .filter(a => { if (seenData.has(a.datas)) return false; seenData.add(a.datas); return true })
-      .map(a => ({ id: a.id, name: a.name, dataUrl: `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}` }))
+      .map(a => ({ id: a.id, name: a.name, create_date: a.create_date || null, dataUrl: `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}` }))
     return res.status(200).json({ photos })
   } catch (e) {
     console.error('[devis-photos]', e?.message || e)
@@ -2636,10 +2642,13 @@ async function handleCdDay(req, res) {
   // « Ganache Cakedesign » = supplément, PAS un gâteau → exclu du planning.
   const firstReal = (name) => String(name || '').split('\n').map(s => s.trim().replace(/^\[\s*\d+\s*\]\s*/, '')).find(Boolean) || ''
   const isGanache = (s) => /^ganache/i.test(String(s || '').trim().replace(/^\[\s*\d+\s*\]\s*/, '').replace(/^(CD-|GM-|GMD-)\s*/i, '').replace(/^\[\s*\d+\s*\]\s*/, ''))
+  // part='confirmed' (rapide, Supabase) | 'devis' (lent, Odoo) | 'all'. Le client appelle les 2
+  // séparément pour afficher les confirmés tout de suite, puis les devis en arrière-plan.
+  const part = req.body?.part || 'all'
   const byHour = {}
 
   // 1) CONFIRMÉS — depuis Supabase (déjà synchronisé : rapide, image_urls = 1 photo par gâteau).
-  try {
+  if (part !== 'devis') try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: orders } = await supabase
       .from('orders')
@@ -2660,7 +2669,7 @@ async function handleCdDay(req, res) {
   } catch (e) { console.warn('[cd-day supabase]', e?.message || e) }
 
   // 2) DEVIS (draft/sent) — pas synchronisés → Odoo. Peu nombreux ; photo PAR ligne.
-  try {
+  if (part !== 'confirmed') try {
     const uid = await odooAuthenticate()
     const devisOrders = await odooSearchRead(uid, 'sale.order',
       [['commitment_date', '>=', startUtc], ['commitment_date', '<=', endUtc], ['state', 'in', ['draft', 'sent']]],

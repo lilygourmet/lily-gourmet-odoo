@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Améliorations UX — maquette</title>
+<style>
+  :root{ --bordeaux:#7a1f3d; --cream:#fdfaf5; --warm:#f3ece2; --line:#e3dcd2; --ink:#3a2b25; --soft:#6a5d54; --ok:#2e7d32; --amber:#e8a417; }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#ece4da;color:var(--ink);margin:0;padding:22px;line-height:1.5;}
+  h1{font-size:22px;margin:0 0 4px;} .sub{color:var(--soft);font-size:13px;margin-bottom:22px;}
+  .card{background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  .num{display:inline-flex;width:24px;height:24px;border-radius:50%;background:var(--bordeaux);color:#fff;font-size:13px;font-weight:700;align-items:center;justify-content:center;margin-right:8px;}
+  .card h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;} .card .why{font-size:12.5px;color:var(--soft);margin:0 0 12px;}
+  .demo{background:var(--warm);border:1px dashed var(--line);border-radius:10px;padding:14px;}
+  .demolabel{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#a99;margin-bottom:8px;}
+
+  /* 1 — bandeau version */
+  .banner{display:flex;align-items:center;gap:10px;background:var(--bordeaux);color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;}
+  .banner b{font-weight:700;} .banner .btn{margin-left:auto;background:#fff;color:var(--bordeaux);border:none;border-radius:20px;padding:5px 14px;font-weight:700;font-size:12px;cursor:pointer;}
+
+  /* 2 — squelettes */
+  .skelrow{display:flex;gap:10px;align-items:center;margin-bottom:8px;}
+  .sk{background:linear-gradient(90deg,#e7ded3 25%,#f1ebe2 50%,#e7ded3 75%);background-size:200% 100%;animation:sh 1.3s infinite;border-radius:6px;}
+  @keyframes sh{to{background-position:-200% 0;}}
+  .compare{display:flex;gap:14px;flex-wrap:wrap;} .compare>div{flex:1;min-width:180px;}
+  .badlabel{font-size:11px;color:#b33;} .goodlabel{font-size:11px;color:var(--ok);}
+  .loadingbox{background:#fff;border:1px solid var(--line);border-radius:8px;height:96px;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:13px;}
+
+  /* 3 — recherche */
+  .searchbar{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid var(--bordeaux);border-radius:24px;padding:8px 14px;}
+  .searchbar input{border:none;outline:none;flex:1;font-size:14px;background:transparent;}
+  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:20px;overflow:hidden;font-size:11px;margin-top:10px;}
+  .toggle span{padding:5px 12px;cursor:pointer;} .toggle .on{background:var(--bordeaux);color:#fff;font-weight:700;}
+  .res{background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:10px;overflow:hidden;}
+  .res .r{padding:8px 12px;border-bottom:1px solid var(--line);font-size:13px;display:flex;justify-content:space-between;}
+  .res .r:last-child{border:none;} .tag{font-size:10px;background:var(--warm);border-radius:4px;padding:1px 7px;color:var(--soft);}
+
+  /* 4 — toasts/confirm */
+  .toast{display:flex;align-items:center;gap:8px;border-radius:10px;padding:9px 14px;font-size:13px;color:#fff;margin-bottom:8px;max-width:330px;}
+  .toast.ok{background:var(--ok);} .toast.err{background:#c0392b;} .toast.info{background:#37607e;}
+  .confirm{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;max-width:320px;box-shadow:0 8px 30px rgba(0,0,0,.15);}
+  .confirm h4{margin:0 0 6px;font-size:14px;} .confirm p{margin:0 0 14px;font-size:12.5px;color:var(--soft);}
+  .confirm .row{display:flex;gap:8px;justify-content:flex-end;}
+  .confirm button{border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:#fff;}
+  .confirm .danger{background:#c0392b;color:#fff;border-color:#c0392b;}
+
+  .extra li{margin-bottom:7px;font-size:13px;} .extra b{color:var(--bordeaux);}
+</style>
+</head>
+<body>
+<h1>✨ Améliorations UX — à valider avant de coder</h1>
+<div class="sub">Maquette des 4 améliorations choisies + suggestions en plus. Rien n'est codé : dis-moi ce qui te plaît.</div>
+
+<!-- 1 -->
+<div class="card">
+  <h2><span class="num">1</span>🔄 Bandeau « nouvelle version »</h2>
+  <p class="why">Fini les « Cmd+Shift+R » : dès qu'une mise à jour est en ligne, ce bandeau apparaît. 1 clic = à jour.</p>
+  <div class="demo"><div class="demolabel">Aperçu</div>
+    <div class="banner">🎉 <b>Nouvelle version disponible</b> — quelques améliorations t'attendent. <button class="btn">Recharger</button></div>
+  </div>
+</div>
+
+<!-- 2 -->
+<div class="card">
+  <h2><span class="num">2</span>⏳ Chargements fluides (squelettes)</h2>
+  <p class="why">Au lieu d'un « Chargement… » qui fait sauter l'écran, un aperçu gris animé de la future structure.</p>
+  <div class="demo"><div class="demolabel">Avant / Après</div>
+    <div class="compare">
+      <div>
+        <div class="badlabel">❌ Avant</div>
+        <div class="loadingbox">Chargement…</div>
+      </div>
+      <div>
+        <div class="goodlabel">✅ Après (squelette)</div>
+        <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;">
+          <div class="skelrow"><div class="sk" style="width:46px;height:46px;border-radius:10px;"></div><div style="flex:1;"><div class="sk" style="height:11px;width:70%;margin-bottom:6px;"></div><div class="sk" style="height:9px;width:45%;"></div></div></div>
+          <div class="skelrow"><div class="sk" style="width:46px;height:46px;border-radius:10px;"></div><div style="flex:1;"><div class="sk" style="height:11px;width:60%;margin-bottom:6px;"></div><div class="sk" style="height:9px;width:35%;"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="card">
+  <h2><span class="num">3</span>🔍 Recherche rapide — globale OU par onglet</h2>
+  <p class="why">Retrouver une commande / un client / un n° S de partout. Tu choisis : chercher dans <b>toute l'app</b> ou seulement <b>l'onglet en cours</b>.</p>
+  <div class="demo"><div class="demolabel">Aperçu</div>
+    <div class="searchbar">🔍 <input value="Mouna" readonly><span style="color:#bbb;font-size:11px;">Ctrl+K</span></div>
+    <div class="toggle"><span class="on">Toute l'app</span><span>Onglet en cours</span></div>
+    <div class="res">
+      <div class="r"><span>👤 Mouna benmoussa — S49980</span><span class="tag">Commande</span></div>
+      <div class="r"><span>💬 Mouna B. — conversation</span><span class="tag">WhatsApp</span></div>
+      <div class="r"><span>🎂 5× Gâteau Forme — 27 juin 12h</span><span class="tag">Planning</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 4 -->
+<div class="card">
+  <h2><span class="num">4</span>✅ Retours d'action cohérents</h2>
+  <p class="why">Mêmes messages partout (succès vert, erreur rouge, info bleu) + une confirmation claire avant de supprimer/annuler.</p>
+  <div class="demo"><div class="demolabel">Aperçu</div>
+    <div class="toast ok">✓ Devis envoyé au client</div>
+    <div class="toast err">⚠️ Échec — réessaie</div>
+    <div class="toast info">ℹ️ Commande en devis, pas encore confirmée</div>
+    <div class="confirm" style="margin-top:12px;">
+      <h4>Annuler la commande S49980 ?</h4>
+      <p>Cette action est irréversible. Le client sera retiré du planning.</p>
+      <div class="row"><button>Retour</button><button class="danger">Oui, annuler</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- extra -->
+<div class="card">
+  <h2>💡 Autres suggestions (en plus)</h2>
+  <ul class="extra">
+    <li>🧭 <b>Onglets favoris</b> : chacun épingle ses onglets les plus utilisés (la base existe déjà) → header moins chargé.</li>
+    <li>📱 <b>Mode cuisine/tablette</b> : boutons plus gros, infos essentielles, pour l'usage au doigt en prod.</li>
+    <li>↩️ <b>Annuler (undo)</b> : après une suppression/un changement, un « Annuler » de 5 s (évite les erreurs).</li>
+    <li>🗂️ <b>États vides utiles</b> : au lieu de « Aucune commande », un message + un bouton d'action (« Prendre une commande »).</li>
+    <li>🎨 <b>Couleurs/badges unifiés</b> : même code couleur partout (rouge=urgent, jaune=en attente, vert=ok).</li>
+    <li>⌨️ <b>Raccourcis</b> : Échap ferme les fenêtres, flèches naviguent (déjà partiel), Ctrl+K = recherche.</li>
+  </ul>
+</div>
+
+</body>
+</html>
