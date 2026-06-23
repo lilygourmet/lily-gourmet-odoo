@@ -3,7 +3,7 @@
 // Auth: header "Authorization: Bearer <SYNC_SECRET_TOKEN>" OU ?token=...
 
 import { createClient } from '@supabase/supabase-js'
-import { parseOdooOrders } from '../src/lib/odooParser.js'
+import { parseOdooOrders, isCdGmProduct } from '../src/lib/odooParser.js'
 
 const STORAGE_BUCKET = 'product-images'
 
@@ -49,7 +49,11 @@ export default async function handler(req, res) {
     for (const line of lines) {
       const pn = (Array.isArray(line.product_id) ? line.product_id[1] : '').replace(/^\[\d+\]\s*/, '')
       const m = pn.match(/^(CD-|GM-)/i)
-      if (m && !/^(CD-|GM-)/i.test((line.name || '').trim())) {
+      // 1ère ligne RÉELLE du libellé (sans [882] ni ligne vide). Si elle a DÉJÀ CD-/GM-,
+      // on n'ajoute rien : sinon on créerait une fausse tête « CD- » qui ferait passer
+      // « CD- Bougies » / « CD- Décoration supplémentaire » pour un vrai gâteau.
+      const head = String(line.name || '').split('\n').map(s => s.trim().replace(/^\[\s*\d+\s*\]\s*/, '')).find(Boolean) || ''
+      if (m && !/^(CD-|GM-)/i.test(head)) {
         line.name = `${m[1].toUpperCase()} ${line.name}`
       }
     }
@@ -210,15 +214,9 @@ function enrichWithLineIds(parsedOrders, linesByOrderId) {
   for (const po of parsedOrders) {
     const odooLines = linesByOrderId.get(po.odooId) || []
 
-    const cdGmLines = odooLines.filter(line => {
-      const trimmed = (line.name || '').trim()
-      if (!/^(CD-|GM-)/i.test(trimmed)) return false
-      if (/^(CD-|GM-)\s*Bougies/i.test(trimmed)) return false
-      if (/D[ée]coration\s+suppl[ée]mentaire/i.test(trimmed)) return false
-      const qty = parseFloat(line.product_uom_qty) || 0
-      if (qty === 0) return false
-      return true
-    })
+    // MÊME sélection que le parser (parseItems) : isCdGmProduct exclut toppers/bougies/déco
+    // → la liste des lignes correspond EXACTEMENT aux items, donc l'association par position est juste.
+    const cdGmLines = odooLines.filter(line => isCdGmProduct(line.name) && (parseFloat(line.product_uom_qty) || 0) > 0)
 
     po.items.forEach((item, idx) => {
       const odooLine = cdGmLines[idx]

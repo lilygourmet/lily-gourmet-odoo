@@ -48,6 +48,7 @@ export default async function handler(req, res) {
   if (action === 'orders-notes') return handleOrdersNotes(req, res)
   if (action === 'cd-load') return handleCdLoad(req, res)
   if (action === 'cd-slot') return handleCdSlot(req, res)
+  if (action === 'cd-day') return handleCdDay(req, res)
   if (action === 'notify-modif') return handleNotifyModif(req, res)
   if (action === 'client-cd-count') return handleClientCdCount(req, res)
   if (action === 'clients-cd-counts') return handleClientsCdCounts(req, res)
@@ -1226,6 +1227,24 @@ async function handleOrderProductSearch(req, res) {
 function odooCreate(uid, model, vals) {
   return odooJsonRpc('object', 'execute_kw', [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, 'create', [vals]])
 }
+// Extension de fichier image (doit matcher guessExt de sync-odoo pour retomber sur le même nom de fichier).
+function imgExtFromMime(m) { m = m || ''; if (m.includes('png')) return 'png'; if (m.includes('webp')) return 'webp'; if (m.includes('gif')) return 'gif'; if (m.includes('heic')) return 'heic'; return 'jpg' }
+// Met à jour TOUT DE SUITE la copie Supabase (order_items.image_urls) d'une ligne, pour que le calendrier/étiquette
+// reflète l'ajout/retrait de photo sans attendre la grosse synchro. add=true ajoute l'URL, sinon la retire.
+async function mirrorPhotoToSupabase(checksum, mimetype, lineId, add) {
+  if (!checksum || !lineId || !supabaseUrl || !supabaseServiceKey) return
+  const fileName = `img_${checksum}.${imgExtFromMime(mimetype)}`
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const { data: pub } = supabase.storage.from('product-images').getPublicUrl(fileName)
+  const url = pub?.publicUrl
+  if (!url) return
+  const { data: rows } = await supabase.from('order_items').select('id, image_urls').eq('odoo_line_id', lineId)
+  for (const r of (rows || [])) {
+    const cur = Array.isArray(r.image_urls) ? r.image_urls : []
+    const next = add ? (cur.includes(url) ? cur : [...cur, url]) : cur.filter(u => u !== url)
+    if (next.length !== cur.length) await supabase.from('order_items').update({ image_urls: next }).eq('id', r.id)
+  }
+}
 
 // Modifie les articles d'une commande existante (sale.order). op = list | add | update | delete.
 // On écrit via le champ order_line (commandes one2many Odoo) → les totaux se recalculent.
@@ -1316,11 +1335,12 @@ async function handleOrderLine(req, res) {
       // Sécurité : on ne supprime que si la pièce jointe appartient à CETTE commande (entête ou une de ses lignes).
       const ord = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['order_line'])
       const lineIds = ord[0]?.order_line || []
-      const att = await odooSearchRead(uid, 'ir.attachment', [['id', '=', attId]], ['res_model', 'res_id'])
+      const att = await odooSearchRead(uid, 'ir.attachment', [['id', '=', attId]], ['res_model', 'res_id', 'checksum', 'mimetype'])
       const a = att[0]
       const ok = a && ((a.res_model === 'sale.order' && a.res_id === orderId) || (a.res_model === 'sale.order.line' && lineIds.includes(a.res_id)))
       if (!ok) return res.status(400).json({ error: 'photo introuvable pour cette commande' })
       await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'ir.attachment', 'unlink', [[attId]]])
+      if (a.res_model === 'sale.order.line') { try { await mirrorPhotoToSupabase(a.checksum, a.mimetype, a.res_id, false) } catch (e) { console.warn('[photo mirror remove]', e?.message || e) } }
       return res.status(200).json({ ok: true })
     }
 
@@ -1368,13 +1388,24 @@ async function handleOrderLine(req, res) {
           targetLineId = ids.length ? Math.max(...ids) : null
         }
         if (targetLineId) {
-          await odooCreate(uid, 'ir.attachment', {
+          const newAttId = await odooCreate(uid, 'ir.attachment', {
             name: photo.name || 'photo.jpg',
             datas: photo.data,
             res_model: 'sale.order.line',
             res_id: targetLineId,
             mimetype: photo.mimetype || 'image/jpeg',
           })
+          // miroir Supabase immédiat : upload dans le stockage + ajoute l'URL à l'article (MAJ calendrier/étiquette tout de suite)
+          try {
+            const meta = await odooSearchRead(uid, 'ir.attachment', [['id', '=', newAttId]], ['checksum', 'mimetype'])
+            const cs = meta[0]?.checksum, mime = meta[0]?.mimetype || photo.mimetype || 'image/jpeg'
+            if (cs) {
+              const fileName = `img_${cs}.${imgExtFromMime(mime)}`
+              const supabase = createClient(supabaseUrl, supabaseServiceKey)
+              await supabase.storage.from('product-images').upload(fileName, Buffer.from(photo.data, 'base64'), { contentType: mime, upsert: true })
+              await mirrorPhotoToSupabase(cs, mime, targetLineId, true)
+            }
+          } catch (e) { console.warn('[photo mirror add]', e?.message || e) }
         }
       } catch (e) { console.warn('[order-line photo]', e?.message || e) }
     }
@@ -1793,6 +1824,7 @@ async function handleOrderCreateDevis(req, res) {
       } catch (e) { console.warn('[devis-merge]', e?.message || e) }
     }
     if (!orderId) orderId = await odooCreate(uid, 'sale.order', vals)
+    const created = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['name'])   // nom de la commande (utilisé plus bas)
 
     // Photos (modèle de gâteau) → attachées à CHAQUE ARTICLE précis (sa ligne), pas à
     // la commande entière. Ainsi chaque gâteau/accessoire montre UNIQUEMENT sa photo
@@ -2502,26 +2534,31 @@ async function handleCdLoad(req, res) {
     const endUtc = moroccoLocalToUtc(date, '23:59')
     const orders = await odooSearchRead(uid, 'sale.order',
       [['commitment_date', '>=', startUtc], ['commitment_date', '<=', endUtc], ['state', '!=', 'cancel']],
-      ['id', 'commitment_date', 'order_line'])
-    if (!orders.length) return res.status(200).json({ counts: {} })
+      ['id', 'commitment_date', 'order_line', 'state'])
+    if (!orders.length) return res.status(200).json({ counts: {}, confirmed: {}, devis: {} })
     const lineIds = orders.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
     const cdLines = lineIds.length ? await odooSearchRead(uid, 'sale.order.line',
       [['id', 'in', lineIds], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%'], ['product_uom_qty', '>', 0]],
       ['order_id', 'name']) : []
     const hourByOrder = new Map()
-    for (const o of orders) hourByOrder.set(o.id, moroccoHourFromUtc(o.commitment_date))
-    const counts = {}
+    const stateByOrder = new Map()
+    for (const o of orders) { hourByOrder.set(o.id, moroccoHourFromUtc(o.commitment_date)); stateByOrder.set(o.id, o.state) }
+    // counts = total (prise de commande) ; confirmed = state sale/done ; devis = draft/sent (planning calendrier).
+    const counts = {}, confirmed = {}, devis = {}
     for (const l of cdLines) {
       if (!isRealCakeLine(l.name)) continue
       const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id
       const h = hourByOrder.get(oid)
       if (h == null) continue
       counts[h] = (counts[h] || 0) + 1
+      const st = stateByOrder.get(oid)
+      if (st === 'sale' || st === 'done') confirmed[h] = (confirmed[h] || 0) + 1
+      else devis[h] = (devis[h] || 0) + 1
     }
-    return res.status(200).json({ counts })
+    return res.status(200).json({ counts, confirmed, devis })
   } catch (e) {
     console.error('[cd-load]', e?.message || e)
-    return res.status(200).json({ counts: {} })
+    return res.status(200).json({ counts: {}, confirmed: {}, devis: {} })
   }
 }
 
@@ -2583,6 +2620,86 @@ async function handleCdSlot(req, res) {
     console.error('[cd-slot]', e?.message || e)
     return res.status(200).json({ items: [] })
   }
+}
+
+// Charge CD- du jour, groupée par heure, avec photo + nb pers + état (devis ?) de chaque gâteau.
+// RAPIDE : les CONFIRMÉS viennent de Supabase (URLs légères, photo PAR gâteau) ; seuls les
+// DEVIS (pas synchronisés) sont lus dans Odoo. Pour le planning « Charge CD » du calendrier.
+async function handleCdDay(req, res) {
+  const date = (req.body?.date || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(200).json({ byHour: {} })
+  const startUtc = moroccoLocalToUtc(date, '00:00')
+  const endUtc = moroccoLocalToUtc(date, '23:59')
+  const startIso = startUtc.replace(' ', 'T') + 'Z'
+  const endIso = endUtc.replace(' ', 'T') + 'Z'
+  const hourMaroc = (d) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Casablanca', hour: '2-digit', hourCycle: 'h23' }).format(d))
+  // « Ganache Cakedesign » = supplément, PAS un gâteau → exclu du planning.
+  const firstReal = (name) => String(name || '').split('\n').map(s => s.trim().replace(/^\[\s*\d+\s*\]\s*/, '')).find(Boolean) || ''
+  const isGanache = (s) => /^ganache/i.test(String(s || '').trim().replace(/^\[\s*\d+\s*\]\s*/, '').replace(/^(CD-|GM-|GMD-)\s*/i, '').replace(/^\[\s*\d+\s*\]\s*/, ''))
+  const byHour = {}
+
+  // 1) CONFIRMÉS — depuis Supabase (déjà synchronisé : rapide, image_urls = 1 photo par gâteau).
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('order_num, delivery_at, odoo_state, order_items(type, title, pers, image_urls, quantity)')
+      .gte('delivery_at', startIso).lte('delivery_at', endIso)
+    for (const o of orders || []) {
+      if (o.odoo_state === 'cancel') continue   // commande annulée → exclue du planning
+      const dt = new Date(o.delivery_at)
+      if (isNaN(dt)) continue
+      const h = hourMaroc(dt)
+      for (const it of (o.order_items || [])) {
+        if (it.type !== 'CD' || isGanache(it.title)) continue
+        const photo = Array.isArray(it.image_urls) && it.image_urls[0] ? it.image_urls[0] : null
+        const qty = Math.max(1, Number(it.quantity) || 1)   // 1 vignette par gâteau (respecte la quantité)
+        for (let k = 0; k < qty; k++) (byHour[h] ||= []).push({ orderRef: o.order_num, pers: it.pers || null, photo, isDevis: false })
+      }
+    }
+  } catch (e) { console.warn('[cd-day supabase]', e?.message || e) }
+
+  // 2) DEVIS (draft/sent) — pas synchronisés → Odoo. Peu nombreux ; photo PAR ligne.
+  try {
+    const uid = await odooAuthenticate()
+    const devisOrders = await odooSearchRead(uid, 'sale.order',
+      [['commitment_date', '>=', startUtc], ['commitment_date', '<=', endUtc], ['state', 'in', ['draft', 'sent']]],
+      ['id', 'name', 'commitment_date', 'order_line'])
+    const lineIds = devisOrders.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
+    const cdLines = lineIds.length ? (await odooSearchRead(uid, 'sale.order.line',
+      [['id', 'in', lineIds], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%'], ['product_uom_qty', '>', 0]],
+      ['id', 'order_id', 'name', 'product_uom_qty'])).filter(l => isRealCakeLine(l.name) && !isGanache(firstReal(l.name))) : []
+    if (cdLines.length) {
+      const lineToOrder = new Map(cdLines.map(l => [l.id, Array.isArray(l.order_id) ? l.order_id[0] : l.order_id]))
+      const orderById = new Map(devisOrders.map(o => [o.id, o]))
+      const cdLineIds = cdLines.map(l => l.id)
+      const oids = [...new Set([...lineToOrder.values()])]
+      const atts = await odooSearchRead(uid, 'ir.attachment',
+        ['&', ['mimetype', 'ilike', 'image'], '|',
+          '&', ['res_model', '=', 'sale.order.line'], ['res_id', 'in', cdLineIds],
+          '&', ['res_model', '=', 'sale.order'], ['res_id', 'in', oids]],
+        ['res_model', 'res_id', 'mimetype', 'datas'], { limit: 60 })
+      const photoByLine = new Map(), photoByOrder = new Map()
+      for (const a of (atts || [])) {
+        if (!a.datas) continue
+        const url = `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}`
+        if (a.res_model === 'sale.order.line') { if (!photoByLine.has(a.res_id)) photoByLine.set(a.res_id, url) }
+        else if (!photoByOrder.has(a.res_id)) photoByOrder.set(a.res_id, url)
+      }
+      for (const l of cdLines) {
+        const oid = lineToOrder.get(l.id)
+        const o = orderById.get(oid)
+        if (!o) continue
+        const h = moroccoHourFromUtc(o.commitment_date)
+        if (h == null) continue
+        const photo = photoByLine.get(l.id) || photoByOrder.get(oid) || null
+        const qty = Math.max(1, Math.round(Number(l.product_uom_qty) || 1))
+        for (let k = 0; k < qty; k++) (byHour[h] ||= []).push({ orderRef: o.name || '', pers: persFromLineName(l.name), photo, isDevis: true })
+      }
+    }
+  } catch (e) { console.warn('[cd-day odoo devis]', e?.message || e) }
+
+  return res.status(200).json({ byHour })
 }
 
 // Notif « nouvelle commande OCP » aux admins + personnes ayant la permission « Notif devis OCP ».
@@ -2835,7 +2952,7 @@ async function handleClientCdCount(req, res) {
     if (!pids.length) return res.status(200).json({ count: 0 })
     // Commandes (non annulées) du client contenant un cake design.
     const cdLines = await odooSearchRead(uid, 'sale.order.line',
-      [['order_id.partner_id', 'in', pids], ['order_id.state', '!=', 'cancel'], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%']],
+      [['order_id.partner_id', 'in', pids], ['order_id.state', 'in', ['sale', 'done']], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%']],
       ['order_id'])
     const cdOrderIds = [...new Set((cdLines || []).map(l => Array.isArray(l.order_id) ? l.order_id[0] : l.order_id))]
     if (!cdOrderIds.length) return res.status(200).json({ count: 0 })
@@ -2873,7 +2990,7 @@ async function handleClientsCdCounts(req, res) {
     }
     const pids = partners.map(p => p.id)
     const cdLines = await odooSearchRead(uid, 'sale.order.line',
-      [['order_id.partner_id', 'in', pids], ['order_id.state', '!=', 'cancel'], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%']], ['order_id'])
+      [['order_id.partner_id', 'in', pids], ['order_id.state', 'in', ['sale', 'done']], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%']], ['order_id'])
     const cdOrderIds = [...new Set((cdLines || []).map(l => Array.isArray(l.order_id) ? l.order_id[0] : l.order_id))]
     if (!cdOrderIds.length) return res.status(200).json({ counts: {} })
     const orders = await odooSearchRead(uid, 'sale.order', [['id', 'in', cdOrderIds]], ['id', 'partner_id'])

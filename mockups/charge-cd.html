@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Charge Cake Design — maquette</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background:#3a2a2f; margin:0; padding:20px; display:flex; justify-content:center; }
+  .modal { background:#fdfaf5; border-radius:18px; width:100%; max-width:460px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .head { background:#7a1f3d; color:#fdfaf5; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; }
+  .head h3 { margin:0; font-style:italic; font-size:17px; font-weight:600; }
+  .head .x { width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.2); border:none; color:#fff; font-size:14px; cursor:pointer; }
+  .body { padding:14px 16px; }
+  .nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .nav button { padding:6px 12px; border:1px solid #e3dcd2; background:#fff; border-radius:8px; font-size:15px; cursor:pointer; }
+  .nav .day { text-align:center; font-weight:600; font-size:14px; text-transform:capitalize; }
+  .legend { display:flex; gap:14px; justify-content:center; font-size:11px; color:#6a5d54; margin-bottom:12px; }
+  .legend span { display:flex; align-items:center; gap:5px; }
+  .swatch { width:14px; height:14px; border-radius:3px; }
+
+  .slot { display:flex; gap:10px; align-items:flex-start; padding:8px; border-radius:12px; margin-bottom:8px; border:1px solid #efe8de; }
+  .slot.full { background:#fdecec; border-color:#f3b9b9; }
+  .slot.has  { background:#fcf7ee; }
+  .slot.libre { background:#f1f7f0; }
+  .hour { font-weight:700; font-size:13px; width:34px; flex-shrink:0; padding-top:18px; color:#4a3b34; }
+  .cakes { display:flex; gap:8px; flex-wrap:wrap; flex:1; min-width:0; }
+  .empty { color:#9a8e80; font-size:12px; padding-top:20px; }
+
+  .cake { width:62px; text-align:center; }
+  .thumb { width:62px; height:62px; border-radius:10px; object-fit:cover; display:flex; align-items:center; justify-content:center; font-size:26px; border:3px solid transparent; }
+  /* cadres : confirmé = rouge, devis = jaune */
+  .confirme .thumb { border-color:#d12f2f; background:linear-gradient(135deg,#f6d9c0,#e9b894); }
+  .devis .thumb    { border-color:#e8b417; background:linear-gradient(135deg,#cfe6d2,#a9d3b0); }
+  .pers { font-size:11px; margin-top:2px; color:#4a3b34; font-weight:600; }
+  .tag { font-size:8.5px; text-transform:uppercase; letter-spacing:.4px; margin-top:1px; }
+  .confirme .tag { color:#d12f2f; }
+  .devis .tag { color:#b8890a; }
+  .slotmeta { font-size:10.5px; text-align:right; flex-shrink:0; padding-top:20px; }
+  .complet { color:#c0392b; font-weight:700; }
+  .total { text-align:center; font-size:12px; color:#6a5d54; margin-top:12px; }
+</style>
+</head>
+<body>
+<div class="modal">
+  <div class="head"><h3>🎂 Charge Cake Design</h3><button class="x">✕</button></div>
+  <div class="body">
+    <div class="nav">
+      <button>‹</button>
+      <div class="day">mercredi 24 juin</div>
+      <button>›</button>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background:#d12f2f"></span> confirmé</span>
+      <span><span class="swatch" style="background:#e8b417"></span> devis</span>
+      <span style="color:#9a8e80">max 3 / créneau</span>
+    </div>
+
+    <!-- 12h : complet (3) -->
+    <div class="slot full">
+      <div class="hour">12h</div>
+      <div class="cakes">
+        <div class="cake confirme"><div class="thumb">🎂</div><div class="pers">15 pers</div><div class="tag">confirmé</div></div>
+        <div class="cake confirme"><div class="thumb">🎂</div><div class="pers">8 pers</div><div class="tag">confirmé</div></div>
+        <div class="cake devis"><div class="thumb">🎂</div><div class="pers">20 pers</div><div class="tag">devis</div></div>
+      </div>
+      <div class="slotmeta"><span class="complet">COMPLET 🔴</span></div>
+    </div>
+
+    <!-- 13h : 1 confirmé -->
+    <div class="slot has">
+      <div class="hour">13h</div>
+      <div class="cakes">
+        <div class="cake confirme"><div class="thumb">🎂</div><div class="pers">10 pers</div><div class="tag">confirmé</div></div>
+      </div>
+      <div class="slotmeta">1 / 3</div>
+    </div>
+
+    <!-- 14h : 1 confirmé + 1 devis -->
+    <div class="slot has">
+      <div class="hour">14h</div>
+      <div class="cakes">
+        <div class="cake confirme"><div class="thumb">🎂</div><div class="pers">6 pers</div><div class="tag">confirmé</div></div>
+        <div class="cake devis"><div class="thumb">🎂</div><div class="pers">12 pers</div><div class="tag">devis</div></div>
+      </div>
+      <div class="slotmeta">2 / 3</div>
+    </div>
+
+    <!-- 15h : libre -->
+    <div class="slot libre">
+      <div class="hour">15h</div>
+      <div class="empty">libre</div>
+    </div>
+
+    <!-- 16h : 2 confirmés -->
+    <div class="slot has">
+      <div class="hour">16h</div>
+      <div class="cakes">
+        <div class="cake confirme"><div class="thumb">🎂</div><div class="pers">25 pers</div><div class="tag">confirmé</div></div>
+        <div class="cake confirme"><div class="thumb">🎂</div><div class="pers">8 pers</div><div class="tag">confirmé</div></div>
+      </div>
+      <div class="slotmeta">2 / 3</div>
+    </div>
+
+    <div class="total">Total du jour : <b style="color:#7a1f3d">6 confirmés</b> + <b style="color:#b8890a">2 devis</b></div>
+  </div>
+</div>
+</body>
+</html>

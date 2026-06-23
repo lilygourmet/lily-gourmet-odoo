@@ -15,6 +15,7 @@ import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
 import AdminGmConfig from './AdminGmConfig'
 import PrintBatchModal from './PrintBatchModal'
+import CakeChargeModal from './CakeChargeModal'
 import RecapVentes from './RecapVentes'
 import AppHeader from './AppHeader'
 import { filterUnprintedOrders, filterCurrentWeek } from '../lib/printOrders'
@@ -233,6 +234,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
   const [showRecaps, setShowRecaps] = useState(false)
   const [showGmConfig, setShowGmConfig] = useState(false)
   const [showBatchPrint, setShowBatchPrint] = useState(false)
+  const [showCharge, setShowCharge] = useState(false)
   const [viewMode, setViewMode] = useState(() => {
     // Si user n'est QUE patissier (pas admin), force mode patissier
     return isPatissierOnly(user) ? 'patissier' : 'admin'
@@ -652,6 +654,14 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
 
         {/* Groupe Imprimer + Etiquettes a droite */}
         <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+          {/* Charge Cake Design (par heure : confirmés + devis) */}
+          {!isPatissierMode && (
+            <button
+              onClick={() => setShowCharge(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-medium tracking-wider border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all flex-shrink-0"
+              title="Voir combien de Cake Design par heure (confirmés + devis)"
+            >🎂 Charge CD</button>
+          )}
           {/* Bouton impression batch */}
           {canPrintBatch(user) && !isPatissierMode && (
             <button
@@ -855,6 +865,8 @@ export default function Calendar({ user, onLogout, activeView, onNavigate }) {
           />
         )
       })()}
+
+      {showCharge && <CakeChargeModal onClose={() => setShowCharge(false)} />}
 
       {showBatchPrint && (
         <PrintBatchModal

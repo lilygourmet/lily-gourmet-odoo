@@ -96,16 +96,25 @@ function isPotentialWarningLine(productName) {
   return true
 }
 
+// 1ère ligne RÉELLE du nom (le produit) : on saute les ⚠️ et on retire le [882] éventuel.
+// On ne juge le produit QUE sur cette ligne — sinon une option citée dans la description
+// (« Décoration supplémentaire », « Bougies »…) ferait rejeter à tort le vrai gâteau.
+function productFirstLine(productName) {
+  const fl = String(productName || '').trim().split('\n').map(s => s.trim())
+    .find(s => s && !/^⚠️/.test(s)) || ''
+  return fl.replace(/^\[\s*\d+\s*\]\s*/, '')
+}
+
 // Detecte si une ligne est un produit CD- / GM- / GMD- a garder
-function isCdGmProduct(productName) {
+export function isCdGmProduct(productName) {
   if (!productName) return false
-  const trimmed = productName.trim()
-  if (!/^(CD-|GM-|GM\s*-|GMD-)/i.test(trimmed)) return false
-  if (/^(CD-|GM-|GMD-)\s*Bougies/i.test(trimmed)) return false
-  if (/D[ée]coration\s+suppl[ée]mentaire/i.test(trimmed)) return false
+  const head = productFirstLine(productName)
+  if (!/^(CD-|GM-|GM\s*-|GMD-)/i.test(head)) return false
+  if (/^(CD-|GM-|GMD-)\s*Bougies/i.test(head)) return false
+  if (/^(CD-|GM-|GMD-)?\s*D[ée]coration\s+suppl[ée]mentaire/i.test(head)) return false
   // Ignorer les toppers (decoration cake)
-  if (/^CD-\s*Happy\s+Birthday\s+Topper/i.test(trimmed)) return false
-  if (/\btopper\b/i.test(trimmed)) return false
+  if (/^CD-\s*Happy\s+Birthday\s+Topper/i.test(head)) return false
+  if (/\btopper\b/i.test(head)) return false
   return true
 }
 
