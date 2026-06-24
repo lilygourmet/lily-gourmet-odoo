@@ -17,7 +17,10 @@ const VIREMENT_METHOD = process.env.ODOO_POS_VIREMENT_METHOD_NAME || 'Virement b
 const sb = createClient(SUPA_URL, SUPA_SR_KEY)
 
 // ---- XML-RPC helpers ----
+// uid Odoo fixe (mot de passe renvoyé à chaque requête) → gardé en mémoire pour ne pas se reconnecter à chaque appel.
+let _odooUid = null
 async function odooAuth() {
+  if (_odooUid) return _odooUid
   const body = `<?xml version="1.0"?>
 <methodCall><methodName>authenticate</methodName><params>
   <param><value><string>${ODOO_DB}</string></value></param>
@@ -31,7 +34,8 @@ async function odooAuth() {
   const text = await res.text()
   const m = text.match(/<int>(\d+)<\/int>/)
   if (!m) throw new Error('Odoo auth failed: ' + text.slice(0, 500))
-  return parseInt(m[1], 10)
+  _odooUid = parseInt(m[1], 10)
+  return _odooUid
 }
 
 function escXml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }

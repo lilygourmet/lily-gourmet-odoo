@@ -119,17 +119,16 @@ export default async function handler(req, res) {
       { limit: 2000 }
     )
 
-    // 2) Templates (sequence + image fallback)
+    // 2) Templates (sequence + image fallback) + 3) Quants : tous deux ne dépendent
+    //    QUE des variantes (pas l'un de l'autre) → on les récupère EN PARALLÈLE.
     const tmplIds = [...new Set(variants
       .map(v => Array.isArray(v.product_tmpl_id) ? v.product_tmpl_id[0] : null)
       .filter(Boolean))]
-    const templates = await odooSearchRead(
-      uid,
-      'product.template',
-      [['id', 'in', tmplIds]],
-      ['id', 'name', 'sequence', 'image_128'],
-      { limit: 500 }
-    )
+    const locationName = process.env.ODOO_STOCK_LOCATION_NAME || 'WHLVP/Stock/Stock Vente'
+    const [templates, quants] = await Promise.all([
+      odooSearchRead(uid, 'product.template', [['id', 'in', tmplIds]], ['id', 'name', 'sequence', 'image_128'], { limit: 500 }),
+      odooSearchRead(uid, 'stock.quant', [['location_id.complete_name', '=', locationName], ['product_id', 'in', variants.map(v => v.id)]], ['product_id', 'quantity'], { limit: 3000 }),
+    ])
     const tmplById = new Map()
     for (const t of templates) {
       tmplById.set(t.id, {
@@ -137,19 +136,6 @@ export default async function handler(req, res) {
         image_url_fallback: t.image_128 ? `data:image/png;base64,${t.image_128}` : null,
       })
     }
-
-    // 3) Quants (info indicative, pas filtre)
-    const locationName = process.env.ODOO_STOCK_LOCATION_NAME || 'WHLVP/Stock/Stock Vente'
-    const quants = await odooSearchRead(
-      uid,
-      'stock.quant',
-      [
-        ['location_id.complete_name', '=', locationName],
-        ['product_id', 'in', variants.map(v => v.id)],
-      ],
-      ['product_id', 'quantity'],
-      { limit: 3000 }
-    )
     const qtyByVariant = new Map()
     for (const q of quants) {
       const vid = Array.isArray(q.product_id) ? q.product_id[0] : null
