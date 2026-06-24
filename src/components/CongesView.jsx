@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import Skeleton from './Skeleton'
 import { usePersistedState } from '../lib/usePersistedState'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
@@ -488,7 +489,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
         </div>
 
         {error && <div style={errBox}>{error}</div>}
-        {loading && <div style={{ color: '#4a3a30', padding: 12 }}>Chargement…</div>}
+        {loading && <Skeleton rows={5} />}
 
         {!loading && tab === 'demandes' && (
           demandes.length === 0

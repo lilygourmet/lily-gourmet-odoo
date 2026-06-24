@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Skeleton from './Skeleton'
 import { loadOrderCatalog, loadOrderProduct, searchOrderProducts } from '../lib/commande'
 import { loadOcpOverrides, addOcpOverride, removeOcpOverride, setOcpPhoto, removeOcpPhoto } from '../lib/ocp'
 import { loadUsers, setUserOcpNotif } from '../lib/users'
@@ -34,7 +35,7 @@ export default function OcpManage() {
     try { await setUserOcpNotif(u.id, next) } catch (e) { toast.error(e?.message || 'Échec'); setUsers(us => us.map(x => x.id === u.id ? { ...x, perm_notif_ocp: !next } : x)) }
   }
 
-  if (!catalog) return <div className="p-6 text-center text-ink-soft">Chargement du catalogue…</div>
+  if (!catalog) return <Skeleton rows={5} />
 
   const C = {}; catalog.forEach(c => { C[c.key] = c })
   const pick = (key, filt) => (C[key]?.items || []).filter(it => !filt || filt(it.name || '')).map(it => ({ tmplId: it.tmplId, name: it.name, img: it.image || '', configurable: it.configurable }))
