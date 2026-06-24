@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import Skeleton from './Skeleton'
 import { usePersistedState } from '../lib/usePersistedState'
 import { MessageSquareText, Cake, Croissant, Printer } from 'lucide-react'
 import AppHeader from './AppHeader'
@@ -577,7 +578,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
 
             {/* Messages de l'onglet actif */}
             {loading ? (
-              <div className="text-center text-ink-mute italic py-8">Chargement...</div>
+              <Skeleton rows={5} />
             ) : currentTabMessages.length === 0 ? (
               <div className="text-center text-ink-mute italic py-8">
                 {activeTab === 'cd' ? 'Aucun message gâteau' : 'Aucun message production'} aujourd'hui

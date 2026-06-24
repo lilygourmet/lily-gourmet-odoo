@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Skeleton from './Skeleton'
 import { Phone, MapPin, Cake, Truck, Cookie, User, Croissant } from 'lucide-react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix, fetchInvoicePdf, openInvoicePdf, searchInvoices } from '../lib/salesLines'
 
@@ -1443,7 +1444,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
 
           {/* 3 sections : Ventes par categorie / Vues transverses / Recap globaux */}
           {loading ? (
-            <div className="p-6 text-center text-ink-mute italic py-12">Chargement...</div>
+            <Skeleton rows={6} />
           ) : isLivreur(user) ? (
             /* Vue restreinte LIVREUR : uniquement la card Livraisons en grand */
             <div className="p-6">
