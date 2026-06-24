@@ -19,7 +19,7 @@ export default function CopyableRef({ value, className = '' }) {
       onClick={copy}
       role="button"
       title="Cliquer pour copier le n°"
-      className={`cursor-pointer hover:underline decoration-dotted ${done ? 'text-ok' : ''} ${className}`}
+      className={`cursor-pointer inline-flex items-center rounded-md px-2 py-1 -mx-1 transition-colors ${done ? 'text-ok bg-ok/10' : 'hover:bg-bordeaux/10'} ${className}`}
     >
       {value}{done ? ' ✓' : ''}
     </span>
