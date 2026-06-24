@@ -273,7 +273,7 @@ export default function NewOrderView({ user, initialClient = null }) {
           <button onClick={refresh} disabled={refreshing}
             title="Resynchroniser le catalogue depuis Odoo (articles ajoutés / retirés / prix)"
             className="px-3 py-1.5 border border-line text-ink-soft rounded-full text-[12px] font-medium hover:border-bordeaux transition-all disabled:opacity-50">
-            🔄 {refreshing ? 'Synchro…' : 'Actualiser'}
+            🔄 {refreshing ? 'Mise à jour…' : 'Mettre à jour'}
           </button>
         </div>
 

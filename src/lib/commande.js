@@ -5,18 +5,19 @@
 
 let _catalogPromise = null
 const CAT_CACHE_KEY = 'lg_catalog_v1'
-const CAT_TTL = 60 * 60 * 1000   // 1 h
+const catalogDay = () => new Date().toLocaleDateString('en-CA')   // 'AAAA-MM-JJ' (date locale)
 
-/** Catalogue groupé (CD/E/GM/SA/V/Saisonnier). Caché en mémoire + localStorage (1 h)
- *  → ré-ouvertures du lien instantanées. force=true → recharge depuis Odoo. */
+/** Catalogue groupé (CD/E/GM/SA/V/Saisonnier). Gardé en mémoire + navigateur
+ *  TOUTE LA JOURNÉE (filet : recharge auto 1×/jour) → ré-ouvertures instantanées.
+ *  La mise à jour se fait via le bouton « Mettre à jour » (force=true). */
 export async function loadOrderCatalog(force = false) {
   if (force) { _catalogPromise = null; try { localStorage.removeItem(CAT_CACHE_KEY) } catch { /* ignore */ } }
   if (!_catalogPromise) {
-    // 1) cache navigateur (rapide)
+    // 1) cache navigateur : valable tant qu'on est le même jour (sinon on recharge une fois)
     if (!force) {
       try {
         const c = JSON.parse(localStorage.getItem(CAT_CACHE_KEY) || 'null')
-        if (c && Array.isArray(c.data) && (Date.now() - c.t) < CAT_TTL) { _catalogPromise = Promise.resolve(c.data); return _catalogPromise }
+        if (c && Array.isArray(c.data) && c.day === catalogDay()) { _catalogPromise = Promise.resolve(c.data); return _catalogPromise }
       } catch { /* ignore */ }
     }
     // 2) sinon, on télécharge + on met en cache
@@ -28,7 +29,7 @@ export async function loadOrderCatalog(force = false) {
         const d = await r.json().catch(() => ({}))
         if (!r.ok) throw new Error(d.error || `Erreur ${r.status}`)
         const cats = d.cats || []
-        try { localStorage.setItem(CAT_CACHE_KEY, JSON.stringify({ t: Date.now(), data: cats })) } catch { /* quota → tant pis */ }
+        try { localStorage.setItem(CAT_CACHE_KEY, JSON.stringify({ day: catalogDay(), data: cats })) } catch { /* quota → tant pis */ }
         return cats
       })
       .catch(e => { _catalogPromise = null; throw e })
