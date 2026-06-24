@@ -6,6 +6,7 @@ import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
 import { countLivraisonsARelancer } from '../lib/deliveries'
+import { refreshOnReturn } from '../lib/autoRefresh'
 import ChangePasswordModal from './ChangePasswordModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
@@ -120,8 +121,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       if (!cancelled) setDevisInternetBadge(n)
     }
     refresh()
-    const iv = setInterval(refresh, 5 * 60 * 1000)   // rafraîchit toutes les 5 min
-    return () => { cancelled = true; clearInterval(iv) }
+    const stopReturn = refreshOnReturn(refresh)   // au retour sur l'app + filet rare
+    return () => { cancelled = true; stopReturn() }
   }, [user])
 
   // Recompte quand on QUITTE l'onglet Devis internet (on vient peut-être de traiter des devis).
@@ -420,12 +421,12 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           () => { refreshTasksBadge() })
       .subscribe()
 
-    // Refresh de secours toutes les 5 min (au cas où le temps réel loupe un event)
-    const interval = setInterval(refreshTasksBadge, 5 * 60 * 1000)
+    // Filet : refresh au retour sur l'app + intervalle espacé (le temps réel fait le gros)
+    const stopReturn = refreshOnReturn(refreshTasksBadge)
 
     return () => {
       cancelled = true
-      clearInterval(interval)
+      stopReturn()
       if (channel) supabase.removeChannel(channel)
     }
   }, [user?.id])
@@ -450,11 +451,11 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('conv-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, refreshConvBadge)
       .subscribe()
-    const interval = setInterval(refreshConvBadge, 3 * 60 * 1000)   // secours (le temps réel est instantané)
+    const stopReturn = refreshOnReturn(refreshConvBadge)   // filet : au retour + espacé
 
     return () => {
       cancelled = true
-      clearInterval(interval)
+      stopReturn()
       if (channel) supabase.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,8 +473,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('modif-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'modifications' }, refresh)
       .subscribe()
-    const interval = setInterval(refresh, 3 * 60 * 1000)   // secours (temps réel instantané)
-    return () => { cancelled = true; clearInterval(interval); if (channel) supabase.removeChannel(channel) }
+    const stopReturn = refreshOnReturn(refresh)   // filet : au retour + espacé
+    return () => { cancelled = true; stopReturn(); if (channel) supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeModif, user?.id])
 
@@ -489,8 +490,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('livraisons-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'livraisons' }, refresh)
       .subscribe()
-    const interval = setInterval(refresh, 3 * 60 * 1000)   // secours (temps réel instantané)
-    return () => { cancelled = true; clearInterval(interval); if (channel) supabase.removeChannel(channel) }
+    const stopReturn = refreshOnReturn(refresh)   // filet : au retour + espacé
+    return () => { cancelled = true; stopReturn(); if (channel) supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeLivraisons, user?.id])
 

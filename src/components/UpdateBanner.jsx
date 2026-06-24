@@ -38,7 +38,7 @@ export default function UpdateBanner() {
     }
 
     check()
-    const interval = setInterval(check, 90 * 1000)   // vérifie en continu → bandeau auto après déploiement
+    const interval = setInterval(check, 5 * 60 * 1000)   // filet espacé ; la vraie vérif se fait au retour sur l'onglet (ci-dessous)
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       cancelled = true

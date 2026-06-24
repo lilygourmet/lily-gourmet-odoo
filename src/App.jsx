@@ -42,6 +42,7 @@ import ToastHost from './components/ToastHost'
 import ConfirmHost from './components/ConfirmHost'
 import MobileBottomNav from './components/MobileBottomNav'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, hasValidJwt } from './lib/auth'
+import { refreshOnReturn } from './lib/autoRefresh'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -202,12 +203,9 @@ function App() {
   // changements d'admin sans que l'utilisateur ait besoin de se reconnecter
   useEffect(() => {
     if (!user) return
-    const interval = setInterval(() => {
-      loadFreshUser(user.id).then(fresh => {
-        if (fresh) setUser(fresh)
-      })
-    }, 2 * 60 * 1000)  // 2 minutes
-    return () => clearInterval(interval)
+    // Re-vérifie les permissions au retour sur l'app + filet espacé (elles changent rarement).
+    const refresh = () => loadFreshUser(user.id).then(fresh => { if (fresh) setUser(fresh) }).catch(() => {})
+    return refreshOnReturn(refresh)
   }, [user?.id])
 
   // Refresh quand l'onglet redevient visible (changement de fenetre, retour de veille...)
