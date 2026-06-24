@@ -261,7 +261,11 @@ export default function CakeVisionView({ user, activeView, onNavigate, onLogout 
               <div className="flex flex-wrap gap-2 mt-3">
                 <a href={result} download="cake-vision.png" className="px-3 py-2 text-[12px] font-medium border border-line rounded-lg hover:bg-cream-warm">⬇️ Télécharger</a>
                 <button onClick={openSend} className="px-3 py-2 text-[12px] font-bold bg-ok text-cream rounded-lg hover:opacity-90">📲 Envoyer au client</button>
-                <button onClick={useResultAsBase} className="px-3 py-2 text-[12px] font-medium border border-line rounded-lg hover:bg-cream-warm">🔁 Repartir de ce rendu</button>
+                <button onClick={useResultAsBase} className="px-3 py-2 text-[12px] font-medium border border-line rounded-lg hover:bg-cream-warm">🔁 Continuer sur ce rendu</button>
+                {origImg && baseImg !== origImg && (
+                  <button onClick={() => { setBaseImg(origImg); setResult(''); setPrompt(''); toast.success('On repart de la photo de base ✓') }}
+                    className="px-3 py-2 text-[12px] font-medium border border-line rounded-lg hover:bg-cream-warm">↩️ Repartir de la photo de base</button>
+                )}
               </div>
             )}
           </div>
