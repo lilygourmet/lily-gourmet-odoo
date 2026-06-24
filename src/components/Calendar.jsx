@@ -13,6 +13,7 @@ import LabelsButton from './LabelsButton'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
+import CopyableRef from './CopyableRef'
 import AdminGmConfig from './AdminGmConfig'
 import PrintBatchModal from './PrintBatchModal'
 import CakeChargeModal from './CakeChargeModal'
@@ -1582,7 +1583,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
             Cette commande a été modifiée
           </div>
           <div className="font-mono text-[11px] text-bordeaux mt-1.5">
-            {order.order_num} · {order.client_name}
+            <CopyableRef value={order.order_num} /> · {order.client_name}
           </div>
         </div>
 

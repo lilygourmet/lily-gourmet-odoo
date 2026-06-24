@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import CopyableRef from './CopyableRef'
 import { loadOrderLines, addOrderLine, updateOrderLine, deleteOrderLine, addOrderWarning, removeOrderWarning, updateOrderDate, loadOrderCatalog, loadOrderProduct, loadWarehouses, setOrderWarehouse, removeOrderPhoto } from '../lib/commande'
 import { recordDevisTraitement, loadDevisPhotos } from '../lib/conversations'
 import { createModification } from '../lib/modifications'
@@ -208,7 +209,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
         {/* En-tête */}
         <div className="flex items-start justify-between gap-2 px-5 pt-5">
           <div>
-            <div className="font-mono text-[13px] font-semibold text-bordeaux">{order.name}</div>
+            <div className="font-mono text-[13px] font-semibold text-bordeaux"><CopyableRef value={order.name} /></div>
             <div className="font-fraunces italic text-[20px] text-ink leading-tight">{order.clientName || '—'}</div>
           </div>
           <button onClick={tryClose} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>

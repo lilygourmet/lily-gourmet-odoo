@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import CopyableRef from './CopyableRef'
 import Skeleton from './Skeleton'
 import { loadDevis, loadConfirmedOrders, loadDevisPhotos, loadDevisEnvois, recordDevisEnvoi, confirmDevis, cancelDevis, restoreDevis, loadContactedOrderRefs, recordDevisTraitement, loadDevisTraitements } from '../lib/conversations'
 import { createModification } from '../lib/modifications'
@@ -274,7 +275,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
         <div className="flex gap-3">
           <div className="flex-1 min-w-0 space-y-2.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[14px] font-semibold text-bordeaux">{d.name}</span>
+              <span className="font-mono text-[14px] font-semibold text-bordeaux"><CopyableRef value={d.name} /></span>
               {env && (
                 <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800" title={`Devis envoyé ${env.count} fois`}>
                   📤 {fmtJour(env.last)}{env.count > 1 ? ` ×${env.count}` : ''}
