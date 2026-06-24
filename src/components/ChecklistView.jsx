@@ -1,4 +1,5 @@
 // src/components/ChecklistView.jsx
+import Skeleton from './Skeleton'
 // Page Checklist Cafe : 2 onglets - "A ranger" et "Range".
 //
 // ONGLET "A RANGER" - 3 sources distinctes :
@@ -703,9 +704,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-2xl border border-line p-6 text-center text-[13px] text-ink-mute shadow-sm">
-            Chargement...
-          </div>
+          <Skeleton rows={6} />
         ) : tab === 'todo' ? (
           <TodoTab
             allDone={allDone && !q}
