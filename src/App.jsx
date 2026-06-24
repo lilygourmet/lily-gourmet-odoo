@@ -1,8 +1,8 @@
 import { useState, useEffect, lazy } from 'react'
 import Login from './components/Login'
-import Calendar from './components/Calendar'
-import RecapVentes from './components/RecapVentes'
 // Écrans rares/lourds : chargés à la demande (réduit le poids au démarrage).
+const Calendar = lazy(() => import('./components/Calendar'))
+const RecapVentes = lazy(() => import('./components/RecapVentes'))
 const PatissierView = lazy(() => import('./components/PatissierView'))
 const ProdView = lazy(() => import('./components/ProdView'))
 const FreezerView = lazy(() => import('./components/FreezerView'))
@@ -20,14 +20,14 @@ const ChecklistView = lazy(() => import('./components/ChecklistView'))
 const EconomatView = lazy(() => import('./components/Economat/EconomatView'))
 const PhotoshopView = lazy(() => import('./components/Photoshop/PhotoshopView'))
 const CaisseView = lazy(() => import('./components/Caisse/CaisseView'))
-import TasksView from './components/Tasks/TasksView'
+const TasksView = lazy(() => import('./components/Tasks/TasksView'))
 const HRView = lazy(() => import('./components/HR/HRView'))
 const InboxView = lazy(() => import('./components/Conversations/InboxView'))
 const DevisView = lazy(() => import('./components/DevisView'))
 const OcpManage = lazy(() => import('./components/OcpManage'))
 const NewOrderView = lazy(() => import('./components/NewOrderView'))
 const ModificationsView = lazy(() => import('./components/ModificationsView'))
-import LivraisonsView from './components/LivraisonsView'
+const LivraisonsView = lazy(() => import('./components/LivraisonsView'))
 const PaymentsView = lazy(() => import('./components/Conversations/PaymentsView'))
 const AbsencesView = lazy(() => import('./components/AbsencesView'))
 const CongesView = lazy(() => import('./components/CongesView'))

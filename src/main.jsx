@@ -1,9 +1,11 @@
-import { StrictMode, Component } from 'react'
+import { StrictMode, Component, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.jsx'
-import ClientOrderView from './components/ClientOrder/ClientOrderView.jsx'
-import OcpOrderView from './components/ClientOrder/OcpOrderView.jsx'
+// Chargés à la demande : l'app interne et les pages clients publiques sont des
+// bundles séparés → chaque visiteur ne télécharge QUE ce dont il a besoin.
+const App = lazy(() => import('./App.jsx'))
+const ClientOrderView = lazy(() => import('./components/ClientOrder/ClientOrderView.jsx'))
+const OcpOrderView = lazy(() => import('./components/ClientOrder/OcpOrderView.jsx'))
 
 // Page CLIENT publique (sans login).
 // - Sur l'adresse « commande… » (commande-lily-gourmet.vercel.app, commande.lily-gourmet.com),
@@ -30,8 +32,12 @@ class ErrBoundary extends Component {
   }
 }
 
+const Loading = () => <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FBF6EE', color: '#993556', fontFamily: 'system-ui', fontSize: 14 }}>Chargement…</div>
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {isOcp ? <ErrBoundary><OcpOrderView /></ErrBoundary> : isPublicOrder ? <ClientOrderView /> : <App />}
+    <Suspense fallback={<Loading />}>
+      {isOcp ? <ErrBoundary><OcpOrderView /></ErrBoundary> : isPublicOrder ? <ClientOrderView /> : <App />}
+    </Suspense>
   </StrictMode>,
 )
