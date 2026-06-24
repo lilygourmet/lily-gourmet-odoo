@@ -680,6 +680,7 @@ export async function loadDevisTraitements() {
   const { data, error } = await supabase
     .from('devis_traitements').select('order_num, action, user_name, created_at')
     .order('created_at', { ascending: false })
+    .limit(2000)   // les 2000 traitements les plus récents suffisent (devis affichés = récents)
   if (error) return {}
   const map = {}
   for (const r of data || []) { if (!map[r.order_num]) map[r.order_num] = r }
@@ -723,10 +724,14 @@ export async function countDevisInternetNonTraites() {
 // Sert à savoir si un client a été contacté pour CETTE commande précise.
 export async function loadContactedOrderRefs() {
   const set = new Set()
+  // Borné aux 8000 messages les plus récents (id décroissant) : évite de charger
+  // TOUTE la table messages dans le navigateur ; les devis affichés sont récents.
   const { data, error } = await supabase
     .from('messages').select('body')
     .in('sender_type', ['agent', 'system'])
     .ilike('body', '%S%')
+    .order('id', { ascending: false })
+    .limit(8000)
   if (error) return set
   for (const m of data || []) {
     const matches = (m.body || '').match(/\bS\d{4,}\b/gi)
