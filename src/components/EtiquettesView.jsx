@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { usePersistedState } from '../lib/usePersistedState'
@@ -203,7 +204,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
       {/* Grid articles */}
       <div className="pt-4">
       {loading ? (
-        <div className="text-center text-ink-mute py-12 text-[13px]">Chargement...</div>
+        <Skeleton rows={6} />
       ) : filteredArticles.length === 0 ? (
         <div className="text-center text-ink-mute py-12 text-[13px]">
           {search ? 'Aucun article trouve' : 'Aucun article. Lance le sync pour les recuperer depuis Odoo.'}

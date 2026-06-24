@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { loadAbsences, createAbsence, deleteAbsence } from '../lib/absences'
@@ -92,7 +93,7 @@ export default function AbsencesView({ user }) {
       />
 
       {error && !showForm && <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded mb-4">{error}</div>}
-      {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
+      {loading && <Skeleton rows={5} />}
 
       {!loading && persons.length === 0 && (
         <div className="text-center py-12 text-ink-mute italic">
