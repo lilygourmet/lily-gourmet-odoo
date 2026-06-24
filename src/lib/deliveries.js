@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { createTask } from './tasks'
+import { memoCache } from './memoCache'
 
 // ============================================================
 // DISPATCH DES LIVRAISONS AUX LIVREURS
@@ -8,7 +9,8 @@ import { createTask } from './tasks'
 // profiles.livreur_defaut = livreur par défaut (reçoit les non-assignées).
 // ============================================================
 
-export async function loadLivreurs() {
+// Cache 5 min (liste quasi figée ; modifs de permissions livreur très rares).
+async function _loadLivreurs() {
   // Livreurs = ancien rôle 'livreur' OU une des 2 permissions livreur.
   const { data, error } = await supabase
     .from('profiles')
@@ -19,6 +21,7 @@ export async function loadLivreurs() {
   if (error) throw error
   return data || []
 }
+export const loadLivreurs = memoCache(_loadLivreurs, 5 * 60 * 1000)
 
 // État (livreur_id, livraison_faite, statut, assigned_by) pour une liste de n° de commande.
 export async function loadDeliveryStates(orderNums) {

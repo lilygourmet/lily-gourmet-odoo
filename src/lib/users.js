@@ -1,10 +1,14 @@
 import { supabase } from './supabase'
+import { memoCache } from './memoCache'
 
 // ============================================================
 // Lecture
 // ============================================================
 
-export async function loadUsers() {
+// Cache COURT (60 s) : assez pour éviter de recharger la liste à chaque
+// ouverture du Calendrier/Admin, et se rafraîchit tout seul après une modif
+// (donc pas besoin de vider le cache à chaque endroit qui édite un compte).
+async function _loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
@@ -13,6 +17,7 @@ export async function loadUsers() {
   if (error) throw error
   return data || []
 }
+export const loadUsers = memoCache(_loadUsers, 60 * 1000)
 
 // Alias compat
 export const loadAllProfiles = loadUsers

@@ -4,6 +4,7 @@ import Docxtemplater from 'docxtemplater'
 import { saveAs } from 'file-saver'
 import { PDFDocument } from 'pdf-lib'
 import { downloadBulletinBytes } from './bulletins'
+import { memoCache } from './memoCache'
 
 // Groupes/catégories d'employé (menu déroulant). Simple étiquette de classement :
 // n'active aucune permission (le dispatch des perms reste manuel).
@@ -19,18 +20,21 @@ export const EMPLOYE_GROUPES = [
 ]
 
 // --- Groupes dynamiques (table employe_groupes). Repli sur la liste fixe ci-dessus. ---
-export async function loadGroupes() {
+// Cache 10 min (change quasi jamais) ; vidé après ajout/renommage/suppression.
+async function _loadGroupes() {
   const { data, error } = await supabase
     .from('employe_groupes').select('nom').order('sort', { ascending: true }).order('nom')
   if (error || !data?.length) return EMPLOYE_GROUPES
   return data.map(g => g.nom)
 }
+export const loadGroupes = memoCache(_loadGroupes)
 
 export async function createGroupe(nom) {
   const n = (nom || '').trim()
   if (!n) throw new Error('Nom vide')
   const { error } = await supabase.from('employe_groupes').insert({ nom: n })
   if (error) throw error
+  loadGroupes.clear()
 }
 
 // Renomme un groupe ET met à jour tous les employés + comptes qui l'utilisaient.
@@ -41,6 +45,7 @@ export async function renameGroupe(oldNom, newNom) {
   if (error) throw error
   await supabase.from('employes').update({ groupe: n }).eq('groupe', oldNom)
   await supabase.from('profiles').update({ groupe: n }).eq('groupe', oldNom)
+  loadGroupes.clear()
 }
 
 // Supprime un groupe et détache les employés + comptes concernés.
@@ -49,6 +54,7 @@ export async function deleteGroupe(nom) {
   if (error) throw error
   await supabase.from('employes').update({ groupe: null }).eq('groupe', nom)
   await supabase.from('profiles').update({ groupe: null }).eq('groupe', nom)
+  loadGroupes.clear()
 }
 
 // ============================================================

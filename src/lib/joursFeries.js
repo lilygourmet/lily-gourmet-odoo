@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { memoCache } from './memoCache'
 
 // Fériés FIXES marocains (mêmes dates chaque année). MM-DD.
 export const FERIES_FIXES = [
@@ -15,13 +16,15 @@ export const FERIES_FIXES = [
 ]
 
 // Charge les jours fériés (optionnellement filtrés sur une année).
-export async function loadJoursFeries({ annee = null } = {}) {
+// Cache 10 min (change quasi jamais) ; vidé après ajout/modif/suppression.
+async function _loadJoursFeries({ annee = null } = {}) {
   let q = supabase.from('jours_feries').select('*').order('date', { ascending: true })
   if (annee) q = q.gte('date', `${annee}-01-01`).lte('date', `${annee}-12-31`)
   const { data, error } = await q
   if (error) throw error
   return data || []
 }
+export const loadJoursFeries = memoCache(_loadJoursFeries)
 
 export async function createJourFerie({ date, nom, type = 'fixe' }) {
   if (!date || !nom) throw new Error('Date et nom requis.')
@@ -30,6 +33,7 @@ export async function createJourFerie({ date, nom, type = 'fixe' }) {
     .insert({ date, nom: nom.trim(), type })
     .select().single()
   if (error) throw error
+  loadJoursFeries.clear()
   return data
 }
 
@@ -43,12 +47,14 @@ export async function updateJourFerie(id, patch) {
     .eq('id', id)
     .select().single()
   if (error) throw error
+  loadJoursFeries.clear()
   return data
 }
 
 export async function deleteJourFerie(id) {
   const { error } = await supabase.from('jours_feries').delete().eq('id', id)
   if (error) throw error
+  loadJoursFeries.clear()
 }
 
 // Insère les fériés fixes pour une année (ignore ceux déjà présents).
@@ -62,6 +68,7 @@ export async function genererFeriesFixes(annee) {
   if (aAjouter.length === 0) return 0
   const { error } = await supabase.from('jours_feries').insert(aAjouter)
   if (error) throw error
+  loadJoursFeries.clear()
   return aAjouter.length
 }
 

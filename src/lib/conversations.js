@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { memoCache } from './memoCache'
 
 // ============================================================
 // CONVERSATIONS WHATSAPP
@@ -266,8 +267,9 @@ export const LABEL_PALETTE = [
   { color: '#555555', bg: '#ECECEC' }, // gris
 ]
 
-/** Charge les étiquettes définies (table conversation_labels). Repli sur CONV_LABELS si vide/erreur. */
-export async function loadConvLabels() {
+/** Charge les étiquettes définies (table conversation_labels). Repli sur CONV_LABELS si vide/erreur.
+ *  Caché 10 min (change rarement) ; le cache est vidé après création/modif/suppression. */
+async function _loadConvLabels() {
   const { data, error } = await supabase
     .from('conversation_labels')
     .select('key, label, color, bg, sort')
@@ -275,6 +277,7 @@ export async function loadConvLabels() {
   if (error || !data?.length) return CONV_LABELS
   return data
 }
+export const loadConvLabels = memoCache(_loadConvLabels)
 
 function slugifyLabel(label) {
   const base = String(label || '').toLowerCase().normalize('NFD')
@@ -287,6 +290,7 @@ export async function createConvLabel({ label, color, bg, sort = 99 }) {
   const key = slugifyLabel(label)
   const { error } = await supabase.from('conversation_labels').insert({ key, label: label.trim(), color, bg, sort })
   if (error) throw error
+  loadConvLabels.clear()
   return key
 }
 
@@ -294,12 +298,14 @@ export async function createConvLabel({ label, color, bg, sort = 99 }) {
 export async function updateConvLabel(key, fields) {
   const { error } = await supabase.from('conversation_labels').update(fields).eq('key', key)
   if (error) throw error
+  loadConvLabels.clear()
 }
 
 /** Supprime une étiquette. */
 export async function deleteConvLabel(key) {
   const { error } = await supabase.from('conversation_labels').delete().eq('key', key)
   if (error) throw error
+  loadConvLabels.clear()
 }
 /** Met à jour les étiquettes d'une conversation (tableau de clés). */
 export async function setConversationLabels(conversationId, labels) {
@@ -492,17 +498,20 @@ export async function rejectPayment(messageId, userId, reason) {
 // PHRASES TYPES (réponses rapides, communes à l'équipe)
 // ============================================================
 
-export async function loadQuickReplies() {
+// Caché 10 min (change rarement) ; le cache est vidé après création/modif/suppression/réordonnancement.
+async function _loadQuickReplies() {
   const { data, error } = await supabase
     .from('quick_replies').select('*').order('ordre').order('id')
   if (error) throw error
   return data || []
 }
+export const loadQuickReplies = memoCache(_loadQuickReplies)
 
 export async function createQuickReply(label, body, mediaPath = null, emoji = null) {
   const { data, error } = await supabase
     .from('quick_replies').insert({ label: label.trim(), body, media_path: mediaPath, emoji: emoji || null }).select().single()
   if (error) throw error
+  loadQuickReplies.clear()
   return data
 }
 
@@ -510,11 +519,13 @@ export async function updateQuickReply(id, label, body, mediaPath = null, emoji 
   const { error } = await supabase
     .from('quick_replies').update({ label: label.trim(), body, media_path: mediaPath, emoji: emoji || null }).eq('id', id)
   if (error) throw error
+  loadQuickReplies.clear()
 }
 
 export async function deleteQuickReply(id) {
   const { error } = await supabase.from('quick_replies').delete().eq('id', id)
   if (error) throw error
+  loadQuickReplies.clear()
 }
 
 /** Enregistre un nouvel ordre des phrases (ordre = position dans la liste). */
@@ -522,6 +533,7 @@ export async function reorderQuickReplies(orderedIds) {
   await Promise.all(orderedIds.map((id, i) =>
     supabase.from('quick_replies').update({ ordre: i }).eq('id', id)
   ))
+  loadQuickReplies.clear()
 }
 
 // ============================================================

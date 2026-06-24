@@ -2,6 +2,7 @@
 // Prise de commande : lecture du catalogue Odoo (via le webhook serveur,
 // les identifiants Odoo ne doivent jamais être côté navigateur).
 // ============================================================
+import { memoCache } from './memoCache'
 
 let _catalogPromise = null
 const CAT_CACHE_KEY = 'lg_catalog_v1'
@@ -79,10 +80,11 @@ export async function loadOrderSizes(tmplIds) {
   return d?.sizes || {}
 }
 
-/** Liste des entrepôts Odoo : [{ id, name, code }]. */
-export async function loadWarehouses() {
+/** Liste des entrepôts Odoo : [{ id, name, code }]. Cache 10 min (jamais modifiés depuis l'app). */
+async function _loadWarehouses() {
   return (await post('order-warehouses', {})).warehouses || []
 }
+export const loadWarehouses = memoCache(_loadWarehouses)
 
 /** Change l'entrepôt d'une commande/devis existant. */
 export async function setOrderWarehouse(orderId, warehouseId) {
