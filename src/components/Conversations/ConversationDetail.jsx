@@ -8,7 +8,7 @@ import { createModification } from '../../lib/modifications'
 import NewConversationModal from './NewConversationModal'
 import OrderEditModal from '../OrderEditModal'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Search, Pencil, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
+import { ArrowLeft, Search, Pencil, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -136,6 +136,8 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   const relanceMarkedRef = useRef(false) // « Relancé par » enregistré une seule fois, au 1er envoi réel
   const [showEmoji, setShowEmoji] = useState(false)
   const [showReplies, setShowReplies] = useState(false)
+  const [showPhone, setShowPhone] = useState(false)
+  const [phoneCopied, setPhoneCopied] = useState(false)
   const [repliesDrawerOpen, setRepliesDrawerOpen] = useState(false)
   const repliesDrawerRef = useRef(null)
   const [quickReplies, setQuickReplies] = useState([])
@@ -237,6 +239,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     setLoading(true)
     setError('')
     setPrefilled(false)
+    setConv(null); setMessages([]) // efface IMMÉDIATEMENT l'ancienne conversation au clic (sinon elle reste affichée pendant un chargement lent)
     setLinkedOrder(null) // on efface la commande de la conversation précédente (sinon les boutons « sautent »)
     setText('') // on repart d'une zone vide à chaque conversation (pas de débordement entre conversations)
     relanceMarkedRef.current = false // nouvelle conversation → on pourra ré-enregistrer « Relancé par » si besoin
@@ -615,8 +618,23 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     if (!conv || sending) return
     const raw = prompt('Information à envoyer au client (WhatsApp) :')
     if (raw === null) return
-    const text = raw.trim()
+    let text = raw.trim()
     if (!text) return
+    // Correction IA puis relecture (même logique que l'envoi normal)
+    setCorrecting(true)
+    try {
+      const c = await correctText(text, user.id)
+      if (c && c.trim() && c !== text) {
+        const reviewed = prompt('✨ Texte corrigé — relis et ajuste si besoin :', c)
+        if (reviewed === null) { setCorrecting(false); return }
+        text = reviewed.trim()
+        if (!text) { setCorrecting(false); return }
+      }
+    } catch (_) {
+      // Erreur IA silencieuse : on garde le texte tapé
+    } finally {
+      setCorrecting(false)
+    }
     setSending(true); setSendError('')
     try {
       const res = await fetch('/api/wati-webhook?action=send-template', {
@@ -970,6 +988,23 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                 <div className="text-[15px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
                 {conv && (
                   <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
+                )}
+                {conv?.client_phone && (
+                  <div className="relative flex-shrink-0">
+                    <button onClick={() => setShowPhone(v => !v)} title="Numéro de téléphone" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex items-center justify-center transition-all"><Phone size={12} /></button>
+                    {showPhone && (
+                      <>
+                        <div className="fixed inset-0 z-[90]" onClick={() => setShowPhone(false)} />
+                        <div className="absolute top-7 left-0 z-[100] bg-cream border border-line rounded-lg shadow-xl px-3 py-2 flex items-center gap-2 whitespace-nowrap">
+                          <span className="font-mono text-[13px] font-semibold text-ink">{conv.client_phone}</span>
+                          <button onClick={() => { try { navigator.clipboard?.writeText(conv.client_phone) } catch { /* */ } setPhoneCopied(true); setTimeout(() => setPhoneCopied(false), 1400) }}
+                            className={`text-[11px] font-bold px-2.5 py-1 rounded-md ${phoneCopied ? 'bg-emerald-600 text-white' : 'border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream'} transition-all`}>
+                            {phoneCopied ? '✓ Copié' : 'Copier'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto">

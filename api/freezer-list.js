@@ -19,11 +19,15 @@ async function odooJsonRpc(service, method, args) {
   return data.result
 }
 
+// uid Odoo fixe (mot de passe renvoyé à chaque requête) → gardé en mémoire pour ne pas se reconnecter à chaque appel.
+let _odooUid = null
 async function odooAuth() {
+  if (_odooUid) return _odooUid
   const uid = await odooJsonRpc('common', 'authenticate', [
     process.env.ODOO_DB, process.env.ODOO_USERNAME, process.env.ODOO_PASSWORD, {},
   ])
   if (!uid) throw new Error('Odoo authentication failed')
+  _odooUid = uid
   return uid
 }
 
