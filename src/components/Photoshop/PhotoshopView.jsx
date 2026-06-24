@@ -2,11 +2,24 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { listPhotos, uploadPhoto, trashPhoto, restorePhoto, renamePhoto, setPhotoSize, replacePhotoImage, duplicatePhoto, purgeOldTemp, purgeOldTrash, listFonts, uploadFont } from '../../lib/photoshop'
 import RegionEditor from './RegionEditor'
 import RemoveBgModal from './RemoveBgModal'
+import DummyModal from './DummyModal'
 import { loadImg, trimToContent } from './imgutil'
 import { extractPsdLayers } from '../../lib/psdImport'
+import { loadCdDay } from '../../lib/commande'
 
 // ====== Studio photos : composer une planche A4 d'images imprimables pour gâteaux ======
 // Porté de la maquette validée (mockups/photos-gateaux-composeur.html).
+// Référence « commande du jour » (comme Charge CD) : date ISO + regroupement des gâteaux identiques.
+const psToISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function psGroupCakes(cakes) {
+  const map = new Map()
+  for (const c of cakes) {
+    const key = `${c.orderRef}|${c.pers}|${c.photo}|${c.isDevis}`
+    if (map.has(key)) map.get(key).count++
+    else map.set(key, { ...c, count: 1 })
+  }
+  return [...map.values()]
+}
 const MARG = 1, PW = 480           // PW = largeur affichée d'une page (px)
 const AR_KEYS = ['ا','ب','ت','ث','ج','ح','خ','د','ذ','ر','ز','س','ش','ص','ض','ط','ظ','ع','غ','ف','ق','ك','ل','م','ن','ه','و','ي','ء','ة','ى','أ','إ','آ','ؤ','ئ','لا','٠','١','٢','٣','٤','٥','٦','٧','٨','٩']
 const PAGE_FORMATS = [
@@ -61,6 +74,29 @@ function clipForme(ctx, forme, w, h) {
   if (forme === 'coeur') { const m = new DOMMatrix().translateSelf(-w / 2, -h / 2).scaleSelf(w / 100, h / 100); const p = new Path2D(); p.addPath(new Path2D(HEART_D), m); ctx.clip(p) }
 }
 
+// Path2D de la forme (boîte w×h centrée à l'origine). Rectangle pour « none ».
+function formePath2D(forme, w, h) {
+  const p = new Path2D()
+  const X = px => -w / 2 + px / 100 * w, Y = py => -h / 2 + py / 100 * h
+  const f = (!forme || forme === 'none') ? 'carre' : forme
+  if (f === 'rond') p.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2)
+  else if (f === 'arrondi') { const r = Math.min(w, h) * 0.16, x = -w / 2, y = -h / 2; p.moveTo(x + r, y); p.arcTo(x + w, y, x + w, y + h, r); p.arcTo(x + w, y + h, x, y + h, r); p.arcTo(x, y + h, x, y, r); p.arcTo(x, y, x + w, y, r) }
+  else if (f === 'losange') { p.moveTo(X(50), Y(0)); p.lineTo(X(100), Y(50)); p.lineTo(X(50), Y(100)); p.lineTo(X(0), Y(50)); p.closePath() }
+  else if (f === 'hexagone') {[[25, 0], [75, 0], [100, 50], [75, 100], [25, 100], [0, 50]].forEach(([a, b], i) => i ? p.lineTo(X(a), Y(b)) : p.moveTo(X(a), Y(b))); p.closePath() }
+  else if (f === 'coeur') { const m = new DOMMatrix().translateSelf(-w / 2, -h / 2).scaleSelf(w / 100, h / 100); p.addPath(new Path2D(HEART_D), m) }
+  else p.rect(-w / 2, -h / 2, w, h)
+  return p
+}
+// Contour INTÉRIEUR : on clippe la forme et on trace un trait double → seule la moitié interne reste.
+function strokeForme(ctx, forme, w, h, color, lw) {
+  if (!lw || lw <= 0) return
+  const p = formePath2D(forme, w, h)
+  ctx.save(); ctx.clip(p)
+  ctx.lineWidth = lw * 2; ctx.strokeStyle = color; ctx.lineJoin = 'round'
+  ctx.stroke(p)
+  ctx.restore()
+}
+
 function Outline({ forme }) {
   if (!forme || forme === 'none') return null
   const s = { stroke: '#cfc7ba', fill: 'none', strokeWidth: 1, vectorEffect: 'non-scaling-stroke' }
@@ -92,13 +128,37 @@ function matchText(query, text) {
   return q.split(/\s+/).every(w => t.includes(w) || toks.some(tok => lev(tok, w) <= (w.length <= 4 ? 1 : 2)))
 }
 
+// Sauvegarde locale de la composition (garde le travail si on sort par erreur).
+const PS_LS = 'ps_composition'
+function loadComp() {
+  try { const r = localStorage.getItem(PS_LS); if (r) { const d = JSON.parse(r); if (Array.isArray(d.placed)) return d } } catch { /* */ }
+  return null
+}
+
 export default function PhotoshopView({ user, onNavigate }) {
-  const [placed, setPlaced] = useState([])
+  const [placed, setPlaced] = useState(() => loadComp()?.placed || [])
   const [selUids, setSelUids] = useState([])
-  const [npages, setNpages] = useState(1)
+  // Onglets = TAILLES. Chaque onglet a son format + sa pile de pages (continuité en longueur).
+  const [tabs, setTabs] = useState(() => { const c = loadComp(); if (c?.tabs) return c.tabs; const fmt = (c?.pageFmts && c.pageFmts[0]) || c?.pageFmt || PAGE_FORMATS[0]; return [{ fmt, npages: c?.npages || 1 }] })
   const [prop, setProp] = useState(true)
-  const [pageFmt, setPageFmt] = useState(PAGE_FORMATS[0])   // format de page (A4 par défaut)
-  const CMW = pageFmt.w, CMH = pageFmt.h
+  const [activeTab, setActiveTab] = useState(0)   // onglet (= taille) ouvert
+  const safeTab = Math.min(activeTab, tabs.length - 1)
+  const curTab = tabs[safeTab] || { fmt: PAGE_FORMATS[0], npages: 1 }
+  const CMW = curTab.fmt.w, CMH = curTab.fmt.h
+  const npages = Math.max(curTab.npages || 1, ...(placed.length ? placed.filter(it => (it.tab || 0) === safeTab).map(it => (it.page || 0) + 1) : [1]))
+  // helpers onglets/pages
+  const updateTab = (patch) => setTabs(arr => arr.map((t, i) => i === safeTab ? { ...t, ...patch } : t))
+  const setTabFmt = (f) => updateTab({ fmt: f })
+  const addPageToTab = () => updateTab({ npages: npages + 1 })
+  const addTab = () => { setTabs(arr => [...arr, { fmt: PAGE_FORMATS[0], npages: 1 }]); setActiveTab(tabs.length); setSelUids([]) }
+  const deleteTab = (t) => {
+    if (tabs.length <= 1) { if (placed.some(it => (it.tab || 0) === t) && !confirm('Vider cette taille (enlever tout) ?')) return; setPlaced(list => list.filter(it => (it.tab || 0) !== t)); updateTab({ npages: 1 }); return }
+    if (!confirm('Supprimer cette taille et tout son contenu ?')) return
+    setPlaced(list => list.filter(it => (it.tab || 0) !== t).map(it => ((it.tab || 0) > t ? { ...it, tab: it.tab - 1 } : it)))
+    setTabs(arr => arr.filter((_, i) => i !== t))
+    setActiveTab(a => (a > t ? a - 1 : Math.min(a, tabs.length - 2)))
+    setSelUids([])
+  }
   const [customFonts, setCustomFonts] = useState([])   // polices ajoutées (fichiers)
   const [arKb, setArKb] = useState(false)              // clavier arabe à l'écran
   const [marq, setMarq] = useState(null)               // rectangle de sélection à la souris (lasso)
@@ -121,6 +181,18 @@ export default function PhotoshopView({ user, onNavigate }) {
   const [regionUid, setRegionUid] = useState(null)
   const [removeBgSrc, setRemoveBgSrc] = useState(null)
   const [removeBgUid, setRemoveBgUid] = useState(null)
+  const [showDummy, setShowDummy] = useState(false)   // générateur de dummies
+  // photo de référence : les gâteaux du jour (comme Charge CD) qu'on garde « en face » en travaillant
+  const [refDate, setRefDate] = useState(null)        // jour affiché (ISO) ; null = section repliée
+  const [refConfirmed, setRefConfirmed] = useState(null)  // gâteaux confirmés (rapide, Supabase)
+  const [refDevis, setRefDevis] = useState(null)          // devis (lent, Odoo) — ajoutés après
+  const [refTitle, setRefTitle] = useState('')        // n° de la commande choisie (titre vignette)
+  const [refPhotos, setRefPhotos] = useState([])      // [{ dataUrl, name }] de la vignette affichée
+  const [refIdx, setRefIdx] = useState(0)             // photo affichée si plusieurs
+  const [refPos, setRefPos] = useState({ x: 360, y: 90 })  // position de la vignette flottante
+  const [refScale, setRefScale] = useState(1)              // zoom dans la photo
+  const [refPan, setRefPan] = useState({ x: 0, y: 0 })     // déplacement dans la photo zoomée
+  const refDrag = useRef(null)
 
   const uid = useRef(1), grpSeq = useRef(0)
   const sizeSave = useRef({ timer: null, pending: {} })   // sauvegarde (débounce) de la taille par photo
@@ -138,8 +210,59 @@ export default function PhotoshopView({ user, onNavigate }) {
   const sel = selUids.length === 1 ? placed.find(p => p.uid === selUids[0]) : null
   const isSel = u => selUids.some(x => x === u)
 
+  // ---------- photo de référence : les gâteaux du jour (comme Charge CD) ----------
+  useEffect(() => {
+    if (!refDate) return
+    let off = false
+    setRefConfirmed(null); setRefDevis(null)
+    loadCdDay(refDate, 'confirmed').then(d => { if (!off) setRefConfirmed(d || {}) }).catch(() => { if (!off) setRefConfirmed({}) })
+    loadCdDay(refDate, 'devis').then(d => { if (!off) setRefDevis(d || {}) }).catch(() => { if (!off) setRefDevis({}) })
+    return () => { off = true }
+  }, [refDate])
+  const refCakes = useMemo(() => {
+    if (refConfirmed === null) return null
+    const all = []
+    for (const h in refConfirmed) all.push(...refConfirmed[h])
+    for (const h in (refDevis || {})) all.push(...refDevis[h])
+    return psGroupCakes(all)
+  }, [refConfirmed, refDevis])
+  const shiftRefDay = n => { const d = new Date(refDate + 'T12:00:00'); d.setDate(d.getDate() + n); setRefDate(psToISO(d)) }
+  const showCake = c => {
+    if (!c.photo) return
+    setRefTitle(c.orderRef || ''); setRefPhotos([{ dataUrl: c.photo, name: c.orderRef }])
+    setRefIdx(0); setRefScale(1); setRefPan({ x: 0, y: 0 })
+  }
+  const refZoom = d => setRefScale(s => { const n = Math.min(5, Math.max(1, +(s + d).toFixed(1))); if (n === 1) setRefPan({ x: 0, y: 0 }); return n })
+  const refGoto = next => { setRefIdx(i => next(i)); setRefScale(1); setRefPan({ x: 0, y: 0 }) }
+  const onRefImgDown = e => {
+    if (refScale <= 1) return
+    e.preventDefault()
+    const start = { x: e.clientX, y: e.clientY, px: refPan.x, py: refPan.y }
+    const move = ev => setRefPan({ x: start.px + (ev.clientX - start.x), y: start.py + (ev.clientY - start.y) })
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up) }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
+  }
+  const onRefDragStart = e => {
+    e.preventDefault()
+    refDrag.current = { dx: e.clientX - refPos.x, dy: e.clientY - refPos.y }
+    const move = ev => { if (refDrag.current) setRefPos({ x: ev.clientX - refDrag.current.dx, y: ev.clientY - refDrag.current.dy }) }
+    const up = () => { refDrag.current = null; document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up) }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
+  }
+
   // ---------- bibliothèque : tout chargé une fois, filtré côté client ----------
   const loadAll = useCallback(async () => { setLibLoading(true); setAllPhotos(await listPhotos({ limit: 5000 })); setLibLoading(false) }, [])
+  // Pose un dummy généré DIRECTEMENT sur la planche, à sa vraie taille (cm) — pas dans la bibliothèque.
+  const placeDummy = (src, wCm, hCm, nom) => {
+    const w = Math.max(0.5, Math.round(wCm * 10) / 10)
+    const h = Math.max(0.5, Math.round(hCm * 10) / 10)
+    setPlaced(list => {
+      const s = freeSpot(list, w, h)
+      const it = { uid: uid.current++, type: 'photo', src, nom: nom || 'Dummy', libId: null, forme: 'none', fit: 'contain', w, h, rot: 0, zoom: 100, ratio: w / h, x: s.x, y: s.y, page: s.page, tab: s.tab, tint: '#ff5aa0', tintA: 0, ct: 0, cr: 0, cb: 0, cl: 0 }
+      setSelUids([it.uid]); return [...list, it]
+    })
+    setShowDummy(false)
+  }
   const allPhotosRef = useRef(allPhotos); allPhotosRef.current = allPhotos
   useEffect(() => { loadAll() }, [loadAll])
   // au démarrage : purge des « Temporaire » de +7 jours, et chargement des polices ajoutées
@@ -170,23 +293,24 @@ export default function PhotoshopView({ user, onNavigate }) {
   }, [allPhotos, theme, search])
 
   // ---------- placement sans déplacer les autres ----------
-  const collides = (list, p, x, y, w, h) => list.some(it => it.page === p && x < it.x + it.w && x + w > it.x && y < it.y + it.h && y + h > it.y)
+  const collides = (list, t, p, x, y, w, h) => list.some(it => (it.tab || 0) === t && it.page === p && x < it.x + it.w && x + w > it.x && y < it.y + it.h && y + h > it.y)
   const freeSpot = (list, w, h) => {
     for (let p = 0; p < npages; p++) for (let y = MARG; y + h <= CMH - MARG + 0.01; y += 0.5) for (let x = MARG; x + w <= CMW - MARG + 0.01; x += 0.5)
-      if (!collides(list, p, x, y, w, h)) return { page: p, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
-    const np = npages; setNpages(n => n + 1); return { page: np, x: MARG, y: MARG }
+      if (!collides(list, safeTab, p, x, y, w, h)) return { page: p, tab: safeTab, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
+    updateTab({ npages: npages + 1 })
+    return { page: npages, tab: safeTab, x: MARG, y: MARG }
   }
 
   const addPhoto = (src, nom, libPhoto) => {
     const img = new Image()
     img.onload = () => {
       const ratio = img.naturalWidth / img.naturalHeight || 1
-      const w = libPhoto?.last_w || 5                                  // taille mémorisée pour CETTE photo
-      const h = libPhoto?.last_h || Math.max(0.5, Math.round(w / ratio * 10) / 10)
+      const w = libPhoto?.last_w || 5                                  // largeur mémorisée pour CETTE photo
+      const h = Math.max(0.5, Math.round(w / ratio * 10) / 10)         // hauteur TOUJOURS calée sur les proportions de l'image (jamais de bords vides)
       if (libPhoto?.id) cloudSync.current.last[libPhoto.id] = src      // image d'origine : ne pas la ré-enregistrer tant qu'elle n'est pas retouchée
       setPlaced(list => {
         const s = freeSpot(list, w, h)
-        const it = { uid: uid.current++, type: 'photo', src, nom: nom || 'photo', libId: libPhoto?.id || null, forme: 'none', fit: 'contain', w, h, rot: 0, zoom: 100, ratio, x: s.x, y: s.y, page: s.page, tint: '#ff5aa0', tintA: 0, ct: 0, cr: 0, cb: 0, cl: 0 }
+        const it = { uid: uid.current++, type: 'photo', src, nom: nom || 'photo', libId: libPhoto?.id || null, forme: 'none', fit: 'contain', w, h, rot: 0, zoom: 100, ratio, x: s.x, y: s.y, page: s.page, tab: s.tab, tint: '#ff5aa0', tintA: 0, ct: 0, cr: 0, cb: 0, cl: 0 }
         setSelUids([it.uid]); return [...list, it]
       })
     }
@@ -194,12 +318,12 @@ export default function PhotoshopView({ user, onNavigate }) {
   }
   const addText = () => setPlaced(list => {
     const s = freeSpot(list, 6, 1.5)
-    const it = { uid: uid.current++, type: 'text', txt: 'Joyeux\nanniversaire', color: '#7a1f3d', size: 1.5, rot: 0, w: 6, h: 1.5, x: s.x, y: s.y, page: s.page, font: "'Dancing Script',cursive" }
+    const it = { uid: uid.current++, type: 'text', txt: 'Joyeux\nanniversaire', color: '#7a1f3d', size: 1.5, rot: 0, w: 6, h: 1.5, x: s.x, y: s.y, page: s.page, tab: s.tab, font: "'Dancing Script',cursive" }
     setSelUids([it.uid]); return [...list, it]
   })
   const addShape = () => setPlaced(list => {
     const s = freeSpot(list, 5, 5)
-    const it = { uid: uid.current++, type: 'shape', forme: 'rond', color: '#fce8ef', w: 5, h: 5, ratio: 1, rot: 0, x: s.x, y: s.y, page: s.page }
+    const it = { uid: uid.current++, type: 'shape', forme: 'rond', color: '#fce8ef', w: 5, h: 5, ratio: 1, rot: 0, x: s.x, y: s.y, page: s.page, tab: s.tab }
     setSelUids([it.uid]); return [...list, it]
   })
 
@@ -210,11 +334,13 @@ export default function PhotoshopView({ user, onNavigate }) {
       : f === 'losange' ? 'clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)'
       : f === 'hexagone' ? 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)'
       : f === 'coeur' ? 'clip-path:url(#psHeart)' : ''
-    const pagesHtml = Array.from({ length: npages }).map((_, p) => {
-      const items = placed.filter(it => it.page === p).map(it => {
+    const pagesHtml = tabs.map((t, ti) => {
+      const tNp = Math.max(t.npages || 1, ...(placed.filter(it => (it.tab || 0) === ti).map(it => (it.page || 0) + 1).concat([1])))
+      return Array.from({ length: tNp }).map((_, p) => {
+      const items = placed.filter(it => (it.tab || 0) === ti && it.page === p).map(it => {
         const pos = `position:absolute;left:${it.x}cm;top:${it.y}cm;transform:rotate(${it.rot || 0}deg) scaleX(${it.flipH ? -1 : 1}) scaleY(${it.flipV ? -1 : 1});`
         if (it.type === 'text') return `<div style="${pos}font-size:${it.size}cm;line-height:1.1;color:${it.color};font-weight:700;white-space:pre;text-align:center;unicode-bidi:plaintext;font-family:${it.font || "'Dancing Script',cursive"}">${esc(it.txt)}</div>`
-        const box = `${pos}width:${it.w}cm;height:${it.h}cm;overflow:hidden;${shapeStr(it.forme)}`
+        const box = `${pos}width:${it.w}cm;height:${it.h}cm;overflow:hidden;${shapeStr(it.forme)}${it.bd ? `box-shadow:inset 0 0 0 ${it.bd}cm ${it.bdColor || '#000'};` : ''}`
         if (it.type === 'shape') return `<div style="${box};background:${it.color}"></div>`
         const fit = it.fit || 'contain'
         const ms = fit === 'fill' ? '100% 100%' : fit
@@ -222,13 +348,14 @@ export default function PhotoshopView({ user, onNavigate }) {
         const tint = it.tintA > 0 ? `<div style="position:absolute;inset:0;background:${it.tint};opacity:${it.tintA / 100};mix-blend-mode:multiply;-webkit-mask:url('${it.src}') center/${ms} no-repeat;mask:url('${it.src}') center/${ms} no-repeat;${crop}"></div>` : ''
         return `<div style="${box}"><img src="${it.src}" style="width:100%;height:100%;object-fit:${fit};transform:scale(${(it.zoom || 100) / 100});${crop}">${tint}</div>`
       }).join('')
-      return `<div class="page">${items}</div>`
+      return `<div class="page" style="width:${t.fmt.w}cm;height:${t.fmt.h}cm">${items}</div>`
+      }).join('')
     }).join('')
     const heart = '<svg width="0" height="0"><defs><clipPath id="psHeart" clipPathUnits="objectBoundingBox"><path d="M0.5,0.97 C0.5,0.97,0.03,0.62,0.03,0.32 C0.03,0.14,0.18,0.03,0.34,0.03 C0.43,0.03,0.5,0.1,0.5,0.18 C0.5,0.1,0.57,0.03,0.66,0.03 C0.82,0.03,0.97,0.14,0.97,0.32 C0.97,0.62,0.5,0.97,0.5,0.97 Z"/></clipPath></defs></svg>'
     const html = `<!doctype html><html><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Pacifico&family=Lobster&family=Playfair+Display:wght@700&family=Montserrat:wght@800&family=Satisfy&display=swap" rel="stylesheet">
-<style>@page{size:${CMW}cm ${CMH}cm;margin:0}*{box-sizing:border-box}body{margin:0}.page{position:relative;width:${CMW}cm;height:${CMH}cm;overflow:hidden;page-break-after:always}</style>
+<style>@page{size:auto;margin:0}*{box-sizing:border-box}body{margin:0}.page{position:relative;overflow:hidden;page-break-after:always}</style>
 </head><body>${heart}${pagesHtml}
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print()},400)})</script>
 </body></html>`
@@ -238,15 +365,16 @@ export default function PhotoshopView({ user, onNavigate }) {
   }
 
   // rangement auto (étagères)
-  const arrange = () => setPlaced(list => {
-    let ux = MARG, uy = MARG, rowH = 0, page = 0; const UW = CMW - 2 * MARG, GAP = 0.4
-    const out = list.map(it => {
+  const arrange = () => {
+    let ux = MARG, uy = MARG, rowH = 0, pg = 0; const UW = CMW - 2 * MARG, GAP = 0.4
+    const out = placed.map(it => {
+      if ((it.tab || 0) !== safeTab) return it
       if (ux + it.w > MARG + UW + 0.001) { ux = MARG; uy += rowH + GAP; rowH = 0 }
-      if (uy + it.h > CMH - MARG + 0.001) { page++; ux = MARG; uy = MARG; rowH = 0 }
-      const n = { ...it, page, x: ux, y: uy }; ux += it.w + GAP; rowH = Math.max(rowH, it.h); return n
+      if (uy + it.h > CMH - MARG + 0.001) { pg++; ux = MARG; uy = MARG; rowH = 0 }
+      const n = { ...it, page: pg, x: ux, y: uy }; ux += it.w + GAP; rowH = Math.max(rowH, it.h); return n
     })
-    setNpages(Math.max(1, page + 1)); return out
-  })
+    setPlaced(out); updateTab({ npages: Math.max(1, pg + 1) })
+  }
 
   // ---------- sélection / groupes ----------
   const groupMembers = (list, u) => { const it = list.find(x => x.uid === u); return (it && it.grp != null) ? list.filter(x => x.grp === it.grp).map(x => x.uid) : [u] }
@@ -306,7 +434,7 @@ export default function PhotoshopView({ user, onNavigate }) {
     const minx = Math.min(...members.map(m => m.x)), miny = Math.min(...members.map(m => m.y))
     const maxx = Math.max(...members.map(m => m.x + m.w)), maxy = Math.max(...members.map(m => m.y + m.h))
     const s = freeSpot(list, maxx - minx, maxy - miny); const gid = members.length > 1 ? ++grpSeq.current : null
-    const copies = members.map(m => ({ ...m, uid: uid.current++, page: s.page, x: Math.round((s.x + (m.x - minx)) * 10) / 10, y: Math.round((s.y + (m.y - miny)) * 10) / 10, grp: gid }))
+    const copies = members.map(m => ({ ...m, uid: uid.current++, page: s.page, tab: s.tab, x: Math.round((s.x + (m.x - minx)) * 10) / 10, y: Math.round((s.y + (m.y - miny)) * 10) / 10, grp: gid }))
     setSelUids(copies.map(c => c.uid)); return [...list, ...copies]
   })
   const delSel = useCallback(() => { setPlaced(p => p.filter(x => !selUids.includes(x.uid))); setSelUids([]) }, [selUids])
@@ -343,6 +471,7 @@ export default function PhotoshopView({ user, onNavigate }) {
           if ((it.fit || 'contain') !== 'fill') { if (wp / hp > ratio) { dh = hp; dw = hp * ratio } else { dw = wp; dh = wp / ratio } }
           ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh)
         }
+        if (it.bd > 0 && it.type !== 'text') strokeForme(ctx, it.forme, wp, hp, it.bdColor || '#000', it.bd * SC)
         ctx.restore()
       }
       const r = trimToContent(cv)
@@ -388,10 +517,8 @@ export default function PhotoshopView({ user, onNavigate }) {
     const copies = []
     for (let i = 0; i < n; i++) {
       const page = Math.floor(i / perPage), idx = i % perPage, r = Math.floor(idx / cols), c = idx % cols
-      copies.push({ ...src, uid: uid.current++, grp: null, page, x: Math.round((MARG + c * (src.w + GAP)) * 10) / 10, y: Math.round((MARG + r * (src.h + GAP)) * 10) / 10 })
+      copies.push({ ...src, uid: uid.current++, grp: null, page, tab: safeTab, x: Math.round((MARG + c * (src.w + GAP)) * 10) / 10, y: Math.round((MARG + r * (src.h + GAP)) * 10) / 10 })
     }
-    const maxPage = Math.max(0, ...copies.map(c => c.page))
-    setNpages(p => Math.max(p, maxPage + 1))
     setPlaced(list => [...list.filter(x => x.uid !== src.uid), ...copies])   // remplace l'original par la grille
     setSelUids([])
   }
@@ -404,8 +531,11 @@ export default function PhotoshopView({ user, onNavigate }) {
     setMarq({ page: p, x0: x, y0: y, x1: x, y1: y }); setSelUids([])
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch (err) { /* */ }
   }
-  const clearPage = (p) => { setPlaced(list => list.filter(it => it.page !== p)); setSelUids([]) }
-  const clearAll = () => { if (!placed.length) return; if (!confirm('Vider toutes les pages ? (les images restent dans la bibliothèque)')) return; setPlaced([]); setSelUids([]); setNpages(1) }
+  const clearPage = (p) => { setPlaced(list => list.filter(it => !((it.tab || 0) === safeTab && it.page === p))); setSelUids([]) }
+  const clearAll = () => { if (!placed.length) return; if (!confirm('Vider toutes les pages ? (les images restent dans la bibliothèque)')) return; setPlaced([]); setSelUids([]); setTabs([{ fmt: PAGE_FORMATS[0], npages: 1 }]); setActiveTab(0) }
+  // cale le cadre de la photo sélectionnée sur ses proportions (enlève les bords vides)
+  const fitFrame = () => { if (!sel || sel.type !== 'photo' || sel.forme !== 'none') return; const nh = Math.max(0.5, Math.round(sel.w / sel.ratio * 10) / 10); patch(sel.uid, { h: nh }); rememberSize(sel.libId, sel.w, nh) }
+  const openRegion = () => { if (sel && sel.type === 'photo') { setRegionUid(sel.uid); setRegionSrc(sel.src) } }
 
   // ---------- baguette magique : enlève le fond uni (flood-fill depuis les coins) ----------
   const removeBg = () => { if (sel && sel.type === 'photo') { setRemoveBgUid(sel.uid); setRemoveBgSrc(sel.src) } }   // ouvre le dialogue (tolérance + aperçu)
@@ -454,7 +584,7 @@ export default function PhotoshopView({ user, onNavigate }) {
     const cx = it.x + it.w / 2, cy = it.y + it.h / 2
     const ax = cx - sx * (it.w / 2) * cos + sy * (it.h / 2) * sin   // coin opposé (fixe)
     const ay = cy - sx * (it.w / 2) * sin - sy * (it.h / 2) * cos
-    drag.current = { resize: true, uid: it.uid, libId: it.libId, isPhoto: it.type === 'photo', el: elMap.current.get(it.uid), isText: it.type === 'text', sx, sy, cos, sin, ax, ay, rl: r.left, rt: r.top, rw: r.width, rh: r.height, w0: it.w, h0: it.h, size0: it.size, cur: null }
+    drag.current = { resize: true, uid: it.uid, libId: it.libId, isPhoto: it.type === 'photo', el: elMap.current.get(it.uid), isText: it.type === 'text', sx, sy, cos, sin, ax, ay, rl: r.left, rt: r.top, rw: r.width, rh: r.height, w0: it.w, h0: it.h, size0: it.size, fit0: it.fit, cur: null }
     try { ev.target.setPointerCapture(ev.pointerId) } catch (e) { /* */ }
   }
   useEffect(() => {
@@ -474,7 +604,9 @@ export default function PhotoshopView({ user, onNavigate }) {
         const nx = Math.round((ncx - nw / 2) * 10) / 10, ny = Math.round((ncy - nh / 2) * 10) / 10
         dr.cur = { x: nx, y: ny, w: nw, h: nh }
         if (dr.isText) { dr.cur.size = Math.max(0.3, Math.round(dr.size0 * (nw / dr.w0) * 10) / 10); dr.cur.h = dr.cur.size }
-        if (dr.el) { dr.el.style.left = (nx / CMW * 100) + '%'; dr.el.style.top = (ny / CMH * 100) + '%'; if (dr.isText) dr.el.style.fontSize = (dr.cur.size / CMW * PW) + 'px'; else { dr.el.style.width = (nw / CMW * 100) + '%'; dr.el.style.height = (nh / CMH * 100) + '%' } }
+        // Étirement libre (sans Shift) d'une photo = déformation : l'image suit le cadre (object-fit fill)
+        if (dr.isPhoto) dr.cur.fit = ev.shiftKey ? dr.fit0 : 'fill'
+        if (dr.el) { dr.el.style.left = (nx / CMW * 100) + '%'; dr.el.style.top = (ny / CMH * 100) + '%'; if (dr.isText) dr.el.style.fontSize = (dr.cur.size / CMW * PW) + 'px'; else { dr.el.style.width = (nw / CMW * 100) + '%'; dr.el.style.height = (nh / CMH * 100) + '%'; if (dr.isPhoto) { const img = dr.el.querySelector('img'); if (img) img.style.objectFit = dr.cur.fit } } }
         return
       }
       if (!dr.pageEl) return
@@ -510,7 +642,7 @@ export default function PhotoshopView({ user, onNavigate }) {
       if (dr) { if (dr.rot) { if (dr.curRot != null) setPlaced(p => p.map(it => it.uid === dr.uid ? { ...it, rot: dr.curRot } : it)) } else if (dr.resize) { if (dr.cur) { setPlaced(p => p.map(it => it.uid === dr.uid ? { ...it, ...dr.cur } : it)); if (dr.isPhoto && dr.libId) rememberSize(dr.libId, dr.cur.w, dr.cur.h) } } else if (dr.cur && Object.keys(dr.cur).length) { const cur = dr.cur; setPlaced(p => p.map(it => cur[it.uid] ? { ...it, ...cur[it.uid] } : it)) } } drag.current = null }
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
     return () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up) }
-  }, [placed, pageFmt])
+  }, [placed, tabs, activeTab])
 
   // touche Effacer + coller (Ctrl+V) + annuler (Ctrl/Cmd+Z)
   useEffect(() => {
@@ -518,6 +650,18 @@ export default function PhotoshopView({ user, onNavigate }) {
       const t = document.activeElement, tg = t && t.tagName
       const inField = tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT'
       if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'z' || ev.key === 'Z')) { if (inField) return; ev.preventDefault(); undo(); return }
+      // flèches du clavier = bouger l'élément sélectionné (Shift = plus grand pas)
+      if (ev.key.indexOf('Arrow') === 0) {
+        if (inField || !selUids.length) return
+        ev.preventDefault()
+        const step = ev.shiftKey ? 1 : 0.1
+        const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0
+        const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
+        setPlaced(p => p.map(it => selUids.includes(it.uid)
+          ? { ...it, x: Math.round((it.x + dx) * 100) / 100, y: Math.round((it.y + dy) * 100) / 100 }
+          : it))
+        return
+      }
       if (ev.key !== 'Backspace' && ev.key !== 'Delete') return
       if (inField) return
       if (selUids.length) { ev.preventDefault(); delSel() }
@@ -569,6 +713,24 @@ export default function PhotoshopView({ user, onNavigate }) {
     }, 1500)
     return () => clearTimeout(cloudSync.current.timer)
   }, [placed])
+  // composition rechargée → recaler le compteur d'uid + éviter une ré-sauvegarde cloud inutile
+  useEffect(() => {
+    for (const it of placed) {
+      if ((it.uid || 0) >= uid.current) uid.current = it.uid + 1
+      if (it.type === 'photo' && it.libId) cloudSync.current.last[it.libId] = it.src
+    }
+  }, []) // eslint-disable-line
+  // sauvegarde locale (débounce) : si on sort par erreur, la composition revient ; vidée par « Tout vider »
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        if (placed.length) localStorage.setItem(PS_LS, JSON.stringify({ placed, tabs, activeTab }))
+        else localStorage.removeItem(PS_LS)
+      } catch { /* quota (composition lourde) : on n'enregistre pas */ }
+    }, 800)
+    return () => clearTimeout(t)
+  }, [placed, tabs, activeTab])
+
   const undo = useCallback(() => {
     const h = histRef.current, cur = JSON.stringify(placedRef.current)
     if (h[h.length - 1] !== cur) h.push(cur)   // fige l'état courant si pas encore enregistré
@@ -700,7 +862,7 @@ export default function PhotoshopView({ user, onNavigate }) {
       const fs = it.size / CMW * PW
       return <div {...common} style={{ ...common.style, fontSize: fs, lineHeight: 1.1, color: it.color, fontWeight: 700, whiteSpace: 'pre', textAlign: 'center', fontFamily: it.font || "'Dancing Script',cursive", unicodeBidi: 'plaintext', overflow: 'visible' }}>{it.txt}</div>
     }
-    const box = { ...common.style, width: `${it.w / CMW * 100}%`, height: `${it.h / CMH * 100}%`, overflow: 'hidden', ...shapeCss(it.forme) }
+    const box = { ...common.style, width: `${it.w / CMW * 100}%`, height: `${it.h / CMH * 100}%`, overflow: 'hidden', ...shapeCss(it.forme), ...(it.bd ? { boxShadow: `inset 0 0 0 ${it.bd * PW / CMW}px ${it.bdColor || '#000'}` } : {}) }
     if (it.type === 'shape') return <div {...common} style={{ ...box, background: it.color }}><Outline forme={it.forme} /></div>
     return (
       <div {...common} style={box}>
@@ -729,26 +891,86 @@ export default function PhotoshopView({ user, onNavigate }) {
         {busy && <span className="text-[12px] opacity-90">{busy}</span>}
         <button onClick={addText} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">✍️ Texte</button>
         <button onClick={addShape} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">⬤ Forme</button>
+        <button onClick={() => setShowDummy(true)} title="Générer une forme de gâteau (dummy) à l'échelle" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🎂 Dummy</button>
         <button onClick={arrange} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🪄 Ranger</button>
-        <select value={PAGE_FORMATS.some(f => f.name === pageFmt.name) ? pageFmt.name : '__custom__'} title="Format de page"
+        <button onClick={fitFrame} title="Cale le cadre de la photo sélectionnée sur ses proportions (enlève les bords vides)" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">📐 Cadre</button>
+        <button onClick={openRegion} title="Modifier une zone de la photo sélectionnée (gomme, sélection, copier, couleur)" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🖌️ Zone</button>
+        <select value={PAGE_FORMATS.some(f => f.name === curTab.fmt.name) ? curTab.fmt.name : '__custom__'} title="Taille de l'onglet actif"
           onChange={e => {
             const v = e.target.value
-            if (v === '__custom__') { const w = parseFloat(prompt('Largeur de la page en cm :', pageFmt.w)); const h = parseFloat(prompt('Hauteur de la page en cm :', pageFmt.h)); if (w > 0 && h > 0) setPageFmt({ name: `Perso ${w}×${h}`, w, h }) }
-            else { const f = PAGE_FORMATS.find(x => x.name === v); if (f) setPageFmt(f) }
+            if (v === '__custom__') { const w = parseFloat(prompt('Largeur de la page en cm :', curTab.fmt.w)); const h = parseFloat(prompt('Hauteur de la page en cm :', curTab.fmt.h)); if (w > 0 && h > 0) setTabFmt({ name: `Perso ${w}×${h}`, w, h }) }
+            else { const f = PAGE_FORMATS.find(x => x.name === v); if (f) setTabFmt(f) }
           }}
           className="bg-white/20 text-white rounded-lg px-2 py-1.5 text-[12px] font-bold">
           {PAGE_FORMATS.map(f => <option key={f.name} value={f.name} className="text-ink">{f.name} ({f.w}×{f.h})</option>)}
-          {!PAGE_FORMATS.some(f => f.name === pageFmt.name) && <option value={pageFmt.name} className="text-ink">{pageFmt.name}</option>}
+          {!PAGE_FORMATS.some(f => f.name === curTab.fmt.name) && <option value={curTab.fmt.name} className="text-ink">{curTab.fmt.name}</option>}
           <option value="__custom__" className="text-ink">✏️ Personnalisé…</option>
         </select>
-        <button onClick={() => setNpages(n => n + 1)} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">＋ Page</button>
+        <button onClick={addPageToTab} title="Ajouter une page (même taille, à la suite)" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">＋ Page</button>
         <button onClick={clearAll} title="Vider toutes les pages" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🗑️ Tout vider</button>
         <button onClick={printPages} className="bg-white text-bordeaux rounded-lg px-3 py-1.5 text-[12px] font-bold">🖨️ Imprimer</button>
       </header>
 
+      {/* Vignette flottante : la photo de la commande, « en face », déplaçable par-dessus le plan de travail */}
+      {refPhotos.length > 0 && (
+        <div className="fixed z-[60] bg-white rounded-xl shadow-2xl border border-bordeaux/40 overflow-hidden select-none" style={{ left: refPos.x, top: refPos.y, width: 270 }}>
+          <div onPointerDown={onRefDragStart} className="flex items-center gap-1 px-2 py-1.5 bg-bordeaux text-white cursor-move">
+            <span className="text-[12px] font-bold flex-1 truncate">📦 {refTitle}</span>
+            <button onClick={() => refZoom(-0.5)} title="Dézoomer" className="bg-white/20 rounded w-5 h-5 text-[13px] leading-none">−</button>
+            <button onClick={() => refZoom(0.5)} title="Zoomer" className="bg-white/20 rounded w-5 h-5 text-[13px] leading-none">＋</button>
+            <button onClick={() => setRefPhotos([])} title="Fermer" className="bg-white/20 rounded w-5 h-5 text-[12px] leading-none">✕</button>
+          </div>
+          <div className="overflow-hidden bg-[#f3eee6]" style={{ maxHeight: 360 }}>
+            <img src={refPhotos[refIdx]?.dataUrl} alt={refPhotos[refIdx]?.name || ''} onPointerDown={onRefImgDown}
+              draggable={false} className="block w-full max-h-[360px] object-contain"
+              style={{ transform: `translate(${refPan.x}px, ${refPan.y}px) scale(${refScale})`, cursor: refScale > 1 ? 'grab' : 'default' }} />
+          </div>
+          {refPhotos.length > 1 && (
+            <div className="flex items-center justify-center gap-3 py-1 bg-cream text-[12px]">
+              <button onClick={() => refGoto(i => (i - 1 + refPhotos.length) % refPhotos.length)} className="px-2 font-bold">◀</button>
+              <span>{refIdx + 1} / {refPhotos.length}</span>
+              <button onClick={() => refGoto(i => (i + 1) % refPhotos.length)} className="px-2 font-bold">▶</button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 flex min-h-0">
         {/* Bibliothèque */}
         <aside className="w-[240px] flex-shrink-0 border-r border-line bg-cream p-2.5 overflow-auto">
+          {/* Gâteaux du jour (comme Charge CD) : choisis une date, clique un gâteau → vignette déplaçable + zoom */}
+          <div className="mb-2 p-1.5 rounded-lg bg-white border border-line">
+            <div className="text-[11px] font-bold text-bordeaux mb-1">📦 Gâteaux du jour</div>
+            {!refDate ? (
+              <button onClick={() => setRefDate(psToISO(new Date()))} className="w-full bg-bordeaux text-white rounded-lg py-1.5 text-[12px] font-bold">📅 Afficher les commandes</button>
+            ) : (
+              <>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <button onClick={() => shiftRefDay(-1)} title="Jour précédent" className="bg-cream border border-line rounded-lg w-6 h-7 text-[12px] font-bold">◀</button>
+                  <input type="date" value={refDate} onChange={e => e.target.value && setRefDate(e.target.value)} className={inp + ' flex-1 text-[11px]'} />
+                  <button onClick={() => shiftRefDay(1)} title="Jour suivant" className="bg-cream border border-line rounded-lg w-6 h-7 text-[12px] font-bold">▶</button>
+                  <button onClick={() => { setRefDate(null); setRefConfirmed(null); setRefDevis(null) }} title="Fermer" className="bg-cream border border-line rounded-lg w-6 h-7 text-[12px]">✕</button>
+                </div>
+                {refCakes === null ? <div className="text-[10px] text-ink-mute">Chargement…</div>
+                  : refCakes.length === 0 ? <div className="text-[10px] text-ink-mute">Aucun gâteau ce jour.</div>
+                  : (
+                    <div className="grid grid-cols-3 gap-1">
+                      {refCakes.map((c, i) => (
+                        <button key={i} onClick={() => showCake(c)} disabled={!c.photo} title={`${c.orderRef || ''}${c.pers ? ' · ' + c.pers + ' pers' : ''}`}
+                          className="relative text-center disabled:opacity-50 hover:opacity-80">
+                          {c.photo
+                            ? <img src={c.photo} alt="" className={'w-full h-14 object-cover rounded-md border-2 ' + (c.isDevis ? 'border-amber-400' : 'border-red-500')} />
+                            : <div className={'w-full h-14 rounded-md border-2 bg-cream flex items-center justify-center text-[18px] ' + (c.isDevis ? 'border-amber-400' : 'border-red-500')}>🎂</div>}
+                          {c.count > 1 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 rounded-full bg-bordeaux text-white text-[9px] font-bold flex items-center justify-center">×{c.count}</span>}
+                          <div className="text-[9px] text-ink-soft leading-tight">{c.pers ? c.pers + 'p' : '—'}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                {refConfirmed !== null && refDevis === null && <div className="text-[10px] text-amber-600 mt-1">⏳ devis…</div>}
+              </>
+            )}
+          </div>
           <div className="flex gap-1.5 mb-2">
             <button onClick={() => fileInput.current?.click()} className="flex-1 bg-bordeaux text-white rounded-lg py-1.5 text-[12px] font-bold">＋ Charger</button>
             <button onClick={() => psdInput.current?.click()} title="Importer des PSD (éclate les calques)" className="bg-white border border-bordeaux text-bordeaux rounded-lg py-1.5 px-2 text-[12px] font-bold">🧩 PSD</button>
@@ -789,27 +1011,40 @@ export default function PhotoshopView({ user, onNavigate }) {
           )}
         </aside>
 
-        {/* Pages A4 */}
-        <main className="flex-1 overflow-auto p-4 flex flex-col items-center gap-4" onPointerDown={e => { if (e.target === e.currentTarget) setSelUids([]) }}>
-          {Array.from({ length: npages }).map((_, p) => (
-            <div key={p} ref={el => { if (el) pageMap.current.set(p, el); else pageMap.current.delete(p) }}
-              data-page={p} onPointerDown={e => onPageDown(e, p)} className="relative bg-white border border-[#bbb] shadow-md flex-shrink-0"
-              style={{ width: PW, height: PW * CMH / CMW }}>
-              {placed.some(it => it.page === p) && <button onClick={() => clearPage(p)} title="Vider cette page" className="absolute top-1 right-1 z-[8] bg-white/90 border border-line rounded px-1.5 py-0.5 text-[11px] hover:bg-red-50 hover:border-red-300">🗑️ Vider</button>}
-              {marq && marq.page === p && <div style={{ position: 'absolute', left: `${Math.min(marq.x0, marq.x1) / CMW * 100}%`, top: `${Math.min(marq.y0, marq.y1) / CMH * 100}%`, width: `${Math.abs(marq.x1 - marq.x0) / CMW * 100}%`, height: `${Math.abs(marq.y1 - marq.y0) / CMH * 100}%`, border: '1.5px dashed #993556', background: 'rgba(153,53,86,0.08)', pointerEvents: 'none', zIndex: 7 }} />}
-              {placed.filter(it => it.page === p).map(renderItem)}
-              {selUids.length === 1 && (() => { const it = placed.find(x => x.uid === selUids[0]); if (!it || it.page !== p) return null; const pageHpx = PW * CMH / CMW, halfH = (it.h / 2) / CMH * pageHpx; return (
-                <>
-                  <div onPointerDown={e => onRotDown(e, it)} title="Tourner (attrape et fais pivoter)"
-                    style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translateY(${-(halfH + 20)}px)`, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'grab', zIndex: 6, touchAction: 'none' }} />
-                  {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy], i) => (
-                    <div key={i} onPointerDown={e => onResizeDown(e, it, sx, sy)} title="Étirer (Shift = garder les proportions)"
-                      style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translate(${sx * (it.w / 2) / CMW * PW}px, ${sy * (it.h / 2) / CMH * pageHpx}px)`, width: 22, height: 22, cursor: 'nwse-resize', zIndex: 6, touchAction: 'none' }} />
-                  ))}
-                </>
-              ) })()}
-            </div>
-          ))}
+        {/* Onglets = TAILLES ; dans chaque onglet, les pages s'empilent (continuité) */}
+        <main className="flex-1 flex flex-col min-h-0">
+          <div className="flex items-end gap-1 px-3 pt-2 bg-[#dcd2c4] border-b border-line overflow-x-auto flex-shrink-0">
+            {tabs.map((t, ti) => (
+              <div key={ti} onClick={() => { setActiveTab(ti); setSelUids([]) }}
+                title={`${t.fmt.name} · ${t.fmt.w}×${t.fmt.h} cm`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg text-[12px] font-semibold cursor-pointer whitespace-nowrap border border-b-0 ${ti === safeTab ? 'bg-white text-ink border-line' : 'bg-[#cfc4b4] text-[#6b5e50] border-transparent hover:bg-[#e7ddcf]'}`}>
+                📐 {t.fmt.name}
+                <span onClick={e => { e.stopPropagation(); deleteTab(ti) }} title="Supprimer cette taille" className="w-4 h-4 rounded-full flex items-center justify-center text-[#a08e7c] hover:text-red-600 hover:bg-black/10">×</span>
+              </div>
+            ))}
+            <button onClick={addTab} title="Ajouter une taille (nouvel onglet)" className="px-3 py-1.5 rounded-t-lg text-[12px] font-bold text-bordeaux border border-dashed border-[#b3a692] mb-px">＋ Taille</button>
+          </div>
+          <div className="flex-1 overflow-auto p-4 flex flex-col items-center gap-4" onPointerDown={e => { if (e.target === e.currentTarget) setSelUids([]) }}>
+            {Array.from({ length: npages }).map((_, p) => (
+              <div key={p} ref={el => { if (el) pageMap.current.set(p, el); else pageMap.current.delete(p) }}
+                data-page={p} onPointerDown={e => onPageDown(e, p)} className="relative bg-white border border-[#bbb] shadow-md flex-shrink-0"
+                style={{ width: PW, height: PW * CMH / CMW }}>
+                {placed.some(it => (it.tab || 0) === safeTab && it.page === p) && <button onClick={() => clearPage(p)} title="Vider cette page" className="absolute top-1 right-1 z-[8] bg-white/90 border border-line rounded px-1.5 py-0.5 text-[11px] hover:bg-red-50 hover:border-red-300">🗑️ Vider</button>}
+                {marq && marq.page === p && <div style={{ position: 'absolute', left: `${Math.min(marq.x0, marq.x1) / CMW * 100}%`, top: `${Math.min(marq.y0, marq.y1) / CMH * 100}%`, width: `${Math.abs(marq.x1 - marq.x0) / CMW * 100}%`, height: `${Math.abs(marq.y1 - marq.y0) / CMH * 100}%`, border: '1.5px dashed #993556', background: 'rgba(153,53,86,0.08)', pointerEvents: 'none', zIndex: 7 }} />}
+                {placed.filter(it => (it.tab || 0) === safeTab && it.page === p).map(renderItem)}
+                {selUids.length === 1 && (() => { const it = placed.find(x => x.uid === selUids[0]); if (!it || (it.tab || 0) !== safeTab || it.page !== p) return null; const pageHpx = PW * CMH / CMW, halfH = (it.h / 2) / CMH * pageHpx; return (
+                  <>
+                    <div onPointerDown={e => onRotDown(e, it)} title="Tourner (attrape et fais pivoter)"
+                      style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translateY(${-(halfH + 20)}px)`, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'grab', zIndex: 6, touchAction: 'none' }} />
+                    {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy], i) => (
+                      <div key={i} onPointerDown={e => onResizeDown(e, it, sx, sy)} title="Étirer (Shift = garder les proportions)"
+                        style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translate(${sx * (it.w / 2) / CMW * PW}px, ${sy * (it.h / 2) / CMH * pageHpx}px)`, width: 22, height: 22, cursor: 'nwse-resize', zIndex: 6, touchAction: 'none' }} />
+                    ))}
+                  </>
+                ) })()}
+              </div>
+            ))}
+          </div>
         </main>
 
         {/* Panneau de réglages */}
@@ -851,6 +1086,14 @@ export default function PhotoshopView({ user, onNavigate }) {
                   <label className={lab}>Couleur de la forme</label>
                   <input type="color" value={sel.color} onChange={e => patch(sel.uid, { color: e.target.value })} className="w-11 h-8 border border-line rounded-md mb-2 bg-white p-0.5" />
                 </>}
+                {(isPhoto || isShape) && <>
+                  <label className={lab}>Contour (cadre)</label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input type="color" value={sel.bdColor || '#7a1f2b'} onChange={e => patch(sel.uid, { bdColor: e.target.value })} className="w-11 h-8 border border-line rounded-md bg-white p-0.5 flex-shrink-0" />
+                    <input type="range" min="0" max="1" step="0.05" value={sel.bd || 0} onChange={e => patch(sel.uid, { bd: parseFloat(e.target.value) })} className="flex-1" />
+                    <span className="text-[11px] w-12 text-right text-ink-soft">{Math.round((sel.bd || 0) * 10)} mm</span>
+                  </div>
+                </>}
                 <div className="flex gap-2 items-end mb-2">
                   <div className="flex-1"><label className={lab}>Largeur (cm)</label><input type="number" step="0.5" value={sel.w} onChange={e => setDim('w', e.target.value)} className={inp} /></div>
                   <div className="flex-1"><label className={lab}>Hauteur (cm)</label><input type="number" step="0.5" value={sel.h} onChange={e => setDim('h', e.target.value)} className={inp} /></div>
@@ -871,7 +1114,6 @@ export default function PhotoshopView({ user, onNavigate }) {
                     <button onClick={resetCrop} className="bg-white border border-line rounded-lg px-2 py-2 text-[12px]">↺ Annuler</button>
                   </div>
                   <button onClick={removeBg} className={btn + ' bg-white border border-line'}>🪄 Enlever le fond</button>
-                  <button onClick={() => { setRegionUid(sel.uid); setRegionSrc(sel.src) }} className={btn + ' bg-white border border-line'}>🖌️ Modifier une zone (gomme, sélection, couleur)</button>
                 </>}
               </>}
 
@@ -955,10 +1197,12 @@ export default function PhotoshopView({ user, onNavigate }) {
         setRemoveBgSrc(null)
       }} />}
 
-      {regionSrc && <RegionEditor src={regionSrc} onClose={res => {
+      {regionSrc && <RegionEditor src={regionSrc} onExtract={({ src }) => addPhoto(src, 'Découpe')} onClose={res => {
         if (res) { const it = placed.find(p => p.uid === regionUid); const w = it ? it.w : 5; const nh = Math.max(0.5, Math.round(w / res.ratio * 10) / 10); patch(regionUid, { src: res.src, ratio: res.ratio, h: nh, ct: 0, cr: 0, cb: 0, cl: 0 }); rememberSize(it?.libId, w, nh); persistEdit(it?.libId, res.src) }
         setRegionSrc(null)
       }} />}
+
+      {showDummy && <DummyModal onClose={() => setShowDummy(false)} onPlace={placeDummy} />}
 
       {bulk && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
