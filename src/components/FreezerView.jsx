@@ -8,7 +8,7 @@ const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 
 const MONTH_NAMES = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 
 // Cache localStorage : evite le rechargement Odoo lent a chaque visite
-const CACHE_KEY = 'lg_freezer_cache_v1'
+const CACHE_KEY = 'lg_freezer_cache_v2'
 const CACHE_TTL_MS = 5 * 60 * 1000  // 5 minutes
 
 function readFreezerCache() {
@@ -57,15 +57,17 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   const [error, setError] = useState('')
   const [groupBy, setGroupBy] = useState('product')   // 'client' ou 'product' (defaut produit)
   const [showDone, setShowDone] = useState({})       // par date : true/false
+  const [showHistory, setShowHistory] = useState(false)   // afficher l'historique J-7 (bouton à part)
   const [cacheInfo, setCacheInfo] = useState(null)   // { ts } si on affiche du cache
 
   const today = new Date()
   const NB_DAYS = 7
+  const PAST_DAYS = 7   // historique J-7
 
   function loadData(forceRefresh = false) {
     setError('')
     const dates = []
-    for (let i = 0; i < NB_DAYS; i++) {
+    for (let i = -PAST_DAYS; i < NB_DAYS; i++) {
       const d = new Date(today)
       d.setDate(today.getDate() + i)
       dates.push(fmtLocalDate(d))
@@ -88,7 +90,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
     setLoading(true)
     setCacheInfo(null)
     Promise.all([
-      fetch(`/api/freezer-list?dates=${dates.join(',')}`).then(r => r.ok ? r.json() : Promise.reject(`Erreur ${r.status}`)),
+      fetch(`/api/freezer-list?dates=${dates.join(',')}&today=${fmtLocalDate(today)}`).then(r => r.ok ? r.json() : Promise.reject(`Erreur ${r.status}`)),
       loadFreezerDoneIds(),
     ])
       .then(([apiData, done]) => {
@@ -117,11 +119,14 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
     }
   }
 
-  function printDay(date, _ignored, wantDone = false) {
-    // Trouve l'index du jour cliqué dans dateKeys, puis prends ce jour + les 2 suivants
+  function printDay(date, _ignored, wantDone = false, back = false) {
+    // Trouve l'index du jour cliqué dans dateKeys.
+    // Vue normale : ce jour + les 2 suivants. Historique : ce jour + les 2 précédents (récent en haut).
     const startIdx = dateKeys.indexOf(date)
     if (startIdx === -1) return
-    const datesToPrint = dateKeys.slice(startIdx, startIdx + 3)
+    const datesToPrint = back
+      ? dateKeys.slice(Math.max(0, startIdx - 2), startIdx + 1).reverse()
+      : dateKeys.slice(startIdx, startIdx + 3)
 
     function buildSection(d) {
       const dayItems = itemsByDate[d] || []
@@ -153,8 +158,8 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
               ${keys.map(k => `
                 <tr>
                   <td class="check"></td>
-                  <td class="prod">${k}</td>
-                  <td class="qty">×${byProd[k].length}</td>
+                  <td class="prod">${k}<div class="scodes">${byProd[k].map(it => `${it.scode || '?'}${(it.qty || 1) > 1 ? ` ×${it.qty}` : ''}`).join(' · ')}</div></td>
+                  <td class="qty">×${byProd[k].reduce((s, it) => s + (it.qty || 1), 0)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -217,6 +222,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
         td.check { width: 22px; }
         td.check::before { content: '☐'; font-size: 17px; color: #999; }
         td.qty { text-align: right; font-weight: 600; color: #5c1f23; width: 70px; }
+        td.prod .scodes { font-family: monospace; font-size: 9px; color: #999; margin-top: 2px; }
         .cmd { margin-bottom: 10px; }
         .cmd-head { font-size: 12px; color: #5c1f23; margin-bottom: 1px; }
         .cmd-head .hour { color: #666; font-weight: normal; margin-left: 6px; font-family: monospace; font-size: 11px; }
@@ -228,7 +234,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       </style></head>
       <body>
         <h1>Sortie congélateur${wantDone ? ' · FAITS' : ''}</h1>
-        <p class="subtitle">${groupBy === 'product' ? 'Vue par produit' : 'Vue par commande'} · 3 jours à partir du ${fmtDayLabel(date, today)}</p>
+        <p class="subtitle">${groupBy === 'product' ? 'Vue par produit' : 'Vue par commande'} · 3 jours ${back ? 'jusqu’au' : 'à partir du'} ${fmtDayLabel(date, today)}</p>
         ${sections}
         <div class="total">Imprimé le ${new Date().toLocaleString('fr-FR')}</div>
         <script>window.onload = () => { window.print() }</script>
@@ -244,19 +250,87 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
     itemsByDate[it.date].push(it)
   }
   const dateKeys = Object.keys(itemsByDate).sort()
+  const _todayStr = fmtLocalDate(today)
+  const _isDone = it => !!it.made || !!doneMap[it.mo_id]   // fait = fabriqué dans Odoo (done) OU coché dans l'app
+  const futureKeys = dateKeys.filter(d => d >= _todayStr)                                                          // aujourd'hui + futur
+  const pastUndoneKeys = dateKeys.filter(d => d < _todayStr && itemsByDate[d].some(it => !_isDone(it)))  // passé pas coché = en retard (du + ancien au + récent → reste en haut)
+  // Historique = tout ce qui est coché (sorti). On sépare le futur (sorti à l'avance) et le passé.
+  const doneFutureKeys = dateKeys.filter(d => d >= _todayStr && itemsByDate[d].some(_isDone))
+  const donePastKeys = dateKeys.filter(d => d < _todayStr && itemsByDate[d].some(_isDone)).reverse()
+
+  // Carte d'un jour. mode : 'current' (futur/auj), 'overdue' (passé non fait), 'history' (passé fait)
+  const renderCard = (date, mode) => {
+    const dayItems = itemsByDate[date]
+    const todoItems = dayItems.filter(it => !_isDone(it))
+    const doneItems = dayItems.filter(it => _isDone(it))
+    const showingDone = showDone[date]
+    let visibleItems, headerRight, emptyMsg, cardCls
+    if (mode === 'history') {
+      visibleItems = doneItems; emptyMsg = 'Aucun fait'; cardCls = 'bg-cream-warm/40 border-line/60'
+      headerRight = (<>
+        <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-ink/10 text-ink-soft">🕘 Historique ({doneItems.length})</span>
+        {doneItems.length > 0 && <button onClick={() => printDay(date, dayItems, true, true)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title="Imprimer les faits · ce jour + les 2 précédents">🖨 Imprimer 3j</button>}
+      </>)
+    } else if (mode === 'overdue') {
+      visibleItems = todoItems; emptyMsg = 'Aucun à sortir'; cardCls = 'bg-cream-warm border-red-200'
+      headerRight = <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-red-100 text-red-700">🔴 En retard ({todoItems.length})</span>
+    } else {
+      visibleItems = showingDone ? doneItems : todoItems; emptyMsg = showingDone ? 'Aucun fait' : 'Aucun à sortir'; cardCls = 'bg-cream-warm border-line'
+      headerRight = (<>
+        <button onClick={() => setShowDone(prev => ({ ...prev, [date]: false }))} className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${!showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}>À sortir ({todoItems.length})</button>
+        <button onClick={() => setShowDone(prev => ({ ...prev, [date]: true }))} className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}>Faits ({doneItems.length})</button>
+        {visibleItems.length > 0 && <button onClick={() => printDay(date, dayItems, showingDone)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title={`Imprimer ${showingDone ? 'les faits' : 'à sortir'} · ce jour + les 2 suivants`}>🖨 Imprimer 3j {showingDone ? '(faits)' : ''}</button>}
+      </>)
+    }
+    return (
+      <div key={date + mode} className={`rounded-lg border overflow-hidden ${cardCls}`}>
+        <div className="px-4 py-3 border-b border-line bg-cream flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="font-fraunces italic text-[18px] text-ink">{fmtDayLabel(date, today)}</h2>
+          <div className="flex items-center gap-2">{headerRight}</div>
+        </div>
+        <div className="p-2">
+          {visibleItems.length === 0
+            ? <div className="text-center py-3 text-[11px] text-ink-mute italic">{emptyMsg}</div>
+            : groupBy === 'product'
+              ? <ProductGroupedList items={visibleItems} doneMap={doneMap} onToggle={toggleDone} />
+              : <ClientGroupedList items={visibleItems} doneMap={doneMap} onToggle={toggleDone} />}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-5xl mx-auto p-4 pb-32">
+        {/* Bouton Recharger en haut de la page */}
+        <div className="flex items-center gap-3 mb-3">
+          <button
+            onClick={() => loadData(true)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-bordeaux text-cream rounded-full text-[13px] font-bold hover:opacity-90 transition-colors disabled:opacity-60"
+            title="Recharger depuis Odoo (peut prendre quelques secondes)"
+          >
+            <i className={`ti ti-refresh text-[15px] ${loading ? 'animate-spin' : ''}`} aria-hidden="true"></i>
+            {loading ? 'Chargement…' : '🔄 Recharger'}
+          </button>
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold transition-colors ${showHistory ? 'bg-ink text-cream' : 'border border-line text-ink-soft hover:border-bordeaux'}`}
+            title="Afficher / masquer les 7 derniers jours"
+          >🕘 Historique J-7</button>
+          {cacheInfo && !loading && (
+            <span className="font-mono text-[10px] text-ink-mute italic">cache · {Math.round((Date.now() - cacheInfo.ts) / 60000)}min</span>
+          )}
+        </div>
         <h1 className="font-fraunces italic text-[26px] text-ink leading-none mb-1">CD Négatif</h1>
         <p className="text-[12px] text-ink-mute mb-4 max-w-2xl">
           Sortie congélateur · composants Cake Design (15/20/25/30 cm) à sortir.
           Coche au fur et à mesure que tu sors les pièces.
         </p>
 
-        {/* Toggle groupBy : segmented control léger + bouton Recharger */}
+        {/* Toggle groupBy */}
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line">
             <button
@@ -272,22 +346,6 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
               }`}
             >Par produit</button>
           </div>
-
-          {/* Bouton Recharger + indicateur cache */}
-          <button
-            onClick={() => loadData(true)}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1 border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream rounded-full text-[11px] font-medium transition-colors disabled:opacity-60"
-            title="Recharger depuis Odoo (peut prendre quelques secondes)"
-          >
-            <i className={`ti ti-refresh text-[13px] ${loading ? 'animate-spin' : ''}`} aria-hidden="true"></i>
-            {loading ? 'Chargement...' : 'Recharger'}
-          </button>
-          {cacheInfo && !loading && (
-            <span className="font-mono text-[10px] text-ink-mute italic">
-              cache · {Math.round((Date.now() - cacheInfo.ts) / 60000)}min
-            </span>
-          )}
         </div>
 
         {loading && <div className="text-center py-8 text-ink-mute italic">Chargement…</div>}
@@ -298,50 +356,27 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
         )}
 
         <div className="space-y-4">
-          {dateKeys.map(date => {
-            const dayItems = itemsByDate[date]
-            const todoItems = dayItems.filter(it => !doneMap[it.mo_id])
-            const doneItems = dayItems.filter(it => doneMap[it.mo_id])
-            const showingDone = showDone[date]
-            const visibleItems = showingDone ? doneItems : todoItems
-
-            return (
-              <div key={date} className="bg-cream-warm rounded-lg border border-line overflow-hidden">
-                <div className="px-4 py-3 border-b border-line bg-cream flex items-center justify-between gap-3 flex-wrap">
-                  <h2 className="font-fraunces italic text-[18px] text-ink">{fmtDayLabel(date, today)}</h2>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowDone(prev => ({ ...prev, [date]: false }))}
-                      className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${!showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}
-                    >À sortir ({todoItems.length})</button>
-                    <button
-                      onClick={() => setShowDone(prev => ({ ...prev, [date]: true }))}
-                      className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}
-                    >Faits ({doneItems.length})</button>
-                    {visibleItems.length > 0 && (
-                      <button
-                        onClick={() => printDay(date, dayItems, showingDone)}
-                        className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all"
-                        title={`Imprimer ${showingDone ? 'les faits' : 'à sortir'} · ce jour + les 2 suivants`}
-                      >🖨 Imprimer 3j {showingDone ? '(faits)' : ''}</button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-2">
-                  {visibleItems.length === 0 ? (
-                    <div className="text-center py-3 text-[11px] text-ink-mute italic">
-                      {showingDone ? 'Aucun fait' : 'Aucun à sortir'}
-                    </div>
-                  ) : groupBy === 'product' ? (
-                    <ProductGroupedList items={visibleItems} doneMap={doneMap} onToggle={toggleDone} />
-                  ) : (
-                    <ClientGroupedList items={visibleItems} doneMap={doneMap} onToggle={toggleDone} />
-                  )}
-                </div>
-              </div>
-            )
-          })}
+          {showHistory ? (
+            /* Vue Historique SEULE : tout ce qui est coché (sorti), futur puis passé */
+            (doneFutureKeys.length + donePastKeys.length) === 0
+              ? <div className="text-center py-8 text-ink-mute italic">Aucun composant coché (sorti) pour l'instant.</div>
+              : <>
+                  {doneFutureKeys.length > 0 && <>
+                    <div className="text-[12px] font-bold text-emerald-700 uppercase tracking-wider">📅 À venir (déjà sortis)</div>
+                    {doneFutureKeys.map(date => renderCard(date, 'history'))}
+                  </>}
+                  {donePastKeys.length > 0 && <>
+                    <div className="text-[12px] font-bold text-ink-mute uppercase tracking-wider border-t border-line pt-3">🕘 Passé</div>
+                    {donePastKeys.map(date => renderCard(date, 'history'))}
+                  </>}
+                </>
+          ) : (
+            /* Vue normale : le passé NON coché (en retard) EN HAUT, puis aujourd'hui + futur */
+            <>
+              {pastUndoneKeys.map(date => renderCard(date, 'overdue'))}
+              {futureKeys.map(date => renderCard(date, 'current'))}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -427,8 +462,11 @@ function ProductGroupedList({ items, doneMap, onToggle }) {
             >
               {allDone ? '✓' : ''}
             </button>
-            <span className="flex-1 text-[13px] text-ink font-medium">{prodKey}</span>
-            <span className="font-mono text-[12px] text-bordeaux font-bold">×{lines.length}</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] text-ink font-medium">{prodKey}</div>
+              <div className="font-mono text-[10px] text-ink-mute">{lines.map(it => `${it.scode || '?'}${(it.qty || 1) > 1 ? ` ×${it.qty}` : ''}`).join(' · ')}</div>
+            </div>
+            <span className="font-mono text-[12px] text-bordeaux font-bold">×{lines.reduce((s, it) => s + (it.qty || 1), 0)}</span>
           </div>
         )
       })}
