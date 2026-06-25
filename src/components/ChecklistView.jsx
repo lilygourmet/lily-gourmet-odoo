@@ -49,6 +49,20 @@ function startsWithAny(name, prefixes) {
   return prefixes.some(p => cleaned.startsWith(p))
 }
 
+// Viennoiseries (hors mini-cakes et cakes) : croissant, pain..., brioche, chausson, viennois.
+const VIENNOISERIE_RX = /croissant|pain|viennois|brioche|chausson/i
+// Lignes qui se rangent AUTOMATIQUEMENT dans la checklist du jour même, SANS attendre
+// que la Prod coche « Fait » : boissons B- (toutes), viennoiseries V- (pas les
+// mini-cakes/cakes), gâteaux secs GS- (sauf les plateaux).
+function isAutoChecklistLine(name) {
+  if (!name) return false
+  const cleaned = String(name).replace(/^\[\d+\]\s*/, '').trim()
+  if (cleaned.startsWith('B-')) return true
+  if (cleaned.startsWith('V-') && VIENNOISERIE_RX.test(cleaned)) return true
+  if (cleaned.startsWith('GS-') && !/^GS-\s*plateaux?\b/i.test(cleaned)) return true
+  return false
+}
+
 // Nettoie le nom de produit pour l'affichage :
 // - retire le code Odoo [447] en tete
 // - garde uniquement la 1ere ligne (coupe les "Message: ...")
@@ -340,7 +354,17 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         !receivedMap.has(l.odoo_line_id) &&
         !isExcludedClient(l.client_name)
       )
-      setProdLines(eligibleLines.filter(l => startsWithAny(l.product_name, PROD_PREFIXES)))
+      // Lignes auto (B- / viennoiseries V- / GS- hors plateau) : du jour même, sans validation Prod.
+      const autoLines = allLines.filter(l =>
+        lineDay(l) === todayStr &&
+        isAutoChecklistLine(l.product_name) &&
+        !receivedMap.has(l.odoo_line_id) &&
+        !isExcludedClient(l.client_name)
+      )
+      const autoIds = new Set(autoLines.map(l => l.odoo_line_id))
+      // PROD = lignes auto + lignes validées par la Prod (sans doublon avec les auto)
+      const prodFromDone = eligibleLines.filter(l => startsWithAny(l.product_name, PROD_PREFIXES) && !autoIds.has(l.odoo_line_id))
+      setProdLines([...autoLines, ...prodFromDone])
       setSaleLines(eligibleLines.filter(l => startsWithAny(l.product_name, SALE_PREFIXES)))
 
       // 3c) COMMANDES a ranger
@@ -372,7 +396,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           const line = linesDoneMap.get(r.odoo_line_id)
           if (!line) continue
           const isSale = startsWithAny(line.product_name, SALE_PREFIXES)
-          const isProd = startsWithAny(line.product_name, PROD_PREFIXES)
+          const isProd = startsWithAny(line.product_name, PROD_PREFIXES) || startsWithAny(line.product_name, ['B-'])
           if (!isSale && !isProd) continue
           if (isExcludedClient(line.client_name)) continue
           const day = lineDay(line)
