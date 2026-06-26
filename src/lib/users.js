@@ -48,6 +48,7 @@ export async function createUser({
   perm_conversations = false,
   perm_devis = false,
   perm_commande = false,
+  perm_ai_tools = false,
   perm_notif_modif = false,
   perm_modification = false,
   livreur_defaut = false,
@@ -92,6 +93,7 @@ export async function createUser({
           perm_conversations,
           perm_devis,
           perm_commande,
+          perm_ai_tools,
           perm_notif_modif,
           perm_modification,
           livreur_defaut,
@@ -250,6 +252,7 @@ export async function updateUser(userId, {
   perm_conversations,
   perm_devis,
   perm_commande,
+  perm_ai_tools,
   perm_notif_modif,
   perm_modification,
   livreur_defaut,
@@ -299,6 +302,7 @@ export async function updateUser(userId, {
   if (perm_conversations !== undefined) updates.perm_conversations = perm_conversations
   if (perm_devis !== undefined) updates.perm_devis = perm_devis
   if (perm_commande !== undefined) updates.perm_commande = perm_commande
+  if (perm_ai_tools !== undefined) updates.perm_ai_tools = perm_ai_tools
   if (perm_notif_modif !== undefined) updates.perm_notif_modif = perm_notif_modif
   if (perm_modification !== undefined) updates.perm_modification = perm_modification
   if (livreur_defaut !== undefined) updates.livreur_defaut = livreur_defaut
