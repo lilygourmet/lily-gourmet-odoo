@@ -286,13 +286,15 @@ function App() {
     setActiveView(view)
   }
 
-  // Raccourci Ctrl/Cmd + K → ouvre/ferme la recherche universelle. (Hook AVANT tout return conditionnel.)
+  // Raccourci Ctrl/Cmd + K + clic sur la loupe du header → ouvre la recherche universelle.
   useEffect(() => {
     function onKey(e) {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setShowSearch(s => !s) }
     }
+    function onOpen() { setShowSearch(true) }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('lily:open-search', onOpen)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('lily:open-search', onOpen) }
   }, [])
 
   if (loading) {
@@ -372,14 +374,11 @@ function App() {
       )}
       <LazyBoundary>{renderActiveView()}</LazyBoundary>
       <MobileBottomNav user={user} activeView={activeView} onNavigate={handleNavigate} />
-      {!isLivreur(user) && (
-        <button onClick={() => setShowSearch(true)} title="Rechercher (Ctrl/Cmd + K)"
-          className="fixed bottom-20 sm:bottom-5 right-5 z-[120] w-12 h-12 rounded-full bg-bordeaux text-cream shadow-lg flex items-center justify-center text-[19px] hover:bg-bordeaux-deep transition-colors">🔍</button>
-      )}
       {showSearch && (
         <GlobalSearch
           onClose={() => setShowSearch(false)}
           onOpenOrder={(num) => { setDeepLinkOrder(num); setActiveView('calendar'); setShowSearch(false) }}
+          onOpenDevis={(num) => { setDeepLinkDevis({ q: num, state: '', day: '' }); setActiveView('devis'); setShowSearch(false) }}
           onOpenConv={(id) => { openConversation(id); setShowSearch(false) }}
           onNavigate={(v) => { setActiveView(v); setShowSearch(false) }}
         />

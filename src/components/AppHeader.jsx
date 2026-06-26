@@ -21,7 +21,7 @@ import {
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
   MessageCircle, Wallet, CreditCard, Snowflake, Banknote, Users, Plane, Receipt,
   Settings, RefreshCw, LogOut, KeyRound, Printer, Wrench, Palette, Circle, ChevronDown,
-  Sliders, MoreHorizontal, Pencil, Truck, Bell, ShoppingBag, Send,
+  Sliders, MoreHorizontal, Pencil, Truck, Bell, ShoppingBag, Send, Search,
 } from 'lucide-react'
 
 // Icône (Lucide) par vue / menu / action — remplace les émoticônes du header.
@@ -918,6 +918,15 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
         {/* Actions : sync + roue + logout */}
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+          {!isLivreur(user) && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('lily:open-search'))}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white border border-line text-bordeaux hover:bg-bordeaux hover:text-cream transition-all flex-shrink-0"
+              title="Rechercher une commande, un devis, une conversation (Ctrl/Cmd + K)"
+            >
+              <Search size={16} />
+            </button>
+          )}
           <button
             onClick={() => onNavigate('presence')}
             className={`w-9 h-9 flex items-center justify-center rounded-full transition-all flex-shrink-0 ${activeView === 'presence' ? 'bg-bordeaux text-cream' : 'bg-white border border-line text-bordeaux hover:bg-bordeaux hover:text-cream'}`}
