@@ -11,7 +11,7 @@ import { memoCache } from './memoCache'
 async function _loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -49,6 +49,7 @@ export async function createUser({
   perm_devis = false,
   perm_commande = false,
   perm_ai_tools = false,
+  perm_photoshop = false,
   perm_notif_modif = false,
   perm_modification = false,
   livreur_defaut = false,
@@ -94,6 +95,7 @@ export async function createUser({
           perm_devis,
           perm_commande,
           perm_ai_tools,
+          perm_photoshop,
           perm_notif_modif,
           perm_modification,
           livreur_defaut,
@@ -253,6 +255,7 @@ export async function updateUser(userId, {
   perm_devis,
   perm_commande,
   perm_ai_tools,
+  perm_photoshop,
   perm_notif_modif,
   perm_modification,
   livreur_defaut,
@@ -303,6 +306,7 @@ export async function updateUser(userId, {
   if (perm_devis !== undefined) updates.perm_devis = perm_devis
   if (perm_commande !== undefined) updates.perm_commande = perm_commande
   if (perm_ai_tools !== undefined) updates.perm_ai_tools = perm_ai_tools
+  if (perm_photoshop !== undefined) updates.perm_photoshop = perm_photoshop
   if (perm_notif_modif !== undefined) updates.perm_notif_modif = perm_notif_modif
   if (perm_modification !== undefined) updates.perm_modification = perm_modification
   if (livreur_defaut !== undefined) updates.livreur_defaut = livreur_defaut
