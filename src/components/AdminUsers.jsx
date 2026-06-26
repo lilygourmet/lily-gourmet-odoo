@@ -149,6 +149,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_notif_modif: formData.permNotifModif,
         perm_notif_ocp: formData.permNotifOcp,
         perm_photoshop: formData.permPhotoshop,
+        perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -215,6 +216,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_notif_modif: formData.permNotifModif,
         perm_notif_ocp: formData.permNotifOcp,
         perm_photoshop: formData.permPhotoshop,
+        perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
         perm_livraisons_dispatch: formData.permLivraisonsDispatch,
@@ -763,6 +765,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permNotifModif: initialData?.perm_notif_modif !== undefined ? initialData.perm_notif_modif : false,
     permNotifOcp: initialData?.perm_notif_ocp !== undefined ? initialData.perm_notif_ocp : false,
     permPhotoshop: initialData?.perm_photoshop !== undefined ? initialData.perm_photoshop : false,
+    permAiTools: initialData?.perm_ai_tools !== undefined ? initialData.perm_ai_tools : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
     permLivraisonsDispatch: initialData?.perm_livraisons_dispatch || false,
@@ -963,6 +966,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-cake-vision" label="Galerie CD" desc="Accès à la galerie des modèles de gâteaux." checked={isAdmin || formData.permCakeVision} onChange={v => update('permCakeVision', v)} />
             <PermCheckbox id="perm-cake-vision-edit" label="Cake Vision" desc="Éditeur IA : modifier une photo de gâteau selon la demande client (utilise du crédit)." checked={isAdmin || formData.permCakeVisionEdit} onChange={v => update('permCakeVisionEdit', v)} />
             <PermCheckbox id="perm-photoshop" label="🎨 Studio photos" desc="Composer/éditer des photos imprimables pour gâteaux (bibliothèque, texte, formes, découpe…)." checked={isAdmin || formData.permPhotoshop} onChange={v => update('permPhotoshop', v)} />
+            <PermCheckbox id="perm-ai-tools" label="🤖 Outils IA" desc="Affiche les liens directs vers Gemini et ChatGPT dans le menu." checked={isAdmin || formData.permAiTools} onChange={v => update('permAiTools', v)} />
           </PermGroup>
 
           <PermGroup emoji="💬" title="Clients & Ventes">

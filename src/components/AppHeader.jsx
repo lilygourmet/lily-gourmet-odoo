@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -635,6 +635,8 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'absences',         emoji: '🌴', label: 'Congés',           visible: !isLivreur(user) && (admin || !!user?.perm_hr), badge: congesBadge },
     { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil || !!user?.perm_econome) },
     { view: 'photoshop',        emoji: '🎨', label: 'Studio photos',    visible: !isLivreur(user) && canSeePhotoshop(user) },
+    { view: 'ai-gemini',        emoji: '✨', label: 'Gemini',           visible: !isLivreur(user) && canSeeAiTools(user), externalUrl: 'https://gemini.google.com/app' },
+    { view: 'ai-chatgpt',       emoji: '🤖', label: 'ChatGPT',          visible: !isLivreur(user) && canSeeAiTools(user), externalUrl: 'https://chatgpt.com' },
   ].filter(i => i.visible)
 
   // ============================================================
