@@ -401,6 +401,7 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
   const [cats, setCats] = useState(null)
   const [activeCat, setActiveCat] = useState(null)
   const [cfg, setCfg] = useState(null)             // produit en cours de configuration (cf. ConfiguratorModal)
+  const [draft, setDraft] = useState([])           // panier temporaire : articles à ajouter, avec quantité
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -420,7 +421,7 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
         if (d === null) return
         name = d.trim() || 'Autre'
       }
-      addToOrder({ name, desc: '', warn: '', photoFile: null, price: item.price ?? 0, variantId: item.variantId })
+      addToDraft({ name, desc: '', warn: '', photoFile: null, price: item.price ?? 0, variantId: item.variantId })
       return
     }
     setCfg({ item, catKey: activeCat, loading: true, attributes: [], variants: [], sel: {}, text: {}, warn: '', photo: '' })
@@ -429,24 +430,44 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
       .catch(e => { toast.error('Erreur : ' + e.message); setCfg(null) })
   }
 
-  async function addToOrder(line) {
+  // Ajoute au panier temporaire : reclique sur le même produit/config → quantité +1.
+  function addToDraft(line) {
     if (!line.variantId) { toast.error('Choisis les options du produit'); return }
+    setDraft(prev => {
+      const sig = `${line.variantId}|${line.name}|${line.desc || ''}|${line.warn || ''}`
+      const i = prev.findIndex(x => x._sig === sig && !x.photoFile && !line.photoFile)
+      if (i >= 0) { const n = [...prev]; n[i] = { ...n[i], qty: n[i].qty + 1 }; return n }
+      return [...prev, { ...line, _sig: sig, key: Date.now() + '' + Math.random(), qty: 1 }]
+    })
+  }
+  function setDraftQty(key, d) {
+    setDraft(prev => prev.flatMap(x => x.key === key ? (x.qty + d <= 0 ? [] : [{ ...x, qty: x.qty + d }]) : [x]))
+  }
+  function removeDraft(key) { setDraft(prev => prev.filter(x => x.key !== key)) }
+
+  // Écrit toutes les lignes du panier dans la commande Odoo, d'un coup.
+  async function commitDraft() {
+    if (draft.length === 0) return
     setBusy(true)
     try {
-      // Le ⚠️ part dans la description → repéré comme warning sur l'article (cf. op list).
-      const desc = [line.desc, line.warn ? `⚠️ ${line.warn}` : ''].filter(Boolean).join('\n')
-      let photo = null
-      if (line.photoFile) {
-        const data = await fileToBase64(line.photoFile)
-        photo = { name: line.photoName || line.photoFile.name, data, mimetype: line.photoFile.type || 'image/jpeg' }
+      for (const line of draft) {
+        // Le ⚠️ part dans la description → repéré comme warning sur l'article (cf. op list).
+        const desc = [line.desc, line.warn ? `⚠️ ${line.warn}` : ''].filter(Boolean).join('\n')
+        let photo = null
+        if (line.photoFile) {
+          const data = await fileToBase64(line.photoFile)
+          photo = { name: line.photoName || line.photoFile.name, data, mimetype: line.photoFile.type || 'image/jpeg' }
+        }
+        await addOrderLine(orderId, { variantId: line.variantId, qty: line.qty, price: line.price, name: line.name, desc, photo })
+        onLog?.(`${line.name}${line.qty > 1 ? ` ×${line.qty}` : ''}`)
       }
-      await addOrderLine(orderId, { variantId: line.variantId, qty: 1, price: line.price, name: line.name, desc, photo })
-      onLog?.(line.name)
-      toast.success('Article ajouté ✅')
+      toast.success(draft.length > 1 ? `${draft.length} articles ajoutés ✅` : 'Article ajouté ✅')
       onAdded()
     } catch (e) { toast.error(e?.message || "Échec de l'ajout") }
     finally { setBusy(false) }
   }
+
+  const draftCount = draft.reduce((s, x) => s + x.qty, 0)
 
   return (
     <div className="bg-white border border-line rounded-xl p-3 mt-1 mb-2">
@@ -482,6 +503,31 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
               </button>
             ))}
           </div>
+
+          {/* Panier temporaire : articles à ajouter, avec quantité (reclique = +1) */}
+          {draft.length > 0 && (
+            <div className="mt-3 border-t border-line pt-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1.5">À ajouter</div>
+              {draft.map(d => (
+                <div key={d.key} className="flex items-center gap-2 py-1.5 border-b border-line/50 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] text-ink font-medium break-words">{firstLine(d.name)}</div>
+                    {d.desc && <div className="text-[11px] text-ink-mute break-words">{firstLine(d.desc)}</div>}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button onClick={() => setDraftQty(d.key, -1)} className="w-6 h-6 rounded border border-line text-bordeaux">−</button>
+                    <span className="w-5 text-center text-[13px] font-semibold">{d.qty}</span>
+                    <button onClick={() => setDraftQty(d.key, 1)} className="w-6 h-6 rounded border border-line text-bordeaux">+</button>
+                    <button onClick={() => removeDraft(d.key)} className="ml-1 w-6 h-6 flex items-center justify-center rounded-full text-ink-mute hover:text-danger" title="Retirer">🗑</button>
+                  </div>
+                </div>
+              ))}
+              <button onClick={commitDraft} disabled={busy}
+                className="w-full mt-2 py-2.5 rounded-xl bg-bordeaux text-cream text-[13px] font-medium hover:bg-bordeaux-deep transition-all disabled:opacity-50">
+                {busy ? '⏳ …' : `Ajouter à la commande (${draftCount})`}
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -490,9 +536,9 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
           cfg={cfg}
           onChange={setCfg}
           onClose={() => setCfg(null)}
-          onAdd={(line) => { addToOrder(line); setCfg(null) }}
+          onAdd={(line) => { addToDraft(line); setCfg(null) }}
           priceEditable={PRICE_EDITABLE.has(activeCat)}
-          addLabel="Ajouter à la commande"
+          addLabel="Ajouter à la liste"
         />
       )}
     </div>
