@@ -7,7 +7,6 @@ import { subscribeToPush } from '../../lib/pushNotif'
 import { supabase } from '../../lib/supabase'
 import Skeleton from '../Skeleton'
 import ConversationDetail from './ConversationDetail'
-import NewConversationModal from './NewConversationModal'
 import QuickRepliesModal from './QuickRepliesModal'
 import ClientAvatar from './ClientAvatar'
 import { Search, MessageSquareText } from 'lucide-react'
@@ -38,7 +37,6 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
   const [selectedId, setSelectedId] = useState(initialConversationId || null)
   const [search, setSearch] = useState('')
   const [contentMatchIds, setContentMatchIds] = useState(() => new Set())
-  const [showNew, setShowNew] = useState(false)
   const [showReplies, setShowReplies] = useState(false)
   const [agentFilter, setAgentFilter] = useState('all')
   const [labelFilter, setLabelFilter] = useState('all')
@@ -216,54 +214,30 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
       <div className={`${selectedId ? 'hidden md:block' : 'block'} md:w-[35%] md:max-w-[400px] md:flex-shrink-0 md:border-r border-line md:sticky md:top-[var(--appbar)] md:h-[calc(100dvh-var(--appbar))] md:overflow-y-auto`}>
         {/* En-tête figé : titre + son + actions + recherche + filtres */}
         <div className="md:sticky md:top-0 z-10 bg-cream px-4 pt-4 pb-3 border-b border-line">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <h1 className="font-fraunces italic text-[26px] text-ink leading-none">Conversations</h1>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                onClick={() => setShowNew(true)}
-                title="Nouveau message"
-                className="w-9 h-9 rounded-full bg-bordeaux text-cream hover:bg-bordeaux-deep transition-all flex items-center justify-center text-[22px] leading-none pb-0.5"
-              >+</button>
-              <button
-                onClick={() => setShowReplies(true)}
-                title="Phrases types"
-                className="w-9 h-9 rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all flex items-center justify-center"
-              ><MessageSquareText size={16} strokeWidth={1.8} /></button>
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="font-fraunces italic text-[20px] text-ink leading-none flex-shrink-0">Conversations</h1>
+            <div className="relative flex-1 min-w-0">
+              <Search size={14} strokeWidth={1.8} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+                className="w-full pl-9 pr-8 py-1.5 text-[13px] bg-cream-warm border border-line rounded-full focus:outline-none focus:border-bordeaux"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} title="Effacer" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-mute hover:text-bordeaux text-[13px]">✕</button>
+              )}
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <button onClick={() => setShowReplies(true)} title="Phrases types" className="w-9 h-9 flex-shrink-0 rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream flex items-center justify-center transition-all"><MessageSquareText size={16} strokeWidth={1.8} /></button>
             {isAdmin(user) && (
-              <button
-                onClick={() => setShowLabels(true)}
-                title="Gérer les étiquettes (ajouter, renommer, couleur)"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-line text-ink-soft rounded-full text-[12px] font-medium hover:border-bordeaux transition-all"
-              >⚙️ Étiquettes</button>
+              <button onClick={() => setShowLabels(true)} title="Étiquettes" className="w-9 h-9 flex-shrink-0 rounded-full border border-line text-ink-soft hover:border-bordeaux flex items-center justify-center transition-all">⚙️</button>
             )}
           </div>
 
-          {/* Recherche */}
-          <div className="relative mb-3">
-            <Search size={14} strokeWidth={1.8} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Rechercher (nom, numéro, message…)"
-              className="w-full pl-9 pr-9 py-2 text-[13px] bg-cream-warm border border-line rounded-full focus:outline-none focus:border-bordeaux"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-mute hover:text-bordeaux text-[14px]"
-                title="Effacer"
-              >✕</button>
-            )}
-          </div>
-
-          {/* Filtres + agents (collés) */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-wrap">
+          {/* Filtres + agents — une seule ligne qui défile (gain de place) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-nowrap flex-shrink-0">
               {FILTERS.map(f => {
                 let label = f.label
                 if (f.key === 'waiting' && waitingCount) label = `🔴 En attente (${waitingCount})`
@@ -284,7 +258,7 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
               <select
                 value={agentFilter}
                 onChange={e => setAgentFilter(e.target.value)}
-                className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux"
+                className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux flex-shrink-0"
               >
                 <option value="all">Tous les agents</option>
                 {agentOptions.map(a => (
@@ -295,7 +269,7 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
             <select
               value={labelFilter}
               onChange={e => setLabelFilter(e.target.value)}
-              className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux"
+              className="px-2 py-1 text-[11px] border border-line rounded-full bg-cream-warm focus:outline-none focus:border-bordeaux flex-shrink-0"
             >
               <option value="all">Toutes étiquettes</option>
               {labels.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
@@ -343,12 +317,12 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
                       markConversationOpened(c.id).catch(() => {})
                     }
                   }}
-                  className={`w-full text-left rounded-xl border p-3 transition-colors shadow-sm hover:border-bordeaux ${
+                  className={`w-full text-left rounded-xl border p-2.5 transition-colors shadow-sm hover:border-bordeaux ${
                     isSelected ? 'bg-line/50 border-ink' : isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'
                   }`}
                 >
-                  <div className="flex items-start gap-3">
-                    <ClientAvatar conv={c} size={40} variant="light" fidele={!!c.fidele || fideleSet.has(last9(c.client_phone))} />
+                  <div className="flex items-start gap-2.5">
+                    <ClientAvatar conv={c} size={32} variant="light" fidele={!!c.fidele || fideleSet.has(last9(c.client_phone))} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
@@ -360,31 +334,20 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
                         </span>
                         <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
                       </div>
-                      {(c.labels || []).length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-1">
-                          {labels.filter(l => (c.labels || []).includes(l.key)).map(l => (
-                            <span key={l.key} className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ background: l.bg, color: l.color }}>{l.label}</span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-[11px] text-ink-mute">{c.client_phone}</span>
+                      {/* Ligne 2 : statut + étiquettes + urgence — passe à la ligne pour tout voir */}
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${badgeCls}`}>
                           {c.status === 'en_cours' && c.assigned?.full_name
                             ? c.assigned.full_name
                             : `${st.text}${c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}`}
                         </span>
+                        {labels.filter(l => (c.labels || []).includes(l.key)).map(l => (
+                          <span key={l.key} className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: l.bg, color: l.color }}>{l.label}</span>
+                        ))}
+                        {u && u.text && (
+                          <span className={`text-[11px] break-words ${u.tone === 'urgent' ? 'font-bold text-red-600' : toneClass}`}>{u.text}</span>
+                        )}
                       </div>
-                      {u && u.text && (
-                        u.tone === 'urgent' ? (
-                          <div className="mt-1 text-[13px] font-bold text-red-600 flex items-center gap-1">
-                            <span className="text-[16px]">⏰</span>
-                            <span>{u.text.replace(/^⏰\s*/, '')}</span>
-                          </div>
-                        ) : (
-                          <div className={`text-[11px] mt-1 ${toneClass}`}>{u.text}</div>
-                        )
-                      )}
                     </div>
                   </div>
                 </button>
@@ -419,13 +382,6 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
         )}
       </div>
 
-      {showNew && (
-        <NewConversationModal
-          user={user}
-          onClose={() => setShowNew(false)}
-          onSent={(id) => { setShowNew(false); if (id) setSelectedId(id); refresh() }}
-        />
-      )}
       {showReplies && <QuickRepliesModal onClose={() => setShowReplies(false)} />}
       {showLabels && <LabelsManager onClose={() => setShowLabels(false)} onSaved={() => loadConvLabels().then(setLabels).catch(() => {})} />}
     </div>
