@@ -896,7 +896,7 @@ export async function sendTemplate({ clientPhone, templateName, broadcastName, p
 // ============================================================
 
 const MEDIA_BUCKET = 'conversation-media'
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const MAX_FILE_SIZE = 16 * 1024 * 1024 // 16 MB (limite vidéo WhatsApp)
 
 /**
  * Upload d'une pièce jointe (image ou PDF) dans le bucket privé.
@@ -905,7 +905,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 export async function uploadConversationMedia(file, userId) {
   if (!file) return null
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error('Fichier trop volumineux (max 5 MB)')
+    throw new Error('Fichier trop volumineux (max 16 MB)')
   }
   const ts = Date.now()
   const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')

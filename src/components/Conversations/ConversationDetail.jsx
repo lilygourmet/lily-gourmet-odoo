@@ -1169,10 +1169,14 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                 {m.media_url && (() => {
                   const href = m.media_url.startsWith('http') ? m.media_url : mediaUrls[m.id]
                   const mt = m.media_type || ''
-                  const isAudio = /audio|voice|ptt/i.test(mt) || /\.(ogg|opus|webm|mp4|m4a|mp3|aac|amr)$/i.test(m.media_url)
-                  const isImage = /image/i.test(mt) || /\.(jpe?g|png|gif|webp)$/i.test(m.media_url)
-                  if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? 'Vocal…' : isImage ? 'Image…' : 'Pièce jointe…'}</span>
+                  const isAudio = /audio|voice|ptt/i.test(mt) || (!/video|image/i.test(mt) && /\.(ogg|opus|m4a|mp3|aac|amr)$/i.test(m.media_url))
+                  const isVideo = !isAudio && (/video/i.test(mt) || /\.(mp4|mov|m4v|3gp|webm)$/i.test(m.media_url))
+                  const isImage = !isAudio && !isVideo && (/image/i.test(mt) || /\.(jpe?g|png|gif|webp)$/i.test(m.media_url))
+                  if (!href) return <span className="block text-[11px] mb-1 opacity-70">{isAudio ? 'Vocal…' : isVideo ? 'Vidéo…' : isImage ? 'Image…' : 'Pièce jointe…'}</span>
                   if (isAudio) return <audio controls src={href} className="block max-w-full mb-1" />
+                  if (isVideo) return (
+                    <video controls src={href} onLoadedData={() => { if (scrollModeRef.current === 'bottom' && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight }} className="block max-w-[220px] max-h-[280px] rounded mb-1" />
+                  )
                   if (isImage) return (
                     <button type="button" onClick={() => setLightboxUrl(href)} title="Voir en grand" className="block mb-1">
                       <img src={href} alt="" onLoad={() => { if (scrollModeRef.current === 'bottom' && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight }} className="block max-w-[160px] max-h-[160px] object-cover rounded" />
@@ -1317,7 +1321,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
             <div className="flex items-center gap-2">
               <label className="w-9 h-9 flex-shrink-0 rounded-full border border-line hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center cursor-pointer transition-all" title="Joindre une image ou un PDF (max 5 MB)">
                 <Paperclip size={16} strokeWidth={1.8} />
-                <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" />
+                <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" onChange={onPickFile} className="hidden" />
               </label>
               <div className="relative flex-shrink-0">
                 <button
