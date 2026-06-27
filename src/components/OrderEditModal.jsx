@@ -34,6 +34,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
   const [photos, setPhotos] = useState([])        // photos déjà enregistrées dans la commande
   const [busy, setBusy] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState([])         // articles à ajouter (écrits dans Odoo au moment d'« Enregistrer »)
   const [warnFor, setWarnFor] = useState(null)   // id de l'article pour lequel on ajoute une attention
   const [warnText, setWarnText] = useState('')
   const isConfirmed = order.state === 'sale'
@@ -113,12 +114,43 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
   const [warehouses, setWarehouses] = useState([])
   useEffect(() => { loadWarehouses().then(setWarehouses).catch(() => {}) }, [])
 
-  // Enregistre les quantités / prix modifiés (uniquement les lignes changées).
+  // --- Articles à AJOUTER (panier temporaire) : reclique = quantité +1 ---
+  function addToDraft(line) {
+    if (!line.variantId) { toast.error('Choisis les options du produit'); return }
+    setDraft(prev => {
+      const sig = `${line.variantId}|${line.name}|${line.desc || ''}|${line.warn || ''}`
+      const i = prev.findIndex(x => x._sig === sig && !x.photoFile && !line.photoFile)
+      if (i >= 0) { const n = [...prev]; n[i] = { ...n[i], qty: n[i].qty + 1 }; return n }
+      return [...prev, { ...line, _sig: sig, key: Date.now() + '' + Math.random(), qty: 1 }]
+    })
+  }
+  function setDraftQty(key, d) { setDraft(prev => prev.flatMap(x => x.key === key ? (x.qty + d <= 0 ? [] : [{ ...x, qty: x.qty + d }]) : [x])) }
+  function removeDraft(key) { setDraft(prev => prev.filter(x => x.key !== key)) }
+  const draftCount = draft.reduce((s, x) => s + x.qty, 0)
+
+  // Écrit les articles en attente dans la commande Odoo (appelé par « Enregistrer »).
+  async function commitDraft() {
+    for (const line of draft) {
+      // Le ⚠️ part dans la description → repéré comme warning sur l'article (cf. op list).
+      const desc = [line.desc, line.warn ? `⚠️ ${line.warn}` : ''].filter(Boolean).join('\n')
+      let photo = null
+      if (line.photoFile) {
+        const data = await fileToBase64(line.photoFile)
+        photo = { name: line.photoName || line.photoFile.name, data, mimetype: line.photoFile.type || 'image/jpeg' }
+      }
+      await addOrderLine(order.id, { variantId: line.variantId, qty: line.qty, price: line.price, name: line.name, desc, photo })
+      logModif(`Article ajouté : ${line.name}${line.qty > 1 ? ` ×${line.qty}` : ''}`)
+    }
+    setDraft([])
+  }
+
+  // Enregistre les articles ajoutés + les quantités / prix modifiés (lignes changées).
   async function saveEdits() {
     const changed = lines.filter(l => l._dirty)
-    if (changed.length === 0) { onClose(); return }
+    if (changed.length === 0 && draft.length === 0) { onClose(); return }
     setBusy(true)
     try {
+      await commitDraft()
       for (const l of changed) {
         let photo = null
         if (l._photoFile) {
@@ -127,7 +159,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
         }
         await updateOrderLine(order.id, l.id, { qty: l.qty, price: l.price, name: l.rawName, discount: l.discount, photo })
       }
-      logModif(changed.map(l => describeLineChange(l, origRef.current[l.id])).join(' ; '))
+      if (changed.length) logModif(changed.map(l => describeLineChange(l, origRef.current[l.id])).join(' ; '))
       // Vraie modification : un article dont la quantité a BAISSÉ (ou est passée à 0).
       const reductions = changed.filter(l => {
         const o = Number(origRef.current[l.id]?.qty), n = Number(l.qty)
@@ -189,7 +221,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
   }
 
   // Y a-t-il des modifs non enregistrées ? + total des articles mis à jour en direct.
-  const dirty = Array.isArray(lines) && lines.some(l => l._dirty)
+  const dirty = (Array.isArray(lines) && lines.some(l => l._dirty)) || draft.length > 0
   const total = Array.isArray(lines)
     ? lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0) * (1 - (Number(l.discount) || 0) / 100), 0)
     : 0
@@ -365,12 +397,29 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
               ➕ Ajouter un article
             </button>
           ) : (
-            <AddArticle
-              orderId={order.id}
-              onLog={(name) => logModif(`Article ajouté : ${name}`)}
-              onCancel={() => setAdding(false)}
-              onAdded={async () => { setAdding(false); await reload(); onChanged?.() }}
-            />
+            <AddArticle onCancel={() => setAdding(false)} onAdd={addToDraft} />
+          )}
+
+          {/* Articles en attente : ajoutés à la commande quand tu cliques « Enregistrer » */}
+          {draft.length > 0 && (
+            <div className="border border-bordeaux/30 bg-bordeaux/5 rounded-xl p-2.5 mt-1 mb-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-bordeaux mb-1.5">À ajouter ({draftCount})</div>
+              {draft.map(d => (
+                <div key={d.key} className="flex items-center gap-2 py-1.5 border-b border-bordeaux/15 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] text-ink font-medium break-words">{firstLine(d.name)}</div>
+                    {d.desc && <div className="text-[11px] text-ink-mute break-words">{firstLine(d.desc)}</div>}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button onClick={() => setDraftQty(d.key, -1)} className="w-6 h-6 rounded border border-line text-bordeaux">−</button>
+                    <span className="w-5 text-center text-[13px] font-semibold">{d.qty}</span>
+                    <button onClick={() => setDraftQty(d.key, 1)} className="w-6 h-6 rounded border border-line text-bordeaux">+</button>
+                    <button onClick={() => removeDraft(d.key)} className="ml-1 w-6 h-6 flex items-center justify-center rounded-full text-ink-mute hover:text-danger" title="Retirer">🗑</button>
+                  </div>
+                </div>
+              ))}
+              <div className="text-[10.5px] text-ink-mute mt-1.5">⤵ Clique <b>« Enregistrer »</b> en bas pour les ajouter à la commande.</div>
+            </div>
           )}
         </div>
 
@@ -397,12 +446,10 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
 }
 
 // ---- Sous-panneau : MÊME configurateur que « Nouvelle commande », mais écrit dans la commande Odoo ----
-function AddArticle({ orderId, onCancel, onAdded, onLog }) {
+function AddArticle({ onCancel, onAdd }) {
   const [cats, setCats] = useState(null)
   const [activeCat, setActiveCat] = useState(null)
   const [cfg, setCfg] = useState(null)             // produit en cours de configuration (cf. ConfiguratorModal)
-  const [draft, setDraft] = useState([])           // panier temporaire : articles à ajouter, avec quantité
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     loadOrderCatalog()
@@ -421,7 +468,7 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
         if (d === null) return
         name = d.trim() || 'Autre'
       }
-      addToDraft({ name, desc: '', warn: '', photoFile: null, price: item.price ?? 0, variantId: item.variantId })
+      onAdd({ name, desc: '', warn: '', photoFile: null, price: item.price ?? 0, variantId: item.variantId })
       return
     }
     setCfg({ item, catKey: activeCat, loading: true, attributes: [], variants: [], sel: {}, text: {}, warn: '', photo: '' })
@@ -429,45 +476,6 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
       .then(d => setCfg(c => c && c.item.tmplId === item.tmplId ? { ...c, loading: false, attributes: d.attributes, variants: d.variants } : c))
       .catch(e => { toast.error('Erreur : ' + e.message); setCfg(null) })
   }
-
-  // Ajoute au panier temporaire : reclique sur le même produit/config → quantité +1.
-  function addToDraft(line) {
-    if (!line.variantId) { toast.error('Choisis les options du produit'); return }
-    setDraft(prev => {
-      const sig = `${line.variantId}|${line.name}|${line.desc || ''}|${line.warn || ''}`
-      const i = prev.findIndex(x => x._sig === sig && !x.photoFile && !line.photoFile)
-      if (i >= 0) { const n = [...prev]; n[i] = { ...n[i], qty: n[i].qty + 1 }; return n }
-      return [...prev, { ...line, _sig: sig, key: Date.now() + '' + Math.random(), qty: 1 }]
-    })
-  }
-  function setDraftQty(key, d) {
-    setDraft(prev => prev.flatMap(x => x.key === key ? (x.qty + d <= 0 ? [] : [{ ...x, qty: x.qty + d }]) : [x]))
-  }
-  function removeDraft(key) { setDraft(prev => prev.filter(x => x.key !== key)) }
-
-  // Écrit toutes les lignes du panier dans la commande Odoo, d'un coup.
-  async function commitDraft() {
-    if (draft.length === 0) return
-    setBusy(true)
-    try {
-      for (const line of draft) {
-        // Le ⚠️ part dans la description → repéré comme warning sur l'article (cf. op list).
-        const desc = [line.desc, line.warn ? `⚠️ ${line.warn}` : ''].filter(Boolean).join('\n')
-        let photo = null
-        if (line.photoFile) {
-          const data = await fileToBase64(line.photoFile)
-          photo = { name: line.photoName || line.photoFile.name, data, mimetype: line.photoFile.type || 'image/jpeg' }
-        }
-        await addOrderLine(orderId, { variantId: line.variantId, qty: line.qty, price: line.price, name: line.name, desc, photo })
-        onLog?.(`${line.name}${line.qty > 1 ? ` ×${line.qty}` : ''}`)
-      }
-      toast.success(draft.length > 1 ? `${draft.length} articles ajoutés ✅` : 'Article ajouté ✅')
-      onAdded()
-    } catch (e) { toast.error(e?.message || "Échec de l'ajout") }
-    finally { setBusy(false) }
-  }
-
-  const draftCount = draft.reduce((s, x) => s + x.qty, 0)
 
   return (
     <div className="bg-white border border-line rounded-xl p-3 mt-1 mb-2">
@@ -493,8 +501,8 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
           {/* Grille de tuiles (même affichage que « Nouvelle commande ») */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {(cat?.items || []).map(item => (
-              <button key={item.tmplId} onClick={() => onTileClick(item)} disabled={busy}
-                className={`text-center rounded-xl border p-2 bg-cream-warm hover:border-bordeaux transition-all disabled:opacity-50 ${item.configurable ? 'border-dashed border-bordeaux/50' : 'border-line'}`}>
+              <button key={item.tmplId} onClick={() => onTileClick(item)}
+                className={`text-center rounded-xl border p-2 bg-cream-warm hover:border-bordeaux transition-all ${item.configurable ? 'border-dashed border-bordeaux/50' : 'border-line'}`}>
                 {item.image
                   ? <img src={item.image} alt="" loading="lazy" className="w-full aspect-square object-cover rounded-lg mb-1.5" />
                   : <div className="w-full aspect-square rounded-lg bg-cream mb-1.5 flex items-center justify-center text-ink-mute text-[11px]">Pas de photo</div>}
@@ -503,31 +511,6 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
               </button>
             ))}
           </div>
-
-          {/* Panier temporaire : articles à ajouter, avec quantité (reclique = +1) */}
-          {draft.length > 0 && (
-            <div className="mt-3 border-t border-line pt-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1.5">À ajouter</div>
-              {draft.map(d => (
-                <div key={d.key} className="flex items-center gap-2 py-1.5 border-b border-line/50 last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] text-ink font-medium break-words">{firstLine(d.name)}</div>
-                    {d.desc && <div className="text-[11px] text-ink-mute break-words">{firstLine(d.desc)}</div>}
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button onClick={() => setDraftQty(d.key, -1)} className="w-6 h-6 rounded border border-line text-bordeaux">−</button>
-                    <span className="w-5 text-center text-[13px] font-semibold">{d.qty}</span>
-                    <button onClick={() => setDraftQty(d.key, 1)} className="w-6 h-6 rounded border border-line text-bordeaux">+</button>
-                    <button onClick={() => removeDraft(d.key)} className="ml-1 w-6 h-6 flex items-center justify-center rounded-full text-ink-mute hover:text-danger" title="Retirer">🗑</button>
-                  </div>
-                </div>
-              ))}
-              <button onClick={commitDraft} disabled={busy}
-                className="w-full mt-2 py-2.5 rounded-xl bg-bordeaux text-cream text-[13px] font-medium hover:bg-bordeaux-deep transition-all disabled:opacity-50">
-                {busy ? '⏳ …' : `Ajouter à la commande (${draftCount})`}
-              </button>
-            </div>
-          )}
         </>
       )}
 
@@ -536,7 +519,7 @@ function AddArticle({ orderId, onCancel, onAdded, onLog }) {
           cfg={cfg}
           onChange={setCfg}
           onClose={() => setCfg(null)}
-          onAdd={(line) => { addToDraft(line); setCfg(null) }}
+          onAdd={(line) => { onAdd(line); setCfg(null) }}
           priceEditable={PRICE_EDITABLE.has(activeCat)}
           addLabel="Ajouter à la liste"
         />
