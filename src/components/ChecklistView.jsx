@@ -1188,7 +1188,7 @@ function ItemCard({ title, subtitle, quantity, onClick, done = false, compact = 
           {title}
         </div>
         {subtitle && (
-          <div className={`${subtitleSize} text-ink-mute group-hover:text-cream/80 mt-0.5 truncate`}>
+          <div className={`${subtitleSize} text-ink-mute group-hover:text-cream/80 mt-0.5 break-words`}>
             {subtitle}
           </div>
         )}
