@@ -28,7 +28,7 @@ import { confirmReception, todayISO } from '../lib/stockBoutique'
 import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
 import { loadVitrineReservations, loadResaRangees, markResaRangee, unmarkResaRangee } from '../lib/previsionsVitrine'
 import { toast } from '../lib/toast'
-import { printArticleBatch } from '../lib/printTicket'
+import { printArticleBatch, printGroupTicket } from '../lib/printTicket'
 import { RefreshCw } from 'lucide-react'
 
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
@@ -497,6 +497,30 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     }
   }
 
+  // Jus (B-) / gâteaux secs (GS-) : 1 SEUL ticket regroupant tous les articles de la commande, puis rangement.
+  const [groupBusy, setGroupBusy] = useState(null)   // clé du groupe en cours d'impression
+  async function handleProdGroupDone(group) {
+    setGroupBusy(group.key)
+    try {
+      await printGroupTicket({
+        deliveryAt: group.delivery_at,
+        orderNum: group.order_num,
+        clientName: group.client_name,
+        items: group.lines.map(l => ({ productName: cleanProductName(l.product_name), quantity: l.quantity })),
+      })
+      toast.success('Ticket imprimé')
+      for (const l of group.lines) await markCafeReceived(l.odoo_line_id, user.id)
+      const ids = new Set(group.lines.map(l => l.odoo_line_id))
+      setProdLines(prev => prev.filter(l => !ids.has(l.odoo_line_id)))
+      refresh(true)
+    } catch (e) {
+      console.error('[handleProdGroupDone]', e)
+      toast.error('Impression échouée — vérifie l\'imprimante et réessaie.')
+    } finally {
+      setGroupBusy(null)
+    }
+  }
+
   // Salé : impression DIRECTE du ticket (pas d'étape photo), puis rangement.
   const [saleBusy, setSaleBusy] = useState(null)   // odoo_line_id en cours
   async function handleSaleDone(line) {
@@ -740,6 +764,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
             vitrineResa={resaTodo}
             onVitrineDone={handleVitrineDone}
             onProdDone={handleProdDone}
+            onProdGroupDone={handleProdGroupDone}
+            groupBusy={groupBusy}
             onSaleDone={handleSaleDone}
             saleBusy={saleBusy}
             onCommandeDone={handleCommandeDone}
@@ -799,8 +825,10 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 // ============================================================
 // Onglet "A ranger"
 // ============================================================
-function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeItems, vitrineResa, onVitrineDone, onProdDone, onSaleDone, saleBusy, onCommandeDone, onResaDone }) {
+function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeItems, vitrineResa, onVitrineDone, onProdDone, onProdGroupDone, groupBusy, onSaleDone, saleBusy, onCommandeDone, onResaDone }) {
   const nbResa = Array.isArray(vitrineResa) ? vitrineResa.length : 0
+  // Jus (B-) et GS- regroupés PAR COMMANDE → 1 carte = 1 ticket. Le reste (E-/V-/MI-) reste individuel.
+  const { jusGroups, gsGroups, otherProd } = groupProdForPrint(prodLines)
   if (allDone && nbResa === 0) {
     return (
       <div className="bg-white rounded-2xl border border-line p-8 text-center shadow-sm">
@@ -860,20 +888,32 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeI
           )}
         </ColumnSection>
 
-        <ColumnSection title="PROD" count={prodLines.length} subtitle="prod + salés">
+        <ColumnSection title="PROD" count={prodLines.length} subtitle="jus & GS- : clic = 1 ticket / commande">
           {prodLines.length === 0 ? (
             <EmptyHint>Rien à ranger</EmptyHint>
           ) : (
-            prodLines.map(line => (
-              <ItemCard
-                key={`prod-${line.odoo_line_id}`}
-                title={cleanProductName(line.product_name)}
-                subtitle={buildSalesLineSubtitle(line)}
-                quantity={line.quantity}
-                onClick={() => onProdDone(line)}
-                compact
-              />
-            ))
+            <>
+              {[...jusGroups, ...gsGroups].map(group => (
+                <ItemCard
+                  key={group.key}
+                  title={`${group.kind === 'jus' ? '🧃 Jus' : '🍪 GS'} — ${group.client_name || group.order_num || ''}`}
+                  subtitle={groupBusy === group.key ? '🖨️ impression…' : buildGroupSubtitle(group)}
+                  quantity={group.lines.reduce((s, l) => s + (Number(l.quantity) || 1), 0)}
+                  onClick={() => groupBusy ? null : onProdGroupDone(group)}
+                  compact
+                />
+              ))}
+              {otherProd.map(line => (
+                <ItemCard
+                  key={`prod-${line.odoo_line_id}`}
+                  title={cleanProductName(line.product_name)}
+                  subtitle={buildSalesLineSubtitle(line)}
+                  quantity={line.quantity}
+                  onClick={() => onProdDone(line)}
+                  compact
+                />
+              ))}
+            </>
           )}
         </ColumnSection>
 
@@ -1071,6 +1111,30 @@ function buildSalesLineSubtitle(line) {
   return parts.join(' · ')
 }
 
+// Regroupe les lignes PROD : jus (B-) et GS- groupés PAR COMMANDE (1 ticket par groupe).
+// Le reste (entremets E-, viennoiserie V-, MI-) reste en lignes individuelles.
+function groupProdForPrint(lines) {
+  const jus = new Map(), gs = new Map(), otherProd = []
+  for (const l of lines) {
+    const isJus = startsWithAny(l.product_name, ['B-'])
+    const isGs = startsWithAny(l.product_name, ['GS-'])
+    if (!isJus && !isGs) { otherProd.push(l); continue }
+    const map = isJus ? jus : gs
+    const k = l.order_num || `l${l.odoo_line_id}`
+    if (!map.has(k)) map.set(k, { key: `${isJus ? 'jus' : 'gs'}-${k}`, kind: isJus ? 'jus' : 'gs', order_num: l.order_num, client_name: l.client_name, delivery_at: l.delivery_at, lines: [] })
+    map.get(k).lines.push(l)
+  }
+  return { jusGroups: [...jus.values()], gsGroups: [...gs.values()], otherProd }
+}
+
+function buildGroupSubtitle(group) {
+  const list = group.lines.map(l => `x${l.quantity || 1} ${cleanProductName(l.product_name)}`).join(' · ')
+  const when = formatDayLabel(lineDay(group.lines[0]))
+  const hour = formatHour(group.delivery_at)
+  const head = [when, hour].filter(Boolean).join(' · ')
+  return head ? `${head} — ${list}` : list
+}
+
 function buildOrderItemSubtitle(item) {
   const who = item.client_name || item.order_num || ''
   const when = formatDayLabel(item.day)
@@ -1119,7 +1183,7 @@ function ItemCard({ title, subtitle, quantity, onClick, done = false, compact = 
       className={`w-full bg-white border rounded-xl shadow-sm ${padding} text-left transition-all flex items-center justify-between gap-2 group ${baseColor}`}
     >
       <div className="flex-1 min-w-0">
-        <div className={`${titleSize} font-medium truncate ${done ? 'line-through text-ink-mute' : ''}`}>
+        <div className={`${titleSize} font-medium break-words ${done ? 'line-through text-ink-mute' : ''}`}>
           {done && <span className="mr-1">✓</span>}
           {title}
         </div>
