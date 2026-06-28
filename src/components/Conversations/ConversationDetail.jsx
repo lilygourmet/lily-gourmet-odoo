@@ -100,6 +100,7 @@ function renderHighlighted(text, term, nextIndex, activeIndex) {
 export default function ConversationDetail({ conversationId, user, onBack, relanceRef = null }) {
   const [conv, setConv] = useState(null)
   const [linkedOrder, setLinkedOrder] = useState(null)   // commande liée (link_order_ref) complète
+  const [actionsOpen, setActionsOpen] = useState(true)   // panneau d'actions commande (repliable)
   const [confirmingOrder, setConfirmingOrder] = useState(false)
   const [waConfirm, setWaConfirm] = useState(null)       // commande pour laquelle envoyer le message de confirmation
   const [editOrder, setEditOrder] = useState(null)       // commande à modifier (✏️ Articles)
@@ -996,7 +997,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                       <>
                         <div className="fixed inset-0 z-[90]" onClick={() => setShowPhone(false)} />
                         <div className="absolute top-7 left-0 z-[100] bg-cream border border-line rounded-lg shadow-xl px-3 py-2 flex items-center gap-2 whitespace-nowrap">
-                          <span className="font-mono text-[13px] font-semibold text-ink">{conv.client_phone}</span>
+                          <span className="text-[13px] font-semibold text-ink">{conv.client_phone}</span>
                           <button onClick={() => { try { navigator.clipboard?.writeText(conv.client_phone) } catch { /* */ } setPhoneCopied(true); setTimeout(() => setPhoneCopied(false), 1400) }}
                             className={`text-[11px] font-bold px-2.5 py-1 rounded-md ${phoneCopied ? 'bg-emerald-600 text-white' : 'border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream'} transition-all`}>
                             {phoneCopied ? '✓ Copié' : 'Copier'}
@@ -1008,33 +1009,6 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto">
-                {linkedOrder && (() => {
-                  // Commande déjà passée (facturée/clôturée dans Odoo) : on garde SEULEMENT « Articles »
-                  // (pour corriger un message), on cache Confirmer / Confirmée / Annuler.
-                  const orderPast = linkedOrder.state === 'done' || linkedOrder.invoiceStatus === 'invoiced'
-                  if (orderPast) {
-                    return (
-                      <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
-                    )
-                  }
-                  return (
-                    <>
-                      {linkedOrder.state === 'sale' ? (
-                        <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-400/30 text-cream border border-emerald-200/40">Confirmée</span>
-                      ) : linkedOrder.state === 'cancel' ? (
-                        <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cream/15 text-cream/70 border border-cream/30">Annulée</span>
-                      ) : (
-                        <button onClick={handleConfirmOrder} disabled={confirmingOrder} title={`Confirmer ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wider bg-emerald-500 text-white hover:bg-emerald-600 transition-all disabled:opacity-50">{confirmingOrder ? '…' : 'Confirmer'}</button>
-                      )}
-                      {linkedOrder.state !== 'cancel' && (
-                        <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
-                      )}
-                      {linkedOrder.state !== 'cancel' && (
-                        <button onClick={handleCancelOrder} disabled={confirmingOrder} title={`Annuler ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-red-500/80 text-cream border border-red-300/40 hover:bg-red-600 transition-all disabled:opacity-50">Annuler</button>
-                      )}
-                    </>
-                  )
-                })()}
                 {conv && (
                   <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
                 )}
@@ -1101,6 +1075,38 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
         )}
       </div>
 
+      {/* Panneau d'actions de la commande liée (repliable) */}
+      {linkedOrder && (() => {
+        const orderPast = linkedOrder.state === 'done' || linkedOrder.invoiceStatus === 'invoiced'
+        const isSale = linkedOrder.state === 'sale'
+        const isCancel = linkedOrder.state === 'cancel'
+        const stateLabel = isSale ? 'Confirmée' : isCancel ? 'Annulée' : 'Devis'
+        const stateCls = isSale ? 'bg-emerald-100 text-emerald-700' : isCancel ? 'bg-line text-ink-mute' : 'bg-amber-100 text-amber-700'
+        return (
+          <div className="flex-shrink-0 border-b border-line bg-cream-warm/40 px-4 py-2">
+            <button onClick={() => setActionsOpen(o => !o)} className="w-full flex items-center gap-2 text-left">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-bordeaux">Commande {linkedOrder.name}</span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${stateCls}`}>{stateLabel}</span>
+              {linkedOrder.amountText && <span className="text-[11px] text-ink-mute">{linkedOrder.amountText}</span>}
+              <span className="ml-auto text-ink-mute text-[12px]">{actionsOpen ? '▾' : '▸'}</span>
+            </button>
+            {actionsOpen && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {!orderPast && !isSale && !isCancel && (
+                  <button onClick={handleConfirmOrder} disabled={confirmingOrder} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all disabled:opacity-50">{confirmingOrder ? '…' : 'Confirmer le devis'}</button>
+                )}
+                {!isCancel && (
+                  <button onClick={() => setEditOrder(linkedOrder)} className="px-4 py-2 rounded-xl text-[13px] font-medium bg-white border border-line text-ink hover:border-bordeaux transition-all">Modifier les articles</button>
+                )}
+                {!orderPast && !isCancel && (
+                  <button onClick={handleCancelOrder} disabled={confirmingOrder} className="px-4 py-2 rounded-xl text-[13px] font-medium bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50">Annuler</button>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {threadSearchOpen && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-line flex-shrink-0">
           <input
@@ -1111,7 +1117,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
             placeholder="Chercher dans la conversation…"
             className="flex-1 px-3 py-1.5 text-[13px] bg-cream-warm border border-line rounded-full focus:outline-none focus:border-bordeaux"
           />
-          <span className="text-[11px] font-mono text-ink-mute flex-shrink-0">{threadMatches ? `${matchIndex + 1}/${threadMatches}` : '0/0'}</span>
+          <span className="text-[11px] text-ink-mute flex-shrink-0">{threadMatches ? `${matchIndex + 1}/${threadMatches}` : '0/0'}</span>
           <button onClick={prevMatch} disabled={!threadMatches} className="w-8 h-8 rounded-full border border-line text-ink-soft hover:bg-cream-warm disabled:opacity-40 flex-shrink-0" title="Précédent">↑</button>
           <button onClick={nextMatch} disabled={!threadMatches} className="w-8 h-8 rounded-full border border-line text-ink-soft hover:bg-cream-warm disabled:opacity-40 flex-shrink-0" title="Suivant">↓</button>
           <button onClick={() => { setThreadSearch(''); setThreadSearchOpen(false) }} className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex-shrink-0" title="Fermer">✕</button>
@@ -1153,8 +1159,8 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
           }
           return (
             <div key={m.id} id={`msg-${m.id}`} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
-              <div className={`relative max-w-[80%] rounded-lg px-3 py-2 pr-8 ${
-                isAgent ? 'bg-bordeaux text-cream' : isNewClient ? 'bg-amber-100 text-ink border border-amber-300' : 'bg-cream-warm text-ink border border-line'
+              <div className={`relative max-w-[80%] px-3 py-2 pr-8 rounded-2xl shadow-sm ${
+                isAgent ? 'lg-grad text-cream rounded-br-sm' : isNewClient ? 'bg-amber-50 text-ink border border-amber-300 rounded-bl-sm' : 'bg-white text-ink border border-line rounded-bl-sm'
               }`}>
                 <button
                   onClick={() => setForwardMsg(m)}
@@ -1260,7 +1266,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                 onClick={() => { setText(s.text); setSuggestions([]); requestAnimationFrame(() => textareaRef.current?.focus()) }}
                 className="text-left rounded-lg border border-bordeaux/30 bg-bordeaux/5 px-3 py-2 hover:border-bordeaux transition-colors"
               >
-                <div className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-bordeaux mb-0.5"><Sparkles size={10} strokeWidth={1.8} /> {TONE_LABEL[s.tone] || s.tone}</div>
+                <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-bordeaux mb-0.5"><Sparkles size={10} strokeWidth={1.8} /> {TONE_LABEL[s.tone] || s.tone}</div>
                 <div className="text-[12px] text-ink">{s.text}</div>
               </button>
             ))}
@@ -1291,7 +1297,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
         {recording ? (
           <div className="flex items-center gap-2 w-full">
             <span className="text-bordeaux animate-pulse text-[14px]">●</span>
-            <span className="font-mono text-[13px] text-ink flex-1">Enregistrement… {fmtDuration(recordSeconds)}</span>
+            <span className="text-[13px] text-ink flex-1">Enregistrement… {fmtDuration(recordSeconds)}</span>
             <button
               type="button"
               onClick={cancelRecording}
@@ -1436,7 +1442,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => setOrdersOpen(false)}>
           <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-fraunces italic text-[18px] text-ink">📦 Commandes & devis</h3>
+              <h3 className="font-fraunces italic text-[18px] text-ink">Commandes & devis</h3>
               <button onClick={() => setOrdersOpen(false)} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>
             </div>
             <p className="text-[11px] text-ink-soft mb-3">{conv?.client_name || conv?.client_phone || ''}</p>
@@ -1458,7 +1464,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                       className="bg-white border border-line rounded-xl p-3 cursor-pointer hover:border-bordeaux transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-[13px] font-semibold text-bordeaux">{o.name} ↗</span>
+                        <span className="text-[13px] font-semibold text-bordeaux">{o.name} ↗</span>
                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${stCls}`}>{stLabel}</span>
                       </div>
                       <div className="text-[11px] text-ink-soft mt-1 flex flex-wrap gap-x-3">
