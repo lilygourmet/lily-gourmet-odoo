@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import CopyableRef from './CopyableRef'
 import Skeleton from './Skeleton'
-import { loadDevis, loadConfirmedOrders, loadDevisPhotos, loadDevisEnvois, recordDevisEnvoi, confirmDevis, cancelDevis, restoreDevis, loadContactedOrderRefs, recordDevisTraitement, loadDevisTraitements } from '../lib/conversations'
+import { loadDevis, loadConfirmedOrders, loadDevisPhotos, loadDevisEnvois, recordDevisEnvoi, confirmDevis, cancelDevis, restoreDevis, loadContactedOrderRefs, loadConversationPhoneKeys, recordDevisTraitement, loadDevisTraitements } from '../lib/conversations'
+
+// 9 derniers chiffres d'un téléphone (pour matcher devis ↔ conversation WhatsApp).
+const phoneKey = p => String(p || '').replace(/\D/g, '').slice(-9)
 import { createModification } from '../lib/modifications'
 import NewConversationModal from './Conversations/NewConversationModal'
 import OrderEditModal from './OrderEditModal'
@@ -67,6 +70,11 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
   const [contactedRefs, setContactedRefs] = useState(() => new Set())
   useEffect(() => {
     loadContactedOrderRefs().then(setContactedRefs).catch(() => {})
+  }, [])
+  // Téléphones (9 chiffres) ayant déjà une conversation WhatsApp → client déjà en contact.
+  const [convPhones, setConvPhones] = useState(() => new Set())
+  useEffect(() => {
+    loadConversationPhoneKeys().then(setConvPhones).catch(() => {})
   }, [])
   const [traitements, setTraitements] = useState({})
   function reloadTraitements() { loadDevisTraitements().then(setTraitements).catch(() => {}) }
@@ -222,7 +230,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
         const lines = Array.isArray(d.productLines) ? d.productLines : []
         return lines.some(l => (typeof l === 'string' ? l : (l.text || '')).toLowerCase().includes(af))
       }
-      const contacted = () => !!envois[d.name] || contactedRefs.has(String(d.name || '').toUpperCase()) || ['relance', 'confirme'].includes(traitements[d.name]?.action)
+      const contacted = () => !!envois[d.name] || contactedRefs.has(String(d.name || '').toUpperCase()) || ['relance', 'confirme'].includes(traitements[d.name]?.action) || (phoneKey(d.clientPhone).length >= 9 && convPhones.has(phoneKey(d.clientPhone)))
       // Devis internet : QUE les non traités (les traités partent vers « Commandes »).
       if (isList) {
         if (d.state !== 'sent') return false
@@ -265,7 +273,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
     const isSent = d.state === 'sent'
     const isConfirmed = d.state === 'sale'
     const env = envois[d.name]
-    const alreadyContacted = !!env || contactedRefs.has(String(d.name || '').toUpperCase()) || ['relance', 'confirme'].includes(traitements[d.name]?.action)   // devis envoyé, ce devis cité dans une conversation, relance ou confirmation
+    const alreadyContacted = !!env || contactedRefs.has(String(d.name || '').toUpperCase()) || ['relance', 'confirme'].includes(traitements[d.name]?.action) || (phoneKey(d.clientPhone).length >= 9 && convPhones.has(phoneKey(d.clientPhone)))   // devis envoyé, ce devis cité dans une conversation, relance/confirmation, ou client déjà en conversation WhatsApp
     const trait = traitements[d.name]
     const statusLabel = isConfirmed ? 'Confirmée' : isSent ? 'Devis internet' : 'Devis'
     const statusCls = isConfirmed ? 'bg-emerald-100 text-emerald-800' : isSent ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
@@ -304,7 +312,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
 
         {/* Commentaire */}
         {d.note && (
-          <div className="mt-3 text-[12px] text-ink-soft bg-cream/60 border border-line/60 rounded-lg px-3 py-2 leading-relaxed">💬 {d.note}</div>
+          <div className="mt-3 text-[12px] text-ink-soft bg-cream/60 border border-line/60 rounded-lg px-3 py-2 leading-relaxed">{d.note}</div>
         )}
 
         {/* Qui a traité */}
@@ -321,7 +329,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
               title={alreadyContacted ? 'Relancer sur WhatsApp' : 'Contacter sur WhatsApp'}
               className="relative w-9 h-9 flex items-center justify-center bg-[#25D366] text-white rounded-full hover:bg-[#1ebe5d] transition-all">
               <WhatsAppLogo size={18} />
-              {alreadyContacted && <span className="absolute -top-1 -right-1 text-[10px] bg-white rounded-full leading-none">🔁</span>}
+              {alreadyContacted && <span className="absolute -top-1 -right-1 text-[11px] bg-white rounded-full leading-none text-bordeaux font-bold">↻</span>}
             </button>
           ) : (
             <span className="text-[11px] text-ink-mute italic">Pas de téléphone</span>
@@ -329,7 +337,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
           <button onClick={() => setEditOrder(d)}
             title="Ajouter / modifier / supprimer des articles"
             className="px-3 py-1.5 bg-gold/15 text-gold border border-gold/40 rounded-full text-[11px] font-medium tracking-wider hover:bg-gold/25 transition-all">
-            ✏️ Articles
+            Modifier
           </button>
           {!isConfirmed && (
             <button onClick={() => handleConfirm(d)} disabled={confirmingId === d.id}
@@ -339,7 +347,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
           )}
           <button onClick={() => handleCancel(d)} disabled={confirmingId === d.id}
             className={`${isConfirmed ? 'ml-auto ' : ''}px-3 py-1.5 bg-red-600 text-white rounded-full text-[11px] font-medium tracking-wider hover:bg-red-700 transition-all disabled:opacity-50`}>
-            {confirmingId === d.id ? '⏳ …' : '🗑 Annuler'}
+            {confirmingId === d.id ? '…' : 'Annuler'}
           </button>
         </div>
       </div>
@@ -349,7 +357,7 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
   return (
     <div className="max-w-7xl mx-auto px-4 py-5">
       <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
-        <h1 className="font-fraunces italic text-[26px] text-ink leading-none">{internetOnly ? '🌐 Devis internet' : '📄 Commandes'}</h1>
+        <h1 className="font-fraunces italic text-[26px] text-ink leading-none">{internetOnly ? 'Devis internet' : 'Commandes'}</h1>
         <span className="font-mono text-[11px] tracking-wider uppercase text-ink-mute">{isCancelled ? `${annulations.length} annulés` : `${shown.length} devis`}</span>
       </div>
 
