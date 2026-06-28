@@ -1006,27 +1006,25 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto">
                 {linkedOrder && (() => {
-                  // Commande déjà passée (facturée/clôturée dans Odoo) : on garde SEULEMENT « Articles »
-                  // (pour corriger un message), on cache Confirmer / Confirmée / Annuler.
+                  // « Modifier » (articles) TOUJOURS visible, quel que soit l'état/la date.
+                  // Confirmer = seulement un devis ; Annuler = sauf commande passée/annulée.
                   const orderPast = linkedOrder.state === 'done' || linkedOrder.invoiceStatus === 'invoiced'
-                  if (orderPast) {
-                    return (
-                      <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
-                    )
-                  }
+                  const isSale = linkedOrder.state === 'sale'
+                  const isCancel = linkedOrder.state === 'cancel'
+                  const confirmable = !orderPast && !isSale && !isCancel
                   return (
                     <>
-                      {linkedOrder.state === 'sale' ? (
+                      {isSale && (
                         <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-400/30 text-cream border border-emerald-200/40">Confirmée</span>
-                      ) : linkedOrder.state === 'cancel' ? (
+                      )}
+                      {isCancel && (
                         <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cream/15 text-cream/70 border border-cream/30">Annulée</span>
-                      ) : (
+                      )}
+                      {confirmable && (
                         <button onClick={handleConfirmOrder} disabled={confirmingOrder} title={`Confirmer ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wider bg-emerald-500 text-white hover:bg-emerald-600 transition-all disabled:opacity-50">{confirmingOrder ? '…' : 'Confirmer'}</button>
                       )}
-                      {linkedOrder.state !== 'cancel' && (
-                        <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
-                      )}
-                      {linkedOrder.state !== 'cancel' && (
+                      <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Modifier</button>
+                      {!orderPast && !isCancel && (
                         <button onClick={handleCancelOrder} disabled={confirmingOrder} title={`Annuler ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-red-500/80 text-cream border border-red-300/40 hover:bg-red-600 transition-all disabled:opacity-50">Annuler</button>
                       )}
                     </>
@@ -1049,11 +1047,6 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                   className="w-8 h-8 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
                   title="Rechercher dans la conversation"
                 ><Search size={16} strokeWidth={1.8} /></button>
-                {conv && !conv.assigned_to && (
-                  <button onClick={handleAssign} disabled={assigning} className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 whitespace-nowrap">
-                    {assigning ? '…' : 'Je prends'}
-                  </button>
-                )}
               </div>
             </>
           )}
