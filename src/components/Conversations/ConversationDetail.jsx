@@ -100,7 +100,6 @@ function renderHighlighted(text, term, nextIndex, activeIndex) {
 export default function ConversationDetail({ conversationId, user, onBack, relanceRef = null }) {
   const [conv, setConv] = useState(null)
   const [linkedOrder, setLinkedOrder] = useState(null)   // commande liée (link_order_ref) complète
-  const [actionsOpen, setActionsOpen] = useState(true)   // panneau d'actions commande (repliable)
   const [confirmingOrder, setConfirmingOrder] = useState(false)
   const [waConfirm, setWaConfirm] = useState(null)       // commande pour laquelle envoyer le message de confirmation
   const [editOrder, setEditOrder] = useState(null)       // commande à modifier (✏️ Articles)
@@ -1009,6 +1008,33 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                 )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto">
+                {linkedOrder && (() => {
+                  // Commande déjà passée (facturée/clôturée dans Odoo) : on garde SEULEMENT « Articles »
+                  // (pour corriger un message), on cache Confirmer / Confirmée / Annuler.
+                  const orderPast = linkedOrder.state === 'done' || linkedOrder.invoiceStatus === 'invoiced'
+                  if (orderPast) {
+                    return (
+                      <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
+                    )
+                  }
+                  return (
+                    <>
+                      {linkedOrder.state === 'sale' ? (
+                        <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-400/30 text-cream border border-emerald-200/40">Confirmée</span>
+                      ) : linkedOrder.state === 'cancel' ? (
+                        <span title={linkedOrder.name} className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cream/15 text-cream/70 border border-cream/30">Annulée</span>
+                      ) : (
+                        <button onClick={handleConfirmOrder} disabled={confirmingOrder} title={`Confirmer ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wider bg-emerald-500 text-white hover:bg-emerald-600 transition-all disabled:opacity-50">{confirmingOrder ? '…' : 'Confirmer'}</button>
+                      )}
+                      {linkedOrder.state !== 'cancel' && (
+                        <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Articles</button>
+                      )}
+                      {linkedOrder.state !== 'cancel' && (
+                        <button onClick={handleCancelOrder} disabled={confirmingOrder} title={`Annuler ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-red-500/80 text-cream border border-red-300/40 hover:bg-red-600 transition-all disabled:opacity-50">Annuler</button>
+                      )}
+                    </>
+                  )
+                })()}
                 {conv && (
                   <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
                 )}
@@ -1074,38 +1100,6 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
           </div>
         )}
       </div>
-
-      {/* Panneau d'actions de la commande liée (repliable) */}
-      {linkedOrder && (() => {
-        const orderPast = linkedOrder.state === 'done' || linkedOrder.invoiceStatus === 'invoiced'
-        const isSale = linkedOrder.state === 'sale'
-        const isCancel = linkedOrder.state === 'cancel'
-        const stateLabel = isSale ? 'Confirmée' : isCancel ? 'Annulée' : 'Devis'
-        const stateCls = isSale ? 'bg-emerald-100 text-emerald-700' : isCancel ? 'bg-line text-ink-mute' : 'bg-amber-100 text-amber-700'
-        return (
-          <div className="flex-shrink-0 border-b border-line bg-cream-warm/40 px-4 py-2">
-            <button onClick={() => setActionsOpen(o => !o)} className="w-full flex items-center gap-2 text-left">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-bordeaux">Commande {linkedOrder.name}</span>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${stateCls}`}>{stateLabel}</span>
-              {linkedOrder.amountText && <span className="text-[11px] text-ink-mute">{linkedOrder.amountText}</span>}
-              <span className="ml-auto text-ink-mute text-[12px]">{actionsOpen ? '▾' : '▸'}</span>
-            </button>
-            {actionsOpen && (
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                {!orderPast && !isSale && !isCancel && (
-                  <button onClick={handleConfirmOrder} disabled={confirmingOrder} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all disabled:opacity-50">{confirmingOrder ? '…' : 'Confirmer le devis'}</button>
-                )}
-                {!isCancel && (
-                  <button onClick={() => setEditOrder(linkedOrder)} className="px-4 py-2 rounded-xl text-[13px] font-medium bg-white border border-line text-ink hover:border-bordeaux transition-all">Modifier les articles</button>
-                )}
-                {!orderPast && !isCancel && (
-                  <button onClick={handleCancelOrder} disabled={confirmingOrder} className="px-4 py-2 rounded-xl text-[13px] font-medium bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50">Annuler</button>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })()}
 
       {threadSearchOpen && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-line flex-shrink-0">

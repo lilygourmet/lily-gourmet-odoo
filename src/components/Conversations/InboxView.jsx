@@ -15,9 +15,9 @@ const FILTERS = [
   { key: 'all', label: 'Toutes' },
   { key: 'mine', label: 'À moi' },
   { key: 'unassigned', label: 'Non assignées' },
-  { key: 'unread', label: '✉️ Non lues' },
-  { key: 'waiting', label: '🔴 En attente' },
-  { key: 'followup', label: '🟡 À relancer' },
+  { key: 'unread', label: 'Non lues' },
+  { key: 'waiting', label: 'En attente' },
+  { key: 'followup', label: 'À relancer' },
   { key: 'fermees', label: 'Fermées' },
 ]
 
@@ -240,9 +240,9 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
             <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line flex-nowrap flex-shrink-0">
               {FILTERS.map(f => {
                 let label = f.label
-                if (f.key === 'waiting' && waitingCount) label = `🔴 En attente (${waitingCount})`
-                else if (f.key === 'followup' && followupCount) label = `🟡 À relancer (${followupCount})`
-                else if (f.key === 'unread' && unreadCount) label = `✉️ Non lues (${unreadCount})`
+                if (f.key === 'waiting' && waitingCount) label = `En attente (${waitingCount})`
+                else if (f.key === 'followup' && followupCount) label = `À relancer (${followupCount})`
+                else if (f.key === 'unread' && unreadCount) label = `Non lues (${unreadCount})`
                 return (
                   <button
                     key={f.key}
@@ -294,11 +294,11 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
               const st = STATUS_LABEL[c.status] || STATUS_LABEL.non_assignee
               const u = conversationUrgency(c)
               const toneClass = u?.tone === 'urgent' ? 'text-bordeaux' : u?.tone === 'warn' ? 'text-amber-600' : 'text-ink-mute'
-              // Étiquette à contour épais foncé (pas de couleur pleine, pour ne pas
-              // confondre avec la surbrillance des non lus). Fermée = grisée.
-              const badgeCls = c.status === 'fermee'
-                ? 'border-2 border-line text-ink-mute'
-                : 'border-2 border-ink text-ink'
+              // Statut : un point de couleur + texte (orange = non assignée, vert = en cours, gris = fermée).
+              const statusColor = c.status === 'fermee' ? '#cbbfc4' : c.status === 'en_cours' ? '#5f9270' : '#e0a23a'
+              const statusText = c.status === 'en_cours'
+                ? `En cours${c.assigned?.full_name ? ' · ' + c.assigned.full_name : ''}`
+                : st.text
               const seenRef = seenAt[c.id] || visitedAtRef.current
               // En avant aussi tant que le client attend une réponse (même déjà ouverte),
               // jusqu'à ce qu'un agent réponde (conversationWaitingSince repasse à null).
@@ -317,35 +317,34 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
                       markConversationOpened(c.id).catch(() => {})
                     }
                   }}
-                  className={`w-full text-left rounded-xl border p-2.5 transition-colors shadow-sm hover:border-bordeaux ${
+                  className={`w-full text-left rounded-xl border p-3 transition-colors shadow-sm hover:border-bordeaux ${
                     isSelected ? 'bg-line/50 border-ink' : isNew ? 'bg-bordeaux/5 border-bordeaux/40' : 'bg-cream-warm border-line'
                   }`}
                 >
-                  <div className="flex items-start gap-2.5">
-                    <ClientAvatar conv={c} size={32} variant="light" fidele={!!c.fidele || fideleSet.has(last9(c.client_phone))} />
+                  <div className="flex items-start gap-3">
+                    <ClientAvatar conv={c} size={42} variant="light" fidele={!!c.fidele || fideleSet.has(last9(c.client_phone))} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className={`text-[14px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
+                        <span className={`text-[15px] truncate flex items-center gap-1.5 min-w-0 ${isNew ? 'font-semibold text-bordeaux' : 'font-medium text-ink'}`}>
                           {c.unread_count > 0 && conversationWaitingSince(c)
                             ? <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[#6f9171] text-white text-[10px] font-semibold flex items-center justify-center leading-none">{c.unread_count}</span>
                             : isNew && <span className="w-2 h-2 rounded-full bg-bordeaux flex-shrink-0" />}
                           <span className="truncate">{c.client_name || c.client_phone}</span>
-                          {c.link_order_at && <span className="flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#F7E3EA] text-[#993556]">🎂 Commande</span>}
+                          {c.link_order_at && <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#F7E3EA] text-[#993556]">Commande</span>}
                         </span>
-                        <span className="font-mono text-[10px] text-ink-mute flex-shrink-0">{formatRelativeTime(c.last_message_at)}</span>
+                        <span className="text-[11.5px] text-ink-mute flex-shrink-0 tabular-nums">{formatRelativeTime(c.last_message_at)}</span>
                       </div>
                       {/* Ligne 2 : statut + étiquettes + urgence — passe à la ligne pour tout voir */}
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider flex-shrink-0 ${badgeCls}`}>
-                          {c.status === 'en_cours' && c.assigned?.full_name
-                            ? c.assigned.full_name
-                            : `${st.text}${c.assigned?.full_name ? ` · ${c.assigned.full_name}` : ''}`}
+                        <span className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
+                          <span className="text-[12px] text-ink-soft">{statusText}</span>
                         </span>
                         {labels.filter(l => (c.labels || []).includes(l.key)).map(l => (
-                          <span key={l.key} className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: l.bg, color: l.color }}>{l.label}</span>
+                          <span key={l.key} className="text-[10.5px] font-medium px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: l.bg, color: l.color }}>{l.label}</span>
                         ))}
                         {u && u.text && (
-                          <span className={`text-[11px] break-words ${u.tone === 'urgent' ? 'font-bold text-red-600' : toneClass}`}>{u.text}</span>
+                          <span className={`text-[11.5px] break-words ${u.tone === 'urgent' ? 'font-semibold text-red-600' : toneClass}`}>{u.text}</span>
                         )}
                       </div>
                     </div>
