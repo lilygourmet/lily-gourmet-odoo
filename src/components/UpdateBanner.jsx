@@ -37,13 +37,18 @@ export default function UpdateBanner() {
       if (document.visibilityState === 'visible') check()
     }
 
+    // Signal envoyé par autoUpdate.js (détection par hash du bundle) → on affiche la bannière.
+    function onSignal() { setHasUpdate(true) }
+
     check()
     const interval = setInterval(check, 5 * 60 * 1000)   // filet espacé ; la vraie vérif se fait au retour sur l'onglet (ci-dessous)
     document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('lg:update-available', onSignal)
     return () => {
       cancelled = true
       clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('lg:update-available', onSignal)
     }
   }, [hasUpdate])
 
