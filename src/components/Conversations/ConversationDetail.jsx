@@ -985,7 +985,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
           ) : (
             <>
               <div className="flex items-center gap-1 min-w-0 flex-1">
-                <div className="text-[15px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
+                <button onClick={openNameEdit} disabled={!conv} title="Cliquer pour modifier le nom du client" className="text-[15px] font-medium text-cream truncate text-left hover:underline disabled:no-underline disabled:cursor-default">{conv?.client_name || conv?.client_phone || '…'}</button>
                 {conv?.client_phone && (
                   <div className="relative flex-shrink-0">
                     <button onClick={() => setShowPhone(v => !v)} title="Numéro de téléphone" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex items-center justify-center transition-all"><Phone size={12} /></button>
