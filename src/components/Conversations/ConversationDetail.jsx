@@ -151,6 +151,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   const [markBusy, setMarkBusy] = useState(false)
   // Édition du nom du client
   const [nameEditing, setNameEditing] = useState(false)
+  const skipNameSave = useRef(false)   // true = Échap → on quitte SANS enregistrer
   const [ordersOpen, setOrdersOpen] = useState(false)
   const [clientOrders, setClientOrders] = useState(null)
   const [ordersBusy, setOrdersBusy] = useState(false)
@@ -851,7 +852,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     }
   }
 
-  function openNameEdit() { setNameInput(conv?.client_name || ''); setNameEditing(true) }
+  function openNameEdit() { skipNameSave.current = false; setNameInput(conv?.client_name || ''); setNameEditing(true) }
 
   async function saveName() {
     setNameBusy(true)
@@ -974,13 +975,13 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                 type="text"
                 value={nameInput}
                 onChange={e => setNameInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setNameEditing(false) }}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { skipNameSave.current = true; e.currentTarget.blur() } }}
+                onBlur={() => { if (skipNameSave.current) { skipNameSave.current = false; setNameEditing(false); return } saveName() }}
                 autoFocus
                 placeholder="Nom du client"
                 className="flex-1 min-w-0 px-2 py-1 text-[14px] text-ink bg-cream rounded border border-cream/40 focus:outline-none focus:border-cream"
               />
-              <button onClick={saveName} disabled={nameBusy} title="Enregistrer" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all flex-shrink-0"><Check size={14} /></button>
-              <button onClick={() => setNameEditing(false)} disabled={nameBusy} title="Annuler" className="w-7 h-7 rounded-full bg-cream/15 text-cream hover:bg-cream/30 flex items-center justify-center transition-all flex-shrink-0"><X size={14} /></button>
+              {nameBusy && <span className="text-[11px] text-cream/80 flex-shrink-0">…</span>}
             </div>
           ) : (
             <>
