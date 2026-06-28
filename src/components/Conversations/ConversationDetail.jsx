@@ -8,7 +8,7 @@ import { createModification } from '../../lib/modifications'
 import NewConversationModal from './NewConversationModal'
 import OrderEditModal from '../OrderEditModal'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Search, Pencil, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
+import { ArrowLeft, Search, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -986,9 +986,6 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
             <>
               <div className="flex items-center gap-1 min-w-0 flex-1">
                 <div className="text-[15px] font-medium text-cream truncate">{conv?.client_name || conv?.client_phone || '…'}</div>
-                {conv && (
-                  <button onClick={openNameEdit} title="Renommer le client" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex-shrink-0 flex items-center justify-center transition-all"><Pencil size={12} /></button>
-                )}
                 {conv?.client_phone && (
                   <div className="relative flex-shrink-0">
                     <button onClick={() => setShowPhone(v => !v)} title="Numéro de téléphone" className="w-6 h-6 rounded-full text-cream/70 hover:text-cream hover:bg-cream/15 flex items-center justify-center transition-all"><Phone size={12} /></button>
@@ -1036,10 +1033,10 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                   )
                 })()}
                 {conv && (
-                  <button onClick={toggleClientOrders} title="Voir ses commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">📦 Cmd</button>
+                  <button onClick={toggleClientOrders} title="Voir l'historique des commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">Historique</button>
                 )}
                 {conv && (
-                  <button onClick={openNewOrder} title="Créer une nouvelle commande pour ce client (nom + téléphone pré-remplis)" className="w-8 h-8 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[14px] transition-all flex-shrink-0 flex items-center justify-center">🧾</button>
+                  <button onClick={openNewOrder} title="Créer une nouvelle commande pour ce client (nom + téléphone pré-remplis)" className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 whitespace-nowrap">Nouvelle commande</button>
                 )}
                 {conv && (
                   <button onClick={() => setLinkMenuOpen(true)} disabled={sending} title="Envoyer un lien de commande en ligne" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50">🔗 Lien</button>
@@ -1052,16 +1049,10 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                   className="w-8 h-8 rounded-full border border-cream/40 text-cream hover:bg-cream hover:text-bordeaux flex items-center justify-center transition-all flex-shrink-0"
                   title="Rechercher dans la conversation"
                 ><Search size={16} strokeWidth={1.8} /></button>
-                {conv && (
-                  conv.assigned_to ? (
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-cream/15 text-cream flex-shrink-0 whitespace-nowrap">
-                      {conv.assigned_to === user.id ? 'À moi' : `Pris par ${conv.assigned?.full_name || conv.assigned?.username || '?'}`}
-                    </span>
-                  ) : (
-                    <button onClick={handleAssign} disabled={assigning} className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 whitespace-nowrap">
-                      {assigning ? '…' : 'Je prends'}
-                    </button>
-                  )
+                {conv && !conv.assigned_to && (
+                  <button onClick={handleAssign} disabled={assigning} className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-60 whitespace-nowrap">
+                    {assigning ? '…' : 'Je prends'}
+                  </button>
                 )}
               </div>
             </>
