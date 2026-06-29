@@ -412,12 +412,29 @@ function App() {
         if (!showSide) return <LazyBoundary>{renderActiveView()}</LazyBoundary>
         const W = 222, RW = 52
         const nav = (v, o) => { handleNavigate(v, o); setSideHover(false) }
-        const railMode = sideMode === 'rail'
+
+        // Mode RAIL : UNE SEULE barre qui s'élargit au survol (icônes ↔ noms).
+        if (sideMode === 'rail') {
+          return (
+            <>
+              <div onMouseEnter={() => setSideHover(true)} onMouseLeave={() => setSideHover(false)}
+                style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: sideHover ? W : RW, zIndex: 47,
+                  background: '#F7F2EA', borderRight: '1px solid #e5d8c3', overflow: 'hidden',
+                  transition: 'width 0.2s ease', boxShadow: sideHover ? '2px 0 18px rgba(0,0,0,0.18)' : 'none' }}>
+                <SideNav user={user} activeView={activeView} onNavigate={nav} width={sideHover ? W : RW}
+                  collapsed={!sideHover} mode={sideMode} onSetMode={setSideMode} onExpand={() => setSideHover(true)} />
+              </div>
+              <div style={{ marginLeft: RW, transition: 'margin-left 0.2s ease' }}>
+                <LazyBoundary>{renderActiveView()}</LazyBoundary>
+              </div>
+            </>
+          )
+        }
+
+        // Modes FIXE / AUTO
         const sideOpen = sideMode === 'fixe' || sideHover
-        const contentLeft = sideMode === 'fixe' ? W : (railMode ? RW : 0)
         return (
           <>
-            {/* mode AUTO : zone de déclenchement + poignée */}
             {sideMode === 'auto' && (
               <div onMouseEnter={() => setSideHover(true)} style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 16, zIndex: 46 }} />
             )}
@@ -430,21 +447,13 @@ function App() {
                 <span style={{ fontSize: 15 }}>›</span>
               </div>
             )}
-            {/* mode RAIL : fine bande d'icônes toujours visible */}
-            {railMode && (
-              <div onMouseEnter={() => setSideHover(true)}
-                style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: RW, zIndex: 46, background: '#F7F2EA', borderRight: '1px solid #e5d8c3' }}>
-                <SideNav collapsed user={user} activeView={activeView} onNavigate={nav} width={RW} onExpand={() => setSideHover(true)} />
-              </div>
-            )}
-            {/* barre pleine : fixe (toujours) OU en survol (auto/rail) */}
             <div onMouseEnter={() => { if (sideMode !== 'fixe') setSideHover(true) }} onMouseLeave={() => { if (sideMode !== 'fixe') setSideHover(false) }}
               style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: W, zIndex: 47,
                 transform: sideOpen ? 'translateX(0)' : `translateX(-${W}px)`, transition: 'transform 0.2s ease',
                 boxShadow: (sideMode !== 'fixe' && sideHover) ? '2px 0 18px rgba(0,0,0,0.18)' : 'none', borderRight: '0.5px solid #e5d8c3' }}>
               <SideNav user={user} activeView={activeView} onNavigate={nav} width={W} mode={sideMode} onSetMode={setSideMode} />
             </div>
-            <div style={{ marginLeft: contentLeft, transition: 'margin-left 0.2s ease' }}>
+            <div style={{ marginLeft: sideMode === 'fixe' ? W : 0, transition: 'margin-left 0.2s ease' }}>
               <LazyBoundary>{renderActiveView()}</LazyBoundary>
             </div>
           </>
