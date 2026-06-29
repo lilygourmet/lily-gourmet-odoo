@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, isLivreurDefaut, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -32,7 +32,7 @@ const HEADER_ICONS = {
   'fin-journee': Moon, stock: ClipboardList, checklist: ListChecks,
   etiquettes: Tag, 'etiquettes-prix': Tag, 'cake-vision-link': Camera, messages: MessageSquare,
   conversations: MessageCircle, modifications: Pencil, livraisons: Truck, paiements: CreditCard, freezer: Snowflake,
-  caisse: Banknote, hr: Users, absences: Plane, economat: Receipt,
+  caisse: Banknote, 'caisse-livreur': Banknote, hr: Users, absences: Plane, economat: Receipt,
   devis: ShoppingBag, photoshop: Palette,
   // menus déroulants
   menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench, menu_more: MoreHorizontal,
@@ -57,6 +57,16 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const isProdUser = !admin && (user?.perm_prod || user?.perm_sales)
   const isPatissierUser = !admin && user?.perm_patissier
   const userCanSync = canSync(user)
+
+  // Sur ordi/tablette (≥768px), la nav passe dans le menu de gauche → on masque les onglets du header (sauf livreurs).
+  const [isWide, setIsWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const h = e => setIsWide(e.matches)
+    mq.addEventListener?.('change', h)
+    return () => mq.removeEventListener?.('change', h)
+  }, [])
+  const hideHeaderNav = isWide && !isLivreur(user)
 
   const [showCog, setShowCog] = useState(false)
   const cogRef = useRef(null)
@@ -125,10 +135,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return () => { cancelled = true; stopReturn() }
   }, [user])
 
-  // Recompte quand on QUITTE l'onglet Devis internet (on vient peut-être de traiter des devis).
+  // Recompte quand on ENTRE ou QUITTE l'onglet Devis internet (l'état des non-traités a pu changer).
   useEffect(() => {
-    if (prevViewRef.current === 'devis-internet' && activeView !== 'devis-internet'
-        && !isLivreur(user) && canSeeDevis(user)) {
+    const touchedDevis = prevViewRef.current === 'devis-internet' || activeView === 'devis-internet'
+    if (touchedDevis && !isLivreur(user) && canSeeDevis(user)) {
       countDevisInternetNonTraites().then(setDevisInternetBadge).catch(() => {})
     }
     prevViewRef.current = activeView
@@ -627,12 +637,11 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'ocp-link',         emoji: '🍽️', label: 'Lien OCP',         visible: admin },
     { view: 'devis-internet',   emoji: '🌐', label: 'Devis internet',   visible: !isLivreur(user) && canSeeDevis(user), badge: devisInternetBadge },
     { view: 'modifications',    emoji: '✏️', label: 'Modifications',    visible: !isLivreur(user) && canSeeModifications(user), badge: modifBadge },
-    { view: 'livraisons',       emoji: '🚚', label: 'Livraisons',       visible: canSeeLivraisons(user), badge: livraisonsBadge },
+    { view: 'livraisons',       emoji: '🚚', label: 'Livraisons',       visible: !isLivreur(user) && canSeeLivraisons(user), badge: livraisonsBadge },
     { view: 'paiements',        emoji: '💰', label: 'Paiements',         visible: !isLivreur(user) && canViewPayments(user), badge: paiementsBadge },
     { view: 'freezer',          emoji: '❄️', label: 'CD Négatif',       visible: !isLivreur(user) && canSeeFreezer(user) },
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },
-    { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users) },
-    { view: 'absences',         emoji: '🌴', label: 'Congés',           visible: !isLivreur(user) && (admin || !!user?.perm_hr), badge: congesBadge },
+    { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users), badge: congesBadge },
     { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil || !!user?.perm_econome) },
     { view: 'photoshop',        emoji: '🎨', label: 'Studio photos',    visible: !isLivreur(user) && canSeePhotoshop(user) },
     { view: 'ai-gemini',        emoji: '✨', label: 'Gemini',           visible: !isLivreur(user) && canSeeAiTools(user), externalUrl: 'https://gemini.google.com/app' },
@@ -647,6 +656,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     (!isLivreur(user) && canSeeCalendar(user)) && { view: 'calendar', emoji: '📅', label: 'Calendrier', badge: 0 },
     canRecaps(user) && { view: 'recap', emoji: '📊', label: 'Récap', badge: 0 },
     isLivreur(user) && { view: 'livraisons', emoji: '🚚', label: 'Livraisons', badge: livraisonsBadge },
+    isLivreurDefaut(user) && { view: 'caisse-livreur', emoji: '💰', label: 'Caisse', badge: 0 },
     { view: 'tasks', emoji: '✅', label: 'Tâches', badge: tasksBadge },
     showChecklistBtn && { view: 'checklist', emoji: '📋', label: 'Checklist', badge: checklistBadge },
   ].filter(Boolean)
@@ -742,7 +752,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           {emoji ? <span className="text-[15px] leading-none">{emoji}</span> : <Ico name={`menu_${id}`} size={15} />}
           <span>{label}</span>
           <ChevronDown size={13} strokeWidth={1.8} className="opacity-70" />
-          {totalBadge > 0 && !hasActive && (
+          {totalBadge > 0 && (
             <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
               {totalBadge > 99 ? '99+' : totalBadge}
             </span>
@@ -811,7 +821,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         </button>
 
         {/* Navigation : 3 boutons fixes + 3 menus deroulants */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap" style={{ display: hideHeaderNav ? 'none' : undefined }}>
           {customActive ? (
             <>
               {/* Mode perso : onglets seuls + dossiers, dans l'ordre choisi */}
@@ -848,6 +858,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               )}
               {isLivreur(user) && (
                 <NavButton view="livraisons" label="Livraisons" isActive={activeView === 'livraisons'} badgeCount={livraisonsBadge} onClick={() => onNavigate('livraisons')} />
+              )}
+              {isLivreurDefaut(user) && (
+                <NavButton view="caisse-livreur" label="Caisse" isActive={activeView === 'caisse-livreur'} onClick={() => onNavigate('caisse-livreur')} />
               )}
               <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
               {primary && (
@@ -961,7 +974,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               tasksBadge > 0 && { emoji: '✅', label: `${tasksBadge} tâche(s) non lue(s)`, view: 'tasks' },
               (convBadge.unassigned + convBadge.unread) > 0 && { emoji: '📱', label: `${convBadge.unassigned + convBadge.unread} conversation(s)`, view: 'conversations' },
               livraisonsBadge > 0 && { emoji: '🚚', label: `${livraisonsBadge} livraison(s) à réassigner`, view: 'livraisons' },
-              congesBadge > 0 && { emoji: '🌴', label: `${congesBadge} congé(s) à traiter`, view: 'absences' },
+              congesBadge > 0 && { emoji: '🌴', label: `${congesBadge} congé(s) à traiter`, view: 'hr', tab: 'conges' },
               modifBadge > 0 && { emoji: '✏️', label: `${modifBadge} modification(s)`, view: 'modifications' },
               paiementsBadge > 0 && { emoji: '💰', label: `${paiementsBadge} paiement(s) à valider`, view: 'paiements' },
             ].filter(Boolean)
@@ -977,7 +990,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                     {items.length === 0 ? (
                       <div className="px-4 py-3 text-[13px] text-ink-mute">Rien à signaler 🎉</div>
                     ) : items.map((it, i) => (
-                      <button key={i} onClick={() => { onNavigate(it.view); setShowBell(false) }} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-bordeaux/5 flex items-center gap-2">
+                      <button key={i} onClick={() => { if (it.tab) { try { localStorage.setItem('lily.hr.tab', it.tab) } catch (e) { /* ignore */ } } onNavigate(it.view); setShowBell(false) }} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-bordeaux/5 flex items-center gap-2">
                         <span>{it.emoji}</span> {it.label}
                       </button>
                     ))}
