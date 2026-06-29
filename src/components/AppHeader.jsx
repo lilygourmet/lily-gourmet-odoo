@@ -21,7 +21,7 @@ import {
   PackageCheck, Moon, ClipboardList, ListChecks, Tag, Camera, MessageSquare,
   MessageCircle, Wallet, CreditCard, Snowflake, Banknote, Users, Plane, Receipt,
   Settings, RefreshCw, LogOut, KeyRound, Printer, Wrench, Palette, Circle, ChevronDown,
-  Sliders, MoreHorizontal, Pencil, Truck, Bell, ShoppingBag, Send, Search,
+  Sliders, MoreHorizontal, Pencil, Truck, Bell, ShoppingBag, Send, Search, Scissors,
 } from 'lucide-react'
 
 // Icône (Lucide) par vue / menu / action — remplace les émoticônes du header.
@@ -33,7 +33,7 @@ const HEADER_ICONS = {
   etiquettes: Tag, 'etiquettes-prix': Tag, 'cake-vision-link': Camera, messages: MessageSquare,
   conversations: MessageCircle, modifications: Pencil, livraisons: Truck, paiements: CreditCard, freezer: Snowflake,
   caisse: Banknote, 'caisse-livreur': Banknote, hr: Users, absences: Plane, economat: Receipt,
-  devis: ShoppingBag, photoshop: Palette,
+  devis: ShoppingBag, photoshop: Palette, 'decoupe-poly': Scissors, 'stock-poly': Snowflake,
   // menus déroulants
   menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench, menu_more: MoreHorizontal,
   // actions
@@ -667,7 +667,13 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const adminGallery = (admin && canSeeCakeVision(user))
     ? [{ view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD', badge: 0, externalUrl: 'https://cake-vision-app.vercel.app' }]
     : []
-  const allTabs = [...fixedTabs, ...adminGallery, ...menuProduction, ...menuVitrine, ...menuOutils]
+  // Onglets accessibles autrement (livreur par défaut / barre mobile) mais qu'on veut
+  // quand même pouvoir CLASSER dans « Mes onglets » (l'admin notamment).
+  const extraClassables = [
+    (admin || isLivreurDefaut(user)) && { view: 'caisse-livreur', emoji: '💰', label: 'Caisse livreur', badge: 0 },
+    canSeeStockPoly(user) && { view: 'decoupe-poly', emoji: '✂️', label: 'Découpe poly', badge: 0 },
+  ].filter(Boolean)
+  const allTabs = [...fixedTabs, ...adminGallery, ...menuProduction, ...menuVitrine, ...menuOutils, ...extraClassables]
     .filter((t, i, arr) => arr.findIndex(x => x.view === t.view) === i)
 
   // Construit les entrees a afficher (onglets seuls + dossiers), dans l'ordre choisi.
@@ -863,6 +869,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
               )}
               {isLivreurDefaut(user) && (
                 <NavButton view="caisse-livreur" label="Caisse" isActive={activeView === 'caisse-livreur'} onClick={() => onNavigate('caisse-livreur')} />
+              )}
+              {canSeeStockPoly(user) && (
+                <NavButton view="decoupe-poly" label="Découpe" isActive={activeView === 'decoupe-poly'} onClick={() => onNavigate('decoupe-poly')} />
               )}
               <NavButton view="tasks" label="Tâches" isActive={activeView === 'tasks'} badgeCount={tasksBadge} onClick={() => onNavigate('tasks')} />
               {primary && (
