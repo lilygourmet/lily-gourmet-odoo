@@ -20,6 +20,8 @@ const ChecklistView = lazy(() => import('./components/ChecklistView'))
 const EconomatView = lazy(() => import('./components/Economat/EconomatView'))
 const PhotoshopView = lazy(() => import('./components/Photoshop/PhotoshopView'))
 const CaisseView = lazy(() => import('./components/Caisse/CaisseView'))
+const CaisseRapide = lazy(() => import('./components/Caisse/CaisseRapide'))
+const CaisseLivreur = lazy(() => import('./components/Caisse/CaisseLivreur'))
 const TasksView = lazy(() => import('./components/Tasks/TasksView'))
 const HRView = lazy(() => import('./components/HR/HRView'))
 const InboxView = lazy(() => import('./components/Conversations/InboxView'))
@@ -41,7 +43,8 @@ import LazyBoundary from './components/LazyBoundary'
 import ToastHost from './components/ToastHost'
 import ConfirmHost from './components/ConfirmHost'
 import MobileBottomNav from './components/MobileBottomNav'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, hasValidJwt } from './lib/auth'
+import SideNav from './components/SideNav'
+import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, isLivreurDefaut, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, canSeeLivraisons, canSeeModifications, canSeeDevis, hasValidJwt } from './lib/auth'
 import { refreshOnReturn } from './lib/autoRefresh'
 
 function App() {
@@ -59,9 +62,25 @@ function App() {
   const [deepLinkDevis, setDeepLinkDevis] = useState(null)
   // Client (nom + téléphone) à pré-remplir dans « Nouvelle commande » (depuis une conversation)
   const [deepLinkNewCmd, setDeepLinkNewCmd] = useState(null)
+  // Onglet de la caisse Meriem à ouvrir directement (raccourcis depuis la caisse rapide)
+  const [deepLinkCaisseSub, setDeepLinkCaisseSub] = useState(null)
+  // Sous-onglet RH (+ sous-onglet Congés) à ouvrir depuis le menu de gauche
+  const [hrDeep, setHrDeep] = useState(null)
+  // Onglet Caisse (admin) à ouvrir depuis le menu de gauche
+  const [caisseDeep, setCaisseDeep] = useState(null)
+  // Bande de gauche « fantôme » : visible au survol du bord gauche
+  const [sideHover, setSideHover] = useState(false)
   // Recherche universelle (Ctrl/Cmd+K) + commande à ouvrir dans le calendrier depuis un résultat
   const [showSearch, setShowSearch] = useState(false)
   const [deepLinkOrder, setDeepLinkOrder] = useState(null)
+  // Menu de gauche (ordi + tablette ≥ 768px). En dessous : navigation actuelle (haut/bas).
+  const [isWide, setIsWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const h = e => setIsWide(e.matches)
+    mq.addEventListener?.('change', h)
+    return () => mq.removeEventListener?.('change', h)
+  }, [])
 
   // Wrapper pour setActiveView : persiste dans localStorage pour que Cmd+R
   // ramene l'utilisateur sur la meme page
@@ -88,7 +107,8 @@ function App() {
   // Choisit la vue par defaut en fonction du user
   function pickDefaultView(u) {
     if (!u) return 'calendar'
-    if (isLivreur(u)) return 'livraisons'
+    // Hamid (livreur par défaut) démarre sur sa caisse ; les autres livreurs sur Livraisons.
+    if (isLivreur(u)) return isLivreurDefaut(u) ? 'caisse-livreur' : 'livraisons'
     if (u.role === 'recap') return 'recap'
     if (u.role === 'admin') return 'calendar'
     // Stock granulaire : si user a UNIQUEMENT une perm stock, on l'oriente sur SON onglet
@@ -280,9 +300,12 @@ function App() {
     try { localStorage.removeItem('lily.activeView') } catch (e) { /* ignore */ }
   }
 
-  function handleNavigate(view) {
+  function handleNavigate(view, opts) {
     setDeepLinkConv(null)
     setDeepLinkPhone(null)
+    setDeepLinkCaisseSub(opts?.caisseSub || null)
+    setHrDeep(opts?.hrTab ? { tab: opts.hrTab, ctab: opts.congesTab || null } : null)
+    setCaisseDeep(opts?.caisseTab ? { tab: opts.caisseTab } : null)
     setActiveView(view)
   }
 
@@ -317,8 +340,9 @@ function App() {
   }
 
   function renderActiveView() {
-    // Livreur : accès limité à Livraisons + ses Tâches (jamais Récap, même via onglet mémorisé).
+    // Livreur : accès limité à Livraisons + sa caisse (Hamid) + ses Tâches (jamais Récap, même via onglet mémorisé).
     if (isLivreur(user)) {
+      if (activeView === 'caisse-livreur') return <CaisseLivreur {...navProps} />
       if (activeView === 'tasks') return <TasksWrapper {...navProps} />
       return <LivraisonsWrapper {...navProps} />
     }
@@ -342,7 +366,7 @@ function App() {
     if (activeView === 'stock-prod-vitrine') return <StockProd {...navProps} lieu="vitrine" />
     if (activeView === 'stock-prod-annexe') return <StockProd {...navProps} lieu="annexe" />
     if (activeView === 'tasks') return <TasksWrapper {...navProps} />
-    if (activeView === 'hr') return <HRWrapper {...navProps} />
+    if (activeView === 'hr') return <HRWrapper {...navProps} hrDeep={hrDeep} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} initialPhone={deepLinkPhone} initialRelanceRef={deepLinkRelanceRef} />
     if (activeView === 'devis') return <DevisWrapper {...navProps} initialDevis={deepLinkDevis} />
     if (activeView === 'ocp-link') return <div className="min-h-screen bg-cream"><AppHeader {...navProps} /><OcpManage /></div>
@@ -352,14 +376,16 @@ function App() {
     if (activeView === 'livraisons') return <LivraisonsWrapper {...navProps} />
     if (activeView === 'paiements') return <PaymentsWrapper {...navProps} />
     if (activeView === 'absences') return <AbsencesWrapper {...navProps} />
-    if (activeView === 'caisse') return <CaisseView {...navProps} />
+    if (activeView === 'caisse') return <CaisseView {...navProps} initialSub={deepLinkCaisseSub} deepTab={caisseDeep} />
+    if (activeView === 'caisse-rapide') return <CaisseRapide {...navProps} />
+    if (activeView === 'caisse-livreur') return <CaisseLivreur {...navProps} />
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
     if (activeView === 'economat') return <EconomatView {...navProps} />
     if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
     // exposer le calendrier à un user sans perm_calendar.
-    if (canSeeCalendar(user)) return <Calendar {...navProps} openOrderNum={deepLinkOrder} onOrderOpened={() => setDeepLinkOrder(null)} />
+    if (canSeeCalendar(user)) return <Calendar {...navProps} openOrderNum={deepLinkOrder} onOrderOpened={() => setDeepLinkOrder(null)} onOpenDevis={(num) => { setDeepLinkDevis({ q: num, state: '', day: '' }); setActiveView('devis') }} />
     if (isLivreur(user)) return <LivraisonsWrapper {...navProps} />
     return <TasksWrapper {...navProps} welcome />
   }
@@ -372,13 +398,40 @@ function App() {
       {canSeeConversations(user) && (
         <ConversationNotifier user={user} onOpen={openConversation} />
       )}
-      <LazyBoundary>{renderActiveView()}</LazyBoundary>
+      {(() => {
+        const showSide = isWide && !isLivreur(user)
+        if (!showSide) return <LazyBoundary>{renderActiveView()}</LazyBoundary>
+        const W = 222
+        const nav = (v, o) => { handleNavigate(v, o); setSideHover(false) }
+        return (
+          <>
+            {/* zone de déclenchement au bord gauche */}
+            <div onMouseEnter={() => setSideHover(true)} style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 16, zIndex: 46 }} />
+            {/* petite poignée visible (clic = ouvrir/fermer, utile au tactile) */}
+            <div onClick={() => setSideHover(h => !h)} onMouseEnter={() => setSideHover(true)} title="Menu"
+              style={{ position: 'fixed', top: '50%', left: 0, transform: 'translateY(-50%)', zIndex: 46,
+                width: 18, height: 66, background: '#993556', color: '#fff', borderRadius: '0 10px 10px 0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                boxShadow: '1px 0 6px rgba(0,0,0,0.15)', opacity: sideHover ? 0 : 1, transition: 'opacity 0.2s' }}>
+              <span style={{ fontSize: 15 }}>›</span>
+            </div>
+            {/* la bande « fantôme » */}
+            <div onMouseEnter={() => setSideHover(true)} onMouseLeave={() => setSideHover(false)}
+              style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: W, zIndex: 47,
+                transform: sideHover ? 'translateX(0)' : `translateX(-${W}px)`, transition: 'transform 0.2s ease',
+                boxShadow: sideHover ? '2px 0 18px rgba(0,0,0,0.18)' : 'none', borderRight: '0.5px solid #e5d8c3' }}>
+              <SideNav user={user} activeView={activeView} onNavigate={nav} width={W} />
+            </div>
+            <LazyBoundary>{renderActiveView()}</LazyBoundary>
+          </>
+        )
+      })()}
       <MobileBottomNav user={user} activeView={activeView} onNavigate={handleNavigate} />
       {showSearch && (
         <GlobalSearch
           onClose={() => setShowSearch(false)}
-          onOpenOrder={(num) => { setDeepLinkOrder(num); setActiveView('calendar'); setShowSearch(false) }}
-          onOpenDevis={(num) => { setDeepLinkDevis({ q: num, state: '', day: '' }); setActiveView('devis'); setShowSearch(false) }}
+          onOpenOrder={(num, day) => { setDeepLinkDevis({ q: num, state: 'sale', day: (day || '').slice(0, 10) }); setActiveView('devis'); setShowSearch(false) }}
+          onOpenDevis={(num, day) => { setDeepLinkDevis({ q: num, state: '', day: (day || '').slice(0, 10) }); setActiveView('devis'); setShowSearch(false) }}
           onOpenConv={(id) => { openConversation(id); setShowSearch(false) }}
           onNavigate={(v) => { setActiveView(v); setShowSearch(false) }}
         />
@@ -410,11 +463,11 @@ function TasksWrapper(props) {
 }
 
 function HRWrapper(props) {
-  const { user, onLogout, onNavigate, activeView } = props
+  const { user, onLogout, onNavigate, activeView, hrDeep } = props
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
-      <HRView user={user} />
+      <HRView user={user} deep={hrDeep} />
     </div>
   )
 }
