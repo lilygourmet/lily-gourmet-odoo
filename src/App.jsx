@@ -70,9 +70,15 @@ function App() {
   const [caisseDeep, setCaisseDeep] = useState(null)
   // Bande de gauche « fantôme » : visible au survol du bord gauche
   const [sideHover, setSideHover] = useState(false)
-  // Barre de gauche : chacun choisit « épinglée » (fixe) ou « détachée » (se cache). Mémorisé par appareil.
-  const [sidePinned, setSidePinned] = useState(() => { try { return localStorage.getItem('lily.sidebar.pinned') === '1' } catch { return false } })
-  function toggleSidePin() { setSidePinned(p => { const n = !p; try { localStorage.setItem('lily.sidebar.pinned', n ? '1' : '0') } catch (e) { /* ignore */ } return n }) }
+  // Barre de gauche : chacun choisit son mode. 'fixe' (toujours ouverte) | 'auto' (se cache) | 'rail' (icônes fines). Mémorisé par appareil.
+  const [sideMode, setSideModeRaw] = useState(() => {
+    try {
+      const m = localStorage.getItem('lily.sidebar.mode')
+      if (m === 'auto' || m === 'fixe' || m === 'rail') return m
+      return localStorage.getItem('lily.sidebar.pinned') === '1' ? 'fixe' : 'auto'   // reprise de l'ancien réglage
+    } catch (e) { return 'auto' }
+  })
+  function setSideMode(m) { setSideModeRaw(m); try { localStorage.setItem('lily.sidebar.mode', m) } catch (e) { /* ignore */ } }
   // Recherche universelle (Ctrl/Cmd+K) + commande à ouvrir dans le calendrier depuis un résultat
   const [showSearch, setShowSearch] = useState(false)
   const [deepLinkOrder, setDeepLinkOrder] = useState(null)
@@ -404,16 +410,18 @@ function App() {
       {(() => {
         const showSide = isWide && !isLivreur(user)
         if (!showSide) return <LazyBoundary>{renderActiveView()}</LazyBoundary>
-        const W = 222
+        const W = 222, RW = 52
         const nav = (v, o) => { handleNavigate(v, o); setSideHover(false) }
-        const sideOpen = sidePinned || sideHover
+        const railMode = sideMode === 'rail'
+        const sideOpen = sideMode === 'fixe' || sideHover
+        const contentLeft = sideMode === 'fixe' ? W : (railMode ? RW : 0)
         return (
           <>
-            {/* zone de déclenchement + poignée : seulement si NON épinglée */}
-            {!sidePinned && (
+            {/* mode AUTO : zone de déclenchement + poignée */}
+            {sideMode === 'auto' && (
               <div onMouseEnter={() => setSideHover(true)} style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 16, zIndex: 46 }} />
             )}
-            {!sidePinned && (
+            {sideMode === 'auto' && (
               <div onClick={() => setSideHover(h => !h)} onMouseEnter={() => setSideHover(true)} title="Menu"
                 style={{ position: 'fixed', top: '50%', left: 0, transform: 'translateY(-50%)', zIndex: 46,
                   width: 18, height: 66, background: '#993556', color: '#fff', borderRadius: '0 10px 10px 0',
@@ -422,14 +430,21 @@ function App() {
                 <span style={{ fontSize: 15 }}>›</span>
               </div>
             )}
-            {/* la bande : épinglée = fixe ; sinon « fantôme » au survol */}
-            <div onMouseEnter={() => { if (!sidePinned) setSideHover(true) }} onMouseLeave={() => { if (!sidePinned) setSideHover(false) }}
+            {/* mode RAIL : fine bande d'icônes toujours visible */}
+            {railMode && (
+              <div onMouseEnter={() => setSideHover(true)}
+                style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: RW, zIndex: 46, background: '#F7F2EA', borderRight: '1px solid #e5d8c3' }}>
+                <SideNav collapsed user={user} activeView={activeView} onNavigate={nav} width={RW} onExpand={() => setSideHover(true)} />
+              </div>
+            )}
+            {/* barre pleine : fixe (toujours) OU en survol (auto/rail) */}
+            <div onMouseEnter={() => { if (sideMode !== 'fixe') setSideHover(true) }} onMouseLeave={() => { if (sideMode !== 'fixe') setSideHover(false) }}
               style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: W, zIndex: 47,
                 transform: sideOpen ? 'translateX(0)' : `translateX(-${W}px)`, transition: 'transform 0.2s ease',
-                boxShadow: (!sidePinned && sideHover) ? '2px 0 18px rgba(0,0,0,0.18)' : 'none', borderRight: '0.5px solid #e5d8c3' }}>
-              <SideNav user={user} activeView={activeView} onNavigate={nav} width={W} pinned={sidePinned} onTogglePin={toggleSidePin} />
+                boxShadow: (sideMode !== 'fixe' && sideHover) ? '2px 0 18px rgba(0,0,0,0.18)' : 'none', borderRight: '0.5px solid #e5d8c3' }}>
+              <SideNav user={user} activeView={activeView} onNavigate={nav} width={W} mode={sideMode} onSetMode={setSideMode} />
             </div>
-            <div style={{ marginLeft: sidePinned ? W : 0, transition: 'margin-left 0.2s ease' }}>
+            <div style={{ marginLeft: contentLeft, transition: 'margin-left 0.2s ease' }}>
               <LazyBoundary>{renderActiveView()}</LazyBoundary>
             </div>
           </>

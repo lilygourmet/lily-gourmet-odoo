@@ -82,7 +82,7 @@ function buildEntries(user, byView, allowed) {
   })
 }
 
-export default function SideNav({ user, activeView, onNavigate, width, pinned, onTogglePin }) {
+export default function SideNav({ user, activeView, onNavigate, width, mode, onSetMode, collapsed, onExpand }) {
   // Onglet externe → on ouvre le site ; sinon navigation interne normale.
   const openTab = (view, opts) => {
     const url = EXTERNAL_URLS[view]
@@ -158,6 +158,34 @@ export default function SideNav({ user, activeView, onNavigate, width, pinned, o
     </div>
   )
 
+  // Mode RAIL : icônes seules + pastilles (survol → la barre pleine s'ouvre par-dessus, géré dans App).
+  if (collapsed) {
+    const iconFor = e => e.kind === 'tab' ? e.t.emoji : e.emoji
+    const countFor = e => e.kind === 'tab' ? (badges[e.t.view] || 0) : e.kind === 'rh' ? (badges.hr || 0) : e.kind === 'caisse' ? 0 : sumBadges(e.tabs)
+    const activeFor = e => e.kind === 'tab' ? activeView === e.t.view : e.kind === 'rh' ? onHr : e.kind === 'caisse' ? onCaisse : e.tabs.some(t => t.view === activeView)
+    const clickFor = e => e.kind === 'tab' ? (() => openTab(e.t.view)) : (onExpand || (() => {}))
+    return (
+      <nav onMouseEnter={onExpand} style={{
+        width, height: '100%', background: '#F7F2EA',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', overflowX: 'hidden', padding: '12px 0', gap: 5,
+      }}>
+        <img src="/Logo_LG.jpg" alt="LG" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, marginBottom: 6 }} />
+        {entries.map((e, i) => {
+          const n = countFor(e)
+          return (
+            <button key={e.id || (e.t && e.t.view) || i} onClick={clickFor(e)} title={e.kind === 'tab' ? e.t.label : e.label} style={{
+              position: 'relative', width: 38, height: 38, borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 18,
+              background: activeFor(e) ? '#993556' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <span>{iconFor(e)}</span>
+              {n > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 999, background: '#dc2626', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n > 99 ? '99+' : n}</span>}
+            </button>
+          )
+        })}
+      </nav>
+    )
+  }
+
   return (
     <nav style={{
       width, height: '100%', background: '#F7F2EA',
@@ -171,15 +199,20 @@ export default function SideNav({ user, activeView, onNavigate, width, pinned, o
           <img src="/Logo_LG.jpg" alt="LG" style={{ width: 30, height: 30, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
           <span style={{ fontFamily: 'Geist, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', color: '#1a0f0a', overflow: 'hidden', textOverflow: 'ellipsis' }}>LILY GOURMET</span>
         </button>
-        {onTogglePin && (
-          <button onClick={onTogglePin} title={pinned ? 'Détacher la barre (elle se cachera)' : 'Épingler la barre (elle reste ouverte)'} style={{
-            flexShrink: 0, width: 28, height: 28, borderRadius: 8, cursor: 'pointer', fontSize: 13,
-            border: '1px solid ' + (pinned ? '#993556' : '#e5d8c3'),
-            background: pinned ? '#993556' : '#fff', color: pinned ? '#fff' : '#8a7a70',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>📌</button>
-        )}
       </div>
+
+      {/* Sélecteur d'affichage de la barre — chacun choisit, c'est mémorisé */}
+      {onSetMode && (
+        <div style={{ display: 'flex', gap: 4, padding: '0 4px 10px' }} title="Comment afficher la barre de gauche">
+          {[['fixe', 'Fixe'], ['auto', 'Auto'], ['rail', 'Rail']].map(([m, lab]) => (
+            <button key={m} onClick={() => onSetMode(m)} style={{
+              flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 4px', borderRadius: 7, cursor: 'pointer',
+              border: '1px solid ' + (mode === m ? '#993556' : '#e5d8c3'),
+              background: mode === m ? '#993556' : '#fff', color: mode === m ? '#fff' : '#8a7a70',
+            }}>{lab}</button>
+          ))}
+        </div>
+      )}
 
       {entries.map((e, i) => {
         if (e.kind === 'tab') return topLeaf(e.t)
