@@ -83,7 +83,9 @@ export async function assignDelivery({ orderNum, livreurId, byUserId, titre, des
       updated_at: new Date().toISOString(),
     }, { onConflict: 'order_num' })
   if (error) throw error
-  if (livreurId && byUserId) {
+  // Pas de tâche pour le livreur PAR DÉFAUT (il accepte d'office et voit tout dans Livraisons).
+  // On garde la tâche pour un AUTRE livreur, qui doit confirmer.
+  if (livreurId && byUserId && !autoAccept) {
     try {
       await createTask({ title: titre || '🚚 Nouvelle livraison', description: description || null, fromUserId: byUserId, toUserId: livreurId, dueDate: dueDate || null })
     } catch { /* la notif ne doit pas bloquer l'assignation */ }
