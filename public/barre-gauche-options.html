@@ -3,180 +3,148 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Barre de gauche — 3 options</title>
+<title>Barre de gauche — comparaison</title>
 <style>
-  :root{ --bx:#993556; --bx-deep:#7c2944; --cream:#fcfbf8; --panel:#F7F2EA; --line:#e5d8c3; --ink:#1a0f0a; --mute:#8a7a70; }
+  :root{ --bx:#993556; --cream:#fcfbf8; --panel:#F7F2EA; --line:#e5d8c3; --ink:#1a0f0a; --mute:#8a7a70; }
   *{ box-sizing:border-box; }
-  body{ margin:0; font-family:-apple-system,Segoe UI,Geist,sans-serif; background:#efe7dc; color:var(--ink); padding:24px; }
-  h1{ font-family:Fraunces,Georgia,serif; font-style:italic; font-size:26px; margin:0 0 4px; }
-  .sub{ color:var(--mute); font-size:14px; margin:0 0 18px; }
-  .tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
-  .tabs button{ border:1px solid var(--line); background:#fff; color:var(--bx); font-size:13px; font-weight:600;
-    padding:9px 14px; border-radius:999px; cursor:pointer; }
-  .tabs button.on{ background:var(--bx); color:#fff; border-color:var(--bx); }
-  .desc{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:13.5px; margin-bottom:14px; line-height:1.5; }
-  .desc b{ color:var(--bx); }
+  body{ margin:0; font-family:-apple-system,Segoe UI,sans-serif; background:#efe7dc; color:var(--ink); padding:22px; }
+  h1{ font-family:Fraunces,Georgia,serif; font-style:italic; font-size:25px; margin:0 0 4px; }
+  .sub{ color:var(--mute); font-size:14px; margin:0 0 20px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:18px; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 8px 22px rgba(90,40,30,.08); }
+  .card.best{ border:2px solid var(--bx); }
+  .ttl{ padding:12px 14px 8px; }
+  .ttl .name{ font-size:16px; font-weight:700; }
+  .ttl .tag{ display:inline-block; font-size:11px; font-weight:700; color:#fff; background:var(--bx); border-radius:999px; padding:2px 9px; margin-left:6px; vertical-align:middle; }
 
-  /* Fenêtre simulée */
-  .win{ position:relative; height:430px; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden;
-    box-shadow:0 12px 30px rgba(90,40,30,.10); }
-  .topbar{ height:46px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; padding:0 14px; background:#fff; position:relative; z-index:5; }
-  .dot{ width:11px; height:11px; border-radius:50%; }
-  .content{ position:absolute; top:46px; right:0; bottom:0; transition:left .22s ease; background:var(--cream);
-    display:flex; align-items:center; justify-content:center; color:var(--mute); font-size:14px; text-align:center; }
-  .content .ph{ width:80%; }
-  .ph .bar{ height:13px; background:#efe7dc; border-radius:6px; margin:9px auto; }
+  /* mini fenêtre */
+  .win{ position:relative; height:180px; margin:0 14px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff; }
+  .top{ height:24px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:5px; padding:0 8px; }
+  .top i{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .row{ position:absolute; top:24px; left:0; right:0; bottom:0; display:flex; }
+  .side{ background:var(--panel); border-right:1px solid var(--line); padding:8px 6px; overflow:hidden; }
+  .li{ display:flex; align-items:center; gap:7px; padding:5px 6px; border-radius:7px; font-size:11px; color:#4a3a30; white-space:nowrap; }
+  .li.on{ background:var(--bx); color:#fff; }
+  .li .b{ margin-left:auto; min-width:15px; height:15px; padding:0 4px; border-radius:999px; background:#dc2626; color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .ic{ display:flex; flex-direction:column; align-items:center; gap:9px; padding-top:4px; }
+  .ic > div{ position:relative; font-size:15px; }
+  .ic .b{ position:absolute; top:-6px; right:-8px; min-width:14px; height:14px; border-radius:999px; background:#dc2626; color:#fff; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .work{ flex:1; background:var(--cream); padding:12px; }
+  .work .l{ height:9px; background:#e8ddcb; border-radius:5px; margin:7px 0; }
+  .handle{ width:14px; background:var(--bx); }
+  .arrow{ position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--mute); background:#fff; border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
 
-  /* Sidebar commun */
-  .side{ position:absolute; top:46px; bottom:0; left:0; background:var(--panel); border-right:1px solid var(--line);
-    padding:12px 8px; overflow-y:auto; }
-  .logo{ display:flex; align-items:center; gap:8px; padding:4px 8px; margin-bottom:8px; font-size:11px; font-weight:800; letter-spacing:.08em; }
-  .logo .lg{ width:26px; height:26px; border-radius:6px; background:var(--bx); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; }
-  .item{ display:flex; align-items:center; gap:10px; padding:8px 11px; border-radius:9px; font-size:13px; font-weight:500; color:#4a3a30; cursor:pointer; white-space:nowrap; }
-  .item.on{ background:var(--bx); color:#fff; }
-  .item .em{ width:18px; text-align:center; flex-shrink:0; }
-  .item .lab{ flex:1; overflow:hidden; }
-  .item .badge{ min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:#dc2626; color:#fff;
-    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-left:auto; }
-  .pin{ margin-left:auto; border:none; background:rgba(0,0,0,.05); width:26px; height:26px; border-radius:7px; cursor:pointer; font-size:13px; }
-
-  .hint{ font-size:12px; color:var(--mute); margin-top:10px; }
-  .hint b{ color:var(--bx); }
+  .note{ padding:10px 14px 14px; font-size:12.5px; line-height:1.5; }
+  .pro{ color:#2f7d4f; } .con{ color:#b23b3b; }
+  .note .who{ color:var(--mute); }
 </style>
 </head>
 <body>
-  <h1>Barre de gauche — 3 options</h1>
-  <p class="sub">Clique sur une option pour voir le comportement. Survole la zone gauche de la fenêtre pour les modes « auto ».</p>
+  <h1>Barre de gauche — les options expliquées</h1>
+  <p class="sub">Voici à quoi ressemble chaque option <b>au repos</b> (sans rien survoler). Compare la place pour le travail à droite.</p>
 
-  <div class="tabs">
-    <button id="t1" class="on" onclick="setOpt(1)">📌 Épingle (au choix)</button>
-    <button id="t2" onclick="setOpt(2)">Rail d'icônes fin</button>
-    <button id="t3" onclick="setOpt(3)">Barre fixe pour tous</button>
-  </div>
+  <div class="grid">
 
-  <div class="desc" id="desc"></div>
-
-  <div class="win" id="win" onmousemove="onMove(event)" onmouseleave="onLeave()">
-    <div class="topbar">
-      <span class="dot" style="background:#ff5f57"></span>
-      <span class="dot" style="background:#febc2e"></span>
-      <span class="dot" style="background:#28c840"></span>
-      <span style="margin-left:10px; font-family:Fraunces,Georgia,serif; font-style:italic; font-size:16px; color:#5c1f23">Lily Gourmet</span>
-    </div>
-
-    <!-- Rail fin (option 2) -->
-    <div class="side" id="rail" style="width:52px; display:none; align-items:center;">
-      <div style="font-size:18px; margin:2px 0 12px">🅛</div>
-      <div style="font-size:18px; margin:9px 0; position:relative">🗓</div>
-      <div style="font-size:18px; margin:9px 0; position:relative">✅<span style="position:absolute;top:-7px;right:-9px" class="badge">2</span></div>
-      <div style="font-size:18px; margin:9px 0; position:relative">💬<span style="position:absolute;top:-7px;right:-9px" class="badge">2</span></div>
-      <div style="font-size:18px; margin:9px 0; position:relative">🏢<span style="position:absolute;top:-7px;right:-9px" class="badge">12</span></div>
-      <div style="font-size:18px; margin:9px 0; position:relative">🧾</div>
-    </div>
-
-    <!-- Sidebar pleine -->
-    <div class="side" id="side" style="width:206px;">
-      <div class="logo"><span class="lg">LG</span><span>LILY GOURMET</span>
-        <button class="pin" id="pinBtn" title="Épingler / détacher" onclick="togglePin(event)">📌</button>
+    <!-- 1. Actuel -->
+    <div class="card">
+      <div class="ttl"><span class="name">1. Actuel (auto-cachée)</span></div>
+      <div class="win">
+        <div class="top"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+        <div class="row">
+          <div class="handle"></div>
+          <div class="work">
+            <div style="font-size:11px;color:#5c1f23;font-weight:600">Travail (pleine largeur)</div>
+            <div class="l" style="width:92%"></div><div class="l" style="width:80%"></div><div class="l" style="width:88%"></div><div class="l" style="width:65%"></div>
+          </div>
+        </div>
+        <div class="arrow">la barre revient au survol du bord</div>
       </div>
-      <div class="item"><span class="em">🗓</span><span class="lab">Calendrier</span></div>
-      <div class="item"><span class="em">✅</span><span class="lab">Tâches</span><span class="badge">2</span></div>
-      <div class="item on"><span class="em">💬</span><span class="lab">Conversations</span><span class="badge">2</span></div>
-      <div class="item"><span class="em">🏢</span><span class="lab">RH</span><span class="badge">12</span></div>
-      <div class="item"><span class="em">🧾</span><span class="lab">Commandes</span><span class="badge">1</span></div>
-      <div class="item"><span class="em">☕</span><span class="lab">Café</span></div>
-      <div class="item"><span class="em">📦</span><span class="lab">Economat / Stock</span></div>
-    </div>
-
-    <!-- Poignée (modes auto) -->
-    <div id="handle" style="position:absolute; top:50%; left:0; transform:translateY(-50%); width:18px; height:64px;
-      background:var(--bx); color:#fff; border-radius:0 10px 10px 0; display:flex; align-items:center; justify-content:center;
-      cursor:pointer; z-index:6; box-shadow:1px 0 6px rgba(0,0,0,.15)">›</div>
-
-    <div class="content" id="content">
-      <div class="ph">
-        <div style="font-weight:600; color:#5c1f23; margin-bottom:6px">Zone de travail (commandes, calendrier…)</div>
-        <div class="bar" style="width:90%"></div>
-        <div class="bar" style="width:75%"></div>
-        <div class="bar" style="width:85%"></div>
-        <div class="bar" style="width:60%"></div>
+      <div class="note">
+        <div class="pro">+ Maximum de place pour travailler.</div>
+        <div class="con">− La barre se cache → l'équipe trouve ça déroutant.</div>
+        <div class="who">C'est ce qu'il y a aujourd'hui.</div>
       </div>
     </div>
+
+    <!-- 2. Fixe -->
+    <div class="card">
+      <div class="ttl"><span class="name">2. Fixe pour tous</span></div>
+      <div class="win">
+        <div class="top"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+        <div class="row">
+          <div class="side" style="width:120px">
+            <div class="li"><span>🗓</span><span>Calendrier</span></div>
+            <div class="li"><span>✅</span><span>Tâches</span><span class="b">2</span></div>
+            <div class="li on"><span>💬</span><span>Convers.</span><span class="b">2</span></div>
+            <div class="li"><span>🏢</span><span>RH</span><span class="b">12</span></div>
+            <div class="li"><span>🧾</span><span>Command.</span></div>
+          </div>
+          <div class="work">
+            <div style="font-size:11px;color:#5c1f23;font-weight:600">Travail (réduit)</div>
+            <div class="l" style="width:90%"></div><div class="l" style="width:70%"></div><div class="l" style="width:82%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <div class="pro">+ Toujours visible, stable, simple.</div>
+        <div class="con">− Prend ~206px en permanence, pour tout le monde.</div>
+        <div class="who">Ce que l'équipe demande.</div>
+      </div>
+    </div>
+
+    <!-- 3. Rail fin -->
+    <div class="card">
+      <div class="ttl"><span class="name">3. Rail d'icônes fin</span></div>
+      <div class="win">
+        <div class="top"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+        <div class="row">
+          <div class="side ic" style="width:38px">
+            <div>🗓</div>
+            <div>✅<span class="b">2</span></div>
+            <div>💬<span class="b">2</span></div>
+            <div>🏢<span class="b">12</span></div>
+            <div>🧾</div>
+          </div>
+          <div class="work">
+            <div style="font-size:11px;color:#5c1f23;font-weight:600">Travail (presque pleine largeur)</div>
+            <div class="l" style="width:92%"></div><div class="l" style="width:78%"></div><div class="l" style="width:86%"></div><div class="l" style="width:62%"></div>
+          </div>
+        </div>
+        <div class="arrow">les noms apparaissent au survol</div>
+      </div>
+      <div class="note">
+        <div class="pro">+ Toujours visible (icônes + pastilles), prend très peu de place.</div>
+        <div class="con">− Sans survol, on a les icônes mais pas les noms.</div>
+        <div class="who">Le compromis entre les deux.</div>
+      </div>
+    </div>
+
+    <!-- 4. Épingle -->
+    <div class="card best">
+      <div class="ttl"><span class="name">4. Épingle</span><span class="tag">recommandé</span></div>
+      <div class="win">
+        <div class="top"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+        <div class="row">
+          <div class="side" style="width:120px">
+            <div class="li" style="font-weight:700;color:var(--bx)"><span>📌</span><span>Épinglée</span></div>
+            <div class="li"><span>🗓</span><span>Calendrier</span></div>
+            <div class="li on"><span>💬</span><span>Convers.</span><span class="b">2</span></div>
+            <div class="li"><span>🏢</span><span>RH</span><span class="b">12</span></div>
+          </div>
+          <div class="work">
+            <div style="font-size:11px;color:#5c1f23;font-weight:600">Chacun choisit</div>
+            <div class="l" style="width:88%"></div><div class="l" style="width:66%"></div>
+          </div>
+        </div>
+        <div class="arrow">clic 📌 = fixe / détachée, par personne</div>
+      </div>
+      <div class="note">
+        <div class="pro">+ Les commerciaux <b>épinglent</b> (= option 2 fixe).</div>
+        <div class="pro">+ Ceux qui veulent de la place <b>détachent</b> (= option 1 actuelle).</div>
+        <div class="who">Un seul bouton 📌 — le choix est gardé pour chacun.</div>
+      </div>
+    </div>
+
   </div>
-
-  <p class="hint" id="hint"></p>
-
-<script>
-  let opt = 1;
-  let pinned = false;   // pour l'option 1
-  let hover = false;
-
-  const side = document.getElementById('side');
-  const rail = document.getElementById('rail');
-  const content = document.getElementById('content');
-  const handle = document.getElementById('handle');
-  const pinBtn = document.getElementById('pinBtn');
-  const SIDE_W = 206, RAIL_W = 52;
-
-  const descs = {
-    1: "<b>Option 1 — Épingle 📌.</b> Chacun choisit : <b>épinglée</b> (fixe, toujours ouverte) ou <b>détachée</b> (se cache, revient au survol). Clique le 📌 dans la barre pour basculer. Le choix est mémorisé par personne → les commerciaux épinglent une fois, ceux qui veulent de la place laissent détaché.",
-    2: "<b>Option 2 — Rail d'icônes fin.</b> Une fine bande d'icônes (~52px) <b>toujours visible</b> (jamais cachée) avec les pastilles rouges. Au survol, elle <b>s'agrandit</b> pour montrer les noms. Peu de place, mais toujours là.",
-    3: "<b>Option 3 — Barre fixe pour tous.</b> La barre reste <b>toujours ouverte</b> (~206px) pour tout le monde. Simple et stable, mais réduit la place du contenu pour tous."
-  };
-  const hints = {
-    1: "💡 Astuce : épinglée = pousse le contenu ; détachée = passe par-dessus au survol (pas de perte de place).",
-    2: "💡 Survole la fenêtre côté gauche pour voir le rail s'agrandir.",
-    3: "💡 Toujours là, aucune surprise — mais −206px de largeur en permanence."
-  };
-
-  function render(){
-    document.getElementById('desc').innerHTML = descs[opt];
-    document.getElementById('hint').innerHTML = hints[opt];
-    handle.style.display = 'none';
-    rail.style.display = 'none';
-    side.style.transition = 'transform .22s ease';
-    side.style.boxShadow = 'none';
-
-    if(opt === 3){                       // Barre fixe
-      side.style.transform = 'translateX(0)';
-      content.style.left = SIDE_W + 'px';
-      pinBtn.style.display = 'none';
-    } else if(opt === 2){                // Rail fin
-      rail.style.display = 'flex';
-      content.style.left = (hover ? SIDE_W : RAIL_W) + 'px';
-      side.style.transform = hover ? 'translateX(0)' : ('translateX(-'+SIDE_W+'px)');
-      side.style.boxShadow = hover ? '2px 0 18px rgba(0,0,0,.18)' : 'none';
-      pinBtn.style.display = 'none';
-    } else {                             // Option 1 : épingle
-      pinBtn.style.display = '';
-      pinBtn.style.background = pinned ? 'var(--bx)' : 'rgba(0,0,0,.05)';
-      pinBtn.style.color = pinned ? '#fff' : '';
-      if(pinned){
-        side.style.transform = 'translateX(0)';
-        content.style.left = SIDE_W + 'px';
-      } else {
-        side.style.transform = hover ? 'translateX(0)' : ('translateX(-'+SIDE_W+'px)');
-        side.style.boxShadow = hover ? '2px 0 18px rgba(0,0,0,.18)' : 'none';
-        content.style.left = '0px';
-        handle.style.display = hover ? 'none' : 'flex';
-      }
-    }
-  }
-  function setOpt(o){ opt=o; hover=false;
-    document.querySelectorAll('.tabs button').forEach((b,i)=>b.classList.toggle('on', i===o-1));
-    render();
-  }
-  function togglePin(e){ e.stopPropagation(); pinned=!pinned; render(); }
-  function onMove(e){
-    const x = e.clientX - document.getElementById('win').getBoundingClientRect().left;
-    const wasHover = hover;
-    if(opt===1 && !pinned) hover = x < (hover ? SIDE_W : 20);
-    else if(opt===2) hover = x < (hover ? SIDE_W : RAIL_W + 6);
-    if(hover!==wasHover) render();
-  }
-  function onLeave(){ if(hover){ hover=false; render(); } }
-
-  render();
-</script>
 </body>
 </html>
