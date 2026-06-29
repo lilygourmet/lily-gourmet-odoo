@@ -35,6 +35,7 @@ const AbsencesView = lazy(() => import('./components/AbsencesView'))
 const CongesView = lazy(() => import('./components/CongesView'))
 const PresenceView = lazy(() => import('./components/PresenceView'))
 const CakeVisionView = lazy(() => import('./components/CakeVision/CakeVisionView'))
+const StockPolyView = lazy(() => import('./components/StockPolyView'))
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
@@ -390,6 +391,7 @@ function App() {
     if (activeView === 'caisse-livreur') return <CaisseLivreur {...navProps} />
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
     if (activeView === 'economat') return <EconomatView {...navProps} />
+    if (activeView === 'stock-poly') return <StockPolyView {...navProps} />
     if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
@@ -413,18 +415,15 @@ function App() {
         const W = 222, RW = 52
         const nav = (v, o) => { handleNavigate(v, o); setSideHover(false) }
 
-        // Mode RAIL : UNE SEULE barre qui s'élargit au survol (icônes ↔ noms).
+        // Mode RAIL : icônes FIXES (52px). Survol d'une icône = son nom en étiquette (géré dans SideNav).
         if (sideMode === 'rail') {
           return (
             <>
-              <div onMouseEnter={() => setSideHover(true)} onMouseLeave={() => setSideHover(false)}
-                style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: sideHover ? W : RW, zIndex: 47,
-                  background: '#F7F2EA', borderRight: '1px solid #e5d8c3', overflow: 'hidden',
-                  transition: 'width 0.2s ease', boxShadow: sideHover ? '2px 0 18px rgba(0,0,0,0.18)' : 'none' }}>
-                <SideNav user={user} activeView={activeView} onNavigate={nav} width={sideHover ? W : RW}
-                  collapsed={!sideHover} mode={sideMode} onSetMode={setSideMode} onExpand={() => setSideHover(true)} />
+              <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: RW, zIndex: 47,
+                background: '#F7F2EA', borderRight: '1px solid #e5d8c3' }}>
+                <SideNav user={user} activeView={activeView} onNavigate={nav} width={RW} collapsed mode={sideMode} onSetMode={setSideMode} />
               </div>
-              <div style={{ marginLeft: RW, transition: 'margin-left 0.2s ease' }}>
+              <div style={{ marginLeft: RW }}>
                 <LazyBoundary>{renderActiveView()}</LazyBoundary>
               </div>
             </>

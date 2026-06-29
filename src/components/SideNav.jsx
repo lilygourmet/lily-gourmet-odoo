@@ -12,7 +12,7 @@ const EXTERNAL_URLS = {
   'ai-chatgpt': 'https://chatgpt.com',
 }
 const GROUPS = [
-  { id: 'prod',   label: 'Production',     emoji: '🥐', views: ['prod', 'sales', 'stock-gs', 'patissier'] },
+  { id: 'prod',   label: 'Production',     emoji: '🥐', views: ['prod', 'sales', 'stock-gs', 'patissier', 'stock-poly'] },
   { id: 'cafe',   label: 'Café / Vitrine', emoji: '☕', views: ['vitrine', 'vitrine-previsions', 'vitrine-sale', 'reception-vitrine', 'fin-journee', 'stock'] },
   { id: 'outils', label: 'Outils',         emoji: '🧰', views: ['etiquettes', 'etiquettes-prix', 'messages', 'devis', 'paiements', 'freezer', 'economat', 'ocp-link', 'cake-vision-link', 'ai-gemini', 'ai-chatgpt'] },
 ]
@@ -105,6 +105,7 @@ export default function SideNav({ user, activeView, onNavigate, width, mode, onS
     (e.kind === 'rh' && onHr) || (e.kind === 'caisse' && onCaisse) ||
     (e.kind === 'group' && e.tabs.some(t => t.view === activeView)))?.id
   const [open, setOpen] = useState(() => new Set(activeOpenId ? [activeOpenId] : []))
+  const [railHover, setRailHover] = useState(null)   // { text, top } : étiquette du rail au survol
   const isOpen = id => open.has(id)   // repli libre (même le dossier où on est)
   const toggle = id => setOpen(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
@@ -158,30 +159,49 @@ export default function SideNav({ user, activeView, onNavigate, width, mode, onS
     </div>
   )
 
-  // Mode RAIL : icônes seules + pastilles (survol → la barre pleine s'ouvre par-dessus, géré dans App).
+  // Mode RAIL : icônes fixes. Survol d'une icône → son nom sort en étiquette (pas d'élargissement).
   if (collapsed) {
     const iconFor = e => e.kind === 'tab' ? e.t.emoji : e.emoji
+    const labelFor = e => e.kind === 'tab' ? e.t.label : e.label
     const countFor = e => e.kind === 'tab' ? (badges[e.t.view] || 0) : e.kind === 'rh' ? (badges.hr || 0) : e.kind === 'caisse' ? 0 : sumBadges(e.tabs)
     const activeFor = e => e.kind === 'tab' ? activeView === e.t.view : e.kind === 'rh' ? onHr : e.kind === 'caisse' ? onCaisse : e.tabs.some(t => t.view === activeView)
-    const clickFor = e => e.kind === 'tab' ? (() => openTab(e.t.view)) : (onExpand || (() => {}))
+    const clickFor = e => {
+      if (e.kind === 'tab') return () => openTab(e.t.view)
+      if (e.kind === 'rh') return () => onNavigate('hr')
+      if (e.kind === 'caisse') return () => onNavigate('caisse')
+      return () => { if (e.tabs[0]) openTab(e.tabs[0].view) }
+    }
+    const showLab = (ev, text) => setRailHover({ text, top: ev.currentTarget.getBoundingClientRect().top })
+    const modes = [['fixe', '📌', 'Barre fixe'], ['auto', '⇤', 'Barre auto-cachée'], ['rail', '▥', "Rail d'icônes"]]
     return (
-      <nav onMouseEnter={onExpand} style={{
-        width, height: '100%', background: '#F7F2EA',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', overflowX: 'hidden', padding: '12px 0', gap: 5,
-      }}>
+      <nav style={{ width, height: '100%', background: '#F7F2EA', display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', overflowX: 'hidden', padding: '12px 0', gap: 4 }}>
         <img src="/Logo_LG.jpg" alt="LG" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, marginBottom: 6 }} />
         {entries.map((e, i) => {
           const n = countFor(e)
           return (
-            <button key={e.id || (e.t && e.t.view) || i} onClick={clickFor(e)} title={e.kind === 'tab' ? e.t.label : e.label} style={{
-              position: 'relative', width: 38, height: 38, borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 18,
-              background: activeFor(e) ? '#993556' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
+            <button key={e.id || (e.t && e.t.view) || i} onClick={clickFor(e)}
+              onMouseEnter={ev => showLab(ev, labelFor(e))} onMouseLeave={() => setRailHover(null)}
+              style={{ position: 'relative', width: 38, height: 38, borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 18,
+                background: activeFor(e) ? '#993556' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span>{iconFor(e)}</span>
               {n > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 999, background: '#dc2626', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n > 99 ? '99+' : n}</span>}
             </button>
           )
         })}
+        {onSetMode && (
+          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 10 }}>
+            {modes.map(([m, ic, lab]) => (
+              <button key={m} onClick={() => onSetMode(m)} onMouseEnter={ev => showLab(ev, lab)} onMouseLeave={() => setRailHover(null)}
+                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 13, cursor: 'pointer',
+                  border: '1px solid ' + (mode === m ? '#993556' : '#e5d8c3'), background: mode === m ? '#993556' : '#fff', color: mode === m ? '#fff' : '#8a7a70' }}>{ic}</button>
+            ))}
+          </div>
+        )}
+        {railHover && (
+          <div style={{ position: 'fixed', left: (width + 8) + 'px', top: railHover.top + 'px', zIndex: 60, pointerEvents: 'none',
+            background: '#fff', border: '1px solid #e5d8c3', borderRadius: 8, padding: '6px 11px', fontSize: 12.5, fontWeight: 600,
+            color: '#1a0f0a', whiteSpace: 'nowrap', boxShadow: '0 4px 14px rgba(0,0,0,0.14)' }}>{railHover.text}</div>
+        )}
       </nav>
     )
   }
