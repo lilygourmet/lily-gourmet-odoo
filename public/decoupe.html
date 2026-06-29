@@ -30,9 +30,11 @@
     font-size:30px; font-weight:800; line-height:1; cursor:pointer; flex-shrink:0; }
   .stepper button:active{ background:var(--bx); color:#fff; }
   .count{ flex:1; text-align:center; }
-  .count .num{ font-size:40px; font-weight:800; line-height:1; }
+  .count input.num{ width:100%; border:none; background:transparent; text-align:center; font-size:40px; font-weight:800; line-height:1; color:var(--ink); -moz-appearance:textfield; }
+  .count input.num::-webkit-outer-spin-button, .count input.num::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .count input.num:focus{ outline:none; border-bottom:2px solid var(--bx); }
   .count .lab{ font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.08em; margin-top:3px; }
-  .card.done .count .num{ color:var(--ok); }
+  .card.done .count input.num{ color:var(--ok); }
   .tick{ float:right; font-size:20px; color:var(--ok); }
 
   footer{ position:sticky; bottom:0; background:var(--cream); border-top:1px solid var(--line); padding:12px 14px calc(12px + env(safe-area-inset-bottom)); }
@@ -85,7 +87,7 @@
         <span class="target">À découper : ${it.target}</span>
         <div class="stepper">
           <button onclick="bump(${i},-1)">−</button>
-          <div class="count"><div class="num">${it.done}</div><div class="lab">découpé</div></div>
+          <div class="count"><input class="num" type="number" inputmode="numeric" min="0" value="${it.done}" onfocus="this.select()" onchange="setVal(${i}, this.value)"><div class="lab">découpé</div></div>
           <button onclick="bump(${i},1)">+</button>
         </div>`;
       list.appendChild(card);
@@ -95,6 +97,7 @@
     document.getElementById('progtxt').textContent = totalDone + ' / ' + totalTarget + ' fait';
   }
   function bump(i, d){ items[i].done = Math.max(0, items[i].done + d); render(); }
+  function setVal(i, v){ items[i].done = Math.max(0, parseInt(v, 10) || 0); render(); }
   function save(){ alert('Découpe enregistrée :\n\n' + items.map(it => '• ' + it.name + ' : ' + it.done + ' / ' + it.target).join('\n')); }
 
   try { document.getElementById('date').textContent = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); } catch(e){}

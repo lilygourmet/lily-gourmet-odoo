@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, isLivreurDefaut, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, isLivreurDefaut, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools, canSeeStockPoly} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -616,6 +616,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'stock-prod-vitrine', emoji: '🛍️', label: 'Stock Prod Vitrine', visible: !isLivreur(user) && canStockProdVitrine(user) },
     { view: 'stock-prod-annexe',  emoji: '🏭', label: 'Stock Prod Annexe',  visible: !isLivreur(user) && canStockProdAnnexe(user) },
     { view: 'patissier',  emoji: '🧁', label: 'Accessoires', visible: !isLivreur(user) && (admin || isPatissierUser) },
+    { view: 'stock-poly', emoji: '🧊', label: 'Stock poly',  visible: !isLivreur(user) && canSeeStockPoly(user) },
   ].filter(i => i.visible)
 
   const menuVitrine = [
