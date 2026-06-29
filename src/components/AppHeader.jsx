@@ -783,11 +783,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                       <Ico name={item.view} size={15} />
                       <span>{item.label}</span>
                     </span>
-                    {item.convBadge ? (
-                      <ConvBadgePills unassigned={item.convBadge.unassigned} unread={item.convBadge.unread} absolute={false} />
-                    ) : item.badge > 0 ? (
+                    {item.badge > 0 ? (
                       <span className="min-w-[20px] h-[20px] px-1.5 flex items-center justify-center text-[11px] font-bold bg-red-600 text-white rounded-full">
-                        {item.badge}
+                        {item.badge > 99 ? '99+' : item.badge}
                       </span>
                     ) : null}
                   </button>
