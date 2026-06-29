@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Découpe — maquette</title>
+<style>
+  :root{ --bx:#993556; --bx-deep:#7c2944; --cream:#fcfbf8; --panel:#F7F2EA; --line:#e7dcc9; --ink:#1a0f0a; --mute:#8a7a70; --ok:#2f7d4f; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; font-family:-apple-system,Segoe UI,sans-serif; background:#ece3d6; color:var(--ink); }
+  .phone{ max-width:430px; margin:0 auto; min-height:100vh; background:var(--cream); display:flex; flex-direction:column; }
+
+  header{ position:sticky; top:0; background:var(--bx); color:#fff; padding:16px 18px 14px; z-index:5; }
+  header .h1{ font-family:Fraunces,Georgia,serif; font-style:italic; font-size:24px; }
+  header .sub{ font-size:13px; opacity:.85; margin-top:2px; }
+  .prog{ margin-top:12px; background:rgba(255,255,255,.2); border-radius:999px; height:9px; overflow:hidden; }
+  .prog > i{ display:block; height:100%; background:#fff; border-radius:999px; transition:width .25s; }
+  .progtxt{ font-size:12px; opacity:.9; margin-top:6px; }
+
+  .list{ padding:12px; display:flex; flex-direction:column; gap:11px; flex:1; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 4px 14px rgba(90,40,30,.05); }
+  .card.done{ border-color:#bfe0c8; background:#f4fbf6; }
+  .name{ font-size:17px; font-weight:700; }
+  .meta{ font-size:13px; color:var(--mute); margin-top:2px; }
+  .target{ display:inline-block; margin-top:9px; font-size:13px; font-weight:700; color:var(--bx); background:#fbeaf0; border-radius:999px; padding:4px 12px; }
+  .card.done .target{ color:var(--ok); background:#e3f3e9; }
+
+  .stepper{ display:flex; align-items:center; gap:14px; margin-top:14px; }
+  .stepper button{ width:58px; height:58px; border-radius:16px; border:2px solid var(--bx); background:#fff; color:var(--bx);
+    font-size:30px; font-weight:800; line-height:1; cursor:pointer; flex-shrink:0; }
+  .stepper button:active{ background:var(--bx); color:#fff; }
+  .count{ flex:1; text-align:center; }
+  .count .num{ font-size:40px; font-weight:800; line-height:1; }
+  .count .lab{ font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.08em; margin-top:3px; }
+  .card.done .count .num{ color:var(--ok); }
+  .tick{ float:right; font-size:20px; color:var(--ok); }
+
+  footer{ position:sticky; bottom:0; background:var(--cream); border-top:1px solid var(--line); padding:12px 14px calc(12px + env(safe-area-inset-bottom)); }
+  .save{ width:100%; padding:16px; border:none; border-radius:14px; background:var(--bx); color:#fff; font-size:17px; font-weight:700; cursor:pointer; }
+  .save:active{ background:var(--bx-deep); }
+  .hint{ text-align:center; font-size:12px; color:var(--mute); margin-top:8px; }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <header>
+      <div class="h1">Découpe du jour</div>
+      <div class="sub" id="date">Aujourd'hui</div>
+      <div class="prog"><i id="bar" style="width:0%"></i></div>
+      <div class="progtxt" id="progtxt">0 / 0 fait</div>
+    </header>
+
+    <div class="list" id="list"></div>
+
+    <footer>
+      <button class="save" onclick="save()">✓ Enregistrer la découpe</button>
+      <div class="hint">Touche − / + pour noter ce que tu as découpé.</div>
+    </footer>
+  </div>
+
+<script>
+  // Données d'exemple : ce que la personne doit produire/découper aujourd'hui.
+  const items = [
+    { name: 'Fraisier', meta: '6 parts', target: 8,  done: 0 },
+    { name: 'Forêt noire', meta: 'entremets', target: 5,  done: 0 },
+    { name: 'Tiramisu plateau', meta: '40×60', target: 12, done: 0 },
+    { name: 'Tarte citron', meta: '8 parts', target: 6,  done: 0 },
+    { name: 'Mille-feuille', meta: 'individuel', target: 20, done: 0 },
+    { name: 'Opéra', meta: '6 parts', target: 4,  done: 0 },
+  ];
+
+  const list = document.getElementById('list');
+  function render(){
+    list.innerHTML = '';
+    let totalDone = 0, totalTarget = 0;
+    items.forEach((it, i) => {
+      totalDone += it.done; totalTarget += it.target;
+      const done = it.done >= it.target && it.target > 0;
+      const card = document.createElement('div');
+      card.className = 'card' + (done ? ' done' : '');
+      card.innerHTML = `
+        ${done ? '<span class="tick">✓</span>' : ''}
+        <div class="name">${it.name}</div>
+        <div class="meta">${it.meta}</div>
+        <span class="target">À découper : ${it.target}</span>
+        <div class="stepper">
+          <button onclick="bump(${i},-1)">−</button>
+          <div class="count"><div class="num">${it.done}</div><div class="lab">découpé</div></div>
+          <button onclick="bump(${i},1)">+</button>
+        </div>`;
+      list.appendChild(card);
+    });
+    const pct = totalTarget ? Math.min(100, Math.round(totalDone/totalTarget*100)) : 0;
+    document.getElementById('bar').style.width = pct + '%';
+    document.getElementById('progtxt').textContent = totalDone + ' / ' + totalTarget + ' fait';
+  }
+  function bump(i, d){ items[i].done = Math.max(0, items[i].done + d); render(); }
+  function save(){ alert('Découpe enregistrée :\n\n' + items.map(it => '• ' + it.name + ' : ' + it.done + ' / ' + it.target).join('\n')); }
+
+  try { document.getElementById('date').textContent = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' }); } catch(e){}
+  render();
+</script>
+</body>
+</html>
