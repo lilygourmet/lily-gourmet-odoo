@@ -82,7 +82,7 @@ function buildEntries(user, byView, allowed) {
   })
 }
 
-export default function SideNav({ user, activeView, onNavigate, width }) {
+export default function SideNav({ user, activeView, onNavigate, width, pinned, onTogglePin }) {
   // Onglet externe → on ouvre le site ; sinon navigation interne normale.
   const openTab = (view, opts) => {
     const url = EXTERNAL_URLS[view]
@@ -163,13 +163,23 @@ export default function SideNav({ user, activeView, onNavigate, width }) {
       width, height: '100%', background: '#F7F2EA',
       display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: '12px 8px', gap: 2,
     }}>
-      <button onClick={() => onNavigate('calendar')} title="Lily Gourmet" style={{
-        display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10, cursor: 'pointer',
-        background: 'none', border: 'none', padding: '4px 8px',
-      }}>
-        <img src="/Logo_LG.jpg" alt="LG" style={{ width: 30, height: 30, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
-        <span style={{ fontFamily: 'Geist, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', color: '#1a0f0a' }}>LILY GOURMET</span>
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <button onClick={() => onNavigate('calendar')} title="Lily Gourmet" style={{
+          display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer',
+          background: 'none', border: 'none', padding: '4px 8px', flex: 1, minWidth: 0,
+        }}>
+          <img src="/Logo_LG.jpg" alt="LG" style={{ width: 30, height: 30, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
+          <span style={{ fontFamily: 'Geist, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', color: '#1a0f0a', overflow: 'hidden', textOverflow: 'ellipsis' }}>LILY GOURMET</span>
+        </button>
+        {onTogglePin && (
+          <button onClick={onTogglePin} title={pinned ? 'Détacher la barre (elle se cachera)' : 'Épingler la barre (elle reste ouverte)'} style={{
+            flexShrink: 0, width: 28, height: 28, borderRadius: 8, cursor: 'pointer', fontSize: 13,
+            border: '1px solid ' + (pinned ? '#993556' : '#e5d8c3'),
+            background: pinned ? '#993556' : '#fff', color: pinned ? '#fff' : '#8a7a70',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>📌</button>
+        )}
+      </div>
 
       {entries.map((e, i) => {
         if (e.kind === 'tab') return topLeaf(e.t)
