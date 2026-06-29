@@ -131,7 +131,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       if (!cancelled) setDevisInternetBadge(n)
     }
     refresh()
-    const stopReturn = refreshOnReturn(refresh)   // au retour sur l'app + filet rare
+    const stopReturn = refreshOnReturn(refresh, 60_000)   // au retour sur l'app + filet rare
     return () => { cancelled = true; stopReturn() }
   }, [user])
 
@@ -229,8 +229,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conges' },             () => refreshCongesBadge())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conges_allocations' }, () => refreshCongesBadge())
       .subscribe()
+    const stopReturn = refreshOnReturn(refreshCongesBadge, 60_000)
 
-    return () => { cancelled = true; supabase.removeChannel(ch) }
+    return () => { cancelled = true; stopReturn(); supabase.removeChannel(ch) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin, user?.id, user?.perm_hr])
 
@@ -262,9 +263,11 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           { event: '*', schema: 'public', table: 'messages' },
           () => { refreshPaiementsBadge() })
       .subscribe()
+    const stopReturn = refreshOnReturn(refreshPaiementsBadge, 60_000)
 
     return () => {
       cancelled = true
+      stopReturn()
       if (channel) supabase.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -432,7 +435,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .subscribe()
 
     // Filet : refresh au retour sur l'app + intervalle espacé (le temps réel fait le gros)
-    const stopReturn = refreshOnReturn(refreshTasksBadge)
+    const stopReturn = refreshOnReturn(refreshTasksBadge, 60_000)
 
     return () => {
       cancelled = true
@@ -461,7 +464,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('conv-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, refreshConvBadge)
       .subscribe()
-    const stopReturn = refreshOnReturn(refreshConvBadge)   // filet : au retour + espacé
+    const stopReturn = refreshOnReturn(refreshConvBadge, 60_000)   // filet : au retour + toutes les 60 s
 
     return () => {
       cancelled = true
@@ -483,7 +486,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('modif-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'modifications' }, refresh)
       .subscribe()
-    const stopReturn = refreshOnReturn(refresh)   // filet : au retour + espacé
+    const stopReturn = refreshOnReturn(refresh, 60_000)   // filet : au retour + espacé
     return () => { cancelled = true; stopReturn(); if (channel) supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeModif, user?.id])
@@ -500,7 +503,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       .channel('livraisons-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'livraisons' }, refresh)
       .subscribe()
-    const stopReturn = refreshOnReturn(refresh)   // filet : au retour + espacé
+    const stopReturn = refreshOnReturn(refresh, 60_000)   // filet : au retour + espacé
     return () => { cancelled = true; stopReturn(); if (channel) supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCanSeeLivraisons, user?.id])
