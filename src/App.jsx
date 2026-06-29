@@ -354,7 +354,8 @@ function App() {
     // Livreur : accès limité à Livraisons + sa caisse (Hamid) + ses Tâches (jamais Récap, même via onglet mémorisé).
     if (isLivreur(user)) {
       if (activeView === 'caisse-livreur') return <CaisseLivreur {...navProps} />
-      if (activeView === 'decoupe-poly') return <PolyDecoupeView user={user} />
+      if (activeView === 'decoupe-poly') return <PolyDecoupeView {...navProps} />
+      if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
       if (activeView === 'tasks') return <TasksWrapper {...navProps} />
       return <LivraisonsWrapper {...navProps} />
     }
@@ -394,7 +395,7 @@ function App() {
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
     if (activeView === 'economat') return <EconomatView {...navProps} />
     if (activeView === 'stock-poly') return <StockPolyView {...navProps} />
-    if (activeView === 'decoupe-poly') return <PolyDecoupeView user={user} />
+    if (activeView === 'decoupe-poly') return <PolyDecoupeView {...navProps} />
     if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
