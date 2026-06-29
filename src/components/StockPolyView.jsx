@@ -75,7 +75,7 @@ export default function StockPolyView({ user, activeView, onNavigate, onLogout }
         </p>
         <button onClick={() => onNavigate('decoupe-poly')} title="Écran simple pour la personne qui découpe (téléphone)"
           style={{ marginBottom: 14, background: '#993556', color: '#fff', border: 'none', borderRadius: 999, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          📱 Écran découpe (Hamid) — lien : ?view=decoupe-poly
+📱 Ouvrir l'écran découpe (Hamid)
         </button>
 
         {lowItems.length > 0 && (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Calendar, BarChart3, ListTodo, MessageCircle, Banknote, Truck } from 'lucide-react'
-import { isLivreur, isLivreurDefaut, canSeeCalendar, canRecaps, canSeeConversations, canSeeCaisse, canSeeLivraisons } from '../lib/auth'
+import { Calendar, BarChart3, ListTodo, MessageCircle, Banknote, Truck, Scissors } from 'lucide-react'
+import { isLivreur, isLivreurDefaut, canSeeCalendar, canRecaps, canSeeConversations, canSeeCaisse, canSeeLivraisons, canSeeStockPoly } from '../lib/auth'
 import { countConversationBadges } from '../lib/conversations'
 import { countUnreadTasks } from '../lib/tasks'
 import { countLivraisonsARelancer } from '../lib/deliveries'
@@ -36,6 +36,7 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
   if (canSeeCalendar(user)) dest.push({ view: 'calendar', label: 'Agenda', Icon: Calendar })
   if (canSeeLivraisons(user)) dest.push({ view: 'livraisons', label: 'Livr.', Icon: Truck })
   if (isLivreurDefaut(user)) dest.push({ view: 'caisse-livreur', label: 'Caisse', Icon: Banknote })
+  if (canSeeStockPoly(user)) dest.push({ view: 'decoupe-poly', label: 'Découpe', Icon: Scissors })
   if (canRecaps(user)) dest.push({ view: 'recap', label: 'Récap', Icon: BarChart3 })
   if (canSeeConversations(user)) dest.push({ view: 'conversations', label: 'Chat', Icon: MessageCircle })
   if (canSeeCaisse(user)) dest.push({ view: 'caisse', label: 'Caisse', Icon: Banknote })

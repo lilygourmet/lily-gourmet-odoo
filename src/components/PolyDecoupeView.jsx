@@ -98,7 +98,7 @@ export default function PolyDecoupeView({ user }) {
         </div>
 
         {todo.length > 0 && (
-          <footer style={{ position: 'sticky', bottom: 0, background: '#fcfbf8', borderTop: '1px solid #e7dcc9', padding: '12px 14px calc(12px + env(safe-area-inset-bottom))' }}>
+          <footer style={{ position: 'sticky', bottom: 0, background: '#fcfbf8', borderTop: '1px solid #e7dcc9', padding: '12px 14px calc(66px + env(safe-area-inset-bottom))' }}>
             <button onClick={save} disabled={saving || totalCut === 0} style={{ width: '100%', padding: 16, border: 'none', borderRadius: 14, background: (saving || totalCut === 0) ? '#c9a7b4' : '#993556', color: '#fff', fontSize: 17, fontWeight: 700, cursor: 'pointer' }}>
               {saving ? 'Enregistrement…' : `✓ Enregistrer la découpe${totalCut ? ' (' + totalCut + ')' : ''}`}
             </button>

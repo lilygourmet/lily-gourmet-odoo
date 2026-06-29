@@ -8,7 +8,8 @@ import {
   isAdmin, isLivreur, canRecaps, canSeeCalendar, canSeeFreezer, canSeeMessages,
   canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, canStockPatissier, canStockCafe,
   canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canViewPayments,
-  canSeePhotoshop,
+  canSeePhotoshop, canSeeAiTools, canSeeStockPoly,
+  canEditCakeVision, canSeeModifications, canSeeLivraisons, isLivreurDefaut,
 } from './auth'
 
 const TAB_DEFS = [
@@ -17,6 +18,7 @@ const TAB_DEFS = [
   { view: 'tasks',             emoji: '✅', label: 'Tâches',            can: () => true },
   { view: 'checklist',         emoji: '📋', label: 'Checklist',         can: u => !isLivreur(u) && canSeeChecklist(u) },
   { view: 'cake-vision-link',  emoji: '📸', label: 'Galerie CD',        can: u => !isLivreur(u) && canSeeCakeVision(u) },
+  { view: 'cake-vision-edit',  emoji: '🎂', label: 'Cake Vision',       can: u => !isLivreur(u) && canEditCakeVision(u) },
   { view: 'prod',              emoji: '🥐', label: 'Prod',              can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_prod) },
   { view: 'sales',             emoji: '🥪', label: 'Salés',             can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_sales) },
   { view: 'stock-gs',          emoji: '🥪', label: 'Stock GS-',         can: u => !isLivreur(u) && canStockGS(u) },
@@ -34,13 +36,19 @@ const TAB_DEFS = [
   { view: 'devis',             emoji: '📄', label: 'Commandes',         can: u => !isLivreur(u) && canSeeDevis(u) },
   { view: 'ocp-link',          emoji: '🍽️', label: 'Lien OCP',          can: u => isAdmin(u) },
   { view: 'devis-internet',    emoji: '🌐', label: 'Devis internet',    can: u => !isLivreur(u) && canSeeDevis(u) },
+  { view: 'modifications',     emoji: '✏️', label: 'Modifications',     can: u => !isLivreur(u) && canSeeModifications(u) },
+  { view: 'livraisons',        emoji: '🚚', label: 'Livraisons',        can: u => canSeeLivraisons(u) },
   { view: 'paiements',         emoji: '💰', label: 'Paiements',         can: u => !isLivreur(u) && canViewPayments(u) },
   { view: 'freezer',           emoji: '❄️', label: 'CD Négatif',        can: u => !isLivreur(u) && canSeeFreezer(u) },
   { view: 'caisse',            emoji: '💰', label: 'Caisse',            can: u => !isLivreur(u) && canSeeCaisse(u) && (isAdmin(u) || !u?.perm_admin_users) },
+  { view: 'caisse-livreur',    emoji: '💰', label: 'Caisse livreur',    can: u => isLivreurDefaut(u) },
   { view: 'hr',                emoji: '🏢', label: 'RH',                can: u => (isAdmin(u) || !!u?.perm_hr) && (isAdmin(u) || !u?.perm_admin_users) },
-  { view: 'absences',          emoji: '🌴', label: 'Congés',            can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_hr) },
   { view: 'economat',          emoji: '🧾', label: 'Économat',          can: u => !isLivreur(u) && (isAdmin(u) || !!u?.economat_profil || !!u?.perm_econome) },
   { view: 'photoshop',         emoji: '🎨', label: 'Studio photos',     can: u => !isLivreur(u) && canSeePhotoshop(u) },
+  { view: 'stock-poly',        emoji: '🧊', label: 'Stock poly',        can: u => !isLivreur(u) && canSeeStockPoly(u) },
+  { view: 'decoupe-poly',      emoji: '✂️', label: 'Découpe poly',      can: u => canSeeStockPoly(u) },
+  { view: 'ai-gemini',         emoji: '✨', label: 'Gemini',            can: u => !isLivreur(u) && canSeeAiTools(u) },
+  { view: 'ai-chatgpt',        emoji: '🤖', label: 'ChatGPT',           can: u => !isLivreur(u) && canSeeAiTools(u) },
 ]
 
 // Onglets autorisés pour cet utilisateur : [{ view, emoji, label }]
