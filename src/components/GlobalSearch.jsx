@@ -57,7 +57,7 @@ export default function GlobalSearch({ onClose, onOpenOrder, onOpenDevis, onOpen
         const isDevis = o.state === 'draft' || o.state === 'sent'
         const lines = (o.productLines || []).map(l => l.text).filter(Boolean).slice(0, 2).join(' · ')
         return {
-          key: 'o_' + o.name, kind: 'order', orderNum: o.name, isDevis,
+          key: 'o_' + o.name, kind: 'order', orderNum: o.name, isDevis, deliveryAt: o.deliveryAt || '',
           title: `${o.clientName || '—'} — ${o.name}`,
           sub: [o.pickupText, lines].filter(Boolean).join(' · ') || (isDevis ? 'devis' : 'commande'),
         }
@@ -73,7 +73,7 @@ export default function GlobalSearch({ onClose, onOpenOrder, onOpenDevis, onOpen
 
   function activate(r) {
     if (!r) return
-    if (r.kind === 'order') { if (r.isDevis && onOpenDevis) onOpenDevis(r.orderNum); else onOpenOrder(r.orderNum) }
+    if (r.kind === 'order') { if (r.isDevis && onOpenDevis) onOpenDevis(r.orderNum, r.deliveryAt); else onOpenOrder(r.orderNum, r.deliveryAt) }
     else if (r.kind === 'conv') { if (onOpenConv) onOpenConv(r.convId); else onNavigate('conversations') }
   }
 

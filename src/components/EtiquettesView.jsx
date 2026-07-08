@@ -144,7 +144,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <div className="max-w-6xl mx-auto px-4 pb-4">
       {/* Header sticky : reste visible quand on scrolle */}

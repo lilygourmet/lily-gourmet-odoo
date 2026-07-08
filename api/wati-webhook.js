@@ -40,6 +40,8 @@ export default async function handler(req, res) {
   // Aiguillage selon ?action= ; sans action = réception entrante (appel de Wati)
   const action = req.query?.action
   if (action === 'login') return handleLogin(req, res)
+  if (action === 'save-navbar') return handleSaveNavbar(req, res)
+  if (action === 'tab-lock') return handleTabLock(req, res)
   if (action === 'send') return handleSend(req, res)
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
@@ -82,6 +84,7 @@ export default async function handler(req, res) {
   if (action === 'vitrine-reservations') return handleVitrineReservations(req, res)
   if (action === 'vitrine-order-add') return handleVitrineOrderAdd(req, res)
   if (action === 'cake-vision') return handleCakeVision(req, res)
+  if (action === 'poly-estimate') return handlePolyEstimate(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
   if (action === 'count-devis-internet') return handleCountDevisInternet(req, res)
   return handleInbound(req, res)
@@ -100,6 +103,18 @@ function signJwt(payload, secret) {
   const data = `${header}.${body}`
   const sig = crypto.createHmac('sha256', secret).update(data).digest()
   return `${data}.${b64url(sig)}`
+}
+// Vérifie un JWT maison (signé par signJwt) : signature + expiration. Renvoie le payload ou null.
+function verifyJwt(token, secret) {
+  try {
+    const [h, b, s] = String(token || '').split('.')
+    if (!h || !b || !s) return null
+    const expected = b64url(crypto.createHmac('sha256', secret).update(`${h}.${b}`).digest())
+    if (expected !== s) return null
+    const payload = JSON.parse(Buffer.from(b.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString())
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null
+    return payload
+  } catch { return null }
 }
 async function handleLogin(req, res) {
   const jwtSecret = process.env.SUPABASE_JWT_SECRET
@@ -127,6 +142,69 @@ async function handleLogin(req, res) {
     return res.status(200).json({ user, token })
   } catch (e) {
     console.error('[login]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Verrou à code des onglets Caisse / RH. op = 'status' | 'verify' | 'set'.
+// Le code est stocké HACHÉ (SHA-256) dans app_config ; « set » réservé à l'admin (JWT app_role).
+async function handleTabLock(req, res) {
+  try {
+    const op = req.body?.op || req.query?.op
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const hash = c => crypto.createHash('sha256').update(String(c)).digest('hex')
+    const readCode = async () => {
+      const { data } = await supabase.from('app_config').select('value').eq('key', 'tab_lock_code').maybeSingle()
+      return data?.value || null
+    }
+    if (op === 'status') {
+      return res.status(200).json({ isSet: !!(await readCode()) })
+    }
+    if (op === 'verify') {
+      const stored = await readCode()
+      if (!stored) return res.status(200).json({ ok: true, notSet: true })   // pas de code défini → pas de verrou
+      return res.status(200).json({ ok: hash(req.body?.code || '') === stored })
+    }
+    if (op === 'set') {
+      const secret = process.env.SUPABASE_JWT_SECRET
+      const auth = req.headers.authorization || ''
+      const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
+      const payload = secret && token ? verifyJwt(token, secret) : null
+      if (payload?.app_role !== 'admin') return res.status(403).json({ error: 'réservé à l\'admin' })
+      const code = String(req.body?.code || '')
+      if (code.length < 4) return res.status(400).json({ error: 'Code trop court (4 chiffres minimum).' })
+      // Si un code existe déjà, il faut fournir l'ANCIEN code correct pour le remplacer.
+      const existing = await readCode()
+      if (existing && hash(req.body?.currentCode || '') !== existing) {
+        return res.status(403).json({ error: 'Ancien code incorrect.' })
+      }
+      await supabase.from('app_config').upsert({ key: 'tab_lock_code', value: hash(code), updated_at: new Date().toISOString() }, { onConflict: 'key' })
+      return res.status(200).json({ ok: true })
+    }
+    return res.status(400).json({ error: 'op invalide' })
+  } catch (e) {
+    console.error('[tab-lock]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Enregistre la disposition perso des onglets de L'UTILISATEUR CONNECTÉ (identifié par son JWT).
+// Sûr : on vérifie le JWT (identité), et on n'écrit QUE la colonne navbar_config de SA propre fiche
+// → un employé ne peut pas modifier ses permissions ni la fiche d'un autre.
+async function handleSaveNavbar(req, res) {
+  try {
+    const secret = process.env.SUPABASE_JWT_SECRET
+    const auth = req.headers.authorization || ''
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
+    const payload = secret && token ? verifyJwt(token, secret) : null
+    if (!payload?.sub) return res.status(401).json({ error: 'non authentifié' })
+    const config = req.body?.config ?? null
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const { error } = await supabase.from('profiles').update({ navbar_config: config }).eq('id', payload.sub)
+    if (error) throw error
+    return res.status(200).json({ ok: true })
+  } catch (e) {
+    console.error('[save-navbar]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }
@@ -343,8 +421,10 @@ async function sendAutoReply(supabase, conv, phone, text) {
   await supabase.from('messages').insert({
     conversation_id: conv.id, sender_type: 'system', body: text, sent_at: now,
   })
+  // On NE bouge PAS last_message_at : une auto-réponse automatique ne doit pas faire
+  // croire qu'un humain a répondu (sinon la conversation perd la couleur « non lu »).
   await supabase.from('conversations')
-    .update({ last_message_at: now, updated_at: now }).eq('id', conv.id)
+    .update({ updated_at: now }).eq('id', conv.id)
 }
 
 // ============================================================
@@ -1055,6 +1135,15 @@ async function handleSendTemplate(req, res) {
     await supabase.from('conversations')
       .update({ last_message_at: sentAt, updated_at: sentAt, status: newStatus })
       .eq('id', conv.id)
+    // Répondre = prendre la conversation : si elle n'est assignée à PERSONNE et qu'on ne la
+    // ferme pas, on l'attribue à l'agent qui répond. (.is('assigned_to', null) → ne vole jamais
+    // une conversation déjà attribuée à quelqu'un d'autre.)
+    if (!fermerApresEnvoi && userId) {
+      await supabase.from('conversations')
+        .update({ assigned_to: userId })
+        .eq('id', conv.id)
+        .is('assigned_to', null)
+    }
 
     return res.status(200).json({ ok: true, conversationId: conv.id })
   } catch (e) {
@@ -1181,15 +1270,22 @@ async function handleOrderProduct(req, res) {
     const valIds = [...new Set(lines.flatMap(l => l.value_ids || []))]
     const vals = valIds.length ? await odooSearchRead(uid, 'product.attribute.value', [['id', 'in', valIds]], ['id', 'name', 'is_custom']) : []
     const valById = {}; vals.forEach(v => { valById[v.id] = v })
+    // Valeurs ENCORE ACTIVES sur ce template (ptav_active=true). Les valeurs désactivées
+    // dans Odoo (ex. parfum « Vanille Rose » archivé) ne doivent plus être proposées.
+    const activePtav = await odooSearchRead(uid, 'product.template.attribute.value',
+      [['product_tmpl_id', '=', tmplId], ['ptav_active', '=', true]], ['product_attribute_value_id'])
+    const activePavIds = new Set(activePtav.map(p => Array.isArray(p.product_attribute_value_id) ? p.product_attribute_value_id[0] : p.product_attribute_value_id))
     // Attribut "texte" si toutes ses valeurs sont libres (is_custom) → ex. Thème, Âge, Message
     const attributes = lines.map(l => {
       const lvals = (l.value_ids || []).map(id => valById[id]).filter(Boolean)
       const isText = lvals.length > 0 && lvals.every(v => v.is_custom)
+      // Ne garder que les valeurs actives (si le filtre est vide → sécurité : on ne cache rien).
+      const shown = activePavIds.size ? lvals.filter(v => activePavIds.has(v.id)) : lvals
       return {
         attrId: Array.isArray(l.attribute_id) ? l.attribute_id[0] : l.attribute_id,
         name: Array.isArray(l.attribute_id) ? l.attribute_id[1] : '',
         type: isText ? 'text' : 'option',
-        values: isText ? [] : lvals.map(v => v.name),
+        values: isText ? [] : shown.map(v => v.name),
       }
     })
     const prods = await odooSearchRead(uid, 'product.product', [['product_tmpl_id', '=', tmplId]], ['id', 'lst_price', 'product_template_attribute_value_ids'])
@@ -1254,7 +1350,7 @@ async function mirrorPhotoToSupabase(checksum, mimetype, lineId, add) {
 // Modifie les articles d'une commande existante (sale.order). op = list | add | update | delete.
 // On écrit via le champ order_line (commandes one2many Odoo) → les totaux se recalculent.
 async function handleOrderLine(req, res) {
-  const { op, orderId, lineId, variantId, qty, price, name, desc, discount, photo } = req.body || {}
+  const { op, orderId, lineId, variantId, qty, price, name, desc, discount, photo, photos, tmplId, combo } = req.body || {}
   if (!orderId) return res.status(400).json({ error: 'commande requise' })
   const DB = process.env.ODOO_DB, PWD = process.env.ODOO_PASSWORD
   try {
@@ -1352,8 +1448,16 @@ async function handleOrderLine(req, res) {
     let command
     if (op === 'add') {
       if (!variantId) return res.status(400).json({ error: 'article requis' })
+      // Variante EXACTE (créée à la volée si besoin) à partir de la combinaison d'attributs
+      // choisie → évite de retomber sur la « variante la plus proche » du configurateur
+      // (ex. forme coeur sans variante pré-créée → repli sur Chocolat).
+      let productId = variantId
+      if (tmplId && Array.isArray(combo) && combo.length) {
+        const exact = await resolveExactVariant(uid, tmplId, combo)
+        if (exact) productId = exact
+      }
       command = [0, 0, {
-        product_id: variantId,
+        product_id: productId,
         product_uom_qty: Number(qty) || 1,
         price_unit: Number(price) || 0,
         name: [name || '', desc || ''].filter(Boolean).join('\n'),
@@ -1383,7 +1487,8 @@ async function handleOrderLine(req, res) {
     // Photo (modèle de gâteau) → attachée à L'ARTICLE (sale.order.line), pas à l'entête,
     // pour que chaque CD- garde SA propre photo dans le calendrier / l'impression.
     // (Pas de message_post : il rebasculerait la pièce jointe sur la commande entière.)
-    if ((op === 'add' || op === 'update') && photo?.data) {
+    const phList = (photos?.length ? photos : (photo ? [photo] : [])).filter(p => p?.data)
+    if ((op === 'add' || op === 'update') && phList.length) {
       try {
         let targetLineId = lineId
         if (op === 'add') {
@@ -1393,24 +1498,29 @@ async function handleOrderLine(req, res) {
           targetLineId = ids.length ? Math.max(...ids) : null
         }
         if (targetLineId) {
-          const newAttId = await odooCreate(uid, 'ir.attachment', {
-            name: photo.name || 'photo.jpg',
-            datas: photo.data,
-            res_model: 'sale.order.line',
-            res_id: targetLineId,
-            mimetype: photo.mimetype || 'image/jpeg',
-          })
-          // miroir Supabase immédiat : upload dans le stockage + ajoute l'URL à l'article (MAJ calendrier/étiquette tout de suite)
-          try {
-            const meta = await odooSearchRead(uid, 'ir.attachment', [['id', '=', newAttId]], ['checksum', 'mimetype'])
-            const cs = meta[0]?.checksum, mime = meta[0]?.mimetype || photo.mimetype || 'image/jpeg'
-            if (cs) {
-              const fileName = `img_${cs}.${imgExtFromMime(mime)}`
-              const supabase = createClient(supabaseUrl, supabaseServiceKey)
-              await supabase.storage.from('product-images').upload(fileName, Buffer.from(photo.data, 'base64'), { contentType: mime, upsert: true })
-              await mirrorPhotoToSupabase(cs, mime, targetLineId, true)
+          for (let k = 0; k < phList.length; k++) {
+            const ph = phList[k]
+            const newAttId = await odooCreate(uid, 'ir.attachment', {
+              name: ph.name || 'photo.jpg',
+              datas: ph.data,
+              res_model: 'sale.order.line',
+              res_id: targetLineId,
+              mimetype: ph.mimetype || 'image/jpeg',
+            })
+            // miroir Supabase : seulement pour la 1re photo (image principale calendrier/étiquette)
+            if (k === 0) {
+              try {
+                const meta = await odooSearchRead(uid, 'ir.attachment', [['id', '=', newAttId]], ['checksum', 'mimetype'])
+                const cs = meta[0]?.checksum, mime = meta[0]?.mimetype || ph.mimetype || 'image/jpeg'
+                if (cs) {
+                  const fileName = `img_${cs}.${imgExtFromMime(mime)}`
+                  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+                  await supabase.storage.from('product-images').upload(fileName, Buffer.from(ph.data, 'base64'), { contentType: mime, upsert: true })
+                  await mirrorPhotoToSupabase(cs, mime, targetLineId, true)
+                }
+              } catch (e) { console.warn('[photo mirror add]', e?.message || e) }
             }
-          } catch (e) { console.warn('[photo mirror add]', e?.message || e) }
+          }
         }
       } catch (e) { console.warn('[order-line photo]', e?.message || e) }
     }
@@ -1450,11 +1560,20 @@ async function countDevisInternetNonTraitesServer(res) {
       [['state', '=', 'sent'], ['partner_id', 'not ilike', 'vitrin']], ['name', 'partner_id'])
     if (!orders.length) return res.status(200).json({ count: 0 })
 
+    // Téléphones des clients de ces devis (pour le rapprochement avec les conversations).
+    const partnerIds = [...new Set(orders.map(o => Array.isArray(o.partner_id) ? o.partner_id[0] : null).filter(Boolean))]
+    const partners = partnerIds.length
+      ? await odooSearchRead(uid, 'res.partner', [['id', 'in', partnerIds]], ['id', 'phone', 'mobile'])
+      : []
+    const phoneKey = p => String(p || '').replace(/\D/g, '').slice(-9)
+    const phoneByPartner = new Map(partners.map(p => [p.id, phoneKey(p.mobile || p.phone)]))
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const [env, tr, msgs] = await Promise.all([
+    const [env, tr, msgs, convs] = await Promise.all([
       supabase.from('devis_envois').select('order_num'),
       supabase.from('devis_traitements').select('order_num, action'),
       supabase.from('messages').select('body').in('sender_type', ['agent', 'system']).ilike('body', '%S%'),
+      supabase.from('conversations').select('client_phone'),
     ])
     const envSet = new Set((env.data || []).map(e => e.order_num))
     const trSet = new Set((tr.data || []).filter(t => ['relance', 'confirme'].includes(t.action)).map(t => t.order_num))
@@ -1464,10 +1583,15 @@ async function countDevisInternetNonTraitesServer(res) {
       const matches = (m.body || '').match(/\bS\d{4,}\b/gi)
       if (matches) matches.forEach(s => refSet.add(s.toUpperCase()))
     }
+    // Clients ayant déjà une conversation WhatsApp entamée (par les 9 derniers chiffres).
+    const convSet = new Set((convs.data || []).map(c => phoneKey(c.client_phone)).filter(k => k.length >= 9))
 
     let n = 0
     for (const o of orders) {
-      const contacted = envSet.has(o.name) || trSet.has(o.name) || refSet.has(String(o.name || '').toUpperCase())
+      const pid = Array.isArray(o.partner_id) ? o.partner_id[0] : null
+      const ph = pid ? phoneByPartner.get(pid) : ''
+      const hasConv = ph && ph.length >= 9 && convSet.has(ph)
+      const contacted = envSet.has(o.name) || trSet.has(o.name) || refSet.has(String(o.name || '').toUpperCase()) || hasConv
       if (!contacted) n++
     }
     return res.status(200).json({ count: n })
@@ -1504,12 +1628,15 @@ async function handleOrderCreateClient(req, res) {
     let normPhone = phone
     if (digits.startsWith('0')) normPhone = '+212' + digits.slice(1)
     else if (digits.startsWith('212')) normPhone = '+' + digits
-    // Doublon : on cherche par les 9 derniers chiffres (insensible au préfixe +212/0).
+    // Doublon : on cherche par les 6 derniers chiffres (ils restent COLLÉS même si le
+    // numéro est enregistré avec des espaces/tirets, ex. « +212 661 793135 »), puis on
+    // CONFIRME en comparant le numéro complet sans séparateurs → aucun faux positif.
     if (digits.length >= 6) {
       const last9 = digits.slice(-9)
+      const last6 = digits.slice(-6)
       const found = await odooSearchRead(uid, 'res.partner',
-        ['|', ['phone', 'ilike', last9], ['mobile', 'ilike', last9]],
-        ['id', 'name', 'phone', 'mobile'], { limit: 5 })
+        ['|', ['phone', 'ilike', last6], ['mobile', 'ilike', last6]],
+        ['id', 'name', 'phone', 'mobile'], { order: 'id asc', limit: 20 })
       const match = (found || []).find(c => {
         const cd = String(c.phone || c.mobile || '').replace(/\D/g, '')
         return cd && (cd.endsWith(last9) || digits.endsWith(cd.slice(-9)))
@@ -1615,9 +1742,10 @@ async function handleVitrineReservations(req, res) {
       if (l.display_type) continue
       const nm = (l.name || '').replace(/\s+/g, ' ').trim()
       if (/^(Acompte|Down\s+Payment)/i.test(nm)) continue
+      if (Number(l.product_uom_qty) === 0) continue          // ligne annulée (quantité 0)
       const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id
       if (!linesByOrder.has(oid)) linesByOrder.set(oid, [])
-      linesByOrder.get(oid).push({ text: nm, qty: String(l.product_uom_qty) })
+      linesByOrder.get(oid).push({ id: l.id, text: nm, qty: String(l.product_uom_qty) })
     }
     const result = orders.map(o => ({
       id: o.id,
@@ -1753,6 +1881,46 @@ async function handleCakeVision(req, res) {
   }
 }
 
+// Estimation poly par IA : analyse la photo du modèle, estime la hauteur réelle de
+// chaque étage (échelle = base réelle de l'étage), renvoie un JSON. Le calcul du poly
+// (génoise 5 cm + arrondi) se fait côté app.
+async function handlePolyEstimate(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST requis' })
+
+  const { image, bases } = req.body || {}
+  if (!image || !Array.isArray(bases) || !bases.length) {
+    return res.status(400).json({ error: 'image et bases requis' })
+  }
+  const n = bases.length
+  const prompt = `Tu es un pâtissier expert. Analyse ce gâteau à partir de la photo.
+Largeurs/diamètres RÉELS des étages (du bas vers le haut) : ${bases.map((b, i) => `étage ${i + 1} = ${b} cm`).join(' ; ')}.
+Sers-toi de ces largeurs comme ÉCHELLE pour estimer les hauteurs réelles d'après les proportions visibles.
+Pour CHAQUE étage, estime la hauteur du gâteau SEUL (sans les décorations qui dépassent) et la hauteur totale avec décorations.
+Un gâteau design fait en général 8 à 22 cm de haut par étage.
+Réponds UNIQUEMENT en JSON strict, sans aucun texte autour :
+{"etages":[{"hauteur_gateau_seul_cm":<nombre>,"hauteur_totale_cm":<nombre>}],"confiance":"haute|moyenne|basse","note":"<courte phrase>"}
+Il doit y avoir exactement ${n} objet(s) dans "etages", du bas vers le haut.`
+  try {
+    const result = await generateText({
+      model: 'claude-haiku-4-5',
+      messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', image }] }],
+    })
+    const txt = result.text || ''
+    const m = txt.match(/\{[\s\S]*\}/)
+    if (!m) return res.status(502).json({ error: "L'IA n'a pas renvoyé de résultat exploitable." })
+    let data
+    try { data = JSON.parse(m[0]) } catch { return res.status(502).json({ error: 'Réponse IA illisible.' }) }
+    return res.status(200).json(data)
+  } catch (e) {
+    console.error('[poly-estimate]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
 async function handleOrderCreateDevis(req, res) {
   const { partnerId, lines, deliveryDate, deliveryTime, note, warehouseId, clientPhone } = req.body || {}
   if (!partnerId) return res.status(400).json({ error: 'client requis' })
@@ -1841,22 +2009,25 @@ async function handleOrderCreateDevis(req, res) {
     const usedLineIds = new Set()
     let nbPhotos = 0
     for (let i = 0; i < lines.length; i++) {
-      const ph = lines[i].photo
-      if (!ph?.data) continue
+      const phs = (lines[i].photos?.length ? lines[i].photos : (lines[i].photo ? [lines[i].photo] : [])).filter(p => p?.data)
+      if (!phs.length) continue
       const wantName = orderLines[i][2].name
       const match = createdLines.find(cl => !usedLineIds.has(cl.id) && cl.name === wantName)
       if (!match) continue
       usedLineIds.add(match.id)
-      try {
-        await odooCreate(uid, 'ir.attachment', {
-          name: ph.name || `photo-${i + 1}.jpg`,
-          datas: ph.data,
-          res_model: 'sale.order.line',
-          res_id: match.id,
-          mimetype: ph.mimetype || 'image/jpeg',
-        })
-        nbPhotos++
-      } catch (e) { console.warn('[order-photo]', e?.message || e) }
+      for (let k = 0; k < phs.length; k++) {
+        const ph = phs[k]
+        try {
+          await odooCreate(uid, 'ir.attachment', {
+            name: ph.name || `photo-${i + 1}-${k + 1}.jpg`,
+            datas: ph.data,
+            res_model: 'sale.order.line',
+            res_id: match.id,
+            mimetype: ph.mimetype || 'image/jpeg',
+          })
+          nbPhotos++
+        } catch (e) { console.warn('[order-photo]', e?.message || e) }
+      }
     }
     if (nbPhotos) {
       try {
@@ -1865,6 +2036,33 @@ async function handleOrderCreateDevis(req, res) {
           { body: `📸 ${nbPhotos} photo${s} de modèle ajoutée${s} sur l'article${s} (depuis l'app)` }])
       } catch (e) { console.warn('[order-photo note]', e?.message || e) }
     }
+
+    // Pré-fiches accessoire (GM-) saisies à la prise de commande → table gm_prefiches, reliées
+    // à la LIGNE Odoo (odoo_line_id, appariement par libellé exact comme les photos). L'onglet
+    // Accessoires s'en sert pour PRÉ-REMPLIR la fiche de production (l'équipe confirme ensuite).
+    try {
+      const usedPrefLineIds = new Set()
+      const prefRows = []
+      for (let i = 0; i < lines.length; i++) {
+        const pf = lines[i].accPrefiche
+        if (!pf) continue
+        const wantName = orderLines[i][2].name
+        const match = createdLines.find(cl => !usedPrefLineIds.has(cl.id) && cl.name === wantName)
+        if (!match) continue
+        usedPrefLineIds.add(match.id)
+        prefRows.push({
+          odoo_line_id: match.id,
+          type_gm: pf.type_gm || null,
+          lots: Array.isArray(pf.lots) ? pf.lots : [],
+          parfum_normal: !!pf.parfum_normal,
+          tete_position: pf.tete_position || null,
+        })
+      }
+      if (prefRows.length) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+        await supabase.from('gm_prefiches').upsert(prefRows, { onConflict: 'odoo_line_id' })
+      }
+    } catch (e) { console.warn('[gm-prefiche]', e?.message || e) }
 
     // Badge « 🎂 Commande » : marque la conversation du client (recherche par 9 derniers chiffres).
     if (clientPhone) {
@@ -1904,18 +2102,18 @@ async function handleOrderCreateDevis(req, res) {
             total = Math.round(full?.[0]?.amount_total || 0)
             const allLines = await odooSearchRead(uid, 'sale.order.line',
               [['order_id', '=', orderId], ['display_type', '=', false], ['product_uom_qty', '>', 0]],
-              ['name', 'product_uom_qty', 'price_subtotal'])
-            detailLignes = allLines.map(l => `- ${Number(l.product_uom_qty) > 1 ? `${Math.round(l.product_uom_qty)}x ` : ''}${stripDeco(String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, ''))} : ${Math.round(l.price_subtotal || 0)} DH`).join('\n')
+              ['name', 'product_uom_qty', 'price_total'])
+            detailLignes = allLines.map(l => `- ${Number(l.product_uom_qty) > 1 ? `${Math.round(l.product_uom_qty)}x ` : ''}${stripDeco(String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, ''))} : ${Math.round(l.price_total || 0)} DH`).join('\n')
           } else {
             total = lines.reduce((s, l) => s + (Number(l.price) || 0) * (Number(l.qty) || 1), 0)
             detailLignes = lines.map(l => { const d = stripDeco(l.desc); return `- ${Number(l.qty) > 1 ? `${l.qty}x ` : ''}${String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, '')}${d ? ` (${d})` : ''} : ${Math.round(Number(l.price) || 0)} DH` }).join('\n')
           }
-          const clientText = `Bonjour ${clientName.split(/\s+/)[0] || ''},\nVoici votre devis ${orderName}${merged ? ' (mis à jour)' : ''} :\n${detailLignes}\nMontant total : ${Math.round(total)} DH\nRetrait : ${retrait}\n\nMerci de nous confirmer pour valider.`
+          const clientText = `Bonjour ${clientName.split(/\s+/)[0] || ''},\nVoici votre devis ${orderName}${merged ? ' (mis à jour)' : ''} :\n${detailLignes}\nMontant Total : ${Math.round(total)} DH\nRetrait : ${retrait}\n\nMerci de nous confirmer pour valider.`
           const tmplDetail = lines.map(l => `${String(l.name).replace(/^(CD-|GM-|GMD-)\s*/i, '')} x${l.qty || 1} - ${Math.round(Number(l.price) || 0)} DH`).join(' ; ')
           const tmplParams = [
             { name: '1', value: clientName.split(/\s+/)[0] || 'Bonjour' },
             { name: '2', value: orderName },
-            { name: '3', value: `Montant : ${Math.round(total)} DH. ${tmplDetail}. Retrait : ${retrait}` },
+            { name: '3', value: `Montant Total : ${Math.round(total)} DH. ${tmplDetail}. Retrait : ${retrait}` },
           ]
           try { await sendReminderWhatsapp(supabase, number, clientText, { name: 'devis_validation', parameters: tmplParams }) } catch (e) { console.warn('[client-devis-wa]', e?.message || e) }
           const flag = mergedConfirmed ? ' ⚠️ AJOUT à une commande DÉJÀ CONFIRMÉE — à vérifier en cuisine.' : ''
@@ -2040,6 +2238,7 @@ async function handleDevisList(req, res) {
       if (l.display_type) continue
       const nm = (l.name || '').replace(/\s+/g, ' ').trim()
       if (/^(Acompte|Down\s+Payment)/i.test(nm)) continue
+      if (Number(l.product_uom_qty) === 0) continue          // ligne annulée (quantité 0)
       if (!linesByOrder.has(oid)) linesByOrder.set(oid, [])
       linesByOrder.get(oid).push({ text: nm, qty: String(l.product_uom_qty), price: String(l.price_total) })
     }
@@ -2125,6 +2324,7 @@ async function handleOrdersConfirmed(req, res) {
       if (l.display_type) continue
       const nm = (l.name || '').replace(/\s+/g, ' ').trim()
       if (/^(Acompte|Down\s+Payment)/i.test(nm)) continue
+      if (Number(l.product_uom_qty) === 0) continue          // ligne annulée (quantité 0)
       const qty = l.product_uom_qty || 0
       const label = `${qty}× ${nm} — ${fmtAmount(l.price_total)}`
       if (!linesByOrder.has(oid)) linesByOrder.set(oid, [])
@@ -2650,6 +2850,8 @@ async function handleCdDay(req, res) {
   // part='confirmed' (rapide, Supabase) | 'devis' (lent, Odoo) | 'all'. Le client appelle les 2
   // séparément pour afficher les confirmés tout de suite, puis les devis en arrière-plan.
   const part = req.body?.part || 'all'
+  // types de modèles à inclure (défaut CD seul → « Charge CD » inchangé ; « À paramétrer » demande CD+GM).
+  const types = Array.isArray(req.body?.types) && req.body.types.length ? req.body.types : ['CD']
   const byHour = {}
 
   // 1) CONFIRMÉS — depuis Supabase (déjà synchronisé : rapide, image_urls = 1 photo par gâteau).
@@ -2665,10 +2867,10 @@ async function handleCdDay(req, res) {
       if (isNaN(dt)) continue
       const h = hourMaroc(dt)
       for (const it of (o.order_items || [])) {
-        if (it.type !== 'CD' || isGanache(it.title)) continue
+        if (!types.includes(it.type) || isGanache(it.title)) continue
         const photo = Array.isArray(it.image_urls) && it.image_urls[0] ? it.image_urls[0] : null
         const qty = Math.max(1, Number(it.quantity) || 1)   // 1 vignette par gâteau (respecte la quantité)
-        for (let k = 0; k < qty; k++) (byHour[h] ||= []).push({ orderRef: o.order_num, pers: it.pers || null, photo, isDevis: false })
+        for (let k = 0; k < qty; k++) (byHour[h] ||= []).push({ orderRef: o.order_num, pers: it.pers || null, photo, isDevis: false, title: it.title || '' })
       }
     }
   } catch (e) { console.warn('[cd-day supabase]', e?.message || e) }
@@ -2680,8 +2882,14 @@ async function handleCdDay(req, res) {
       [['commitment_date', '>=', startUtc], ['commitment_date', '<=', endUtc], ['state', 'in', ['draft', 'sent']]],
       ['id', 'name', 'commitment_date', 'order_line'])
     const lineIds = devisOrders.flatMap(o => Array.isArray(o.order_line) ? o.order_line : [])
+    // Mêmes types que la branche confirmés (défaut CD seul → requête identique à avant).
+    const namePrefixes = []
+    if (types.includes('CD')) namePrefixes.push('CD-%')
+    if (types.includes('GM')) namePrefixes.push('GM-%')
+    if (!namePrefixes.length) namePrefixes.push('CD-%')
+    const nameOr = [...Array(namePrefixes.length - 1).fill('|'), ...namePrefixes.map(p => ['product_id.product_tmpl_id.name', '=ilike', p])]
     const cdLines = lineIds.length ? (await odooSearchRead(uid, 'sale.order.line',
-      [['id', 'in', lineIds], ['product_id.product_tmpl_id.name', '=ilike', 'CD-%'], ['product_uom_qty', '>', 0]],
+      [['id', 'in', lineIds], ...nameOr, ['product_uom_qty', '>', 0]],
       ['id', 'order_id', 'name', 'product_uom_qty'])).filter(l => isRealCakeLine(l.name) && !isGanache(firstReal(l.name))) : []
     if (cdLines.length) {
       const lineToOrder = new Map(cdLines.map(l => [l.id, Array.isArray(l.order_id) ? l.order_id[0] : l.order_id]))
@@ -2708,7 +2916,7 @@ async function handleCdDay(req, res) {
         if (h == null) continue
         const photo = photoByLine.get(l.id) || photoByOrder.get(oid) || null
         const qty = Math.max(1, Math.round(Number(l.product_uom_qty) || 1))
-        for (let k = 0; k < qty; k++) (byHour[h] ||= []).push({ orderRef: o.name || '', pers: persFromLineName(l.name), photo, isDevis: true })
+        for (let k = 0; k < qty; k++) (byHour[h] ||= []).push({ orderRef: o.name || '', pers: persFromLineName(l.name), photo, isDevis: true, title: firstReal(l.name) })
       }
     }
   } catch (e) { console.warn('[cd-day odoo devis]', e?.message || e) }
@@ -2900,6 +3108,7 @@ async function handleSearchOrders(req, res) {
       if (l.display_type) continue                          // sections / notes
       const nm = (l.name || '').replace(/\s+/g, ' ').trim() // texte sur une ligne
       if (/^(Acompte|Down\s+Payment)/i.test(nm)) continue   // acomptes
+      if (Number(l.product_uom_qty) === 0) continue          // ligne annulée (quantité 0)
       const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id
       if (!linesByOrder.has(oid)) linesByOrder.set(oid, [])
       linesByOrder.get(oid).push({ text: nm, qty: String(l.product_uom_qty), price: String(l.price_total) })

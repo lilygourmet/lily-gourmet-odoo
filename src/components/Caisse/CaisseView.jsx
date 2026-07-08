@@ -21,14 +21,14 @@ const TABS = [
 
 const STORAGE_KEY = 'caisse_active_tab'
 
-export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
+export default function CaisseView({ user, activeView, onNavigate, onLogout, initialSub, deepTab }) {
   const isAdmin = !!(user?.perm_caisse_admin || user?.role === 'admin')
 
   if (!isAdmin && user?.perm_caisse) {
     return (
       <>
         <AppHeader user={user} activeView="caisse" onNavigate={onNavigate} onLogout={onLogout} />
-        <MeriemUserView user={user} />
+        <MeriemUserView user={user} initialSub={initialSub} />
       </>
     )
   }
@@ -42,34 +42,66 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, tab) } catch {}
   }, [tab])
+  // Ouverture d'un onglet précis depuis le menu de gauche.
+  useEffect(() => { if (deepTab?.tab) setTab(deepTab.tab) }, [deepTab])
   const [envSub, setEnvSub] = usePersistedState('lily.caisse.envSub', 'affectation') // sous-onglet d'Enveloppes
   const [focusMvt, setFocusMvt] = useState(null)      // cible de navigation depuis la recherche
+
+  // Mobile : la colonne gauche devient une rangée horizontale en haut.
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    const h = e => setIsMobile(e.matches)
+    mq.addEventListener?.('change', h)
+    return () => mq.removeEventListener?.('change', h)
+  }, [])
+  // Sur ordi/tablette (≥768px) la bande de gauche gère la navigation → on cache le menu interne.
+  const [sidebarActive, setSidebarActive] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const h = e => setSidebarActive(e.matches)
+    mq.addEventListener?.('change', h)
+    return () => mq.removeEventListener?.('change', h)
+  }, [])
 
   return (
     <>
       <AppHeader user={user} activeView="caisse" onNavigate={onNavigate} onLogout={onLogout} />
-      <div className="caisse-root" style={{ padding: '1rem 1.25rem' }}>
-      <div style={{
-        display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap',
-        borderBottom: '1px solid #e5d8c3', paddingBottom: 12,
-      }}>
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{
-              padding: '8px 14px',
-              borderRadius: 8,
-              border: '1px solid transparent',
-              background: tab === t.key ? '#993556' : '#F4F0EA',
-              color:      tab === t.key ? 'white'   : '#1a0f0a',
-              fontSize: 13, fontWeight: 500, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-            <t.Icon size={15} />{t.label}
-          </button>
-        ))}
-      </div>
+      <div className="caisse-root" style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '1rem 0.75rem' : '1.25rem' }}>
+      <div style={{ display: (isMobile && !sidebarActive) ? 'block' : 'grid', gridTemplateColumns: sidebarActive ? '1fr' : (isMobile ? undefined : '210px 1fr'), gap: isMobile ? 0 : 20, alignItems: 'start' }}>
+
+        {/* Menu vignettes (colonne gauche) — caché sur ordi (la bande de gauche gère la nav) */}
+        {!sidebarActive && (
+        <div style={{
+          display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: 6,
+          overflowX: isMobile ? 'auto' : 'visible',
+          marginBottom: isMobile ? 16 : 0,
+          padding: isMobile ? '0 0 4px' : 12,
+          background: isMobile ? 'transparent' : '#F7F2EA',
+          border: isMobile ? 'none' : '0.5px solid #e5d8c3',
+          borderRadius: isMobile ? 0 : 14,
+          position: isMobile ? 'static' : 'sticky', top: 12,
+        }}>
+          {TABS.map(t => {
+            const active = tab === t.key
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                padding: '11px 13px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+                whiteSpace: 'nowrap', flexShrink: 0, border: '1px solid transparent',
+                background: active ? '#993556' : (isMobile ? 'white' : 'transparent'),
+                color: active ? '#faf7f2' : '#4a3a30',
+                borderColor: active ? '#993556' : (isMobile ? '#e5d8c3' : 'transparent'),
+              }}>
+                <t.Icon size={17} strokeWidth={1.8} /><span>{t.label}</span>
+              </button>
+            )
+          })}
+        </div>
+        )}
+
+        {/* Contenu (colonne droite) */}
+        <div style={{ minWidth: 0 }}>
 
       {tab === 'enveloppes' && (
         <>
@@ -107,6 +139,8 @@ export default function CaisseView({ user, activeView, onNavigate, onLogout }) {
         if (target) setTab(target)
       }} />}
       {tab === 'params'       && <ParametresView user={user} />}
+        </div>
+      </div>
       </div>
     </>
   )

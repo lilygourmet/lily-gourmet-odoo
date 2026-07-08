@@ -7,10 +7,11 @@ import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
+import { filePhoto } from '../lib/photoCompress'
 
 // Fenêtre « ✏️ Articles » : modifie les articles d'une commande Odoo (ajouter /
 // modifier quantité-prix / supprimer). Écrit directement dans Odoo via l'API.
-export default function OrderEditModal({ order, onClose, onChanged, user }) {
+export default function OrderEditModal({ order, onClose, onChanged, user, embedded = false }) {
   // Journal interne des commandes : trace TOUS les changements (non bloquant).
   const logModif = (detail) => {
     recordDevisTraitement({
@@ -119,7 +120,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
     if (!line.variantId) { toast.error('Choisis les options du produit'); return }
     setDraft(prev => {
       const sig = `${line.variantId}|${line.name}|${line.desc || ''}|${line.warn || ''}`
-      const i = prev.findIndex(x => x._sig === sig && !x.photoFile && !line.photoFile)
+      const i = prev.findIndex(x => x._sig === sig && !(x.photoFiles?.length) && !(line.photoFiles?.length))
       if (i >= 0) { const n = [...prev]; n[i] = { ...n[i], qty: n[i].qty + 1 }; return n }
       return [...prev, { ...line, _sig: sig, key: Date.now() + '' + Math.random(), qty: 1 }]
     })
@@ -133,12 +134,8 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
     for (const line of draft) {
       // Le ⚠️ part dans la description → repéré comme warning sur l'article (cf. op list).
       const desc = [line.desc, line.warn ? `⚠️ ${line.warn}` : ''].filter(Boolean).join('\n')
-      let photo = null
-      if (line.photoFile) {
-        const data = await fileToBase64(line.photoFile)
-        photo = { name: line.photoName || line.photoFile.name, data, mimetype: line.photoFile.type || 'image/jpeg' }
-      }
-      await addOrderLine(order.id, { variantId: line.variantId, qty: line.qty, price: line.price, name: line.name, desc, photo })
+      const photos = line.photoFiles?.length ? await Promise.all(line.photoFiles.map(filePhoto)) : null
+      await addOrderLine(order.id, { variantId: line.variantId, qty: line.qty, price: line.price, name: line.name, desc, photos, tmplId: line.tmplId, combo: line.combo })
       logModif(`Article ajouté : ${line.name}${line.qty > 1 ? ` ×${line.qty}` : ''}`)
     }
     setDraft([])
@@ -152,12 +149,8 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
     try {
       await commitDraft()
       for (const l of changed) {
-        let photo = null
-        if (l._photoFile) {
-          const data = await fileToBase64(l._photoFile)
-          photo = { name: l._photoName || l._photoFile.name, data, mimetype: l._photoFile.type || 'image/jpeg' }
-        }
-        await updateOrderLine(order.id, l.id, { qty: l.qty, price: l.price, name: l.rawName, discount: l.discount, photo })
+        const photos = l._photoFiles?.length ? await Promise.all(l._photoFiles.map(filePhoto)) : null
+        await updateOrderLine(order.id, l.id, { qty: l.qty, price: l.price, name: l.rawName, discount: l.discount, photos })
       }
       if (changed.length) logModif(changed.map(l => describeLineChange(l, origRef.current[l.id])).join(' ; '))
       // Vraie modification : un article dont la quantité a BAISSÉ (ou est passée à 0).
@@ -195,6 +188,22 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
     } finally { setBusy(false) }
   }
 
+  function addLinePhotos(id, files) {
+    const arr = Array.from(files || []).filter(f => f && f.type?.startsWith('image/'))
+    if (!arr.length) return
+    setLines(prev => prev.map(l => l.id === id ? {
+      ...l, _dirty: true,
+      _photoFiles: [...(l._photoFiles || []), ...arr],
+      _photoPreviews: [...(l._photoPreviews || []), ...arr.map(f => URL.createObjectURL(f))],
+    } : l))
+  }
+  function removeLinePhotoAt(id, idx) {
+    setLines(prev => prev.map(l => l.id === id ? {
+      ...l, _dirty: true,
+      _photoFiles: (l._photoFiles || []).filter((_, i) => i !== idx),
+      _photoPreviews: (l._photoPreviews || []).filter((_, i) => i !== idx),
+    } : l))
+  }
   function patchLine(id, patch) {
     setLines(prev => prev.map(l => l.id === id ? { ...l, ...patch, _dirty: true } : l))
   }
@@ -209,7 +218,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
           const blob = await it.getType(type)
           const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg')
           const file = new File([blob], `coller.${ext}`, { type })
-          patchLine(lineId, { _photoFile: file, _photoName: file.name, _photoPreview: URL.createObjectURL(file) })
+          addLinePhotos(lineId, [file])
           toast.success('Photo collée ✓')
           return
         }
@@ -235,8 +244,8 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={tryClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className={embedded ? '' : 'fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm'} onClick={embedded ? undefined : tryClose}>
+      <div className={embedded ? 'bg-cream' : 'bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line max-h-[90vh] overflow-y-auto'} onClick={embedded ? undefined : e => e.stopPropagation()}>
 
         {/* En-tête */}
         <div className="flex items-start justify-between gap-2 px-5 pt-5">
@@ -248,7 +257,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-soft px-5 mt-2 mb-3">
           <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isConfirmed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{isConfirmed ? 'Confirmée' : 'Devis'}</span>
-          {order.pickupText && <span>🗓️ {order.pickupText}</span>}
+          {order.pickupText && <span>{order.pickupText}</span>}
         </div>
 
         {/* Date + heure de retrait/livraison — modifiable (même si confirmée) */}
@@ -308,7 +317,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
                 placeholder="ex : Parfum : Vanille · Âge : 5"
                 className="w-full mt-1 px-2 py-1.5 text-[12px] border border-line rounded-lg bg-cream focus:outline-none focus:border-bordeaux" />
               {/* Champ MESSAGE dédié : toujours mis proprement sur sa propre ligne « Message : … » */}
-              <div className="text-[10px] text-ink-mute mt-2">💬 <b>Message sur le gâteau</b></div>
+              <div className="text-[10px] text-ink-mute mt-2"><b>Message sur le gâteau</b></div>
               <input
                 value={splitDetails(l.rawName ?? l.name).message}
                 onChange={e => { const s = splitDetails(l.rawName ?? l.name); patchLine(l.id, { rawName: rebuildDetails(s.first, s.restNoMsg, e.target.value) }) }}
@@ -340,17 +349,25 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
               </div>
               <div className="mt-2 flex items-center gap-3 flex-wrap">
                 <label className="inline-flex items-center gap-2 text-[12px] text-bordeaux cursor-pointer">
-                  📎 {l._photoName || 'Ajouter / changer la photo'}
-                  <input type="file" accept="image/*" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) patchLine(l.id, { _photoFile: f, _photoName: f.name, _photoPreview: URL.createObjectURL(f) }) }} />
+                  {l._photoFiles?.length ? 'Ajouter une photo' : 'Ajouter / changer la photo'}
+                  <input type="file" accept="image/*" multiple className="hidden"
+                    onChange={e => { addLinePhotos(l.id, e.target.files); e.target.value = '' }} />
                 </label>
                 <button type="button" onClick={() => pasteLinePhoto(l.id)}
                   className="inline-flex items-center gap-1 text-[12px] text-bordeaux hover:underline">
-                  📋 Coller
+                  Coller
                 </button>
               </div>
-              {l._photoPreview && (
-                <img src={l._photoPreview} alt="" className="mt-2 max-h-40 rounded-lg border border-line object-contain" />
+              {l._photoPreviews?.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {l._photoPreviews.map((src, i) => (
+                    <div key={i} className="relative">
+                      <img src={src} alt="" className="max-h-28 rounded-lg border border-line object-contain" />
+                      <button type="button" onClick={() => removeLinePhotoAt(l.id, i)} title="Retirer"
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] leading-none flex items-center justify-center">✕</button>
+                    </div>
+                  ))}
+                </div>
               )}
               {(l.warnings || []).map(w => (
                 <div key={w.noteId ?? `${w.lineId}#${w.idx}`} className="flex items-center gap-2 mt-1.5 text-[12px] text-[#B36B00] font-semibold">
@@ -362,7 +379,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
               {warnFor === l.id ? (
                 <div className="flex gap-2 mt-2">
                   <input autoFocus value={warnText} onChange={e => setWarnText(e.target.value)}
-                    placeholder="⚠️ ex : décor en bleu · sans fruits à coque"
+                    placeholder="ex : décor en bleu · sans fruits à coque"
                     className="flex-1 px-2 py-1.5 border border-[#E08A00] bg-[#FFF8EC] rounded-lg text-[12px]" />
                   <button onClick={() => addWarning(l.id)} disabled={busy || !warnText.trim()}
                     className="px-3 py-1.5 bg-[#B36B00] text-white rounded-lg text-[11px] font-medium disabled:opacity-50">OK</button>
@@ -370,7 +387,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
                 </div>
               ) : (
                 <button onClick={() => { setWarnFor(l.id); setWarnText('') }}
-                  className="mt-1.5 text-[11px] text-[#B36B00] font-medium hover:underline">+ ⚠️ Attention sur cet article</button>
+                  className="mt-1.5 text-[11px] text-[#B36B00] font-medium hover:underline">+ Attention sur cet article</button>
               )}
             </div>
           ))}
@@ -394,10 +411,10 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
           {!adding ? (
             <button onClick={() => setAdding(true)}
               className="w-full mt-1 mb-1 py-2.5 rounded-xl border border-dashed border-bordeaux/50 text-bordeaux text-[13px] font-medium hover:bg-bordeaux/5 transition-all">
-              ➕ Ajouter un article
+              Ajouter un article
             </button>
           ) : (
-            <AddArticle onCancel={() => setAdding(false)} onAdd={addToDraft} />
+            <AddArticle onCancel={() => setAdding(false)} onAdd={addToDraft} embedded={embedded} />
           )}
 
           {/* Articles en attente : ajoutés à la commande quand tu cliques « Enregistrer » */}
@@ -446,7 +463,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user }) {
 }
 
 // ---- Sous-panneau : MÊME configurateur que « Nouvelle commande », mais écrit dans la commande Odoo ----
-function AddArticle({ onCancel, onAdd }) {
+function AddArticle({ onCancel, onAdd, embedded = false }) {
   const [cats, setCats] = useState(null)
   const [activeCat, setActiveCat] = useState(null)
   const [cfg, setCfg] = useState(null)             // produit en cours de configuration (cf. ConfiguratorModal)
@@ -468,7 +485,7 @@ function AddArticle({ onCancel, onAdd }) {
         if (d === null) return
         name = d.trim() || 'Autre'
       }
-      onAdd({ name, desc: '', warn: '', photoFile: null, price: item.price ?? 0, variantId: item.variantId })
+      onAdd({ name, desc: '', warn: '', price: item.price ?? 0, variantId: item.variantId })
       return
     }
     setCfg({ item, catKey: activeCat, loading: true, attributes: [], variants: [], sel: {}, text: {}, warn: '', photo: '' })
@@ -522,6 +539,7 @@ function AddArticle({ onCancel, onAdd }) {
           onAdd={(line) => { onAdd(line); setCfg(null) }}
           priceEditable={PRICE_EDITABLE.has(activeCat)}
           addLabel="Ajouter à la liste"
+          embedded={embedded}
         />
       )}
     </div>
@@ -569,16 +587,6 @@ function describeLineChange(l, orig) {
   if (Number(orig.price) !== Number(l.price)) parts.push(`prix ${orig.price}→${l.price}`)
   if (Number(orig.discount || 0) !== Number(l.discount || 0)) parts.push(`remise ${orig.discount || 0}%→${l.discount || 0}%`)
   if ((orig.name || '') !== (l.rawName ?? l.name ?? '')) parts.push('texte')
-  if (l._photoFile) parts.push('photo')
+  if (l._photoFiles?.length) parts.push('photo')
   return parts.length ? `${name} (${parts.join(', ')})` : name
-}
-
-// Lit une image en base64 (sans le préfixe data:) pour l'envoyer à Odoo.
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result).split(',')[1] || '')
-    r.onerror = reject
-    r.readAsDataURL(file)
-  })
 }

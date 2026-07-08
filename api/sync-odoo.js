@@ -1046,6 +1046,7 @@ async function syncToSupabase(supabase, parsedOrders) {
           moule: item.moule || null,
           decor: item.decor || null,
           fleurs: item.fleurs || null,
+          acc_details: item.acc_details || null,
           parfum: item.parfums?.length === 1 ? item.parfums[0] : null,
           parfums: item.parfums || [],
           etages_count: item.etages,

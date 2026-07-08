@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { todayISO } from '../_helpers'
 import { ModalBox } from './AjoutSortieModal'
 import { toast } from '../../../lib/toast'
+import MontantPad from '../MontantPad'
 
 export default function AjoutEntreeModal({ onClose, onSubmit }) {
   const [amount, setAmount] = useState('')
@@ -17,8 +18,8 @@ export default function AjoutEntreeModal({ onClose, onSubmit }) {
 
   return (
     <ModalBox title="Ajouter une entrée manuelle" titleColor="#1D7A5C" titleIcon="↓" onClose={onClose}>
-      <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Montant (dh)</div>
-      <input type="number" autoFocus value={amount} onChange={e => setAmount(e.target.value)} style={ipt} />
+      <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Montant</div>
+      <MontantPad value={amount} onChange={setAmount} accent="#1D7A5C" />
       <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4, marginTop: 10 }}>Libellé</div>
       <input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="ex: Reçu client en direct" style={ipt} />
       <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4, marginTop: 10 }}>Date</div>

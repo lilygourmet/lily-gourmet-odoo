@@ -179,7 +179,7 @@ export default function StockGS({ user, activeView, onNavigate, onLogout }) {
   const countZero = gsLines.filter(l => l.stock === 0).length
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-3xl mx-auto px-4 py-6">

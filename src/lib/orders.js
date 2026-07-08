@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { isBurnAway } from './burnAway'
 
 // Nettoie les caractères null / unicode invalides
 function cleanStr(s) {
@@ -86,7 +87,7 @@ export async function saveOrdersFromPdf(parsedOrders, pdfFilename, userId, force
         .from('orders')
         .select(`
           id, client_name, delivery_at, seller_name,
-          order_items (id, type, title, etages_count, pers, parfums, theme, message, age, modele, modelage, impression, moule, decor, fleurs, warnings, image_urls, quantity)
+          order_items (id, type, title, etages_count, pers, parfums, theme, message, age, modele, modelage, impression, moule, decor, fleurs, acc_details, warnings, image_urls, quantity)
         `)
         .eq('order_num', order.orderNum)
         .maybeSingle()
@@ -325,11 +326,38 @@ export async function loadOrdersByIds(ids) {
   return data || []
 }
 
+// Charge UNE commande complète par son numéro (forme attendue par OrderModal).
+export async function loadFullOrderByNum(orderNum) {
+  if (!orderNum) return null
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      id, order_num, client_name, delivery_at, seller_name,
+      odoo_state, modified_at, last_changes_summary,
+      printed_at, printed_by,
+      order_items (
+        id, item_idx, type, title, etages_count, pers, parfums,
+        taille_value, taille_unit,
+        theme, message, age, modele, modelage, impression, moule, decor, fleurs, warnings, image_urls, polys, quantity,
+        modified_at, last_changes
+      )
+    `)
+    .eq('order_num', orderNum)
+    .maybeSingle()
+  if (error) { console.error('❌ loadFullOrderByNum :', error); return null }
+  return data || null
+}
+
 export async function loadOrdersForWeek(monday) {
-  const start = new Date(monday)
+  return loadOrdersForRange(monday, 7)
+}
+
+// Commandes (avec leurs articles) livrées entre `start` (à 00:00) et start+days.
+export async function loadOrdersForRange(startDate, days) {
+  const start = new Date(startDate)
   start.setHours(0, 0, 0, 0)
   const end = new Date(start)
-  end.setDate(end.getDate() + 7)
+  end.setDate(end.getDate() + days)
 
   const { data, error } = await supabase
     .from('orders')
@@ -349,11 +377,65 @@ export async function loadOrdersForWeek(monday) {
     .order('delivery_at', { ascending: true })
 
   if (error) {
-    console.error('❌ loadOrdersForWeek :', error)
+    console.error('❌ loadOrdersForRange :', error)
     return []
   }
 
   return data || []
+}
+
+// Récupère le message à imprimer : d'abord « 🔥 Burn away : … » (nouvelle case), sinon
+// « Message : … » dans le nom du produit (saisie manuelle).
+function extractBurnMessage(note, productName) {
+  let m = String(note || '').match(/burn\s*-?\s*away\s*:\s*(.+)$/im)
+  if (m && m[1].trim()) return m[1].trim()
+  m = String(productName || '').match(/Message\s*:\s*(.+)$/im)
+  if (m && m[1].trim()) return m[1].trim()
+  return ''
+}
+
+// Burn away de la semaine : entremets (ou produits) dont la note/le nom mentionne « burn away ».
+// Source = sales_lines (les entremets n'entrent pas dans order_items/calendrier) → couche additive
+// pour afficher un repère 🔥 sur le calendrier, SANS toucher à la synchro.
+// Une seule carte par commande (on regroupe ligne « E- … » + éventuelle ligne « Burnaway » séparée).
+export async function loadBurnAwaysForWeek(monday) {
+  const start = new Date(monday)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 7)
+
+  const { data, error } = await supabase
+    .from('sales_lines')
+    .select('order_num, client_name, delivery_at, product_name, product_note')
+    .gte('delivery_at', start.toISOString())
+    .lt('delivery_at', end.toISOString())
+    .order('delivery_at', { ascending: true })
+
+  if (error) {
+    console.error('❌ loadBurnAwaysForWeek :', error)
+    return []
+  }
+
+  const byOrder = new Map()
+  for (const l of (data || [])) {
+    if (!isBurnAway(l.product_note, l.product_name)) continue
+    const cand = {
+      order_num: l.order_num,
+      client_name: cleanStr(l.client_name) || '',
+      delivery_at: l.delivery_at,
+      cake: (cleanStr((l.product_name || '').split('\n')[0]) || '').trim(),
+      message: extractBurnMessage(l.product_note, l.product_name),
+    }
+    const cur = byOrder.get(l.order_num)
+    // On garde la ligne la plus parlante : celle qui a un message, sinon le nom le plus complet
+    // (la ligne « E- … » plutôt que la ligne nue « Burnaway »).
+    const better = !cur
+      || (cand.message && !cur.message)
+      || (!!cand.message === !!cur.message && cand.cake.length > cur.cake.length)
+    if (better) byOrder.set(l.order_num, cand)
+  }
+
+  return [...byOrder.values()].sort((a, b) => (a.delivery_at || '').localeCompare(b.delivery_at || ''))
 }
 
 // ============================================================

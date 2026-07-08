@@ -58,11 +58,11 @@ export function conversationUrgency(conv) {
 
   // 🔴 client attend une réponse depuis > 30 min
   if (clientSpokeLast && (now - lastInbound) > 30 * 60 * 1000) {
-    return { emoji: '🔴', text: `⏰ Attend une réponse depuis ${formatElapsed(lastInbound)}`, tone: 'urgent' }
+    return { emoji: '🔴', text: `Attend une réponse depuis ${formatElapsed(lastInbound)}`, tone: 'urgent' }
   }
   // 🟡 silence client > 3 jours (l'agent a parlé en dernier, pas de réponse)
   if (!clientSpokeLast && lastMsg && (now - lastMsg) > 3 * 24 * 60 * 60 * 1000) {
-    return { emoji: '🟡', text: `😴 Silence depuis ${formatElapsed(lastMsg)} - à relancer`, tone: 'warn' }
+    return { emoji: '🟡', text: `Silence depuis ${formatElapsed(lastMsg)} — à relancer`, tone: 'warn' }
   }
   // 🆕 nouvelle conversation à prendre (non assignée récente)
   if (conv.status === 'non_assignee') {
@@ -88,25 +88,35 @@ export function conversationWaitingSince(conv) {
 
 /**
  * Compte pour le badge de l'onglet : { unassigned, unread }.
- * - unassigned = conversations status='non_assignee' (à prendre).
- * - unread = conversations dont last_inbound_at > dernière visite du user.
- *   Si jamais visité (lastVisited null) → toutes celles ayant reçu un message.
+ * On compte les conversations qui demandent une ACTION (= ce qui apparaît en
+ * rouge dans la liste), pas les messages :
+ * - unassigned = conversations à prendre (status='non_assignee').
+ * - unread = conversations DÉJÀ assignées mais qui attendent une réponse
+ *   (le client a parlé en dernier) ou marquées « non lu » à la main.
+ * Les deux ensembles sont disjoints → le total (unassigned + unread) ne
+ * double-compte pas.
  */
-export async function countConversationBadges(lastVisited) {
-  const { count: unassigned } = await supabase
+export async function countConversationBadges() {
+  const { data } = await supabase
     .from('conversations')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'non_assignee')
+    .select('status, last_inbound_at, last_message_at, marked_unread')
+    .neq('status', 'fermee')
+    .order('last_inbound_at', { ascending: false, nullsFirst: false })
+    .limit(1000)
 
-  let unreadQuery = supabase
-    .from('conversations')
-    .select('id', { count: 'exact', head: true })
-  unreadQuery = lastVisited
-    ? unreadQuery.gt('last_inbound_at', lastVisited)
-    : unreadQuery.not('last_inbound_at', 'is', null)
-  const { count: unread } = await unreadQuery
-
-  return { unassigned: unassigned || 0, unread: unread || 0 }
+  let unassigned = 0, unread = 0
+  for (const c of (data || [])) {
+    const lastInbound = c.last_inbound_at ? new Date(c.last_inbound_at).getTime() : null
+    const lastMsg = c.last_message_at ? new Date(c.last_message_at).getTime() : null
+    const clientSpokeLast = lastInbound && (!lastMsg || lastMsg <= lastInbound)
+    // On ne compte que ce qui demande une action : client a parlé en dernier
+    // OU marquée « non lu » à la main. Une conversation non assignée déjà
+    // répondue (auto-réponse) ne compte donc plus → colle au « Non lues » de l'inbox.
+    if (!clientSpokeLast && !c.marked_unread) continue
+    if (c.status === 'non_assignee') unassigned++
+    else unread++
+  }
+  return { unassigned, unread }
 }
 
 /**
@@ -752,6 +762,19 @@ export async function loadContactedOrderRefs() {
   return set
 }
 
+// Téléphones (9 derniers chiffres) ayant déjà une conversation WhatsApp entamée.
+// Sert à masquer un « devis internet » dont le client est déjà en contact.
+export async function loadConversationPhoneKeys() {
+  const { data, error } = await supabase.from('conversations').select('client_phone')
+  const set = new Set()
+  if (error) return set
+  for (const c of data || []) {
+    const k = String(c.client_phone || '').replace(/\D/g, '').slice(-9)
+    if (k.length >= 9) set.add(k)
+  }
+  return set
+}
+
 // Confirme un devis dans Odoo (action réelle). Renvoie { ok, name, state }.
 export async function confirmDevis(id, actorId = null) {
   const res = await fetch('/api/wati-webhook?action=devis-confirm', {
@@ -761,6 +784,14 @@ export async function confirmDevis(id, actorId = null) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
   if (data?.name) untagDevisEnvoye(data.name)   // confirmé → l'étiquette « Devis envoyé » part
+  // Confirmer ne synchronise pas tout seul → on relance la synchro en arrière-plan
+  // pour que la commande apparaisse tout de suite en Prod / Calendrier (sans bloquer l'écran).
+  if (actorId) {
+    fetch('/api/sync-now', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: actorId }),
+    }).catch(() => {})
+  }
   return data
 }
 

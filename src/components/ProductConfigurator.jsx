@@ -3,15 +3,49 @@
 // Fichier dédié pour éviter qu'un écran chargé à la demande (lazy) en importe un autre
 // statiquement — ce qui cassait le découpage du code (chunks introuvables / 404).
 
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from '../lib/toast'
+import { buildBurnAwayWarn } from '../lib/burnAway'
+import { loadPalette, TYPE_SPEC, detectTypeFromName, makeEmptyLot, TYPE_LABELS } from '../lib/gmFiches'
+import LotEditor from './LotEditor'
 
 // Catégories où le prix est modifiable
 export const PRICE_EDITABLE = new Set(['cd', 'divers'])
 
-export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable, addLabel = 'Ajouter au panier' }) {
-  const { item, loading, attributes, variants, sel, text, warn, photo } = cfg
+// Points à confirmer avec le client avant d'ajouter un cake design (CD-) au panier.
+const CD_CHECKS = [
+  { key: 'poly', label: "J'ai confirmé la fausse hauteur (poly) avec le client" },
+  { key: 'glacage', label: "J'ai confirmé le glaçage avec le client" },
+  { key: 'modele', label: "J'ai prévenu le client qu'on s'approchera du modèle d'inspiration, sans copie à l'identique" },
+]
+
+export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable, addLabel = 'Ajouter au panier', embedded = false }) {
+  const { item, loading, attributes, variants, sel, text, warn } = cfg
+  // Pop-up bloquant « à valider » avant d'ajouter un cake design au panier.
+  const [checkOpen, setCheckOpen] = useState(false)
+  const [cdChecks, setCdChecks] = useState({})
+  const cdAllChecked = CD_CHECKS.every(it => cdChecks[it.key])
   const optionAttrs = attributes.filter(a => a.type === 'option')
   const textAttrs = attributes.filter(a => a.type === 'text')
+  const photoFiles = cfg.photoFiles || []
+  const photoPreviews = cfg.photoPreviews || []
+  function addPhotos(files) {
+    const arr = Array.from(files || []).filter(f => f && f.type?.startsWith('image/'))
+    if (!arr.length) return
+    onChange(c => ({
+      ...c,
+      photoFiles: [...(c.photoFiles || []), ...arr],
+      photoPreviews: [...(c.photoPreviews || []), ...arr.map(f => URL.createObjectURL(f))],
+    }))
+  }
+  function removePhotoAt(idx) {
+    onChange(c => ({
+      ...c,
+      photoFiles: (c.photoFiles || []).filter((_, i) => i !== idx),
+      photoPreviews: (c.photoPreviews || []).filter((_, i) => i !== idx),
+    }))
+  }
 
   // Étiquette : si deux attributs ont le même nom (ex. cupcake « parfum 1 » ×2), on numérote.
   function dispLabel(a) {
@@ -46,7 +80,6 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   function setText(attrId, val) { onChange(c => ({ ...c, text: { ...c.text, [attrId]: val } })) }
 
   // Blocs « anti-erreur » pour les produits décorés (cake design CD- ET GM-/GMD-).
-  const isDecorated = cfg.catKey === 'cd' || cfg.catKey === 'gm'
   // 1) Modèle du client (choix forcé, rien par défaut)
   const modele = cfg.modele || ''   // 'identique' | 'inspire'
   function setModele(v) { onChange(c => ({ ...c, modele: v })) }
@@ -81,12 +114,42 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
   }
   function setFleurDetail(val) { onChange(c => ({ ...c, fleurs: { ...(c.fleurs || { types: [], detail: '' }), detail: val } })) }
   const fleursReelles = (fleurs.types || []).some(t => t !== 'aucune')
-  // Validation : pour les produits décorés, modèle + décor + fleurs sont obligatoires (choix forcé).
-  const decoratedOk = !isDecorated || (modele === 'identique') || (!!modele && decorOk && (fleurs.types || []).length > 0)
+  // Validation : SEUL le cake design (CD-) force modèle + décor + fleurs.
+  // Les gourmandises (GM-) sont libres : rien n'est obligatoire (choix par défaut : optionnel).
+  const isCd = cfg.catKey === 'cd'
+  const decoratedOk = !isCd || (modele === 'identique') || (!!modele && decorOk && (fleurs.types || []).length > 0)
 
-  // Prix final : pour CD-, on prend le prix saisi à la main s'il existe.
-  const finalPrice = priceEditable && cfg.priceOverride != null && cfg.priceOverride !== ''
+  // Détails accessoire (gourmandises GM-) : MÊME formulaire par type que le modal Accessoires — TOUT optionnel.
+  const isGm = cfg.catKey === 'gm'
+  const gmType = isGm ? detectTypeFromName(item.name) : null
+  const gmSpec = gmType ? TYPE_SPEC[gmType] : null
+  const [accPalette, setAccPalette] = useState([])
+  useEffect(() => { if (isGm) loadPalette().then(setAccPalette).catch(() => {}) }, [isGm])
+  const accLots = cfg.accLots || []
+  const accParfumNormal = !!cfg.accParfumNormal
+  const accTete = cfg.accTete || 'bas'
+  function setAccLots(updater) { onChange(c => ({ ...c, accLots: typeof updater === 'function' ? updater(c.accLots || []) : updater })) }
+  // Résumé texte des lots (pour l'affichage sur la commande / calendrier). Vide = rien saisi.
+  function lotSummary(lot) {
+    const parts = []
+    if (lot.qty) parts.push(`${lot.qty}`)
+    const col = accPalette.find(c => c.id === lot.couleur_id); if (col) parts.push(col.nom)
+    if (lot.forme) { const fo = gmSpec?.formeOptions?.find(f => f.value === lot.forme); parts.push(fo ? fo.label : lot.forme) }
+    if (lot.has_zigzag) { const z = accPalette.find(c => c.id === lot.zigzag_couleur_id); parts.push('zigzag' + (z ? ` ${z.nom}` : '')) }
+    if (lot.has_perles) { const p = accPalette.find(c => c.id === lot.perles_couleur_id); parts.push('perles' + (p ? ` ${p.nom}` : '')) }
+    return parts.join(' ')
+  }
+  const accSummary = accParfumNormal
+    ? 'parfum normal'
+    : accLots.map(lotSummary).filter(Boolean).join(' ; ')
+
+  // Supplément « Burn away » : +50 DH, avec remise éventuelle en %.
+  const burnRemisePct = cfg.burnAway ? Math.min(100, Math.max(0, Number(cfg.burnRemise) || 0)) : 0
+  const burnSupp = cfg.burnAway ? Math.round(50 * (1 - burnRemisePct / 100)) : 0
+  // Prix final : pour CD-, on prend le prix saisi à la main s'il existe ; + le supplément burn away.
+  const basePrice = priceEditable && cfg.priceOverride != null && cfg.priceOverride !== ''
     ? Number(cfg.priceOverride) : (price ?? 0)
+  const finalPrice = Number(basePrice || 0) + burnSupp
 
   // Cake design (CD-) : TOUS les champs sont obligatoires (options + thème/âge/message).
   const requireAll = cfg.catKey === 'cd'
@@ -100,16 +163,20 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       ...optionAttrs.filter(a => sel[a.attrId]).map(a => `${dispLabel(a)} : ${sel[a.attrId]}`),
       ...textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`),
     ]
-    const decorSub = isDecorated
+    const decorSub = isCd
       ? (decorModes.includes('rien') ? 'Décor : rien'
         : [showMain && decor.main.trim() && `🖐️ ${decor.main.trim()}`, showImp && decor.imp.trim() && `🖨️ ${decor.imp.trim()}`, showMoule && (decor.moule || '').trim() && `🧊 ${(decor.moule || '').trim()}`].filter(Boolean).join(' · '))
       : ''
+    // « Burn away » : on l'écrit dans l'avertissement de l'article (⚠️) → il remonte
+    // tout seul en Production (product_note) et dans la fiche commande (warnings).
+    const burnTag = cfg.burnAway ? buildBurnAwayWarn(cfg.burnMsg) : ''
+    const finalWarn = [burnTag, warn].filter(Boolean).join(' · ')
     const subDisplay = [
       ...optionAttrs.map(a => sel[a.attrId]).filter(Boolean),
       ...textAttrs.map(a => text[a.attrId]).filter(Boolean),
       decorSub,
-      warn && `⚠️ ${warn}`,
-      photo && `📎 ${photo}`,
+      finalWarn && `⚠️ ${finalWarn}`,
+      photoFiles.length && `📎 ${photoFiles.length} photo${photoFiles.length > 1 ? 's' : ''}`,
     ].filter(Boolean).join(' · ')
 
     // CD/GM : nom au format que le CALENDRIER sait lire → « CD- Nom (pers, forme, parfums) ».
@@ -133,7 +200,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       const cdTextLines = textAttrs.filter(a => text[a.attrId]).map(a => `${a.name} : ${text[a.attrId]}`)
       const decorLines = []
       let modeleLine = '', fleursLine = ''
-      if (isDecorated) {
+      if (isCd) {
         // Modèle
         if (modele === 'identique') modeleLine = 'Modèle : à l\'identique (voir photo réf.)'
         else if (modele === 'inspire') modeleLine = 'Modèle : inspiration / adapté'
@@ -154,7 +221,9 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
           }
         }
       }
-      lineDesc = [...cdTextLines, modeleLine, ...decorLines, fleursLine].filter(Boolean).join('\n')
+      // Détails accessoire (GM-) : résumé texte des lots pour affichage (tout optionnel).
+      const accLine = (isGm && accSummary) ? `Accessoire : ${accSummary}` : ''
+      lineDesc = [...cdTextLines, modeleLine, ...decorLines, fleursLine, accLine].filter(Boolean).join('\n')
     }
 
     // Combinaison d'attributs choisie → le serveur peut créer/retrouver la VRAIE variante Odoo
@@ -164,9 +233,8 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
     onAdd({
       name: lineName,
       desc: lineDesc,
-      warn: warn || '',
-      photoFile: cfg.photoFile || null,
-      photoName: photo || '',
+      warn: finalWarn || '',
+      photoFiles: cfg.photoFiles || [],
       sub: subDisplay,
       price: finalPrice,
       editable: priceEditable,
@@ -174,11 +242,22 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       variantId: resolved?.id || null,
       tmplId: item.tmplId || null,
       combo: combo.length ? combo : null,
+      // Pré-fiche accessoire (GM-) : lots structurés + type, pour pré-remplir la fiche de production.
+      accPrefiche: (isGm && gmType && (accParfumNormal || accLots.some(l => l.qty || l.couleur_id || l.forme)))
+        ? { type_gm: gmType, lots: accParfumNormal ? [] : accLots, parfum_normal: accParfumNormal, tete_position: gmSpec?.hasTetePosition ? accTete : null }
+        : null,
     })
   }
 
-  return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-ink/50" onClick={onClose}>
+  return createPortal(
+    <>
+    {/* En mode panneau : la fenêtre couvre seulement la partie droite (au-dessus de la commande),
+        le chat reste visible/cliquable à gauche, et un clic dehors ne ferme PAS (seul le ✕ ferme). */}
+    <div
+      className={embedded
+        ? 'fixed inset-y-0 right-0 z-[140] w-full md:w-[50%] md:max-w-[640px] flex items-center justify-center p-4 bg-ink/40'
+        : 'fixed inset-0 z-[140] flex items-center justify-center p-4 bg-ink/50'}
+      onClick={embedded ? undefined : onClose}>
       <div className="bg-cream rounded-2xl w-full max-w-md max-h-[92vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="bg-bordeaux text-cream px-4 py-3 flex items-center justify-between">
           <h3 className="font-fraunces italic text-[18px]">{item.name}</h3>
@@ -209,11 +288,11 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                 </div>
               ))}
 
-              {isDecorated && (
+              {isCd && (
                 <>
                   {/* 1 · Le modèle */}
                   <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
-                    <div className="text-[12px] font-bold text-bordeaux mb-2">1 · Le modèle du client <span className="text-bordeaux">*</span></div>
+                    <div className="text-[12px] font-bold text-bordeaux mb-2">1 · Le modèle du client {isCd && <span className="text-bordeaux">*</span>}</div>
                     <div className="flex gap-1.5">
                       {[['identique', '📷', 'À l’identique'], ['inspire', '✨', 'Inspiration / adapté']].map(([v, ic, lbl]) => (
                         <button key={v} type="button" onClick={() => setModele(v)}
@@ -229,7 +308,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                   {modele !== 'identique' && (<>
                   {/* 2 · Décor */}
                   <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
-                    <div className="text-[12px] font-bold text-bordeaux mb-2">2 · Décor — comment ? <span className="text-bordeaux">*</span> <span className="font-normal text-ink-soft normal-case">(plusieurs possibles)</span></div>
+                    <div className="text-[12px] font-bold text-bordeaux mb-2">2 · Décor — comment ? {isCd && <span className="text-bordeaux">*</span>} <span className="font-normal text-ink-soft normal-case">(plusieurs possibles)</span></div>
                     <div className="flex gap-1.5 mb-1">
                       {[['main', '🖐️', 'Modelage'], ['imp', '🖨️', 'Impression'], ['moule', '🧊', 'Moule'], ['rien', '🚫', 'Rien']].map(([m, ic, lbl]) => (
                         <button key={m} type="button" onClick={() => toggleDecorMode(m)}
@@ -266,9 +345,9 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
 
                   {/* 3 · Fleurs */}
                   <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
-                    <div className="text-[12px] font-bold text-bordeaux mb-2">3 · Fleurs <span className="text-bordeaux">*</span> <span className="font-normal text-ink-soft normal-case">(plusieurs possibles)</span></div>
+                    <div className="text-[12px] font-bold text-bordeaux mb-2">3 · Fleurs {isCd && <span className="text-bordeaux">*</span>} <span className="font-normal text-ink-soft normal-case">(plusieurs possibles)</span></div>
                     <div className="flex gap-1.5 flex-wrap">
-                      {[['aucune', '🚫', 'Aucune'], ['sucre', '🍬', 'Pâte à sucre'], ['artif', '🌸', 'Artificielles'], ['vraies', '🌹', 'Vraies']].map(([v, ic, lbl]) => (
+                      {[['aucune', '🚫', 'Aucune'], ['sucre', '🍬', 'Pâte à sucre'], ['artif', '🌸', 'Artificielles'], ...(cfg.catKey === 'gm' ? [] : [['vraies', '🌹', 'Vraies']])].map(([v, ic, lbl]) => (
                         <button key={v} type="button" onClick={() => toggleFleur(v)}
                           className={`flex-1 min-w-[70px] rounded-lg py-2 px-1 text-[12px] font-bold border text-center ${(fleurs.types || []).includes(v) ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>
                           <span className="block text-[18px] leading-none mb-0.5">{ic}</span>{lbl}
@@ -285,12 +364,46 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                 </>
               )}
 
+              {isGm && gmSpec && (
+                <div className="mb-3 border border-dashed border-bordeaux rounded-xl p-3 bg-[#fffdf7]">
+                  <div className="text-[12px] font-bold text-bordeaux mb-2">Détails {(TYPE_LABELS[gmType] || 'accessoire').toLowerCase()} <span className="font-normal text-ink-soft normal-case">(optionnel — si tu as l'info)</span></div>
+
+                  {gmSpec.hasParfumNormal && (
+                    <div className="flex gap-2 mb-2">
+                      <button type="button" onClick={() => onChange(c => ({ ...c, accParfumNormal: false }))}
+                        className={`flex-1 px-3 py-1.5 rounded-full text-[12px] font-bold border ${!accParfumNormal ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>Couleur</button>
+                      <button type="button" onClick={() => onChange(c => ({ ...c, accParfumNormal: true }))}
+                        className={`flex-1 px-3 py-1.5 rounded-full text-[12px] font-bold border ${accParfumNormal ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>Parfum normal</button>
+                    </div>
+                  )}
+
+                  {gmSpec.hasTetePosition && !accParfumNormal && (
+                    <div className="flex gap-2 mb-2">
+                      <button type="button" onClick={() => onChange(c => ({ ...c, accTete: 'bas' }))}
+                        className={`flex-1 px-3 py-1.5 rounded-full text-[12px] border ${accTete === 'bas' ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>Tête en bas</button>
+                      <button type="button" onClick={() => onChange(c => ({ ...c, accTete: 'haut' }))}
+                        className={`flex-1 px-3 py-1.5 rounded-full text-[12px] border ${accTete === 'haut' ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line'}`}>Tête en haut</button>
+                    </div>
+                  )}
+
+                  {!accParfumNormal && (<>
+                    {accLots.map((lot, idx) => (
+                      <LotEditor key={idx} lot={lot} palette={accPalette} spec={gmSpec}
+                        onChange={nl => setAccLots(prev => prev.map((x, i) => i === idx ? nl : x))}
+                        onDelete={() => setAccLots(prev => prev.filter((_, i) => i !== idx))} />
+                    ))}
+                    <button type="button" onClick={() => setAccLots(prev => [...prev, makeEmptyLot(null)])}
+                      className="w-full mt-1 py-2 rounded-lg border border-dashed border-bordeaux text-bordeaux text-[12px] font-bold hover:bg-bordeaux/5">+ Ajouter un lot</button>
+                  </>)}
+                </div>
+              )}
+
               <div className="mb-3">
-                <div className="text-[12px] font-bold text-ink-soft mb-1">Photo (optionnel)</div>
+                <div className="text-[12px] font-bold text-ink-soft mb-1">Photos (optionnel)</div>
                 <label className="inline-flex items-center gap-2 border border-dashed border-bordeaux text-bordeaux rounded-lg px-3 py-2 text-[13px] cursor-pointer bg-white">
-                  📎 {photo || 'Joindre une photo'}
-                  <input type="file" accept="image/*" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; onChange(c => ({ ...c, photo: f?.name || '', photoFile: f || null, photoPreview: f ? URL.createObjectURL(f) : '' })) }} />
+                  📎 {photoFiles.length ? 'Ajouter une photo' : 'Joindre une photo'}
+                  <input type="file" accept="image/*" multiple className="hidden"
+                    onChange={e => { addPhotos(e.target.files); e.target.value = '' }} />
                 </label>
                 <button type="button" onClick={async () => {
                   try {
@@ -301,7 +414,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                         const blob = await it.getType(type)
                         const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg')
                         const file = new File([blob], `coller.${ext}`, { type })
-                        onChange(c => ({ ...c, photo: file.name, photoFile: file, photoPreview: URL.createObjectURL(file) }))
+                        addPhotos([file])
                         toast.success('Photo collée ✓')
                         return
                       }
@@ -314,14 +427,47 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                   className="ml-2 inline-flex items-center gap-1 border border-dashed border-bordeaux text-bordeaux rounded-lg px-3 py-2 text-[13px] cursor-pointer bg-white">
                   📋 Coller
                 </button>
-                {photo && (
-                  <button type="button" onClick={() => onChange(c => ({ ...c, photo: '', photoFile: null, photoPreview: '' }))}
-                    className="ml-2 text-[12px] text-red-600 underline">retirer</button>
-                )}
-                {cfg.photoPreview && (
-                  <img src={cfg.photoPreview} alt="" className="mt-2 max-h-40 rounded-lg border border-line object-contain" />
+                {photoPreviews.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {photoPreviews.map((src, i) => (
+                      <div key={i} className="relative">
+                        <img src={src} alt="" className="max-h-28 rounded-lg border border-line object-contain" />
+                        <button type="button" onClick={() => removePhotoAt(i)} title="Retirer"
+                          className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] leading-none flex items-center justify-center">✕</button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
+
+              {cfg.catKey === 'e' && (
+                <div className="mb-3 border border-bordeaux rounded-xl p-3 bg-[#fdf3f6]">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!cfg.burnAway}
+                      onChange={e => onChange(c => ({ ...c, burnAway: e.target.checked }))} />
+                    <span className="text-[13px] font-bold text-bordeaux">🔥 Burn away <span className="font-normal text-ink-soft">(photo comestible qui se consume)</span></span>
+                  </label>
+                  {cfg.burnAway && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-[12px] text-ink-soft">Supplément <b className="text-bordeaux">+{burnSupp} DH</b>{burnRemisePct > 0 ? ` (remise ${burnRemisePct}% sur 50)` : ''}</span>
+                        <label className="flex items-center gap-1 text-[12px] text-ink-soft whitespace-nowrap">
+                          Remise
+                          <input type="number" min="0" max="100" value={cfg.burnRemise || ''}
+                            onChange={e => onChange(c => ({ ...c, burnRemise: e.target.value }))}
+                            placeholder="0"
+                            className="w-14 px-2 py-1 border border-line rounded text-right text-[13px]" /> %
+                        </label>
+                      </div>
+                      <div className="text-[12px] font-bold text-ink-soft mb-1">Message à brûler <span className="font-normal">(si pas de photo)</span></div>
+                      <textarea value={cfg.burnMsg || ''} onChange={e => onChange(c => ({ ...c, burnMsg: e.target.value }))}
+                        placeholder="ex : Joyeux anniversaire Sarah"
+                        className="w-full px-3 py-2 border border-line rounded-lg text-[13px] min-h-[44px]" />
+                      <div className="text-[11px] text-bordeaux mt-1">📎 Joins la photo du client ci-dessous — sinon le message ci-dessus sera imprimé (« à brûler »).</div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mb-3">
                 <div className="text-[12px] font-bold text-[#B36B00] mb-1">⚠️ Attention / instruction spéciale (optionnel)</div>
@@ -340,10 +486,10 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                     <span className="text-bordeaux font-bold">DH</span>
                   </div>
                 ) : (
-                  <b className="text-bordeaux text-[18px]">{price != null ? price + ' DH' : '—'}</b>
+                  <b className="text-bordeaux text-[18px]">{price != null ? finalPrice + ' DH' : '—'}{burnSupp > 0 && price != null && <span className="text-[11px] font-normal text-ink-mute"> (dont 🔥 +{burnSupp})</span>}</b>
                 )}
               </div>
-              <button onClick={add} disabled={(price == null && !(priceEditable && cfg.priceOverride)) || !requiredOk}
+              <button onClick={cfg.catKey === 'cd' ? () => setCheckOpen(true) : add} disabled={(price == null && !(priceEditable && cfg.priceOverride)) || !requiredOk}
                 className="w-full py-3 bg-bordeaux text-cream rounded-full text-[14px] font-medium disabled:opacity-50">
                 {addLabel}
               </button>
@@ -355,5 +501,36 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
         </div>
       </div>
     </div>
+
+    {checkOpen && (
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-ink/60">
+        <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="bg-bordeaux text-cream px-4 py-3">
+            <h3 className="font-fraunces italic text-[18px]">Avant d'ajouter au panier</h3>
+          </div>
+          <div className="p-4">
+            <p className="text-[13px] text-ink-soft mb-3">Confirme ces points avec le client avant d'ajouter ce cake design.</p>
+            <div className="space-y-2 mb-4">
+              {CD_CHECKS.map(it => (
+                <label key={it.key} className="flex items-start gap-2 cursor-pointer border border-line rounded-lg p-3 bg-white">
+                  <input type="checkbox" checked={!!cdChecks[it.key]}
+                    onChange={e => setCdChecks(p => ({ ...p, [it.key]: e.target.checked }))}
+                    className="mt-0.5 accent-bordeaux" />
+                  <span className="text-[13px] text-ink leading-snug">{it.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setCheckOpen(false)}
+                className="flex-1 py-2.5 border border-line text-ink-soft rounded-full text-[13px]">Retour</button>
+              <button onClick={add} disabled={!cdAllChecked}
+                className="flex-1 py-2.5 bg-bordeaux text-cream rounded-full text-[13px] font-medium disabled:opacity-50">Ajouter au panier</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>,
+    document.body
   )
 }

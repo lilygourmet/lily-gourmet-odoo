@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Conversations — proposition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{ --bx:#9a3357; --bx-deep:#6f1f3c; --ink:#1f1820; --mute:#9a8f93; --line:#ece3d4; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Geist',sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;color:var(--ink);
+    background:radial-gradient(900px 400px at 88% -10%,#fbe6ee,transparent 58%),radial-gradient(700px 400px at -8% 4%,#fbf0dd,transparent 52%),#fdfaf6;
+    padding:16px 12px 50px}
+  .intro{text-align:center;margin:6px 0 18px}
+  .intro h1{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:24px}
+  .intro p{color:var(--mute);font-size:13px;margin-top:5px}
+
+  .app{max-width:1000px;margin:0 auto;display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}
+  @media(max-width:760px){.app{grid-template-columns:1fr}.chat{display:none}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 30px rgba(90,40,30,.07);overflow:hidden}
+
+  /* ---- LISTE ---- */
+  .lhead{padding:15px 16px 12px;border-bottom:1px solid var(--line)}
+  .lhead h2{font-family:'Fraunces',serif;font-style:italic;font-size:20px}
+  .search{margin-top:11px;display:flex;align-items:center;gap:8px;background:#faf6f1;border:1px solid var(--line);border-radius:12px;padding:9px 12px;color:var(--mute);font-size:13px}
+  .filters{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+  .filters span{font-size:11.5px;padding:5px 11px;border-radius:999px;background:#f3ece2;color:#6b5d63}
+  .filters span.on{background:var(--bx);color:#fff}
+
+  .row{display:flex;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid #f4eee4;cursor:pointer;position:relative;transition:.15s}
+  .row:hover{background:#fdf7f3}
+  .row.sel{background:#fbeef2}
+  .row.sel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--bx)}
+  .av{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#fbe6ee,#f3e6c9);color:var(--bx);display:grid;place-items:center;font-weight:600;flex:0 0 auto;position:relative;font-size:15px}
+  .av .star{position:absolute;-bottom:-2px;right:-2px;bottom:-2px;font-size:12px}
+  .main{flex:1;min-width:0}
+  .l1{display:flex;align-items:center;gap:7px}
+  .nm{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .time{margin-left:auto;font-size:11.5px;color:var(--mute);flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .prev{color:#8a7e82;font-size:13px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{display:flex;align-items:center;gap:8px;margin-top:7px}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .stat{font-size:12px;color:#7a6f74}
+  .unread{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#5f9270;color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;flex:0 0 auto}
+  .lbl{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:500}
+
+  /* ---- CHAT ---- */
+  .chead{display:flex;align-items:center;gap:11px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .chead .nm2{font-weight:600;font-size:15px}
+  .chead .ph{font-size:12.5px;color:var(--mute);font-variant-numeric:tabular-nums}
+  .chead .acts{margin-left:auto;display:flex;gap:8px;color:var(--bx)}
+  .ibtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;background:#fff}
+  .ic{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .stream{padding:18px 16px;display:flex;flex-direction:column;gap:10px;background:#fdfaf6;min-height:300px}
+  .day{align-self:center;font-size:11px;color:var(--mute);background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px 12px;margin:4px 0}
+  .b{max-width:74%;padding:9px 13px;border-radius:16px;font-size:13.5px;line-height:1.4;position:relative}
+  .b.in{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:5px}
+  .b.out{align-self:flex-end;background:linear-gradient(120deg,var(--bx),var(--bx-deep));color:#fff;border-bottom-right-radius:5px}
+  .b .t{display:block;font-size:10px;margin-top:4px;opacity:.6;text-align:right;font-variant-numeric:tabular-nums}
+  .composer{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
+  .composer .field{flex:1;background:#faf6f1;border:1px solid var(--line);border-radius:14px;padding:11px 14px;color:var(--mute);font-size:13.5px}
+  .send{width:42px;height:42px;border-radius:50%;background:linear-gradient(120deg,var(--bx),var(--bx-deep));color:#fff;display:grid;place-items:center;flex:0 0 auto}
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Conversations — ma proposition</h1>
+    <p>Plus d'air · nom plus grand · aperçu du dernier message · un seul statut propre · vraies bulles de chat.</p>
+  </div>
+
+  <div class="app">
+    <!-- LISTE -->
+    <div class="card">
+      <div class="lhead">
+        <h2>Conversations</h2>
+        <div class="search"><svg class="ic"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Rechercher un client, un message…</div>
+        <div class="filters"><span class="on">Toutes</span><span>À moi</span><span>En attente</span><span>À relancer</span></div>
+      </div>
+
+      <div class="row sel">
+        <div class="av">ZM<span class="star">⭐</span></div>
+        <div class="main">
+          <div class="l1"><span class="nm">Znati Maha</span><span class="time">12 min</span></div>
+          <div class="prev">Bonjour, c'est pour confirmer la commande de samedi…</div>
+          <div class="meta"><span class="dot" style="background:#e0a23a"></span><span class="stat">Non assignée</span><span class="lbl" style="background:#fdeaef;color:#9a3357">Commande</span><span class="unread">3</span></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="av">HA</div>
+        <div class="main">
+          <div class="l1"><span class="nm">Hôtel Atlas</span><span class="time">2 h</span></div>
+          <div class="prev">Merci beaucoup, à bientôt 🙏</div>
+          <div class="meta"><span class="dot" style="background:#5f9270"></span><span class="stat">En cours · Sara</span></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="av">KM</div>
+        <div class="main">
+          <div class="l1"><span class="nm">Karim M.</span><span class="time">hier</span></div>
+          <div class="prev">Vous : Je vous envoie le devis tout de suite</div>
+          <div class="meta"><span class="dot" style="background:#5f9270"></span><span class="stat">En cours · Vous</span><span class="lbl" style="background:#fff3d6;color:#9a6a14">À relancer</span></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="av">NB</div>
+        <div class="main">
+          <div class="l1"><span class="nm">Nora Bennis</span><span class="time">lun.</span></div>
+          <div class="prev">D'accord parfait</div>
+          <div class="meta"><span class="dot" style="background:#cbbfc4"></span><span class="stat">Fermée</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHAT -->
+    <div class="card chat">
+      <div class="chead">
+        <div class="av" style="width:40px;height:40px;font-size:14px">ZM</div>
+        <div><div class="nm2">Znati Maha</div><div class="ph">+212 6 12 34 56 78</div></div>
+        <div class="acts">
+          <button class="ibtn"><svg class="ic"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></button>
+          <button class="ibtn"><svg class="ic"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+        </div>
+      </div>
+      <!-- PANNEAU ACTIONS (tout est là — repliable/défilable pour aérer) -->
+      <div style="padding:12px 14px;border-bottom:1px solid var(--line);background:#fffdfa">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-family:'Fraunces',serif;font-style:italic;font-size:15px">Commande S04821</span>
+          <span style="font-size:12px;color:var(--mute)">· Licorne 2 étages · 25 pers</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--mute)">▾ replier</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button style="border:none;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:11px;background:linear-gradient(120deg,#2f7d4f,#246b40);color:#fff">Confirmer le devis</button>
+          <button style="cursor:pointer;font-size:12.5px;font-weight:500;padding:8px 14px;border-radius:11px;background:#fff;border:1px solid var(--line);color:#6f1f3c">Modifier les articles</button>
+          <button style="cursor:pointer;font-size:12.5px;font-weight:500;padding:8px 14px;border-radius:11px;background:#fbecec;border:1px solid #f0caca;color:#b23b3b">Annuler</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11.5px;color:var(--mute)">Étiquettes :</span>
+          <span style="font-size:11.5px;padding:3px 10px;border-radius:999px;background:#fdeaef;color:#9a3357;font-weight:500">Commande</span>
+          <span style="font-size:11.5px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3858a3;font-weight:500">Mariage</span>
+          <span style="font-size:11.5px;padding:3px 10px;border-radius:999px;background:#f3ece2;color:#7a6f74;cursor:pointer">+ ajouter</span>
+          <span style="margin-left:auto;font-size:12px;color:#9a3357;font-weight:500;cursor:pointer">Preuve de paiement</span>
+        </div>
+      </div>
+
+      <div class="stream">
+        <div class="day">Aujourd'hui</div>
+        <div class="b in">Bonjour, c'est pour confirmer la commande de samedi pour 25 personnes <span class="t">10:02</span></div>
+        <div class="b out">Bonjour Maha ! Oui c'est bien noté : licorne 2 étages, 25 pers, samedi 14h. <span class="t">10:05</span></div>
+        <div class="b in">Super merci ! Et pour le paiement ? <span class="t">10:06</span></div>
+        <div class="b out">Un acompte de 300 DH par virement, je vous envoie le RIB 🙂 <span class="t">10:07</span></div>
+      </div>
+      <div class="composer">
+        <button class="ibtn" style="border:none"><svg class="ic" style="color:#9a3357"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+        <div class="field">Écrire un message…</div>
+        <button class="send"><svg class="ic" style="color:#fff;width:18px;height:18px"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:var(--mute);font-size:12px;margin-top:26px;max-width:600px;margin-left:auto;margin-right:auto">
+    Maquette — proposition. À gauche : liste aérée avec aperçu du message + 1 pastille de couleur pour le statut (orange = non assignée, vert = en cours, gris = fermée). À droite : vraies bulles de discussion. 2 polices seulement.
+  </p>
+</body>
+</html>

@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Search, Printer, FileText } from 'lucide-react'
+import { Search, Printer, FileText, AlertTriangle } from 'lucide-react'
 import {
   loadOrdersForWeek, loadOrdersByIds,
   loadAllOrders,
   loadStepsForOrders,
   cleanupOldOrders,
   loadAllProfiles,
+  loadBurnAwaysForWeek,
 } from '../lib/orders'
+import { loadOrderPhotosByNum } from '../lib/conversations'
 import { logout, canSync, canManageUsers, canPatissier, isPatissierOnly, canPrintBatch, canPrintLabels, canRecaps, isAdmin } from '../lib/auth'
 import { toast } from '../lib/toast'
 import LabelsButton from './LabelsButton'
@@ -17,6 +19,7 @@ import CopyableRef from './CopyableRef'
 import AdminGmConfig from './AdminGmConfig'
 import PrintBatchModal from './PrintBatchModal'
 import CakeChargeModal from './CakeChargeModal'
+import PolyExpressModal from './PolyExpressModal'
 import RecapVentes from './RecapVentes'
 import AppHeader from './AppHeader'
 import { filterUnprintedOrders, filterCurrentWeek } from '../lib/printOrders'
@@ -200,7 +203,7 @@ function filterOrderItemsForView(order, isPatissierMode) {
   return { ...order, order_items: filteredItems }
 }
 
-export default function Calendar({ user, onLogout, activeView, onNavigate, openOrderNum, onOrderOpened }) {
+export default function Calendar({ user, onLogout, activeView, onNavigate, openOrderNum, onOrderOpened, onOpenDevis }) {
   // Helpers nav
   const goPatissier = () => onNavigate && onNavigate('patissier')
   const goProd = () => onNavigate && onNavigate('prod')
@@ -210,6 +213,8 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
   const [orders, setOrders] = useState([])
   const [allOrders, setAllOrders] = useState([])
   const [loadingOrders, setLoadingOrders] = useState(true)
+  const [burnAways, setBurnAways] = useState([])   // entremets « 🔥 Burn away » de la semaine
+  const [burnView, setBurnView] = useState(null)   // burn away ouvert (popup photo) : { ...burn, photos, loading }
 
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('active')
@@ -236,6 +241,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
   const [showGmConfig, setShowGmConfig] = useState(false)
   const [showBatchPrint, setShowBatchPrint] = useState(false)
   const [showCharge, setShowCharge] = useState(false)
+  const [showPolyExpress, setShowPolyExpress] = useState(false)
   const [viewMode, setViewMode] = useState(() => {
     // Si user n'est QUE patissier (pas admin), force mode patissier
     return isPatissierOnly(user) ? 'patissier' : 'admin'
@@ -276,6 +282,19 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
     const steps = await loadStepsForOrders(data)
     setStepsMap(steps)
     setLoadingOrders(false)
+    loadBurnAwaysForWeek(currentMonday).then(setBurnAways).catch(() => {})
+  }
+
+  // Ouvre le burn away (popup) et charge ses photos (Odoo) à la demande.
+  async function openBurn(burn) {
+    setBurnView({ ...burn, loading: true, photos: [] })
+    try {
+      const ph = await loadOrderPhotosByNum(burn.order_num)
+      setBurnView(v => v && v.order_num === burn.order_num
+        ? { ...v, loading: false, photos: (ph || []).map(p => p.dataUrl).filter(Boolean) } : v)
+    } catch {
+      setBurnView(v => v && v.order_num === burn.order_num ? { ...v, loading: false } : v)
+    }
   }
 
   function handleStepsChanged(itemId, stepKey, checked, userId) {
@@ -314,12 +333,6 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
         },
       }
     })
-  }
-
-  async function handleOrderDeleted(orderId) {
-    setOrders(prev => prev.filter(o => o.id !== orderId))
-    setAllOrders(prev => prev.filter(o => o.id !== orderId))
-    setSelected(null)
   }
 
   function handleLogout() {
@@ -584,24 +597,40 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
 
   // Affiche les capsules (commandes) d'un jour — utilisé en vue ordinateur et téléphone
   function renderDayCapsules(day) {
-    if (day.capsules.length === 0) {
+    // Burn away du jour (entremets avec burn away) — couche additive, repère 🔥.
+    const dayBurns = burnAways.filter(b => isSameDay(new Date(b.delivery_at), day.date))
+    if (day.capsules.length === 0 && dayBurns.length === 0) {
       return <div className="py-4 flex items-center justify-center text-[11px] text-ink-mute italic">—</div>
     }
-    return day.capsules.map(capsule => (
-      <div key={capsule.id} onClick={() => openCapsule(capsule)}>
-        {capsule.kind === 'order' ? (
-          <AllCapsule order={capsule.order} stepsMap={stepsMap} />
-        ) : capsule.item.type === 'CD' ? (
-          <CDItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
-        ) : (
-          <GMItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
-        )}
-      </div>
-    ))
+    return (
+      <>
+        {day.capsules.map(capsule => (
+          <div key={capsule.id} onClick={() => openCapsule(capsule)}>
+            {capsule.kind === 'order' ? (
+              <AllCapsule order={capsule.order} stepsMap={stepsMap} />
+            ) : capsule.item.type === 'CD' ? (
+              <CDItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
+            ) : (
+              <GMItemCapsule order={capsule.order} item={capsule.item} stepsMap={stepsMap} />
+            )}
+          </div>
+        ))}
+        {dayBurns.map(b => (
+          <div key={'burn_' + b.order_num + b.delivery_at} onClick={() => openBurn(b)}
+            className="mb-1 rounded-lg border border-bordeaux bg-bordeaux/5 px-2 py-1.5 cursor-pointer hover:bg-bordeaux/10">
+            <div className="flex items-center gap-1 text-[11px] font-bold text-bordeaux">
+              <span>🔥</span><span>Burn away</span>
+            </div>
+            <div className="text-[11px] text-ink truncate">{b.client_name}</div>
+            {b.message && <div className="text-[10px] text-ink-soft truncate italic">« {b.message} »</div>}
+          </div>
+        ))}
+      </>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-cream flex flex-col">
+    <div className="min-h-screen lg-vibrant flex flex-col">
       <AppHeader
         user={user}
         activeView={activeView || 'calendar'}
@@ -645,7 +674,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
               <div className="font-fraunces text-[13px] font-medium text-ink capitalize leading-tight">
                 {formatWeekRange(currentMonday)}
               </div>
-              <div className="font-mono text-[8px] tracking-[0.15em] uppercase text-ink-mute">
+              <div className="text-[8px] tracking-[0.15em] uppercase text-ink-mute">
                 Sem. {getWeekNumber(currentMonday)} {loadingOrders && '·...'}
               </div>
             </div>
@@ -656,7 +685,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
             >›</button>
             <button
               onClick={() => setCurrentMonday(getMondayOf(new Date()))}
-              className="px-2.5 py-1 text-[9px] font-mono tracking-[0.15em] uppercase text-bordeaux border border-bordeaux rounded-full hover:bg-bordeaux hover:text-cream transition-all flex-shrink-0"
+              className="px-2.5 py-1 text-[9px] tracking-[0.15em] uppercase text-bordeaux border border-bordeaux rounded-full hover:bg-bordeaux hover:text-cream transition-all flex-shrink-0"
             >Aujourd'hui</button>
           </div>
         )}
@@ -669,7 +698,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
               onClick={() => setShowCharge(true)}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-medium tracking-wider border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all flex-shrink-0"
               title="Voir combien de Cake Design par heure (confirmés + devis)"
-            >🎂 Charge CD</button>
+            >Charge CD</button>
           )}
           {/* Bouton impression batch */}
           {canPrintBatch(user) && !isPatissierMode && (
@@ -722,7 +751,10 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
           <FilterButton active={statusFilter === 'ranger'} onClick={() => setStatusFilter('ranger')} label="À ranger" small />
           <FilterButton active={statusFilter === 'range'} onClick={() => setStatusFilter('range')} label="Rangé" small />
           <span className="w-px h-3.5 bg-line" aria-hidden="true" />
-          <FilterButton active={statusFilter === 'poly'} onClick={() => setStatusFilter('poly')} label="Poly" small />
+          <button onClick={() => setShowPolyExpress(true)}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all">
+            Poly
+          </button>
         </div>
       </div>
 
@@ -746,20 +778,19 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
                     key={idx}
                     className={`flex flex-col rounded-xl p-2.5 ${isToday ? 'bg-cream border border-bordeaux shadow-sm' : 'bg-cream-warm border border-transparent'} ${isPast ? 'opacity-55' : ''}`}
                   >
-                    <div className="flex items-baseline justify-between pb-2 mb-2 border-b border-dashed border-line">
-                      <div>
-                        <div className="font-fraunces font-medium text-[13px] text-ink capitalize leading-none">
-                          {DAY_NAMES[idx]}
-                        </div>
-                        {isToday && (
-                          <div className="font-mono text-[8px] tracking-[0.18em] uppercase text-bordeaux mt-1">
-                            · aujourd'hui
-                          </div>
-                        )}
-                      </div>
-                      <div className={`font-mono text-[11px] ${isToday ? 'bg-bordeaux text-cream px-1.5 py-0.5 rounded' : 'text-ink-mute'}`}>
-                        {String(day.date.getDate()).padStart(2, '0')}.{String(day.date.getMonth() + 1).padStart(2, '0')}
-                      </div>
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-dashed border-line">
+                      <span className="text-[11px] uppercase tracking-[0.12em] text-ink-mute font-semibold">
+                        {DAY_NAMES[idx].slice(0, 3)}
+                      </span>
+                      {isToday ? (
+                        <span className="font-fraunces text-[15px] text-cream bg-bordeaux w-7 h-7 rounded-full flex items-center justify-center leading-none flex-shrink-0">
+                          {day.date.getDate()}
+                        </span>
+                      ) : (
+                        <span className="font-fraunces text-[21px] text-ink leading-none">
+                          {day.date.getDate()}
+                        </span>
+                      )}
                     </div>
                     <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto">
                       {renderDayCapsules(day)}
@@ -783,8 +814,8 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
                     onClick={() => setMobileDayIdx(i)}
                     className={`flex-1 py-1 rounded-lg text-center leading-tight ${sel ? 'bg-bordeaux text-cream' : isToday ? 'bg-cream border border-bordeaux text-bordeaux' : 'bg-cream-warm text-ink-soft'}`}
                   >
-                    <div className="text-[10px] font-medium capitalize">{DAY_NAMES[i].slice(0, 3)}</div>
-                    <div className="text-[10px] font-mono">{String(d.date.getDate()).padStart(2, '0')}</div>
+                    <div className="text-[9.5px] font-semibold uppercase tracking-wider">{DAY_NAMES[i].slice(0, 3)}</div>
+                    <div className="font-fraunces text-[14px] leading-none mt-0.5">{d.date.getDate()}</div>
                   </button>
                 )
               })}
@@ -815,7 +846,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
                       <div className="font-fraunces font-medium text-[18px] text-ink capitalize">
                         {DAY_NAMES[mobileDayIdx]}{isToday ? " · aujourd'hui" : ''}
                       </div>
-                      <div className={`font-mono text-[13px] ${isToday ? 'bg-bordeaux text-cream px-2 py-0.5 rounded' : 'text-ink-mute'}`}>
+                      <div className={`text-[13px] ${isToday ? 'bg-bordeaux text-cream px-2 py-0.5 rounded' : 'text-ink-mute'}`}>
                         {String(day.date.getDate()).padStart(2, '0')}.{String(day.date.getMonth() + 1).padStart(2, '0')}
                       </div>
                     </div>
@@ -870,10 +901,54 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
             profiles={profiles}
             onStepsChanged={handleStepsChanged}
             onPolysChanged={handlePolysChanged}
-            onOrderDeleted={handleOrderDeleted}
           />
         )
       })()}
+
+      {burnView && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-ink/50" onClick={() => setBurnView(null)}>
+          <div className="bg-cream rounded-2xl w-full max-w-md max-h-[90vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-bordeaux text-cream px-4 py-3 flex items-center justify-between">
+              <h3 className="font-fraunces italic text-[18px]">🔥 Burn away — à imprimer</h3>
+              <button onClick={() => setBurnView(null)} className="w-7 h-7 rounded-full bg-cream/20">✕</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="text-[13px]"><b>{burnView.client_name}</b> · <span className="text-bordeaux">{burnView.order_num}</span></div>
+              <div className="text-[12px] text-ink-soft">{burnView.cake}</div>
+              {burnView.message && (
+                <div className="rounded-lg border border-bordeaux bg-bordeaux/5 p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-bordeaux font-semibold mb-1">Message à imprimer</div>
+                  <div className="text-[14px] text-ink">{burnView.message}</div>
+                </div>
+              )}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-ink-mute mb-2">Photo du client</div>
+                {burnView.loading ? (
+                  <div className="text-[12px] text-ink-mute italic py-4 text-center">Chargement de la photo…</div>
+                ) : burnView.photos?.length ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {burnView.photos.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-line">
+                        <img src={url} alt="" loading="lazy" className="w-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[12px] text-ink-mute italic py-2">Aucune photo attachée à cette commande.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPolyExpress && (
+        <PolyExpressModal
+          user={user}
+          onClose={() => setShowPolyExpress(false)}
+          onPolysChanged={handlePolysChanged}
+        />
+      )}
 
       {showCharge && (
         <CakeChargeModal
@@ -881,6 +956,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
           onOpenOrder={(num) => {
             const o = allOrders.find(x => x.order_num === num) || orders.find(x => x.order_num === num)
             if (o) openOrder(o)
+            else if (onOpenDevis) onOpenDevis(num)   // pas dans le calendrier = un devis → onglet Commandes
             else toast(`Commande ${num} en devis — pas encore dans le calendrier.`)
           }}
         />
@@ -941,7 +1017,7 @@ function SearchResults({ orders, stepsMap, onOrderClick, query }) {
   return (
     <div className="flex-1 overflow-y-auto p-4">
       <div className="max-w-2xl mx-auto">
-        <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-ink-mute mb-3">
+        <div className="text-[10px] tracking-[0.15em] uppercase text-ink-mute mb-3">
           {orders.length} résultat{orders.length > 1 ? 's' : ''} pour « {query} »
         </div>
         {orders.length === 0 ? (
@@ -975,14 +1051,14 @@ function SearchResultRow({ order, stepsMap, onClick }) {
   return (
     <div
       onClick={onClick}
-      className={`bg-cream rounded-xl p-3 border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all flex items-center gap-3 ${cancelled ? 'opacity-60' : ''}`}
+      className={`bg-white rounded-2xl p-3 border border-line/70 shadow-[0_2px_10px_rgba(90,40,30,0.05)] hover:border-bordeaux/40 hover:shadow-[0_12px_28px_rgba(90,40,30,0.11)] hover:-translate-y-0.5 cursor-pointer transition-all flex items-center gap-3 ${cancelled ? 'opacity-60' : ''}`}
     >
       {photoUrl && (
-        <img src={photoUrl} alt="" className={`w-12 h-12 rounded-md object-cover flex-shrink-0 ${cancelled ? 'grayscale' : ''}`} />
+        <img src={photoUrl} alt="" loading="lazy" className={`w-12 h-12 rounded-md object-cover flex-shrink-0 ${cancelled ? 'grayscale' : ''}`} />
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={`font-mono text-[11px] text-bordeaux font-semibold ${cancelled ? 'line-through' : ''}`}>{order.order_num}</span>
+          <span className={`text-[11px] text-bordeaux font-semibold ${cancelled ? 'line-through' : ''}`}>{order.order_num}</span>
           <span className={`text-[12px] text-ink font-medium truncate ${cancelled ? 'line-through' : ''}`}>{order.client_name || '—'}</span>
           {cancelled && <CancelledBadge />}
           {!cancelled && modified && <ModifiedBadge />}
@@ -1035,7 +1111,7 @@ function ProgressDotsForItems({ items, stepsMap, size = 'lg', label, labelColor 
   return (
     <div className="flex items-center gap-2">
       {label && (
-        <span className={`font-mono text-[10px] font-semibold tracking-wider uppercase ${labelColor} flex-shrink-0 w-10`}>
+        <span className={`text-[10px] font-semibold tracking-wider uppercase ${labelColor} flex-shrink-0 w-10`}>
           {label}
         </span>
       )}
@@ -1060,7 +1136,7 @@ function ProgressDotsRaw({ total, done, size = 'sm' }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className={`font-mono font-medium ${lg ? 'text-[13px]' : 'text-[9px]'} ${isFull ? 'text-ok' : 'text-ink-mute'}`}>
+      <span className={`font-medium ${lg ? 'text-[13px]' : 'text-[9px]'} ${isFull ? 'text-ok' : 'text-ink-mute'}`}>
         {done}/{total}
       </span>
     </div>
@@ -1084,7 +1160,7 @@ function MiniPhoto({ url, dimmed }) {
 
 function WarningBadge() {
   return (
-    <span className="text-[12px] leading-none flex-shrink-0" title="Avertissement à lire">⚠️</span>
+    <span className="leading-none flex-shrink-0 text-[#B36B00]" title="Avertissement à lire"><AlertTriangle size={13} strokeWidth={2.2} /></span>
   )
 }
 
@@ -1095,6 +1171,18 @@ function PolyBadge() {
       title="Polys à choisir"
     >
       poly
+    </span>
+  )
+}
+
+// Déco faite → repère vert « couleur validé ».
+function DecoBadge() {
+  return (
+    <span
+      className="font-sans text-[10px] font-bold text-cream bg-ok px-1.5 py-0.5 rounded tracking-wider uppercase"
+      title="Couleur validée"
+    >
+      couleur validé
     </span>
   )
 }
@@ -1135,16 +1223,16 @@ function AllCapsule({ order, stepsMap }) {
   const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-xl border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
+    <div className={`bg-white rounded-2xl border border-line/70 shadow-[0_2px_10px_rgba(90,40,30,0.05)] hover:border-bordeaux/40 hover:shadow-[0_12px_28px_rgba(90,40,30,0.11)] hover:-translate-y-0.5 cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
       {/* === Mobile (< md) === */}
       <div className="md:hidden p-2.5">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <span className={`font-mono text-[12px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
+          <span className={`text-[12px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
             <span className="truncate">{order.order_num}</span>
             {warningOnOrder && <WarningBadge />}
           </span>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <span className="font-mono text-[12px] text-ink-soft font-medium">{deliveryTime}</span>
+            <span className="text-[12px] text-ink-soft font-medium">{deliveryTime}</span>
             {!cancelled && needsPolys && <PolyBadge />}
           </div>
         </div>
@@ -1207,12 +1295,12 @@ function AllCapsule({ order, stepsMap }) {
             {(cdItems.length > 1 || (mainCD && gmItems.length > 0)) && (
               <div className="flex gap-1 flex-wrap pt-1">
                 {cdItems.length > 1 && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 bg-bordeaux/10 text-bordeaux rounded">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-bordeaux/10 text-bordeaux rounded">
                     +{cdItems.length - 1} CD
                   </span>
                 )}
                 {mainCD && gmItems.length > 0 && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 bg-gold/15 text-chocolate rounded">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-gold/15 text-chocolate rounded">
                     +{gmItems.length} GM
                   </span>
                 )}
@@ -1225,12 +1313,13 @@ function AllCapsule({ order, stepsMap }) {
 
       {/* === Desktop (md+) — original === */}
       <div className="hidden md:block p-2">
-        <div className="flex items-center justify-between mb-1.5 gap-1">
-          <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
-            <span className="truncate">{order.order_num}</span>
-            {warningOnOrder && <WarningBadge />}
-          </span>
-          <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+        <div className="flex items-center gap-2 mb-1">
+          <MiniPhoto url={photoUrl} dimmed={cancelled} />
+          <span className="text-[10.5px] text-ink-mute font-medium ml-auto flex-shrink-0">{deliveryTime}</span>
+        </div>
+        <div className={`text-[10.5px] tracking-[0.05em] text-bordeaux font-semibold flex items-center gap-1.5 mb-1.5 ${titleClass}`}>
+          <span className="truncate">{order.order_num}</span>
+          {warningOnOrder && <WarningBadge />}
         </div>
 
         {(cancelled || modified) && (
@@ -1240,45 +1329,38 @@ function AllCapsule({ order, stepsMap }) {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <MiniPhoto url={photoUrl} dimmed={cancelled} />
-          <div className="flex-1 min-w-0">
-            {mainCD ? (
-              <div className="space-y-0.5">
-                {(mainCD.etages_count || mainCD.pers) && (
-                  <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
-                    {mainCD.etages_count && (
-                      <span className="font-medium">
-                        {mainCD.etages_count} étage{mainCD.etages_count > 1 ? 's' : ''}
-                      </span>
-                    )}
-                    {mainCD.etages_count && mainCD.pers && <span className="text-ink-mute"> · </span>}
-                    {mainCD.pers && <span className="font-medium">{mainCD.pers} pers</span>}
-                  </div>
+        {mainCD ? (
+          <div className="space-y-0.5">
+            {(mainCD.etages_count || mainCD.pers) && (
+              <div className={`font-fraunces text-[14px] text-ink leading-tight ${titleClass}`}>
+                {mainCD.etages_count && (
+                  <span>{mainCD.etages_count} étage{mainCD.etages_count > 1 ? 's' : ''}</span>
                 )}
-                {mainCD.theme && (
-                  <div className={`text-[10px] text-ink-soft italic leading-tight truncate ${titleClass}`}>
-                    {mainCD.theme}
-                  </div>
-                )}
+                {mainCD.etages_count && mainCD.pers && <span className="text-ink-mute"> · </span>}
+                {mainCD.pers && <span>{mainCD.pers} pers</span>}
               </div>
-            ) : gmItems.length > 0 ? (
-              <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
-                {gmItems.length} accessoire{gmItems.length > 1 ? 's' : ''}
+            )}
+            {mainCD.theme && (
+              <div className={`text-[11px] text-ink-soft italic leading-tight truncate ${titleClass}`}>
+                {mainCD.theme}
               </div>
-            ) : null}
+            )}
           </div>
-        </div>
+        ) : gmItems.length > 0 ? (
+          <div className={`font-fraunces text-[14px] text-ink leading-tight ${titleClass}`}>
+            {gmItems.length} accessoire{gmItems.length > 1 ? 's' : ''}
+          </div>
+        ) : null}
 
         {(cdItems.length > 1 || (mainCD && gmItems.length > 0)) && (
           <div className="flex gap-1 flex-wrap mt-1.5">
             {cdItems.length > 1 && (
-              <span className="text-[9px] font-mono px-1.5 py-0.5 bg-bordeaux/10 text-bordeaux rounded">
+              <span className="text-[9.5px] font-medium px-2 py-0.5 bg-bordeaux/10 text-bordeaux rounded-full">
                 +{cdItems.length - 1} CD
               </span>
             )}
             {mainCD && gmItems.length > 0 && (
-              <span className="text-[9px] font-mono px-1.5 py-0.5 bg-gold/15 text-chocolate rounded">
+              <span className="text-[9.5px] font-medium px-2 py-0.5 bg-gold/15 text-chocolate rounded-full">
                 +{gmItems.length} GM
               </span>
             )}
@@ -1304,23 +1386,25 @@ function CDItemCapsule({ order, item, stepsMap }) {
   const cancelled = isCancelled(order)
   const modified = itemIsModified(item) || isModified(order)
   const titleClass = cancelled ? 'line-through' : ''
+  const decoDone = !!stepsMap[`${item.id}_deco`]   // déco faite → repère vert « validé »
 
   return (
-    <div className={`bg-cream rounded-xl border border-line/60 shadow-sm hover:border-bordeaux hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
+    <div className={`bg-white rounded-2xl border border-line/70 shadow-[0_2px_10px_rgba(90,40,30,0.05)] hover:border-bordeaux/40 hover:shadow-[0_12px_28px_rgba(90,40,30,0.11)] hover:-translate-y-0.5 cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
       {/* === Mobile (< md) : progression au milieu, Poly sous l'horaire, image en grand === */}
       <div className="md:hidden p-2.5">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <span className={`font-mono text-[12px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
+          <span className={`text-[12px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
             <span className="truncate">{order.order_num}</span>
-            <span className="text-[9px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
+            <span className="text-[9px] px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
             {itemWarning && <WarningBadge />}
           </span>
           <div className="flex-shrink-0">
             <ProgressDotsItem item={item} stepsMap={stepsMap} size="lg" />
           </div>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <span className="font-mono text-[12px] text-ink-soft font-medium">{deliveryTime}</span>
+            <span className="text-[12px] text-ink-soft font-medium">{deliveryTime}</span>
             {!cancelled && needsPolys && <PolyBadge />}
+            {!cancelled && decoDone && <DecoBadge />}
           </div>
         </div>
 
@@ -1368,12 +1452,12 @@ function CDItemCapsule({ order, item, stepsMap }) {
       {/* === Desktop (md+) : layout compact original === */}
       <div className="hidden md:block p-2">
         <div className="flex items-center justify-between mb-1.5 gap-1">
-          <span className={`font-mono text-[10px] tracking-wider text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
+          <span className={`text-[10.5px] tracking-[0.05em] text-bordeaux font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
             <span className="truncate">{order.order_num}</span>
-            <span className="text-[8px] font-mono px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
+            <span className="text-[8px] px-1 py-0.5 bg-bordeaux/10 text-bordeaux rounded flex-shrink-0">CD</span>
             {itemWarning && <WarningBadge />}
           </span>
-          <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+          <span className="text-[10.5px] text-ink-mute font-medium flex-shrink-0">{deliveryTime}</span>
         </div>
 
         {(cancelled || modified) && (
@@ -1387,7 +1471,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
           <MiniPhoto url={photoUrl} dimmed={cancelled} />
           <div className="flex-1 min-w-0 space-y-0.5">
             {(item.etages_count || item.pers) && (
-              <div className={`text-[11px] text-ink leading-tight ${titleClass}`}>
+              <div className={`font-fraunces text-[13.5px] text-ink leading-tight ${titleClass}`}>
                 {item.etages_count && (
                   <span className="font-medium">
                     {item.etages_count} étage{item.etages_count > 1 ? 's' : ''}
@@ -1408,7 +1492,7 @@ function CDItemCapsule({ order, item, stepsMap }) {
         {itemHasWarning(item) && <div className="mt-1.5"><WarningBadge /></div>}
 
         <div className="flex items-center justify-between mt-1.5">
-          <div>{!cancelled && needsPolys && <PolyBadge />}</div>
+          <div className="flex items-center gap-1">{!cancelled && needsPolys && <PolyBadge />}{!cancelled && decoDone && <DecoBadge />}</div>
           <ProgressDotsItem item={item} stepsMap={stepsMap} />
         </div>
       </div>
@@ -1425,19 +1509,19 @@ function GMItemCapsule({ order, item, stepsMap }) {
   const titleClass = cancelled ? 'line-through' : ''
 
   return (
-    <div className={`bg-cream rounded-xl border border-line/60 shadow-sm hover:border-gold hover:shadow-md cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
+    <div className={`bg-white rounded-2xl border border-line/70 shadow-[0_2px_10px_rgba(90,40,30,0.05)] hover:border-gold/50 hover:shadow-[0_12px_28px_rgba(90,40,30,0.11)] hover:-translate-y-0.5 cursor-pointer transition-all ${cancelled ? 'opacity-60' : ''}`}>
       {/* === Mobile (< md) === */}
       <div className="md:hidden p-2.5">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <span className={`font-mono text-[12px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
+          <span className={`text-[12px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
             <span className="truncate">{order.order_num}</span>
-            <span className="text-[9px] font-mono px-1 py-0.5 bg-gold/20 text-chocolate rounded flex-shrink-0">GM</span>
+            <span className="text-[9px] px-1 py-0.5 bg-gold/20 text-chocolate rounded flex-shrink-0">GM</span>
             {itemWarning && <WarningBadge />}
           </span>
           <div className="flex-shrink-0">
             <ProgressDotsItem item={item} stepsMap={stepsMap} size="lg" />
           </div>
-          <span className="font-mono text-[12px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+          <span className="text-[12px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
         </div>
 
         {(cancelled || modified) && (
@@ -1475,12 +1559,12 @@ function GMItemCapsule({ order, item, stepsMap }) {
       {/* === Desktop (md+) — original === */}
       <div className="hidden md:block p-2">
         <div className="flex items-center justify-between mb-1.5 gap-1">
-          <span className={`font-mono text-[10px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
+          <span className={`text-[10px] tracking-wider text-chocolate font-semibold flex items-center gap-1.5 min-w-0 ${titleClass}`}>
             <span className="truncate">{order.order_num}</span>
-            <span className="text-[8px] font-mono px-1 py-0.5 bg-gold/20 text-chocolate rounded flex-shrink-0">GM</span>
+            <span className="text-[8px] px-1 py-0.5 bg-gold/20 text-chocolate rounded flex-shrink-0">GM</span>
             {itemWarning && <WarningBadge />}
           </span>
-          <span className="font-mono text-[10px] text-ink-soft font-medium flex-shrink-0">{deliveryTime}</span>
+          <span className="text-[10.5px] text-ink-mute font-medium flex-shrink-0">{deliveryTime}</span>
         </div>
 
         {(cancelled || modified) && (
@@ -1493,7 +1577,7 @@ function GMItemCapsule({ order, item, stepsMap }) {
         <div className="flex items-center gap-2">
           <MiniPhoto url={photoUrl} dimmed={cancelled} />
           <div className="flex-1 min-w-0">
-            <div className={`text-[11px] text-ink leading-tight font-medium truncate ${titleClass}`}>
+            <div className={`font-fraunces text-[13.5px] text-ink leading-tight truncate ${titleClass}`}>
               {item.title || '—'}
             </div>
             {item.parfums && item.parfums.length > 0 && (
@@ -1575,14 +1659,14 @@ function DiffPopup({ order, onClose, onViewDetails }) {
         <div className="border-b border-line px-6 py-4">
           <div className="flex items-center gap-2 mb-1">
             <FileText size={15} strokeWidth={1.8} className="text-gold" />
-            <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-gold font-bold">
+            <span className="text-[10px] tracking-[0.2em] uppercase text-gold font-bold">
               Modification
             </span>
           </div>
           <div className="font-fraunces italic text-[20px] font-medium text-ink leading-tight">
             Cette commande a été modifiée
           </div>
-          <div className="font-mono text-[11px] text-bordeaux mt-1.5">
+          <div className="text-[11px] text-bordeaux mt-1.5">
             <CopyableRef value={order.order_num} /> · {order.client_name}
           </div>
         </div>
@@ -1598,7 +1682,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
           {/* Items modifies */}
           {modifiedItems.map(item => (
             <div key={item.id} className="rounded-lg border border-line/60 bg-cream-warm p-3">
-              <div className="font-mono text-[10px] tracking-wider uppercase text-bordeaux font-semibold mb-2">
+              <div className="text-[10px] tracking-wider uppercase text-bordeaux font-semibold mb-2">
                 {item.type}- {item.title}
               </div>
               <div className="space-y-1.5">
@@ -1640,7 +1724,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
               <div className="text-[12px]">
                 {action === 'ajoute' ? (
                   <>
-                    <span className="font-mono text-[10px] tracking-wider uppercase text-gold font-semibold">
+                    <span className="text-[10px] tracking-wider uppercase text-gold font-semibold">
                       Item ajouté
                     </span>
                     {item && (
@@ -1650,7 +1734,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
                     )}
                   </>
                 ) : (
-                  <span className="font-mono text-[10px] tracking-wider uppercase text-bordeaux font-semibold">
+                  <span className="text-[10px] tracking-wider uppercase text-bordeaux font-semibold">
                     Item supprimé (idx {idx})
                   </span>
                 )}

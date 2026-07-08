@@ -10,6 +10,7 @@ import ProductGrid, { isSaleProduct } from './ProductGrid'
 import PrintButton from './PrintButton'
 import {
   getOrCreateStockDay,
+  loadStockDay,
   loadDayItems,
   loadYesterdayLeftovers,
   applyLeftoverDecisions,
@@ -44,6 +45,9 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
   const [leftoversApplied, setLeftoversApplied] = useState(false)
   const [cart, setCart] = useState({}) // { [productName]: { qty, code } }
   const [sending, setSending] = useState(false)
+  const [showHistory, setShowHistory] = useState(false) // bascule "Historique J-7"
+  const [history, setHistory] = useState([]) // [{ day, items }] des 7 jours passés
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   // Clé localStorage scopée à la journée + user → panier "à envoyer" persisté
   const cartKey = stockDay ? `stock_morning_cart_${stockDay.day}_${user.id}` : null
@@ -110,6 +114,47 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
       if (sub) sub.unsubscribe()
     }
   }, [])
+
+  // Historique J-7 : charge les 7 jours passés (J-1 à J-7) en lecture seule, à la 1re ouverture
+  useEffect(() => {
+    if (!showHistory || history.length > 0) return
+    let mounted = true
+    async function loadHistory() {
+      setHistoryLoading(true)
+      try {
+        const days = []
+        for (let i = 1; i <= 7; i++) {
+          const d = new Date()
+          d.setDate(d.getDate() - i)
+          days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+        }
+        const groups = []
+        for (const day of days) {
+          const sd = await loadStockDay(day)
+          if (!sd) continue
+          const items = await loadDayItems(sd.id)
+          groups.push({ day, items })
+        }
+        if (mounted) setHistory(groups)
+      } finally {
+        if (mounted) setHistoryLoading(false)
+      }
+    }
+    loadHistory()
+    return () => { mounted = false }
+  }, [showHistory])
+
+  // Items "matin envoyés" d'un jour passé, filtrés selon le mode (même règle que sentItems)
+  function historyMorningItems(items) {
+    return items
+      .filter(it => it.source === 'morning')
+      .filter(it => {
+        if (mode === 'sale') return isSaleProduct(it.product_name)
+        if (mode === 'sucre') return !isSaleProduct(it.product_name)
+        return true
+      })
+      .sort((a, b) => new Date(b.announced_at || b.created_at) - new Date(a.announced_at || a.created_at))
+  }
 
   // Items en attente d'une décision DU PÂTISSIER (workflow étape 3)
   const pendingPatissier = useMemo(() => {
@@ -231,7 +276,7 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
@@ -247,10 +292,82 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
           <div className="flex items-center gap-2"><PrintButton mode="vitrine" /><div className="text-[11px] opacity-80">Pâtissier</div></div>
         </div>
 
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowHistory(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold transition-colors ${showHistory ? 'bg-ink text-cream' : 'border border-line text-ink-soft hover:border-bordeaux'}`}
+            title="Afficher / masquer les 7 derniers jours (lecture seule)"
+          >Historique J-7</button>
+          {showHistory && (
+            <span className="font-mono text-[10px] text-ink-mute italic uppercase tracking-wider">Lecture seule</span>
+          )}
+        </div>
+
         {loading ? (
           <div className="bg-white border border-line rounded-b-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
             Chargement...
           </div>
+        ) : showHistory ? (
+          /* HISTORIQUE J-7 — lecture seule, jours passés du + récent au + ancien */
+          historyLoading ? (
+            <div className="bg-white border border-line rounded-2xl p-12 text-center text-ink-mute text-[12px] shadow-sm">
+              Chargement de l'historique...
+            </div>
+          ) : (() => {
+            const groups = history
+              .map(g => ({ day: g.day, items: historyMorningItems(g.items) }))
+              .filter(g => g.items.length > 0)
+            if (groups.length === 0) {
+              return (
+                <div className="bg-white border border-line rounded-2xl p-8 text-center text-[12px] text-ink-mute shadow-sm">
+                  Rien d'envoyé au café sur les 7 derniers jours.
+                </div>
+              )
+            }
+            return (
+              <div className="space-y-4">
+                {groups.map(({ day, items }) => {
+                  const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+                  const totalQty = items.reduce((s, i) => s + (i.qty_announced || 0), 0)
+                  return (
+                    <div key={day} className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm opacity-90">
+                      <div className="px-4 py-3 border-b border-line bg-cream-warm">
+                        <div className="text-[12px] font-semibold capitalize">{dayLabel}</div>
+                        <div className="text-[10px] text-ink-mute font-mono tracking-wider uppercase mt-0.5">
+                          {items.length} ligne{items.length > 1 ? 's' : ''} · {totalQty} article{totalQty > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                      <div className="divide-y divide-line">
+                        {items.map(it => {
+                          const time = it.announced_at ? new Date(it.announced_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''
+                          const statusBadge = it.reception_status === 'confirmed' ? '✓ Reçu OK' :
+                                             it.reception_status === 'discrepancy' ? '⚠ Écart noté' :
+                                             '⏳ En attente'
+                          const statusColor = it.reception_status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                             it.reception_status === 'discrepancy' ? 'bg-orange-100 text-orange-800' :
+                                             'bg-bordeaux/10 text-bordeaux'
+                          return (
+                            <div key={it.id} className="px-4 py-2 flex items-center gap-3">
+                              <div className="flex-1">
+                                <div className="text-[12px] font-medium">{it.product_name}</div>
+                                <div className="text-[10px] text-ink-mute font-mono">
+                                  {time} · annoncé : {it.qty_announced}
+                                </div>
+                              </div>
+                              <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${statusColor}`}>
+                                {statusBadge}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()
         ) : (
           <>
             {/* MODAL BLOQUANT ÉCARTS — overlay couvre toute la page Vitrine */}

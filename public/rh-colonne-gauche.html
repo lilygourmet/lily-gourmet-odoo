@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RH — menu colonne gauche (maquette)</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+  body{background:#211c1a;padding:24px 16px 60px;color:#1a0f0a}
+  h1{color:#fff;font-size:18px;text-align:center;margin-bottom:4px}
+  .sub{color:#cbb9a8;font-size:13px;text-align:center;margin-bottom:22px}
+  .app{max-width:1000px;margin:0 auto;background:#fcfbf8;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  /* header */
+  .bar{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:.5px solid #e5d8c3;background:#fcfbf8}
+  .brand{font-family:Georgia,serif;font-size:15px;color:#993556;font-weight:700}
+  .bar .tabs{display:flex;gap:6px;margin-left:12px}
+  .bar .t{font-size:11px;color:#993556;border:1px solid rgba(153,53,86,.4);border-radius:999px;padding:5px 11px;display:flex;align-items:center;gap:5px}
+  .bar .t.on{background:#993556;color:#fff;border-color:#993556}
+  .bar .right{margin-left:auto;display:flex;gap:8px}
+  .bar .ico{width:28px;height:28px;border-radius:7px;border:1px solid #e5d8c3;display:grid;place-items:center;color:#4a3a30}
+  /* layout 2 colonnes */
+  .rh{display:grid;grid-template-columns:210px 1fr;min-height:440px}
+  .side{background:#F7F2EA;border-right:.5px solid #e5d8c3;padding:14px 10px;display:flex;flex-direction:column;gap:6px}
+  .side .title{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#8a7a70;padding:4px 10px 8px}
+  .vig{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;color:#4a3a30;border:1px solid transparent}
+  .vig svg{flex-shrink:0}
+  .vig:hover{background:#efe7da}
+  .vig.on{background:#993556;color:#fff}
+  .vig .badge{margin-left:auto;font-size:10px;background:#FCE9E8;color:#99201E;border-radius:999px;padding:1px 7px}
+  .vig.on .badge{background:rgba(255,255,255,.25);color:#fff}
+  /* contenu */
+  .main{padding:22px 24px;background:#fcfbf8}
+  .main h2{font-size:17px;color:#1a0f0a;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+  .card{background:white;border:.5px solid #e5d8c3;border-radius:12px;padding:14px}
+  .card .l{font-size:11px;color:#8a7a70}
+  .card .v{font-size:22px;font-weight:600;margin-top:4px;color:#1a0f0a}
+  .ph{background:white;border:.5px dashed #d8ccba;border-radius:12px;padding:30px;text-align:center;color:#8a7a70;font-size:13px}
+  svg{display:block}
+  .note{max-width:1000px;margin:14px auto 0;color:#cbb9a8;font-size:12px;text-align:center;line-height:1.5}
+</style></head><body>
+<h1>RH — menu en colonne à gauche</h1>
+<div class="sub">Tout dans RH (Congés inclus). Plus de bouton « Congés » séparé en haut.</div>
+
+<div class="app">
+  <!-- header app -->
+  <div class="bar">
+    <span class="brand">LILY GOURMET</span>
+    <div class="tabs">
+      <span class="t"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg> Calendrier</span>
+      <span class="t on"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 8h5M16 12h5"/></svg> RH</span>
+    </div>
+    <div class="right">
+      <div class="ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+      <div class="ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg></div>
+    </div>
+  </div>
+
+  <!-- 2 colonnes -->
+  <div class="rh">
+    <!-- menu vignettes gauche -->
+    <div class="side">
+      <div class="title">Ressources humaines</div>
+      <div class="vig"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 8h5M16 12h5"/></svg> Employés</div>
+      <div class="vig"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg> Attestations</div>
+      <div class="vig on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Pointage</div>
+      <div class="vig"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 22s4-10 10-10 10 10 10 10"/><path d="M12 12V2M12 2l4 3-4 3"/></svg> Congés <span class="badge">2</span></div>
+      <div class="vig"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg> Salaires</div>
+      <div class="vig"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> Bulletins</div>
+    </div>
+
+    <!-- contenu (exemple : Pointage) -->
+    <div class="main">
+      <h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#993556" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Pointage — Juin 2026</h2>
+      <div class="cards">
+        <div class="card"><div class="l">Heures prévues</div><div class="v">187h</div></div>
+        <div class="card"><div class="l">Travaillées</div><div class="v">171h</div></div>
+        <div class="card"><div class="l">Heures sup</div><div class="v" style="color:#27500A">+3,5h</div></div>
+        <div class="card"><div class="l">Solde du mois</div><div class="v" style="color:#A32D2D">−16h</div></div>
+      </div>
+      <div class="ph">📋 Le tableau du pointage s'affiche ici (inchangé).<br>Quand tu cliques « Congés » à gauche → l'écran Congés s'affiche ici à la place.</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">📱 Sur téléphone : la colonne de gauche devient un petit menu déroulant en haut (sinon ça prend trop de place sur un petit écran).</div>
+</body></html>

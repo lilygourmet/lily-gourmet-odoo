@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Conversations — liste compacte</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --warm:#f3ece1; --ink:#2b2320; --line:#e4dad0; --mute:#9a8d80; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#cfc4b4; color:var(--ink); padding:16px; }
+  .switch { max-width:390px; margin:0 auto 10px; display:flex; gap:6px; }
+  .switch button { flex:1; padding:7px; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; background:#fff; }
+  .switch button.on { background:var(--bordeaux); color:#fff; }
+
+  .tablet { max-width:390px; height:560px; margin:0 auto; background:var(--cream); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.18); }
+  .head { flex-shrink:0; border-bottom:1px solid var(--line); }
+  .list { flex:1; overflow-y:auto; }
+
+  /* en-tête compact (1 ligne titre+recherche+icônes, 1 ligne filtres) */
+  .r1 { display:flex; align-items:center; gap:8px; padding:9px 12px 7px; }
+  .r1 h1 { font-size:18px; font-style:italic; margin:0; font-family:Georgia,serif; flex-shrink:0; }
+  .srch { flex:1; display:flex; align-items:center; gap:6px; background:var(--warm); border:1px solid var(--line); border-radius:999px; padding:6px 11px; color:var(--mute); font-size:13px; }
+  .ic { width:32px; height:32px; border-radius:50%; border:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .r2 { display:flex; gap:6px; padding:0 12px 8px; overflow-x:auto; }
+  .pill { white-space:nowrap; font-size:11px; padding:4px 10px; border:1px solid var(--line); border-radius:999px; font-weight:600; background:#fff; }
+  .pill.on { background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+
+  /* ===== item client COMPACT ===== */
+  .it { border-bottom:1px solid var(--line); }
+  .it .main { display:flex; gap:9px; padding:7px 12px; align-items:center; cursor:pointer; }
+  .av { width:30px; height:30px; border-radius:50%; background:var(--bordeaux); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; }
+  .it.big .av { width:40px; height:40px; font-size:14px; }
+  .nm { font-weight:600; font-size:13.5px; line-height:1.15; }
+  .ms { font-size:11.5px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2; }
+  .ph-line { font-size:11px; color:var(--mute); font-family:ui-monospace,monospace; }   /* la ligne tél (mode AVANT) */
+  .rt { margin-left:auto; text-align:right; flex-shrink:0; display:flex; align-items:center; gap:8px; }
+  .rt .col { display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+  .phbtn { width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; flex-shrink:0; }
+  .phbtn:hover { border-color:var(--bordeaux); }
+  .phbtn.on { background:var(--bordeaux); border-color:var(--bordeaux); }
+  .tm { font-size:10px; color:var(--mute); }
+  .toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#1a0f0a; color:#fff; font-size:13px; padding:9px 16px; border-radius:10px; opacity:0; transition:.2s; pointer-events:none; }
+  .toast.on { opacity:1; }
+  .dot { width:17px; height:17px; border-radius:50%; background:#e11; color:#fff; font-size:10px; font-weight:700; line-height:17px; text-align:center; }
+
+  /* tiroir tél (au clic sur le nom) */
+  .ph-drawer { display:none; align-items:center; gap:8px; padding:6px 12px 9px 51px; background:var(--warm); }
+  .it.open .ph-drawer { display:flex; }
+  .ph-num { font-family:ui-monospace,monospace; font-size:13px; font-weight:600; }
+  .copy { margin-left:auto; font-size:11px; font-weight:700; padding:4px 10px; border-radius:8px; border:1px solid var(--bordeaux); color:var(--bordeaux); background:#fff; cursor:pointer; }
+  .copy.done { background:#2f9e5e; color:#fff; border-color:#2f9e5e; }
+  .note { max-width:390px; margin:10px auto 0; font-size:12px; color:#4f463c; text-align:center; line-height:1.5; }
+</style>
+</head>
+<body>
+  <div class="switch">
+    <button id="bOld" onclick="setMode('old')">Avant</button>
+    <button id="bNew" class="on" onclick="setMode('new')">Optimisé</button>
+  </div>
+  <div class="tablet">
+    <div class="head">
+      <div class="r1"><h1>Conversations</h1><div class="srch">🔍 Rechercher…</div><div class="ic">💬</div><div class="ic">⚙️</div></div>
+      <div class="r2" id="r2"></div>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+  <div class="note" id="note"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+  const FILTERS = ['🔴 En attente (4)','🟡 À relancer (2)','✉️ Non lues (7)','Tous'];
+  document.getElementById('r2').innerHTML = FILTERS.map((f,i)=>`<span class="pill ${i===0?'on':''}">${f}</span>`).join('');
+  const CLIENTS = [
+    ['SF','Sara Fihri','Bonjour, est-ce dispo pour samedi ?','10:42',2,'0661234567'],
+    ['KE','Kenza Essassi','Merci beaucoup ! 🙏','10:31',0,'0662345678'],
+    ['MB','Meriem B.','Le gâteau était parfait','09:58',0,'0663456789'],
+    ['OT','Othmane T.','Vous avez reçu mon virement ?','09:40',1,'0664567890'],
+    ['NB','Nadia Bennani','D\'accord pour 16h','Hier',0,'0665678901'],
+    ['IL','Imane L.','Combien pour 20 personnes ?','Hier',3,'0666789012'],
+    ['RA','Réda A.','👍','Hier',0,'0667890123'],
+    ['SK','Salma K.','Je passe demain matin','Lun',0,'0668901234'],
+    ['YH','Youssef H.','Photo du modèle ci-jointe','Lun',0,'0669012345'],
+    ['FB','Fatima B.','Bonsoir, je voudrais commander','Dim',1,'0670123456'],
+  ];
+  let mode='new';
+  function render(){
+    document.getElementById('list').innerHTML = CLIENTS.map((c,idx)=>{
+      const [in_,nm,ms,tm,n,ph]=c;
+      const phLine = mode==='old' ? `<div class="ph-line">📞 ${ph}</div>` : '';
+      const phBtn = mode==='new' ? `<div class="phbtn" onclick="togglePhone(event,${idx})" title="Voir le numéro">📞</div>` : '';
+      return `<div class="it ${mode==='old'?'big':''}" data-i="${idx}">
+        <div class="main" onclick="openConv('${nm}')">
+          <div class="av">${in_}</div>
+          <div style="min-width:0">
+            <div class="nm">${nm}</div>
+            <div class="ms">${ms}</div>
+            ${phLine}
+          </div>
+          <div class="rt"><div class="col"><div class="tm">${tm}</div>${n?`<div class="dot">${n}</div>`:''}</div>${phBtn}</div>
+        </div>
+        <div class="ph-drawer">📞 <span class="ph-num">${ph}</span><button class="copy" onclick="copyNum(event,'${ph}',this)">Copier</button></div>
+      </div>`;
+    }).join('');
+    document.getElementById('note').innerHTML = mode==='old'
+      ? "<b>Avant :</b> grosses vignettes + ligne 📞 tél sur chaque client → on en voit ~4."
+      : "<b>Optimisé :</b> vignettes réduites, <b>pas de ligne tél</b> → ~8 clients. <br>👆 Clic sur la ligne = <b>ouvre la conversation</b> · clic sur <b>📞</b> = numéro + Copier.";
+  }
+  function openConv(nm){ const t=document.getElementById('toast'); t.textContent='→ Conversation de '+nm+' ouverte'; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1300); }
+  function togglePhone(e,i){ e.stopPropagation(); const el=document.querySelector(`.it[data-i="${i}"]`); el.classList.toggle('open'); el.querySelector('.phbtn').classList.toggle('on'); }
+  function copyNum(e,ph,btn){ e.stopPropagation(); navigator.clipboard?.writeText(ph); btn.textContent='✓ Copié'; btn.classList.add('done'); setTimeout(()=>{btn.textContent='Copier';btn.classList.remove('done');},1400); }
+  function setMode(m){ mode=m; document.getElementById('bOld').classList.toggle('on',m==='old'); document.getElementById('bNew').classList.toggle('on',m==='new'); render(); }
+  render();
+</script>
+</body>
+</html>

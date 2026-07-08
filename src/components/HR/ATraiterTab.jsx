@@ -202,7 +202,7 @@ export default function ATraiterTab({ user, onChange }) {
               <div key={key} style={{ background: 'white', border: '1px solid #ddd9f5', borderRadius: 12, padding: '12px 14px', marginBottom: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
                 <div style={{ minWidth: 170 }}>
                   <strong style={{ fontSize: 14 }}>{r.nom}</strong>
-                  <div style={{ fontSize: 12, color: '#3C3489' }}>{r.label} travaillé le {r.jour} {fmtJour(r.date)} → +1 récup</div>
+                  <div style={{ fontSize: 12, color: '#3C3489' }}>{r.label} travaillé le {r.jour} {fmtJour(r.date)} → +{String(r.jours ?? 1).replace('.', ',')} récup</div>
                 </div>
                 <input value={f.raison || ''} onChange={e => setField(key, 'raison', e.target.value)}
                   placeholder="Pourquoi a-t-il travaillé ? (facultatif)"

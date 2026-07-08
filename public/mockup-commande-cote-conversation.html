@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette — Commande à côté de la conversation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bordeaux:#7a2233; --bordeaux-deep:#5f1926; --gold:#b8873b;
+    --cream:#fcfbf8; --cream-warm:#f4efe6; --line:#e6ded0;
+    --ink:#2b2320; --ink-soft:#6b5f57; --ink-mute:#9a8f85;
+    --wa:#e8ded2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);height:100vh;overflow:hidden}
+  .fraunces{font-family:'Fraunces',serif}
+
+  .layout{display:flex;height:100vh}
+
+  /* ===== Colonne GAUCHE : la conversation (reste visible) ===== */
+  .conv{flex:1 1 52%;min-width:0;display:flex;flex-direction:column;border-right:1px solid var(--line);background:#faf6ef}
+  .conv-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:#fff}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--bordeaux);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600}
+  .conv-head b{font-size:14px}.conv-head small{display:block;color:var(--ink-mute);font-size:12px}
+  .msgs{flex:1;overflow-y:auto;padding:18px 16px;display:flex;flex-direction:column;gap:10px}
+  .bubble{max-width:78%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.45;position:relative}
+  .in{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
+  .time{display:block;font-size:10px;color:var(--ink-mute);margin-top:3px}
+  .photo{width:140px;height:100px;border-radius:12px;background:linear-gradient(135deg,#d8c4a8,#b89b78);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;border:1px solid var(--line)}
+  .copybtn{position:absolute;top:6px;right:6px;background:var(--cream-warm);border:1px solid var(--line);border-radius:7px;
+    font-size:10px;padding:2px 6px;color:var(--ink-soft);cursor:pointer;opacity:0;transition:.15s}
+  .bubble:hover .copybtn{opacity:1}
+
+  /* ===== Colonne DROITE : la commande docké ===== */
+  .order{flex:0 0 42%;max-width:520px;display:flex;flex-direction:column;background:var(--cream);box-shadow:-8px 0 24px rgba(43,35,32,.06)}
+  .order-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bordeaux);color:#fff}
+  .order-head h3{margin:0;font-size:18px;font-style:italic}
+  .order-head .x{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.18);border:none;color:#fff;cursor:pointer}
+  .order-body{flex:1;overflow-y:auto;padding:16px 18px}
+  .lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);margin:0 0 5px}
+  .field{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;margin-bottom:14px;font-family:'Geist'}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;cursor:pointer;font-weight:500;color:var(--ink-soft)}
+  .chip.on{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+  .cart{border:1px solid var(--line);border-radius:14px;background:#fff;padding:14px;margin-top:6px}
+  .cart h4{margin:0 0 10px;font-size:15px}
+  .cart-line{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .cart-line b{color:var(--bordeaux)}
+  .total{display:flex;justify-content:space-between;font-size:15px;font-weight:600;padding-top:10px}
+  .order-foot{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:10px;background:#fff}
+  .btn{flex:1;padding:12px;border-radius:12px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-soft)}
+  .btn.primary{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+
+  .note{position:fixed;bottom:10px;left:16px;font-size:11px;color:var(--ink-mute);background:#fff;border:1px solid var(--line);padding:6px 10px;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- GAUCHE : conversation client, toujours lisible -->
+  <div class="conv">
+    <div class="conv-head">
+      <div class="avatar">SB</div>
+      <div><b>Sara Bennani</b><small>+212 6 61 23 45 67 · en ligne</small></div>
+    </div>
+    <div class="msgs">
+      <div class="bubble in">Bonjour, je voudrais un gâteau pour l'anniversaire de ma fille 🎂
+        <span class="time">10:02</span>
+        <button class="copybtn" onclick="cp(this)">Copier</button></div>
+      <div class="bubble in">Elle aime le thème licorne, avec les couleurs pastel
+        <span class="time">10:02</span>
+        <button class="copybtn" onclick="cp(this)">Copier</button></div>
+      <div class="bubble in">Pour 20 personnes environ, parfum chocolat
+        <span class="time">10:03</span>
+        <button class="copybtn" onclick="cp(this)">Copier</button></div>
+      <div class="bubble in">
+        <div class="photo">📷 photo modèle</div>
+        <span class="time">10:03</span></div>
+      <div class="bubble in">C'est pour samedi 5 juillet, à récupérer vers 15h
+        <span class="time">10:04</span>
+        <button class="copybtn" onclick="cp(this)">Copier</button></div>
+    </div>
+  </div>
+
+  <!-- DROITE : la fenêtre Nouvelle commande, collée sur le côté -->
+  <div class="order">
+    <div class="order-head">
+      <h3 class="fraunces">Nouvelle commande</h3>
+      <button class="x">✕</button>
+    </div>
+    <div class="order-body">
+      <p class="lbl">Client</p>
+      <input class="field" value="Sara Bennani · +212 6 61 23 45 67">
+
+      <p class="lbl">Produit</p>
+      <div class="chips">
+        <span class="chip on">🎂 Cake design</span>
+        <span class="chip">🍬 Gourmandises</span>
+        <span class="chip">🧁 Entremets</span>
+      </div>
+
+      <p class="lbl">Thème / message <span style="color:var(--gold)">(collé du chat)</span></p>
+      <input class="field" value="Licorne, couleurs pastel">
+
+      <p class="lbl">Personnes · parfum</p>
+      <input class="field" value="20 personnes · chocolat">
+
+      <p class="lbl">Retrait</p>
+      <input class="field" value="Samedi 5 juillet · 15h">
+
+      <div class="cart">
+        <h4>🛒 Panier</h4>
+        <div class="cart-line"><span>CD- Licorne (20 pers, chocolat)</span><b>650 DH</b></div>
+        <div class="total"><span>Total</span><span>650 DH</span></div>
+      </div>
+    </div>
+    <div class="order-foot">
+      <button class="btn">Annuler</button>
+      <button class="btn primary">Créer le devis</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="note">💡 Survole un message du client → bouton « Copier » apparaît. La commande reste à droite, le chat visible à gauche.</div>
+
+<script>
+  function cp(btn){
+    const txt = btn.parentElement.childNodes[0].textContent.trim();
+    navigator.clipboard?.writeText(txt);
+    const old = btn.textContent; btn.textContent = 'Copié ✓';
+    setTimeout(()=>btn.textContent=old, 1200);
+  }
+</script>
+</body>
+</html>

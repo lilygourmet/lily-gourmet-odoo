@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { navTabsForUser } from '../lib/navTabs'
 import { useNavBadges } from '../lib/useNavBadges'
 
@@ -14,7 +14,7 @@ const EXTERNAL_URLS = {
 const GROUPS = [
   { id: 'prod',   label: 'Production',     emoji: '🥐', views: ['prod', 'sales', 'stock-gs', 'patissier', 'stock-poly'] },
   { id: 'cafe',   label: 'Café / Vitrine', emoji: '☕', views: ['vitrine', 'vitrine-previsions', 'vitrine-sale', 'reception-vitrine', 'fin-journee', 'stock'] },
-  { id: 'outils', label: 'Outils',         emoji: '🧰', views: ['etiquettes', 'etiquettes-prix', 'messages', 'devis', 'paiements', 'freezer', 'economat', 'ocp-link', 'cake-vision-link', 'ai-gemini', 'ai-chatgpt'] },
+  { id: 'outils', label: 'Outils',         emoji: '🧰', views: ['etiquettes', 'etiquettes-prix', 'messages', 'devis', 'modifications', 'livraisons', 'paiements', 'freezer', 'economat', 'supports', 'simu-gateaux', 'ocp-link', 'cake-vision-link', 'cake-vision-edit', 'ai-gemini', 'ai-chatgpt'] },
 ]
 
 function rhSubs(user) {
@@ -28,6 +28,7 @@ function rhSubs(user) {
     { hrTab: 'conges', ctab: 'allocations', label: 'Allocations',       emoji: '📊' },
     { hrTab: 'conges', ctab: 'soldes',      label: 'Soldes employés',   emoji: '⚖️' },
     { hrTab: 'conges', ctab: 'equipe',      label: 'Calendrier équipe', emoji: '📅' },
+    { hrTab: 'acces',        label: 'Accès locaux',      emoji: '🔑' },
     admin && { hrTab: 'salaires',  label: 'Salaires',          emoji: '💰' },
     admin && { hrTab: 'bulletins', label: 'Bulletins de paie', emoji: '🧾' },
   ].filter(Boolean)
@@ -64,7 +65,7 @@ function buildEntries(user, byView, allowed) {
     }
     const hidden = new Set(cfg.hidden || [])
     const left = allowed.filter(t => !placed.has(t.view) && !hidden.has(t.view))
-    if (left.length) entries.push({ kind: 'group', id: '_autres', label: 'Autres', emoji: '📁', tabs: left })
+    left.forEach(t => entries.push({ kind: 'tab', t }))
   } else {
     TOP.map(v => byView[v]).filter(Boolean).forEach(t => entries.push({ kind: 'tab', t }))
     for (const g of GROUPS) {
@@ -108,6 +109,16 @@ export default function SideNav({ user, activeView, onNavigate, width, mode, onS
   const [railHover, setRailHover] = useState(null)   // { text, top } : étiquette du rail au survol
   const isOpen = id => open.has(id)   // repli libre (même le dossier où on est)
   const toggle = id => setOpen(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  // Recherche d'onglet : liste plate de toutes les destinations (onglets + sous-onglets RH/Caisse).
+  const [q, setQ] = useState('')
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const searchTargets = [
+    ...allowed.filter(t => t.view !== 'hr' && t.view !== 'caisse').map(t => ({ label: t.label, emoji: t.emoji, go: () => openTab(t.view) })),
+    ...(allowed.some(t => t.view === 'hr') ? rhSubs(user).map(s => ({ label: `RH · ${s.label}`, emoji: s.emoji, go: () => onNavigate('hr', { hrTab: s.hrTab, congesTab: s.ctab }) })) : []),
+    ...(allowed.some(t => t.view === 'caisse') && caisseSubs(user) ? caisseSubs(user).map(s => ({ label: `Caisse · ${s.label}`, emoji: s.emoji, go: () => onNavigate('caisse', { caisseTab: s.caisseTab }) })) : []),
+  ]
+  const results = q.trim() ? searchTargets.filter(x => norm(x.label).includes(norm(q))) : null
 
   const Badge = ({ n }) => (!n || n <= 0) ? null : (
     <span style={{
@@ -234,7 +245,35 @@ export default function SideNav({ user, activeView, onNavigate, width, mode, onS
         </div>
       )}
 
-      {entries.map((e, i) => {
+      {/* Recherche d'onglet */}
+      <div style={{ position: 'relative', padding: '0 4px 10px' }}>
+        <Search size={14} strokeWidth={1.8} style={{ position: 'absolute', left: 14, top: 9, color: '#8a7a70', pointerEvents: 'none' }} />
+        <input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="Rechercher un onglet…"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '7px 11px 7px 32px', borderRadius: 9, border: '1px solid #e5d8c3', background: '#fff', color: '#1a0f0a', fontSize: 12.5, outline: 'none' }}
+        />
+        {q && <button onClick={() => setQ('')} title="Effacer" style={{ position: 'absolute', right: 12, top: 6, border: 'none', background: 'none', cursor: 'pointer', color: '#8a7a70', fontSize: 14 }}>✕</button>}
+      </div>
+
+      {results && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {results.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: '8px 11px', fontStyle: 'italic' }}>Aucun onglet trouvé.</div>}
+          {results.map((r, i) => (
+            <button key={i} onClick={() => { r.go(); setQ('') }} title={r.label} style={{
+              display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%',
+              padding: '8px 11px', borderRadius: 9, border: '1px solid transparent', background: 'transparent',
+              color: '#4a3a30', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', textAlign: 'left',
+            }}>
+              <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{r.emoji}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!results && entries.map((e, i) => {
         if (e.kind === 'tab') return topLeaf(e.t)
         if (e.kind === 'rh') return (
           <Folder key="hr" id="hr" label={e.label} emoji={e.emoji} hasActive={onHr} count={badges.hr || 0}>

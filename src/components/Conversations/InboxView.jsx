@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationOpened, loadClientsCdCounts, markConversationsFidele, CONV_LABELS, loadConvLabels } from '../../lib/conversations'
 import LabelsManager from './LabelsManager'
 import { formatRelativeTime, isAdmin } from '../../lib/auth'
@@ -7,6 +7,8 @@ import { subscribeToPush } from '../../lib/pushNotif'
 import { supabase } from '../../lib/supabase'
 import Skeleton from '../Skeleton'
 import ConversationDetail from './ConversationDetail'
+const NewOrderView = lazy(() => import('../NewOrderView'))
+const OrderEditModal = lazy(() => import('../OrderEditModal'))
 import QuickRepliesModal from './QuickRepliesModal'
 import ClientAvatar from './ClientAvatar'
 import { Search, MessageSquareText } from 'lucide-react'
@@ -35,6 +37,12 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(initialConversationId || null)
+  // Panneau collé à côté du chat : soit « Nouvelle commande » ({ phone, name }),
+  // soit « Modifier » une commande existante (objet order). Un seul ouvert à la fois.
+  const [orderClient, setOrderClient] = useState(null)
+  const [editOrder, setEditOrder] = useState(null)
+  const panelOpen = orderClient || editOrder
+  const closePanel = () => { setOrderClient(null); setEditOrder(null) }
   const [search, setSearch] = useState('')
   const [contentMatchIds, setContentMatchIds] = useState(() => new Set())
   const [showReplies, setShowReplies] = useState(false)
@@ -211,7 +219,7 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
   return (
     <div className="md:flex md:items-start" style={{ '--appbar': `${headerTop}px` }}>
       {/* COLONNE LISTE (gauche) — collante en desktop */}
-      <div className={`${selectedId ? 'hidden md:block' : 'block'} md:w-[35%] md:max-w-[400px] md:flex-shrink-0 md:border-r border-line md:sticky md:top-[var(--appbar)] md:h-[calc(100dvh-var(--appbar))] md:overflow-y-auto`}>
+      <div className={`${panelOpen ? 'hidden' : selectedId ? 'hidden md:block' : 'block'} md:w-[35%] md:max-w-[400px] md:flex-shrink-0 md:border-r border-line md:sticky md:top-[var(--appbar)] md:h-[calc(100dvh-var(--appbar))] md:overflow-y-auto`}>
         {/* En-tête figé : titre + son + actions + recherche + filtres */}
         <div className="md:sticky md:top-0 z-10 bg-cream px-4 pt-4 pb-3 border-b border-line">
           <div className="flex items-center gap-2 mb-2">
@@ -302,7 +310,12 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
               const seenRef = seenAt[c.id] || visitedAtRef.current
               // En avant aussi tant que le client attend une réponse (même déjà ouverte),
               // jusqu'à ce qu'un agent réponde (conversationWaitingSince repasse à null).
-              const isNew = c.marked_unread || c.unread_count > 0 || !!c.link_order_at || conversationWaitingSince(c) || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))
+              // Si on a parlé en DERNIER (réponse ou devis envoyé), la conv est traitée → plus "non lue"
+              // (sauf marquée non-lue à la main / commande liée). Évite le "non lu" collé quand
+              // un envoi de devis ne remet pas unread_count à 0.
+              const weSpokeLast = c.last_message_at && (!c.last_inbound_at || new Date(c.last_message_at) > new Date(c.last_inbound_at))
+              const isNew = c.marked_unread || !!c.link_order_at || conversationWaitingSince(c)
+                || (!weSpokeLast && (c.unread_count > 0 || (c.last_inbound_at && (!seenRef || c.last_inbound_at > seenRef))))
               const isSelected = c.id === selectedId
               return (
                 <button
@@ -361,13 +374,15 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
         </div>
       </div>
 
-      {/* COLONNE DÉTAIL (droite) */}
-      <div className={`${selectedId ? 'block' : 'hidden md:block'} md:flex-1 md:min-w-0`}>
+      {/* COLONNE DÉTAIL (chat) */}
+      <div className={`${panelOpen ? 'hidden md:block' : selectedId ? 'block' : 'hidden md:block'} md:flex-1 md:min-w-0`}>
         {selectedId ? (
           <ConversationDetail
             conversationId={selectedId}
             user={user}
             onBack={() => { setSelectedId(null); refresh() }}
+            onNewOrder={(c) => { setEditOrder(null); setOrderClient(c) }}
+            onEditOrder={(o) => { setOrderClient(null); setEditOrder(o) }}
             relanceRef={initialRelanceRef && selectedId === relanceConvIdRef.current ? initialRelanceRef : null}
           />
         ) : (
@@ -380,6 +395,23 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
           </div>
         )}
       </div>
+
+      {/* PANNEAU COMMANDE (à droite du chat) : nouvelle commande OU modification */}
+      {panelOpen && (
+        <div className="block w-full md:w-[50%] md:max-w-[640px] md:flex-shrink-0 md:border-l border-line bg-cream md:sticky md:top-[var(--appbar)] md:h-[calc(100dvh-var(--appbar))] md:overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-bordeaux text-cream">
+            <h2 className="font-fraunces italic text-[18px]">{editOrder ? 'Modifier la commande' : 'Nouvelle commande'}</h2>
+            <button onClick={closePanel} title="Fermer" className="w-8 h-8 rounded-full bg-cream/20 hover:bg-cream/30 flex items-center justify-center flex-shrink-0">✕</button>
+          </div>
+          <Suspense fallback={<div className="p-6 text-center text-ink-mute text-[13px]">Chargement…</div>}>
+            {editOrder ? (
+              <OrderEditModal order={editOrder} user={user} onClose={closePanel} onChanged={() => refresh(true)} embedded />
+            ) : (
+              <NewOrderView user={user} initialClient={orderClient} embedded />
+            )}
+          </Suspense>
+        </div>
+      )}
 
       {showReplies && <QuickRepliesModal onClose={() => setShowReplies(false)} />}
       {showLabels && <LabelsManager onClose={() => setShowLabels(false)} onSaved={() => loadConvLabels().then(setLabels).catch(() => {})} />}

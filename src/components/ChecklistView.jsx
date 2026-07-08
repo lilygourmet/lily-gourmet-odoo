@@ -41,6 +41,9 @@ const EXCLUDED_CLIENTS = ['Vitrine']
 // Fenetre : aujourd'hui + 3 jours apres
 const DAYS_BEFORE = 0
 const DAYS_AFTER = 3
+// Envois vitrine non confirmés : on les garde visibles dans la checklist
+// (reportés au jour suivant) jusqu'à N jours en arrière, pour pouvoir les confirmer en retard.
+const VITRINE_CARRYOVER_DAYS = 7
 
 function startsWithAny(name, prefixes) {
   if (!name) return false
@@ -190,18 +193,24 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   }
   useEffect(() => { loadVitrineResa() }, [])
 
-  async function handleResaDone(o) {
-    setResaRangees(prev => new Set(prev).add(o.id))   // optimiste
-    try { await markResaRangee({ day: todayISO(), orderId: o.id, orderName: o.name, clientName: o.clientName, userId: user?.id }) }
+  async function handleResaDone(x) {
+    setResaRangees(prev => new Set(prev).add(x.lineId))   // optimiste
+    try { await markResaRangee({ day: todayISO(), lineId: x.lineId, orderId: x.orderId, orderName: x.orderName, clientName: x.clientName, productName: x.text, userId: user?.id }) }
     catch (e) { toast.error(e?.message || 'Erreur'); loadVitrineResa() }
   }
-  async function handleResaUndo(o) {
-    setResaRangees(prev => { const n = new Set(prev); n.delete(o.id); return n })
-    try { await unmarkResaRangee(todayISO(), o.id) }
+  async function handleResaUndo(x) {
+    setResaRangees(prev => { const n = new Set(prev); n.delete(x.lineId); return n })
+    try { await unmarkResaRangee(todayISO(), x.lineId) }
     catch (e) { toast.error(e?.message || 'Erreur'); loadVitrineResa() }
   }
-  const resaTodo = Array.isArray(vitrineResa) ? vitrineResa.filter(o => !resaRangees.has(o.id)) : vitrineResa
-  const resaDone = Array.isArray(vitrineResa) ? vitrineResa.filter(o => resaRangees.has(o.id)) : []
+  // Aplati : chaque ARTICLE (ligne) de réservation se range séparément.
+  const resaLines = Array.isArray(vitrineResa)
+    ? vitrineResa.flatMap(o => (o.lines || []).filter(l => l.id != null).map(l => ({
+        lineId: l.id, orderId: o.id, orderName: o.name, clientName: o.clientName, pickupText: o.pickupText, text: l.text, qty: l.qty,
+      })))
+    : null
+  const resaTodo = resaLines ? resaLines.filter(x => !resaRangees.has(x.lineId)) : vitrineResa
+  const resaDone = resaLines ? resaLines.filter(x => resaRangees.has(x.lineId)) : []
 
   // Section VITRINE
   const [vitrineItems, setVitrineItems] = useState([])
@@ -300,16 +309,15 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
         linesDoneResult,
         gmDoneNoFicheResult,
       ] = await Promise.all([
-        // 2a) Vitrine "A ranger" : items pending
-        sd?.id
-          ? supabase
-              .from('stock_day_items')
-              .select('id, product_name, product_code, qty_announced, reception_status, discrepancy_status')
-              .eq('stock_day_id', sd.id)
-              .eq('source', 'morning')
-              .eq('reception_status', 'pending')
-              .order('product_name')
-          : Promise.resolve({ data: [] }),
+        // 2a) Vitrine "A ranger" : items pending du jour ET des jours précédents non confirmés (report)
+        supabase
+          .from('stock_day_items')
+          .select('id, product_name, product_code, qty_announced, reception_status, discrepancy_status, stock_day!inner(day)')
+          .eq('source', 'morning')
+          .eq('reception_status', 'pending')
+          .gte('stock_day.day', shiftISO(todayStr, -VITRINE_CARRYOVER_DAYS))
+          .lte('stock_day.day', todayStr)
+          .order('product_name'),
         // 2b) Vitrine "Range" : items deja recus
         sd?.id
           ? supabase
@@ -343,8 +351,15 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       // PHASE 3 : assemblage et calculs (synchrone, rapide)
       // ============================================================
 
-      // 3a) VITRINE a ranger
-      setVitrineItems(vitItemsResult?.data || [])
+      // 3a) VITRINE a ranger (avec report des jours précédents non confirmés)
+      const yestStr = shiftISO(todayStr, -1)
+      setVitrineItems((vitItemsResult?.data || []).map(it => {
+        const day = it.stock_day?.day
+        const carryLabel = !day || day === todayStr
+          ? null
+          : (day === yestStr ? "⚠️ envoi d'hier" : `⚠️ envoi du ${day.slice(8, 10)}/${day.slice(5, 7)}`)
+        return { ...it, day, carryLabel }
+      }))
 
       // 3b) PROD a ranger
       const doneSet = new Set(dones.filter(d => d.status === 'done').map(d => d.odoo_line_id))
@@ -502,20 +517,30 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   async function handleProdGroupDone(group) {
     setGroupBusy(group.key)
     try {
-      await printGroupTicket({
-        deliveryAt: group.delivery_at,
-        orderNum: group.order_num,
-        clientName: group.client_name,
-        items: group.lines.map(l => ({ productName: cleanProductName(l.product_name), quantity: l.quantity })),
-      })
+      // 1) Impression : si ça échoue, on s'arrête (rien n'est rangé) et on le dit clairement.
+      try {
+        await printGroupTicket({
+          deliveryAt: group.delivery_at,
+          orderNum: group.order_num,
+          clientName: group.client_name,
+          items: group.lines.map(l => ({ productName: cleanProductName(l.product_name), quantity: l.quantity })),
+        })
+      } catch (e) {
+        console.error('[handleProdGroupDone] impression', e)
+        toast.error('Impression échouée — vérifie l\'imprimante et réessaie.')
+        return
+      }
       toast.success('Ticket imprimé')
-      for (const l of group.lines) await markCafeReceived(l.odoo_line_id, user.id)
-      const ids = new Set(group.lines.map(l => l.odoo_line_id))
-      setProdLines(prev => prev.filter(l => !ids.has(l.odoo_line_id)))
-      refresh(true)
-    } catch (e) {
-      console.error('[handleProdGroupDone]', e)
-      toast.error('Impression échouée — vérifie l\'imprimante et réessaie.')
+      // 2) Enregistrement (rangement) : message distinct si ça échoue (le ticket, lui, est bien sorti).
+      try {
+        for (const l of group.lines) await markCafeReceived(l.odoo_line_id, user.id)
+        const ids = new Set(group.lines.map(l => l.odoo_line_id))
+        setProdLines(prev => prev.filter(l => !ids.has(l.odoo_line_id)))
+        refresh(true)
+      } catch (e) {
+        console.error('[handleProdGroupDone] enregistrement', e)
+        toast.error('Ticket imprimé, mais enregistrement incomplet — rafraîchis la page.')
+      }
     } finally {
       setGroupBusy(null)
     }
@@ -668,7 +693,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // Render
   // ============================================================
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-[1100px] mx-auto px-5 py-5">
@@ -854,17 +879,15 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeI
           ) : nbResa === 0 ? (
             <EmptyHint>Aucune réservation</EmptyHint>
           ) : (
-            vitrineResa.map(o => (
-              <button key={`resa-${o.id}`} type="button" onClick={() => onResaDone(o)}
+            vitrineResa.map(x => (
+              <button key={`resa-${x.lineId}`} type="button" onClick={() => onResaDone(x)}
                 title="Marquer comme rangé"
                 className="w-full text-left bg-white border border-line rounded-xl p-2.5 mb-2 shadow-sm hover:border-emerald-400 hover:bg-emerald-50/40 transition-all">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[12px] font-semibold text-ink truncate">{o.clientName || '—'}</span>
-                  {o.pickupText && <span className="text-[10px] text-ink-mute whitespace-nowrap">{o.pickupText.slice(-5)}</span>}
+                  <span className="text-[12px] font-semibold text-ink truncate">{x.clientName || '—'}</span>
+                  {x.pickupText && <span className="text-[10px] text-ink-mute whitespace-nowrap">{x.pickupText.slice(-5)}</span>}
                 </div>
-                {Array.isArray(o.lines) && o.lines.map((l, i) => (
-                  <div key={i} className="text-[11px] text-ink-soft leading-snug">{Number(l.qty) > 1 ? `${l.qty}× ` : ''}{l.text}</div>
-                ))}
+                <div className="text-[11px] text-ink-soft leading-snug">{Number(x.qty) > 1 ? `${x.qty}× ` : ''}{x.text}</div>
                 <div className="text-[10px] text-emerald-700 mt-1 font-medium">✓ Marquer rangé</div>
               </button>
             ))
@@ -879,7 +902,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeI
               <ItemCard
                 key={`vit-${item.id}`}
                 title={cleanProductName(item.product_name)}
-                subtitle={null}
+                subtitle={item.carryLabel}
                 quantity={item.qty_announced}
                 onClick={() => onVitrineDone(item)}
                 compact
@@ -1000,17 +1023,15 @@ function DoneTab({ vitrineItems, prodItems, saleItems, commandeItems, vitrineRes
         {resaDone.length === 0 ? (
           <EmptyHint>Rien rangé</EmptyHint>
         ) : (
-          resaDone.map(o => (
-            <button key={`resaD-${o.id}`} type="button" onClick={() => onResaUndo(o)}
+          resaDone.map(x => (
+            <button key={`resaD-${x.lineId}`} type="button" onClick={() => onResaUndo(x)}
               title="Annuler (remettre à ranger)"
               className="w-full text-left bg-emerald-50/60 border border-emerald-200 rounded-xl p-2.5 mb-2 shadow-sm hover:bg-white transition-all">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] font-semibold text-ink truncate line-through decoration-emerald-600/40">{o.clientName || '—'}</span>
-                {o.pickupText && <span className="text-[10px] text-ink-mute whitespace-nowrap">{o.pickupText.slice(-5)}</span>}
+                <span className="text-[12px] font-semibold text-ink truncate line-through decoration-emerald-600/40">{x.clientName || '—'}</span>
+                {x.pickupText && <span className="text-[10px] text-ink-mute whitespace-nowrap">{x.pickupText.slice(-5)}</span>}
               </div>
-              {Array.isArray(o.lines) && o.lines.map((l, i) => (
-                <div key={i} className="text-[11px] text-ink-soft leading-snug">{Number(l.qty) > 1 ? `${l.qty}× ` : ''}{l.text}</div>
-              ))}
+              <div className="text-[11px] text-ink-soft leading-snug">{Number(x.qty) > 1 ? `${x.qty}× ` : ''}{x.text}</div>
               <div className="text-[10px] text-ink-mute mt-1">↩︎ Annuler</div>
             </button>
           ))

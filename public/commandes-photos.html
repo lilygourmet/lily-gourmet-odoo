@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Commandes — toutes les photos (vue jours)</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --ink:#2b2320; --line:#e4dad0; --mute:#9a8d80; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:var(--cream); color:var(--ink); }
+  .top { padding:14px 18px 6px; }
+  h1 { font-size:21px; margin:0 0 6px; }
+  .tabs { display:flex; gap:6px; }
+  .tab { padding:6px 13px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:12px; font-weight:600; cursor:pointer; }
+  .tab.on { background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+
+  /* colonnes par jour */
+  .cols { display:flex; gap:12px; padding:12px 18px 24px; overflow-x:auto; align-items:flex-start; }
+  .col { flex:1 0 270px; max-width:330px; }
+  .colhead { font-family:ui-monospace,monospace; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--bordeaux); font-weight:700; margin-bottom:8px; }
+  .colhead .n { color:var(--mute); }
+
+  .card { background:#fff; border:1px solid var(--line); border-radius:13px; padding:10px 11px; margin-bottom:10px; }
+  .chead { display:flex; align-items:baseline; gap:6px; }
+  .chead .num { font-weight:700; font-size:14px; }
+  .badge { font-size:9px; font-weight:700; padding:1px 7px; border-radius:999px; margin-left:auto; }
+  .b-devis { background:#fef3e0; color:#b8860b; }
+  .b-conf  { background:#e7f5ec; color:#2f9e5e; }
+  .cli { font-size:13px; font-weight:600; margin-top:1px; }
+  .meta { font-size:11px; color:var(--mute); }
+  .det { font-size:12px; margin-top:5px; line-height:1.45; }
+  .det .t { font-weight:600; }
+  .det .f { color:var(--mute); }
+
+  /* bande de TOUTES les photos */
+  .photos { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .ph { position:relative; width:58px; height:58px; border-radius:9px; overflow:hidden; border:1px solid var(--line); cursor:pointer; }
+  .ph img { width:100%; height:100%; object-fit:cover; display:block; }
+  .ph:hover { outline:2px solid var(--bordeaux); }
+  .tag { position:absolute; left:0; right:0; bottom:0; font-size:8px; font-weight:700; text-align:center; color:#fff; padding:1px 0; }
+  .t-new { background:rgba(47,158,94,.92); }
+  .t-mod { background:rgba(184,134,11,.92); }
+  .t-old { background:rgba(120,110,100,.85); }
+  .none { color:var(--mute); font-size:11px; font-style:italic; margin-top:6px; }
+
+  .legend { font-size:11px; color:var(--mute); padding:0 18px 18px; display:flex; gap:14px; flex-wrap:wrap; }
+  .legend b { padding:1px 7px; border-radius:6px; color:#fff; }
+  .lb { position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center; padding:24px; }
+  .lb.on { display:flex; }
+  .lb img { max-width:90vw; max-height:88vh; border-radius:8px; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <h1>📋 Commandes</h1>
+    <div class="tabs"><div class="tab">Jour</div><div class="tab on">4 jours</div><div class="tab">Semaine</div></div>
+  </div>
+
+  <div class="cols" id="cols"></div>
+
+  <div class="legend">
+    <span><b class="t-new" style="background:#2f9e5e">Nouvelle</b></span>
+    <span><b class="t-mod" style="background:#b8860b">Modifiée</b></span>
+    <span><b class="t-old" style="background:#786e64">Ancienne</b></span>
+    · clic sur une photo = plein écran
+  </div>
+
+  <div class="lb" id="lb" onclick="this.classList.remove('on')"><img id="lbimg" /></div>
+
+<script>
+  const PH = s => `https://picsum.photos/seed/${s}/200/200`;
+  const TAG = { new:'Nouvelle', mod:'Modifiée', old:'Ancienne' };
+  const DAYS = [
+    { label:"Aujourd'hui · mar 23/06", orders:[
+      { num:'S49917', cli:'Kenza Essassi', time:'11h', state:'conf', det:{t:'Cake Design 1 étage', f:'Thème: Coupe du monde · Âge: 44 ans'},
+        photos:[{s:'c1',t:'new'},{s:'c2',t:'new'},{s:'c3',t:'mod'},{s:'c3b',t:'old'}] },
+      { num:'S49901', cli:'Salma R.', time:'16h', state:'devis', det:{t:'GM- Number Cake', f:'Chiffre 7 · fraises'},
+        photos:[{s:'c4',t:'new'},{s:'c5',t:'old'}] },
+    ]},
+    { label:'Demain · mer 24/06', orders:[
+      { num:'S49758', cli:'Sara L.', time:'12h', state:'conf', det:{t:'Cake Design 2 étages', f:'Thème: Licorne'},
+        photos:[{s:'c6',t:'new'},{s:'c7',t:'new'},{s:'c8',t:'mod'},{s:'c9',t:'old'},{s:'c10',t:'old'}] },
+      { num:'S49760', cli:'Imane T.', time:'15h', state:'devis', det:{t:'CD- Cake Design 1 étage', f:'Message: Bon rétablissement'},
+        photos:[{s:'c11',t:'new'}] },
+    ]},
+    { label:'jeu 25/06', orders:[
+      { num:'S49739', cli:'Othmane K.', time:'10h', state:'devis', det:{t:'CD- Autre', f:'à chiffrer'}, photos:[] },
+    ]},
+    { label:'ven 26/06', orders:[
+      { num:'S49805', cli:'Nadia B.', time:'17h', state:'conf', det:{t:'Cake Design 1 étage', f:'Thème: Foot · Âge: 8 ans'},
+        photos:[{s:'c12',t:'new'},{s:'c13',t:'mod'},{s:'c14',t:'old'}] },
+    ]},
+  ];
+
+  const cols = document.getElementById('cols');
+  for (const day of DAYS) {
+    const cards = day.orders.map(o => {
+      const photos = o.photos.length
+        ? `<div class="photos">${o.photos.map(p=>`<div class="ph" onclick="zoom('${PH(p.s)}')"><img src="${PH(p.s)}"><span class="tag t-${p.t}">${TAG[p.t]}</span></div>`).join('')}</div>`
+        : `<div class="none">Aucune photo</div>`;
+      return `<div class="card">
+        <div class="chead"><span class="num">${o.num}</span><span class="badge ${o.state==='conf'?'b-conf':'b-devis'}">${o.state==='conf'?'✅ Confirmée':'📝 Devis'}</span></div>
+        <div class="cli">${o.cli}</div>
+        <div class="meta">🚚 ${o.time}</div>
+        <div class="det"><span class="t">${o.det.t}</span><br><span class="f">${o.det.f}</span></div>
+        ${photos}
+      </div>`;
+    }).join('');
+    cols.insertAdjacentHTML('beforeend', `<div class="col"><div class="colhead">${day.label} <span class="n">· ${day.orders.length}</span></div>${cards}</div>`);
+  }
+  function zoom(src){ document.getElementById('lbimg').src=src; document.getElementById('lb').classList.add('on'); }
+</script>
+</body>
+</html>

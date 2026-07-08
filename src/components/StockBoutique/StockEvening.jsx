@@ -11,6 +11,7 @@ import NumpadInline from './NumpadInline'
 import { fetchEntremetsCatalog } from '../../lib/stockCatalog'
 import {
   getOrCreateStockDay,
+  loadStockDay,
   loadEveningCounts,
   addEveningCount,
   updateEveningCount,
@@ -29,6 +30,25 @@ const FRESHNESS_OPTIONS = [
   { id: 'twodays', label: 'J+2' },
 ]
 
+// Libellé d'une date ISO (jour passé) : « lundi 23 juin »
+function fmtHistoryDate(day) {
+  return new Date(day + 'T00:00:00').toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  })
+}
+
+// Les 7 dates passées (J-1 → J-7), même calcul local que todayISO()
+function pastSevenDays() {
+  const out = []
+  const base = new Date()
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(base)
+    d.setDate(base.getDate() - i)
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+  }
+  return out
+}
+
 export default function StockEvening({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [stockDay, setStockDay] = useState(null)
@@ -40,6 +60,10 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
   // Mobile : onglet actif (articles ou panier+calculette)
   const [mobileTab, setMobileTab] = useState('articles')
   const [submitting, setSubmitting] = useState(false)
+  // Historique J-7 (lecture seule, chargé à la demande)
+  const [showHistory, setShowHistory] = useState(false)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -193,6 +217,28 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
     }
   }
 
+  async function loadHistory() {
+    setHistoryLoading(true)
+    try {
+      const results = []
+      for (const day of pastSevenDays()) {   // J-1 → J-7 = plus récent en premier
+        const sd = await loadStockDay(day)
+        if (!sd) continue
+        const dayCounts = await loadEveningCounts(sd.id)
+        if (dayCounts.length > 0) results.push({ day, counts: dayCounts })
+      }
+      setHistory(results)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function toggleHistory() {
+    const next = !showHistory
+    setShowHistory(next)
+    if (next && history.length === 0 && !historyLoading) loadHistory()
+  }
+
   function tileQty(productName) {
     return counts
       .filter(c => c.product_name === productName)
@@ -200,7 +246,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
@@ -215,6 +261,16 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleHistory}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-medium tracking-wider transition-colors ${
+                showHistory ? 'bg-cream text-bordeaux-deep' : 'bg-white/15 text-cream hover:bg-white/25'
+              }`}
+              title="Afficher / masquer les 7 derniers jours (lecture seule)"
+            >
+              Historique J-7
+            </button>
             <PrintButton mode="evening" />
             <div className="text-right text-[11px] opacity-80">
               <div>Équipe café</div>
@@ -259,6 +315,46 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
           <div className="bg-white border border-line rounded-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
             Chargement...
           </div>
+        ) : showHistory ? (
+          /* ============= HISTORIQUE J-7 (lecture seule) ============= */
+          historyLoading ? (
+            <div className="bg-white border border-line rounded-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
+              Chargement de l'historique…
+            </div>
+          ) : history.length === 0 ? (
+            <div className="bg-white border border-line rounded-2xl p-12 text-center text-ink-mute text-[12px] shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
+              Aucun comptage sur les 7 derniers jours.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {history.map(({ day, counts: dayCounts }) => {
+                const dayTotal = dayCounts.reduce((s, c) => s + (c.qty_counted || 0), 0)
+                return (
+                  <div key={day} className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-4 py-3 border-b border-line bg-cream-warm flex items-center justify-between">
+                      <h2 className="font-semibold text-[14px] italic text-bordeaux-deep capitalize">{fmtHistoryDate(day)}</h2>
+                      <span className="text-[11px] text-ink-mute">{dayTotal} article{dayTotal > 1 ? 's' : ''}</span>
+                    </div>
+                    <div>
+                      {[...dayCounts]
+                        .sort((a, b) => new Date(b.counted_at || b.created_at || 0) - new Date(a.counted_at || a.created_at || 0))
+                        .map(c => (
+                          <CountRow
+                            key={c.id}
+                            item={c}
+                            selected={false}
+                            disabled
+                            onSelect={() => {}}
+                            onFreshnessChange={() => {}}
+                            onRemove={() => {}}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
         ) : (
           <>
             {isOpen && counts.length === 0 && (
@@ -456,6 +552,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
         )}
       </div>
       {/* ============= BOTTOM BAR MOBILE : onglets Articles / Comptés ============= */}
+      {!showHistory && (
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-line flex md:hidden shadow-lg">
         <button
           type="button"
@@ -487,6 +584,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
           )}
         </button>
       </div>
+      )}
     </div>
   )
 }

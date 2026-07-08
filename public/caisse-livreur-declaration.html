@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Déclaration dépense Hamid — favoris gérés par lui</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #2b2422; min-height: 100vh; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 24px; padding: 28px 12px 48px; color: #1a0f0a; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .cap { color: #cbb9a8; font-size: 13px; text-align: center; max-width: 320px; line-height: 1.5; }
+  .modal { width: 340px; background: white; border-radius: 16px; padding: 22px; border: .5px solid #e5d8c3; box-shadow: 0 20px 60px rgba(0,0,0,.45); }
+  .title { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #99201E; font-size: 15px; font-weight: 600; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .head .l { font-size: 12px; color: #4a3a30; }
+  .head .g { font-size: 11px; color: #993556; display: inline-flex; align-items: center; gap: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fav { display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid #e5d8c3; background: white; font-size: 14px; font-weight: 500; }
+  .fav.on { border: 1.5px solid #993556; background: #FCEEF3; color: #993556; }
+  .fav .tag { font-size: 9px; margin-left: auto; color: #7A5510; }
+  .fav.add { border: 1px dashed #C4BFB6; background: #FAF6F0; color: #4a3a30; font-size: 13px; }
+  .addbox { margin-top: 10px; padding: 12px; background: #FAF6F0; border-radius: 12px; border: .5px solid #e5d8c3; }
+  .addbox .t { font-size: 12px; font-weight: 500; margin-bottom: 8px; }
+  .ipt { width: 100%; padding: 9px 11px; border: .5px solid #C4BFB6; border-radius: 8px; font-size: 13px; margin-bottom: 8px; }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 4px 0 12px; }
+  .chk .hint { color: #8a7a70; font-size: 11px; }
+  .actions { display: flex; gap: 6px; margin-top: 10px; }
+  .btn { padding: 10px; border-radius: 8px; font-size: 13px; cursor: pointer; text-align: center; }
+  .annuler { flex: 1; border: 1px solid #e5d8c3; background: white; }
+  .ok { flex: 2; border: 1px solid #993556; background: #993556; color: white; font-weight: 500; }
+  .ff { font-size: 11px; color: #4a3a30; margin: 14px 0 4px; }
+  .photo { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; border: .5px dashed #C4BFB6; background: #F4F0EA; color: #4a3a30; font-size: 13px; }
+  .req { color: #99201E; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+  <!-- Panneau 1 : il ajoute un favori -->
+  <div class="col">
+    <div class="cap"><strong style="color:#fff">1. Hamid crée ses favoris</strong><br>Nom + catégorie + photo obligatoire (décochée pour un pourboire)</div>
+    <div class="modal">
+      <div class="title">↑ Déclarer une dépense</div>
+      <div class="head"><span class="l">Choisis le type</span></div>
+      <div class="grid">
+        <div class="fav add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg> Autre</div>
+        <div class="fav add" style="border-color:#993556;color:#993556"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg> Ajouter</div>
+      </div>
+      <div class="addbox">
+        <div class="t">Nouveau favori</div>
+        <input class="ipt" value="Essence" />
+        <select class="ipt"><option>🚖 Livraison / coursier</option></select>
+        <label class="chk"><input type="checkbox" checked> Photo du ticket obligatoire <span class="hint">(décoche pour un pourboire)</span></label>
+        <div class="actions"><div class="btn annuler">Annuler</div><div class="btn ok">Enregistrer le favori</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panneau 2 : il déclare avec ses favoris -->
+  <div class="col">
+    <div class="cap"><strong style="color:#fff">2. Ensuite il déclare en 2 taps</strong><br>Ses favoris apparaissent — « Gérer » pour en retirer</div>
+    <div class="modal">
+      <div class="title">↑ Déclarer une dépense</div>
+      <div class="head"><span class="l">Choisis le type</span><span class="g"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5a7 7 0 0 0 .1-1Z"/></svg> Gérer</span></div>
+      <div class="grid">
+        <div class="fav on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.5 3h9L21 9l-9 12L3 9l4.5-6Z"/></svg> Essence</div>
+        <div class="fav"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.5 3h9L21 9l-9 12L3 9l4.5-6Z"/></svg> Pourboire <span class="tag">sans photo</span></div>
+        <div class="fav"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.5 3h9L21 9l-9 12L3 9l4.5-6Z"/></svg> Courses</div>
+        <div class="fav add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg> Ajouter</div>
+      </div>
+      <div class="ff">Montant (dh)</div>
+      <input class="ipt" value="250" />
+      <div class="ff">Photo du ticket <strong class="req">(obligatoire)</strong></div>
+      <div class="photo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg> Prendre une photo du ticket</div>
+      <div class="actions"><div class="btn annuler">Annuler</div><div class="btn ok">Envoyer</div></div>
+    </div>
+  </div>
+</body>
+</html>

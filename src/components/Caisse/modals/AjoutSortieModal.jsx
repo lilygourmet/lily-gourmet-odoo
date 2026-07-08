@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { todayISO } from '../_helpers'
 import { toast } from '../../../lib/toast'
+import MontantPad from '../MontantPad'
 
 export default function AjoutSortieModal({ categories, caisseOwner, onClose, onSubmit }) {
   const [amount, setAmount] = useState('')
@@ -18,7 +19,7 @@ export default function AjoutSortieModal({ categories, caisseOwner, onClose, onS
 
   return (
     <ModalBox title="Ajouter une sortie" titleColor="#99201E" titleIcon="↑" onClose={onClose}>
-      <Field label="Montant (dh)"><input type="number" autoFocus value={amount} onChange={e => setAmount(e.target.value)} style={ipt} /></Field>
+      <Field label="Montant"><MontantPad value={amount} onChange={setAmount} accent="#99201E" /></Field>
       <Field label="Libellé"><input type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="ex: Carrefour · sucre, café" style={ipt} /></Field>
       <Field label="Catégorie">
         <select value={category} onChange={e => setCategory(e.target.value)} style={ipt}>

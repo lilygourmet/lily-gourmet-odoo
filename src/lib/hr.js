@@ -1,8 +1,4 @@
 import { supabase } from './supabase'
-import PizZip from 'pizzip'
-import Docxtemplater from 'docxtemplater'
-import { saveAs } from 'file-saver'
-import { PDFDocument } from 'pdf-lib'
 import { downloadBulletinBytes } from './bulletins'
 import { memoCache } from './memoCache'
 
@@ -268,6 +264,9 @@ const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingm
 
 // Remplit un modèle .docx (Docxtemplater) et renvoie le PizZip rempli (sans télécharger).
 async function fillTemplate(type, data) {
+  const [{ default: PizZip }, { default: Docxtemplater }] = await Promise.all([
+    import('pizzip'), import('docxtemplater'),
+  ])
   const info = TEMPLATES[type]
   if (!info || !info.file) throw new Error(`Type d'attestation inconnu : ${type}`)
 
@@ -338,6 +337,7 @@ async function fillTemplate(type, data) {
 
 // Génère un document .docx (1 modèle) et déclenche le téléchargement.
 export async function generateAttestation(type, data) {
+  const { saveAs } = await import('file-saver')
   const zip = await fillTemplate(type, data)
   const blob = zip.generate({ type: 'blob', mimeType: DOCX_MIME })
   saveAs(blob, formatFilename(type, data.nom))
@@ -357,6 +357,9 @@ async function dernierssBulletins(data, n = 3) {
 //   • les 3 derniers bulletins de paie (PDF) de l'employé.
 // (Un Word ne peut pas contenir de PDF → on regroupe tout dans un seul .zip.)
 export async function generateDepartPackWord(data) {
+  const [{ default: PizZip }, { PDFDocument }, { saveAs }] = await Promise.all([
+    import('pizzip'), import('pdf-lib'), import('file-saver'),
+  ])
   // 1) Fusionner les 3 attestations en 1 .docx (on garde l'en-tête/format du 1er).
   const types = ['travail_depart', 'accuse', 'salaire']
   const zips = []

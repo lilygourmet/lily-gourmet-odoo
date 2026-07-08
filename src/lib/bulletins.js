@@ -32,6 +32,19 @@ export async function addBulletinPage(period, { label: suggestedLabel, matricule
   }
   label = (label && label.trim()) || matricule || 'À identifier'
 
+  // Anti-doublon : si ce mois existe déjà pour ce matricule (ré-import du même PDF),
+  // on supprime l'ancien (fichier + ligne) avant d'ajouter — sinon le mois apparaît en double.
+  if (matricule) {
+    const { data: dups } = await supabase
+      .from('bulletins_paie')
+      .select('storage_path')
+      .eq('period', period)
+      .eq('matricule', matricule)
+    const paths = (dups || []).map(d => d.storage_path).filter(Boolean)
+    if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
+    if (dups && dups.length) await supabase.from('bulletins_paie').delete().eq('period', period).eq('matricule', matricule)
+  }
+
   const safe = (matricule || 'page').replace(/[^a-zA-Z0-9_-]/g, '_')
   const path = `${period}/${safe}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.pdf`
   const { error: upErr } = await supabase.storage

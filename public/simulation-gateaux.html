@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulation gâteaux — Lily Gourmet</title>
+<style>
+  :root{
+    --bordeaux:#7a1f2b;
+    --or:#c9a24b;
+    --fond:#fcfbf8;
+    --creme:#f3e9d6;
+    --creme2:#e8d9bd;
+    --texte:#3a2c28;
+    --gris:#8a7d78;
+    --alerte:#e2915a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--fond);
+    color:var(--texte);
+    font-family:"Geist","Segoe UI",system-ui,sans-serif;
+    padding:28px 18px 60px;
+  }
+  h1{
+    font-family:"Fraunces",Georgia,serif;
+    color:var(--bordeaux);
+    font-size:28px;
+    text-align:center;
+    font-weight:600;
+  }
+  .sous{
+    text-align:center;
+    color:var(--gris);
+    margin:6px 0 26px;
+    font-size:15px;
+  }
+  .controle{
+    max-width:560px;
+    margin:0 auto 30px;
+    background:#fff;
+    border:1px solid #efe7d7;
+    border-radius:18px;
+    padding:20px 22px;
+    box-shadow:0 6px 22px rgba(122,31,43,.06);
+    text-align:center;
+  }
+  .controle label{display:block;font-size:14px;color:var(--gris);margin-bottom:10px}
+  .rangee{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+  input[type=number]{
+    width:120px;font-size:26px;text-align:center;
+    padding:8px 10px;border:2px solid var(--creme2);border-radius:12px;
+    color:var(--bordeaux);font-family:"Fraunces",Georgia,serif;font-weight:600;
+  }
+  input[type=number]:focus{outline:none;border-color:var(--or)}
+  .pers{font-size:15px;color:var(--texte)}
+  .raccourcis{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .raccourcis button{
+    border:1px solid var(--creme2);background:#fff;color:var(--bordeaux);
+    padding:6px 14px;border-radius:999px;font-size:14px;cursor:pointer;transition:.15s;
+  }
+  .raccourcis button:hover{background:var(--creme);border-color:var(--or)}
+  .cartes{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:20px;max-width:840px;margin:0 auto;
+  }
+  .carte{
+    background:#fff;border:1px solid #efe7d7;border-radius:20px;
+    padding:22px 18px;text-align:center;
+    box-shadow:0 6px 22px rgba(122,31,43,.05);
+    display:flex;flex-direction:column;align-items:center;
+  }
+  .carte h2{
+    font-family:"Fraunces",Georgia,serif;color:var(--bordeaux);
+    font-size:20px;font-weight:600;margin-bottom:2px;
+  }
+  .etiquette{font-size:13px;color:var(--gris);margin-bottom:14px}
+  .scene{height:250px;display:flex;align-items:flex-end;justify-content:center}
+  .indispo{
+    height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:var(--gris);font-size:14px;gap:8px;
+  }
+  .indispo .rond{
+    width:54px;height:54px;border-radius:50%;border:2px dashed var(--creme2);
+    display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--creme2);
+  }
+  .detail{
+    margin-top:16px;width:100%;border-top:1px dashed #eadfca;padding-top:12px;
+    font-size:13.5px;color:var(--texte);
+  }
+  .detail .ligne{display:flex;justify-content:space-between;padding:3px 4px}
+  .detail .ligne span:last-child{color:var(--bordeaux);font-weight:600}
+  .total{margin-top:10px;font-size:14px;color:var(--gris)}
+  .total b{color:var(--bordeaux)}
+  .note{
+    max-width:600px;margin:34px auto 0;text-align:center;
+    font-size:13px;color:var(--gris);line-height:1.5;
+  }
+</style>
+</head>
+<body>
+  <h1>Simulation de gâteaux</h1>
+  <p class="sous">Toutes les configurations possibles selon le nombre de personnes</p>
+
+  <div class="controle">
+    <label>Nombre de personnes</label>
+    <div class="rangee">
+      <input type="number" id="nb" value="30" min="5" max="1220" step="5">
+      <span class="pers">personnes</span>
+    </div>
+    <div class="raccourcis">
+      <button data-n="30">30</button>
+      <button data-n="60">60</button>
+      <button data-n="100">100</button>
+      <button data-n="150">150</button>
+      <button data-n="200">200</button>
+      <button data-n="360">360</button>
+    </div>
+  </div>
+
+  <div class="cartes" id="cartes"></div>
+
+  <p class="note">
+    Tailles réelles Lily Gourmet. On affiche uniquement les configurations réalisables :
+    chaque étage doit être d'une taille différente, donc plus il y a d'étages,
+    plus il faut de personnes.
+  </p>
+
+<script>
+  // ===== Copie EXACTE de src/lib/cakeSizes.js =====
+  const SIZE_TABLE = [
+    { cm: 15, pers: 5 },
+    { cm: 20, pers: 10 },
+    { cm: 25, pers: 15 },
+    { cm: 30, pers: 20 },
+    { cm: 35, pers: 30 },
+    { cm: 40, pers: 40 },
+    { cm: 45, pers: 60 },
+    { cm: 50, pers: 80 },
+    { cm: 55, pers: 100 },
+    { cm: 60, pers: 130 },
+    { cm: 65, pers: 130 },
+    { cm: 70, pers: 200 },
+    { cm: 75, pers: 200 },
+    { cm: 80, pers: 200 },
+  ];
+
+  function computeSizesForCake(pers, etages){
+    if(!pers || !etages) return null;
+    const e = Math.max(1, etages);
+    if(e === 1){
+      const match = SIZE_TABLE.find(s => s.pers === pers);
+      return match ? [match.cm] : null;
+    }
+    const allSolutions = [];
+    function search(startIdx, remainingEtages, currentSum, currentPath){
+      if(remainingEtages === 0){
+        if(currentSum === pers) allSolutions.push([...currentPath]);
+        return;
+      }
+      const maxStart = SIZE_TABLE.length - remainingEtages;
+      for(let i = startIdx; i <= maxStart; i++){
+        const newSum = currentSum + SIZE_TABLE[i].pers;
+        if(newSum > pers) break;
+        search(i + 1, remainingEtages - 1, newSum, [...currentPath, SIZE_TABLE[i].cm]);
+      }
+    }
+    search(0, e, 0, []);
+    if(allSolutions.length === 0) return null;
+    allSolutions.sort((a, b) => {
+      const rangeA = a[a.length - 1] - a[0];
+      const rangeB = b[b.length - 1] - b[0];
+      if(rangeA !== rangeB) return rangeA - rangeB;
+      return b[b.length - 1] - a[a.length - 1];
+    });
+    return allSolutions[0];
+  }
+  // ===== fin copie =====
+
+  const persParCm = cm => (SIZE_TABLE.find(s => s.cm === cm) || {}).pers;
+  const ECHELLE = 3;           // pixels par cm
+  const H_MAX = 236;           // hauteur px dispo pour l'empilement
+
+  // écarts (marches) entre étages consécutifs ; renvoie {steps, minStep}
+  function marches(cms){
+    const steps = [];
+    for(let i=0;i<cms.length-1;i++) steps.push(cms[i]-cms[i+1]);
+    return { steps, minStep: steps.length ? Math.min(...steps) : 0 };
+  }
+  const aUnGap = cms => { const {steps,minStep}=marches(cms); return steps.some(s=>s>minStep); };
+
+  // cms : diamètres du BAS (plus grand) vers le HAUT
+  function dessine(cms){
+    const svgW = 300, svgH = 250;
+    const hEt = Math.min(46, H_MAX / cms.length); // hauteur d'un étage, adaptée
+    const { minStep } = marches(cms);
+    let y = svgH - 14;
+    const diamBas = cms[0]*ECHELLE;
+    let el = `<ellipse cx="${svgW/2}" cy="${svgH-10}" rx="${diamBas/2+22}" ry="10" fill="#efe4cf"/>`;
+    cms.forEach((cm,i)=>{
+      const w = cm*ECHELLE;
+      const x = (svgW-w)/2;
+      const ry = Math.max(5, w*0.10);
+      const topY = y - hEt;
+      const fill = i%2===0 ? 'var(--creme)' : 'var(--creme2)';
+      // rebord irrégulier = marche vers l'étage du dessus plus grande que la plus petite
+      const gapLedge = (i < cms.length-1) && ((cm - cms[i+1]) > minStep);
+      const topFill = gapLedge ? 'var(--alerte)' : '#fff8ec';
+      el += `<rect x="${x}" y="${topY}" width="${w}" height="${hEt}" fill="${fill}"/>`;
+      el += `<ellipse cx="${svgW/2}" cy="${y}" rx="${w/2}" ry="${ry}" fill="${fill}"/>`;
+      el += `<ellipse cx="${svgW/2}" cy="${topY}" rx="${w/2}" ry="${ry}" fill="${topFill}"/>`;
+      el += `<ellipse cx="${svgW/2}" cy="${topY}" rx="${w/2}" ry="${ry}" fill="none" stroke="var(--or)" stroke-width="1.5"/>`;
+      // libellé diamètre toujours centré au milieu de l'étage
+      el += `<text x="${svgW/2}" y="${topY + hEt/2}" text-anchor="middle" dominant-baseline="central" font-size="12" fill="var(--bordeaux)" font-family="Georgia,serif">${cm} cm</text>`;
+      y = topY;
+    });
+    return `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${el}</svg>`;
+  }
+
+  function rendu(){
+    let n = parseInt(document.getElementById('nb').value)||0;
+    const cont = document.getElementById('cartes');
+    cont.innerHTML='';
+    let dispo = 0;
+    for(let nb=1; nb<=9; nb++){
+      const sizes = computeSizesForCake(n, nb);
+      if(!sizes) continue;              // on n'affiche QUE les possibles
+      dispo++;
+      const carte = document.createElement('div');
+      carte.className='carte';
+      const cms = sizes.slice().sort((a,b)=>b-a); // bas -> haut
+      let lignes='';
+      cms.forEach((cm,idx)=>{
+        const num = nb - idx;
+        const nom = nb===1 ? 'Gâteau'
+                  : num===nb ? 'Étage du bas'
+                  : num===1 ? 'Étage du haut'
+                  : `Étage ${num}`;
+        lignes += `<div class="ligne"><span>${nom}</span><span>Ø ${cm} cm · ${persParCm(cm)} pers</span></div>`;
+      });
+      const legende = aUnGap(cms)
+        ? `<div style="font-size:12px;color:var(--alerte);margin-top:2px">■ descente irrégulière</div>`
+        : '';
+      carte.innerHTML = `
+        <h2>${nb} étage${nb>1?'s':''}</h2>
+        <div class="etiquette">${cms.length} taille${cms.length>1?'s':''} · ${n} parts</div>
+        <div class="scene">${dessine(cms)}</div>
+        ${legende}
+        <div class="detail">${lignes}</div>
+        <div class="total">Pour <b>${n}</b> personnes</div>`;
+      cont.appendChild(carte);
+    }
+    if(dispo === 0){
+      cont.innerHTML = `<div class="carte" style="grid-column:1/-1">
+        <div class="indispo"><div class="rond">×</div>
+        Aucune configuration possible pour ${n} personnes<br>
+        <span style="font-size:12px">(essaie un total réalisable avec les tailles, ex. 30, 60, 100…)</span></div></div>`;
+    }
+  }
+
+  document.getElementById('nb').addEventListener('input',rendu);
+  document.querySelectorAll('.raccourcis button').forEach(b=>{
+    b.addEventListener('click',()=>{ document.getElementById('nb').value=b.dataset.n; rendu(); });
+  });
+  rendu();
+</script>
+</body>
+</html>

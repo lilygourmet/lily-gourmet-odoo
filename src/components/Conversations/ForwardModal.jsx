@@ -80,7 +80,7 @@ export default function ForwardModal({ sourceMessage, currentConversationId, use
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-cream-warm transition-colors disabled:opacity-50"
                   >
                     <div className="text-[13px] text-ink truncate">{c.client_name || c.client_phone}</div>
-                    {c.client_name && <div className="font-mono text-[10px] text-ink-mute">{c.client_phone}</div>}
+                    {c.client_name && <div className="text-[10px] text-ink-mute">{c.client_phone}</div>}
                   </button>
                 ))}
                 {list.length === 0 && <div className="text-[12px] text-ink-mute italic py-2">Aucun client.</div>}

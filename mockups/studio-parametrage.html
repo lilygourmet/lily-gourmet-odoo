@@ -1,0 +1,214 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maquette — Lily Studio + À paramétrer</title>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<style>
+:root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;--bordeaux:#993556;--line:#e8dcc9;--green:#1a9d55}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:#e9e2d6;color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px;overflow:hidden}
+.fr{font-family:'Fraunces',serif}
+/* ---- barre du haut (réelle) ---- */
+header{background:var(--bordeaux);color:#fff;padding:7px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hb{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:6px 9px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
+.hbw{background:#fff;color:var(--bordeaux)}
+.sep{width:1px;height:22px;background:rgba(255,255,255,.25);margin:0 2px}
+.param{background:#ffd23f;color:#5a3d00;font-weight:800}
+.param .b{background:#5a3d00;color:#ffd23f;border-radius:20px;padding:0 7px;margin-left:4px;font-size:11px}
+select.hb{appearance:none}
+/* ---- corps : 3 colonnes ---- */
+.wrap{display:flex;height:calc(100vh - 44px)}
+.col{padding:8px;overflow:auto}
+.lib{width:218px;flex-shrink:0;border-right:1px solid var(--line);background:var(--cream)}
+.panel{width:250px;flex-shrink:0;border-left:1px solid var(--line);background:var(--cream-warm)}
+.center{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:16px;overflow:auto;background:#e9e2d6}
+.btn{display:block;width:100%;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px;margin-bottom:6px;font-size:12px;text-align:center;cursor:pointer}
+.btn.p{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux);font-weight:700}
+.row{display:flex;gap:6px}.row .btn{margin-bottom:0}
+.inp{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px;margin-bottom:6px;font-size:12px;background:#fff}
+.lab{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin:6px 0 3px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.lcard{background:#fff;border:1px solid var(--line);border-radius:9px;padding:4px;text-align:center}
+.lcard .ph{height:54px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.lcard .nm{font-size:9px;color:var(--ink-soft);margin-top:2px;height:20px;overflow:hidden}
+.page{position:relative;width:380px;height:537px;background:#fff;border:1px solid #bbb;box-shadow:0 4px 16px rgba(0,0,0,.14);flex-shrink:0}
+.el{position:absolute;overflow:hidden;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:38px}
+h3{font-size:12px;margin:10px 0 6px;color:var(--bordeaux);text-transform:uppercase;letter-spacing:.4px}
+/* ---- overlay À paramétrer ---- */
+.ov{position:fixed;inset:0;background:rgba(26,15,10,.45);display:none;align-items:flex-start;justify-content:center;padding:54px 14px 14px;z-index:50}
+.ov.open{display:flex}
+.sheet{background:var(--cream);border-radius:14px;max-width:1000px;width:100%;max-height:calc(100vh - 70px);overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.sheet .sh{position:sticky;top:0;background:var(--bordeaux);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sheet .sh .count{background:#fff;color:var(--bordeaux);border-radius:20px;padding:1px 11px;font-weight:800}
+.sheet .sh .x{margin-left:auto;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:5px 10px;cursor:pointer;font-weight:700}
+.body{padding:14px}
+.cap{font-size:12px;color:var(--ink-mute);margin:0 0 10px}
+.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+@media(max-width:760px){.grid5{grid-template-columns:repeat(3,1fr)}}
+.mc{background:#fff;border:1px solid var(--line);border-radius:11px;padding:6px;text-align:center;cursor:pointer;transition:.15s;position:relative}
+.mc:hover{border-color:var(--bordeaux)}
+.mc.sel{box-shadow:0 0 0 2px var(--bordeaux);border-color:var(--bordeaux)}
+.mc .ph{height:78px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px}
+.mc .nm{font-size:11px;font-weight:700;margin-top:4px;height:28px;overflow:hidden;line-height:1.12}
+.mc .num{font-size:10px;color:var(--ink-mute)}
+.mc .ok{margin-top:5px;width:100%;background:var(--green);color:#fff;border:none;border-radius:8px;padding:6px;font-weight:800;font-size:11px;cursor:pointer}
+.mc.leaving{opacity:0;transform:scale(.85);pointer-events:none}
+.empty{grid-column:1/-1;text-align:center;color:var(--ink-mute);padding:26px;background:#fff;border-radius:11px;border:1px dashed var(--line)}
+.detail{background:#fff;border:1px solid var(--line);border-radius:11px;padding:13px;margin-top:12px}
+.detail .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:10px}
+.detail .top b{font-size:15px}
+.chip{display:inline-block;background:#fbeef2;color:var(--bordeaux);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700}
+.cake{display:flex;gap:14px;flex-wrap:wrap}
+.cake .big{width:140px;height:140px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:58px;flex-shrink:0}
+.specs{flex:1;min-width:210px}
+.specs .r{display:flex;gap:8px;padding:3px 0;font-size:12.5px;border-bottom:1px dashed #f0e8db}
+.specs .k{color:var(--ink-mute);width:88px;flex-shrink:0}
+.acc{margin-top:13px}
+.acc .list{display:flex;gap:9px;flex-wrap:wrap;margin-top:6px}
+.acc .a{background:var(--cream-warm);border:1px solid var(--line);border-radius:10px;padding:6px;text-align:center;width:92px}
+.acc .a .ph{height:56px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:26px}
+.acc .a .nm{font-size:10px;margin-top:3px;height:24px;overflow:hidden;line-height:1.1}
+.btnopen{margin-left:auto;background:var(--bordeaux);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px}
+.none{color:var(--ink-mute);font-style:italic;font-size:12px}
+</style></head><body>
+
+<!-- ====== Barre du haut RÉELLE ====== -->
+<header>
+  <button class="hb" style="background:rgba(255,255,255,.1)">←</button>
+  <span class="fr" style="font-size:15px;margin-right:4px">Lily Studio</span>
+  <span class="sep"></span>
+  <button class="hb">✍️ Texte</button>
+  <button class="hb">⬤ Forme</button>
+  <button class="hb">⊙ Rond+texte</button>
+  <button class="hb">🎂 Dummy</button>
+  <span class="sep"></span>
+  <button class="hb">↩️</button><button class="hb">↪️</button>
+  <span class="sep"></span>
+  <button class="hb">🪄 Ranger</button>
+  <button class="hb">🧩 Imbriquer</button>
+  <button class="hb">📐 Caler</button>
+  <button class="hb">🖌️ Zone</button>
+  <span class="sep"></span>
+  <select class="hb"><option>A4 (21×29.7)</option><option>Burnaway</option><option>XL</option></select>
+  <button class="hb">＋ Page</button>
+  <button class="hb">🗑️ Vider</button>
+  <!-- ★ NOUVEAU bouton -->
+  <button class="hb param" onclick="openOv()">🎯 À paramétrer <span class="b" id="hcount">10</span></button>
+  <span style="flex:1"></span>
+  <button class="hb">💾 Enregistrer</button>
+  <button class="hb hbw">🖨️ Imprimer</button>
+</header>
+
+<!-- ====== Corps : bibliothèque / plan / panneau (réel) ====== -->
+<div class="wrap">
+  <div class="col lib">
+    <div class="row" style="margin-bottom:6px">
+      <button class="btn p" style="flex:1">＋ Charger</button>
+      <button class="btn" style="width:34px">🧩</button>
+      <button class="btn" style="width:34px">🗑️</button>
+    </div>
+    <input class="inp" placeholder="Rechercher…">
+    <select class="inp"><option>Tous les thèmes (6 008)</option><option>Disney</option><option>Dessins animés</option></select>
+    <div class="grid2">
+      <div class="lcard"><div class="ph" style="background:#ffe3ef">🕷️</div><div class="nm">Spiderman</div></div>
+      <div class="lcard"><div class="ph" style="background:#e3f0ff">❄️</div><div class="nm">Elsa</div></div>
+      <div class="lcard"><div class="ph" style="background:#fff2d6">🦁</div><div class="nm">Roi Lion</div></div>
+      <div class="lcard"><div class="ph" style="background:#e8ffe6">🐢</div><div class="nm">Pikachu</div></div>
+      <div class="lcard"><div class="ph" style="background:#ffe6e6">⚽</div><div class="nm">Foot</div></div>
+      <div class="lcard"><div class="ph" style="background:#f0e6ff">👑</div><div class="nm">Princesse</div></div>
+    </div>
+  </div>
+
+  <div class="center" style="position:relative">
+    <div class="page" id="page">
+      <div class="el" style="left:26px;top:30px;width:130px;height:130px;background:#ffe3ef;border-radius:50%">🕷️</div>
+      <div class="el" style="left:185px;top:54px;width:150px;height:105px;background:#e3f0ff">❄️</div>
+      <div class="el" style="left:55px;top:210px;font-size:26px;font-family:'Dancing Script',cursive;color:#7a1f3d">Joyeux anniversaire</div>
+      <div class="el" style="left:110px;top:300px;width:150px;height:110px;background:#fff2d6">🦁</div>
+    </div>
+    <!-- vignette de référence « en face » (chargée en cliquant un modèle à paramétrer) -->
+    <div id="refbox" style="display:none;position:absolute;top:24px;right:24px;width:120px;border-radius:12px;padding:8px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25);border:2px solid var(--bordeaux);cursor:grab"></div>
+  </div>
+
+  <div class="col panel" id="panel"></div>
+</div>
+
+<!-- ====== Overlay « À paramétrer » (ouvert depuis le header) ====== -->
+<div class="ov" id="ov">
+  <div class="sheet">
+    <div class="sh">
+      <span class="fr" style="font-size:15px">🎯 Modèles à paramétrer</span>
+      <span class="count" id="scount">10</span>
+      <span style="font-size:12px;opacity:.9">Coche « ✓ Paramétré » → la photo part, la suivante arrive.</span>
+      <button class="x" onclick="closeOv()">✕ Fermer</button>
+    </div>
+    <div class="body">
+      <p class="cap">Clique une photo → la commande se charge dans le plan de travail (photo de référence + détails à droite). Quand c'est paramétré, coche « ✓ Paramétré » → elle disparaît et la suivante prend sa place.</p>
+      <div class="grid5" id="grid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS=['#ffe3ef','#e3f0ff','#fff2d6','#e8ffe6','#f0e6ff','#ffe6e6','#e6fff8','#fdeccf'];
+const MODELS=[
+ {num:'S50012',client:'Sara B.',date:'26/06',cake:'🦄',nom:'Licorne pastel',theme:'Licorne',age:'5 ans',msg:'Joyeux anniversaire Lina',taille:'20 cm (15 pers)',parfum:'Vanille / Fraise',acc:[{e:'🧁',n:'12 cupcakes'},{e:'🎀',n:'Topper prénom'}]},
+ {num:'S50018',client:'Karim O.',date:'26/06',cake:'⚽',nom:'Ballon de foot',theme:'Football',age:'8 ans',msg:'Bon anniv Adam',taille:'24 cm (20 pers)',parfum:'Chocolat',acc:[{e:'🏆',n:'Mini coupe'}]},
+ {num:'S50021',client:'Nadia F.',date:'27/06',cake:'👑',nom:'Princesse',theme:'Princesse',age:'4 ans',msg:'Maya',taille:'18 cm',parfum:'Vanille',acc:[]},
+ {num:'S50025',client:'Yassine',date:'27/06',cake:'🕷️',nom:'Spiderman',theme:'Spiderman',age:'6 ans',msg:'Rayan',taille:'20 cm',parfum:'Praliné',acc:[{e:'🍪',n:'Sablés déco'},{e:'🎈',n:'Ballon 6'}]},
+ {num:'S50030',client:'Imane',date:'28/06',cake:'🌸',nom:'Fleurs roses',theme:'Fleurs',age:'—',msg:'Bravo !',taille:'26 cm',parfum:'Citron',acc:[]},
+ {num:'S50031',client:'Omar T.',date:'28/06',cake:'🦁',nom:'Roi Lion',theme:'Roi Lion',age:'3 ans',msg:'Sami',taille:'20 cm',parfum:'Vanille',acc:[{e:'🧁',n:'6 cupcakes'}]},
+ {num:'S50033',client:'Lina',date:'28/06',cake:'🚗',nom:'Voiture rouge',theme:'Voiture',age:'5 ans',msg:'Ziad',taille:'22 cm',parfum:'Chocolat',acc:[]},
+ {num:'S50037',client:'Hajar',date:'29/06',cake:'🐰',nom:'Lapin',theme:'Animaux',age:'2 ans',msg:'Joyeux anniv',taille:'18 cm',parfum:'Fraise',acc:[{e:'🥕',n:'Déco carottes'}]},
+ {num:'S50040',client:'Reda',date:'29/06',cake:'🎮',nom:'Manette',theme:'Gaming',age:'10 ans',msg:'Anas',taille:'24 cm',parfum:'Oreo',acc:[]},
+ {num:'S50044',client:'Salma',date:'30/06',cake:'🌈',nom:'Arc-en-ciel',theme:'Arc-en-ciel',age:'7 ans',msg:'Aya',taille:'20 cm',parfum:'Vanille',acc:[{e:'🍭',n:'Sucettes'}]},
+ {num:'S50048',client:'Mehdi',date:'30/06',cake:'🦖',nom:'Dinosaure',theme:'Dino',age:'5 ans',msg:'Iyad',taille:'22 cm',parfum:'Chocolat',acc:[]},
+ {num:'S50051',client:'Wafa',date:'01/07',cake:'🐠',nom:'Monde marin',theme:'Mer',age:'4 ans',msg:'Nour',taille:'20 cm',parfum:'Vanille',acc:[{e:'🐚',n:'Coquillages'}]},
+ {num:'S50055',client:'Bilal',date:'01/07',cake:'🏎️',nom:'F1',theme:'Course',age:'9 ans',msg:'Zakaria',taille:'26 cm',parfum:'Praliné',acc:[]},
+ {num:'S50060',client:'Sofia',date:'02/07',cake:'🦋',nom:'Papillons',theme:'Nature',age:'6 ans',msg:'Malak',taille:'18 cm',parfum:'Citron',acc:[]},
+];
+const VISIBLE=10;
+let queue=MODELS.map((m,i)=>({...m,color:COLORS[i%COLORS.length]}));
+let current=null;   // modèle chargé dans le plan de travail
+function openOv(){document.getElementById('ov').classList.add('open');render();}
+function closeOv(){document.getElementById('ov').classList.remove('open');}
+function render(){
+  const grid=document.getElementById('grid'); const shown=queue.slice(0,VISIBLE);
+  document.getElementById('scount').textContent=queue.length;
+  document.getElementById('hcount').textContent=queue.length;
+  grid.innerHTML = queue.length===0 ? '<div class="empty">✅ Tout est paramétré, bravo !</div>'
+   : shown.map(m=>`<div class="mc" onclick="load('${m.num}')" title="Cliquer = charger dans le plan de travail">
+       <div class="ph" style="background:${m.color}">${m.cake}</div>
+       <div class="nm">${m.nom}</div><div class="num">${m.num} · ${m.client}</div>
+       <button class="ok" onclick="event.stopPropagation();param('${m.num}',this)">✓ Paramétré</button></div>`).join('');
+}
+// CLIC sur une photo = charge la commande dans le plan (remplace « Afficher les commandes »)
+function load(n){ current=queue.find(m=>m.num===n); closeOv(); renderWork(); }
+function param(n,btn){btn.closest('.mc').classList.add('leaving');setTimeout(()=>{queue=queue.filter(m=>m.num!==n);if(current&&current.num===n)current=null;render();renderWork();},170);}
+function paramCurrent(){ if(!current)return; queue=queue.filter(m=>m.num!==current.num); current=null; renderWork(); }
+function renderWork(){
+  const ref=document.getElementById('refbox'), panel=document.getElementById('panel');
+  if(!current){
+    ref.style.display='none';
+    panel.innerHTML='<h3>Réglages</h3><p style="font-size:12px;color:var(--ink-soft)">Clique un modèle dans « 🎯 À paramétrer » → la commande se charge ici (photo de référence + détails).</p>';
+    return;
+  }
+  ref.style.display='block'; ref.style.background=current.color;
+  ref.innerHTML=`<div style="font-size:42px">${current.cake}</div><div style="font-size:10px;font-weight:700;color:#7a1f3d">${current.num} · réf.</div><div style="font-size:9px;color:#8a7a70">glisse-moi</div>`;
+  panel.innerHTML=`
+    <div class="detail" style="margin-top:0">
+      <div class="top"><b>${current.num}</b><span class="chip">${current.client}</span><span class="chip">📅 ${current.date}</span></div>
+      <div class="specs">
+        <div class="r"><span class="k">Modèle</span><b>${current.nom}</b></div>
+        <div class="r"><span class="k">Thème</span><span>${current.theme}</span></div>
+        <div class="r"><span class="k">Âge</span><span>${current.age}</span></div>
+        <div class="r"><span class="k">Message</span><span>${current.msg}</span></div>
+        <div class="r"><span class="k">Taille</span><span>${current.taille}</span></div>
+        <div class="r"><span class="k">Parfum</span><span>${current.parfum}</span></div>
+      </div>
+      <div class="acc"><b style="font-size:12px">Accessoires</b>
+        ${current.acc.length?`<div class="list">${current.acc.map(a=>`<div class="a"><div class="ph" style="background:${COLORS[a.n.length%COLORS.length]}">${a.e}</div><div class="nm">${a.n}</div></div>`).join('')}</div>`:'<div class="none">Aucun accessoire.</div>'}</div>
+    </div>
+    <button class="btn p" style="margin-top:8px;background:var(--green);border-color:var(--green)" onclick="paramCurrent()">✓ Paramétré (passer au suivant)</button>
+    <button class="btn" onclick="alert('Ouvre la commande ${current.num} dans l\\'app')">Ouvrir la commande ↗</button>`;
+}
+renderWork();
+</script>
+</body></html>

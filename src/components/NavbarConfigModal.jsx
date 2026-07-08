@@ -2,6 +2,9 @@ import { useState, useRef } from 'react'
 import { X, RotateCcw, GripVertical, FolderPlus, Trash2 } from 'lucide-react'
 import { toast } from '../lib/toast'
 
+// Emojis proposés pour les dossiers (clic pour choisir).
+const FOLDER_EMOJIS = ['📁', '🗂️', '🥐', '☕', '🧰', '📦', '🍰', '🧁', '🥪', '🛒', '📊', '💰', '🏢', '📱', '📄', '🏷️', '❄️', '🧾', '🎨', '🔧', '🌙', '📅', '✅', '📋', '⭐', '🔴', '🟢', '🟡', '🔵', '🟣']
+
 // ============================================================
 // NavbarConfigModal v2 : l'utilisateur range ses onglets comme il veut.
 // - onglets "seuls" = boutons directs dans la barre rouge
@@ -82,6 +85,7 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
   const tabsByView = Object.fromEntries(tabs.map(t => [t.view, t]))
   const [items, setItems] = useState(() => buildItems(config, tabs))
   const [saving, setSaving] = useState(false)
+  const [pickerFor, setPickerFor] = useState(null)   // id du dossier dont le choix d'emoji est ouvert
 
   // Onglets rangés nulle part -> section "Caché (menu Plus)"
   const placed = new Set()
@@ -221,13 +225,21 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
                 <div className="border border-line rounded-xl mb-2 bg-cream">
                   <div className="flex items-center gap-2 px-2 py-2 border-b border-line">
                     <span {...handleProps} className="text-ink-mute flex-shrink-0"><GripVertical size={16} /></span>
-                    <input
-                      value={it.emoji}
-                      onChange={e => updateGroup(it.id, { emoji: e.target.value.slice(0, 2) })}
-                      onPointerDown={e => e.stopPropagation()}
-                      className="w-9 text-center text-[16px] border border-line rounded-md bg-cream-warm py-0.5"
-                      title="Emoji du dossier"
-                    />
+                    <div className="relative flex-shrink-0" onPointerDown={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => setPickerFor(pickerFor === it.id ? null : it.id)}
+                        className="w-9 h-8 text-center text-[16px] border border-line rounded-md bg-cream-warm"
+                        title="Choisir l'emoji du dossier"
+                      >{it.emoji || '📁'}</button>
+                      {pickerFor === it.id && (
+                        <div className="absolute z-[60] top-full left-0 mt-1 bg-cream border border-line rounded-lg shadow-xl p-2 grid grid-cols-6 gap-1 w-[212px]">
+                          {FOLDER_EMOJIS.map(em => (
+                            <button key={em} onClick={() => { updateGroup(it.id, { emoji: em }); setPickerFor(null) }}
+                              className="text-[18px] leading-none p-1.5 rounded hover:bg-cream-warm">{em}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <input
                       value={it.label}
                       onChange={e => updateGroup(it.id, { label: e.target.value })}

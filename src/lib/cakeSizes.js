@@ -3,7 +3,7 @@
 // Utilise par OrderModal et l'impression PDF
 // ============================================================
 
-const SIZE_TABLE = [
+export const SIZE_TABLE = [
   { cm: 15, pers: 5 },
   { cm: 20, pers: 10 },
   { cm: 25, pers: 15 },
@@ -11,13 +11,13 @@ const SIZE_TABLE = [
   { cm: 35, pers: 30 },
   { cm: 40, pers: 40 },
   { cm: 45, pers: 60 },
-  { cm: 50, pers: 80 },
-  { cm: 55, pers: 100 },
-  { cm: 60, pers: 130 },
-  { cm: 65, pers: 130 },
-  { cm: 70, pers: 200 },
-  { cm: 75, pers: 200 },
-  { cm: 80, pers: 200 },
+  { cm: 50, pers: 75 },
+  { cm: 55, pers: 90 },
+  { cm: 60, pers: 105 },
+  { cm: 65, pers: 125 },
+  { cm: 70, pers: 145 },
+  { cm: 75, pers: 165 },
+  { cm: 80, pers: 190 },
 ]
 
 export function computeSizesForCake(pers, etages) {

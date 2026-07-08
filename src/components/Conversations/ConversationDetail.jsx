@@ -8,7 +8,7 @@ import { createModification } from '../../lib/modifications'
 import NewConversationModal from './NewConversationModal'
 import OrderEditModal from '../OrderEditModal'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Search, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X } from 'lucide-react'
+import { ArrowLeft, Search, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X, Copy } from 'lucide-react'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -97,7 +97,17 @@ function renderHighlighted(text, term, nextIndex, activeIndex) {
   return out
 }
 
-export default function ConversationDetail({ conversationId, user, onBack, relanceRef = null }) {
+// Rend un texte avec ses URL (http/https) cliquables (ouverture nouvel onglet).
+function linkify(text) {
+  return String(text).split(/(https?:\/\/[^\s]+)/g).map((part, i) => (
+    /^https?:\/\//.test(part)
+      ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+           className="underline break-all" style={{ color: 'inherit' }}>{part}</a>
+      : part
+  ))
+}
+
+export default function ConversationDetail({ conversationId, user, onBack, relanceRef = null, onNewOrder = null, onEditOrder = null }) {
   const [conv, setConv] = useState(null)
   const [linkedOrder, setLinkedOrder] = useState(null)   // commande liée (link_order_ref) complète
   const [confirmingOrder, setConfirmingOrder] = useState(false)
@@ -118,6 +128,10 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
   const [sending, setSending] = useState(false)
+  // Verrou SYNCHRONE anti-double-envoi : le state `sending` se met à jour trop tard
+  // (après le re-render React) pour bloquer un 2ᵉ clic très rapproché ou un clic
+  // pendant une fenêtre de confirmation. Ce ref, lui, se pose instantanément.
+  const sendingRef = useRef(false)
   const [sendError, setSendError] = useState('')
   const [statusBusy, setStatusBusy] = useState(false)
   const [headerTop, setHeaderTop] = useState(0)
@@ -198,8 +212,10 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       finally { setOrdersBusy(false) }
     }
   }
-  // Ouvre « Nouvelle commande » (nouvel onglet) avec le nom + téléphone du client pré-remplis.
+  // Ouvre « Nouvelle commande » avec le nom + téléphone du client pré-remplis.
   function openNewOrder() {
+    // Depuis l'écran Conversations : ouvre le formulaire en PANNEAU à côté du chat.
+    if (onNewOrder) { onNewOrder({ phone: conv?.client_phone || '', name: conv?.client_name || '' }); return }
     const params = new URLSearchParams({ newcmd: '1' })
     if (conv?.client_phone) params.set('cmdphone', conv.client_phone)
     if (conv?.client_name) params.set('cmdname', conv.client_name)
@@ -505,6 +521,24 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     setFile(f)
   }
 
+  // Coller (Cmd/Ctrl+V) une image directement dans la zone d'écriture → devient la pièce jointe.
+  function onPasteFile(e) {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (const it of items) {
+      if (!it.type.startsWith('image/')) continue
+      const f0 = it.getAsFile()
+      if (!f0) continue
+      if (f0.size > 5 * 1024 * 1024) { setSendError('Fichier trop volumineux (max 5 MB).'); return }
+      // Une image collée n'a parfois pas de nom → on lui en donne un (sinon l'upload échoue).
+      const f = f0.name ? f0 : new File([f0], `collee.${(f0.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f0.type })
+      e.preventDefault()
+      setSendError('')
+      setFile(f)
+      return
+    }
+  }
+
   // Insère un texte à la position du curseur dans la zone d'écriture
   function insertAtCursor(snippet) {
     const el = textareaRef.current
@@ -542,7 +576,8 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   }
 
   async function sendQuickReply(q) {
-    if (!conv || sending) return
+    if (!conv || sendingRef.current) return
+    sendingRef.current = true
     setRepliesDrawerOpen(false)   // referme le tiroir dès qu'un choix est cliqué
     setSending(true); setSendError('')
     try {
@@ -562,6 +597,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       setSendError(e.message)
     } finally {
       setSending(false)
+      sendingRef.current = false
     }
   }
 
@@ -582,7 +618,9 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     if (part) params.set('part', String(part))
     const link = `${window.location.origin}/?${params.toString()}`
     const body = `Si c'est possible et pour vous faciliter les choses, vous pouvez composer votre commande tranquillement ici 👇\n${link}\n(gâteau, parfum, thème, date…) — on s'occupe du reste avec plaisir 💛`
-    if (!(await confirmDialog('Envoyer le lien de commande à ce client par WhatsApp ?'))) return
+    if (sendingRef.current) return
+    sendingRef.current = true
+    if (!(await confirmDialog('Envoyer le lien de commande à ce client par WhatsApp ?'))) { sendingRef.current = false; return }
     setSending(true); setSendError('')
     try {
       const msg = await sendMessage({ conversationId, clientPhone: conv.client_phone, userId: user.id, text: body })
@@ -590,7 +628,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       if (conv.status === 'fermee') { try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ } }
       toast.success('Lien de commande envoyé ✅')
     } catch (e) { setSendError(e.message); toast.error('Échec : ' + e.message) }
-    finally { setSending(false) }
+    finally { setSending(false); sendingRef.current = false }
   }
 
   // 2ᵉ lien : catalogue (entremets, mignardises, salé, surgelés, boissons, gourmandises, gâteaux secs).
@@ -603,7 +641,9 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     if (conv.client_phone) params.set('tel', conv.client_phone)
     const link = `${window.location.origin}/?${params.toString()}`
     const body = `Pour vous faciliter les choses, vous pouvez composer votre commande ici 👇\n${link}\n(entremets, mignardises, salé, boissons, gourmandises…) — on s'occupe du reste avec plaisir 💛`
-    if (!(await confirmDialog('Envoyer le lien « catalogue » à ce client par WhatsApp ?'))) return
+    if (sendingRef.current) return
+    sendingRef.current = true
+    if (!(await confirmDialog('Envoyer le lien « catalogue » à ce client par WhatsApp ?'))) { sendingRef.current = false; return }
     setSending(true); setSendError('')
     try {
       const msg = await sendMessage({ conversationId, clientPhone: conv.client_phone, userId: user.id, text: body })
@@ -611,7 +651,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       if (conv.status === 'fermee') { try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ } }
       toast.success('Lien catalogue envoyé ✅')
     } catch (e) { setSendError(e.message); toast.error('Échec : ' + e.message) }
-    finally { setSending(false) }
+    finally { setSending(false); sendingRef.current = false }
   }
 
   // Envoie une INFORMATION libre au client (modèle wati_info hors fenêtre 24h, sinon message normal).
@@ -636,6 +676,8 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     } finally {
       setCorrecting(false)
     }
+    if (sendingRef.current) return
+    sendingRef.current = true
     setSending(true); setSendError('')
     try {
       const res = await fetch('/api/wati-webhook?action=send-template', {
@@ -649,7 +691,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       if (conv.status === 'fermee') { try { setConv(await reopenConversation(conversationId, user.id)) } catch (_) { /* ignore */ } }
       toast.success('Information envoyée ✅')
     } catch (e) { setSendError(e.message); toast.error('Échec : ' + e.message) }
-    finally { setSending(false) }
+    finally { setSending(false); sendingRef.current = false }
   }
 
   async function handleSend() {
@@ -677,6 +719,8 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       }
     }
 
+    if (sendingRef.current) return
+    sendingRef.current = true
     setSending(true)
     setSendError('')
     try {
@@ -706,6 +750,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       setSendError(e.message)
     } finally {
       setSending(false)
+      sendingRef.current = false
     }
   }
 
@@ -716,10 +761,12 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   }, [])
 
   async function sendVoice(audioFile) {
-    if (!conv) return
+    if (!conv || sendingRef.current) return
+    sendingRef.current = true
     // Avertir si le format n'est pas compatible WhatsApp (webm)
     if (/webm/i.test(audioFile.type)) {
       if (!await confirmDialog("⚠️ Ton navigateur a enregistré en WebM, format que WhatsApp ne lit pas toujours. Le client risque de ne pas recevoir l'audio.\n\nAstuce : utilise Safari (iPhone/Mac) ou Firefox pour des vocaux fiables.\n\nEnvoyer quand même ?", { confirmLabel: 'Envoyer' })) {
+        sendingRef.current = false
         return
       }
     }
@@ -746,6 +793,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
       toast.error("Échec d'envoi de l'audio : " + e.message)
     } finally {
       setSending(false)
+      sendingRef.current = false
     }
   }
 
@@ -1024,7 +1072,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                       {confirmable && (
                         <button onClick={handleConfirmOrder} disabled={confirmingOrder} title={`Confirmer ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium tracking-wider bg-emerald-500 text-white hover:bg-emerald-600 transition-all disabled:opacity-50">{confirmingOrder ? '…' : 'Confirmer'}</button>
                       )}
-                      <button onClick={() => setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Modifier</button>
+                      <button onClick={() => onEditOrder ? onEditOrder(linkedOrder) : setEditOrder(linkedOrder)} title={`Modifier les articles de ${linkedOrder.name}`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-cream/15 text-cream border border-cream/30 hover:bg-cream/30 transition-all">Modifier</button>
                       {!orderPast && !isCancel && (
                         <button onClick={handleCancelOrder} disabled={confirmingOrder} title={`Annuler ${linkedOrder.name} dans Odoo`} className="flex-shrink-0 px-2 py-1 rounded-full text-[11px] font-medium tracking-wider bg-red-500/80 text-cream border border-red-300/40 hover:bg-red-600 transition-all disabled:opacity-50">Annuler</button>
                       )}
@@ -1173,11 +1221,18 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                     </a>
                   )
                 })()}
-                {m.body && <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{threadTerm ? renderHighlighted(m.body, threadTerm, nextHl, matchIndex) : m.body}</div>}
+                {m.body && <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{threadTerm ? renderHighlighted(m.body, threadTerm, nextHl, matchIndex) : linkify(m.body)}</div>}
                 <div className={`flex items-center gap-2 mt-1 ${isAgent ? 'justify-end' : ''}`}>
                   <span className={`text-[9px] ${isAgent ? 'text-cream/70' : 'text-ink-mute'}`}>
                     {isAgent && m.sender?.full_name ? `${m.sender.full_name} · ` : ''}{fmtTime(m.sent_at)}
                   </span>
+                  {!isAgent && m.body && (
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(m.body); toast.success('Copié ✓') }}
+                      title="Copier ce message"
+                      className="text-ink-mute hover:text-bordeaux flex-shrink-0"
+                    ><Copy size={12} strokeWidth={1.8} /></button>
+                  )}
                   {isAgent && m.delivery_status && (
                     <span className="text-[10px] leading-none flex-shrink-0" title={
                       m.delivery_status === 'failed' ? 'Non reçu par la cliente'
@@ -1299,8 +1354,9 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
               value={text}
               onChange={e => { const v = e.target.value; setText(v); if (!v.trim()) setCorrected(false) }}
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px' }}
+              onPaste={onPasteFile}
               rows={3}
-              placeholder="Écrire une réponse…"
+              placeholder="Écrire une réponse… (tu peux coller une image)"
               className="w-full resize-none max-h-[200px] px-4 py-3 rounded-2xl border border-line bg-cream-warm text-[15px] leading-relaxed text-ink focus:outline-none focus:border-bordeaux"
             />
             <div className="flex items-center gap-2">

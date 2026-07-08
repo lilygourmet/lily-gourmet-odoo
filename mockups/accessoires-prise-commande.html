@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Détails accessoire à la prise de commande</title>
+<style>
+  :root{
+    --bordeaux:#7a1f3d; --cream:#FBF6EE; --cream-warm:#f4ecdf; --line:#e7dccb;
+    --ink:#241a16; --ink-soft:#6b5b52; --pink:#fdf3f6; --gold:#C9A24B;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#efe7d8;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);padding:24px}
+  h1{font-family:Georgia,serif;font-style:italic;color:var(--bordeaux);font-size:24px;text-align:center;margin:4px 0 4px}
+  .sub{text-align:center;color:var(--ink-soft);font-size:13px;margin-bottom:22px}
+  .wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:430px 1fr;gap:26px;align-items:start}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+
+  /* fenêtre configurateur (comme dans l'app) */
+  .modal{background:var(--cream);border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.18);border:1px solid var(--line)}
+  .modal .top{background:var(--bordeaux);color:var(--cream);padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+  .modal .top h3{margin:0;font-family:Georgia,serif;font-style:italic;font-size:18px}
+  .modal .body{padding:16px;max-height:78vh;overflow:auto}
+  .lbl{font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:6px}
+  .field{margin-bottom:14px}
+  input.txt,select.txt{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13px;background:#fff}
+  .qtybox{display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .qtybox button{width:40px;height:40px;border:0;background:#fff;font-size:20px;color:var(--bordeaux);cursor:pointer}
+  .qtybox input{width:56px;height:40px;border:0;border-left:1px solid var(--line);border-right:1px solid var(--line);text-align:center;font-size:16px;font-weight:700}
+
+  /* bloc bordeaux (comme cake design) */
+  .block{border:1px solid var(--bordeaux);border-radius:14px;padding:12px;background:var(--pink);margin-bottom:14px}
+  .block .head{font-size:12px;font-weight:800;color:var(--bordeaux);margin-bottom:9px;text-transform:uppercase;letter-spacing:.3px}
+  .opt{border:1px dashed var(--gold);background:#fffdf7}
+  .opt .head{color:#9a7d1e}
+  .hint{font-size:11px;color:var(--ink-soft);margin-top:6px}
+
+  /* palette de couleurs */
+  .swatches{display:flex;flex-wrap:wrap;gap:7px}
+  .sw{width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer;position:relative}
+  .sw.sel{box-shadow:0 0 0 2px var(--bordeaux);transform:scale(1.08)}
+  .sw.sel::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;text-shadow:0 0 2px rgba(0,0,0,.6)}
+  .selname{font-size:12px;color:var(--bordeaux);font-weight:700;margin-top:8px;min-height:16px}
+
+  /* chips (type / forme) */
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 13px;font-size:12px;font-weight:700;color:var(--ink-soft);cursor:pointer}
+  .chip.sel{background:var(--bordeaux);color:var(--cream);border-color:var(--bordeaux)}
+
+  .addbtn{width:100%;background:var(--bordeaux);color:var(--cream);border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;margin-top:4px}
+  .price{font-size:13px;color:var(--ink-soft);text-align:center;margin:6px 0 10px}
+  .price b{color:var(--bordeaux)}
+
+  /* colonne droite : explication du flux */
+  .flow{display:flex;flex-direction:column;gap:16px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(122,31,61,.06)}
+  .card h4{margin:0 0 8px;color:var(--bordeaux);font-size:15px}
+  .arrow{text-align:center;color:var(--gold);font-size:22px;line-height:1}
+  .recap{background:var(--pink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px}
+  .recap b{color:var(--bordeaux)}
+  .tag{display:inline-block;background:var(--bordeaux);color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;margin-right:6px}
+  .miniorder{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:10px}
+  .thumb{width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,#f6dbe4,#f4ecdf);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:20px}
+  .note{font-size:12px;color:var(--ink-soft);line-height:1.5}
+  .legend{font-size:11px;color:#9a7d1e;background:#fffdf7;border:1px dashed var(--gold);border-radius:8px;padding:6px 9px;display:inline-block}
+</style>
+</head>
+<body>
+  <h1>Détails accessoire — dès la prise de commande</h1>
+  <div class="sub">Maquette à valider · quand on ajoute une gourmandise, on peut (si on a l'info) noter <b>quantité · couleur · forme</b> → ça remonte au calendrier ET à l'onglet Accessoires.<br><b style="color:#7a1f3d">Pour les gourmandises, PLUS RIEN n'est obligatoire</b> (ni modèle/décor/fleurs, ni ces nouveaux champs) — on peut ajouter au panier sans rien remplir.</div>
+
+  <div class="wrap">
+    <!-- ============ GAUCHE : le configurateur ============ -->
+    <div class="modal">
+      <div class="top"><h3>Cupcakes</h3><span style="opacity:.7">✕</span></div>
+      <div class="body">
+
+        <!-- options normales du produit (existant) -->
+        <div class="field">
+          <div class="lbl">Parfum</div>
+          <select class="txt"><option>Vanille</option><option>Chocolat</option><option>Citron</option></select>
+        </div>
+
+        <!-- NOUVEAU bloc optionnel -->
+        <div class="block opt">
+          <div class="head">✨ Détails accessoire <span style="font-weight:500;text-transform:none;letter-spacing:0">(si tu as l'info — sinon laisse vide)</span></div>
+
+          <div class="field">
+            <div class="lbl">Quantité</div>
+            <div class="qtybox">
+              <button onclick="chQty(-1)">–</button>
+              <input id="qty" value="12" readonly>
+              <button onclick="chQty(1)">+</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="lbl">Couleur (palette production)</div>
+            <div class="swatches" id="pal"></div>
+            <div class="selname" id="selname">— aucune couleur choisie —</div>
+          </div>
+
+          <div class="field" id="formeField" style="display:none">
+            <div class="lbl">Forme</div>
+            <div class="chips" id="formes"></div>
+          </div>
+
+          <div class="hint">Ces infos sont facultatives. Elles seront écrites sur la commande et pré-rempliront la fiche dans l'onglet Accessoires.</div>
+        </div>
+
+        <div class="field">
+          <div class="lbl">📎 Photo (optionnel)</div>
+          <input class="txt" placeholder="Joindre une photo…" readonly>
+        </div>
+
+        <div class="price">Prix : <b>120 DH</b></div>
+        <button class="addbtn">Ajouter au panier</button>
+      </div>
+    </div>
+
+    <!-- ============ DROITE : le flux ============ -->
+    <div class="flow">
+      <div class="card">
+        <h4>1 · Ce qui est enregistré sur la commande</h4>
+        <div class="recap" id="recap">
+          <b>Cupcakes</b> · Vanille<br>
+          <span id="recapDetails" style="color:#9a7d1e">— (aucun détail accessoire saisi) —</span>
+        </div>
+        <div class="note" style="margin-top:8px">Vide = comportement actuel, rien ne change. Rempli = les détails s'ajoutent au libellé de l'article.</div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <div class="card">
+        <h4>2 · Sur le calendrier (fiche commande)</h4>
+        <div class="miniorder">
+          <div class="thumb">🧁</div>
+          <div>
+            <div style="font-weight:700;font-size:14px">S50312 · Yasmine K.</div>
+            <div class="note" id="calLine">1 accessoire · Cupcakes</div>
+          </div>
+        </div>
+        <div class="note" style="margin-top:8px">En cliquant la commande, l'équipe voit tout de suite les détails saisis (au lieu de devoir demander).</div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <div class="card">
+        <h4>3 · Onglet Accessoires (fiche pré-remplie)</h4>
+        <div class="recap">
+          <span class="tag">Lot 1</span>
+          <span id="ficheLine" style="color:#9a7d1e">quantité / couleur / forme à définir</span>
+        </div>
+        <div class="note" style="margin-top:8px">Si les détails sont saisis à la commande, le lot est <b>pré-rempli</b> → moins de ressaisie. Sinon, ça reste « à définir » comme aujourd'hui.</div>
+        <div style="margin-top:10px"><span class="legend">Règle : les détails restent modifiables ensuite dans l'onglet Accessoires.</span></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Vraie palette production (gm_palette)
+  const PALETTE = [
+    {nom:"Rouge",hex:"#e32400"},{nom:"Saumon",hex:"#ffc4ab"},{nom:"Rose bebe",hex:"#fad9e0"},
+    {nom:"orange",hex:"#ff8647"},{nom:"Jaune vif",hex:"#f5d537"},{nom:"Jaune bébé",hex:"#fff995"},
+    {nom:"vert bebe",hex:"#b8e8d4"},{nom:"Vert bebe",hex:"#bccfa8"},{nom:"Bleu ciel",hex:"#a8d4e8"},
+    {nom:"Lilas",hex:"#cdb4d9"},{nom:"Beige sable",hex:"#d4c2a0"},{nom:"Noir",hex:"#000000"},
+    {nom:"Vert gazon",hex:"#007b0d"},{nom:"bleu",hex:"#004fd3"},{nom:"Bleu marine",hex:"#132357"},
+    {nom:"Tiffany",hex:"#00fad0"},{nom:"Blanc",hex:"#ffffff"},{nom:"Rose",hex:"#f695b6"},
+    {nom:"Caramel",hex:"#ea9a10"},{nom:"Marron clair",hex:"#be7027"},{nom:"Marron foncé",hex:"#864509"},{nom:"Gris Clair",hex:"#c0c0c0"}
+  ];
+  const FORMES = ["Rond","Carré","Ovale","Cœur","Étoile","Hexagone","Découpoir"];
+
+  const state = {qty:12, couleur:null, forme:null, type:"Cupcakes"};
+  // Cupcakes n'a pas de forme ; Sablés oui. Ici on montre Cupcakes (pas de forme) mais on
+  // garde le champ pour la démo → on l'affiche seulement si le produit en a besoin.
+  const TYPE_A_FORME = false; // Cupcakes = pas de forme
+
+  const pal = document.getElementById('pal');
+  PALETTE.forEach((c,i)=>{
+    const d=document.createElement('div');
+    d.className='sw'; d.style.background=c.hex; d.title=c.nom;
+    d.onclick=()=>{ state.couleur = (state.couleur===c.nom)?null:c.nom; render(); };
+    d.dataset.nom=c.nom;
+    pal.appendChild(d);
+  });
+
+  if(TYPE_A_FORME){
+    document.getElementById('formeField').style.display='';
+    const fc=document.getElementById('formes');
+    FORMES.forEach(f=>{
+      const b=document.createElement('div'); b.className='chip'; b.textContent=f;
+      b.onclick=()=>{ state.forme=(state.forme===f)?null:f; render(); };
+      b.dataset.f=f; fc.appendChild(b);
+    });
+  }
+
+  function chQty(d){ state.qty=Math.max(1,state.qty+d); document.getElementById('qty').value=state.qty; render(); }
+
+  function render(){
+    // swatches
+    [...pal.children].forEach(s=>s.classList.toggle('sel', s.dataset.nom===state.couleur));
+    document.getElementById('selname').textContent = state.couleur ? ('Couleur : '+state.couleur) : '— aucune couleur choisie —';
+    if(TYPE_A_FORME){[...document.getElementById('formes').children].forEach(c=>c.classList.toggle('sel',c.dataset.f===state.forme));}
+
+    // recap / flux
+    const parts=[];
+    parts.push('×'+state.qty);
+    if(state.couleur) parts.push(state.couleur);
+    if(TYPE_A_FORME && state.forme) parts.push(state.forme);
+    const hasDetails = state.couleur || (TYPE_A_FORME && state.forme);
+    const line = 'Quantité '+state.qty + (state.couleur?(' · couleur '+state.couleur):'') + (TYPE_A_FORME&&state.forme?(' · forme '+state.forme):'');
+
+    document.getElementById('recapDetails').textContent = hasDetails ? line : '— (aucun détail accessoire saisi) —';
+    document.getElementById('recapDetails').style.color = hasDetails ? '#241a16' : '#9a7d1e';
+    document.getElementById('calLine').textContent = '1 accessoire · Cupcakes' + (hasDetails? (' — '+parts.join(' · ')) : '');
+    const fl=document.getElementById('ficheLine');
+    fl.textContent = hasDetails ? line : 'quantité / couleur / forme à définir';
+    fl.style.color = hasDetails ? '#241a16' : '#9a7d1e';
+  }
+  render();
+</script>
+</body>
+</html>

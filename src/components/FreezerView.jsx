@@ -130,7 +130,8 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
 
     function buildSection(d) {
       const dayItems = itemsByDate[d] || []
-      const items = wantDone ? dayItems.filter(it => doneMap[it.mo_id]) : dayItems.filter(it => !doneMap[it.mo_id])
+      // « Fait/sorti » = fabriqué dans Odoo (it.made) OU coché dans l'app (doneMap) — même règle qu'à l'écran (_isDone).
+      const items = wantDone ? dayItems.filter(it => it.made || doneMap[it.mo_id]) : dayItems.filter(it => !(it.made || doneMap[it.mo_id]))
       const dayLabel = fmtDayLabel(d, today)
 
       if (items.length === 0) {
@@ -268,8 +269,8 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
     if (mode === 'history') {
       visibleItems = doneItems; emptyMsg = 'Aucun fait'; cardCls = 'bg-cream-warm/40 border-line/60'
       headerRight = (<>
-        <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-ink/10 text-ink-soft">🕘 Historique ({doneItems.length})</span>
-        {doneItems.length > 0 && <button onClick={() => printDay(date, dayItems, true, true)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title="Imprimer les faits · ce jour + les 2 précédents">🖨 Imprimer 3j</button>}
+        <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-ink/10 text-ink-soft">Historique ({doneItems.length})</span>
+        {doneItems.length > 0 && <button onClick={() => printDay(date, dayItems, true, true)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title="Imprimer les faits · ce jour + les 2 précédents">Imprimer 3j</button>}
       </>)
     } else if (mode === 'overdue') {
       visibleItems = todoItems; emptyMsg = 'Aucun à sortir'; cardCls = 'bg-cream-warm border-red-200'
@@ -279,11 +280,11 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       headerRight = (<>
         <button onClick={() => setShowDone(prev => ({ ...prev, [date]: false }))} className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${!showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}>À sortir ({todoItems.length})</button>
         <button onClick={() => setShowDone(prev => ({ ...prev, [date]: true }))} className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}>Faits ({doneItems.length})</button>
-        {visibleItems.length > 0 && <button onClick={() => printDay(date, dayItems, showingDone)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title={`Imprimer ${showingDone ? 'les faits' : 'à sortir'} · ce jour + les 2 suivants`}>🖨 Imprimer 3j {showingDone ? '(faits)' : ''}</button>}
+        {visibleItems.length > 0 && <button onClick={() => printDay(date, dayItems, showingDone)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title={`Imprimer ${showingDone ? 'les faits' : 'à sortir'} · ce jour + les 2 suivants`}>Imprimer 3j {showingDone ? '(faits)' : ''}</button>}
       </>)
     }
     return (
-      <div key={date + mode} className={`rounded-lg border overflow-hidden ${cardCls}`}>
+      <div key={date + mode} className={`rounded-2xl border overflow-hidden shadow-sm ${cardCls}`}>
         <div className="px-4 py-3 border-b border-line bg-cream flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-fraunces italic text-[18px] text-ink">{fmtDayLabel(date, today)}</h2>
           <div className="flex items-center gap-2">{headerRight}</div>
@@ -300,7 +301,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-5xl mx-auto p-4 pb-32">
@@ -319,7 +320,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
             onClick={() => setShowHistory(v => !v)}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold transition-colors ${showHistory ? 'bg-ink text-cream' : 'border border-line text-ink-soft hover:border-bordeaux'}`}
             title="Afficher / masquer les 7 derniers jours"
-          >🕘 Historique J-7</button>
+          >Historique J-7</button>
           {cacheInfo && !loading && (
             <span className="font-mono text-[10px] text-ink-mute italic">cache · {Math.round((Date.now() - cacheInfo.ts) / 60000)}min</span>
           )}
@@ -366,7 +367,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
                     {doneFutureKeys.map(date => renderCard(date, 'history'))}
                   </>}
                   {donePastKeys.length > 0 && <>
-                    <div className="text-[12px] font-bold text-ink-mute uppercase tracking-wider border-t border-line pt-3">🕘 Passé</div>
+                    <div className="text-[12px] font-bold text-ink-mute uppercase tracking-wider border-t border-line pt-3">Passé</div>
                     {donePastKeys.map(date => renderCard(date, 'history'))}
                   </>}
                 </>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Barre du haut — icônes qui s'agrandissent</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --ink:#2b2320; --line:#e4dad0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#efe7dc; color:var(--ink); }
+
+  /* ===== Barre du haut ===== */
+  .bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+         background:rgba(250,246,240,.97); border-bottom:1px solid var(--line);
+         padding:10px 14px; position:sticky; top:0; }
+  .logo { display:flex; align-items:center; gap:8px; flex-shrink:0; margin-right:4px; }
+  .logo .mark { width:30px; height:30px; border-radius:9px; background:var(--bordeaux); color:#fff;
+                display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .logo b { font-size:12px; letter-spacing:.12em; }
+
+  nav { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+
+  /* Onglet = icône seule qui s'agrandit au survol */
+  .tab { display:inline-flex; align-items:center; height:38px; max-width:38px; overflow:hidden;
+         background:#fff; border:1px solid var(--line); border-radius:999px; cursor:pointer;
+         transition:max-width .28s ease, background .15s, color .15s, border-color .15s; }
+  .tab .ic  { min-width:38px; height:38px; display:flex; align-items:center; justify-content:center; font-size:17px; }
+  .tab .lbl { white-space:nowrap; font-size:13px; font-weight:600; padding-right:15px; opacity:0;
+              transition:opacity .18s; }
+  .tab:hover { max-width:240px; background:#f1e9e0; }
+  .tab:hover .lbl { opacity:1; }
+  /* L'onglet actif reste ouvert (on voit toujours où on est) */
+  .tab.active { max-width:240px; background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+  .tab.active .lbl { opacity:1; }
+
+  /* Dossier = garde son nom (texte visible) */
+  .folder { display:inline-flex; align-items:center; gap:6px; height:38px; padding:0 13px;
+            background:#fff; border:1px solid var(--line); border-radius:999px;
+            font-size:13px; font-weight:600; cursor:pointer; }
+  .folder .chev { font-size:10px; opacity:.6; }
+  .folder:hover { background:#f1e9e0; }
+
+  .spacer { flex:1; }
+  /* Boutons d'action à droite (déjà icônes) */
+  .icbtn { width:38px; height:38px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+           font-size:16px; cursor:pointer; flex-shrink:0; }
+  .icbtn.green { background:#25D366; color:#fff; }
+  .icbtn.red { background:var(--bordeaux); color:#fff; }
+  .icbtn.outline { background:#fff; border:1px solid var(--line); }
+
+  .note { max-width:760px; margin:26px auto; background:#fff; border:1px solid var(--line);
+          border-radius:14px; padding:18px 20px; font-size:14px; line-height:1.6; }
+  .note h2 { margin:0 0 8px; font-size:16px; }
+  .note kbd { background:#f1e9e0; border-radius:5px; padding:1px 6px; font-size:12px; }
+</style>
+</head>
+<body>
+
+  <div class="bar">
+    <div class="logo"><span class="mark">🌸</span><b>LILY GOURMET</b></div>
+
+    <nav>
+      <!-- icônes seules : survole-les ! -->
+      <div class="tab active"><span class="ic">📄</span><span class="lbl">Commandes</span></div>
+      <div class="tab"><span class="ic">🌐</span><span class="lbl">Devis internet</span></div>
+      <div class="tab"><span class="ic">📅</span><span class="lbl">Calendrier</span></div>
+      <div class="tab"><span class="ic">🎂</span><span class="lbl">Cake design</span></div>
+      <div class="tab"><span class="ic">🧊</span><span class="lbl">Congélateur</span></div>
+      <div class="tab"><span class="ic">🏷️</span><span class="lbl">Étiquettes</span></div>
+
+      <!-- dossiers : gardent leur nom -->
+      <div class="folder"><span>📁</span> Vitrine <span class="chev">▾</span></div>
+      <div class="folder"><span>📁</span> RH <span class="chev">▾</span></div>
+      <div class="folder"><span>📁</span> Caisse <span class="chev">▾</span></div>
+    </nav>
+
+    <div class="spacer"></div>
+
+    <div class="icbtn outline">👥</div>
+    <div class="icbtn green">🟢</div>
+    <div class="icbtn red">＋</div>
+  </div>
+
+  <div class="note">
+    <h2>👆 Passe la souris sur les icônes</h2>
+    <ul>
+      <li>Les onglets sont <b>juste une icône</b> ; au survol, ils <b>s'agrandissent</b> pour afficher leur nom.</li>
+      <li>L'onglet <b>actif</b> (ici « Commandes ») reste <b>ouvert</b> en bordeaux, pour toujours voir où tu es.</li>
+      <li>Les <b>dossiers</b> (📁 Vitrine, RH, Caisse) <b>gardent leur nom</b> en entier.</li>
+    </ul>
+    <p style="margin-bottom:0; color:#8a7d72;">Sur téléphone (pas de survol) : un <b>appui</b> ouvrirait l'onglet. On peut aussi garder le nom visible sur petit écran si tu préfères — dis-moi.</p>
+  </div>
+
+</body>
+</html>

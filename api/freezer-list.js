@@ -82,15 +82,15 @@ function parseCakedesign(productName) {
   return null
 }
 
-async function fetchListForDate(date, uid) {
+async function fetchListForDate(date, uid, includeDone = false) {
   const startUTC = `${date} 00:00:00`
   const endUTC = `${date} 23:59:59`
 
-  // 1) MOs WHLVP non terminés du jour (exclut cancel + done)
+  // 1) MOs WHLVP du jour. Futur = à faire (exclut done) ; passé/historique = on garde aussi les terminés.
   const productions = await odooSearchRead(uid, 'mrp.production', [
     ['date_planned_finished', '>=', startUTC],
     ['date_planned_finished', '<=', endUTC],
-    ['state', 'not in', ['cancel', 'done']],
+    ['state', 'not in', includeDone ? ['cancel'] : ['cancel', 'done']],
     ['name', 'ilike', 'WHLVP'],
   ], ['id', 'name', 'origin', 'state', 'product_id', 'product_qty'])
 
@@ -191,6 +191,8 @@ async function fetchListForDate(date, uid) {
       hour,
       minute,
       qty: Math.max(1, Math.round(child.productQty || 1)),
+      history: includeDone,
+      made: child.state === 'done',   // fabriqué dans Odoo (pour l'historique du passé)
     })
   }
   return items
@@ -207,7 +209,8 @@ export default async function handler(req, res) {
     const uid = await odooAuth()
     const allItems = []
     for (const date of dates) {
-      const items = await fetchListForDate(date, uid)
+      // On inclut TOUJOURS les composants déjà fabriqués : ils sont dans le congélateur, donc à sortir.
+      const items = await fetchListForDate(date, uid, true)
       allItems.push(...items)
     }
     return res.status(200).json({ items: allItems })

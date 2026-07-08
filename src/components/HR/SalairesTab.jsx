@@ -12,8 +12,11 @@ const MOIS_FR = [
 
 export default function SalairesTab({ user }) {
   const today = new Date()
-  const [mois, setMois] = useState(today.getMonth() + 1)
-  const [annee, setAnnee] = useState(today.getFullYear())
+  // Par défaut on ouvre le MOIS PRÉCÉDENT : le salaire du mois en cours ne sort
+  // qu'à la fin du mois (ex. début juillet → on travaille sur juin).
+  const cm = today.getMonth()   // 0-based (juillet = 6)
+  const [mois, setMois] = useState(cm === 0 ? 12 : cm)               // 1-based du mois précédent
+  const [annee, setAnnee] = useState(cm === 0 ? today.getFullYear() - 1 : today.getFullYear())
   const [employes, setEmployes] = useState([])
   const [societes, setSocietes] = useState([])
   const [montants, setMontants] = useState({})  // { empId: montant }

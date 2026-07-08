@@ -154,7 +154,7 @@ export default function CakeVisionView({ user, activeView, onNavigate, onLogout 
   })
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <div className="max-w-6xl mx-auto px-4 py-6">
         <h1 className="font-fraunces italic text-[26px] text-ink leading-none mb-1">Cake Vision</h1>
@@ -202,7 +202,7 @@ export default function CakeVisionView({ user, activeView, onNavigate, onLogout 
                   {refs.map((r, i) => (
                     <div key={i} className="w-24">
                       <div className="relative">
-                        <img src={r.url} alt="" className="w-24 h-20 object-cover rounded-lg border border-line" />
+                        <img src={r.url} alt="" loading="lazy" className="w-24 h-20 object-cover rounded-lg border border-line" />
                         <button onClick={() => setRefs(rr => rr.filter((_, j) => j !== i))}
                           className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-bordeaux text-cream text-[11px] leading-none">×</button>
                       </div>

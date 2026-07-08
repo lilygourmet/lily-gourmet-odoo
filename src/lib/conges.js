@@ -577,6 +577,22 @@ export async function loadAllocations({ annee = null, employeId = null, statut =
 
 export async function createAllocation({ employe_id, annee, type, jours, raison = null, date_evt = null, source = 'manuel', created_by = null, statut = 'valide' }) {
   if (!employe_id || !annee || !type || jours == null) throw new Error('employe_id, annee, type et jours requis')
+  // Garde anti-doublon : refuse une allocation identique déjà présente (même employé, année,
+  // type, et même date d'événement le cas échéant). Évite le double-comptage.
+  let dup = supabase
+    .from('conges_allocations')
+    .select('id')
+    .eq('employe_id', employe_id)
+    .eq('annee', annee)
+    .eq('type', type)
+    .neq('statut', 'annule')
+  dup = date_evt ? dup.eq('date_evt', date_evt) : dup.is('date_evt', null)
+  const { data: existing } = await dup.limit(1)
+  if (existing && existing.length) {
+    throw new Error(date_evt
+      ? `Une allocation « ${type} » existe déjà pour cet employé à cette date (${date_evt}).`
+      : `Une allocation « ${type} » existe déjà pour cet employé en ${annee}.`)
+  }
   const { data, error } = await supabase
     .from('conges_allocations')
     .insert({ employe_id, annee, type, jours, raison, date_evt, source, created_by, statut })

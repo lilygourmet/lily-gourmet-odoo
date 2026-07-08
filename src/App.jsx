@@ -28,6 +28,7 @@ const InboxView = lazy(() => import('./components/Conversations/InboxView'))
 const DevisView = lazy(() => import('./components/DevisView'))
 const OcpManage = lazy(() => import('./components/OcpManage'))
 const NewOrderView = lazy(() => import('./components/NewOrderView'))
+const SupportsView = lazy(() => import('./components/SupportsView'))
 const ModificationsView = lazy(() => import('./components/ModificationsView'))
 const LivraisonsView = lazy(() => import('./components/LivraisonsView'))
 const PaymentsView = lazy(() => import('./components/Conversations/PaymentsView'))
@@ -37,6 +38,7 @@ const PresenceView = lazy(() => import('./components/PresenceView'))
 const CakeVisionView = lazy(() => import('./components/CakeVision/CakeVisionView'))
 const StockPolyView = lazy(() => import('./components/StockPolyView'))
 const PolyDecoupeView = lazy(() => import('./components/PolyDecoupeView'))
+const SimulationGateauxView = lazy(() => import('./components/SimulationGateauxView'))
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
@@ -46,6 +48,7 @@ import ToastHost from './components/ToastHost'
 import ConfirmHost from './components/ConfirmHost'
 import MobileBottomNav from './components/MobileBottomNav'
 import SideNav from './components/SideNav'
+import TabLockGate from './components/TabLockGate'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, isLivreurDefaut, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, canSeeLivraisons, canSeeModifications, canSeeDevis, hasValidJwt } from './lib/auth'
 import { refreshOnReturn } from './lib/autoRefresh'
 
@@ -379,7 +382,9 @@ function App() {
     if (activeView === 'stock-prod-vitrine') return <StockProd {...navProps} lieu="vitrine" />
     if (activeView === 'stock-prod-annexe') return <StockProd {...navProps} lieu="annexe" />
     if (activeView === 'tasks') return <TasksWrapper {...navProps} />
-    if (activeView === 'hr') return <HRWrapper {...navProps} hrDeep={hrDeep} />
+    if (activeView === 'hr') return isAdmin(user)
+      ? <TabLockGate label="RH"><HRWrapper {...navProps} hrDeep={hrDeep} /></TabLockGate>
+      : <HRWrapper {...navProps} hrDeep={hrDeep} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} initialPhone={deepLinkPhone} initialRelanceRef={deepLinkRelanceRef} />
     if (activeView === 'devis') return <DevisWrapper {...navProps} initialDevis={deepLinkDevis} />
     if (activeView === 'ocp-link') return <div className="min-h-screen bg-cream"><AppHeader {...navProps} /><OcpManage /></div>
@@ -389,13 +394,17 @@ function App() {
     if (activeView === 'livraisons') return <LivraisonsWrapper {...navProps} />
     if (activeView === 'paiements') return <PaymentsWrapper {...navProps} />
     if (activeView === 'absences') return <AbsencesWrapper {...navProps} />
-    if (activeView === 'caisse') return <CaisseView {...navProps} initialSub={deepLinkCaisseSub} deepTab={caisseDeep} />
+    if (activeView === 'caisse') return isAdmin(user)
+      ? <TabLockGate label="Caisse"><CaisseView {...navProps} initialSub={deepLinkCaisseSub} deepTab={caisseDeep} /></TabLockGate>
+      : <CaisseView {...navProps} initialSub={deepLinkCaisseSub} deepTab={caisseDeep} />
     if (activeView === 'caisse-rapide') return <CaisseRapide {...navProps} />
     if (activeView === 'caisse-livreur') return <CaisseLivreur {...navProps} />
     if (activeView === 'checklist') return <ChecklistView {...navProps} />
+    if (activeView === 'supports') return <SupportsView {...navProps} />
     if (activeView === 'economat') return <EconomatView {...navProps} />
     if (activeView === 'stock-poly') return <StockPolyView {...navProps} />
     if (activeView === 'decoupe-poly') return <PolyDecoupeView {...navProps} />
+    if (activeView === 'simu-gateaux') return <SimulationGateauxView {...navProps} />
     if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais

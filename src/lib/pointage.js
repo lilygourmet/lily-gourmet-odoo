@@ -9,6 +9,10 @@ export const JOURS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Ven
 // Tolérance en minutes pour arrondir aux heures prévues
 export const TOLERANCE_MIN = 2
 
+// En-dessous, une "session" (ex. 17:36–17:37) est un double-pointage accidentel,
+// pas une vraie présence : on ne la compte pas comme du temps travaillé.
+export const MIN_SESSION_MIN = 5
+
 // Seuil pour considérer une session "session avec pause" (équipe café)
 // Si > 45 min entre 2 sessions = pause détectée
 export const PAUSE_THRESHOLD_MIN = 45
@@ -211,6 +215,12 @@ export function calculerHeuresPointees(sessions) {
       anomalie = 'duree_excessive'
       continue
     }
+    // Session trop courte (ex. 17:36–17:37) = double-pointage accidentel → on ne la compte
+    // pas comme du temps travaillé (sinon = quasi journée entière en "heures manquantes").
+    if (diffMin < MIN_SESSION_MIN) {
+      anomalie = anomalie || 'pointage_incomplet'
+      continue
+    }
     totalMin += diffMin
   }
 
@@ -398,9 +408,12 @@ export function calculerMois(employe, mois, annee, data) {
     ajustByDate.get(key)[a.champ] = a.valeur
   }
 
-  // Solde reporté du mois précédent
+  // Solde reporté du mois précédent.
+  // RÈGLE : seul un solde NÉGATIF (dette d'heures) se reporte. Un solde POSITIF
+  // (heures sup) NE se reporte PAS (remis à 0) car les heures sup sont déjà payées.
   const prev = prevSynthese.find(s => String(s.employe_id) === empId)
-  const solde_reporte = prev ? Number(prev.solde_mois) : 0
+  const prevSolde = prev ? Number(prev.solde_mois) : 0
+  const solde_reporte = prevSolde < 0 ? prevSolde : 0
 
   // Boucle sur tous les jours du mois
   const journal = []

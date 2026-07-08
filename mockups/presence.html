@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Présence — maquette</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --ink:#2b2320; --line:#e4dad0; --green:#2f9e5e; --mute:#9a8d80; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:var(--cream); color:var(--ink); }
+  .wrap { max-width:1000px; margin:0 auto; padding:18px; }
+
+  /* en-tête */
+  .head { display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+  .head .logo { width:38px; height:38px; border-radius:11px; background:var(--bordeaux); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .head h1 { font-size:22px; margin:0; }
+  .summary { font-size:13px; color:var(--mute); margin:2px 0 16px 50px; }
+  .summary b { color:var(--green); }
+
+  /* sous-onglets */
+  .tabs { display:flex; gap:8px; margin-bottom:16px; }
+  .tab { padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  .tab.on { background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+
+  /* groupes */
+  .group { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin-bottom:14px; }
+  .group h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; margin:0 0 12px; display:flex; align-items:center; gap:10px; }
+  .group h2 .dot { width:9px; height:9px; border-radius:50%; }
+  .group h2 .cnt { margin-left:auto; font-size:12px; color:var(--mute); font-weight:600; letter-spacing:0; text-transform:none; }
+  .group h2 .cnt b { color:var(--green); }
+  .people { display:flex; flex-wrap:wrap; gap:14px; }
+
+  .person { display:flex; flex-direction:column; align-items:center; width:70px; text-align:center; }
+  .av { position:relative; width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:16px; }
+  .av.absent { filter:grayscale(1); opacity:.38; }
+  .av .badge { position:absolute; bottom:-2px; right:-2px; width:16px; height:16px; border-radius:50%; border:2px solid #fff; }
+  .av .badge.in { background:var(--green); }
+  .av .badge.out { background:#ccbfb3; }
+  .person .nm { font-size:11px; margin-top:5px; line-height:1.2; }
+  .person.absent .nm { color:var(--mute); }
+  .person .st { font-size:9px; color:var(--green); font-weight:600; }
+  .person.absent .st { color:#c0392b; }
+
+  /* calendrier */
+  .cal { background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .cal .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .cal .top h2 { font-size:16px; margin:0; text-transform:capitalize; }
+  .cal .nav button { border:1px solid var(--line); background:#fff; width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:15px; }
+  .grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .wd { text-align:center; font-size:10px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; padding-bottom:4px; }
+  .cell { min-height:74px; border:1px solid var(--line); border-radius:9px; padding:5px; font-size:11px; }
+  .cell.empty { border:none; }
+  .cell .d { color:var(--mute); font-weight:600; }
+  .cell.today { border-color:var(--bordeaux); border-width:2px; }
+  .cell.today .d { color:var(--bordeaux); }
+  .off { display:block; margin-top:3px; padding:2px 5px; border-radius:6px; background:#f6e7e9; color:var(--bordeaux); font-size:10px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .off.half { background:#fff3e0; color:#b07d10; }
+  .legend { font-size:11px; color:var(--mute); margin-top:12px; display:flex; gap:14px; flex-wrap:wrap; }
+  .legend .chip { display:inline-block; background:#f6e7e9; color:var(--bordeaux); padding:2px 8px; border-radius:6px; font-weight:600; }
+  .legend .chip.half { background:#fff3e0; color:#b07d10; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="logo">👥</div>
+    <h1>Présence</h1>
+  </div>
+  <div class="summary" id="summary"></div>
+
+  <div class="tabs">
+    <div class="tab on" id="tabPresence">Qui est là</div>
+    <div class="tab" id="tabCal">Jours off 🌴</div>
+  </div>
+
+  <div id="viewPresence"></div>
+  <div id="viewCal" class="hidden"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ---- fausses données (à remplacer par le vrai pointage + congés) ----
+const GROUPS = [
+  { name:'Pâtisserie', color:'#c0392b', staff:[
+    {n:'Hamza', in:true}, {n:'Youssef', in:true}, {n:'Karim', in:false}, {n:'Bilal', in:true} ]},
+  { name:'Café / Boutique', color:'#b8860b', staff:[
+    {n:'Meriem', in:true}, {n:'Salma', in:true}, {n:'Nadia', in:false}, {n:'Imane', in:true}, {n:'Rim', in:true} ]},
+  { name:'Caisse', color:'#2980b9', staff:[
+    {n:'Khaoula', in:true}, {n:'Sara', in:false} ]},
+  { name:'Commercial / WhatsApp', color:'#7a1f2b', staff:[
+    {n:'Kaltoume', in:true}, {n:'Othmane', in:false} ]},
+  { name:'Livreurs', color:'#16a085', staff:[
+    {n:'Hamid', in:true}, {n:'Réda', in:true}, {n:'Anas', in:false} ]},
+  { name:'Production', color:'#8e44ad', staff:[
+    {n:'Fatima', in:true}, {n:'Zineb', in:false} ]},
+];
+// Jours off du mois (jour du mois -> liste de noms)
+// jour -> liste de { n: nom, demi?: 'matin'|'après-midi' }
+const DAYS_OFF = {
+  3:[{n:'Karim'}],
+  6:[{n:'Nadia'},{n:'Sara',demi:'matin'}],
+  12:[{n:'Hamza',demi:'après-midi'}],
+  15:[{n:'Anas'},{n:'Zineb'}],
+  20:[{n:'Salma'}],
+  24:[{n:'Meriem',demi:'matin'}],
+  28:[{n:'Othmane'},{n:'Réda'}],
+};
+
+const initials = n => n.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+
+// ---- vue Présence ----
+function renderPresence() {
+  let totalIn=0, html='';
+  for (const g of GROUPS) {
+    const present = g.staff.filter(s=>s.in);
+    if (!present.length) continue;            // on n'affiche que les groupes où quelqu'un est là
+    totalIn += present.length;
+    html += `<div class="group">
+      <h2><span class="dot" style="background:${g.color}"></span>${g.name}
+        <span class="cnt"><b>${present.length}</b> présent${present.length>1?'s':''}</span></h2>
+      <div class="people">` +
+      present.map(s=>`
+        <div class="person">
+          <div class="av" style="background:${g.color}">${initials(s.n)}<span class="badge in"></span></div>
+          <div class="nm">${s.n}</div>
+        </div>`).join('') +
+      `</div></div>`;
+  }
+  if (!html) html = `<div class="group" style="text-align:center;color:var(--mute)">Personne n'a encore pointé.</div>`;
+  $('viewPresence').innerHTML = html;
+  $('summary').innerHTML = `<b>${totalIn} présent${totalIn>1?'s':''}</b>`;
+}
+
+// ---- vue Calendrier ----
+const MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+let calY=2026, calM=5; // juin 2026
+function renderCal() {
+  const first = new Date(calY, calM, 1);
+  let startDow = (first.getDay()+6)%7; // lundi=0
+  const nbDays = new Date(calY, calM+1, 0).getDate();
+  const today = new Date();
+  const isThisMonth = today.getFullYear()===calY && today.getMonth()===calM;
+  let cells='';
+  for (let i=0;i<startDow;i++) cells += `<div class="cell empty"></div>`;
+  for (let d=1; d<=nbDays; d++) {
+    const offs = DAYS_OFF[d] || [];
+    const tdy = isThisMonth && today.getDate()===d ? ' today':'';
+    cells += `<div class="cell${tdy}"><span class="d">${d}</span>` +
+      offs.map(o=> o.demi
+        ? `<span class="off half" title="demi-journée">½ ${o.n} · ${o.demi}</span>`
+        : `<span class="off">🌴 ${o.n}</span>`).join('') + `</div>`;
+  }
+  $('viewCal').innerHTML = `<div class="cal">
+    <div class="top">
+      <div class="nav"><button id="prev">‹</button></div>
+      <h2>${MOIS[calM]} ${calY}</h2>
+      <div class="nav"><button id="next">›</button></div>
+    </div>
+    <div class="grid">${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(w=>`<div class="wd">${w}</div>`).join('')}${cells}</div>
+    <div class="legend"><span><span class="chip">🌴 Nom</span> = jour off complet</span><span><span class="chip half">½ Nom · matin</span> = demi-journée</span></div>
+  </div>`;
+  $('prev').onclick = ()=>{ calM--; if(calM<0){calM=11;calY--;} renderCal(); };
+  $('next').onclick = ()=>{ calM++; if(calM>11){calM=0;calY++;} renderCal(); };
+}
+
+// ---- onglets ----
+$('tabPresence').onclick = ()=>{ $('tabPresence').classList.add('on'); $('tabCal').classList.remove('on'); $('viewPresence').classList.remove('hidden'); $('viewCal').classList.add('hidden'); };
+$('tabCal').onclick = ()=>{ $('tabCal').classList.add('on'); $('tabPresence').classList.remove('on'); $('viewCal').classList.remove('hidden'); $('viewPresence').classList.add('hidden'); renderCal(); };
+
+renderPresence();
+</script>
+</body>
+</html>

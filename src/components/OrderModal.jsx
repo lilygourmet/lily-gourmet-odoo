@@ -1,12 +1,16 @@
 import { useEffect, useState, useMemo } from 'react'
+import { Printer, Loader2 } from 'lucide-react'
 import GmFicheModal from './GMDetailsModal'
 import { detectTypeFromName, TYPE_EMOJIS, loadFichesForOrder } from '../lib/gmFiches'
 import { loadDoneByItemIds, markItemDone, unmarkItemDone } from '../lib/gmDone'
 import { loadPalette } from '../lib/palette'
 import PrintCommande from './PrintCommande'
 import CopyableRef from './CopyableRef'
+import BesoinsAchatSection from './BesoinsAchatSection'
+import { canEditBesoinsAchat } from '../lib/auth'
 import { markOrderPrinted } from '../lib/printOrders'
 import { computeSizesForCake } from '../lib/cakeSizes'
+import { isBurnAway } from '../lib/burnAway'
 import { loadCakeDesignPrice, loadSalesLinesForOrders, stripOdooPrefix } from '../lib/salesLines'
 import { loadOrderHandler, loadOrderNote, loadOrderPhotosByNum } from '../lib/conversations'
 import {
@@ -15,7 +19,6 @@ import {
   checkItemStep,
   uncheckItemStep,
   updateItemPolys,
-  deleteOrder,
   getPolyValue,
   getPolyInfo,
   cleanOrderComment,
@@ -23,7 +26,6 @@ import {
 import {
   canEditPolys,
   canUncheckSteps,
-  canDeleteOrder,
   formatRelativeTime,
 } from '../lib/auth'
 import { toast } from '../lib/toast'
@@ -56,7 +58,7 @@ const SEQUENTIAL_STEPS = {
 }
 
 const STEP_LABELS = {
-  deco: 'Déco',
+  deco: 'Couleur validé',
   couvert: 'Couvert',
   fini: 'Fini',
   fait: 'Fait',
@@ -147,7 +149,7 @@ function buildHistory(order, checkedSteps, polysMap, profiles) {
   return events
 }
 
-export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, isPatissierMode, onClose, user, profiles, onStepsChanged, onPolysChanged, onOrderDeleted }) {
+export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, isPatissierMode, onClose, user, profiles, onStepsChanged, onPolysChanged }) {
 
   // Vendeur « app » = qui a pris/confirmé la commande dans l'app (journal), pas le vendeur Odoo.
   // + note Odoo de la commande (commentaire « ⚠️ … ») pour l'impression.
@@ -217,6 +219,15 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     setPrinting(true)
     // Attendre 1 frame pour que le composant PrintCommande soit monte dans le DOM
     await new Promise(r => requestAnimationFrame(r))
+    // Attendre que les PHOTOS de la fiche soient chargées (sinon la feuille sort blanche), max 4 s
+    await new Promise(resolve => {
+      const imgs = Array.from(document.images).filter(im => !im.complete)
+      if (!imgs.length) return resolve()
+      let left = imgs.length, done = false
+      const fin = () => { if (done) return; done = true; resolve() }
+      imgs.forEach(im => { const t = () => { if (--left <= 0) fin() }; im.addEventListener('load', t); im.addEventListener('error', t) })
+      setTimeout(fin, 4000)
+    })
     // Lancer l'impression
     window.print()
     // Marquer comme imprime apres l'impression (fenetre fermee)
@@ -262,12 +273,8 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
   const [checkedSteps, setCheckedSteps] = useState({})
   const [loadingSteps, setLoadingSteps] = useState(true)
   const [polysMap, setPolysMap] = useState({})
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-
   const canEdit = canEditPolys(user)
   const canUncheck = canUncheckSteps(user)
-  const canDelete = canDeleteOrder(user)
 
   const sharedPhotos = useMemo(() => {
     if (!order) return []
@@ -306,7 +313,6 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
       initialPolys[item.id] = item.polys && typeof item.polys === 'object' ? item.polys : {}
     }
     setPolysMap(initialPolys)
-    setConfirmingDelete(false)
   }, [order])
 
   useEffect(() => {
@@ -443,16 +449,6 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
     if (onPolysChanged) onPolysChanged(item.id, newPolys)
   }
 
-  async function handleConfirmDelete() {
-    setDeleting(true)
-    const ok = await deleteOrder(order.id)
-    setDeleting(false)
-    if (!ok) {
-      toast.error('Erreur lors de la suppression')
-      return
-    }
-    if (onOrderDeleted) onOrderDeleted(order.id)
-  }
 
   let displayedItems = []
   if (focusItemId) {
@@ -526,7 +522,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
               </div>
               {cakePrice != null && (
                 <div className="inline-flex items-center gap-1 mt-1.5 text-[12px] font-semibold text-bordeaux bg-bordeaux/10 px-2 py-0.5 rounded-full">
-                  🎂 Cake design : {cakePrice.toLocaleString('fr-FR')} DH
+                  Cake design : {cakePrice.toLocaleString('fr-FR')} DH
                 </div>
               )}
               {(appSeller || order.seller_name) && (
@@ -576,7 +572,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
                   } disabled:opacity-50`}
                   title={order.printed_at ? `Deja imprime · cliquer pour reimprimer` : 'Imprimer la fiche'}
                 >
-                  {printing ? '⏳' : (order.printed_at ? '🖨️' : '🖨️')}
+                  {printing ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} strokeWidth={2} />}
                 </button>
               )}
               <button
@@ -592,9 +588,12 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
           <div className="px-6 py-5 space-y-6">
             {cleanOrderComment(orderNote) && (
               <div className="rounded-lg border-l-4 border-bordeaux bg-bordeaux/5 px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-bordeaux mb-1">💬 Commentaire</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-bordeaux mb-1">Commentaire</div>
                 <div className="text-[13px] text-ink whitespace-pre-wrap leading-snug">{cleanOrderComment(orderNote)}</div>
               </div>
+            )}
+            {(order.order_items || []).some(i => i.type === 'CD') && canEditBesoinsAchat(user) && (
+              <BesoinsAchatSection order={order} user={user} />
             )}
             {displayedItems.map((item, idx) => (
               <ItemBlock
@@ -653,42 +652,6 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
               </div>
             )}
 
-            {canDelete && !focusItemId && !isPatissierMode && (
-              <div className="pt-4 mt-2 border-t border-dashed border-line">
-                {!confirmingDelete ? (
-                  <button
-                    onClick={() => setConfirmingDelete(true)}
-                    className="w-full px-4 py-2.5 text-[11px] font-medium tracking-wider uppercase text-bordeaux border border-bordeaux rounded-lg hover:bg-bordeaux hover:text-cream transition-all"
-                  >
-                    ❌ Annuler cette commande
-                  </button>
-                ) : (
-                  <div className="rounded-lg border border-bordeaux bg-bordeaux/5 p-3">
-                    <div className="text-[13px] text-ink mb-3 leading-snug">
-                      Supprimer définitivement la commande <span className="font-mono text-bordeaux font-semibold">{order.order_num}</span> ?
-                      <br />
-                      <span className="text-[11px] text-ink-mute italic">Cette action est irréversible (photos + données supprimées).</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setConfirmingDelete(false)}
-                        disabled={deleting}
-                        className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase text-ink-soft border border-line rounded-lg hover:bg-cream-warm transition-all disabled:opacity-50"
-                      >
-                        Non, garder
-                      </button>
-                      <button
-                        onClick={handleConfirmDelete}
-                        disabled={deleting}
-                        className="flex-1 px-3 py-2 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50 disabled:cursor-wait"
-                      >
-                        {deleting ? '⏳ Suppression...' : 'Oui, supprimer'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -800,7 +763,7 @@ function ItemBlock({
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux font-semibold mb-1">
-                Avertissement
+                {isBurnAway(warningText) ? '🔥 Burn away — photo à imprimer' : 'Avertissement'}
               </div>
               <div className="text-[13px] text-ink leading-snug">
                 {warningText}
@@ -827,12 +790,18 @@ function ItemBlock({
 
       {isCD && (item.modele || item.modelage || item.impression || item.moule || item.fleurs || item.decor) && (
         <div className="mb-4 space-y-2.5">
-          {item.modele && <InfoRow label="📷 Modèle" value={item.modele} />}
-          {item.modelage && <InfoRow label="🖐️ Modelage" value={item.modelage} />}
-          {item.impression && <InfoRow label="🖨️ Impression" value={item.impression} />}
-          {item.moule && <InfoRow label="🧊 Moule" value={item.moule} />}
-          {item.decor && !item.modelage && !item.impression && !item.moule && <InfoRow label="🎨 Décor" value={item.decor} />}
-          {item.fleurs && <InfoRow label="🌸 Fleurs" value={item.fleurs} />}
+          {item.modele && <InfoRow label="Modèle" value={item.modele} />}
+          {item.modelage && <InfoRow label="Modelage" value={item.modelage} />}
+          {item.impression && <InfoRow label="Impression" value={item.impression} />}
+          {item.moule && <InfoRow label="Moule" value={item.moule} />}
+          {item.decor && !item.modelage && !item.impression && !item.moule && <InfoRow label="Décor" value={item.decor} />}
+          {item.fleurs && <InfoRow label="Fleurs" value={item.fleurs} />}
+        </div>
+      )}
+
+      {!isCD && item.acc_details && (
+        <div className="mb-4 space-y-2.5">
+          <InfoRow label="Accessoire" value={item.acc_details} />
         </div>
       )}
 

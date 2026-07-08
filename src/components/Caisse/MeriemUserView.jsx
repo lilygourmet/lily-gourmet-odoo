@@ -10,8 +10,8 @@ import RechercheView from './RechercheView'
 import { loadHamidBalance, loadFacturesStats, loadAvancesSummary } from '../../lib/caisse'
 import { fmtMoney, currentYear } from './_helpers'
 
-export default function MeriemUserView({ user }) {
-  const [sub, setSub] = useState('caisse')
+export default function MeriemUserView({ user, initialSub }) {
+  const [sub, setSub] = useState(initialSub || 'caisse')
   const [hamidBal, setHamidBal] = useState(0)
   const [factStats, setFactStats] = useState({ countPending: 0 })
   const [avancesTotal, setAvancesTotal] = useState(0)

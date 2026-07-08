@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Générateur de dummies — Studio photo</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --warm:#f3ece1; --ink:#2b2320; --line:#e4dad0; --mute:#9a8d80; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#efe7da; color:var(--ink); padding:18px; }
+  .wrap { max-width:880px; margin:0 auto; }
+  h1 { font-family:Georgia,serif; font-style:italic; font-size:24px; margin:0 0 4px; }
+  .sub { color:var(--mute); font-size:13px; margin:0 0 16px; }
+
+  .grid { display:grid; grid-template-columns:300px 1fr; gap:16px; align-items:start; }
+  @media (max-width:720px){ .grid { grid-template-columns:1fr; } }
+
+  .card { background:var(--cream); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .lbl { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--bordeaux); margin:0 0 8px; }
+
+  .seg { display:flex; gap:6px; flex-wrap:wrap; }
+  .seg button { padding:7px 0; flex:1; min-width:42px; border:1px solid var(--line); background:#fff; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; }
+  .seg button.on { background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+
+  .tier { margin-bottom:14px; padding-bottom:10px; border-bottom:1px dashed var(--line); }
+  .tier .name { font-size:12px; font-weight:600; margin-bottom:5px; color:var(--ink); }
+  .w button { font-size:12.5px; }
+  .hrow { display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .hrow span { font-size:11px; color:var(--mute); }
+  .hrow select { flex:1; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:#fff; }
+
+  .btn { width:100%; padding:11px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; background:var(--bordeaux); color:#fff; margin-top:6px; }
+
+  /* aperçu : fond en damier = transparence (découpe pour la bibliothèque) */
+  .stage { min-height:420px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:12px;
+    background-color:#fff;
+    background-image:linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%);
+    background-size:18px 18px; background-position:0 0,0 9px,9px -9px,-9px 0; padding:18px; }
+  .meta { text-align:center; font-size:12px; color:var(--mute); margin-top:8px; }
+  .note { font-size:12.5px; color:#4f463c; line-height:1.6; margin-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎂 Générateur de dummies</h1>
+  <p class="sub">Crée la forme nue d'un gâteau à l'échelle (1 à 4 étages) pour tes simulations dans Studio photo.</p>
+
+  <div class="grid">
+    <!-- GAUCHE : réglages -->
+    <div class="card">
+      <p class="lbl">Nombre d'étages</p>
+      <div class="seg" id="nTiers"></div>
+
+      <div style="height:14px"></div>
+      <p class="lbl">Largeur &amp; hauteur de chaque étage (cm)</p>
+      <div id="tiers"></div>
+
+      <button class="btn" onclick="alert('(maquette) Ajouté à ta bibliothèque Studio photo — il apparaît directement dans la page, sans téléchargement.')">➕ Ajouter à la bibliothèque</button>
+    </div>
+
+    <!-- DROITE : aperçu -->
+    <div>
+      <div class="card" style="padding:0">
+        <div class="stage"><svg id="cake" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      </div>
+      <div class="meta" id="meta"></div>
+    </div>
+  </div>
+
+  <p class="note">
+    👀 La forme est dessinée <b>à la vraie échelle</b> (étage du bas = le plus large en général). Le fond en damier = <b>transparence</b> :
+    le dummy sera une image découpée que tu poses dans Studio photo pour composer ta photo.
+    <br>Étage 1 = le haut. « Ajouter à la bibliothèque » le pose directement dans la page (pas de téléchargement). Largeur 15/20/25/30 cm et hauteur 5 à 25 cm, réglables par étage.
+  </p>
+</div>
+
+<script>
+  const SIZES = [15, 20, 25, 30];                            // largeurs dispo (cm)
+  const HEIGHTS = [5,7,9,10,12,14,15,17,19,20,22,24,25];     // hauteurs dispo (cm)
+  const SCALE = 7;                    // px par cm
+  let n = 2;                          // nb d'étages
+  let widths  = [15, 20, 25, 30];    // largeur par étage (étage 1 = haut → bas)
+  let heights = [10, 10, 10, 10];    // hauteur par étage (étage 1 = haut → bas)
+
+  function renderControls(){
+    // nb d'étages
+    document.getElementById('nTiers').innerHTML = [1,2,3,4].map(k =>
+      `<button class="${k===n?'on':''}" onclick="setN(${k})">${k}</button>`).join('');
+    // largeur + hauteur par étage (du bas vers le haut)
+    let html = '';
+    for (let i=0;i<n;i++){
+      const idx = i; const label = i===0 ? 'Étage 1 (haut)' : (i===n-1 ? `Étage ${i+1} (bas)` : `Étage ${i+1}`);
+      html += `<div class="tier"><div class="name">${label}</div><div class="seg w">` +
+        SIZES.map(s => `<button class="${widths[idx]===s?'on':''}" onclick="setW(${idx},${s})">${s}</button>`).join('') +
+        `</div><div class="hrow"><span>hauteur</span><select onchange="setH(${idx}, this.value)">` +
+        HEIGHTS.map(h => `<option value="${h}" ${heights[idx]===h?'selected':''}>${h} cm</option>`).join('') +
+        `</select></div></div>`;
+    }
+    document.getElementById('tiers').innerHTML = html;
+  }
+  function setN(k){ n=k; renderControls(); draw(); }
+  function setW(i,s){ widths[i]=s; renderControls(); draw(); }
+  function setH(i,h){ heights[i]=Number(h); draw(); }
+
+  function draw(){
+    const used  = widths.slice(0,n);
+    const usedH = heights.slice(0,n);
+    const maxW = Math.max(...used);
+    const pad = 28;
+    const W = maxW*SCALE + pad*2;
+    const totalH = usedH.reduce((a,b)=>a+b,0)*SCALE;
+    const H = totalH + pad*2 + maxW*SCALE*0.11;
+    const cx = W/2;
+    const baseY = H - pad;
+
+    let svg = `<defs>
+      <linearGradient id="body" x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0%" stop-color="#e7e0d4"/><stop offset="16%" stop-color="#faf7f2"/>
+        <stop offset="50%" stop-color="#ffffff"/><stop offset="84%" stop-color="#efe9df"/>
+        <stop offset="100%" stop-color="#dad2c4"/>
+      </linearGradient>
+    </defs>`;
+    // ombre au sol
+    svg += `<ellipse cx="${cx}" cy="${baseY+4}" rx="${used[0]*SCALE/2+6}" ry="9" fill="rgba(0,0,0,.12)"/>`;
+
+    // étages du bas vers le haut (les supérieurs recouvrent l'ellipse du dessous)
+    let cumBelow = 0;
+    for (let k=0;k<n;k++){
+      const i = n-1-k;            // k=0 → bas ; i = index étage (0 = haut)
+      const w = used[i]*SCALE;
+      const hPx = usedH[i]*SCALE;
+      const bandBottom = baseY - cumBelow;
+      const bandTop = bandBottom - hPx;
+      const ry = w*0.11;
+      const x = cx - w/2;
+      // courbe avant du bas de l'étage
+      svg += `<ellipse cx="${cx}" cy="${bandBottom}" rx="${w/2}" ry="${ry}" fill="#e9e2d6"/>`;
+      // corps
+      svg += `<rect x="${x}" y="${bandTop}" width="${w}" height="${hPx}" fill="url(#body)"/>`;
+      svg += `<rect x="${x}" y="${bandTop}" width="${w}" height="${hPx}" fill="none" stroke="#cfc6b6" stroke-width="1"/>`;
+      // dessus
+      svg += `<ellipse cx="${cx}" cy="${bandTop}" rx="${w/2}" ry="${ry}" fill="#fffdf9" stroke="#cfc6b6" stroke-width="1"/>`;
+      // cote largeur × hauteur
+      svg += `<text x="${cx + w/2 + 6}" y="${bandTop + hPx/2 + 4}" font-size="11" fill="#9a8d80" font-family="system-ui">${used[i]}×${usedH[i]} cm</text>`;
+      cumBelow += hPx;
+    }
+
+    const el = document.getElementById('cake');
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    el.setAttribute('width', Math.min(W, 420));
+    el.setAttribute('height', Math.min(H, 460));
+    el.innerHTML = svg;
+
+    const totalCm = usedH.reduce((a,b)=>a+b,0);
+    document.getElementById('meta').textContent =
+      `${n} étage${n>1?'s':''} · largeurs ${used.join('/')} cm · hauteurs ${usedH.join('/')} cm · total ${totalCm} cm`;
+  }
+
+  renderControls(); draw();
+</script>
+</body>
+</html>

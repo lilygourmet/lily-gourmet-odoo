@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { loadOrderCatalog, loadOrderProduct, createClient, createDevis, loadCdLoad } from '../../lib/commande'
 import CakeDayPlanning, { CD_MAX_PER_SLOT } from '../CakeDayPlanning'
+import { filePhoto } from '../../lib/photoCompress'
 
 // ============================================================
 // Page CLIENT (publique, sans login) — « lien commande » WhatsApp.
@@ -25,15 +26,6 @@ const CATALOGUE_ORDER = [
   { key: 'gm', label: 'Gourmandises' },
   { key: 'gs', label: 'Gâteaux secs' },
 ]
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result).split(',')[1] || '')
-    r.onerror = reject
-    r.readAsDataURL(file)
-  })
-}
 
 export default function ClientOrderView() {
   const params = new URLSearchParams(window.location.search)
@@ -150,7 +142,7 @@ export default function ClientOrderView() {
 
   async function openItem(it, kind = 'cake') {
     setScreen('cfg')
-    setCfg({ item: it, kind, loading: true, attributes: [], variants: [], sel: {}, text: {}, comment: '', photoFile: null, photoName: '' })
+    setCfg({ item: it, kind, loading: true, attributes: [], variants: [], sel: {}, text: {}, comment: '', photoFiles: [], photoPreviews: [] })
     try {
       const d = await loadOrderProduct(it.tmplId)
       setCfg(c => c && c.item.tmplId === it.tmplId ? { ...c, loading: false, attributes: d.attributes || [], variants: d.variants || [] } : c)
@@ -218,7 +210,7 @@ export default function ClientOrderView() {
       if (v) txt.push(`${a.name} : ${v}`)
     }
     // Cake design : la photo du modèle est obligatoire.
-    if (cfg.kind === 'cake' && !cfg.photoFile) missing.push('la photo du modèle')
+    if (cfg.kind === 'cake' && !cfg.photoFiles?.length) missing.push('la photo du modèle')
     if (missing.length) { alert('Pour ajouter ce gâteau, il manque :\n• ' + missing.join('\n• ')); return }
 
     // MÊME FORMAT que « Nouvelle commande » : « CD- Nom (pers, parfums) » + thème/âge/message en desc.
@@ -246,7 +238,7 @@ export default function ClientOrderView() {
       desc: lineDesc,
       detail: [...opts, ...txt].join(' · '),
       comment: cfg.comment.trim(),
-      photoFile: cfg.photoFile, photoName: cfg.photoName, qty: 1,
+      photoFiles: cfg.photoFiles, qty: 1,
       fraisier: /fraisier/i.test(cfg.item.name + ' ' + [...opts].join(' ')),
       isCake: cfg.kind === 'cake',
     }])
@@ -304,7 +296,7 @@ export default function ClientOrderView() {
       const c = await createClient(name.trim(), phone.trim())
       const lines = await Promise.all(cart.map(async l => {
         const base = { variantId: l.variantId, qty: l.qty || 1, price: l.price, name: l.name, desc: l.desc || '', comment: l.comment || '' }
-        if (l.photoFile) { const data = await fileToBase64(l.photoFile); base.photo = { name: l.photoName || l.photoFile.name, data, mimetype: l.photoFile.type || 'image/jpeg' } }
+        if (l.photoFiles?.length) base.photos = await Promise.all(l.photoFiles.map(filePhoto))
         return base
       }))
       // Livraison = vraie ligne dans le devis (variante zone + tarif réel).
@@ -472,16 +464,31 @@ export default function ClientOrderView() {
                 {(cfg.kind === 'gm' || cfg.kind === 'cake') && (
                   <div style={{ marginBottom: 15 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-                      📎 Photo du modèle
+                      📎 Photos du modèle
                       {cfg.kind === 'cake'
                         ? <span style={{ color: B }}> *</span>
                         : <span style={{ color: '#9a8e80', fontWeight: 400, fontSize: 12 }}> (optionnel)</span>}
                     </div>
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1.5px dashed ${B}`, color: B, borderRadius: 12, padding: '11px 13px', fontSize: 13, cursor: 'pointer', background: '#fff' }}>
-                      {cfg.photoName || 'Joindre une photo'}
-                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; setCfg(c => ({ ...c, photoFile: f || null, photoName: f?.name || '' })) }} />
+                      {cfg.photoFiles?.length ? 'Ajouter une photo' : 'Joindre une photo'}
+                      <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => {
+                        const arr = Array.from(e.target.files || []).filter(f => f && f.type?.startsWith('image/'))
+                        if (arr.length) setCfg(c => ({ ...c, photoFiles: [...(c.photoFiles || []), ...arr], photoPreviews: [...(c.photoPreviews || []), ...arr.map(f => URL.createObjectURL(f))] }))
+                        e.target.value = ''
+                      }} />
                     </label>
-                    {cfg.kind === 'cake' && <div style={{ fontSize: 12, color: '#9a8e80', marginTop: 6 }}>Une photo du gâteau que vous voulez est obligatoire pour commander.</div>}
+                    {cfg.photoPreviews?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                        {cfg.photoPreviews.map((src, i) => (
+                          <div key={i} style={{ position: 'relative' }}>
+                            <img src={src} alt="" style={{ maxHeight: 90, borderRadius: 10, border: `1px solid ${LINE}`, objectFit: 'contain' }} />
+                            <button type="button" onClick={() => setCfg(c => ({ ...c, photoFiles: (c.photoFiles || []).filter((_, k) => k !== i), photoPreviews: (c.photoPreviews || []).filter((_, k) => k !== i) }))}
+                              style={{ position: 'absolute', top: -8, right: -8, width: 20, height: 20, borderRadius: '50%', background: '#dc2626', color: '#fff', fontSize: 11, border: 'none', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {cfg.kind === 'cake' && <div style={{ fontSize: 12, color: '#9a8e80', marginTop: 6 }}>Au moins une photo du gâteau que vous voulez est obligatoire pour commander.</div>}
                   </div>
                 )}
                 <div style={{ marginBottom: 15 }}>

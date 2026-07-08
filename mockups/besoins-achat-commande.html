@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Besoins d'achat d'une commande (cake design)</title>
+<style>
+  :root{ --bordeaux:#7a1f3d; --cream:#FBF6EE; --cream-warm:#f4ecdf; --line:#e7dccb; --ink:#241a16; --ink-soft:#6b5b52; --gold:#C9A24B; --danger:#c0392b; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#efe7d8;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);padding:22px}
+  h1{font-family:Georgia,serif;font-style:italic;color:var(--bordeaux);font-size:23px;text-align:center;margin:2px 0 2px}
+  .sub{text-align:center;color:var(--ink-soft);font-size:13px;margin-bottom:20px}
+  .wrap{max-width:1060px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+  @media(max-width:860px){.wrap{grid-template-columns:1fr}}
+  .modal{background:var(--cream);border-radius:18px;overflow:hidden;box-shadow:0 16px 44px rgba(0,0,0,.16);border:1px solid var(--line)}
+  .top{background:var(--bordeaux);color:var(--cream);padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+  .top h3{margin:0;font-family:Georgia,serif;font-style:italic;font-size:17px}
+  .body{padding:16px}
+  .order{display:flex;gap:12px;margin-bottom:14px}
+  .photo{width:96px;height:96px;border-radius:12px;flex:0 0 auto;background:linear-gradient(135deg,#f6dbe4,#f4ecdf);display:flex;align-items:center;justify-content:center;font-size:34px;border:1px solid var(--line)}
+  .oinfo{font-size:13px;line-height:1.5}
+  .oinfo b{color:var(--bordeaux)}
+  .lead{font-size:13px;font-weight:800;color:var(--bordeaux);margin:6px 0 4px;text-transform:uppercase;letter-spacing:.3px}
+  .hint{font-size:11.5px;color:var(--ink-soft);margin-bottom:10px}
+
+  .item{border:1px solid var(--line);border-radius:11px;padding:9px 11px;margin-bottom:8px;background:#fff;transition:.12s}
+  .item.on{border-color:var(--danger);background:#fdf2f0}
+  .row{display:flex;align-items:center;gap:10px;cursor:pointer}
+  .row input[type=checkbox]{width:18px;height:18px;accent-color:var(--danger);flex:0 0 auto}
+  .row .lab{font-size:14px;font-weight:700}
+  .detail{margin-top:8px;display:none}
+  .item.on .detail{display:block}
+  .detail input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(122,31,61,.05)}
+  .card h4{margin:0 0 8px;color:var(--bordeaux);font-size:15px}
+  .preview{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+  .to{font-size:12px;color:var(--ink-soft);margin-bottom:8px}
+  .to b{color:var(--bordeaux)}
+  .msg{white-space:pre-wrap;font-size:13px;line-height:1.55;background:#fbf3ef;border:1px solid #f0d9d2;border-radius:10px;padding:11px 12px;min-height:60px}
+  .msg .urgent{color:var(--danger);font-weight:800}
+  .btnrow{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{flex:1;border:0;border-radius:12px;padding:13px;font-size:14px;font-weight:800;cursor:pointer}
+  .btn.primary{background:var(--danger);color:#fff}
+  .btn.primary:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink-soft)}
+  .note{font-size:11.5px;color:#9a7d1e;background:#fffdf7;border:1px dashed var(--gold);border-radius:9px;padding:8px 10px;margin-top:12px;line-height:1.5}
+</style>
+</head>
+<body>
+  <h1>Besoins d'achat d'une commande</h1>
+  <div class="sub">Maquette à valider · s'affiche quand le cake design (ex. Meriem) ouvre une commande + sa photo dans le calendrier.<br>Coche ce qu'il faut → crée une <b>tâche urgente</b> pour le responsable d'achat (à recevoir AVANT la date). Rien coché → validé, et ça ne redemande plus.</div>
+
+  <div class="wrap">
+    <!-- GAUCHE : la commande + la liste à cocher -->
+    <div class="modal">
+      <div class="top"><h3>Commande S50312 — Yasmine K.</h3><span style="opacity:.7">✕</span></div>
+      <div class="body">
+        <div class="order">
+          <div class="photo">🎂</div>
+          <div class="oinfo">
+            <div><b>CD- Number cake 20 pers</b></div>
+            <div>Thème : licorne · rose &amp; or</div>
+            <div>Retrait : <b>samedi 5 juil · 16h</b></div>
+          </div>
+        </div>
+
+        <div class="lead">Besoins pour cette commande</div>
+        <div class="hint">Coche ce dont tu as besoin (et précise si tu veux).</div>
+
+        <div id="list"></div>
+
+        <div class="note">Une fois validé (envoyé OU « rien de spécial »), la liste <b>ne réapparaît plus</b> sur cette commande. Un responsable pourra voir la réponse.</div>
+      </div>
+    </div>
+
+    <!-- DROITE : la TÂCHE créée -->
+    <div class="card">
+      <h4>📋 Tâche créée (module Tâches)</h4>
+      <div class="preview">
+        <div class="to">Assignée à : <b>Responsable d'achat</b> · Priorité <b style="color:var(--danger)">🚨 Urgent</b></div>
+        <div class="msg" id="msg">— coche quelque chose pour voir la tâche —</div>
+      </div>
+      <div class="btnrow">
+        <button class="btn primary" id="send" disabled onclick="alert('(Maquette) Tâche urgente créée pour le responsable d\'achat.')">🚨 Créer la tâche (urgent)</button>
+        <button class="btn ghost" onclick="alert('(Maquette) Rien de spécial — commande validée, ne redemande plus.')">Rien de spécial</button>
+      </div>
+      <div class="note" style="margin-top:14px">La tâche indique <b>qui</b> l'a demandée, le <b>n° de commande</b> et la <b>date de la commande</b> → pour tout <b>recevoir avant</b>. Le bouton s'active dès qu'une case est cochée.</div>
+    </div>
+  </div>
+
+<script>
+  // La liste à cocher. « autre » = champ libre pour écrire.
+  const ITEMS = [
+    { key:'achat',  emoji:'🛒', label:'Acheter des choses',  ph:'Quoi ? (ex : colorant or, perles)' },
+    { key:'plaque', emoji:'🧊', label:'Plaque spéciale',      ph:'Laquelle ? (taille / forme)' },
+    { key:'poly',   emoji:'📐', label:'Poly spécial',         ph:'Lequel ? (taille / hauteur)' },
+    { key:'fleurs', emoji:'🌸', label:'Fleurs',               ph:'Lesquelles ? (type / couleur / quantité)' },
+    { key:'jouet',  emoji:'🧸', label:'Jouet',                ph:'Lequel ? (personnage / couleur)' },
+    { key:'autre',  emoji:'✏️', label:'Autre',                ph:'Écris ici…' },
+  ]
+  const LAB = Object.fromEntries(ITEMS.map(i=>[i.key,i.label]))
+  const state = {}
+
+  const list = document.getElementById('list')
+  list.innerHTML = ITEMS.map(i=>`
+    <div class="item" data-key="${i.key}">
+      <label class="row">
+        <input type="checkbox" onchange="toggle('${i.key}', this.checked)">
+        <span class="lab">${i.emoji} ${i.label}</span>
+      </label>
+      <div class="detail"><input placeholder="${i.ph}" data-d="${i.key}" oninput="render()"></div>
+    </div>`).join('')
+
+  function toggle(key, on){
+    state[key]=on
+    document.querySelector(`.item[data-key="${key}"]`).classList.toggle('on', on)
+    render()
+  }
+  function detailVal(key){ const el=document.querySelector(`input[data-d="${key}"]`); return el? el.value.trim():'' }
+
+  function render(){
+    const on = ITEMS.map(i=>i.key).filter(k=>state[k])
+    const send=document.getElementById('send'), msg=document.getElementById('msg')
+    send.disabled = on.length===0
+    if(!on.length){ msg.innerHTML='— coche quelque chose pour voir la tâche —'; return }
+    let t='🚨 URGENT — Achats commande S50312\n'
+    t+='Demandé par : Meriem (cake design)\n'
+    t+='Commande : S50312 — Yasmine K.\n'
+    t+='Date commande : samedi 5 juil 16h  → à RECEVOIR AVANT\n'
+    t+='Article : CD- Number cake 20 pers\n\n'
+    t+='À acheter :\n'
+    for(const k of on){ const d=detailVal(k); t+=`  • ${LAB[k]}${d? ' : '+d:''}\n` }
+    t+='\n➡️ Prévoir un coursier si nécessaire.'
+    msg.innerHTML=t.replace('🚨 URGENT','<span class="urgent">🚨 URGENT</span>').replace('à RECEVOIR AVANT','<span class="urgent">à RECEVOIR AVANT</span>')
+  }
+  render()
+</script>
+</body>
+</html>

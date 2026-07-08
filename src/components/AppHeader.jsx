@@ -8,11 +8,12 @@ import { countModificationsATraiter } from '../lib/modifications'
 import { countLivraisonsARelancer } from '../lib/deliveries'
 import { refreshOnReturn } from '../lib/autoRefresh'
 import ChangePasswordModal from './ChangePasswordModal'
+import TabLockSettingsModal from './TabLockSettingsModal'
 import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
 import OrderJournalModal from './OrderJournalModal'
 import NavbarConfigModal from './NavbarConfigModal'
-import { saveNavbarConfig } from '../lib/users'
+import { saveMyNavbarConfig } from '../lib/users'
 import LabelsButton from './LabelsButton'
 import NewConversationModal from './Conversations/NewConversationModal'
 import WhatsAppLogo from './WhatsAppLogo'
@@ -32,12 +33,12 @@ const HEADER_ICONS = {
   'fin-journee': Moon, stock: ClipboardList, checklist: ListChecks,
   etiquettes: Tag, 'etiquettes-prix': Tag, 'cake-vision-link': Camera, messages: MessageSquare,
   conversations: MessageCircle, modifications: Pencil, livraisons: Truck, paiements: CreditCard, freezer: Snowflake,
-  caisse: Banknote, 'caisse-livreur': Banknote, hr: Users, absences: Plane, economat: Receipt,
+  caisse: Banknote, 'caisse-livreur': Banknote, hr: Users, absences: Plane, economat: Receipt, supports: Boxes,
   devis: ShoppingBag, photoshop: Palette, 'decoupe-poly': Scissors, 'stock-poly': Snowflake,
   // menus déroulants
   menu_prod: Croissant, menu_vitrine: Store, menu_outils: Wrench, menu_more: MoreHorizontal,
   // actions
-  settings: Settings, sync: RefreshCw, logout: LogOut, password: KeyRound,
+  settings: Settings, sync: RefreshCw, logout: LogOut, password: KeyRound, lock: KeyRound,
   print: Printer, palette: Palette, users: Users, nav_config: Sliders, journal: ClipboardList,
 }
 
@@ -86,6 +87,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return () => document.removeEventListener('mousedown', onDown)
   }, [showBell])
   const [showChangePwd, setShowChangePwd] = useState(false)
+  const [showTabLock, setShowTabLock] = useState(false)
   const [showAdminUsers, setShowAdminUsers] = useState(false)
   const [showOrderJournal, setShowOrderJournal] = useState(false)
   const [showPalette, setShowPalette] = useState(false)
@@ -571,7 +573,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   // Enregistre la disposition perso des onglets et l'applique tout de suite
   async function handleSaveNavCfg(cfg) {
-    await saveNavbarConfig(user.id, cfg)
+    await saveMyNavbarConfig(cfg)
     setNavCfg(cfg)
     try {
       const raw = localStorage.getItem('lily_user')
@@ -647,6 +649,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'caisse',           emoji: '💰', label: 'Caisse',           visible: !isLivreur(user) && canSeeCaisse(user) && (admin || !user?.perm_admin_users) },
     { view: 'hr',               emoji: '🏢', label: 'RH',               visible: (admin || !!user?.perm_hr) && (admin || !user?.perm_admin_users), badge: congesBadge },
     { view: 'economat',         emoji: '🧾', label: 'Économat',         visible: !isLivreur(user) && (admin || !!user?.economat_profil || !!user?.perm_econome) },
+    { view: 'supports',         emoji: '🥂', label: 'Supports',         visible: !isLivreur(user) && (admin || !!user?.perm_supports) },
     { view: 'photoshop',        emoji: '🎨', label: 'Studio photos',    visible: !isLivreur(user) && canSeePhotoshop(user) },
     { view: 'ai-gemini',        emoji: '✨', label: 'Gemini',           visible: !isLivreur(user) && canSeeAiTools(user), externalUrl: 'https://gemini.google.com/app' },
     { view: 'ai-chatgpt',       emoji: '🤖', label: 'ChatGPT',          visible: !isLivreur(user) && canSeeAiTools(user), externalUrl: 'https://chatgpt.com' },
@@ -668,9 +671,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     ? [{ view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD', badge: 0, externalUrl: 'https://cake-vision-app.vercel.app' }]
     : []
   // Onglets accessibles autrement (livreur par défaut / barre mobile) mais qu'on veut
-  // quand même pouvoir CLASSER dans « Mes onglets » (l'admin notamment).
+  // quand même pouvoir CLASSER dans « Mes onglets ».
+  // Caisse livreur : réservée à celui qui a la perm (livreur par défaut), pas l'admin.
   const extraClassables = [
-    (admin || isLivreurDefaut(user)) && { view: 'caisse-livreur', emoji: '💰', label: 'Caisse livreur', badge: 0 },
+    isLivreurDefaut(user) && { view: 'caisse-livreur', emoji: '💰', label: 'Caisse livreur', badge: 0 },
     canSeeStockPoly(user) && { view: 'decoupe-poly', emoji: '✂️', label: 'Découpe poly', badge: 0 },
   ].filter(Boolean)
   const allTabs = [...fixedTabs, ...adminGallery, ...menuProduction, ...menuVitrine, ...menuOutils, ...extraClassables]
@@ -1023,9 +1027,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             </button>
             {showCog && (
               <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
-                {admin && <CogItem name="nav_config" label="Mes onglets" onClick={() => { setShowNavConfig(true); setShowCog(false) }} />}
+                <CogItem name="nav_config" label="Mes onglets" onClick={() => { setShowNavConfig(true); setShowCog(false) }} />
                 <CogItem name="password" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
                 {(admin || user?.perm_admin_users) && <CogItem name="users" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />}
+                {admin && <CogItem name="lock" label="Code Caisse/RH" onClick={() => { setShowTabLock(true); setShowCog(false) }} />}
                 {admin && <CogItem name="journal" label="Journal des commandes" onClick={() => { setShowOrderJournal(true); setShowCog(false) }} />}
                 {admin && <CogItem name="palette" label="Palette couleurs" onClick={() => { setShowPalette(true); setShowCog(false) }} />}
                 {userCanSync && <CogItem name="sync" label="Synchroniser" onClick={() => { setShowCog(false); handleSync() }} />}
@@ -1038,6 +1043,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
       {/* Modals */}
       {showChangePwd && <ChangePasswordModal user={user} onClose={() => setShowChangePwd(false)} />}
+      {showTabLock && <TabLockSettingsModal onClose={() => setShowTabLock(false)} />}
       {showAdminUsers && <AdminUsers currentUser={user} onClose={() => setShowAdminUsers(false)} />}
       {showOrderJournal && <OrderJournalModal onClose={() => setShowOrderJournal(false)} />}
       {showPalette && <AdminGmConfig onClose={() => setShowPalette(false)} />}

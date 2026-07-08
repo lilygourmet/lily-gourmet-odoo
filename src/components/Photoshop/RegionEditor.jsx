@@ -9,7 +9,7 @@ const DISP = 520
 const rgbToHsl = (r, g, b) => { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h, s, l = (mx + mn) / 2; if (mx === mn) { h = s = 0 } else { const d = mx - mn; s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6 } return [h, s, l] }
 const hslToRgb = (h, s, l) => { let r, g, b; if (s === 0) { r = g = b = l } else { const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q; const f = t => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p }; r = f(h + 1 / 3); g = f(h); b = f(h - 1 / 3) } return [r * 255, g * 255, b * 255] }
 
-export default function RegionEditor({ src, onClose }) {
+export default function RegionEditor({ src, onClose, onExtract }) {
   const cvRef = useRef(null)        // canvas de travail (pleine résolution, transparence gardée)
   const maskRef = useRef(null)      // canvas masque (blanc = sélectionné)
   const ovRef = useRef(null)        // canvas d'aperçu de la sélection (résolution affichage)
@@ -24,6 +24,11 @@ export default function RegionEditor({ src, onClose }) {
   const [tol, setTol] = useState(30)
   const [hasSel, setHasSel] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [extracted, setExtracted] = useState(false)
+  const floatRef = useRef(null)              // calque flottant (copie à déposer dans la photo)
+  const floatOff = useRef({ dx: 0, dy: 0 })
+  const pastingRef = useRef(false)
+  const [pasting, setPasting] = useState(false)
   const [cur, setCur] = useState(null)
   const [dispH, setDispH] = useState(200)
 
@@ -78,6 +83,12 @@ export default function RegionEditor({ src, onClose }) {
       else if (prog.lasso) { ctx.beginPath(); prog.lasso.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke() }
       ctx.setLineDash([])
     }
+    if (pastingRef.current && floatRef.current) {   // calque flottant à déposer
+      const f = floatRef.current, sc = scaleRef.current
+      ctx.save(); ctx.globalAlpha = .92
+      ctx.drawImage(f, floatOff.current.dx / sc, floatOff.current.dy / sc, f.width / sc, f.height / sc)
+      ctx.restore()
+    }
   }
   const setSel = v => { hasSelRef.current = v; setHasSel(v); drawOverlay() }
   const clearSel = () => { maskRef.current.getContext('2d').clearRect(0, 0, maskRef.current.width, maskRef.current.height); setSel(false) }
@@ -117,6 +128,7 @@ export default function RegionEditor({ src, onClose }) {
   const onDown = e => {
     const p = pos(e); try { e.target.setPointerCapture(e.pointerId) } catch { /* */ }
     const cc = toCv(p)
+    if (pastingRef.current) { drag.current = { pasteMove: true, sx: cc.x, sy: cc.y, dx0: floatOff.current.dx, dy0: floatOff.current.dy }; return }
     if (hasSelRef.current && mode !== 'gomme' && inMask(cc)) { drag.current = { move: true, temp: copyMask(), sx: cc.x, sy: cc.y }; return }   // déplacer la sélection
     if (mode === 'gomme') { const c = toCv(p); erodeAt(c, c); drag.current = { gomme: true, last: c } }
     else if (mode === 'rect' || mode === 'ellipse') drag.current = { shape: mode, s: p, c: p }
@@ -125,6 +137,7 @@ export default function RegionEditor({ src, onClose }) {
   }
   const onMove = e => {
     const p = pos(e); setCur(p); const dr = drag.current; if (!dr) return
+    if (dr.pasteMove) { const c = toCv(p); floatOff.current = { dx: dr.dx0 + (c.x - dr.sx), dy: dr.dy0 + (c.y - dr.sy) }; drawOverlay(); return }
     if (dr.move) { const c = toCv(p), m = mctx(); m.clearRect(0, 0, maskRef.current.width, maskRef.current.height); m.drawImage(dr.temp, c.x - dr.sx, c.y - dr.sy); drawOverlay() }
     else if (dr.gomme) { const c = toCv(p); erodeAt(dr.last, c); dr.last = c }
     else if (dr.shape) { dr.c = p; drawOverlay({ shape: dr.shape, s: dr.s, c: p }) }
@@ -158,6 +171,33 @@ export default function RegionEditor({ src, onClose }) {
       setCopied(true); setTimeout(() => setCopied(false), 1600)
     } catch (e) { alert("Copie impossible sur ce navigateur. Astuce : utilise plutôt « Terminer » puis ré-ajoute l'image.") }
   }
+  // extraire la sélection comme NOUVELLE vignette (image à part) sur la composition
+  const extractToVignette = () => {
+    if (!hasSelRef.current || !onExtract) return
+    const cv = cvRef.current, t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height
+    const tx = t.getContext('2d'); tx.drawImage(cv, 0, 0); tx.globalCompositeOperation = 'destination-in'; tx.drawImage(maskRef.current, 0, 0)
+    const r = trimToContent(t)
+    onExtract({ src: r.dataURL, ratio: r.w / r.h })
+    setExtracted(true); setTimeout(() => setExtracted(false), 1600)
+  }
+  // dupliquer la sélection en calque flottant, à déposer ailleurs DANS la photo
+  const duplicateSel = () => {
+    if (!hasSelRef.current) return
+    const cv = cvRef.current
+    const f = floatRef.current || (floatRef.current = document.createElement('canvas'))
+    f.width = cv.width; f.height = cv.height
+    const fx = f.getContext('2d'); fx.clearRect(0, 0, f.width, f.height)
+    fx.drawImage(cv, 0, 0); fx.globalCompositeOperation = 'destination-in'; fx.drawImage(maskRef.current, 0, 0)
+    floatOff.current = { dx: Math.round(cv.width * 0.05), dy: Math.round(cv.height * 0.05) }
+    clearSel(); pastingRef.current = true; setPasting(true); drawOverlay()
+  }
+  const placeFloat = () => {
+    if (!floatRef.current) return
+    cvRef.current.getContext('2d').drawImage(floatRef.current, floatOff.current.dx, floatOff.current.dy)
+    pushState(); pastingRef.current = false; setPasting(false); drawOverlay()
+  }
+  const cancelFloat = () => { pastingRef.current = false; setPasting(false); drawOverlay() }
+
   const finish = () => { const r = trimToContent(cvRef.current); onClose({ src: r.dataURL, ratio: r.w / r.h }) }
 
   const TB = 'rounded-lg px-2.5 py-2 text-[12px] font-semibold'
@@ -192,9 +232,21 @@ export default function RegionEditor({ src, onClose }) {
               <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-9 h-8 border border-line rounded-md bg-white p-0.5" />
               <button onClick={recolorSel} className={TB + ' bg-white border border-line'}>🎨 Recolorer le dessin</button>
               <button onClick={copySelection} className={TB + ' bg-white border border-line'}>{copied ? '✓ Copié' : '📋 Copier'}</button>
+              {onExtract && <button onClick={extractToVignette} className={TB + ' bg-white border border-line'}>{extracted ? '✓ Ajoutée' : '🖼️ Image à part'}</button>}
+              <button onClick={duplicateSel} className={TB + ' bg-white border border-line'}>📍 Dupliquer dans la photo</button>
               <button onClick={clearSel} className={TB + ' bg-white border border-line'}>✖ Désélectionner</button>
             </div>
-            <p className="text-[11px] text-ink-mute mt-1">Glisse la sélection (ou flèches) pour la déplacer · Ctrl/Cmd+C pour copier · Ctrl/Cmd+Z pour annuler</p>
+            <p className="text-[11px] text-ink-mute mt-1">« Image à part » = nouvelle vignette · « Dupliquer » = copie à déposer ici · Glisse/flèches pour déplacer · Ctrl/Cmd+C copier · Ctrl/Cmd+Z annuler</p>
+          </div>
+        )}
+        {pasting && (
+          <div className="mt-2 p-2 bg-[#eef4ff] rounded-lg">
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="text-[12px] font-semibold text-ink-soft">Copie à placer :</span>
+              <button onClick={placeFloat} className={TB + ' bg-bordeaux text-white'}>✓ Poser ici</button>
+              <button onClick={cancelFloat} className={TB + ' bg-white border border-line'}>✖ Annuler</button>
+            </div>
+            <p className="text-[11px] text-ink-mute mt-1">Glisse la copie à l'endroit voulu, puis « Poser ici ».</p>
           </div>
         )}
 

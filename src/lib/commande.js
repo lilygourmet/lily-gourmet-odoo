@@ -48,6 +48,12 @@ async function post(action, body) {
   return d
 }
 
+/** Estimation poly par IA depuis la photo du modèle. `bases` = largeur réelle par étage (cm).
+ *  Renvoie { etages:[{hauteur_gateau_seul_cm, hauteur_totale_cm}], confiance, note }. */
+export async function estimatePolyFromPhoto(image, bases) {
+  return post('poly-estimate', { image, bases })
+}
+
 /** Recherche un client Odoo par nom / téléphone. */
 export async function searchClients(query) {
   return (await post('order-clients-search', { query })).clients || []
@@ -97,13 +103,13 @@ export async function loadOrderLines(orderId) {
 }
 
 /** Ajoute un article à une commande existante (photo optionnelle). */
-export async function addOrderLine(orderId, { variantId, qty, price, name, desc, photo }) {
-  return post('order-line', { op: 'add', orderId, variantId, qty, price, name, desc, photo })
+export async function addOrderLine(orderId, { variantId, qty, price, name, desc, photo, photos, tmplId, combo }) {
+  return post('order-line', { op: 'add', orderId, variantId, qty, price, name, desc, photo, photos, tmplId, combo })
 }
 
 /** Modifie un article : quantité, prix, libellé (thème/âge/message), remise %, photo. */
-export async function updateOrderLine(orderId, lineId, { qty, price, name, discount, photo } = {}) {
-  return post('order-line', { op: 'update', orderId, lineId, qty, price, name, discount, photo })
+export async function updateOrderLine(orderId, lineId, { qty, price, name, discount, photo, photos } = {}) {
+  return post('order-line', { op: 'update', orderId, lineId, qty, price, name, discount, photo, photos })
 }
 
 /** Supprime un article d'une commande. */
@@ -161,12 +167,12 @@ export async function loadCdLoad(date) {
 
 // Charge CD- du jour groupée par heure : { byHour: { 12:[{photo,pers,isDevis,orderRef}], ... } }
 // Pour le planning « Charge CD » du calendrier (vignettes photo + nb pers).
-export async function loadCdDay(date, part) {
+export async function loadCdDay(date, part, types) {
   if (!date) return {}
   try {
     const res = await fetch('/api/wati-webhook?action=cd-day', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, part }),
+      body: JSON.stringify({ date, part, types }),
     })
     const d = await res.json().catch(() => ({}))
     return d?.byHour || {}

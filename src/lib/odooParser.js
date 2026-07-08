@@ -154,7 +154,7 @@ function parseItems(odooLines) {
       if (!title) continue
 
       const DECOR_STOPS = ['Modèle', 'Modelage', 'Impression', 'Moule', 'Décor', 'Fleurs']
-      const OTHER = ['Thème', 'Age', 'Message', 'Option']
+      const OTHER = ['Thème', 'Age', 'Message', 'Option', 'Accessoire']
       const theme = extractField(cleanName, 'Thème', ['Age', 'Message', 'Option', ...DECOR_STOPS])
       const age = extractField(cleanName, 'Age', ['Message', 'Option', ...DECOR_STOPS])
       const message = extractField(cleanName, 'Message', ['Age', 'Option', 'Acompte', ...DECOR_STOPS])
@@ -164,6 +164,8 @@ function parseItems(odooLines) {
       const moule = extractField(cleanName, 'Moule', ['Modèle', 'Modelage', 'Impression', 'Décor', 'Fleurs', ...OTHER])
       const decor = extractField(cleanName, 'Décor', ['Modèle', 'Modelage', 'Impression', 'Moule', 'Fleurs', ...OTHER])
       const fleurs = extractField(cleanName, 'Fleurs', ['Modèle', 'Modelage', 'Impression', 'Moule', 'Décor', ...OTHER])
+      // Détails accessoire (GM-) saisis à la prise de commande : « Accessoire : X pièces · couleur Y · forme Z »
+      const acc_details = extractField(cleanName, 'Accessoire', ['Thème', 'Age', 'Message', 'Option', ...DECOR_STOPS])
 
       const decomposed = decomposeTitle(title, type)
 
@@ -186,6 +188,7 @@ function parseItems(odooLines) {
         moule,
         decor,
         fleurs,
+        acc_details,
         warnings: embeddedWarns,
         quantity,
         isGift,

@@ -122,7 +122,7 @@ export async function loadATraiter() {
         } else if (Number(d.jours_recup) > 0) {
           const k = `${emp.id}|${d.date}`
           if (!recupTraite.has(k) && !recupDejaAllouee.has(k)) {
-            recups.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, label: d.label })
+            recups.push({ employe_id: emp.id, nom: emp.nom, date: d.date, jour: d.jour_semaine, label: d.label, jours: Number(d.jours_recup) || 0 })
           }
         }
       }

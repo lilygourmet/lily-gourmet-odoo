@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { fetchTemplates, sendTemplate, searchOrders } from '../../lib/conversations'
 import { loadEmployes } from '../../lib/hr'
 
@@ -18,15 +19,27 @@ function placeholders(body) {
 
 // Compose le bloc détails {{3}} sur UNE seule ligne (WhatsApp interdit les
 // retours à la ligne dans les variables de template).
+// Une ligne « annulée » = quantité explicitement 0 (article retiré de la commande).
+// On ne l'envoie pas au client (sinon il la voit dans sa confirmation et est confus).
+// NB : un article offert (ex. « Bougies ×9 — 0 DH ») a une quantité > 0 → conservé.
+function isLigneAnnulee(l) {
+  if (typeof l === 'string') return false
+  if (l.qty === undefined || l.qty === null || l.qty === '') return false
+  return Number(l.qty) === 0
+}
+function lignesVisibles(order) {
+  return (order.productLines || []).filter(l => !isLigneAnnulee(l))
+}
+
 function composeDetails(order, tmplName) {
   // articleLine() gère les 2 formats (objet devis OU chaîne commande confirmée) :
   // évite le « Produit : undefined » et donne « Gâteau ×1 — 2500 DH ».
-  const prods = (order.productLines || []).map(l => articleLine(l)).join(' ; ')
+  const prods = lignesVisibles(order).map(l => articleLine(l)).join(' ; ')
   if (tmplName === 'devis_validation') {
-    return `Montant : ${order.amountText}. ${prods}. Date et heure de retrait souhaitées : ${order.pickupText}`
+    return `Montant Total : ${order.amountText}. ${prods}. Date et heure de retrait souhaitées : ${order.pickupText}`
   }
   // message_de_confirmation
-  return `Montant : ${order.amountText}. La date et l'heure de retrait sont ${order.pickupText}. Détails : ${prods}`
+  return `Montant Total : ${order.amountText}. La date et l'heure de retrait sont ${order.pickupText}. Détails : ${prods}`
 }
 
 // Une ligne d'article lisible : « Gâteau 20 pers ×1 — 2500 DH ».
@@ -43,11 +56,11 @@ function articleLine(l) {
 // Version « un article par ligne » du bloc {{3}} (autorisée seulement dans un
 // message NORMAL, pas dans un modèle — WhatsApp interdit les \n dans un modèle).
 function composeDetailsMultiline(order, tmplName) {
-  const prods = (order.productLines || []).map(l => `• ${articleLine(l)}`).join('\n')
+  const prods = lignesVisibles(order).map(l => `• ${articleLine(l)}`).join('\n')
   if (tmplName === 'devis_validation') {
-    return `Montant : ${order.amountText}\n${prods}\nDate et heure de retrait souhaitées : ${order.pickupText}`
+    return `Montant Total : ${order.amountText}\n${prods}\nDate et heure de retrait souhaitées : ${order.pickupText}`
   }
-  return `Montant : ${order.amountText}\nLa date et l'heure de retrait sont ${order.pickupText}\nDétails :\n${prods}`
+  return `Montant Total : ${order.amountText}\nLa date et l'heure de retrait sont ${order.pickupText}\nDétails :\n${prods}`
 }
 const AUTOFILL_TEMPLATES = new Set(['devis_validation', 'message_de_confirmation'])
 
@@ -65,6 +78,13 @@ const ALLOWED_TEMPLATES = new Set([
 ])
 // Template envoyé au PERSONNEL (mode personnel).
 const STAFF_TEMPLATE = 'nouvelle_demande_economat'
+
+// Une commande est un « cake design » si une ligne commence par CD-.
+// (GM-/GMD- = gourmandises : pas concernées.)
+const CAKE_PREFIX_RE = /^[•\-\s]*CD-/i
+function isCakeDesignOrder(order) {
+  return (order?.productLines || []).some(l => CAKE_PREFIX_RE.test(typeof l === 'string' ? l : (l?.text || '')))
+}
 
 // Numéro au format WhatsApp (0… -> 212…) pour l'affichage ; le serveur normalise aussi.
 function normalizePhoneFr(raw) {
@@ -84,6 +104,11 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
   const [params, setParams] = useState({})
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
+
+  // Pop-up acompte bloquant, affiché juste après l'envoi d'un devis cake design.
+  const [acompteOpen, setAcompteOpen] = useState(false)
+  const [acompteChecked, setAcompteChecked] = useState(false)
+  const [sentConvId, setSentConvId] = useState(null)
 
   // Mode d'envoi : 'client' (commandes) ou 'personnel' (employés)
   const [mode, setMode] = useState('client')
@@ -216,8 +241,14 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
         freeText,
         userId: user.id,
       })
-      onSent?.(r.conversationId)
-      onClose()
+      // Devis cake design → pop-up bloquant « acompte expliqué » avant de fermer.
+      if (selectedName === 'devis_validation' && pickedOrder && isCakeDesignOrder(pickedOrder)) {
+        setSentConvId(r.conversationId)
+        setAcompteOpen(true)
+      } else {
+        onSent?.(r.conversationId)
+        onClose()
+      }
     } catch (e) {
       setErr(e.message)
     } finally {
@@ -225,7 +256,8 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
     }
   }
 
-  return (
+  return createPortal(
+    <>
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -403,5 +435,27 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
         </div>
       </div>
     </div>
+
+    {acompteOpen && (
+      <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm">
+        <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5">
+          <h3 className="font-fraunces italic text-[20px] text-ink mb-1">Devis envoyé ✓</h3>
+          <p className="text-[13px] text-ink-soft mb-4">Avant de fermer, confirme que tu as expliqué l'acompte au client.</p>
+          <label className="flex items-start gap-2 cursor-pointer bg-cream-warm border border-bordeaux/40 rounded-lg p-3 mb-4">
+            <input type="checkbox" checked={acompteChecked}
+              onChange={e => setAcompteChecked(e.target.checked)}
+              className="mt-0.5 accent-bordeaux" />
+            <span className="text-[13px] text-ink leading-snug">J'ai expliqué l'acompte au client (pour réserver la date, la commande est confirmée dès réception de l'acompte).</span>
+          </label>
+          <button
+            onClick={() => { onSent?.(sentConvId); onClose() }}
+            disabled={!acompteChecked}
+            className="w-full px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50"
+          >Terminé</button>
+        </div>
+      </div>
+    )}
+    </>,
+    document.body
   )
 }

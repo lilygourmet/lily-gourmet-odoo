@@ -1,16 +1,30 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { listPhotos, uploadPhoto, trashPhoto, restorePhoto, renamePhoto, setPhotoSize, replacePhotoImage, duplicatePhoto, purgeOldTemp, purgeOldTrash, listFonts, uploadFont } from '../../lib/photoshop'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
+import { listPhotos, listNewPhotos, uploadPhoto, trashPhoto, restorePhoto, renamePhoto, setPhotoSize, replacePhotoImage, duplicatePhoto, purgeOldTemp, purgeOldTrash, listFonts, uploadFont, photoUrl } from '../../lib/photoshop'
 import RegionEditor from './RegionEditor'
 import RemoveBgModal from './RemoveBgModal'
 import DummyModal from './DummyModal'
+import OrderModal from '../OrderModal'
+import { loadFullOrderByNum, loadAllProfiles } from '../../lib/orders'
 import { loadImg, trimToContent } from './imgutil'
 import { extractPsdLayers } from '../../lib/psdImport'
 import { loadCdDay } from '../../lib/commande'
+import { loadOrderPhotosByNum } from '../../lib/conversations'
+import { loadParametreDone, markParametre, loadOrderDetail, loadParametreHistory } from '../../lib/parametre'
+import { nestItems } from '../../lib/nesting'
 
 // ====== Studio photos : composer une planche A4 d'images imprimables pour gâteaux ======
 // Porté de la maquette validée (mockups/photos-gateaux-composeur.html).
 // Référence « commande du jour » (comme Charge CD) : date ISO + regroupement des gâteaux identiques.
 const psToISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const psFmtDate = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : ''
+// Dernier « dimanche 20h » passé → on rafraîchit la bibliothèque seulement après ce moment (1×/semaine).
+const lastSundayEve = () => { const d = new Date(), s = new Date(d); s.setDate(d.getDate() - d.getDay()); s.setHours(20, 0, 0, 0); if (s > d) s.setDate(s.getDate() - 7); return s }
+const LIB_CACHE = 'ps_lib_cache_v1'
+// Cache bibliothèque dans IndexedDB (grande capacité, contrairement à localStorage qui peut être plein).
+const IDB_DB = 'ps_studio', IDB_STORE = 'kv'
+function idbOpen() { return new Promise((res, rej) => { const r = indexedDB.open(IDB_DB, 1); r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) }) }
+async function idbGet(k) { try { const db = await idbOpen(); return await new Promise(res => { const t = db.transaction(IDB_STORE).objectStore(IDB_STORE).get(k); t.onsuccess = () => res(t.result); t.onerror = () => res(null) }) } catch (e) { return null } }
+async function idbSet(k, v) { try { const db = await idbOpen(); await new Promise(res => { const tx = db.transaction(IDB_STORE, 'readwrite'); tx.objectStore(IDB_STORE).put(v, k); tx.oncomplete = res; tx.onerror = res }) } catch (e) { /* ignore */ } }
 function psGroupCakes(cakes) {
   const map = new Map()
   for (const c of cakes) {
@@ -28,6 +42,7 @@ const PAGE_FORMATS = [
   { name: 'XL', w: 32, h: 53 },
 ]
 const TRASH = '🗑️ Poubelle'                              // catégorie corbeille (à part, hors thèmes)
+const MI = 'flex w-full items-center gap-2 text-left px-3 py-2 rounded-lg text-[13.5px] hover:bg-cream-warm'   // item de menu déroulant
 const FONT_LIST = [
   { v: "'Dancing Script',cursive", l: 'Dancing Script (manuscrite)' },
   { v: "'Great Vibes',cursive", l: 'Great Vibes (élégante)' },
@@ -168,6 +183,7 @@ export default function PhotoshopView({ user, onNavigate }) {
   const [search, setSearch] = useState('')
   const [allPhotos, setAllPhotos] = useState([])
   const [libLoading, setLibLoading] = useState(true)
+  const [libRefreshing, setLibRefreshing] = useState(false)   // mise à jour silencieuse en arrière-plan
   const [busy, setBusy] = useState('')
   // dialogue d'ajout d'une photo (nom + destination)
   const [queue, setQueue] = useState([])
@@ -182,6 +198,8 @@ export default function PhotoshopView({ user, onNavigate }) {
   const [removeBgSrc, setRemoveBgSrc] = useState(null)
   const [removeBgUid, setRemoveBgUid] = useState(null)
   const [showDummy, setShowDummy] = useState(false)   // générateur de dummies
+  const [menu, setMenu] = useState(null)              // menu ouvert dans la barre : 'add' | 'tools' | 'page'
+  const [guides, setGuides] = useState(null)          // magnétisme : { page, vx:[cm], hy:[cm] } pendant le glisser
   // photo de référence : les gâteaux du jour (comme Charge CD) qu'on garde « en face » en travaillant
   const [refDate, setRefDate] = useState(null)        // jour affiché (ISO) ; null = section repliée
   const [refConfirmed, setRefConfirmed] = useState(null)  // gâteaux confirmés (rapide, Supabase)
@@ -193,8 +211,27 @@ export default function PhotoshopView({ user, onNavigate }) {
   const [refScale, setRefScale] = useState(1)              // zoom dans la photo
   const [refPan, setRefPan] = useState({ x: 0, y: 0 })     // déplacement dans la photo zoomée
   const refDrag = useRef(null)
+  // « 🎯 À paramétrer » : file des modèles (commandes confirmées, 7 jours) à régler, triée par date de livraison
+  const [paramOpen, setParamOpen] = useState(false)
+  const [paramList, setParamList] = useState(null)        // [{...cake, _date}] ou null = chargement
+  const [paramDone, setParamDone] = useState(() => new Set())
+  const [paramSel, setParamSel] = useState(null)          // cake sélectionné (pour voir le détail)
+  const [paramDetail, setParamDetail] = useState(null)    // détail commande (chargé à la demande) ; 'loading' pendant
+  const [paramPhotos, setParamPhotos] = useState(null)    // TOUTES les photos de la commande (gâteau + accessoires) ; 'loading' pendant
+  const [modalOrder, setModalOrder] = useState(null)      // fiche commande (OrderModal) ouverte depuis « À paramétrer »
+  const [profiles, setProfiles] = useState({})
+  const [paramHist, setParamHist] = useState(null)        // historique J-5 : null = caché, 'loading', ou tableau de lignes
+  const cakeKey = c => `${c.orderRef || ''}|${c.pers || ''}|${c.title || c.nom || ''}`
 
   const uid = useRef(1), grpSeq = useRef(0)
+  const paramReq = useRef(0)   // n° de la dernière demande de détail « à paramétrer » (anti-course au clic rapide)
+  // Compteurs initialisés depuis la composition chargée (sinon les nouveaux uid/grp entrent en COLLISION
+  // avec les éléments déjà enregistrés → groupes faux + poignées au mauvais endroit).
+  useEffect(() => {
+    const init = loadComp()?.placed || []
+    uid.current = init.reduce((m, it) => Math.max(m, it.uid || 0), 0) + 1
+    grpSeq.current = init.reduce((m, it) => Math.max(m, it.grp || 0), 0) + 1
+  }, [])   // eslint-disable-line
   const sizeSave = useRef({ timer: null, pending: {} })   // sauvegarde (débounce) de la taille par photo
   const libEdits = useRef([])   // pile : pour annuler une retouche dans la vignette (Ctrl+Z)
   const cloudSync = useRef({ timer: null, last: {} })   // sauvegarde cloud auto (débounce) : last[libId] = dernière image déjà enregistrée
@@ -232,6 +269,62 @@ export default function PhotoshopView({ user, onNavigate }) {
     setRefTitle(c.orderRef || ''); setRefPhotos([{ dataUrl: c.photo, name: c.orderRef }])
     setRefIdx(0); setRefScale(1); setRefPan({ x: 0, y: 0 })
   }
+  // « 🎯 À paramétrer » : charge les modèles confirmés des 7 prochains jours (avec photo), triés par date
+  const loadParam = useCallback(async () => {
+    setParamList(null)
+    try {
+      const done = await loadParametreDone(); setParamDone(done)
+      const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return psToISO(d) })
+      const perDay = await Promise.all(days.map(date => loadCdDay(date, 'confirmed', ['CD', 'GM']).then(byHour => {
+        const all = []; for (const h in (byHour || {})) all.push(...byHour[h])
+        return psGroupCakes(all).map(c => ({ ...c, _date: date }))
+      }).catch(() => [])))
+      setParamList(perDay.flat().filter(c => c.photo))   // uniquement les modèles avec une photo
+    } catch (e) { setParamList([]) }
+  }, [])
+  useEffect(() => { loadParam() }, [loadParam])
+  const paramTodo = useMemo(() => (paramList || []).filter(c => !paramDone.has(cakeKey(c))), [paramList, paramDone])   // eslint-disable-line
+  const markParam = async (c) => {
+    const k = cakeKey(c)
+    setParamDone(s => { const n = new Set(s); n.add(k); return n })
+    try { await markParametre(k, c.orderRef, user?.id) } catch (e) { /* reste marqué côté écran */ }
+  }
+  // Historique J-5 : bascule entre la liste « à faire » et l'historique des commandes déjà paramétrées.
+  const toggleParamHist = async () => {
+    if (paramHist !== null) { setParamHist(null); return }
+    setParamHist('loading')
+    try {
+      const [rows, profs] = await Promise.all([loadParametreHistory(5), loadAllProfiles()])
+      setProfiles(profs || {})
+      setParamHist(rows)
+    } catch (e) { setParamHist([]) }
+  }
+  const openParamCake = (c) => { showCake(c); setParamOpen(false) }   // charge la photo dans le plan + ferme la liste
+  const selectParam = async (c) => {   // clic sur une vignette → affiche le détail + TOUTES les photos de la commande
+    const req = ++paramReq.current
+    setParamSel(c); setParamDetail('loading'); setParamPhotos('loading')
+    loadOrderDetail(c.orderRef).then(d => { if (paramReq.current === req) setParamDetail(d) }).catch(() => { if (paramReq.current === req) setParamDetail(null) })
+    loadOrderPhotosByNum(c.orderRef).then(p => { if (paramReq.current === req) setParamPhotos(p || []) }).catch(() => { if (paramReq.current === req) setParamPhotos([]) })
+  }
+  // clic sur une photo de la commande : la met dans la photo de référence flottante (pas sur la planche)
+  const loadPhotoToPlan = (dataUrl, nom) => {
+    if (!dataUrl) return
+    setRefTitle(nom || ''); setRefPhotos([{ dataUrl, name: nom }])
+    setRefIdx(0); setRefScale(1); setRefPan({ x: 0, y: 0 })
+    setParamOpen(false)
+  }
+  // « Ouvrir commande » : ouvre la fiche du calendrier (OrderModal) par-dessus le Studio
+  const openOrderModal = async (orderRef) => {
+    if (!orderRef) return
+    setBusy('Ouverture de la commande…')
+    try {
+      const [ord, profs] = await Promise.all([loadFullOrderByNum(orderRef), loadAllProfiles()])
+      setProfiles(profs || {})
+      if (ord) { setModalOrder(ord); setParamOpen(false) }
+      else alert('Commande introuvable (non synchronisée).')
+    } catch (e) { alert('Ouverture impossible : ' + (e.message || e)) }
+    finally { setBusy('') }
+  }
   const refZoom = d => setRefScale(s => { const n = Math.min(5, Math.max(1, +(s + d).toFixed(1))); if (n === 1) setRefPan({ x: 0, y: 0 }); return n })
   const refGoto = next => { setRefIdx(i => next(i)); setRefScale(1); setRefPan({ x: 0, y: 0 }) }
   const onRefImgDown = e => {
@@ -250,8 +343,55 @@ export default function PhotoshopView({ user, onNavigate }) {
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
   }
 
-  // ---------- bibliothèque : tout chargé une fois, filtré côté client ----------
-  const loadAll = useCallback(async () => { setLibLoading(true); setAllPhotos(await listPhotos({ limit: 5000 })); setLibLoading(false) }, [])
+  // ---------- bibliothèque : chargée 1× puis GARDÉE (cache local), re-synchro auto le dimanche soir ----------
+  const libServerAt = useRef(0)   // date de la dernière vraie lecture serveur (pour la règle hebdo)
+  const libSyncedUpTo = useRef(null)   // created_at (ISO) de la photo la plus récente déjà chargée → base du chargement « que les nouvelles »
+  const writeLibCache = useCallback((photos) => {
+    idbSet(LIB_CACHE, { serverAt: libServerAt.current, syncedUpTo: libSyncedUpTo.current, photos: photos.map(p => ({ id: p.id, theme: p.theme, nom: p.nom, path: p.path, last_w: p.last_w, last_h: p.last_h })) })
+  }, [])
+  const maxCreatedAt = (photos, base) => photos.reduce((m, p) => (p.created_at && p.created_at > m ? p.created_at : m), base || '')
+  const loadAll = useCallback(async (force) => {
+    // 1) Afficher TOUT DE SUITE ce qu'on a en cache (même périmé) → la page n'est jamais bloquée
+    let hadCache = false
+    try {
+      const c = await idbGet(LIB_CACHE)
+      if (c && Array.isArray(c.photos) && c.photos.length) {
+        libServerAt.current = +new Date(c.serverAt) || 0
+        libSyncedUpTo.current = c.syncedUpTo || (c.serverAt ? new Date(c.serverAt).toISOString() : null)
+        setAllPhotos(c.photos.map(p => ({ ...p, url: photoUrl(p.path) })))
+        setLibLoading(false); hadCache = true
+        // cache encore frais (avant le dimanche 20h) et pas forcé → rien d'autre à faire
+        if (!force && new Date(c.serverAt) >= lastSundayEve()) return
+      }
+    } catch (e) { /* cache illisible → on charge */ }
+    // 2) Charger en ARRIÈRE-PLAN : si on a déjà le cache à l'écran, on ne bloque pas (pas de « Chargement… »)
+    if (!hadCache) setLibLoading(true); else setLibRefreshing(true)
+    try {
+      const photos = await listPhotos({ limit: 5000 })
+      libServerAt.current = Date.now()
+      libSyncedUpTo.current = maxCreatedAt(photos, libSyncedUpTo.current)
+      setAllPhotos(photos); writeLibCache(photos)
+    } catch (e) { /* garde le cache affiché */ } finally { setLibLoading(false); setLibRefreshing(false) }
+  }, [writeLibCache])
+  // « 🆕 Nouvelles » : récupère seulement les photos ajoutées depuis la dernière synchro (rapide), sans recharger les 6000.
+  // Renvoie true si la mise à jour a réussi (pour ne marquer « fait aujourd'hui » qu'en cas de succès).
+  const loadNew = useCallback(async (silent) => {
+    const since = libSyncedUpTo.current || (libServerAt.current ? new Date(libServerAt.current).toISOString() : null)
+    if (!since) { loadAll(true); return true }   // aucune base connue → synchro complète une fois
+    setLibRefreshing(true)
+    try {
+      const fresh = await listNewPhotos(since)
+      const known = new Set(allPhotosRef.current.map(p => p.id))
+      const add = fresh.filter(p => !known.has(p.id))
+      if (add.length) {
+        libSyncedUpTo.current = maxCreatedAt(add, libSyncedUpTo.current)
+        setAllPhotos(prev => [...add, ...prev])   // le cache se réécrit via l'effet sur allPhotos
+      }
+      if (!silent) { setBusy(add.length ? `✅ ${add.length} nouvelle(s) photo(s) ajoutée(s)` : 'Aucune nouvelle photo'); setTimeout(() => setBusy(''), 1600) }
+      return true
+    } catch (e) { if (!silent) { setBusy('Mise à jour impossible'); setTimeout(() => setBusy(''), 1600) }; return false }
+    finally { setLibRefreshing(false) }
+  }, [loadAll])
   // Pose un dummy généré DIRECTEMENT sur la planche, à sa vraie taille (cm) — pas dans la bibliothèque.
   const placeDummy = (src, wCm, hCm, nom) => {
     const w = Math.max(0.5, Math.round(wCm * 10) / 10)
@@ -265,9 +405,21 @@ export default function PhotoshopView({ user, onNavigate }) {
   }
   const allPhotosRef = useRef(allPhotos); allPhotosRef.current = allPhotos
   useEffect(() => { loadAll() }, [loadAll])
+  // Auto 1×/jour : charge tout seul les nouvelles photos (garde tout l'historique). Le bouton 🆕 reste pour forcer.
+  useEffect(() => {
+    if (libLoading) return
+    const today = psToISO(new Date())
+    let last = null
+    try { last = localStorage.getItem('ps_new_checked_day') } catch { /* ignore */ }
+    if (last === today) return
+    // On ne marque « fait pour aujourd'hui » qu'en cas de SUCCÈS → réessaie à la prochaine ouverture si ça a échoué.
+    loadNew(true).then(ok => { if (ok) { try { localStorage.setItem('ps_new_checked_day', today) } catch { /* ignore */ } } })
+  }, [libLoading, loadNew])
+  // garde le cache à jour quand TU modifies la biblio (ajout/suppression/renommage) — sans changer la date serveur
+  useEffect(() => { if (libLoading || !allPhotos.length) return; const t = setTimeout(() => writeLibCache(allPhotos), 800); return () => clearTimeout(t) }, [allPhotos, libLoading, writeLibCache])
   // au démarrage : purge des « Temporaire » de +7 jours, et chargement des polices ajoutées
   useEffect(() => { (async () => {
-    try { const n = await purgeOldTemp(7); const t = await purgeOldTrash(30); if (n || t) loadAll() } catch (e) { /* ignore */ }
+    try { const n = await purgeOldTemp(7); const t = await purgeOldTrash(30); if (n || t) loadAll(true) } catch (e) { /* ignore */ }
     try {
       const fonts = await listFonts()
       for (const f of fonts) { try { const ff = new FontFace(f.name, `url(${f.url})`); await ff.load(); document.fonts.add(ff) } catch (e) { /* ignore */ } }
@@ -323,57 +475,209 @@ export default function PhotoshopView({ user, onNavigate }) {
   })
   const addShape = () => setPlaced(list => {
     const s = freeSpot(list, 5, 5)
-    const it = { uid: uid.current++, type: 'shape', forme: 'rond', color: '#fce8ef', w: 5, h: 5, ratio: 1, rot: 0, x: s.x, y: s.y, page: s.page, tab: s.tab }
+    const it = { uid: uid.current++, type: 'shape', forme: 'rond', color: 'transparent', bd: 0.08, bdColor: '#993556', w: 5, h: 5, ratio: 1, rot: 0, x: s.x, y: s.y, page: s.page, tab: s.tab }
     setSelUids([it.uid]); return [...list, it]
   })
+  // Préréglage : un rond (cadre) + un texte centré dessus, groupés et prêts à l'emploi.
+  const addRondText = () => setPlaced(list => {
+    const s = freeSpot(list, 7, 7)
+    const shape = { uid: uid.current++, type: 'shape', forme: 'rond', color: 'transparent', bd: 0.1, bdColor: '#993556', w: 7, h: 7, ratio: 1, rot: 0, x: s.x, y: s.y, page: s.page, tab: s.tab }
+    const txt = { uid: uid.current++, type: 'text', txt: 'Texte', color: '#993556', size: 1, rot: 0, w: 5, h: 1, x: Math.round((s.x + 1) * 10) / 10, y: Math.round((s.y + 3) * 10) / 10, page: s.page, tab: s.tab, font: "'Dancing Script',cursive" }
+    setSelUids([txt.uid]); return [...list, shape, txt]   // séparés (non groupés) ; texte sélectionné pour l'éditer
+  })
+  // Dessine un élément (photo/texte/forme) sur un canvas, à sa position page (cm × SC).
+  const drawItem = async (ctx, it, SC) => {
+    // TEXTE : calé en HAUT-GAUCHE comme à l'écran (la boîte du texte = sa taille réelle, pas it.w/it.h).
+    if (it.type === 'text') {
+      const fp = (it.size || 1) * SC
+      ctx.save()
+      ctx.font = `700 ${fp}px ${it.font || "'Dancing Script',cursive"},sans-serif`
+      const linesArr = String(it.txt || '').split('\n')
+      const lh = fp * 1.1
+      const textW = Math.max(0, ...linesArr.map(ln => ctx.measureText(ln).width))
+      const textH = linesArr.length * lh
+      const tcx = it.x * SC + textW / 2, tcy = it.y * SC + textH / 2   // centre réel du texte = pivot de rotation
+      ctx.translate(tcx, tcy); ctx.rotate((it.rot || 0) * Math.PI / 180); ctx.scale(it.flipH ? -1 : 1, it.flipV ? -1 : 1)
+      ctx.fillStyle = it.color || '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+      linesArr.forEach((ln, i) => ctx.fillText(ln, 0, -textH / 2 + i * lh))
+      ctx.restore()
+      return
+    }
+    const cx = (it.x + it.w / 2) * SC, cy = (it.y + it.h / 2) * SC, wp = it.w * SC, hp = it.h * SC
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate((it.rot || 0) * Math.PI / 180); ctx.scale(it.flipH ? -1 : 1, it.flipV ? -1 : 1)
+    if (it.type === 'shape') {
+      if (it.color && it.color !== 'transparent') { clipForme(ctx, it.forme, wp, hp); ctx.fillStyle = it.color; ctx.fillRect(-wp / 2, -hp / 2, wp, hp) }
+    } else {
+      const img = await loadImg(it.src)
+      ctx.save()
+      clipForme(ctx, it.forme, wp, hp)
+      // rognage « live » (insets %) : on restreint la zone visible dans la boîte, comme à l'écran
+      if (it.ct || it.cr || it.cb || it.cl) {
+        const cl = (it.cl || 0) / 100 * wp, cr = (it.cr || 0) / 100 * wp
+        const ct = (it.ct || 0) / 100 * hp, cb = (it.cb || 0) / 100 * hp
+        ctx.beginPath(); ctx.rect(-wp / 2 + cl, -hp / 2 + ct, wp - cl - cr, hp - ct - cb); ctx.clip()
+      }
+      const ratio = img.naturalWidth / img.naturalHeight || 1
+      const fit = it.fit || 'contain'
+      let dw = wp, dh = hp
+      if (fit === 'contain') { if (wp / hp > ratio) { dh = hp; dw = hp * ratio } else { dw = wp; dh = wp / ratio } }
+      else if (fit === 'cover') { if (wp / hp > ratio) { dw = wp; dh = wp / ratio } else { dh = hp; dw = hp * ratio } }
+      // 'fill' → dw=wp, dh=hp (étirement, déjà initialisé)
+      const z = (it.zoom || 100) / 100   // zoom photo (comme transform:scale à l'écran)
+      dw *= z; dh *= z
+      ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh)
+      ctx.restore()
+    }
+    if (it.bd > 0) strokeForme(ctx, it.forme, wp, hp, it.bdColor || '#000', it.bd * SC)
+    // forme sans remplissage NI bordure (cercle-cadre) : on trace le contour-guide visible à l'écran, sinon il disparaît.
+    else if (it.type === 'shape' && (!it.color || it.color === 'transparent') && it.forme && it.forme !== 'none') strokeForme(ctx, it.forme, wp, hp, '#cfc7ba', Math.max(1, SC * 0.02))
+    ctx.restore()
+  }
+  // « Enregistrer » : télécharge la/les page(s) de l'onglet courant en PNG.
+  const downloadPlanche = async () => {
+    setBusy('Création de l’image…')
+    try {
+      const SC = 100, fmt = curTab.fmt
+      for (let p = 0; p < npages; p++) {
+        const items = placed.filter(it => (it.tab || 0) === safeTab && it.page === p)
+        if (!items.length) continue
+        const cv = document.createElement('canvas'); cv.width = Math.round(fmt.w * SC); cv.height = Math.round(fmt.h * SC)
+        const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height)
+        for (const it of items) { try { await drawItem(ctx, it, SC) } catch (e) { /* image externe protégée → ignore */ } }
+        const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = npages > 1 ? `planche-${p + 1}.png` : 'planche.png'; a.click()
+        await new Promise(r => setTimeout(r, 300))
+      }
+    } catch (e) { alert('Téléchargement impossible : ' + (e.message || e)) } finally { setBusy('') }
+  }
 
-  // ---------- impression (vraies pages A4) ----------
-  const printPages = () => {
-    const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    const shapeStr = f => f === 'rond' ? 'border-radius:50%' : f === 'arrondi' ? 'border-radius:16%'
-      : f === 'losange' ? 'clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)'
-      : f === 'hexagone' ? 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)'
-      : f === 'coeur' ? 'clip-path:url(#psHeart)' : ''
-    const pagesHtml = tabs.map((t, ti) => {
-      const tNp = Math.max(t.npages || 1, ...(placed.filter(it => (it.tab || 0) === ti).map(it => (it.page || 0) + 1).concat([1])))
-      return Array.from({ length: tNp }).map((_, p) => {
-      const items = placed.filter(it => (it.tab || 0) === ti && it.page === p).map(it => {
-        const pos = `position:absolute;left:${it.x}cm;top:${it.y}cm;transform:rotate(${it.rot || 0}deg) scaleX(${it.flipH ? -1 : 1}) scaleY(${it.flipV ? -1 : 1});`
-        if (it.type === 'text') return `<div style="${pos}font-size:${it.size}cm;line-height:1.1;color:${it.color};font-weight:700;white-space:pre;text-align:center;unicode-bidi:plaintext;font-family:${it.font || "'Dancing Script',cursive"}">${esc(it.txt)}</div>`
-        const box = `${pos}width:${it.w}cm;height:${it.h}cm;overflow:hidden;${shapeStr(it.forme)}${it.bd ? `box-shadow:inset 0 0 0 ${it.bd}cm ${it.bdColor || '#000'};` : ''}`
-        if (it.type === 'shape') return `<div style="${box};background:${it.color}"></div>`
-        const fit = it.fit || 'contain'
-        const ms = fit === 'fill' ? '100% 100%' : fit
-        const crop = (it.ct || it.cr || it.cb || it.cl) ? `clip-path:inset(${it.ct || 0}% ${it.cr || 0}% ${it.cb || 0}% ${it.cl || 0}%);` : ''
-        const tint = it.tintA > 0 ? `<div style="position:absolute;inset:0;background:${it.tint};opacity:${it.tintA / 100};mix-blend-mode:multiply;-webkit-mask:url('${it.src}') center/${ms} no-repeat;mask:url('${it.src}') center/${ms} no-repeat;${crop}"></div>` : ''
-        return `<div style="${box}"><img src="${it.src}" style="width:100%;height:100%;object-fit:${fit};transform:scale(${(it.zoom || 100) / 100});${crop}">${tint}</div>`
-      }).join('')
-      return `<div class="page" style="width:${t.fmt.w}cm;height:${t.fmt.h}cm">${items}</div>`
-      }).join('')
-    }).join('')
-    const heart = '<svg width="0" height="0"><defs><clipPath id="psHeart" clipPathUnits="objectBoundingBox"><path d="M0.5,0.97 C0.5,0.97,0.03,0.62,0.03,0.32 C0.03,0.14,0.18,0.03,0.34,0.03 C0.43,0.03,0.5,0.1,0.5,0.18 C0.5,0.1,0.57,0.03,0.66,0.03 C0.82,0.03,0.97,0.14,0.97,0.32 C0.97,0.62,0.5,0.97,0.5,0.97 Z"/></clipPath></defs></svg>'
-    const html = `<!doctype html><html><head><meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Pacifico&family=Lobster&family=Playfair+Display:wght@700&family=Montserrat:wght@800&family=Satisfy&display=swap" rel="stylesheet">
-<style>@page{size:auto;margin:0}*{box-sizing:border-box}body{margin:0}.page{position:relative;overflow:hidden;page-break-after:always}</style>
-</head><body>${heart}${pagesHtml}
-<script>window.addEventListener('load',function(){setTimeout(function(){window.print()},400)})</script>
+  // ---------- impression : on RASTÉRISE chaque page en image, puis on imprime l'image ----------
+  // Avantage : le texte blanc devient de vrais pixels blancs (il s'imprime, ne laisse plus voir la photo
+  // derrière) et les polices sont déjà appliquées (rendu identique à l'écran, comme « Enregistrer »).
+  const printPages = async () => {
+    setBusy('Préparation de l’impression…')
+    try {
+      const SC = 100
+      const pages = []   // { w, h, url }
+      for (let ti = 0; ti < tabs.length; ti++) {
+        const t = tabs[ti]
+        const tNp = Math.max(t.npages || 1, ...(placed.filter(it => (it.tab || 0) === ti).map(it => (it.page || 0) + 1).concat([1])))
+        for (let p = 0; p < tNp; p++) {
+          const items = placed.filter(it => (it.tab || 0) === ti && it.page === p)
+          if (!items.length) continue
+          const cv = document.createElement('canvas')
+          cv.width = Math.round(t.fmt.w * SC); cv.height = Math.round(t.fmt.h * SC)
+          const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height)
+          for (const it of items) { try { await drawItem(ctx, it, SC) } catch (e) { /* image protégée → ignore */ } }
+          pages.push({ w: t.fmt.w, h: t.fmt.h, url: cv.toDataURL('image/png') })
+        }
+      }
+      if (!pages.length) { alert('Rien à imprimer.'); return }
+      const pagesHtml = pages.map(pg => `<div class="page" style="width:${pg.w}cm;height:${pg.h}cm"><img src="${pg.url}" style="width:100%;height:100%;display:block"></div>`).join('')
+      const html = `<!doctype html><html><head><meta charset="utf-8">
+<style>@page{size:auto;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0}.page{overflow:hidden;page-break-after:always}img{display:block}</style>
+</head><body>${pagesHtml}
+<script>
+(function(){
+  var done=false;
+  function go(){ if(done)return; done=true; try{window.focus()}catch(e){} setTimeout(function(){window.print()},250); }
+  var imgs=Array.prototype.slice.call(document.images);
+  var left=imgs.filter(function(im){return !im.complete}).length;
+  if(left===0){ go(); }
+  else { function tick(){ left--; if(left<=0) go(); } imgs.forEach(function(im){ if(!im.complete){ im.addEventListener('load',tick); im.addEventListener('error',tick); } }); }
+  setTimeout(go, 6000); // sécurité
+})();
+</script>
 </body></html>`
-    const w = window.open('', '_blank')
-    if (!w) { alert("Autorise les fenêtres pop-up pour imprimer."); return }
-    w.document.write(html); w.document.close()
+      const w = window.open('', '_blank')
+      if (!w) { alert("Autorise les fenêtres pop-up pour imprimer."); return }
+      w.document.write(html); w.document.close()
+    } catch (e) { alert('Impression impossible : ' + (e.message || e)) }
+    finally { setBusy('') }
   }
 
   // rangement auto (étagères)
+  // « Ranger » : calage dense (type skyline / bottom-left) pour économiser le papier.
+  // Pose chaque élément le plus bas/à gauche possible, comble les trous, tourne à 90°
+  // (sans déformer) si ça rentre mieux, et remplit chaque page à fond avant la suivante.
   const arrange = () => {
-    let ux = MARG, uy = MARG, rowH = 0, pg = 0; const UW = CMW - 2 * MARG, GAP = 0.4
-    const out = placed.map(it => {
-      if ((it.tab || 0) !== safeTab) return it
-      if (ux + it.w > MARG + UW + 0.001) { ux = MARG; uy += rowH + GAP; rowH = 0 }
-      if (uy + it.h > CMH - MARG + 0.001) { pg++; ux = MARG; uy = MARG; rowH = 0 }
-      const n = { ...it, page: pg, x: ux, y: uy }; ux += it.w + GAP; rowH = Math.max(rowH, it.h); return n
-    })
-    setPlaced(out); updateTab({ npages: Math.max(1, pg + 1) })
+    const GAP = 0.05                                 // espacement mini (≈ collés) en cm
+    const UW = CMW - 2 * MARG, UH = CMH - 2 * MARG   // surface utile
+    const r10 = v => Math.round(v * 20) / 20         // arrondi fin (0,5 mm) pour éviter chevauchement/écart
+    const others = placed.filter(it => (it.tab || 0) !== safeTab)
+    const items = placed.filter(it => (it.tab || 0) === safeTab)
+      .sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h))   // les plus grands d'abord
+
+    const newSky = () => [{ x: 0, w: UW, y: 0 }]    // ligne d'horizon d'une page
+    // meilleure position (la plus basse, puis la plus à gauche) pour une boîte bw×bh
+    const fit = (sky, bw, bh) => {
+      let best = null
+      for (let i = 0; i < sky.length; i++) {
+        const x = sky[i].x
+        if (x + bw > UW + 1e-6) continue
+        let y = 0, span = 0, j = i
+        while (j < sky.length && span < bw - 1e-6) { y = Math.max(y, sky[j].y); span += sky[j].w; j++ }
+        if (span < bw - 1e-6) continue               // pas assez de largeur jusqu'au bord
+        if (y + bh > UH + 1e-6) continue              // dépasse la page
+        if (!best || y < best.y - 1e-6 || (Math.abs(y - best.y) < 1e-6 && x < best.x)) best = { x, y }
+      }
+      return best
+    }
+    // relève l'horizon sur [x, x+bw] à la hauteur `top`
+    const raise = (sky, x, bw, top) => {
+      const xe = x + bw, next = []
+      for (const s of sky) {
+        const a = s.x, b = s.x + s.w
+        if (b <= x + 1e-6 || a >= xe - 1e-6) { next.push(s); continue }
+        if (a < x - 1e-6) next.push({ x: a, w: x - a, y: s.y })
+        if (b > xe + 1e-6) next.push({ x: xe, w: b - xe, y: s.y })
+      }
+      next.push({ x, w: bw, y: top })
+      next.sort((p, q) => p.x - q.x)
+      const m = []
+      for (const s of next) { const l = m[m.length - 1]; if (l && Math.abs(l.y - s.y) < 1e-6 && Math.abs(l.x + l.w - s.x) < 1e-6) l.w += s.w; else m.push({ ...s }) }
+      return m
+    }
+    const pages = [newSky()]
+    const tryPlace = (pg, it) => {
+      const opts = [{ bw: it.w + GAP, bh: it.h + GAP, rot: 0 }, { bw: it.h + GAP, bh: it.w + GAP, rot: 90 }]
+      let best = null
+      for (const o of opts) { const f = fit(pages[pg], o.bw, o.bh); if (f && (!best || f.y < best.f.y - 1e-6)) best = { f, o } }
+      if (!best) return null
+      pages[pg] = raise(pages[pg], best.f.x, best.o.bw, best.f.y + best.o.bh)
+      const px = MARG + best.f.x, py = MARG + best.f.y
+      const nx = best.o.rot === 90 ? (px + it.h / 2 - it.w / 2) : px
+      const ny = best.o.rot === 90 ? (py + it.w / 2 - it.h / 2) : py
+      return { ...it, page: pg, x: r10(nx), y: r10(ny), rot: best.o.rot }
+    }
+    const out = []
+    for (const it of items) {
+      let res = null
+      for (let pg = 0; pg < pages.length && !res; pg++) res = tryPlace(pg, it)
+      if (!res) { pages.push(newSky()); res = tryPlace(pages.length - 1, it) }
+      if (!res) { const pg = pages.length - 1; res = { ...it, page: pg, x: MARG, y: MARG, rot: 0 }; pages[pg] = raise(pages[pg], 0, Math.min(it.w, UW) + GAP, it.h + GAP) }   // plus grand qu'une page
+      out.push(res)
+    }
+    setPlaced([...others, ...out]); updateTab({ npages: Math.max(1, pages.length) })
+  }
+
+  // « Imbriquer » (expérimental) : calage par silhouette, plusieurs angles (détourées inclinées).
+  const nestArrange = async () => {
+    const mine = placed.filter(it => (it.tab || 0) === safeTab)
+    if (!mine.length) return
+    setBusy('Imbrication… (quelques secondes)')
+    try {
+      const input = mine.map(it => ({ id: it.uid, src: it.type === 'photo' ? it.src : null, w: it.w, h: it.h }))
+      const { placements, npages, emptyPct } = await nestItems(input, CMW, CMH)   // pleine page (sans marges)
+      const by = new Map(placements.map(p => [p.id, p]))
+      setPlaced(list => list.map(it => {
+        if ((it.tab || 0) !== safeTab) return it
+        const p = by.get(it.uid)
+        return p ? { ...it, page: p.page, x: p.x, y: p.y, rot: p.rot } : it
+      }))
+      updateTab({ npages: Math.max(1, npages) })
+      setBusy(''); return
+    } catch (e) { alert('Imbrication impossible : ' + (e.message || '')) }
+    finally { setBusy('') }
   }
 
   // ---------- sélection / groupes ----------
@@ -438,6 +742,9 @@ export default function PhotoshopView({ user, onNavigate }) {
     setSelUids(copies.map(c => c.uid)); return [...list, ...copies]
   })
   const delSel = useCallback(() => { setPlaced(p => p.filter(x => !selUids.includes(x.uid))); setSelUids([]) }, [selUids])
+  // ordre des calques : l'ordre dans `placed` = empilement (fin = au-dessus)
+  const bringFront = () => setPlaced(list => { const sel = list.filter(x => selUids.includes(x.uid)), rest = list.filter(x => !selUids.includes(x.uid)); return [...rest, ...sel] })
+  const sendBack = () => setPlaced(list => { const sel = list.filter(x => selUids.includes(x.uid)), rest = list.filter(x => !selUids.includes(x.uid)); return [...sel, ...rest] })
 
   // aplatit la sélection (composition) en UNE image et l'enregistre dans la bibliothèque
   const saveGroup = async () => {
@@ -559,7 +866,9 @@ export default function PhotoshopView({ user, onNavigate }) {
 
   // ---------- glisser-déposer (DOM direct -> fluide) ----------
   const onItemPointerDown = (ev, it) => {
+    if (editTextUid === it.uid) return                                   // en cours d'édition de texte → laisser le curseur
     if (ev.shiftKey) { select(it.uid, true); ev.preventDefault(); return }
+    if (it.locked) { setSelUids([it.uid]); ev.preventDefault(); return }  // verrouillé : sélection seule, pas de déplacement
     const targetSel = isSel(it.uid) ? selUids : groupMembers(placed, it.uid)
     if (!isSel(it.uid)) setSelUids(targetSel)
     const pageEl = pageMap.current.get(it.page)
@@ -587,10 +896,65 @@ export default function PhotoshopView({ user, onNavigate }) {
     drag.current = { resize: true, uid: it.uid, libId: it.libId, isPhoto: it.type === 'photo', el: elMap.current.get(it.uid), isText: it.type === 'text', sx, sy, cos, sin, ax, ay, rl: r.left, rt: r.top, rw: r.width, rh: r.height, w0: it.w, h0: it.h, size0: it.size, fit0: it.fit, cur: null }
     try { ev.target.setPointerCapture(ev.pointerId) } catch (e) { /* */ }
   }
+  // ---- Poignées de GROUPE (plusieurs éléments sélectionnés) : agrandir / tourner le bloc entier ----
+  const onGroupResizeDown = (ev, sx, sy) => {
+    ev.stopPropagation(); ev.preventDefault()
+    const items = placed.filter(x => selUids.includes(x.uid)); if (items.length < 2) return
+    const pageEl = pageMap.current.get(items[0].page); if (!pageEl) return
+    const r = pageEl.getBoundingClientRect()
+    const minx = Math.min(...items.map(i => i.x)), miny = Math.min(...items.map(i => i.y))
+    const maxx = Math.max(...items.map(i => i.x + i.w)), maxy = Math.max(...items.map(i => i.y + i.h))
+    drag.current = {
+      groupResize: true, sx, sy, ax: sx > 0 ? minx : maxx, ay: sy > 0 ? miny : maxy, gw: maxx - minx, gh: maxy - miny,
+      rl: r.left, rt: r.top, rw: r.width, rh: r.height,
+      members: items.map(i => ({ uid: i.uid, el: elMap.current.get(i.uid), x: i.x, y: i.y, w: i.w, h: i.h, size: i.size, isText: i.type === 'text' })), cur: null,
+    }
+    try { ev.target.setPointerCapture(ev.pointerId) } catch (e) { /* */ }
+  }
+  const onGroupRotDown = (ev) => {
+    ev.stopPropagation(); ev.preventDefault()
+    const items = placed.filter(x => selUids.includes(x.uid)); if (items.length < 2) return
+    const pageEl = pageMap.current.get(items[0].page); if (!pageEl) return
+    const r = pageEl.getBoundingClientRect()
+    const minx = Math.min(...items.map(i => i.x)), miny = Math.min(...items.map(i => i.y))
+    const maxx = Math.max(...items.map(i => i.x + i.w)), maxy = Math.max(...items.map(i => i.y + i.h))
+    const gcx = (minx + maxx) / 2, gcy = (miny + maxy) / 2
+    drag.current = {
+      groupRot: true, gcx, gcy, scx: r.left + gcx / CMW * r.width, scy: r.top + gcy / CMH * r.height,
+      start: Math.atan2(ev.clientY - (r.top + gcy / CMH * r.height), ev.clientX - (r.left + gcx / CMW * r.width)),
+      pageHpx: r.height,
+      members: items.map(i => ({ uid: i.uid, el: elMap.current.get(i.uid), cx: i.x + i.w / 2, cy: i.y + i.h / 2, w: i.w, h: i.h, rot: i.rot || 0, flipH: i.flipH, flipV: i.flipV })), cur: null,
+    }
+    try { ev.target.setPointerCapture(ev.pointerId) } catch (e) { /* */ }
+  }
   useEffect(() => {
     const move = ev => {
       const dr = drag.current; if (!dr) return
       if (dr.marquee) { dr.x1 = (ev.clientX - dr.rect.left) / dr.rect.width * CMW; dr.y1 = (ev.clientY - dr.rect.top) / dr.rect.height * CMH; setMarq(m => m ? { ...m, x1: dr.x1, y1: dr.y1 } : m); return }
+      if (dr.groupResize) {
+        const Px = (ev.clientX - dr.rl) / dr.rw * CMW, Py = (ev.clientY - dr.rt) / dr.rh * CMH
+        let s = Math.max(Math.abs(Px - dr.ax) / dr.gw, Math.abs(Py - dr.ay) / dr.gh); if (!isFinite(s) || s < 0.1) s = 0.1
+        dr.cur = dr.members.map(m => {
+          const nx = Math.round((dr.ax + (m.x - dr.ax) * s) * 10) / 10, ny = Math.round((dr.ay + (m.y - dr.ay) * s) * 10) / 10
+          const nw = Math.round(m.w * s * 10) / 10, nh = Math.round(m.h * s * 10) / 10
+          const o = { uid: m.uid, x: nx, y: ny, w: nw, h: nh }; if (m.isText && m.size != null) { o.size = Math.max(0.3, Math.round(m.size * s * 10) / 10); o.h = o.size }
+          if (m.el) { m.el.style.left = (nx / CMW * 100) + '%'; m.el.style.top = (ny / CMH * 100) + '%'; if (m.isText) m.el.style.fontSize = ((o.size) / CMW * PW) + 'px'; else { m.el.style.width = (nw / CMW * 100) + '%'; m.el.style.height = (nh / CMH * 100) + '%' } }
+          return o
+        })
+        return
+      }
+      if (dr.groupRot) {
+        const d = Math.atan2(ev.clientY - dr.scy, ev.clientX - dr.scx) - dr.start, cosD = Math.cos(d), sinD = Math.sin(d), deg = d * 180 / Math.PI
+        dr.cur = dr.members.map(m => {
+          const ncx = dr.gcx + (m.cx - dr.gcx) * cosD - (m.cy - dr.gcy) * sinD
+          const ncy = dr.gcy + (m.cx - dr.gcx) * sinD + (m.cy - dr.gcy) * cosD
+          const nx = Math.round((ncx - m.w / 2) * 10) / 10, ny = Math.round((ncy - m.h / 2) * 10) / 10
+          const nr = Math.round(((m.rot + deg) % 360 + 360) % 360)
+          if (m.el) { m.el.style.left = (nx / CMW * 100) + '%'; m.el.style.top = (ny / CMH * 100) + '%'; m.el.style.transform = `rotate(${nr}deg) scaleX(${m.flipH ? -1 : 1}) scaleY(${m.flipV ? -1 : 1})` }
+          return { uid: m.uid, x: nx, y: ny, rot: nr }
+        })
+        return
+      }
       if (dr.rot) { const ang = Math.round(Math.atan2(ev.clientY - dr.cy, ev.clientX - dr.cx) * 180 / Math.PI + 90); dr.curRot = ((ang % 360) + 360) % 360; if (dr.el) dr.el.style.transform = `rotate(${dr.curRot}deg) scaleX(${dr.flipH ? -1 : 1}) scaleY(${dr.flipV ? -1 : 1})`; return }
       if (dr.resize) {
         const Px = (ev.clientX - dr.rl) / dr.rw * CMW, Py = (ev.clientY - dr.rt) / dr.rh * CMH
@@ -615,22 +979,37 @@ export default function PhotoshopView({ user, onNavigate }) {
       let tp = dr.startPage, trect = r0
       for (const [pi, el] of pageMap.current) { const rr = el.getBoundingClientRect(); if (ev.clientY >= rr.top && ev.clientY <= rr.bottom) { tp = pi; trect = rr; break } }
       const dxcm = (ev.clientX - dr.sx) / r0.width * CMW, dycm = (ev.clientY - dr.sy) / r0.height * CMH
+      const single = dr.set.length === 1
+      const gvx = [], ghy = []
       dr.set.forEach(d => {
         const p = placed.find(x => x.uid === d.uid); if (!p) return
         // position cible dans la page survolée (coordonnées écran → cm de la page cible)
         const screenTop = r0.top + d.y0 / CMH * r0.height + (ev.clientY - dr.sy)
-        const tx = Math.max(-(p.w - 1), Math.min(CMW - 1, Math.round((d.x0 + dxcm) * 10) / 10))
-        const ty = Math.max(-(p.h - 1), Math.min(CMH - 1, Math.round((screenTop - trect.top) / trect.height * CMH * 10) / 10))
-        dr.cur[d.uid] = { x: tx, y: ty, page: tp }
-        // aperçu live (sur la page d'origine, autorisé à dépasser ~1 cm pour rattraper)
-        if (d.el) {
-          const lx = Math.max(-(p.w - 1), Math.min(CMW - 1, Math.round((d.x0 + dxcm) * 10) / 10))
-          const ly = Math.max(-(p.h - 1), Math.min(CMH - 1, Math.round((d.y0 + dycm) * 10) / 10))
-          d.el.style.left = (lx / CMW * 100) + '%'; d.el.style.top = (ly / CMH * 100) + '%'
+        let tx = Math.max(-(p.w - 1), Math.min(CMW - 1, Math.round((d.x0 + dxcm) * 10) / 10))
+        let ty = Math.max(-(p.h - 1), Math.min(CMH - 1, Math.round((screenTop - trect.top) / trect.height * CMH * 10) / 10))
+        let lx = Math.max(-(p.w - 1), Math.min(CMW - 1, Math.round((d.x0 + dxcm) * 10) / 10))
+        let ly = Math.max(-(p.h - 1), Math.min(CMH - 1, Math.round((d.y0 + dycm) * 10) / 10))
+        // magnétisme (sélection simple) : centre / bords de la page
+        if (single) {
+          const SNAP = 0.3
+          if (Math.abs((lx + p.w / 2) - CMW / 2) < SNAP) { lx = Math.round((CMW / 2 - p.w / 2) * 10) / 10; gvx.push(CMW / 2) }
+          else if (Math.abs(lx - MARG) < SNAP) { lx = MARG; gvx.push(MARG) }
+          else if (Math.abs((lx + p.w) - (CMW - MARG)) < SNAP) { lx = Math.round((CMW - MARG - p.w) * 10) / 10; gvx.push(CMW - MARG) }
+          tx = lx
+          if (tp === dr.startPage) {
+            if (Math.abs((ly + p.h / 2) - CMH / 2) < SNAP) { ly = Math.round((CMH / 2 - p.h / 2) * 10) / 10; ghy.push(CMH / 2) }
+            else if (Math.abs(ly - MARG) < SNAP) { ly = MARG; ghy.push(MARG) }
+            else if (Math.abs((ly + p.h) - (CMH - MARG)) < SNAP) { ly = Math.round((CMH - MARG - p.h) * 10) / 10; ghy.push(CMH - MARG) }
+            ty = ly
+          }
         }
+        dr.cur[d.uid] = { x: tx, y: ty, page: tp }
+        if (d.el) { d.el.style.left = (lx / CMW * 100) + '%'; d.el.style.top = (ly / CMH * 100) + '%' }
       })
+      setGuides(single && (gvx.length || ghy.length) ? { page: tp, vx: gvx, hy: ghy } : null)
     }
     const up = () => { const dr = drag.current
+      setGuides(null)
       if (dr && dr.marquee) {
         const minx = Math.min(dr.x0, dr.x1 ?? dr.x0), maxx = Math.max(dr.x0, dr.x1 ?? dr.x0), miny = Math.min(dr.y0, dr.y1 ?? dr.y0), maxy = Math.max(dr.y0, dr.y1 ?? dr.y0)
         if (maxx - minx > 0.3 || maxy - miny > 0.3) {
@@ -638,6 +1017,10 @@ export default function PhotoshopView({ user, onNavigate }) {
           setSelUids(got)
         }
         setMarq(null); drag.current = null; return
+      }
+      if (dr && (dr.groupResize || dr.groupRot)) {
+        if (Array.isArray(dr.cur) && dr.cur.length) { const cur = dr.cur; setPlaced(p => p.map(it => { const c = cur.find(z => z.uid === it.uid); return c ? { ...it, ...c } : it })) }
+        drag.current = null; return
       }
       if (dr) { if (dr.rot) { if (dr.curRot != null) setPlaced(p => p.map(it => it.uid === dr.uid ? { ...it, rot: dr.curRot } : it)) } else if (dr.resize) { if (dr.cur) { setPlaced(p => p.map(it => it.uid === dr.uid ? { ...it, ...dr.cur } : it)); if (dr.isPhoto && dr.libId) rememberSize(dr.libId, dr.cur.w, dr.cur.h) } } else if (dr.cur && Object.keys(dr.cur).length) { const cur = dr.cur; setPlaced(p => p.map(it => cur[it.uid] ? { ...it, ...cur[it.uid] } : it)) } } drag.current = null }
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
@@ -648,8 +1031,13 @@ export default function PhotoshopView({ user, onNavigate }) {
   useEffect(() => {
     const key = ev => {
       const t = document.activeElement, tg = t && t.tagName
-      const inField = tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT'
-      if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'z' || ev.key === 'Z')) { if (inField) return; ev.preventDefault(); undo(); return }
+      const inField = tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || (t && t.isContentEditable)
+      if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'z' || ev.key === 'Z')) { if (inField) return; ev.preventDefault(); ev.shiftKey ? redo() : undo(); return }
+      if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'y' || ev.key === 'Y')) { if (inField) return; ev.preventDefault(); redo(); return }
+      // raccourcis sur la sélection : dupliquer (Ctrl+D), devant/derrière (Ctrl+↑ / Ctrl+↓)
+      if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'd' || ev.key === 'D')) { if (inField || !selUids.length) return; ev.preventDefault(); dupSel(); return }
+      // Ctrl+↑ / Ctrl+↓ = mettre devant / derrière
+      if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) { if (inField || !selUids.length) return; ev.preventDefault(); ev.key === 'ArrowUp' ? bringFront() : sendBack(); return }
       // flèches du clavier = bouger l'élément sélectionné (Shift = plus grand pas)
       if (ev.key.indexOf('Arrow') === 0) {
         if (inField || !selUids.length) return
@@ -657,7 +1045,7 @@ export default function PhotoshopView({ user, onNavigate }) {
         const step = ev.shiftKey ? 1 : 0.1
         const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0
         const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0
-        setPlaced(p => p.map(it => selUids.includes(it.uid)
+        setPlaced(p => p.map(it => (selUids.includes(it.uid) && !it.locked)
           ? { ...it, x: Math.round((it.x + dx) * 100) / 100, y: Math.round((it.y + dy) * 100) / 100 }
           : it))
         return
@@ -682,12 +1070,12 @@ export default function PhotoshopView({ user, onNavigate }) {
 
   // ---------- annuler (Ctrl/Cmd+Z) : historique des compositions ----------
   const placedRef = useRef(placed); placedRef.current = placed
-  const histRef = useRef([]); const undoingRef = useRef(false)
+  const histRef = useRef([]); const undoingRef = useRef(false); const redoRef = useRef([])
   useEffect(() => {
     if (undoingRef.current) { undoingRef.current = false; return }
     const t = setTimeout(() => {
       const h = histRef.current, snap = JSON.stringify(placed)
-      if (h[h.length - 1] !== snap) { h.push(snap); if (h.length > 16) h.shift() }
+      if (h[h.length - 1] !== snap) { h.push(snap); if (h.length > 16) h.shift(); redoRef.current = [] }   // nouvelle action → on perd le « refaire »
     }, 350)
     return () => clearTimeout(t)
   }, [placed])
@@ -735,7 +1123,7 @@ export default function PhotoshopView({ user, onNavigate }) {
     const h = histRef.current, cur = JSON.stringify(placedRef.current)
     if (h[h.length - 1] !== cur) h.push(cur)   // fige l'état courant si pas encore enregistré
     if (h.length < 2) return
-    h.pop()
+    redoRef.current.push(h.pop())   // l'état courant part dans la pile « refaire »
     const prevStr = h[h.length - 1]
     try {   // annuler une retouche → remettre la vignette (et le cloud) comme avant
       const c = JSON.parse(cur), pr = JSON.parse(prevStr)
@@ -748,6 +1136,16 @@ export default function PhotoshopView({ user, onNavigate }) {
     undoingRef.current = true
     setSelUids([])
     setPlaced(JSON.parse(prevStr))
+  }, [])
+  // ---------- refaire (Ctrl/Cmd+Shift+Z ou Ctrl+Y) ----------
+  const redo = useCallback(() => {
+    const r = redoRef.current
+    if (!r.length) return
+    const next = r.pop()
+    histRef.current.push(next)
+    undoingRef.current = true
+    setSelUids([])
+    setPlaced(JSON.parse(next))
   }, [])
 
   // ---------- charger / supprimer ----------
@@ -860,7 +1258,16 @@ export default function PhotoshopView({ user, onNavigate }) {
     }
     if (it.type === 'text') {
       const fs = it.size / CMW * PW
-      return <div {...common} style={{ ...common.style, fontSize: fs, lineHeight: 1.1, color: it.color, fontWeight: 700, whiteSpace: 'pre', textAlign: 'center', fontFamily: it.font || "'Dancing Script',cursive", unicodeBidi: 'plaintext', overflow: 'visible' }}>{it.txt}</div>
+      const tStyle = { ...common.style, fontSize: fs, lineHeight: 1.1, color: it.color, fontWeight: 700, whiteSpace: 'pre', textAlign: 'center', fontFamily: it.font || "'Dancing Script',cursive", unicodeBidi: 'plaintext', overflow: 'visible' }
+      if (editTextUid === it.uid) {
+        return <div {...common} contentEditable suppressContentEditableWarning
+          ref={el => { if (el) { elMap.current.set(it.uid, el); if (el.dataset.psinit !== '1') { el.dataset.psinit = '1'; el.textContent = it.txt; el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r) } } else elMap.current.delete(it.uid) }}
+          onPointerDown={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}
+          onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') e.currentTarget.blur() }}
+          onBlur={e => { patch(it.uid, { txt: e.currentTarget.innerText.replace(/\n$/, '') }); setEditTextUid(null) }}
+          style={{ ...tStyle, outline: '2px dashed #993556', cursor: 'text', minWidth: '1ch' }} />
+      }
+      return <div {...common} onDoubleClick={e => { e.stopPropagation(); setSelUids([it.uid]); setEditTextUid(it.uid) }} style={tStyle}>{it.txt}</div>
     }
     const box = { ...common.style, width: `${it.w / CMW * 100}%`, height: `${it.h / CMH * 100}%`, overflow: 'hidden', ...shapeCss(it.forme), ...(it.bd ? { boxShadow: `inset 0 0 0 ${it.bd * PW / CMW}px ${it.bdColor || '#000'}` } : {}) }
     if (it.type === 'shape') return <div {...common} style={{ ...box, background: it.color }}><Outline forme={it.forme} /></div>
@@ -874,6 +1281,17 @@ export default function PhotoshopView({ user, onNavigate }) {
   }
 
   const isShape = sel && sel.type === 'shape', isText = sel && sel.type === 'text', isPhoto = sel && sel.type === 'photo'
+  // Mesure la VRAIE taille de l'élément sélectionné (le texte s'auto-dimensionne → it.w/it.h ne suffisent pas)
+  // pour caler le cadre des poignées exactement dessus.
+  const [selSize, setSelSize] = useState(null)
+  const [editTextUid, setEditTextUid] = useState(null)   // texte en édition directe sur la planche (double-clic)
+  useLayoutEffect(() => {
+    if (selUids.length !== 1) { setSelSize(null); return }
+    const it = placed.find(x => x.uid === selUids[0])
+    const el = it && elMap.current.get(it.uid), pageEl = it && pageMap.current.get(it.page)
+    if (!el || !pageEl || !pageEl.clientWidth) { setSelSize(null); return }
+    setSelSize({ uid: it.uid, w: el.offsetWidth / pageEl.clientWidth * CMW, h: el.offsetHeight / pageEl.clientHeight * CMH })
+  }, [selUids, placed, tabs, activeTab, CMW, CMH])
   const lab = 'block text-[11px] font-semibold text-ink-soft mb-1'
   const inp = 'w-full border border-line rounded-lg px-2 py-1.5 text-[13px]'
   const btn = 'w-full rounded-lg px-3 py-2 text-[13px] font-semibold mb-2'
@@ -883,19 +1301,33 @@ export default function PhotoshopView({ user, onNavigate }) {
       <svg width="0" height="0" style={{ position: 'absolute' }}><defs><clipPath id="psHeart" clipPathUnits="objectBoundingBox"><path d="M0.5,0.97 C0.5,0.97,0.03,0.62,0.03,0.32 C0.03,0.14,0.18,0.03,0.34,0.03 C0.43,0.03,0.5,0.1,0.5,0.18 C0.5,0.1,0.57,0.03,0.66,0.03 C0.82,0.03,0.97,0.14,0.97,0.32 C0.97,0.62,0.5,0.97,0.5,0.97 Z" /></clipPath></defs></svg>
       <style>{`.ps-it.ps-sel{outline:2px solid #993556;outline-offset:1px}`}</style>
 
-      {/* Barre du haut */}
-      <header className="bg-bordeaux text-white px-3 py-2 flex items-center gap-2 flex-shrink-0">
-        <button onClick={() => onNavigate && onNavigate('calendar')} className="bg-white/20 rounded-lg px-3 py-1.5 text-[13px] font-bold">← Retour</button>
-        <h1 className="font-fraunces text-[15px] m-0">🎨 Studio photos</h1>
-        <div className="flex-1" />
-        {busy && <span className="text-[12px] opacity-90">{busy}</span>}
-        <button onClick={addText} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">✍️ Texte</button>
-        <button onClick={addShape} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">⬤ Forme</button>
-        <button onClick={() => setShowDummy(true)} title="Générer une forme de gâteau (dummy) à l'échelle" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🎂 Dummy</button>
-        <button onClick={arrange} className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🪄 Ranger</button>
-        <button onClick={fitFrame} title="Cale le cadre de la photo sélectionnée sur ses proportions (enlève les bords vides)" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">📐 Cadre</button>
-        <button onClick={openRegion} title="Modifier une zone de la photo sélectionnée (gomme, sélection, copier, couleur)" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🖌️ Zone</button>
-        <select value={PAGE_FORMATS.some(f => f.name === curTab.fmt.name) ? curTab.fmt.name : '__custom__'} title="Taille de l'onglet actif"
+      {/* Barre du haut — tous les boutons visibles (retour à la ligne auto si étroit) */}
+      <header className="bg-bordeaux text-white px-3 py-2 flex items-center gap-1.5 flex-wrap flex-shrink-0 relative z-30">
+        <button onClick={() => onNavigate && onNavigate('calendar')} title="Retour" className="bg-white/10 hover:bg-white/25 rounded-lg px-2 py-1 text-[13px] leading-none whitespace-nowrap">←</button>
+        <h1 className="font-fraunces text-[15px] m-0 ml-0.5 mr-1">Lily Studio</h1>
+        {busy && <span className="text-[12px] opacity-90 ml-1">{busy}</span>}
+
+        <span className="w-px h-6 bg-white/25 mx-0.5" />
+        {/* Ajouter */}
+        <button onClick={addText} className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">✍️ Texte</button>
+        <button onClick={addShape} className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">⬤ Forme</button>
+        <button onClick={addRondText} className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">⊙ Rond+texte</button>
+        <button onClick={() => setShowDummy(true)} className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">🎂 Dummy</button>
+
+        <span className="w-px h-6 bg-white/25 mx-0.5" />
+        <button onClick={undo} title="Annuler (Ctrl+Z)" className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[14px] font-bold">↩️</button>
+        <button onClick={redo} title="Refaire (Ctrl+Maj+Z)" className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[14px] font-bold">↪️</button>
+
+        <span className="w-px h-6 bg-white/25 mx-0.5" />
+        {/* Outils */}
+        <button onClick={arrange} title="Caler les images au mieux" className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">🪄 Ranger</button>
+        <button onClick={nestArrange} title="Incline les images détourées pour combler les trous (essai)" className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">🧩 Imbriquer</button>
+        <button onClick={fitFrame} title="Cale le cadre de la photo sur ses proportions" className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">📐 Caler</button>
+        <button onClick={openRegion} title="Gomme, sélection, couleur" className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">🖌️ Zone</button>
+
+        <span className="w-px h-6 bg-white/25 mx-0.5" />
+        {/* Page */}
+        <select title="Taille de la page" value={PAGE_FORMATS.some(f => f.name === curTab.fmt.name) ? curTab.fmt.name : '__custom__'}
           onChange={e => {
             const v = e.target.value
             if (v === '__custom__') { const w = parseFloat(prompt('Largeur de la page en cm :', curTab.fmt.w)); const h = parseFloat(prompt('Hauteur de la page en cm :', curTab.fmt.h)); if (w > 0 && h > 0) setTabFmt({ name: `Perso ${w}×${h}`, w, h }) }
@@ -906,9 +1338,12 @@ export default function PhotoshopView({ user, onNavigate }) {
           {!PAGE_FORMATS.some(f => f.name === curTab.fmt.name) && <option value={curTab.fmt.name} className="text-ink">{curTab.fmt.name}</option>}
           <option value="__custom__" className="text-ink">✏️ Personnalisé…</option>
         </select>
-        <button onClick={addPageToTab} title="Ajouter une page (même taille, à la suite)" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">＋ Page</button>
-        <button onClick={clearAll} title="Vider toutes les pages" className="bg-white/20 rounded-lg px-3 py-1.5 text-[12px] font-bold">🗑️ Tout vider</button>
-        <button onClick={printPages} className="bg-white text-bordeaux rounded-lg px-3 py-1.5 text-[12px] font-bold">🖨️ Imprimer</button>
+        <span className="sep w-px h-6 bg-white/25 mx-0.5" />
+        <button onClick={() => setParamOpen(o => !o)} title="Modèles à paramétrer (commandes confirmées, 7 jours)" className="bg-[#ffd23f] text-[#5a3d00] rounded-lg px-2.5 py-1.5 text-[12px] font-extrabold whitespace-nowrap">À paramétrer {paramList === null ? '…' : `(${paramTodo.length})`}</button>
+
+        <div className="flex-1" />
+        <button onClick={downloadPlanche} className="bg-white/20 rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">💾 Enregistrer</button>
+        <button onClick={printPages} className="bg-white text-bordeaux rounded-lg px-2.5 py-1.5 text-[12px] font-bold whitespace-nowrap">🖨️ Imprimer</button>
       </header>
 
       {/* Vignette flottante : la photo de la commande, « en face », déplaçable par-dessus le plan de travail */}
@@ -935,42 +1370,111 @@ export default function PhotoshopView({ user, onNavigate }) {
         </div>
       )}
 
+      {/* Overlay « 🎯 À paramétrer » */}
+      {paramOpen && (
+        <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-14" onPointerDown={e => { if (e.target === e.currentTarget) setParamOpen(false) }}>
+          <div className="bg-cream rounded-2xl w-full max-w-[1000px] max-h-[calc(100vh-72px)] overflow-auto shadow-2xl">
+            <div className="sticky top-0 bg-bordeaux text-white px-4 py-2.5 flex items-center gap-3 flex-wrap z-10">
+              <span className="font-fraunces text-[15px]">{paramHist !== null ? 'Historique paramétrage (5 derniers jours)' : 'Modèles à paramétrer'}</span>
+              {paramHist === null && <span className="bg-white text-bordeaux rounded-full px-2.5 font-bold text-[12px]">{paramTodo.length}</span>}
+              <button onClick={toggleParamHist} className="ml-auto bg-white/20 rounded-lg px-2.5 py-1 text-[12px] font-bold">{paramHist !== null ? '← À faire' : 'Historique'}</button>
+              {paramHist === null && <button onClick={loadParam} title="Rafraîchir" className="bg-white/20 rounded-lg px-2.5 py-1 text-[12px] font-bold">↻</button>}
+              <button onClick={() => setParamOpen(false)} className="bg-white/20 rounded-lg px-2.5 py-1 text-[12px] font-bold">✕ Fermer</button>
+            </div>
+            <div className="p-3">
+              {paramHist !== null ? (
+                paramHist === 'loading' ? <p className="text-[13px] text-ink-mute p-6 text-center">Chargement de l'historique…</p>
+                : paramHist.length === 0 ? <p className="text-[13px] text-ink-mute p-8 text-center">Aucune commande paramétrée ces 5 derniers jours.</p>
+                : <div className="space-y-1.5">
+                    {paramHist.map((h, i) => {
+                      const who = profiles[h.done_by]?.full_name || profiles[h.done_by]?.username || ''
+                      const when = h.done_at ? new Date(h.done_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
+                      return (
+                        <div key={h.cake_key + i} className="bg-white border border-line rounded-lg px-3 py-2 flex items-center gap-3 text-[12.5px]">
+                          <b className="text-bordeaux">{h.order_ref || '—'}</b>
+                          <span className="text-ink-mute">{when}{who ? ' · ' + who : ''}</span>
+                          {h.order_ref && <button onClick={() => openOrderModal(h.order_ref)} className="ml-auto text-[12px] text-bordeaux underline">Ouvrir</button>}
+                        </div>
+                      )
+                    })}
+                  </div>
+              ) : paramList === null ? <p className="text-[13px] text-ink-mute p-6 text-center">Chargement des commandes…</p>
+                : paramTodo.length === 0 ? <p className="text-[13px] text-ink-mute p-8 text-center">✅ Tout est paramétré pour les 7 prochains jours.</p>
+                : (<>
+                  <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))' }}>
+                    {paramTodo.slice(0, 12).map((c, i) => (
+                      <div key={cakeKey(c) + i} className={'bg-white border rounded-xl p-1.5 text-center ' + (paramSel && cakeKey(paramSel) === cakeKey(c) ? 'border-bordeaux ring-2 ring-bordeaux' : 'border-line hover:border-bordeaux')}>
+                        <button onClick={() => selectParam(c)} title="Voir le détail" className="block w-full">
+                          <img src={c.photo} alt="" loading="lazy" decoding="async" className="w-full h-24 object-cover rounded-lg" />
+                          <div className="text-[11px] font-bold mt-1 truncate" title={c.title || ''}>{(c.title || '').replace(/^(CD-|GM-|GMD-)\s*/i, '') || c.orderRef || '—'}</div>
+                          <div className="text-[10px] text-ink-mute truncate">{c.orderRef || '—'} · {psFmtDate(c._date)}{c.pers ? ' · ' + c.pers + 'p' : ''}{c.count > 1 ? ' · ×' + c.count : ''}</div>
+                        </button>
+                        <button onClick={() => markParam(c)} className="w-full mt-1.5 bg-[#1a9d55] text-white rounded-lg py-1.5 text-[11px] font-bold">✓ Paramétré</button>
+                      </div>
+                    ))}
+                  </div>
+                  {paramSel && (
+                    <div className="mt-3 bg-white border border-line rounded-xl p-3">
+                      {paramDetail === 'loading' ? <p className="text-[12px] text-ink-mute">Chargement du détail…</p> : (() => {
+                        const d = paramDetail, items = (d && d.order_items) || []
+                        const cd = items.find(it => it.type === 'CD') || items[0]
+                        const others = items.filter(it => it !== cd)
+                        const fmt = v => Array.isArray(v) ? v.filter(Boolean).join(', ') : v
+                        const Row = ({ k, v }) => v ? <div className="flex gap-2 py-0.5 border-b border-dashed border-[#f0e8db]"><span className="text-ink-mute w-20 flex-shrink-0">{k}</span><span>{fmt(v)}</span></div> : null
+                        return (
+                          <>
+                            <div className="flex items-center gap-2 flex-wrap border-b border-line pb-2 mb-2">
+                              <b className="text-[14px]">{paramSel.orderRef}</b>
+                              {d && d.client_name && <span className="bg-[#fbeef2] text-bordeaux rounded-full px-2 text-[11px] font-bold">{d.client_name}</span>}
+                              <span className="bg-[#fbeef2] text-bordeaux rounded-full px-2 text-[11px] font-bold">📅 {psFmtDate(paramSel._date)}</span>
+                              <button onClick={() => openParamCake(paramSel)} className="ml-auto bg-bordeaux text-white rounded-lg px-3 py-1.5 text-[12px] font-bold">📥 Charger dans le plan</button>
+                            </div>
+                            <div className="flex gap-3 flex-wrap">
+                              {paramSel.photo && <img src={paramSel.photo} alt="" className="w-28 h-28 object-cover rounded-lg border border-line flex-shrink-0" />}
+                              <div className="flex-1 min-w-[200px] text-[12.5px]">
+                                {cd ? <><Row k="Modèle" v={cd.title} /><Row k="Thème" v={cd.theme} /><Row k="Âge" v={cd.age} /><Row k="Message" v={cd.message} /><Row k="Pers." v={cd.pers} /><Row k="Parfums" v={cd.parfums} /><Row k="Impression" v={cd.impression} /><Row k="Décor" v={cd.decor} /></> : <p className="text-ink-mute text-[12px]">Détail indisponible (commande non synchronisée).</p>}
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <b className="text-[12px]">📸 Photos de la commande (gâteau + accessoires) — clic = charger dans le plan</b>
+                              {paramPhotos === 'loading' ? <p className="text-[11px] text-ink-mute mt-1">Chargement des photos…</p>
+                                : !paramPhotos || !paramPhotos.length ? <p className="text-[11px] text-ink-mute mt-1">Aucune photo sur cette commande.</p>
+                                  : <div className="flex gap-2 flex-wrap mt-1.5">
+                                    {paramPhotos.map((ph, j) => (
+                                      <button key={j} onClick={() => loadPhotoToPlan(ph.dataUrl, paramSel.orderRef + '-' + (j + 1))} title="Charger dans le plan" className="bg-white border border-line rounded-lg p-1 w-24 text-center hover:border-bordeaux">
+                                        <img src={ph.dataUrl} alt="" className="w-full h-16 object-contain rounded" />
+                                        <div className="text-[10px] mt-0.5 text-bordeaux font-bold">📥 plan</div>
+                                      </button>
+                                    ))}
+                                  </div>}
+                            </div>
+                            <button onClick={() => openOrderModal(paramSel.orderRef)} className="inline-block mt-2 text-[12px] text-bordeaux underline">Ouvrir la commande (fiche complète)</button>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </>)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fiche commande (popup) ouverte depuis « À paramétrer » */}
+      {modalOrder && (
+        <OrderModal
+          order={modalOrder}
+          profiles={profiles}
+          user={user}
+          isPatissierMode={false}
+          onClose={() => setModalOrder(null)}
+          onOrderDeleted={() => setModalOrder(null)}
+        />
+      )}
+
       <div className="flex-1 flex min-h-0">
         {/* Bibliothèque */}
         <aside className="w-[240px] flex-shrink-0 border-r border-line bg-cream p-2.5 overflow-auto">
-          {/* Gâteaux du jour (comme Charge CD) : choisis une date, clique un gâteau → vignette déplaçable + zoom */}
-          <div className="mb-2 p-1.5 rounded-lg bg-white border border-line">
-            <div className="text-[11px] font-bold text-bordeaux mb-1">📦 Gâteaux du jour</div>
-            {!refDate ? (
-              <button onClick={() => setRefDate(psToISO(new Date()))} className="w-full bg-bordeaux text-white rounded-lg py-1.5 text-[12px] font-bold">📅 Afficher les commandes</button>
-            ) : (
-              <>
-                <div className="flex items-center gap-1 mb-1.5">
-                  <button onClick={() => shiftRefDay(-1)} title="Jour précédent" className="bg-cream border border-line rounded-lg w-6 h-7 text-[12px] font-bold">◀</button>
-                  <input type="date" value={refDate} onChange={e => e.target.value && setRefDate(e.target.value)} className={inp + ' flex-1 text-[11px]'} />
-                  <button onClick={() => shiftRefDay(1)} title="Jour suivant" className="bg-cream border border-line rounded-lg w-6 h-7 text-[12px] font-bold">▶</button>
-                  <button onClick={() => { setRefDate(null); setRefConfirmed(null); setRefDevis(null) }} title="Fermer" className="bg-cream border border-line rounded-lg w-6 h-7 text-[12px]">✕</button>
-                </div>
-                {refCakes === null ? <div className="text-[10px] text-ink-mute">Chargement…</div>
-                  : refCakes.length === 0 ? <div className="text-[10px] text-ink-mute">Aucun gâteau ce jour.</div>
-                  : (
-                    <div className="grid grid-cols-3 gap-1">
-                      {refCakes.map((c, i) => (
-                        <button key={i} onClick={() => showCake(c)} disabled={!c.photo} title={`${c.orderRef || ''}${c.pers ? ' · ' + c.pers + ' pers' : ''}`}
-                          className="relative text-center disabled:opacity-50 hover:opacity-80">
-                          {c.photo
-                            ? <img src={c.photo} alt="" className={'w-full h-14 object-cover rounded-md border-2 ' + (c.isDevis ? 'border-amber-400' : 'border-red-500')} />
-                            : <div className={'w-full h-14 rounded-md border-2 bg-cream flex items-center justify-center text-[18px] ' + (c.isDevis ? 'border-amber-400' : 'border-red-500')}>🎂</div>}
-                          {c.count > 1 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 rounded-full bg-bordeaux text-white text-[9px] font-bold flex items-center justify-center">×{c.count}</span>}
-                          <div className="text-[9px] text-ink-soft leading-tight">{c.pers ? c.pers + 'p' : '—'}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                {refConfirmed !== null && refDevis === null && <div className="text-[10px] text-amber-600 mt-1">⏳ devis…</div>}
-              </>
-            )}
-          </div>
           <div className="flex gap-1.5 mb-2">
             <button onClick={() => fileInput.current?.click()} className="flex-1 bg-bordeaux text-white rounded-lg py-1.5 text-[12px] font-bold">＋ Charger</button>
             <button onClick={() => psdInput.current?.click()} title="Importer des PSD (éclate les calques)" className="bg-white border border-bordeaux text-bordeaux rounded-lg py-1.5 px-2 text-[12px] font-bold">🧩 PSD</button>
@@ -989,11 +1493,16 @@ export default function PhotoshopView({ user, onNavigate }) {
           <button onClick={() => setCleanMode(v => !v)} className={'w-full rounded-lg py-1.5 text-[12px] font-bold mb-2 ' + (cleanMode ? 'bg-red-600 text-white' : 'bg-white border border-line')}>
             {cleanMode ? '✓ Terminer le nettoyage' : '🧹 Nettoyer (1 clic = supprimer)'}
           </button>
+          <div className="text-[11px] text-ink-mute mb-1.5 flex items-center gap-1">
+            {libLoading ? '⏳ Chargement de la bibliothèque…'
+              : libRefreshing ? `📚 ${allPhotos.length} images · 🔄 mise à jour…`
+                : `📚 ${allPhotos.length} images chargées`}
+          </div>
           {libLoading ? <p className="text-[12px] text-ink-mute">Chargement…</p> : (
             <div className="grid grid-cols-2 gap-1.5">
               {photos.map(ph => (
                 <div key={ph.id} className={'relative bg-white border rounded-lg p-1 cursor-pointer group ' + (cleanMode ? 'border-red-200 hover:border-red-500 hover:bg-red-50' : 'border-line hover:border-bordeaux')} onClick={() => cleanMode ? onDeletePhoto(ph, true) : addPhoto(ph.url, ph.nom, ph)} title={cleanMode ? 'Cliquer pour supprimer' : ph.nom}>
-                  <img src={ph.url} alt={ph.nom} loading="lazy" crossOrigin="anonymous" className="w-full h-16 object-contain" />
+                  <img src={ph.url} alt={ph.nom} loading="lazy" decoding="async" className="w-full h-16 object-contain" />
                   <div className="text-[9px] text-ink-soft h-6 overflow-hidden leading-tight mt-0.5">{ph.nom}</div>
                   {theme === TRASH
                     ? <button onClick={e => { e.stopPropagation(); onRestorePhoto(ph) }} title="Remettre à sa place" className="absolute top-0.5 right-0.5 bg-white/90 border border-line rounded px-1 h-5 text-[10px] opacity-0 group-hover:opacity-100">↩️</button>
@@ -1012,7 +1521,7 @@ export default function PhotoshopView({ user, onNavigate }) {
         </aside>
 
         {/* Onglets = TAILLES ; dans chaque onglet, les pages s'empilent (continuité) */}
-        <main className="flex-1 flex flex-col min-h-0">
+        <main className="flex-1 flex flex-col min-h-0 relative">
           <div className="flex items-end gap-1 px-3 pt-2 bg-[#dcd2c4] border-b border-line overflow-x-auto flex-shrink-0">
             {tabs.map((t, ti) => (
               <div key={ti} onClick={() => { setActiveTab(ti); setSelUids([]) }}
@@ -1024,6 +1533,10 @@ export default function PhotoshopView({ user, onNavigate }) {
             ))}
             <button onClick={addTab} title="Ajouter une taille (nouvel onglet)" className="px-3 py-1.5 rounded-t-lg text-[12px] font-bold text-bordeaux border border-dashed border-[#b3a692] mb-px">＋ Taille</button>
           </div>
+          <div className="absolute top-[44px] right-3 z-20 flex flex-col gap-1.5">
+            <button onClick={addPageToTab} title="Ajouter une page" className="bg-white border border-line shadow-md rounded-lg px-3 py-1.5 text-[12px] font-bold text-ink hover:border-bordeaux">＋ Page</button>
+            <button onClick={clearAll} title="Tout vider" className="bg-white border border-line shadow-md rounded-lg px-3 py-1.5 text-[12px] font-bold text-red-600 hover:border-red-400">🗑️ Vider</button>
+          </div>
           <div className="flex-1 overflow-auto p-4 flex flex-col items-center gap-4" onPointerDown={e => { if (e.target === e.currentTarget) setSelUids([]) }}>
             {Array.from({ length: npages }).map((_, p) => (
               <div key={p} ref={el => { if (el) pageMap.current.set(p, el); else pageMap.current.delete(p) }}
@@ -1031,17 +1544,49 @@ export default function PhotoshopView({ user, onNavigate }) {
                 style={{ width: PW, height: PW * CMH / CMW }}>
                 {placed.some(it => (it.tab || 0) === safeTab && it.page === p) && <button onClick={() => clearPage(p)} title="Vider cette page" className="absolute top-1 right-1 z-[8] bg-white/90 border border-line rounded px-1.5 py-0.5 text-[11px] hover:bg-red-50 hover:border-red-300">🗑️ Vider</button>}
                 {marq && marq.page === p && <div style={{ position: 'absolute', left: `${Math.min(marq.x0, marq.x1) / CMW * 100}%`, top: `${Math.min(marq.y0, marq.y1) / CMH * 100}%`, width: `${Math.abs(marq.x1 - marq.x0) / CMW * 100}%`, height: `${Math.abs(marq.y1 - marq.y0) / CMH * 100}%`, border: '1.5px dashed #993556', background: 'rgba(153,53,86,0.08)', pointerEvents: 'none', zIndex: 7 }} />}
-                {placed.filter(it => (it.tab || 0) === safeTab && it.page === p).map(renderItem)}
-                {selUids.length === 1 && (() => { const it = placed.find(x => x.uid === selUids[0]); if (!it || (it.tab || 0) !== safeTab || it.page !== p) return null; const pageHpx = PW * CMH / CMW, halfH = (it.h / 2) / CMH * pageHpx; return (
+                {/* magnétisme : guides d'alignement */}
+                {guides && guides.page === p && (
                   <>
-                    <div onPointerDown={e => onRotDown(e, it)} title="Tourner (attrape et fais pivoter)"
-                      style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translateY(${-(halfH + 20)}px)`, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'grab', zIndex: 6, touchAction: 'none' }} />
-                    {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy], i) => (
-                      <div key={i} onPointerDown={e => onResizeDown(e, it, sx, sy)} title="Étirer (Shift = garder les proportions)"
-                        style={{ position: 'absolute', left: `${(it.x + it.w / 2) / CMW * 100}%`, top: `${(it.y + it.h / 2) / CMH * 100}%`, transform: `translate(-50%,-50%) rotate(${it.rot || 0}deg) translate(${sx * (it.w / 2) / CMW * PW}px, ${sy * (it.h / 2) / CMH * pageHpx}px)`, width: 22, height: 22, cursor: 'nwse-resize', zIndex: 6, touchAction: 'none' }} />
-                    ))}
+                    {guides.vx.map((x, i) => <div key={'v' + i} style={{ position: 'absolute', left: `${x / CMW * 100}%`, top: 0, bottom: 0, width: 0, borderLeft: '1.5px dashed #d63384', zIndex: 8, pointerEvents: 'none' }} />)}
+                    {guides.hy.map((y, i) => <div key={'h' + i} style={{ position: 'absolute', top: `${y / CMH * 100}%`, left: 0, right: 0, height: 0, borderTop: '1.5px dashed #d63384', zIndex: 8, pointerEvents: 'none' }} />)}
                   </>
+                )}
+                {placed.filter(it => (it.tab || 0) === safeTab && it.page === p).map(renderItem)}
+                {selUids.length === 1 && (() => { const it = placed.find(x => x.uid === selUids[0]); if (!it || (it.tab || 0) !== safeTab || it.page !== p) return null; const bw = (selSize && selSize.uid === it.uid) ? selSize.w : it.w, bh = (selSize && selSize.uid === it.uid) ? selSize.h : it.h
+                  if (it.locked) return (
+                    <div style={{ position: 'absolute', left: `${it.x / CMW * 100}%`, top: `${it.y / CMH * 100}%`, width: `${bw / CMW * 100}%`, height: `${bh / CMH * 100}%`, transform: `rotate(${it.rot || 0}deg)`, transformOrigin: 'center', border: '1.5px dashed #999', pointerEvents: 'none', zIndex: 6 }}>
+                      <div style={{ position: 'absolute', top: -9, right: -9, fontSize: 13 }}>🔒</div>
+                    </div>
+                  )
+                  return (
+                  // cadre invisible calé EXACTEMENT sur l'élément (taille mesurée, en %, avec sa rotation) → les poignées collent toujours
+                  <div style={{ position: 'absolute', left: `${it.x / CMW * 100}%`, top: `${it.y / CMH * 100}%`, width: `${bw / CMW * 100}%`, height: `${bh / CMH * 100}%`, transform: `rotate(${it.rot || 0}deg)`, transformOrigin: 'center', pointerEvents: 'none', zIndex: 6 }}>
+                    <div onPointerDown={e => onRotDown(e, it)} title="Tourner (attrape et fais pivoter)"
+                      style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%,-50%) translateY(-18px)', width: 13, height: 13, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'grab', pointerEvents: 'auto', touchAction: 'none' }} />
+                    {[[0, 0, -1, -1], [100, 0, 1, -1], [0, 100, -1, 1], [100, 100, 1, 1]].map(([lx, ly, sx, sy], i) => (
+                      <div key={i} onPointerDown={e => onResizeDown(e, it, sx, sy)} title="Étirer (Shift = garder les proportions)"
+                        style={{ position: 'absolute', left: `${lx}%`, top: `${ly}%`, transform: 'translate(-50%,-50%)', width: 14, height: 14, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'nwse-resize', pointerEvents: 'auto', touchAction: 'none' }} />
+                    ))}
+                  </div>
                 ) })()}
+                {selUids.length > 1 && (() => {
+                  const its = placed.filter(x => selUids.includes(x.uid) && (x.tab || 0) === safeTab && x.page === p)
+                  if (its.length < 2) return null
+                  const minx = Math.min(...its.map(i => i.x)), miny = Math.min(...its.map(i => i.y))
+                  const maxx = Math.max(...its.map(i => i.x + i.w)), maxy = Math.max(...its.map(i => i.y + i.h))
+                  const gcx = (minx + maxx) / 2, gw = maxx - minx, gh = maxy - miny
+                  return (
+                    <>
+                      <div style={{ position: 'absolute', left: `${minx / CMW * 100}%`, top: `${miny / CMH * 100}%`, width: `${gw / CMW * 100}%`, height: `${gh / CMH * 100}%`, border: '1px dashed #993556', pointerEvents: 'none', zIndex: 5 }} />
+                      <div onPointerDown={onGroupRotDown} title="Tourner le groupe"
+                        style={{ position: 'absolute', left: `${gcx / CMW * 100}%`, top: `${miny / CMH * 100}%`, transform: 'translate(-50%,-50%) translateY(-18px)', width: 13, height: 13, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'grab', zIndex: 6, touchAction: 'none' }} />
+                      {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy], i) => (
+                        <div key={i} onPointerDown={e => onGroupResizeDown(e, sx, sy)} title="Agrandir le groupe"
+                          style={{ position: 'absolute', left: `${(gcx + sx * gw / 2) / CMW * 100}%`, top: `${((miny + maxy) / 2 + sy * gh / 2) / CMH * 100}%`, transform: 'translate(-50%,-50%)', width: 14, height: 14, borderRadius: '50%', background: '#fff', border: '2px solid #993556', cursor: 'nwse-resize', zIndex: 6, touchAction: 'none' }} />
+                      ))}
+                    </>
+                  )
+                })()}
               </div>
             ))}
           </div>
@@ -1049,7 +1594,7 @@ export default function PhotoshopView({ user, onNavigate }) {
 
         {/* Panneau de réglages */}
         <aside className="w-[280px] flex-shrink-0 border-l border-line bg-cream-warm p-3 overflow-auto">
-          {selUids.length === 0 && <p className="text-[12px] text-ink-soft">Clique une image à gauche pour l'ajouter.<br /><br />Puis glisse-la pour la placer, ou règle-la ici.<br /><br /><b>Maj+clic</b> = sélectionner plusieurs.<br /><b>Ctrl+V</b> = coller une photo.</p>}
+          {selUids.length === 0 && <p className="text-[12px] text-ink-soft">Clique une image à gauche pour l'ajouter.<br /><br />Puis glisse-la pour la placer, ou règle-la ici.<br /><br /><b>Maj+clic</b> = sélectionner plusieurs.<br /><b>Ctrl+V</b> = coller une photo.<br /><br />Raccourcis : <b>Ctrl+D</b> dupliquer · <b>Ctrl+↑</b> devant · <b>Ctrl+↓</b> derrière · <b>Suppr</b> effacer.</p>}
 
           {selUids.length > 1 && (
             <div>
@@ -1162,6 +1707,7 @@ export default function PhotoshopView({ user, onNavigate }) {
                 <button onClick={toFront} className="flex-1 bg-white border border-line rounded-lg py-2 text-[12px]">⬆️ Devant</button>
                 <button onClick={toBack} className="flex-1 bg-white border border-line rounded-lg py-2 text-[12px]">⬇️ Derrière</button>
               </div>
+              <button onClick={() => patch(sel.uid, { locked: !sel.locked })} className={btn + (sel.locked ? ' bg-ink text-white' : ' bg-white border border-line')}>{sel.locked ? '🔒 Verrouillé (cliquer pour déverrouiller)' : '🔓 Verrouiller (ne plus bouger)'}</button>
               <button onClick={dupSel} className={btn + ' bg-bordeaux text-white'}>✦ Dupliquer</button>
               <button onClick={fillCopies} className={btn + ' bg-white border border-bordeaux text-bordeaux'}>🖨️ Remplir la page de copies…</button>
               <button onClick={delSel} className={btn + ' bg-red-50 text-red-700 border border-red-200'}>🗑️ Retirer</button>

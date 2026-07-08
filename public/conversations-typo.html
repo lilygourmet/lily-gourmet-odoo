@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Conversations — typo avant / après</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Geist',sans-serif;background:#ece6dc;color:#1a0f0a;-webkit-font-smoothing:antialiased;font-size:14px;padding:18px 14px 60px}
+  .intro{text-align:center;margin:6px 0 20px}
+  .intro h1{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:25px}
+  .intro p{color:#8a7a70;font-size:13px;margin-top:5px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1000px;margin:0 auto;align-items:start}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .lab{font-weight:600;font-size:13px;padding:8px 13px;border-radius:11px;margin-bottom:10px;display:inline-block}
+  .lab.a{background:rgba(180,170,158,.5);color:#5b4a40}
+  .lab.b{background:#9a3357;color:#fff}
+  .panel{background:#fbfaf7;border:1px solid #e6ddcf;border-radius:18px;overflow:hidden;box-shadow:0 8px 24px rgba(80,40,30,.08)}
+  .hd{font-family:'Fraunces',serif;font-style:italic;font-size:18px;padding:13px 15px;border-bottom:1px solid #eee4d6}
+
+  /* ligne de conversation */
+  .row{display:flex;gap:11px;align-items:flex-start;padding:13px 15px;border-bottom:1px solid #f1ead e}
+  .row{border-bottom:1px solid #f1eade}
+  .av{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#fbe6ee,#f3e6c9);color:#9a3357;display:grid;place-items:center;font-weight:600;flex:0 0 auto}
+  .row .main{flex:1;min-width:0}
+  .nm{font-weight:600;font-size:14px}
+  .pv{color:#8a7a70;font-size:12.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
+  .badge{font-size:9px;padding:3px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;background:#fdeaef;color:#9a3357;font-weight:600}
+
+  /* entête détail */
+  .det{padding:14px 15px;border-bottom:1px solid #f1eade;display:flex;align-items:center;gap:11px}
+  .det .nm2{font-weight:600;font-size:15px}
+  .ord{margin:12px 15px;padding:11px 13px;border:1px solid #eee4d6;border-radius:13px;background:#fff}
+  .ord .ot{font-family:'Fraunces',serif;font-style:italic;font-size:15px;margin-bottom:7px}
+  .ord .oref{font-weight:600;color:#9a3357;font-size:13px}
+
+  /* AVANT = Geist Mono sur les chiffres ; APRÈS = Geist normal */
+  .mono{font-family:'Geist Mono',monospace}
+  .num{font-variant-numeric:tabular-nums}
+  .hl{background:#fff6cf;border-radius:4px;padding:0 3px}
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Conversations — typographie</h1>
+    <p>Même écran. À gauche l'ancien (chiffres en « machine à écrire »), à droite le nouveau (tout en Geist). Le <span class="hl">surligné</span> = ce qui change.</p>
+  </div>
+
+  <div class="cols">
+    <!-- AVANT -->
+    <div>
+      <span class="lab a">◀ AVANT — 3 polices</span>
+      <div class="panel">
+        <div class="hd">Conversations</div>
+        <div class="row">
+          <div class="av">ZM</div>
+          <div class="main">
+            <div class="nm">Znati Maha</div>
+            <div class="pv">Bonjour, c'est pour confirmer la commande…</div>
+          </div>
+          <div class="right">
+            <span class="mono hl" style="font-size:10px;color:#8a7a70">il y a 12 min</span>
+            <span class="badge mono hl">En attente</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="av">HA</div>
+          <div class="main">
+            <div class="nm">Hôtel Atlas</div>
+            <div class="pv">Merci beaucoup 🙏</div>
+          </div>
+          <div class="right"><span class="mono hl" style="font-size:10px;color:#8a7a70">il y a 2 h</span></div>
+        </div>
+        <div class="det">
+          <div class="av">ZM</div>
+          <div>
+            <div class="nm2">Znati Maha</div>
+            <div class="mono hl" style="font-size:13px;font-weight:600">+212 6 12 34 56 78</div>
+          </div>
+        </div>
+        <div class="ord">
+          <div class="ot">Commandes &amp; devis</div>
+          <div><span class="oref mono hl">S04821 ↗</span> · Licorne 2 étages</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- APRÈS -->
+    <div>
+      <span class="lab b">APRÈS — 2 polices ▶</span>
+      <div class="panel">
+        <div class="hd">Conversations</div>
+        <div class="row">
+          <div class="av">ZM</div>
+          <div class="main">
+            <div class="nm">Znati Maha</div>
+            <div class="pv">Bonjour, c'est pour confirmer la commande…</div>
+          </div>
+          <div class="right">
+            <span class="num hl" style="font-size:10px;color:#8a7a70">il y a 12 min</span>
+            <span class="badge hl">En attente</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="av">HA</div>
+          <div class="main">
+            <div class="nm">Hôtel Atlas</div>
+            <div class="pv">Merci beaucoup 🙏</div>
+          </div>
+          <div class="right"><span class="num hl" style="font-size:10px;color:#8a7a70">il y a 2 h</span></div>
+        </div>
+        <div class="det">
+          <div class="av">ZM</div>
+          <div>
+            <div class="nm2">Znati Maha</div>
+            <div class="num hl" style="font-size:13px;font-weight:600">+212 6 12 34 56 78</div>
+          </div>
+        </div>
+        <div class="ord">
+          <div class="ot">Commandes &amp; devis</div>
+          <div><span class="oref num hl">S04821 ↗</span> · Licorne 2 étages</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:#9b8b80;font-size:12px;margin-top:30px;max-width:560px;margin-left:auto;margin-right:auto">
+    Regarde les zones surlignées : l'heure (« il y a 12 min »), le badge « En attente », le n° de téléphone et la référence « S04821 ».
+    À gauche ils sont en police « machine à écrire » (espacée, technique). À droite, ils sont dans la même police nette que le reste.
+  </p>
+</body>
+</html>

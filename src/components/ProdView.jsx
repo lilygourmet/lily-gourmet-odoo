@@ -6,6 +6,8 @@ import { isAdmin } from '../lib/auth'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import ActivityLog, { relativeTime } from './ActivityLog'
+import { AlertTriangle, Printer } from 'lucide-react'
+import { isBurnAway } from '../lib/burnAway'
 
 export default function ProdView({ user, onLogout, onNavigate, activeView, forcedCategory }) {
   const [lines, setLines] = useState([])
@@ -20,6 +22,11 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
   const [printMode, setPrintMode] = useState('todo')    // 'todo' (à faire) | 'done' (faites)
   const [printData, setPrintData] = useState(null)      // { byDate, statusOf } — inclut J-3
   const [expandedKey, setExpandedKey] = useState(null)  // pour vue par produit
+  const [showHistory, setShowHistory] = useState(false)   // afficher l'historique J-7 (lecture seule)
+  const [historyData, setHistoryData] = useState(null)    // { lines, doneMap } des 7 jours passés
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  const noop = () => {}
 
   // category peut etre 'prod', 'sales', ou un array ['prod', 'sales']
   // Determination :
@@ -91,6 +98,18 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     }
     return map
   }, [lines])
+
+  // Group par date pour l'historique J-7 (du plus récent au plus ancien)
+  const historyByDate = useMemo(() => {
+    const map = new Map()
+    if (!historyData) return map
+    for (const l of historyData.lines) {
+      const d = new Date(l.delivery_at).toISOString().slice(0, 10)
+      if (!map.has(d)) map.set(d, [])
+      map.get(d).push(l)
+    }
+    return new Map([...map.entries()].sort((a, b) => b[0].localeCompare(a[0])))
+  }, [historyData])
 
   // Helpers status : permet de lire l'etat actuel d'une ligne dans doneMap
   // Une entree dans doneMap signifie soit 'done', soit 'cancelled'.
@@ -199,6 +218,33 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
     setPrintDate(null)
   }
 
+  // Charge les 7 jours PASSÉS (J-7 à J-1) pour l'historique, en lecture seule.
+  // Réutilise les mêmes fonctions que le flux normal (loadSalesLinesForRange charge
+  // une plage depuis une date de début ; ici on commence il y a 7 jours sur 7 jours).
+  async function loadHistory() {
+    setHistoryLoading(true)
+    try {
+      const d0 = new Date(); d0.setDate(d0.getDate() - 7)
+      const start = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`
+      const all = await loadSalesLinesForRange(start, 7)
+      const filtered = filterLinesForProdCategory(all, category).filter(l => !/vitrine/i.test(l.client_name || ''))
+      const dones = await loadProdDoneForLines(filtered.map(l => l.odoo_line_id).filter(Boolean))
+      const dmap = new Map()
+      for (const d of dones) dmap.set(d.odoo_line_id, d)
+      setHistoryData({ lines: filtered, doneMap: dmap })
+    } catch (e) {
+      toast.error('Erreur de chargement : ' + e.message)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function toggleHistory() {
+    const next = !showHistory
+    setShowHistory(next)
+    if (next && !historyData) loadHistory()
+  }
+
   // def : utilise pour afficher emoji/label. Si array -> emoji combine + label combine.
   const def = useMemo(() => {
     if (!category) return null
@@ -222,7 +268,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
 
 
   return (
-    <div className="min-h-screen bg-cream pb-40">
+    <div className="min-h-screen lg-vibrant pb-40">
       <AppHeader
         user={user}
         activeView={activeView || (Array.isArray(category) ? 'prod' : (category === 'sales' ? 'sales' : 'prod'))}
@@ -262,12 +308,69 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
               <i className="ti ti-printer text-[13px]" aria-hidden="true"></i>
               Imprimer
             </button>
+            <button
+              onClick={toggleHistory}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] transition-colors ${
+                showHistory ? 'bg-ink text-cream' : 'border border-line text-ink-soft hover:border-bordeaux'
+              }`}
+              title="Afficher / masquer les 7 derniers jours (lecture seule)"
+            >Historique J-7</button>
           </div>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto p-4">
-        {loading ? (
+        {showHistory ? (
+          historyLoading ? (
+            <Skeleton rows={6} />
+          ) : !historyData || historyByDate.size === 0 ? (
+            <div className="text-center text-ink-mute italic py-12">Aucune ligne sur les 7 derniers jours</div>
+          ) : (
+            <div className="space-y-5">
+              {[...historyByDate.entries()].map(([date, dayLines]) => {
+                const d = new Date(date)
+                const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+                return (
+                  <div key={date} className="bg-white rounded-2xl border border-line p-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-bordeaux/30 flex-wrap">
+                      <div className="font-mono text-[11px] tracking-[0.15em] uppercase text-bordeaux font-bold capitalize">
+                        {label}
+                      </div>
+                      <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-ink/10 text-ink-soft">
+                        Historique · {dayLines.length}
+                      </span>
+                    </div>
+                    {viewMode === 'client' ? (
+                      <ClientView
+                        lines={dayLines}
+                        doneMap={historyData.doneMap}
+                        onToggle={noop}
+                        onCancel={noop}
+                        supportsCancellation={supportsCancellation}
+                        hideClient={supportsCancellation}
+                        readOnly
+                      />
+                    ) : (
+                      <ProductView
+                        lines={dayLines}
+                        doneMap={historyData.doneMap}
+                        onToggleGroup={noop}
+                        onToggleSingle={noop}
+                        onCancelSingle={noop}
+                        supportsCancellation={supportsCancellation}
+                        hideClient={supportsCancellation}
+                        expandedKey={expandedKey}
+                        setExpandedKey={setExpandedKey}
+                        dateKey={'hist-' + date}
+                        readOnly
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        ) : loading ? (
           <Skeleton rows={6} />
         ) : byDate.size === 0 ? (
           <div className="text-center text-ink-mute italic py-12">Aucune ligne sur les 14 prochains jours</div>
@@ -283,7 +386,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
               const visibleLines = tab === 'todo' ? todo : tab === 'done' ? done : cancelled
 
               return (
-                <div key={date} className="bg-white rounded-lg border border-line p-3">
+                <div key={date} className="bg-white rounded-2xl border border-line p-3 shadow-sm">
                   <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-bordeaux/30 flex-wrap">
                     <div className="font-mono text-[11px] tracking-[0.15em] uppercase text-bordeaux font-bold capitalize">
                       {label}
@@ -320,7 +423,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
                           onClick={() => handlePrint(date)}
                           className="w-7 h-7 flex items-center justify-center text-bordeaux border border-bordeaux/40 rounded-full hover:bg-bordeaux hover:text-cream transition-colors text-[14px]"
                           title="Imprimer ce jour"
-                        >🖨</button>
+                        ><Printer size={14} strokeWidth={2} /></button>
                       )}
                     </div>
                   </div>
@@ -486,7 +589,7 @@ function cleanProdProductName(name) {
 }
 
 // Vue par client : ligne par ligne
-function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, hideClient }) {
+function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, hideClient, readOnly = false }) {
   const sorted = [...lines].sort((a, b) => new Date(a.delivery_at) - new Date(b.delivery_at))
   return (
     <div className="space-y-1">
@@ -512,8 +615,9 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
             {/* Click sur la zone principale = toggle "Fait" */}
             <button
               onClick={() => onToggle(line)}
-              className="flex-1 min-w-0 flex items-start sm:items-center gap-2 text-left"
-              title={isDone ? 'Cliquer pour annuler la coche' : 'Marquer comme fait'}
+              disabled={readOnly}
+              className={`flex-1 min-w-0 flex items-start sm:items-center gap-2 text-left ${readOnly ? 'cursor-default' : ''}`}
+              title={readOnly ? '' : isDone ? 'Cliquer pour annuler la coche' : 'Marquer comme fait'}
             >
               <span className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] mt-0.5 sm:mt-0 ${
                 isDone
@@ -539,12 +643,12 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
                   <span className="text-[12px] text-ink min-w-0 break-words sm:truncate">{cleanProdProductName(line.product_name)}</span>
                 </span>
                 {line.product_note && (
-                  <span className="text-[11px] text-[#B36B00] font-semibold break-words w-full pl-[3.75rem] sm:pl-[3.75rem] mt-0.5">{line.product_note}</span>
+                  <span className={`text-[11px] font-semibold break-words w-full pl-[3.75rem] sm:pl-[3.75rem] mt-0.5 ${isBurnAway(line.product_note) ? 'text-bordeaux font-bold' : 'text-[#B36B00]'}`}>{line.product_note}</span>
                 )}
               </span>
             </button>
             {/* Bouton Annuler (croix rouge) - uniquement pour Prod */}
-            {supportsCancellation && (
+            {supportsCancellation && !readOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); onCancel(line) }}
                 className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors text-[14px] font-bold leading-none ${
@@ -565,7 +669,7 @@ function ClientView({ lines, doneMap, onToggle, onCancel, supportsCancellation, 
 }
 
 // Vue par produit : agrégé, click pour expand
-function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSingle, supportsCancellation, hideClient, expandedKey, setExpandedKey, dateKey }) {
+function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSingle, supportsCancellation, hideClient, expandedKey, setExpandedKey, dateKey, readOnly = false }) {
   // Helper local : extrait le status d'une ligne
   function statusOf(odooLineId) {
     const e = doneMap.get(odooLineId)
@@ -618,12 +722,13 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
             <div className="flex items-center gap-2 px-2 py-1.5">
               <button
                 onClick={() => onToggleGroup(g.lines, allDone)}
-                className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-[10px] transition-colors ${
+                disabled={readOnly}
+                className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-[10px] transition-colors ${readOnly ? 'cursor-default' : ''} ${
                   allDone ? 'bg-success border-success text-cream'
                   : someDone ? 'bg-bordeaux/20 border-bordeaux text-bordeaux'
                   : 'border-line hover:border-bordeaux'
                 }`}
-                title={allDone ? 'Tout déjà fait — clic pour annuler' : 'Marquer fait'}
+                title={readOnly ? '' : allDone ? 'Tout déjà fait — clic pour annuler' : 'Marquer fait'}
               >
                 {allDone ? '✓' : someDone ? '½' : ''}
               </button>
@@ -643,8 +748,10 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
               }`}>
                 {cleanProdProductName(g.name)}
               </span>
-              {g.lines.some(l => l.product_note) && (
-                <span className="text-[14px] flex-shrink-0" title="Une commande a une ⚠️ attention — ouvre le détail clients">⚠️</span>
+              {g.lines.some(l => isBurnAway(l.product_note)) ? (
+                <span className="flex-shrink-0 text-bordeaux font-bold text-[13px] leading-none" title="🔥 Burn away dans une commande — ouvre le détail clients">🔥</span>
+              ) : g.lines.some(l => l.product_note) && (
+                <span className="flex-shrink-0 text-[#B36B00]" title="Une commande a une attention — ouvre le détail clients"><AlertTriangle size={14} strokeWidth={2} /></span>
               )}
               {allVitrine && <VitrinePill />}
               {someVitrine && (
@@ -686,8 +793,9 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
                     <div key={line.id} className={`w-full flex items-center gap-2 px-2 py-0.5 rounded transition-all text-[11px] ${txtClass}`}>
                       <button
                         onClick={() => onToggleSingle(line)}
-                        className="flex-1 min-w-0 flex items-center gap-2 text-left"
-                        title={isDone ? 'Cliquer pour annuler la coche' : 'Marquer comme fait'}
+                        disabled={readOnly}
+                        className={`flex-1 min-w-0 flex items-center gap-2 text-left ${readOnly ? 'cursor-default' : ''}`}
+                        title={readOnly ? '' : isDone ? 'Cliquer pour annuler la coche' : 'Marquer comme fait'}
                       >
                         <span className={`flex-shrink-0 w-3 h-3 rounded-full border flex items-center justify-center text-[8px] ${
                           isDone
@@ -705,9 +813,11 @@ function ProductView({ lines, doneMap, onToggleGroup, onToggleSingle, onCancelSi
                         <span className="truncate max-w-[120px]">— {line.client_name}</span>
                         <span className="font-bold text-bordeaux">×{line.quantity}</span>
                         {isReservationVitrine(line) && <VitrinePill />}
-                        {line.product_note && <span className="text-[10px] text-[#B36B00] font-semibold truncate">⚠️ {line.product_note}</span>}
+                        {line.product_note && (isBurnAway(line.product_note)
+                          ? <span className="text-[10px] text-bordeaux font-bold truncate inline-flex items-center gap-1"><span className="shrink-0">🔥</span> {line.product_note}</span>
+                          : <span className="text-[10px] text-[#B36B00] font-semibold truncate inline-flex items-center gap-1"><AlertTriangle size={10} strokeWidth={2} className="shrink-0" /> {line.product_note}</span>)}
                       </button>
-                      {supportsCancellation && (
+                      {supportsCancellation && !readOnly && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onCancelSingle(line) }}
                           className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors text-[12px] font-bold leading-none ${

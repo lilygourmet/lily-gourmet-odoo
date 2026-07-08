@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Lock, Clock, Archive, Paperclip, X, Image, Pencil, Coins, Trash2, Check, AlertTriangle, Tags, ChevronDown, ChevronUp } from 'lucide-react'
+import { Lock, Clock, Archive, Paperclip, X, Image, Pencil, Coins, Trash2, Check, AlertTriangle, Tags, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import { loadMouvementsMonth, loadCaisseBalance, loadMonthStats, loadCategories, addMouvement, updateMouvement, deleteMouvement, isMonthClosed, cloturerMois, uploadMouvementProof, declareMouvementNoProof, resetMouvementProof, loadPendingReceptions, validateReception } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
 import AjoutSortieModal from '../modals/AjoutSortieModal'
@@ -11,6 +11,53 @@ import ValiderReceptionsModal from '../modals/ValiderReceptionsModal'
 import AuditLogPanel from '../AuditLogPanel'
 import { confirmDialog } from '../../../lib/confirmDialog'
 import { toast } from '../../../lib/toast'
+
+// Charge la librairie Excel (XLSX) depuis le CDN, une seule fois (comme le Rapprochement bancaire).
+async function ensureXLSX() {
+  if (window.XLSX) return window.XLSX
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+    s.onload = resolve; s.onerror = reject
+    document.head.appendChild(s)
+  })
+  return window.XLSX
+}
+
+const PROOF_LABELS = { with_proof: 'Preuve', pending: 'En attente', no_proof_declared: 'Sans preuve' }
+
+// Construit une feuille Excel pour une liste de mouvements + calcule les totaux.
+// Les entrées « à valider » (reception_status = pending) sont listées mais non comptées.
+function buildCaisseSheet(XLSX, mvts, openingBalance = null) {
+  const ordered = [...mvts].sort((a, b) => (a.mvt_date < b.mvt_date ? -1 : a.mvt_date > b.mvt_date ? 1 : 0))
+  const rows = [['Date', 'Type', 'Libellé', 'Catégorie', 'Entrée (dh)', 'Sortie (dh)', 'Preuve']]
+  let totalEntrees = 0, totalSorties = 0
+  ordered.forEach(m => {
+    const isEntree = m.type === 'entree'
+    const pending = isEntree && m.reception_status === 'pending'
+    const amount = Number(m.amount)
+    if (isEntree && !pending) totalEntrees += amount
+    if (!isEntree) totalSorties += amount
+    rows.push([
+      m.mvt_date,
+      isEntree ? (pending ? 'Entrée (à valider)' : 'Entrée') : 'Sortie',
+      m.label || '',
+      m.category || '',
+      isEntree ? amount : '',
+      isEntree ? '' : amount,
+      isEntree ? '' : (PROOF_LABELS[m.proof_status] || ''),
+    ])
+  })
+  const net = totalEntrees - totalSorties
+  rows.push([])
+  if (openingBalance != null) rows.push(['', '', '', 'Solde au début du mois', Number(openingBalance), '', ''])
+  rows.push(['', '', '', 'Totaux du mois', totalEntrees, totalSorties, ''])
+  rows.push(['', '', '', 'Net du mois (entrées − sorties)', net, '', ''])
+  if (openingBalance != null) rows.push(['', '', '', 'Solde à la fin du mois', Number(openingBalance) + net, '', ''])
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 34 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }]
+  return { ws, totalEntrees, totalSorties }
+}
 
 export default function MeriemCaisse({ user, focus }) {
   return <CaisseGenericView caisseOwner="meriem" user={user} focus={focus} accent={{ bg: '#EAF3DE', text: '#27500A', border: '#97C459' }} />
@@ -170,6 +217,58 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
     if (remaining.length === 0) setShowReceptionsModal(false)
   }
 
+  const ownerLabel = caisseOwner === 'meriem' ? 'Meriem' : 'Layla LG'
+
+  async function handleExport() {
+    if (mouvements.length === 0) { toast.info('Aucun mouvement à exporter ce mois.'); return }
+    try {
+      const XLSX = await ensureXLSX()
+      const moisLabel = MOIS_TABS.find(m => m.idx === month)?.label || month
+      const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+      const opening = await loadCaisseBalance(caisseOwner, monthStart)
+      const { ws } = buildCaisseSheet(XLSX, mouvements, opening)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, `${moisLabel} ${year}`.slice(0, 31))
+      XLSX.writeFile(wb, `caisse_${ownerLabel.replace(/\s+/g, '_')}_${year}_${String(month).padStart(2, '0')}.xlsx`)
+    } catch (e) {
+      toast.error('Échec de l\'export : ' + (e?.message || e))
+    }
+  }
+
+  async function handleExportYear() {
+    try {
+      const XLSX = await ensureXLSX()
+      const all = await loadMouvementsMonth(caisseOwner, year, 0) // 0 = toute l'année
+      if (all.length === 0) { toast.info(`Aucun mouvement en ${year}.`); return }
+      const wb = XLSX.utils.book_new()
+      const resume = [['Mois', 'Solde début (dh)', 'Entrées (dh)', 'Sorties (dh)', 'Net (dh)', 'Solde fin (dh)']]
+      // Solde de départ de l'année = tout ce qui précède le 1er janvier.
+      let running = await loadCaisseBalance(caisseOwner, `${year}-01-01`)
+      let anEntrees = 0, anSorties = 0
+      const debutAnnee = running
+      for (const m of MOIS_TABS) {
+        const monthMvts = all.filter(x => Number(String(x.mvt_date).slice(5, 7)) === m.idx)
+        if (monthMvts.length === 0) continue
+        const { ws, totalEntrees, totalSorties } = buildCaisseSheet(XLSX, monthMvts, running)
+        XLSX.utils.book_append_sheet(wb, ws, `${m.label} ${year}`.slice(0, 31))
+        const net = totalEntrees - totalSorties
+        resume.push([m.label, running, totalEntrees, totalSorties, net, running + net])
+        running += net
+        anEntrees += totalEntrees; anSorties += totalSorties
+      }
+      resume.push([])
+      resume.push(['Année', debutAnnee, anEntrees, anSorties, anEntrees - anSorties, running])
+      const rws = XLSX.utils.aoa_to_sheet(resume)
+      rws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 16 }]
+      XLSX.utils.book_append_sheet(wb, rws, 'Résumé')
+      // Résumé en première feuille.
+      wb.SheetNames = ['Résumé', ...wb.SheetNames.filter(n => n !== 'Résumé')]
+      XLSX.writeFile(wb, `caisse_${ownerLabel.replace(/\s+/g, '_')}_${year}.xlsx`)
+    } catch (e) {
+      toast.error('Échec de l\'export : ' + (e?.message || e))
+    }
+  }
+
   const palette = ['#993556', '#C77B9F', '#EF9F27', '#378ADD', '#7F77DD', '#1D9E75', '#D85A30', '#8a7a70']
 
   return (
@@ -254,7 +353,9 @@ export function CaisseGenericView({ caisseOwner, user, accent, focus }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
         <button disabled={closed} onClick={() => setShowSortie(true)} style={{ ...btnPrimary, opacity: closed ? 0.4 : 1 }}>↑ Ajouter sortie</button>
         <button disabled={closed} onClick={() => setShowEntree(true)} style={{ ...btnNormal, opacity: closed ? 0.4 : 1 }}>↓ Ajouter entrée manuelle</button>
-        <button disabled={closed} onClick={() => setShowCloture(true)} style={{ ...btnNormal, marginLeft: 'auto', opacity: closed ? 0.4 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Archive size={15} /> Clôturer le mois</button>
+        <button onClick={handleExport} style={{ ...btnNormal, marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Download size={15} /> Export mois</button>
+        <button onClick={handleExportYear} style={{ ...btnNormal, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Download size={15} /> Export année</button>
+        <button disabled={closed} onClick={() => setShowCloture(true)} style={{ ...btnNormal, opacity: closed ? 0.4 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Archive size={15} /> Clôturer le mois</button>
       </div>
 
       {(() => { const selectedCat = categories.find(c => c.name === filter); return (

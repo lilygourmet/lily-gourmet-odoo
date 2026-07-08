@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cake Vision IA — maquette</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --warm:#f3ece1; --ink:#2b2320; --line:#e4dad0; --mute:#9a8d80; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#efe7da; color:var(--ink); padding:18px; }
+  .wrap { max-width:1000px; margin:0 auto; }
+  h1 { font-family:Georgia,serif; font-style:italic; font-size:26px; margin:0 0 4px; }
+  .sub { color:var(--mute); font-size:13px; margin:0 0 16px; }
+
+  /* 2 colonnes : réglages à gauche, visuel à droite */
+  .grid { display:grid; grid-template-columns:340px 1fr; gap:16px; align-items:start; }
+  @media (max-width:760px){ .grid { grid-template-columns:1fr; } }
+
+  .card { background:var(--cream); border:1px solid var(--line); border-radius:14px; padding:14px; box-shadow:0 4px 16px rgba(0,0,0,.05); }
+  .lbl { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--bordeaux); margin:0 0 6px; }
+  .step { margin-bottom:16px; }
+
+  .drop { border:2px dashed var(--line); border-radius:12px; background:var(--warm); padding:18px; text-align:center; color:var(--mute); font-size:13px; cursor:pointer; }
+  .drop.has { padding:0; border-style:solid; overflow:hidden; }
+  .drop img { width:100%; display:block; }
+
+  textarea { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:13px; resize:vertical; min-height:64px; background:#fff; font-family:inherit; }
+
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { font-size:12px; font-weight:600; padding:6px 11px; border:1px solid var(--line); border-radius:999px; background:#fff; cursor:pointer; }
+  .chip:hover { border-color:var(--bordeaux); color:var(--bordeaux); }
+
+  .btn { width:100%; padding:11px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; }
+  .btn-main { background:var(--bordeaux); color:#fff; }
+  .btn-main:disabled { opacity:.5; cursor:not-allowed; }
+  .row2 { display:flex; gap:8px; margin-top:10px; }
+  .btn-sm { flex:1; padding:9px; border-radius:10px; font-size:12.5px; font-weight:700; cursor:pointer; border:1px solid var(--line); background:#fff; }
+  .btn-wa { background:#1f9d55; color:#fff; border-color:#1f9d55; }
+
+  /* visuel droite */
+  .visual { min-height:420px; display:flex; flex-direction:column; }
+  .vhead { display:flex; gap:8px; margin-bottom:10px; }
+  .tab { font-size:12px; font-weight:700; padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  .tab.on { background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+  .stage { flex:1; border:1px solid var(--line); border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; overflow:hidden; min-height:360px; }
+  .stage img { max-width:100%; max-height:520px; display:block; }
+  .ph { color:var(--mute); font-size:14px; text-align:center; padding:30px; }
+  .ba { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; }
+  .ba figure { margin:0; }
+  .ba figcaption { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--mute); text-align:center; margin-bottom:4px; font-weight:700; }
+  .ba img { width:100%; border-radius:10px; border:1px solid var(--line); }
+  .note { max-width:1000px; margin:14px auto 0; font-size:12.5px; color:#4f463c; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎨 Cake Vision IA</h1>
+  <p class="sub">Modifie une photo de gâteau selon la demande du client, puis envoie-lui le résultat.</p>
+
+  <div class="grid">
+    <!-- GAUCHE : réglages / chargement -->
+    <div class="card">
+      <div class="step">
+        <p class="lbl">1 · Photo de départ</p>
+        <div class="drop has" id="drop" onclick="fakePick()">
+          <img src="https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&q=70" alt="" />
+        </div>
+      </div>
+
+      <div class="step">
+        <p class="lbl">2 · Ta demande</p>
+        <textarea id="ask" placeholder="Ex : mets un thème Spiderman, couleur rouge et bleu, ajoute le prénom « Sara »…"></textarea>
+      </div>
+
+      <div class="step">
+        <p class="lbl">Demandes rapides</p>
+        <div class="chips">
+          <span class="chip" onclick="quick('Change la couleur du gâteau en ')">🎨 Changer la couleur</span>
+          <span class="chip" onclick="quick('Ajoute le prénom « » écrit joliment sur le gâteau')">✍️ Ajouter un prénom</span>
+          <span class="chip" onclick="quick('Change le thème pour ')">🎭 Changer le thème</span>
+          <span class="chip" onclick="quick('Change la forme du gâteau en ')">🎂 Changer la forme</span>
+        </div>
+      </div>
+
+      <button class="btn btn-main" id="gen" onclick="generate()">✨ Générer le visuel</button>
+
+      <div class="row2" id="afterActions" style="display:none">
+        <button class="btn-sm" onclick="alert('(maquette) téléchargement')">📥 Télécharger</button>
+        <button class="btn-sm btn-wa" onclick="alert('(maquette) envoi WhatsApp au client')">📲 Envoyer au client</button>
+      </div>
+    </div>
+
+    <!-- DROITE : visuel -->
+    <div class="card visual">
+      <div class="vhead" id="vhead" style="display:none">
+        <span class="tab on" id="tAp" onclick="setTab('ap')">Résultat</span>
+        <span class="tab" id="tBa" onclick="setTab('ba')">Avant / Après</span>
+      </div>
+      <div class="stage" id="stage">
+        <div class="ph">Le résultat de l'IA<br>apparaîtra ici 👉</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    👀 Disposition : <b>à gauche</b> tu charges la photo, tu écris la demande et tu utilises les boutons rapides ;
+    <b>à droite</b> le visuel généré (avec un onglet « Avant / Après » pour comparer).
+    Une fois généré, les boutons <b>Télécharger</b> et <b>Envoyer au client</b> apparaissent.
+    <br>Dis-moi si la disposition te va, et j'intègre ça dans le vrai onglet.
+  </p>
+</div>
+
+<script>
+  const BEFORE = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&q=70";
+  const AFTER  = "https://images.unsplash.com/photo-1535141192574-5d4897c12636?w=500&q=70";
+  let tab = 'ap';
+  function fakePick(){ /* maquette : photo déjà chargée */ }
+  function quick(t){ const a=document.getElementById('ask'); a.value = (a.value ? a.value+' ' : '') + t; a.focus(); }
+  function setTab(t){ tab=t; document.getElementById('tAp').classList.toggle('on',t==='ap'); document.getElementById('tBa').classList.toggle('on',t==='ba'); paint(); }
+  function paint(){
+    const s=document.getElementById('stage');
+    if(tab==='ap'){ s.innerHTML = `<img src="${AFTER}" alt="">`; }
+    else { s.innerHTML = `<div class="ba">
+      <figure><figcaption>Avant</figcaption><img src="${BEFORE}"></figure>
+      <figure><figcaption>Après</figcaption><img src="${AFTER}"></figure></div>`; }
+  }
+  function generate(){
+    const g=document.getElementById('gen'); g.textContent='✨ Génération…'; g.disabled=true;
+    setTimeout(()=>{
+      g.textContent='✨ Re-générer'; g.disabled=false;
+      document.getElementById('vhead').style.display='flex';
+      document.getElementById('afterActions').style.display='flex';
+      tab='ap'; setTab('ap');
+    }, 900);
+  }
+</script>
+</body>
+</html>

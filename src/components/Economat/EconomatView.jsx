@@ -160,7 +160,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   }
 
   return (
-    <div className="min-h-screen bg-cream pb-28">
+    <div className="min-h-screen lg-vibrant pb-28">
       <AppHeader
         user={user}
         activeView={activeView || 'economat'}

@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lily Gourmet — Spectaculaire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500&family=Geist:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bx:#9a3357; --bx-deep:#6f1f3c; --bx-soft:#c4567a;
+    --gold:#c79a4e; --gold-soft:#e7c780;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Geist',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;transition:background .4s}
+  .serif{font-family:'Fraunces',Georgia,serif}
+  .ic{stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;fill:none;flex:none;width:18px;height:18px}
+
+  /* ====== THEME LIGHT (vibrant) ====== */
+  body.light{ background:
+      radial-gradient(1200px 500px at 80% -10%, #fbe6ee 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, #fbf0dd 0%, transparent 55%),
+      #fdfaf6; color:#26181d; }
+  body.light .surface{ background:#fff; border:1px solid #f0e6dc; box-shadow:0 10px 30px rgba(120,40,60,.08), 0 2px 6px rgba(120,40,60,.05); }
+  body.light .muted{ color:#9a8a86 }
+  body.light .hero{ background:linear-gradient(120deg, #9a3357 0%, #6f1f3c 70%, #54172e 100%); }
+  body.light .nav-pill{ background:#fff; color:#7a4a58; border:1px solid #f0e6dc }
+  body.light .nav-pill.on{ background:linear-gradient(120deg,#9a3357,#6f1f3c); color:#fff; border-color:transparent; box-shadow:0 8px 20px rgba(154,51,87,.35) }
+  body.light .chip{ background:#fff;border:1px solid #f0e6dc;color:#6b5a55 }
+  body.light .thumb{ background:linear-gradient(135deg,#fbe6ee,#f6e6c9); color:#9a3357 }
+  body.light .statbig{ color:#6f1f3c }
+  body.light .divider{ border-color:#f0e6dc }
+
+  /* ====== THEME DARK (luxe) ====== */
+  body.dark{ background:
+      radial-gradient(1100px 600px at 85% -10%, #3a1326 0%, transparent 55%),
+      radial-gradient(900px 500px at -5% 0%, #2a1a10 0%, transparent 50%),
+      #161015; color:#f0e7df; }
+  body.dark .surface{ background:linear-gradient(180deg,#241a21,#1f161d); border:1px solid #3a2a33; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  body.dark .muted{ color:#a78f9b }
+  body.dark .hero{ background:linear-gradient(120deg,#3a1326 0%, #2a0f1e 60%, #1f0a16 100%); border-bottom:1px solid #4a2638 }
+  body.dark .nav-pill{ background:#241a21; color:#cbb3c0; border:1px solid #3a2a33 }
+  body.dark .nav-pill.on{ background:linear-gradient(120deg,#c4567a,#9a3357); color:#fff; border-color:transparent; box-shadow:0 8px 22px rgba(196,86,122,.4) }
+  body.dark .chip{ background:#2a1f27;border:1px solid #3f2e39;color:#d8c4cf }
+  body.dark .thumb{ background:linear-gradient(135deg,#3a2030,#37291a); color:#e7c780 }
+  body.dark .statbig{ color:#e7c780 }
+  body.dark .divider{ border-color:#3a2a33 }
+  body.dark .gold{ color:#e7c780 }
+
+  /* shared layout */
+  .switch{position:fixed;top:14px;right:14px;z-index:50;display:flex;background:rgba(255,255,255,.14);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:4px}
+  .switch button{border:none;background:none;color:#fff;font-weight:600;font-size:12px;padding:7px 14px;border-radius:999px;cursor:pointer;transition:.2s}
+  .switch button.on{background:#fff;color:#6f1f3c}
+
+  .hero{padding:30px 22px 26px;color:#fff;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(231,199,128,.35),transparent 70%)}
+  .wrap{max-width:1140px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .logo{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#e7c780,#c79a4e);color:#6f1f3c;display:grid;place-items:center;font-family:'Fraunces';font-weight:700;font-size:24px;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+  .brand h1{font-family:'Fraunces';font-weight:600;font-size:26px;line-height:1}
+  .brand small{display:block;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.7);margin-top:3px}
+  .hero p{margin-top:14px;font-size:13.5px;color:rgba(255,255,255,.82);max-width:520px}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+  .nav-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;font-weight:600;font-size:13px;cursor:pointer;transition:.2s}
+  .nav-pill .ic{width:16px;height:16px}
+
+  .body{max-width:1140px;margin:0 auto;padding:24px 18px 70px}
+  .screen{display:none;animation:fade .4s ease}
+  .screen.show{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .sechead{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:6px 2px 18px}
+  .sechead h2{font-family:'Fraunces';font-weight:600;font-size:30px}
+  .sechead p{font-size:13px;margin-top:2px}
+
+  .surface{border-radius:22px;transition:transform .2s, box-shadow .2s, background .4s}
+  .surface.hoverable:hover{transform:translateY(-3px)}
+  .pad{padding:20px}
+  .grid{display:grid;gap:18px}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:14px;font-weight:600;font-size:13.5px;cursor:pointer;border:none;transition:.2s;color:#fff;background:linear-gradient(120deg,#9a3357,#6f1f3c);box-shadow:0 10px 24px rgba(154,51,87,.32)}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(154,51,87,.42)}
+  .btn.gold{background:linear-gradient(120deg,#e7c780,#c79a4e);color:#5a3210;box-shadow:0 10px 24px rgba(199,154,78,.35)}
+  .btn.sm{padding:8px 14px;font-size:12px;border-radius:11px}
+  .btn .ic{width:15px;height:15px}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:500}
+  .chip .sw{width:11px;height:11px;border-radius:50%}
+  .chip.ok{background:linear-gradient(120deg,#2f7d4f,#246b40)!important;color:#fff!important;border-color:transparent!important}
+  .seg{display:inline-flex;padding:5px;border-radius:14px;gap:3px}
+  body.light .seg{background:#f3e7dd}
+  body.dark .seg{background:#241a21;border:1px solid #3a2a33}
+  .seg button{border:none;background:none;font-weight:600;font-size:12.5px;padding:8px 16px;border-radius:10px;cursor:pointer;transition:.2s}
+  body.light .seg button{color:#7a4a58}
+  body.dark .seg button{color:#cbb3c0}
+  .seg button.on{background:linear-gradient(120deg,#9a3357,#6f1f3c);color:#fff;box-shadow:0 6px 16px rgba(154,51,87,.3)}
+
+  .thumb{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;flex:0 0 auto}
+  .thumb .ic{width:25px;height:25px;stroke-width:1.6}
+  .li{display:flex;align-items:center;gap:14px;padding:15px 17px;border-radius:18px}
+  .qty{margin-left:auto;font-weight:700;border-radius:999px;padding:5px 13px;font-size:13px;background:linear-gradient(120deg,#e7c780,#c79a4e);color:#5a3210}
+  .tag{font-family:'Geist';font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
+  body.light .tag{color:#9a3357}
+  body.dark .tag{color:#e7c780}
+  .statbig{font-family:'Fraunces';font-weight:700;font-size:40px;line-height:1}
+  .divider{border:none;border-top:1px solid;margin:16px 0}
+</style>
+</head>
+<body class="light">
+
+<div class="switch">
+  <button id="bL" class="on" onclick="setT('light')">☀ Clair vibrant</button>
+  <button id="bD" onclick="setT('dark')">☾ Sombre élégant</button>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-cake" viewBox="0 0 24 24"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 16V9M13 16V6M8 16v-4"/></symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M10 2v2M14 2v2"/></symbol>
+  <symbol id="i-cookie" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01M16 15.5v.01M12 12v.01M11 17v.01M7 14v.01"/></symbol>
+  <symbol id="i-savory" viewBox="0 0 24 24"><path d="M3 11h18"/><path d="M5 11a7 7 0 0 1 14 0"/><path d="M4 15h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-bread" viewBox="0 0 24 24"><path d="M4 11h16a3 3 0 0 0 0-6c-1.5 0-2 .5-4 .5S13.5 5 12 5s-2 .5-4 .5S6.5 5 5 5a3 3 0 0 0-1 6Z"/><path d="M4 11v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8"/></symbol>
+</svg>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo">L</div>
+      <div><h1>Lily Gourmet<small>Atelier · Tableau de bord</small></h1></div>
+    </div>
+    <p>Une interface qui claque : dégradés, profondeur, gros titres — la même app, en version « waouh ».</p>
+    <nav class="nav" id="nav">
+      <button class="nav-pill on" data-s="acc"><svg class="ic"><use href="#i-cake"/></svg>Accessoires</button>
+      <button class="nav-pill" data-s="recap"><svg class="ic"><use href="#i-chart"/></svg>Récap Ventes</button>
+      <button class="nav-pill" data-s="check"><svg class="ic"><use href="#i-check"/></svg>Checklist</button>
+    </nav>
+  </div>
+</header>
+
+<main class="body">
+
+  <!-- ACCESSOIRES -->
+  <section class="screen show" id="s-acc">
+    <div class="sechead"><div><h2>Accessoires</h2><p class="muted">Lundi 30 juin · à préparer</p></div>
+      <div style="display:flex;gap:10px;align-items:center"><div class="seg"><button class="on">Par client</button><button>Par produit</button></div><button class="btn gold sm"><svg class="ic"><use href="#i-print"/></svg>Imprimer</button></div>
+    </div>
+    <div class="surface pad" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:15px;flex-wrap:wrap">
+        <span class="tag">S04821</span><b style="font-size:15px">Znati Maha</b>
+        <button class="btn sm" style="padding:6px 12px"><svg class="ic"><use href="#i-file"/></svg>Détails</button>
+        <span class="muted" style="margin-left:auto;font-size:12px">14h00</span>
+      </div>
+      <div class="li surface" style="border-radius:16px">
+        <div class="thumb"><svg class="ic"><use href="#i-cake"/></svg></div>
+        <div style="flex:1"><div style="font-weight:700;font-size:15px">Macarons <span class="muted" style="font-weight:400">(24)</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+            <span class="chip">×8 pistache <span class="sw" style="background:#9ccb6a"></span></span>
+            <span class="chip" style="outline:2px solid #c4567a;outline-offset:-1px">×8 framboise <span class="sw" style="background:#d05377"></span></span>
+            <span class="chip ok">×8 vanille ✓</span>
+          </div>
+        </div>
+        <button class="btn sm">Tout fait</button>
+      </div>
+    </div>
+    <div class="surface pad">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:15px;flex-wrap:wrap"><span class="tag">S04822</span><b style="font-size:15px">Hôtel Atlas</b><button class="btn sm" style="padding:6px 12px"><svg class="ic"><use href="#i-file"/></svg>Détails</button><span class="muted" style="margin-left:auto;font-size:12px">16h30</span></div>
+      <div class="li surface" style="border-radius:16px"><div class="thumb"><svg class="ic"><use href="#i-cookie"/></svg></div><div style="flex:1"><div style="font-weight:700;font-size:15px">Mignardises <span class="muted" style="font-weight:400">(40)</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"><span class="chip">×20 chocolat</span><span class="chip">×20 caramel <span class="sw" style="background:#c9923f"></span></span></div></div><button class="btn sm">Tout fait</button></div>
+    </div>
+  </section>
+
+  <!-- RECAP -->
+  <section class="screen" id="s-recap">
+    <div class="sechead"><div><h2>Récap Ventes</h2><p class="muted">Mardi 1 juillet</p></div><button class="btn gold sm"><svg class="ic"><use href="#i-print"/></svg>Tickets</button></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">
+      <div class="surface hoverable pad"><div class="thumb"><svg class="ic"><use href="#i-cake"/></svg></div><div style="font-weight:700;margin-top:12px;font-size:15px">Vente CD</div><div class="statbig">18</div><div class="muted" style="font-size:12px">commandes · 12 400 DH</div></div>
+      <div class="surface hoverable pad"><div class="thumb"><svg class="ic"><use href="#i-savory"/></svg></div><div style="font-weight:700;margin-top:12px;font-size:15px">Vente Salés</div><div class="statbig">9</div><div class="muted" style="font-size:12px">commandes · 5 200 DH</div></div>
+      <div class="surface hoverable pad"><div class="thumb"><svg class="ic"><use href="#i-bread"/></svg></div><div style="font-weight:700;margin-top:12px;font-size:15px">Vienn / Jus</div><div class="statbig">31</div><div class="muted" style="font-size:12px">articles · 1 980 DH</div></div>
+      <div class="surface hoverable pad"><div class="thumb"><svg class="ic"><use href="#i-truck"/></svg></div><div style="font-weight:700;margin-top:12px;font-size:15px">Livraisons</div><div class="statbig">7</div><div class="muted" style="font-size:12px">tournées</div></div>
+    </div>
+  </section>
+
+  <!-- CHECKLIST -->
+  <section class="screen" id="s-check">
+    <div class="sechead"><div><h2>Checklist</h2><p class="muted">À ranger aujourd'hui · 14 articles</p></div><div class="seg"><button class="on">À ranger</button><button>Rangé</button></div></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">
+      <div class="surface pad"><div class="tag" style="margin-bottom:13px">Prod · jus & GS</div>
+        <div class="li surface" style="border-radius:15px;margin-bottom:11px"><div class="thumb"><svg class="ic"><use href="#i-cup"/></svg></div><div><div style="font-weight:700">Jus — Atlas</div><div class="muted" style="font-size:12px;margin-top:2px">x2 orange · x1 citron</div></div><span class="qty">×3</span></div>
+        <div class="li surface" style="border-radius:15px"><div class="thumb"><svg class="ic"><use href="#i-cookie"/></svg></div><div><div style="font-weight:700">GS — Znati</div><div class="muted" style="font-size:12px;margin-top:2px">x2 sablés</div></div><span class="qty">×2</span></div>
+      </div>
+      <div class="surface pad"><div class="tag" style="margin-bottom:13px">Salé</div>
+        <div class="li surface" style="border-radius:15px;margin-bottom:11px"><div class="thumb"><svg class="ic"><use href="#i-savory"/></svg></div><div><div style="font-weight:700">Briouates</div><div class="muted" style="font-size:12px;margin-top:2px">Mariage K.</div></div><span class="qty">×30</span></div>
+        <div class="li surface" style="border-radius:15px"><div class="thumb"><svg class="ic"><use href="#i-savory"/></svg></div><div><div style="font-weight:700">Mini-pizzas</div><div class="muted" style="font-size:12px;margin-top:2px">Mariage K.</div></div><span class="qty">×24</span></div>
+      </div>
+      <div class="surface pad"><div class="tag" style="margin-bottom:13px">Commandes</div>
+        <div class="li surface" style="border-radius:15px;margin-bottom:11px"><div class="thumb"><svg class="ic"><use href="#i-cake"/></svg></div><div><div style="font-weight:700">Licorne 2 étages</div><div class="muted" style="font-size:12px;margin-top:2px">16h · CD</div></div><span class="qty">×1</span></div>
+        <div class="li surface" style="border-radius:15px"><div class="thumb"><svg class="ic"><use href="#i-cake"/></svg></div><div><div style="font-weight:700">Number cake</div><div class="muted" style="font-size:12px;margin-top:2px">demain · GM</div></div><span class="qty">×1</span></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="muted" style="text-align:center;font-size:12px;margin-top:34px">Maquette « spectaculaire » — rien n'est appliqué à l'app. Bascule clair / sombre en haut à droite.</p>
+</main>
+
+<script>
+  function setT(t){ document.body.className=t; document.getElementById('bL').classList.toggle('on',t==='light'); document.getElementById('bD').classList.toggle('on',t==='dark'); }
+  const nav=document.getElementById('nav');
+  nav.addEventListener('click',e=>{ const b=e.target.closest('button[data-s]'); if(!b)return;
+    nav.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+    document.getElementById('s-'+b.dataset.s).classList.add('show');
+    window.scrollTo({top:0,behavior:'smooth'});
+  });
+</script>
+</body>
+</html>

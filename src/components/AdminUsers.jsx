@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, createContext, useContext, Children, isValidElement } from 'react'
+
+// Recherche de permission : chaque groupe se filtre selon ce texte.
+const PermSearchCtx = createContext('')
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import {
@@ -149,6 +152,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_notif_modif: formData.permNotifModif,
         perm_notif_ocp: formData.permNotifOcp,
         perm_photoshop: formData.permPhotoshop,
+        perm_stock_poly: formData.permStockPoly,
+        perm_simu_gateaux: formData.permSimuGateaux,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
@@ -160,6 +165,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_validate_payments: formData.permValidatePayments,
         economat_profil: formData.economatProfil || null,
         perm_econome: formData.permEconome,
+        perm_besoins_achat: formData.permBesoinsAchat,
+        perm_achat: formData.permAchat,
         whatsapp: formData.whatsapp?.trim() || null,
         employe_id: formData.employe_id || null,
       })
@@ -216,6 +223,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_notif_modif: formData.permNotifModif,
         perm_notif_ocp: formData.permNotifOcp,
         perm_photoshop: formData.permPhotoshop,
+        perm_stock_poly: formData.permStockPoly,
+        perm_simu_gateaux: formData.permSimuGateaux,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
@@ -227,6 +236,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_validate_payments: formData.permValidatePayments,
         economat_profil: formData.economatProfil || null,
         perm_econome: formData.permEconome,
+        perm_besoins_achat: formData.permBesoinsAchat,
+        perm_achat: formData.permAchat,
         whatsapp: formData.whatsapp?.trim() || null,
         employe_id: formData.employe_id || null,
       })
@@ -721,6 +732,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHa
 // ==========================================
 
 function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes = [], duplicatedFromName = null, currentUser = null }) {
+  const [permQuery, setPermQuery] = useState('')
   const [formData, setFormData] = useState({
     username: initialData?.username || '',
     fullName: initialData?.full_name || '',
@@ -765,6 +777,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permNotifModif: initialData?.perm_notif_modif !== undefined ? initialData.perm_notif_modif : false,
     permNotifOcp: initialData?.perm_notif_ocp !== undefined ? initialData.perm_notif_ocp : false,
     permPhotoshop: initialData?.perm_photoshop !== undefined ? initialData.perm_photoshop : false,
+    permStockPoly: initialData?.perm_stock_poly !== undefined ? initialData.perm_stock_poly : false,
+    permSimuGateaux: initialData?.perm_simu_gateaux !== undefined ? initialData.perm_simu_gateaux : false,
     permAiTools: initialData?.perm_ai_tools !== undefined ? initialData.perm_ai_tools : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
@@ -776,6 +790,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permValidatePayments: initialData?.perm_validate_payments !== undefined ? initialData.perm_validate_payments : false,
     economatProfil: initialData?.economat_profil || '',
     permEconome: initialData?.perm_econome !== undefined ? initialData.perm_econome : false,
+    permBesoinsAchat: initialData?.perm_besoins_achat ?? false,
+    permAchat: initialData?.perm_achat ?? false,
     whatsapp: initialData?.whatsapp || '',
     employe_id: initialData?.employe_id ?? '',
   })
@@ -930,6 +946,13 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
         <label className="block text-[11px] font-medium text-ink-soft mb-1.5">
           Permissions {isAdmin && <span className="text-ink-mute italic">(admin = tout autorisé)</span>}
         </label>
+        <input
+          value={permQuery}
+          onChange={e => setPermQuery(e.target.value)}
+          placeholder="🔎 Rechercher une permission (ex : achat, caisse, étiquette…)"
+          className="w-full mb-2 px-3 py-2 text-[12px] border border-line rounded-lg focus:outline-none focus:border-bordeaux"
+        />
+        <PermSearchCtx.Provider value={permQuery}>
         <div className={`space-y-3 ${isAdmin ? 'opacity-50 pointer-events-none' : ''}`}>
 
           <PermGroup emoji="🎂" title="Production & Calendrier" defaultOpen={true}>
@@ -957,6 +980,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-stock-prod-vitrine" label="Stock Prod Vitrine" desc="Stock de production vitrine (SM-)." checked={isAdmin || formData.permStockProdVitrine} onChange={v => update('permStockProdVitrine', v)} />
             <PermCheckbox id="perm-stock-prod-annexe" label="Stock Prod Annexe" desc="Stock de production annexe (SM-)." checked={isAdmin || formData.permStockProdAnnexe} onChange={v => update('permStockProdAnnexe', v)} />
             <PermCheckbox id="perm-stock-minmax" label="Régler les seuils min/max" desc="Définir les alertes de réassort (GS- / Prod)." checked={isAdmin || formData.permStockMinMax} onChange={v => update('permStockMinMax', v)} />
+            <PermCheckbox id="perm-stock-poly" label="Stock poly" desc="Gérer le stock de poly découpé (morceaux 5/2 cm) + alerte WhatsApp." checked={isAdmin || formData.permStockPoly} onChange={v => update('permStockPoly', v)} />
+            <PermCheckbox id="perm-simu-gateaux" label="Simulation gâteaux" desc="Voir le simulateur visuel de gâteaux par nombre de personnes et d'étages." checked={isAdmin || formData.permSimuGateaux} onChange={v => update('permSimuGateaux', v)} />
             <PermCheckbox id="perm-freezer" label="Sortie congélateur" desc="Voir la liste des sorties de congélateur." checked={isAdmin || formData.permFreezer} onChange={v => update('permFreezer', v)} />
           </PermGroup>
 
@@ -1002,8 +1027,16 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
           </PermGroup>
           )}
 
-        </div>
+          <PermGroup emoji="🛒" title="Achats & Économat">
+            <PermCheckbox id="perm-econome" label="📥 Économe (reçoit les demandes d'articles)" desc="Reçoit les demandes d'articles (économat)." checked={isAdmin || formData.permEconome} onChange={v => update('permEconome', v)} />
+            <PermCheckbox id="perm-besoins-achat" label="🛒 Besoins d'achat (commande cake design)" desc="Coche les besoins d'achat sur une fiche commande CD-." checked={isAdmin || formData.permBesoinsAchat} onChange={v => update('permBesoinsAchat', v)} />
+            <PermCheckbox id="perm-achat" label="🚚 Responsable d'achat" desc="Reçoit les tâches d'achat urgentes des commandes." checked={isAdmin || formData.permAchat} onChange={v => update('permAchat', v)} />
+          </PermGroup>
 
+        </div>
+        </PermSearchCtx.Provider>
+
+        {!permQuery.trim() && (<>
         {/* Equipe (dropdown) */}
         <div className="mt-3 pt-3 border-t border-line">
           <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Équipe</div>
@@ -1046,13 +1079,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </select>
-          <PermCheckbox
-            id="perm-econome"
-            label="📥 Économe (reçoit les demandes d'articles)"
-            checked={formData.permEconome}
-            onChange={v => update('permEconome', v)}
-          />
         </div>
+        </>)}
       </div>
 
       {/* Boutons */}
@@ -1106,7 +1134,23 @@ function PermCheckbox({ id, label, desc, checked, onChange }) {
 
 // Section de permissions repliable.
 function PermGroup({ emoji, title, children, defaultOpen = false, danger = false }) {
+  const q = useContext(PermSearchCtx)
   const [open, setOpen] = useState(defaultOpen)
+  const searching = !!q.trim()
+
+  // En recherche : on ne garde que les cases dont le libellé/description correspond ;
+  // un groupe sans correspondance est masqué, sinon il s'ouvre tout seul.
+  let kids = children
+  if (searching) {
+    const t = q.trim().toLowerCase()
+    kids = Children.toArray(children).filter(c =>
+      isValidElement(c) && c.props?.label &&
+      (String(c.props.label).toLowerCase().includes(t) || String(c.props.desc || '').toLowerCase().includes(t))
+    )
+    if (kids.length === 0) return null
+  }
+  const isOpen = searching || open
+
   return (
     <div className={`border rounded-xl overflow-hidden ${danger ? 'border-bordeaux/40' : 'border-line'}`}>
       <button
@@ -1116,9 +1160,9 @@ function PermGroup({ emoji, title, children, defaultOpen = false, danger = false
       >
         <span className="text-[15px]">{emoji}</span>
         <span className="font-fraunces italic text-[14px] text-ink">{title}</span>
-        <span className="ml-auto text-ink-mute text-[12px]">{open ? '▴' : '▾'}</span>
+        {!searching && <span className="ml-auto text-ink-mute text-[12px]">{open ? '▴' : '▾'}</span>}
       </button>
-      {open && <div className="px-3 py-1 divide-y divide-line/40">{children}</div>}
+      {isOpen && <div className="px-3 py-1 divide-y divide-line/40">{kids}</div>}
     </div>
   )
 }

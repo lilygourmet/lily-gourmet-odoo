@@ -443,7 +443,7 @@ export default function MessagesView({ user, activeView, onNavigate, onLogout })
   // RENDER
   // ============================================================
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} onSyncSuccess={refresh} />
 
       <div className="max-w-[1100px] mx-auto px-5 py-5">

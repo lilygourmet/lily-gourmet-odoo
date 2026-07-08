@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
-import { loadPolyStock, loadPolyConsumption, consumptionFor, setStockBase, setMinMax } from '../lib/polyStock'
+import { loadPolyStock, loadPolyConsumption, loadCoveredConsumption, consumptionFor, setStockBase, setMinMax } from '../lib/polyStock'
 
 // Onglet « Stock poly » : morceaux découpés par taille (diamètre) × hauteur (5 ou 2 cm).
 // Stock réel = stock_base − consommation auto (poly réglés sur gâteaux livrés après base_date).
 export default function StockPolyView({ user, activeView, onNavigate, onLogout }) {
   const [rows, setRows] = useState([])
   const [events, setEvents] = useState([])
+  const [coveredEvents, setCoveredEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
 
@@ -18,8 +19,8 @@ export default function StockPolyView({ user, activeView, onNavigate, onLogout }
       const since = data.length
         ? data.reduce((m, r) => (r.base_date < m ? r.base_date : m), data[0].base_date)
         : new Date().toISOString()
-      const ev = await loadPolyConsumption(since)
-      setRows(data); setEvents(ev)
+      const [ev, evCov] = await Promise.all([loadPolyConsumption(since), loadCoveredConsumption(since)])
+      setRows(data); setEvents(ev); setCoveredEvents(evCov)
     } catch (e) {
       setErr(e?.message || String(e))
     } finally { setLoading(false) }
@@ -28,10 +29,12 @@ export default function StockPolyView({ user, activeView, onNavigate, onLogout }
 
   const items = rows.map(r => {
     const conso = consumptionFor(events, r.taille_cm, r.hauteur_cm, r.base_date)
+    const consoReel = consumptionFor(coveredEvents, r.taille_cm, r.hauteur_cm, r.base_date)
     const current = Number(r.stock_base) - conso
+    const reel = Number(r.stock_base) - consoReel
     const aProduire = Math.max(0, Number(r.max) - current)
     const low = Number(r.max) > 0 && current <= Number(r.min)
-    return { ...r, conso, current, aProduire, low }
+    return { ...r, conso, current, reel, aProduire, low }
   })
   const lowItems = items.filter(i => i.low && i.aProduire > 0)
 
@@ -70,7 +73,8 @@ export default function StockPolyView({ user, activeView, onNavigate, onLogout }
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '1.25rem' }}>
         <h1 className="font-fraunces italic" style={{ fontSize: 26, margin: '0 0 4px', color: '#1a0f0a' }}>🧊 Stock poly</h1>
         <p style={{ color: '#7a6f66', fontSize: 13, margin: '0 0 14px' }}>
-          Morceaux découpés par taille × hauteur. Le stock baisse tout seul selon les poly réglés sur les gâteaux.
+          Morceaux découpés par taille × hauteur. <b>Stock prévu</b> = anticipé (baisse dès qu'un poly est réglé sur une commande) — c'est lui qui déclenche les alertes.
+          <b>Réel couvert</b> = stock physique (baisse seulement quand le gâteau est couvert).
           Quand un article passe sous le minimum (rouge), préviens la personne qui découpe.
         </p>
         <button onClick={() => onNavigate('decoupe-poly')} title="Écran simple pour la personne qui découpe (téléphone)"
@@ -99,7 +103,8 @@ export default function StockPolyView({ user, activeView, onNavigate, onLogout }
               <tr style={{ background: '#f6efe2', color: '#993556' }}>
                 <th style={{ padding: '9px 11px', textAlign: 'left' }}>Taille</th>
                 <th style={{ padding: '9px 11px', textAlign: 'center' }}>Hauteur</th>
-                <th style={{ padding: '9px 11px', textAlign: 'center' }}>Stock</th>
+                <th style={{ padding: '9px 11px', textAlign: 'center' }} title="Stock anticipé : baisse dès qu'un poly est réglé sur une commande à venir">Stock prévu</th>
+                <th style={{ padding: '9px 11px', textAlign: 'center' }} title="Stock physique réel : baisse seulement quand le gâteau est couvert">Réel couvert</th>
                 <th style={{ padding: '9px 11px', textAlign: 'center' }}>Min</th>
                 <th style={{ padding: '9px 11px', textAlign: 'center' }}>Max</th>
                 <th style={{ padding: '9px 11px', textAlign: 'center' }}>À produire</th>
@@ -112,6 +117,7 @@ export default function StockPolyView({ user, activeView, onNavigate, onLogout }
                   <td style={{ padding: '8px 11px', fontWeight: 600 }}>{it.taille_cm} cm</td>
                   <td style={{ padding: '8px 11px', textAlign: 'center' }}>{it.hauteur_cm} cm</td>
                   <td style={{ padding: '8px 11px', textAlign: 'center', fontWeight: 700, color: it.low ? '#c0392b' : '#27500A' }}>{it.current}</td>
+                  <td style={{ padding: '8px 11px', textAlign: 'center', fontWeight: 600, color: '#7a6f66' }}>{it.reel}</td>
                   <td style={{ padding: '8px 11px', textAlign: 'center' }}>
                     <input type="number" min="0" defaultValue={it.min} key={'min' + it.id + it.min} onBlur={e => saveMM(it, 'min', e.target.value)} style={num} />
                   </td>

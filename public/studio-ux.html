@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Studio photo — UX relookée (maquette)</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --warm:#f3ece1; --ink:#2b2320; --line:#e4dad0; --mute:#9a8d80; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#cfc4b4; color:var(--ink); padding:16px; }
+  .wrap { max-width:920px; margin:0 auto; }
+  .h { font-size:13px; color:#3a3128; margin:0 0 10px; }
+
+  /* ---- Barre du haut rangée ---- */
+  .bar { background:var(--bordeaux); color:#fff; border-radius:12px 12px 0 0; padding:8px 10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .bar .back { background:rgba(255,255,255,.18); border:none; color:#fff; border-radius:9px; padding:8px 12px; font-weight:700; font-size:13px; cursor:pointer; }
+  .bar .title { font-family:Georgia,serif; font-style:italic; font-size:15px; margin-right:4px; }
+  .sep { width:1px; height:24px; background:rgba(255,255,255,.25); margin:0 2px; }
+  .grow { flex:1; }
+  .grp { position:relative; }
+  .btn { background:rgba(255,255,255,.18); border:none; color:#fff; border-radius:9px; padding:9px 13px; font-weight:700; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .btn.icon { padding:9px 11px; }
+  .btn.print { background:#fff; color:var(--bordeaux); }
+  .menu { position:absolute; top:calc(100% + 6px); left:0; background:#fff; color:var(--ink); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.18); padding:6px; min-width:170px; z-index:20; display:none; }
+  .menu.open { display:block; }
+  .menu button { display:flex; width:100%; align-items:center; gap:8px; background:none; border:none; text-align:left; padding:9px 10px; border-radius:8px; font-size:13.5px; cursor:pointer; color:var(--ink); }
+  .menu button:hover { background:var(--warm); }
+
+  /* ---- Zone de travail ---- */
+  .stage { position:relative; background:var(--cream); border:1px solid var(--line); border-top:none; border-radius:0 0 12px 12px; height:430px; overflow:hidden; }
+  .page { position:absolute; left:50%; top:24px; transform:translateX(-50%); width:300px; height:380px; background:#fff; border:1px solid var(--line); box-shadow:0 4px 18px rgba(0,0,0,.08); }
+  .guide { position:absolute; left:50%; top:0; bottom:0; width:0; border-left:1.5px dashed #d36; z-index:5; }
+  .guide span { position:absolute; top:6px; left:6px; background:#d36; color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:6px; white-space:nowrap; }
+
+  .el { position:absolute; left:84px; top:120px; width:150px; height:120px; border-radius:8px;
+        background:linear-gradient(135deg,#f6d8e4,#f0bcd0); border:1px solid #e2a6bd; display:flex; align-items:center; justify-content:center; font-size:30px; }
+  .selbox { position:absolute; inset:-3px; border:2px solid #993556; border-radius:9px; pointer-events:none; }
+  .hdl { position:absolute; width:18px; height:18px; background:#fff; border:2px solid #993556; border-radius:50%; }
+  .hdl.tl{left:-9px;top:-9px} .hdl.tr{right:-9px;top:-9px} .hdl.bl{left:-9px;bottom:-9px} .hdl.br{right:-9px;bottom:-9px}
+  .rot { position:absolute; left:50%; top:-40px; transform:translateX(-50%); width:18px; height:18px; background:#fff; border:2px solid #993556; border-radius:50%; }
+  .rot::after{ content:''; position:absolute; left:50%; top:18px; width:2px; height:22px; background:#993556; transform:translateX(-50%); }
+
+  /* mini-barre d'actions contextuelle */
+  .ctx { position:absolute; left:50%; top:-86px; transform:translateX(-50%); display:flex; gap:4px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:5px; box-shadow:0 8px 24px rgba(0,0,0,.16); }
+  .ctx button { border:none; background:var(--warm); border-radius:9px; width:40px; height:40px; font-size:17px; cursor:pointer; }
+  .ctx button.del{ background:#fde7e7; }
+  .ctx .lab { position:absolute; top:100%; left:0; right:0; text-align:center; font-size:10px; color:var(--mute); margin-top:3px; }
+
+  .note { font-size:12.5px; color:#3a3128; line-height:1.7; margin-top:14px; background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .note b{ color:var(--bordeaux); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="h">Maquette — Studio photo relooké (clique « Ajouter » / « Outils » / « Page » pour voir les menus regroupés)</p>
+
+  <!-- Barre du haut rangée -->
+  <div class="bar">
+    <button class="back">← Retour</button>
+    <span class="title">🎨 Studio</span>
+    <span class="sep"></span>
+
+    <div class="grp">
+      <button class="btn" onclick="tog('m1',event)">➕ Ajouter ▾</button>
+      <div class="menu" id="m1">
+        <button>🖼️ Photo (bibliothèque)</button>
+        <button>✍️ Texte</button>
+        <button>⬤ Forme</button>
+        <button>🎂 Dummy</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <button class="btn" onclick="tog('m2',event)">🛠️ Outils ▾</button>
+      <div class="menu" id="m2">
+        <button>🪄 Ranger</button>
+        <button>📐 Caler le cadre</button>
+        <button>🖌️ Modifier une zone</button>
+      </div>
+    </div>
+
+    <span class="sep"></span>
+    <button class="btn icon" title="Annuler">↩️</button>
+    <button class="btn icon" title="Refaire">↪️</button>
+    <span class="sep"></span>
+
+    <div class="grp">
+      <button class="btn" onclick="tog('m3',event)">📄 Page ▾</button>
+      <div class="menu" id="m3">
+        <button>📐 Taille de la page…</button>
+        <button>＋ Ajouter une page</button>
+        <button>🗑️ Tout vider</button>
+      </div>
+    </div>
+
+    <span class="grow"></span>
+    <button class="btn print">🖨️ Imprimer</button>
+  </div>
+
+  <!-- Zone de travail -->
+  <div class="stage" onclick="closeAll()">
+    <div class="page"></div>
+    <div class="guide"><span>↔ centré</span></div>
+
+    <div class="el">🎂
+      <div class="selbox"></div>
+      <div class="rot"></div>
+      <span class="hdl tl"></span><span class="hdl tr"></span><span class="hdl bl"></span><span class="hdl br"></span>
+      <!-- mini-barre d'actions au-dessus de l'élément sélectionné -->
+      <div class="ctx">
+        <button title="Dupliquer">📋</button>
+        <button title="Mettre devant">⬆️</button>
+        <button title="Mettre derrière">⬇️</button>
+        <button class="del" title="Supprimer">🗑️</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Ce qui change :</b><br>
+    • La barre du haut passe de ~12 boutons à <b>4 groupes clairs</b> : <b>➕ Ajouter</b>, <b>🛠️ Outils</b>, <b>↩️↪️ Annuler/Refaire</b>, <b>📄 Page</b>, + Imprimer. Plus lisible et plus gros pour la tablette.<br>
+    • Quand tu sélectionnes une image : une <b>mini-barre</b> apparaît juste au-dessus (Dupliquer · Devant · Derrière · Supprimer) — plus besoin de chercher.<br>
+    • Poignées de redimensionnement <b>plus grosses</b> + poignée de rotation.<br>
+    • <b>Guide rose</b> qui s'accroche pour centrer/aligner proprement (magnétisme).<br>
+    👉 Dis-moi si ça te plaît ; ensuite je le code dans le vrai Studio.
+  </div>
+</div>
+
+<script>
+  function closeAll(){ document.querySelectorAll('.menu').forEach(m=>m.classList.remove('open')); }
+  function tog(id,e){ e.stopPropagation(); const m=document.getElementById(id); const was=m.classList.contains('open'); closeAll(); if(!was) m.classList.add('open'); }
+</script>
+</body>
+</html>

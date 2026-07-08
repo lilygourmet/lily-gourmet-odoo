@@ -11,6 +11,23 @@ export default {
         sans: ['Geist', 'sans-serif'],
         mono: ['Geist Mono', 'monospace'],
       },
+      // Arrondis adoucis globalement (look « premium » homogène, sans toucher les composants).
+      borderRadius: {
+        DEFAULT: '0.375rem',
+        md: '0.5rem',
+        lg: '0.7rem',
+        xl: '0.95rem',
+        '2xl': '1.2rem',
+      },
+      // Ombres plus douces et chaleureuses (teinte brune légère) — homogènes sur toute l'app.
+      boxShadow: {
+        sm: '0 1px 2px rgba(60,30,20,.05)',
+        DEFAULT: '0 2px 8px rgba(80,40,30,.06)',
+        md: '0 4px 16px rgba(90,40,30,.07)',
+        lg: '0 12px 30px rgba(80,40,30,.10)',
+        xl: '0 18px 40px rgba(75,35,28,.12)',
+        '2xl': '0 22px 55px rgba(70,30,25,.16)',
+      },
       colors: {
         ink: {
           DEFAULT: '#1a0f0a',
@@ -18,7 +35,7 @@ export default {
           mute: '#8a7a70',
         },
         cream: {
-          DEFAULT: '#faf7f2',
+          DEFAULT: '#fcfbf8',
           warm: '#ffffff',
           deep: '#f1eadd',
         },

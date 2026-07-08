@@ -24,7 +24,7 @@ export async function listThemes() {
 
 /** Liste TOUTES les images (pagination par 1000). Renvoie {id, theme, nom, path, url}. */
 export async function listPhotos({ theme = null, search = '' } = {}) {
-  let cols = 'id, theme, nom, path, width, height, last_w, last_h'
+  let cols = 'id, theme, nom, path, width, height, last_w, last_h, created_at'
   const all = []
   for (let from = 0; from < 30000;) {
     let q = supabase.from('ps_photos').select(cols).order('created_at', { ascending: false }).range(from, from + 999)
@@ -32,7 +32,24 @@ export async function listPhotos({ theme = null, search = '' } = {}) {
     if (search) { const s = search.replace(/[,()%]/g, ' ').trim(); if (s) q = q.or(`nom.ilike.%${s}%,theme.ilike.%${s}%`) }
     const { data, error } = await q
     if (error) {
-      if (cols.includes('last_w') && /last_w|last_h/.test(error.message || '')) { cols = 'id, theme, nom, path, width, height'; continue }   // repli si colonnes absentes
+      if (cols.includes('last_w') && /last_w|last_h/.test(error.message || '')) { cols = 'id, theme, nom, path, width, height, created_at'; continue }   // repli si colonnes absentes
+      break
+    }
+    all.push(...(data || [])); if (!data || data.length < 1000) break; from += 1000
+  }
+  return all.map(r => ({ ...r, url: photoUrl(r.path) }))
+}
+
+/** Photos ajoutées APRÈS sinceIso (chargement incrémental « que les nouvelles »). */
+export async function listNewPhotos(sinceIso) {
+  if (!sinceIso) return []
+  let cols = 'id, theme, nom, path, width, height, last_w, last_h, created_at'
+  const all = []
+  for (let from = 0; from < 30000;) {
+    const q = supabase.from('ps_photos').select(cols).gt('created_at', sinceIso).order('created_at', { ascending: false }).range(from, from + 999)
+    const { data, error } = await q
+    if (error) {
+      if (cols.includes('last_w') && /last_w|last_h/.test(error.message || '')) { cols = 'id, theme, nom, path, width, height, created_at'; continue }
       break
     }
     all.push(...(data || [])); if (!data || data.length < 1000) break; from += 1000

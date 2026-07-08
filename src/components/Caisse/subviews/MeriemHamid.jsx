@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, addHamidSession, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense, uploadHamidDepenseProof, loadHamidSessionsMonth, uploadHamidSessionProof, deleteHamidSession } from '../../../lib/caisse'
+import { loadHamidAvancesMonth, loadHamidDepensesMonth, loadHamidBalance, donnerAHamid, addHamidSession, hamidRendArgent, loadCategories, deleteMouvement, deleteHamidDepense, uploadHamidDepenseProof, loadHamidSessionsMonth, uploadHamidSessionProof, deleteHamidSession, confirmHamidDepense, setHamidDepenseCategory, setHamidDepenseFacture } from '../../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, todayISO } from '../_helpers'
-import { Trash2, Paperclip, AlertTriangle, Receipt, Scale } from 'lucide-react'
+import { Trash2, Paperclip, AlertTriangle, Receipt, Scale, Clock, Check } from 'lucide-react'
 import AjoutAvanceHamidModal from '../modals/AjoutAvanceHamidModal'
 import AjoutDepenseHamidModal from '../modals/AjoutDepenseHamidModal'
 import HamidRendModal from '../modals/HamidRendModal'
@@ -34,7 +34,10 @@ export default function MeriemHamid({ user }) {
   }
 
   const totalAvances  = useMemo(() => avances.reduce((s, a) => s + Number(a.amount), 0), [avances])
-  const totalDepenses = useMemo(() => depenses.reduce((s, d) => s + Number(d.amount), 0), [depenses])
+  // Les dépenses « en attente » (déclarées par Hamid, pas encore confirmées) ne comptent pas dans le total.
+  const totalDepenses = useMemo(() => depenses.filter(d => d.confirm_status !== 'pending').reduce((s, d) => s + Number(d.amount), 0), [depenses])
+  const pendingDeps   = useMemo(() => depenses.filter(d => d.confirm_status === 'pending'), [depenses])
+  const pendingTotal  = useMemo(() => pendingDeps.reduce((s, d) => s + Number(d.amount), 0), [pendingDeps])
   const totalFacturesPending = useMemo(
     () => depenses.filter(d => d.is_facture && d.facture_status === 'pending').reduce((s, d) => s + Number(d.amount), 0),
     [depenses]
@@ -53,6 +56,20 @@ export default function MeriemHamid({ user }) {
   async function handleRend({ amount, label, mvtDate }) {
     await hamidRendArgent({ amount, label, mvtDate, userId: user.id })
     setShowRend(false); reload()
+  }
+  async function handleConfirmDepense(d) {
+    if (!d.category) { toast.error('Choisis d\'abord une catégorie pour cette dépense.'); return }
+    if (!await confirmDialog(`Confirmer la dépense « ${d.label || d.category || ''} » (${fmtMoney(d.amount)}) déclarée par Hamid ?`, { confirmLabel: 'Confirmer' })) return
+    try { await confirmHamidDepense(d.id, user.id); reload() }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
+  }
+  async function handleSetCategory(d, category) {
+    try { await setHamidDepenseCategory(d.id, category, user.id); reload() }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
+  }
+  async function handleSetFacture(d, isFacture) {
+    try { await setHamidDepenseFacture(d.id, isFacture, user.id); reload() }
+    catch (e) { toast.error('Erreur : ' + (e.message || e)) }
   }
 
   const isAdmin = user?.role === 'admin'
@@ -137,6 +154,13 @@ export default function MeriemHamid({ user }) {
         </div>
       )}
 
+      {pendingDeps.length > 0 && (
+        <div style={{ background: '#FFF6E5', border: '1px solid #F5C46B', color: '#7A5510', padding: '12px 16px', borderRadius: 12, marginBottom: 14, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Clock size={16} style={{ flexShrink: 0 }} />
+          <span><strong>{pendingDeps.length}</strong> dépense{pendingDeps.length > 1 ? 's' : ''} déclarée{pendingDeps.length > 1 ? 's' : ''} par Hamid à confirmer ({fmtMoney(pendingTotal)}) — non comptée{pendingDeps.length > 1 ? 's' : ''} tant que tu n'as pas confirmé.</span>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 18 }}>
         <div style={{ background: negative ? '#FCE9E8' : '#FAEEDA', border: `0.5px solid ${negative ? '#E5BFB6' : '#EF9F27'}`, borderRadius: 16, padding: 20, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
           <div style={{ fontSize: 11, color: negative ? '#99201E' : '#633806' }}>Solde Hamid</div>
@@ -203,6 +227,10 @@ export default function MeriemHamid({ user }) {
               uploading={uploadingSessionId === item.session.id}
               onUploadProof={file => handleSessionProof(item.session.id, file)}
               onDeleteSession={total => handleDeleteSession(item.session, total)}
+              onConfirmDepense={handleConfirmDepense}
+              categories={categories}
+              onSetCategory={handleSetCategory}
+              onSetFacture={handleSetFacture}
             />
           ) : (
             <div key={`d${item.dep.id}`} style={miniRow}>
@@ -261,7 +289,7 @@ const btnPrimary = { fontSize: 13, padding: '10px 14px', borderRadius: 8, border
 const miniRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
 
 // Carte « session » : N lignes de dépense + UNE preuve commune.
-function SessionCard({ session, lines, isAdmin, uploading, onUploadProof, onDeleteSession }) {
+function SessionCard({ session, lines, isAdmin, uploading, onUploadProof, onDeleteSession, onConfirmDepense, categories, onSetCategory, onSetFacture }) {
   const total = lines.reduce((s, l) => s + Number(l.amount || 0), 0)
   const facturesCount = lines.filter(l => l.is_facture).length
   return (
@@ -302,11 +330,16 @@ function SessionCard({ session, lines, isAdmin, uploading, onUploadProof, onDele
 
       {/* Lignes de la session */}
       <div>
-        {lines.map(d => (
-          <div key={d.id} style={{ padding: '8px 14px', borderTop: '0.5px solid #f0e8d5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        {lines.map(d => {
+          const isPending = d.confirm_status === 'pending'
+          return (
+          <div key={d.id} style={{ padding: '8px 14px', borderTop: '0.5px solid #f0e8d5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: isPending ? '#FFFBF0' : 'transparent' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13 }}>
                 {d.label || <span style={{ color: '#8a7a70', fontStyle: 'italic' }}>(sans libellé)</span>}
+                {isPending && (
+                  <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999, background: '#FFF6E5', color: '#7A5510', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Clock size={9} /> À confirmer</span>
+                )}
                 {d.is_facture && (
                   <span style={{
                     marginLeft: 6, fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
@@ -315,11 +348,37 @@ function SessionCard({ session, lines, isAdmin, uploading, onUploadProof, onDele
                   }}>{d.facture_status === 'recovered' ? 'Facture récupérée' : 'Facture à récupérer'}</span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: '#4a3a30' }}>{d.category || '—'}</div>
+              <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={d.category || ''}
+                  onChange={e => onSetCategory && onSetCategory(d, e.target.value)}
+                  style={{
+                    fontSize: 11, padding: '3px 6px', borderRadius: 6,
+                    border: d.category ? '0.5px solid #e5d8c3' : '1px solid #EF9F27',
+                    background: d.category ? '#F4F0EA' : '#FFF6E5', color: d.category ? '#4a3a30' : '#7A5510',
+                  }}>
+                  <option value="">À catégoriser…</option>
+                  {(categories || []).map(c => <option key={c.id} value={c.name}>{c.emoji} {c.name}</option>)}
+                </select>
+                <button onClick={() => onSetFacture && onSetFacture(d, !d.is_facture)} title="Facture à récupérer ?"
+                  style={{
+                    fontSize: 10, padding: '3px 8px', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                    border: d.is_facture ? '1px solid #99201E' : '0.5px solid #e5d8c3',
+                    background: d.is_facture ? '#FCE9E8' : 'white', color: d.is_facture ? '#99201E' : '#8a7a70',
+                  }}>
+                  <Paperclip size={11} /> {d.is_facture ? 'Facture à récupérer' : 'Pas de facture'}
+                </button>
+              </div>
             </div>
-            <span style={{ color: '#99201E', fontWeight: 500, fontSize: 13 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {isPending && onConfirmDepense && (
+                <button onClick={() => onConfirmDepense(d)} title="Confirmer cette dépense" style={{ fontSize: 11, padding: '4px 9px', background: '#1D7A5C', border: '1px solid #1D7A5C', color: 'white', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 500 }}><Check size={12} /> Confirmer</button>
+              )}
+              <span style={{ color: '#99201E', fontWeight: 500, fontSize: 13 }}>− {fmtMoney(d.amount).replace(' dh', '')} <span style={{ fontSize: 11 }}>dh</span></span>
+            </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

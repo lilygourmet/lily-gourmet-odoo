@@ -43,7 +43,7 @@ export default function StockPrevisions({ user, activeView, onNavigate, onLogout
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <div className="max-w-3xl mx-auto px-4 py-5">
         <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   loadOrdersWithFichesForRange, loadPalette, findColor,
   isLotDone, isItemFullyDone, aggregateByProduct,
@@ -9,7 +9,10 @@ import {
 import { toast } from '../lib/toast'
 import AppHeader from './AppHeader'
 import ActivityLog, { relativeTime } from './ActivityLog'
-import { Printer } from 'lucide-react'
+import OrderModal from './OrderModal'
+import { loadFullOrderByNum, loadAllProfiles } from '../lib/orders'
+import { canSeeCalendar } from '../lib/auth'
+import { Printer, FileText, AlertTriangle } from 'lucide-react'
 
 const DAYS = 14
 
@@ -22,6 +25,19 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
   const [printDate, setPrintDate] = useState(null)
   const [lightboxUrl, setLightboxUrl] = useState(null)
   const [expandedKey, setExpandedKey] = useState(null)
+  // Détail commande (fiche OrderModal) — réservé à ceux qui peuvent voir le calendrier.
+  const canDetails = canSeeCalendar(user)
+  const [modalOrder, setModalOrder] = useState(null)
+  const [profiles, setProfiles] = useState({})
+  const openOrderDetail = async (orderNum) => {
+    if (!orderNum) return
+    try {
+      const [ord, profs] = await Promise.all([loadFullOrderByNum(orderNum), loadAllProfiles()])
+      setProfiles(profs || {})
+      if (ord) setModalOrder(ord)
+      else toast.error('Commande introuvable (non synchronisée).')
+    } catch (e) { toast.error('Ouverture impossible : ' + (e.message || e)) }
+  }
 
   // Date locale (pas UTC) pour eviter les decalages timezone
   const todayStr = (() => {
@@ -113,7 +129,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
   const datesWithLines = [...byDate.keys()].sort()
 
   return (
-    <div className="min-h-screen bg-cream pb-40">
+    <div className="min-h-screen lg-vibrant pb-40">
       <AppHeader
         user={user}
         activeView={activeView || 'patissier'}
@@ -144,7 +160,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
             </div>
             <button
               onClick={() => setPrintDate('__open__')}
-              className="px-3 py-1.5 border border-bordeaux text-bordeaux rounded-full text-[11px] hover:bg-bordeaux hover:text-cream transition-colors"
+              className="px-4 py-1.5 rounded-full text-[11px] lg-grad transition-all"
             >Imprimer</button>
           </div>
         </div>
@@ -179,7 +195,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
               return (
                 <div key={date} className="bg-white rounded-2xl border border-line p-3 shadow-sm">
                   <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-bordeaux/30 flex-wrap">
-                    <div className="font-mono text-[11px] tracking-[0.15em] uppercase text-bordeaux font-bold capitalize">
+                    <div className="font-fraunces italic text-[16px] text-bordeaux-deep capitalize">
                       {label}
                     </div>
                     <div className="flex items-center gap-2">
@@ -218,6 +234,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
                       currentUserId={user?.id}
                       onChange={refresh}
                       onPhotoClick={setLightboxUrl}
+                      onOpenOrder={canDetails ? openOrderDetail : null}
                     />
                   ) : (
                     <ProductView
@@ -291,6 +308,18 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
         </div>
       )}
 
+      {/* Fiche commande complète (réservée à ceux qui peuvent voir le calendrier) */}
+      {modalOrder && (
+        <OrderModal
+          order={modalOrder}
+          profiles={profiles}
+          user={user}
+          isPatissierMode={false}
+          onClose={() => setModalOrder(null)}
+          onOrderDeleted={() => setModalOrder(null)}
+        />
+      )}
+
       {/* Footer logs */}
       <ActivityLog
         storageKey="activity_log_open_patissier"
@@ -314,18 +343,27 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
 // ============================================================
 // Vue par client : commande par commande
 // ============================================================
-function ClientView({ ordersList, palette, currentUserId, onChange, onPhotoClick }) {
+function ClientView({ ordersList, palette, currentUserId, onChange, onPhotoClick, onOpenOrder }) {
   return (
     <div className="space-y-2">
       {ordersList.map(({ order, items }) => (
-        <div key={order.id} className="bg-cream-warm/50 rounded p-2 border border-line/40">
+        <div key={order.id} className="bg-white rounded-2xl p-3 border border-line shadow-sm">
           <div className="flex items-center gap-2 mb-1.5 text-[12px]">
             <span className="font-mono text-[10px] text-bordeaux font-bold">{order.order_num}</span>
             <span className="font-medium text-ink">— {order.client_name || 'Sans nom'}</span>
+            {onOpenOrder && (
+              <button onClick={() => onOpenOrder(order.order_num)} title="Voir le détail complet de la commande"
+                className="inline-flex items-center gap-1 text-[10px] px-3 py-1 rounded-full lg-gold transition-all">
+                <FileText size={12} strokeWidth={2} /> Détails
+              </button>
+            )}
             <span className="ml-auto font-mono text-[10px] text-ink-mute">
               {new Date(order.delivery_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
+          {order.handler && (
+            <div className="text-[10px] text-ink-mute mb-1.5">Pris par <span className="font-medium text-ink-soft">{order.handler}</span></div>
+          )}
           <div className="space-y-1.5">
             {items.map(({ item, fiche, dones }) => (
               <ItemCard
@@ -346,36 +384,88 @@ function ClientView({ ordersList, palette, currentUserId, onChange, onPhotoClick
   )
 }
 
+// « 2 touches » : 1er appui = arme (visuel « valider ? »), 2e appui (sous 3 s) = confirme.
+// Évite qu'un article passe en « fait » sur un appui accidentel. Annuler (déjà fait → ○) reste instantané.
+function useTwoTap(onConfirm, ms = 3000) {
+  const [armed, setArmed] = useState(false)
+  const timer = useRef(null)
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  const tap = () => {
+    if (armed) { if (timer.current) clearTimeout(timer.current); setArmed(false); onConfirm() }
+    else { setArmed(true); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setArmed(false), ms) }
+  }
+  return [armed, tap]
+}
+
+// Lot (vue par commande) : 2 touches pour marquer fait, annuler instantané.
+function LotChip({ lot, done, palette, onToggle }) {
+  const [armed, tap] = useTwoTap(() => onToggle(false))
+  const couleur = findColor(palette, lot.couleur_id)
+  const zigzag = findColor(palette, lot.zigzag_couleur_id)
+  const perles = findColor(palette, lot.perles_couleur_id)
+  const cls = done ? 'bg-success/10 border-success/30 text-success line-through'
+    : armed ? 'bg-bordeaux/10 border-bordeaux text-bordeaux ring-1 ring-bordeaux'
+      : 'bg-cream-warm border-line hover:border-bordeaux'
+  return (
+    <button onClick={() => (done ? onToggle(true) : tap())}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border transition-all ${cls}`}>
+      <span className="font-medium">×{lot.qty}</span>
+      {lot.parfum && <span>{lot.parfum}</span>}
+      {couleur && <span className="w-2.5 h-2.5 rounded-full border border-line/40" style={{ backgroundColor: couleur.hex }} title={couleur.nom} />}
+      {lot.forme && <span className="capitalize">{lot.forme}</span>}
+      {lot.has_zigzag && zigzag && (
+        <span className="inline-flex items-center gap-0.5"><span className="text-ink-mute">·zig</span><span className="w-2 h-2 rounded-full" style={{ backgroundColor: zigzag.hex }} /></span>
+      )}
+      {lot.has_perles && perles && (
+        <span className="inline-flex items-center gap-0.5"><span className="text-ink-mute">·perl</span><span className="w-2 h-2 rounded-full" style={{ backgroundColor: perles.hex }} /></span>
+      )}
+      <span className="ml-0.5">{armed ? '●' : done ? '✓' : '○'}</span>
+    </button>
+  )
+}
+
+// Bouton « Tout fait » : 2 touches pour marquer, instantané pour annuler.
+function AllDoneButton({ fullyDone, onToggle }) {
+  const [armed, tap] = useTwoTap(() => onToggle())
+  return (
+    <button onClick={() => (fullyDone ? onToggle() : tap())}
+      className={`text-[9px] px-3 py-1 rounded-full whitespace-nowrap transition-all ${fullyDone ? 'bg-success/10 text-success border border-success/30' : armed ? 'bg-bordeaux/20 text-bordeaux border border-bordeaux ring-1 ring-bordeaux' : 'lg-grad'}`}>
+      {fullyDone ? '✓' : armed ? 'Valider ?' : 'Tout fait'}
+    </button>
+  )
+}
+
+// Article « à définir » (sans fiche) : 2 touches pour marquer fait, annuler instantané.
+function UndefItem({ item, dones, currentUserId, onChange }) {
+  const undefDone = isLotDone(dones, -1)
+  async function doToggle(mark) {
+    try {
+      if (!mark) await unmarkLotDone(item.id, -1)
+      else await markLotDone(item.id, -1, currentUserId)
+      onChange && onChange()
+    } catch (e) { console.error(e); toast.error('Erreur : ' + e.message) }
+  }
+  const [armed, tap] = useTwoTap(() => doToggle(true))
+  return (
+    <button onClick={() => (undefDone ? doToggle(false) : tap())}
+      className={`w-full text-left border rounded p-2 flex items-center gap-2 transition-all ${undefDone ? 'bg-amber-50 border-amber-200 opacity-60' : armed ? 'bg-bordeaux/10 border-bordeaux ring-1 ring-bordeaux' : 'bg-amber-50 border-amber-200 hover:border-amber-400'}`}>
+      <div className={`w-10 h-10 rounded flex items-center justify-center text-[16px] flex-shrink-0 ${undefDone ? 'bg-success/10 text-success' : armed ? 'bg-bordeaux/10 text-bordeaux' : 'bg-amber-100 text-amber-700'}`}>
+        {undefDone ? '✓' : armed ? '●' : <AlertTriangle size={15} strokeWidth={2} />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`text-[12px] font-medium text-amber-900 truncate ${undefDone ? 'line-through' : ''}`}>{item.title}</div>
+        <div className="text-[10px] text-amber-700 italic">{undefDone ? 'Fait' : armed ? 'Toucher pour valider' : 'À définir'}</div>
+      </div>
+    </button>
+  )
+}
+
 function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhotoClick }) {
   const realQty = getRealQuantity(item)
   const photoUrl = Array.isArray(item.image_urls) && item.image_urls[0] ? item.image_urls[0] : null
 
   if (!fiche) {
-    const undefDone = isLotDone(dones, -1)
-    async function toggleUndefDone() {
-      try {
-        if (undefDone) await unmarkLotDone(item.id, -1)
-        else await markLotDone(item.id, -1, currentUserId)
-        onChange && onChange()
-      } catch (e) {
-        console.error(e)
-        toast.error('Erreur : ' + e.message)
-      }
-    }
-    return (
-      <button
-        onClick={toggleUndefDone}
-        className={`w-full text-left bg-amber-50 border border-amber-200 rounded p-2 flex items-center gap-2 transition-all hover:border-amber-400 ${undefDone ? 'opacity-60' : ''}`}
-      >
-        <div className={`w-10 h-10 rounded flex items-center justify-center text-[16px] flex-shrink-0 ${undefDone ? 'bg-success/10 text-success' : 'bg-amber-100 text-amber-700'}`}>
-          {undefDone ? '✓' : '⚠'}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className={`text-[12px] font-medium text-amber-900 truncate ${undefDone ? 'line-through' : ''}`}>{item.title}</div>
-          <div className="text-[10px] text-amber-700 italic">{undefDone ? 'Fait' : 'À définir'}</div>
-        </div>
-      </button>
-    )
+    return <UndefItem item={item} dones={dones} currentUserId={currentUserId} onChange={onChange} />
   }
 
   const typeGm = fiche.type_gm
@@ -415,15 +505,15 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
   }
 
   return (
-    <div className={`bg-white rounded border p-2 ${fullyDone ? 'border-success/30 opacity-70' : 'border-line/60'}`}>
+    <div className={`bg-white rounded-xl border p-3 ${fullyDone ? 'border-success/30 opacity-70' : 'border-line/60'}`}>
       <div className="flex gap-2 items-start">
         <button
           onClick={() => photoUrl && onPhotoClick && onPhotoClick(photoUrl)}
-          className="w-12 h-12 rounded bg-cream-warm border border-line/40 flex items-center justify-center flex-shrink-0 overflow-hidden hover:opacity-80"
+          className="w-14 h-14 rounded-2xl lg-gold border border-line/40 flex items-center justify-center flex-shrink-0 overflow-hidden hover:opacity-90 shadow-sm"
           disabled={!photoUrl}
         >
           {photoUrl ? (
-            <img src={photoUrl} alt="" className="w-full h-full object-cover" />
+            <img src={photoUrl} alt="" className="w-full h-full object-contain" />
           ) : (
             <span className="text-[20px] opacity-50">{emoji}</span>
           )}
@@ -447,55 +537,14 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
 
           {!fiche.parfum_normal && (
             <div className="flex flex-wrap gap-1 mt-1">
-              {(fiche.lots || []).map((lot, idx) => {
-                const done = isLotDone(dones, idx)
-                const couleur = findColor(palette, lot.couleur_id)
-                const zigzag = findColor(palette, lot.zigzag_couleur_id)
-                const perles = findColor(palette, lot.perles_couleur_id)
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => toggleLot(idx, done)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border transition-all ${
-                      done
-                        ? 'bg-success/10 border-success/30 text-success line-through'
-                        : 'bg-cream-warm border-line hover:border-bordeaux'
-                    }`}
-                  >
-                    <span className="font-medium">×{lot.qty}</span>
-                    {lot.parfum && <span>{lot.parfum}</span>}
-                    {couleur && <span className="w-2.5 h-2.5 rounded-full border border-line/40" style={{ backgroundColor: couleur.hex }} title={couleur.nom} />}
-                    {lot.forme && <span className="capitalize">{lot.forme}</span>}
-                    {lot.has_zigzag && zigzag && (
-                      <span className="inline-flex items-center gap-0.5">
-                        <span className="text-ink-mute">·zig</span>
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: zigzag.hex }} />
-                      </span>
-                    )}
-                    {lot.has_perles && perles && (
-                      <span className="inline-flex items-center gap-0.5">
-                        <span className="text-ink-mute">·perl</span>
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: perles.hex }} />
-                      </span>
-                    )}
-                    <span className="ml-0.5">{done ? '✓' : '○'}</span>
-                  </button>
-                )
-              })}
+              {(fiche.lots || []).map((lot, idx) => (
+                <LotChip key={idx} lot={lot} done={isLotDone(dones, idx)} palette={palette} onToggle={(d) => toggleLot(idx, d)} />
+              ))}
             </div>
           )}
         </div>
 
-        <button
-          onClick={toggleAllDone}
-          className={`text-[9px] px-2 py-0.5 rounded-full whitespace-nowrap transition-colors ${
-            fullyDone
-              ? 'bg-success/10 text-success border border-success/30'
-              : 'bg-bordeaux text-cream border border-bordeaux hover:bg-bordeaux-deep'
-          }`}
-        >
-          {fullyDone ? '✓' : 'Tout fait'}
-        </button>
+        <AllDoneButton fullyDone={fullyDone} onToggle={toggleAllDone} />
       </div>
     </div>
   )
@@ -536,11 +585,15 @@ function ProductGroup({ product, palette, currentUserId, onChange, expandedKey, 
 
   if (visibleParfums.length === 0) return null
 
+  // Quantité totale du produit (somme de tous les lots) — pour savoir combien en faire en un coup d'œil.
+  const totalQty = visibleParfums.reduce((s, [, entries]) => s + entries.reduce((a, e) => a + (Number(e.qty) || 0), 0), 0)
+
   return (
-    <div className={`rounded border p-2 ${product.isNonDefini ? 'bg-amber-50 border-amber-200' : 'bg-cream-warm/50 border-line/40'}`}>
+    <div className={`rounded-2xl border p-3 shadow-sm ${product.isNonDefini ? 'bg-amber-50 border-amber-200' : 'bg-white border-line'}`}>
       <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-line/30">
         <span className="text-[16px]">{product.emoji}</span>
         <span className="text-[12px] font-medium text-ink">{product.label}</span>
+        <span className="text-[12px] font-bold text-bordeaux ml-auto">×{totalQty}</span>
       </div>
 
       {(() => {
@@ -568,7 +621,7 @@ function ProductGroup({ product, palette, currentUserId, onChange, expandedKey, 
 
       <div className="space-y-1.5">
         {visibleParfums.map(([parfum, entries]) => (
-          <div key={parfum} className="bg-white rounded border border-line/40 p-1.5">
+          <div key={parfum} className="bg-white rounded-xl border border-line/50 p-2.5">
             <div className="text-[10px] font-mono uppercase tracking-wider text-ink-mute mb-1">
               {parfum === '__normal__' ? 'Parfum normal' : parfum === '__sansparfum__' ? '(sans parfum)' : parfum === '__pasdefini__' ? '⚠ Pas défini' : parfum}
             </div>
@@ -630,14 +683,17 @@ function AggLotChip({ entry, palette, currentUserId, onChange, fusionKey, expand
     }
   }
 
+  const [armed, tap] = useTwoTap(toggle)
   return (
     <div className="inline-flex items-center gap-1">
       <button
-        onClick={toggle}
+        onClick={() => (allDone ? toggle() : tap())}
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] border transition-all ${
           allDone
             ? 'bg-success/10 border-success/30 text-success line-through'
-            : 'bg-cream-warm border-line hover:border-bordeaux'
+            : armed
+              ? 'bg-bordeaux/10 border-bordeaux text-bordeaux ring-1 ring-bordeaux'
+              : 'bg-cream-warm border-line hover:border-bordeaux'
         }`}
       >
         <span className="font-medium">×{entry.qty}</span>
@@ -655,7 +711,7 @@ function AggLotChip({ entry, palette, currentUserId, onChange, fusionKey, expand
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: perles.hex }} />
           </span>
         )}
-        <span className="ml-1">{allDone ? '✓' : entry.totalSources > 1 ? `(${entry.totalSources})` : '○'}</span>
+        <span className="ml-1">{allDone ? '✓' : armed ? '●' : entry.totalSources > 1 ? `(${entry.totalSources})` : '○'}</span>
       </button>
       {entry.totalSources > 1 && (
         <button
@@ -688,9 +744,11 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
     const products = aggregateByProduct(ordersList)
     for (const prod of products) {
       let prodHtml = ''
+      let prodTotal = 0
       for (const [parfum, entries] of Object.entries(prod.parfums)) {
         const notDone = entries.filter(e => e.doneCount < e.totalSources)
         if (notDone.length === 0) continue
+        prodTotal += notDone.reduce((a, e) => a + (Number(e.qty) || 0), 0)
         const parfumLabel = parfum === '__normal__' ? 'Parfum normal' : parfum === '__sansparfum__' ? '(sans parfum)' : parfum === '__pasdefini__' ? 'Pas défini' : parfum
         let chips = ''
         for (const e of notDone) {
@@ -715,7 +773,7 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         }
       }
       if (prodHtml) {
-        body += `<div style="margin:10px 0;padding:6px;border-bottom:1px solid #ccc"><div style="font-size:13px;font-weight:600">${prod.emoji} ${prod.label}</div>${prodHtml}</div>`
+        body += `<div style="margin:10px 0;padding:6px;border-bottom:1px solid #ccc"><div style="font-size:13px;font-weight:600">${prod.emoji} ${prod.label} <span style="color:#a8324b">×${prodTotal}</span></div>${prodHtml}</div>`
       }
     }
   } else {

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hamid — déclaration en 3 étapes</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+  body{background:#211c1a;color:#1a0f0a;padding:30px 16px 60px}
+  h1{color:#fff;font-size:19px;text-align:center;margin-bottom:24px}
+  .row{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .step{width:250px}
+  .num{color:#fff;font-size:13px;font-weight:600;margin-bottom:8px;text-align:center}
+  .cap{color:#cbb9a8;font-size:12px;margin-top:8px;text-align:center;line-height:1.4}
+  .modal{background:white;border-radius:16px;padding:18px}
+  .title{font-size:13px;font-weight:600;color:#99201E;margin-bottom:12px}
+  .prog{display:flex;gap:6px;margin-bottom:14px}
+  .prog div{flex:1;height:4px;border-radius:2px;background:#e5d8c3}
+  .prog .on{background:#993556}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tile{display:flex;align-items:center;gap:7px;padding:13px 10px;border-radius:11px;border:1px solid #e5d8c3;background:#fff;font-size:13px;font-weight:500}
+  .tile.on{border:1.5px solid #993556;background:#FCEEF3;color:#993556}
+  .tile .t{margin-left:auto;font-size:8px;color:#7A5510}
+  .ipt{width:100%;padding:10px;border:.5px solid #C4BFB6;border-radius:8px;font-size:13px;margin-top:6px}
+  .hint{font-size:10px;color:#8a7a70;margin-top:5px}
+  .disp{text-align:center;font-size:30px;font-weight:600;color:#99201E;padding:6px 0 10px}
+  .keys{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+  .k{padding:11px 0;border-radius:9px;border:1px solid #e5d8c3;background:#fff;text-align:center;font-size:16px}
+  .k.del{background:#FCEEE8;color:#99201E}
+  .photo{display:flex;align-items:center;gap:9px;padding:15px 13px;border-radius:9px;border:.5px dashed #C4BFB6;background:#F4F0EA;font-size:13px;color:#4a3a30}
+  .lbl{font-size:12px;color:#4a3a30;margin-bottom:5px}
+  .req{color:#99201E}
+  .btns{display:flex;gap:6px;margin-top:14px}
+  .b1{flex:1;border:1px solid #e5d8c3;background:#fff;border-radius:8px;padding:11px;text-align:center;font-size:13px}
+  .b2{flex:2;background:#993556;color:#fff;border-radius:8px;padding:11px;text-align:center;font-size:13px;font-weight:500}
+  .arrow{align-self:center;color:#B14A6F;font-size:24px}
+  .band{color:#fff;font-size:15px;font-weight:600;margin:34px 0 14px;text-align:center;border-top:1px solid #4a3a30;padding-top:20px}
+  .mrow{display:flex;align-items:center;justify-content:space-between;background:#FFFBF0;border:.5px solid #e5d8c3;border-radius:9px;padding:9px 11px;font-size:12px;max-width:330px;margin:0 auto}
+  .sel{font-size:11px;padding:3px 7px;border-radius:6px;border:1px solid #EF9F27;background:#FFF6E5;color:#7A5510}
+</style></head><body>
+<h1>Hamid — « Ajouter une dépense » en 3 étapes</h1>
+<div class="row">
+  <div class="step">
+    <div class="num">Étape 1 · C'est quoi ?</div>
+    <div class="modal">
+      <div class="title">↑ Déclarer · C'est quoi ?</div>
+      <div class="prog"><div class="on"></div><div></div><div></div></div>
+      <div class="grid">
+        <div class="tile on">🏷 Essence</div>
+        <div class="tile">🏷 Pourboire <span class="t">sans photo</span></div>
+        <div class="tile">🏷 Courses</div>
+        <div class="tile">🏷 Autre</div>
+      </div>
+      <div class="btns"><div class="b1">Annuler</div><div class="b2">OK</div></div>
+    </div>
+    <div class="cap">Un favori, ou « Autre » → il écrit un mot.<br><b>Pas de catégorie</b> (Meriem la mettra).</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="num">Étape 2 · Montant</div>
+    <div class="modal">
+      <div class="title">↑ Déclarer · Montant</div>
+      <div class="prog"><div class="on"></div><div class="on"></div><div></div></div>
+      <div class="lbl">Essence</div>
+      <div class="disp">250 dh</div>
+      <div class="keys">
+        <div class="k">1</div><div class="k">2</div><div class="k">3</div>
+        <div class="k">4</div><div class="k">5</div><div class="k">6</div>
+        <div class="k">7</div><div class="k">8</div><div class="k">9</div>
+        <div class="k">00</div><div class="k">0</div><div class="k del">⌫</div>
+      </div>
+      <div class="btns"><div class="b1">‹ Retour</div><div class="b2">OK</div></div>
+    </div>
+    <div class="cap">La calculatrice. (Pour un pourboire, après OK → direct « Envoyer ».)</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="num">Étape 3 · Photo</div>
+    <div class="modal">
+      <div class="title">↑ Déclarer · Photo du ticket</div>
+      <div class="prog"><div class="on"></div><div class="on"></div><div class="on"></div></div>
+      <div class="lbl">Essence · 250 dh</div>
+      <div class="lbl" style="margin-top:8px">Photo du ticket <b class="req">(obligatoire)</b></div>
+      <div class="photo">📷 Prendre une photo du ticket</div>
+      <div class="btns"><div class="b1">‹ Retour</div><div class="b2">Envoyer</div></div>
+    </div>
+    <div class="cap">Photo obligatoire — sautée pour pourboire / type « sans photo ».</div>
+  </div>
+</div>
+
+<div class="band">Côté Meriem — elle met la catégorie + confirme</div>
+<div class="mrow">
+  <span>Essence <span style="font-size:9px;background:#FFF6E5;color:#7A5510;padding:1px 6px;border-radius:99px">À confirmer</span><br>
+    <select class="sel" style="margin-top:4px"><option>À catégoriser…</option></select>
+  </span>
+  <span style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;background:#1D7A5C;color:#fff;padding:3px 8px;border-radius:6px">✓ Confirmer</span><b style="color:#99201E">− 250</b></span>
+</div>
+<div class="cap" style="margin-top:8px">Meriem choisit la catégorie (« À catégoriser… » devient la vraie catégorie), puis confirme.</div>
+</body></html>

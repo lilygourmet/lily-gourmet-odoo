@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poly — estimation par IA (Gemini)</title>
+<style>
+  :root{ --bordeaux:#7a1f2b; --or:#b8862f; --cream:#fcfbf8; --line:#e7ddcb; --ink:#241a16; --mute:#7a6f66; }
+  *{box-sizing:border-box}
+  body{font-family:'Geist',-apple-system,Segoe UI,Roboto,sans-serif;background:var(--cream);color:var(--ink);margin:0;padding:24px;line-height:1.5}
+  h1{font-family:'Fraunces',Georgia,serif;font-style:italic;color:var(--bordeaux);font-size:26px;margin:0 0 4px}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.12em;color:var(--bordeaux);margin:28px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .sub{color:var(--mute);font-size:13px;margin-bottom:18px}
+  .box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  code,pre{font-family:ui-monospace,Menlo,Consolas,monospace}
+  pre{background:#2a1d1a;color:#f3e9da;padding:14px;border-radius:10px;overflow:auto;font-size:12.5px;line-height:1.6}
+  table{border-collapse:collapse;width:100%;font-size:13px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 11px;text-align:center;border-bottom:1px solid var(--line)}
+  th{background:#f6efe2;color:var(--bordeaux);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.06em}
+  tr:last-child td{border-bottom:none}
+  .poly{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;border-radius:999px;background:var(--bordeaux);color:#fff;font-weight:700;font-family:ui-monospace,monospace}
+  .scale span{display:inline-block;margin:2px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;font-family:ui-monospace,monospace;font-size:12px;background:#fff}
+  .scale b{color:var(--bordeaux)}
+  .formula{background:#fdf3f6;border:1px solid var(--bordeaux);border-radius:10px;padding:12px 14px;font-size:14px}
+  .card{display:flex;gap:14px;border:1px solid var(--bordeaux);border-radius:14px;padding:14px;background:#fff;max-width:560px}
+  .thumb{width:120px;height:120px;border-radius:10px;background:linear-gradient(135deg,#f0e3d2,#e7d2c0);display:flex;align-items:center;justify-content:center;color:#9a8b7c;font-size:11px;flex-shrink:0;text-align:center}
+  .ai{margin-top:10px;background:#f6efe2;border-radius:10px;padding:10px 12px;font-size:13px}
+  .ai b{color:var(--bordeaux)}
+  .tag{display:inline-block;background:var(--or);color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle}
+  small{color:var(--mute)}
+</style>
+</head>
+<body>
+
+<h1>Poly — estimation par IA <span class="tag">Gemini</span></h1>
+<p class="sub">Dans le modal « Poly » : si le gâteau a <b>une photo du modèle</b> et qu'il est <b>à 1 seul étage</b>,
+un bouton « 🤖 Estimer avec l'IA » analyse l'image et propose une valeur de poly. Validation toujours manuelle.</p>
+
+<h2>1 · La règle de conversion</h2>
+<div class="box">
+  <div class="formula">
+    <b>poly (cm)</b> = hauteur estimée du gâteau seul − 5 cm (génoise réelle)<br>
+    <b>valeur poly</b> = on arrondit ce poly au pas de <b>2,5 cm</b> <i>supérieur</i>, puis ÷ 5
+  </div>
+  <p style="margin:12px 0 6px"><small>Échelle des poly (1 cran = 2,5 cm de polystyrène) :</small></p>
+  <div class="scale">
+    <span>0&nbsp;→&nbsp;<b>0&nbsp;cm</b></span>
+    <span>0,5&nbsp;→&nbsp;<b>2,5</b></span>
+    <span>1&nbsp;→&nbsp;<b>5</b></span>
+    <span>1,5&nbsp;→&nbsp;<b>7,5</b></span>
+    <span>2&nbsp;→&nbsp;<b>10</b></span>
+    <span>2,5&nbsp;→&nbsp;<b>12,5</b></span>
+    <span>3&nbsp;→&nbsp;<b>15</b></span>
+    <span>3,5&nbsp;→&nbsp;<b>17,5&nbsp;cm</b></span>
+  </div>
+</div>
+
+<h2>2 · Tes 2 exemples (vérification)</h2>
+<table>
+  <tr><th>Hauteur gâteau seul (estimée)</th><th>Génoise réelle</th><th>Poly nécessaire</th><th>→ Valeur poly</th></tr>
+  <tr><td>15 cm</td><td>5 cm</td><td>10 cm</td><td><span class="poly">2</span></td></tr>
+  <tr><td>16–17 cm</td><td>5 cm</td><td>11–12 cm</td><td><span class="poly">2,5</span></td></tr>
+</table>
+<p><small>✔️ 10 cm = pile 2 crans (2). &nbsp; 11–12 cm = on passe au cran supérieur 12,5 cm = 2,5.</small></p>
+
+<h2>3 · Plus d'exemples (base 20 cm)</h2>
+<table>
+  <tr><th>Hauteur gâteau seul</th><th>Poly (h − 5)</th><th>Arrondi au cran sup.</th><th>Valeur poly</th></tr>
+  <tr><td>8 cm</td><td>3 cm</td><td>5 cm</td><td><span class="poly">1</span></td></tr>
+  <tr><td>10 cm</td><td>5 cm</td><td>5 cm</td><td><span class="poly">1</span></td></tr>
+  <tr><td>12 cm</td><td>7 cm</td><td>7,5 cm</td><td><span class="poly">1,5</span></td></tr>
+  <tr><td>15 cm</td><td>10 cm</td><td>10 cm</td><td><span class="poly">2</span></td></tr>
+  <tr><td>17 cm</td><td>12 cm</td><td>12,5 cm</td><td><span class="poly">2,5</span></td></tr>
+  <tr><td>20 cm</td><td>15 cm</td><td>15 cm</td><td><span class="poly">3</span></td></tr>
+  <tr><td>≤ 5 cm</td><td>0</td><td>0</td><td><span class="poly">0</span></td></tr>
+</table>
+
+<h2>3 bis · Gâteau à 2 étages — chaque étage se calcule seul</h2>
+<p class="sub">L'IA estime la hauteur de <b>chaque étage</b> (en prenant la base de cet étage comme échelle),
+puis on applique la même règle par étage → <b>un poly par étage</b>.</p>
+<table>
+  <tr><th>Étage</th><th>Base (échelle)</th><th>Hauteur estimée</th><th>Poly (h − 5)</th><th>Arrondi sup.</th><th>Valeur poly</th></tr>
+  <tr><td>Étage 1 (bas)</td><td>22 cm</td><td>14 cm</td><td>9 cm</td><td>10 cm</td><td><span class="poly">2</span></td></tr>
+  <tr><td>Étage 2 (haut)</td><td>16 cm</td><td>10 cm</td><td>5 cm</td><td>5 cm</td><td><span class="poly">1</span></td></tr>
+</table>
+<p><small>Chaque étage est indépendant : ici Étage 1 → poly 2, Étage 2 → poly 1.</small></p>
+
+<h2>4 · À quoi ça ressemblerait dans le modal Poly</h2>
+<div class="card">
+  <div class="thumb">📷 photo<br>du modèle</div>
+  <div>
+    <div style="font-weight:600">Mme Alami — S50231</div>
+    <div style="color:var(--mute);font-size:13px">CD- Gâteau Forme · 15 pers · base 20 cm · 1 étage</div>
+    <div class="ai">
+      🤖 <b>Estimation IA</b><br>
+      Hauteur gâteau seul : <b>~15 cm</b> · hauteur totale avec déco : ~19 cm<br>
+      Génoise 5 cm + <b>poly 10 cm</b> → poly proposé : <b>2</b>
+      <div style="margin-top:6px"><small>Tu peux ajuster à la main : [0] [0,5] [1] [1,5] [<b style="color:#fff;background:var(--bordeaux);padding:1px 6px;border-radius:6px">2</b>] [2,5] [3] [3,5]</small></div>
+    </div>
+  </div>
+</div>
+
+<h2>5 · Le prompt envoyé à Gemini</h2>
+<pre>Tu es un pâtissier expert. Analyse ce gâteau à partir de la photo.
+On te donne la largeur/diamètre RÉEL de la base : {{BASE}} cm.
+Sers-t'en comme échelle pour estimer les hauteurs en te basant sur
+les proportions visibles.
+
+Réponds en JSON strict :
+{
+  "hauteur_gateau_seul_cm": <nombre>,   // le gâteau seul, SANS les
+                                        // décorations qui dépassent
+  "hauteur_totale_cm": <nombre>,        // avec les décorations
+  "confiance": "haute" | "moyenne" | "basse",
+  "note": "<courte explication>"
+}
+
+Donne une estimation RÉALISTE (un gâteau design fait souvent 8 à 20 cm
+de haut). Si l'image ne permet pas d'estimer, mets confiance "basse".</pre>
+<p><small>Côté app : on prend <code>hauteur_gateau_seul_cm</code>, on fait <code>poly = hauteur − 5</code>,
+on arrondit au cran de 2,5 cm supérieur, ÷ 5 → valeur poly proposée (modifiable).</small></p>
+
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette — Supports (consignes)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bordeaux:#7a2233; --bordeaux-deep:#5f1926; --gold:#b8873b;
+    --cream:#fcfbf8; --cream-warm:#f4efe6; --line:#e6ded0;
+    --ink:#2b2320; --ink-soft:#6b5f57; --ink-mute:#9a8f85;
+    --danger:#c0392b; --ok:#5f9270;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);padding:22px;max-width:1000px;margin:0 auto}
+  .fraunces{font-family:'Fraunces',serif}
+  h1{font-style:italic;font-weight:400;font-size:28px;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:13.5px;margin:0 0 20px}
+
+  .alert{display:flex;align-items:center;gap:10px;background:#fbeaea;border:1px solid #e6b5b0;color:#8f2b22;
+    border-radius:12px;padding:11px 14px;font-size:13.5px;margin-bottom:20px}
+
+  .sectitle{display:flex;align-items:center;justify-content:space-between;margin:22px 0 10px}
+  .sectitle h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-mute);margin:0;font-weight:600}
+  .btn{font-family:'Geist';font-size:12px;font-weight:600;letter-spacing:.04em;padding:9px 15px;border-radius:10px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-soft)}
+  .btn.primary{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+
+  /* Stock */
+  .stock{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
+  .card h3{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:9px}
+  .thumb{width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:20px}
+  .thumb.v{background:linear-gradient(135deg,#e8dcc8,#cbb590)}
+  .thumb.p{background:linear-gradient(135deg,#d7d7dd,#b7b7c2)}
+  .thumb.pr{background:linear-gradient(135deg,#e6d3d8,#c9a9b3)}
+  .thumb.sm{width:26px;height:26px;border-radius:7px;font-size:14px}
+  .big{font-size:30px;font-weight:600;color:var(--bordeaux);line-height:1}
+  .big small{font-size:12px;color:var(--ink-mute);font-weight:500}
+  .rowline{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+  .dehors{color:var(--danger);font-weight:600}
+
+  /* Form sortie */
+  .form{background:var(--cream-warm);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:6px;display:none;grid-template-columns:1fr 1fr;gap:12px}
+  .form.open{display:grid}
+  .form label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);display:block;margin-bottom:5px}
+  .form input,.form select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:13px;font-family:'Geist'}
+  .form .full{grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end}
+
+  /* Dehors */
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600}
+  td{padding:11px 12px;font-size:13px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:none}
+  tr.late td{background:#fdf3f2}
+  .tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
+  .tag.ocp{background:#eee3cf;color:#8a6a20}
+  .tag.cli{background:#e7e0f0;color:#5a4a86}
+  .days{font-weight:600}
+  .days.late{color:var(--danger)}
+  .ret{font-size:11px;font-weight:600;padding:6px 11px;border-radius:9px;border:1px solid var(--bordeaux);background:#fff;color:var(--bordeaux);cursor:pointer}
+</style>
+</head>
+<body>
+  <h1 class="fraunces">Supports (consignes)</h1>
+  <p class="sub">Suivi des verrines, plateaux, présentoirs… prêtés à l'OCP ou aux clients. Qui les a, depuis quand, et ce qui est rendu.</p>
+
+  <div class="alert">⚠️ <b>2 sorties</b> dehors depuis plus de <b>7 jours</b> — pense à réclamer le retour.</div>
+
+  <!-- À PRÉPARER (détecté depuis les commandes à venir) -->
+  <div class="sectitle">
+    <h2>À préparer — commandes à venir</h2>
+    <button class="btn">⚙️ Règles de détection</button>
+  </div>
+  <table style="margin-bottom:6px">
+    <thead><tr><th>Livraison</th><th>Commande</th><th>Client</th><th>Supports détectés</th><th></th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Aujourd'hui 15h</td><td>S48587</td><td><span class="tag ocp">OCP</span></td>
+        <td>🥂 24 Verrines <span style="color:var(--ink-mute);font-size:11px">(ligne « Verrines mousse ×24 »)</span></td>
+        <td><button class="ret">Sortir</button></td>
+      </tr>
+      <tr>
+        <td>Demain 11h</td><td>S48699</td><td><span class="tag cli">Karim O.</span></td>
+        <td>🗼 1 Présentoir <span style="color:var(--ink-mute);font-size:11px">(règle : Entremet → 1 présentoir)</span></td>
+        <td><button class="ret">Sortir</button></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="sub" style="margin-top:0">« Sortir » enregistre la sortie d'un clic (déjà pré-rempli). Tu peux corriger la quantité avant. Ce qui n'a pas de règle n'apparaît pas ici → tu l'ajoutes à la main plus bas.</p>
+
+  <!-- STOCK -->
+  <div class="sectitle">
+    <h2>Mon stock</h2>
+    <button class="btn">+ Ajouter un type</button>
+  </div>
+  <div class="stock">
+    <div class="card">
+      <h3><span class="thumb v">🥂</span> Verrines rondes</h3>
+      <div class="big">72 <small>en stock</small></div>
+      <div class="rowline"><span>Dehors : <span class="dehors">28</span></span><span>Total : 100</span></div>
+    </div>
+    <div class="card">
+      <h3><span class="thumb p">🍽️</span> Plateaux argentés</h3>
+      <div class="big">14 <small>en stock</small></div>
+      <div class="rowline"><span>Dehors : <span class="dehors">6</span></span><span>Total : 20</span></div>
+    </div>
+    <div class="card">
+      <h3><span class="thumb pr">🗼</span> Présentoirs</h3>
+      <div class="big">5 <small>en stock</small></div>
+      <div class="rowline"><span>Dehors : <span class="dehors">0</span></span><span>Total : 5</span></div>
+    </div>
+  </div>
+
+  <!-- SORTIE -->
+  <div class="sectitle">
+    <h2>Enregistrer une sortie</h2>
+    <button class="btn primary" onclick="document.getElementById('f').classList.toggle('open')">+ Nouvelle sortie</button>
+  </div>
+  <div class="form" id="f">
+    <div><label>Support</label><select><option>🥂 Verrines rondes</option><option>🍽️ Plateaux argentés</option><option>🗼 Présentoirs</option></select></div>
+    <div><label>Quantité</label><input type="number" value="24" /></div>
+    <div><label>Destinataire</label><select><option>OCP</option><option>Client…</option></select></div>
+    <div><label>N° commande (S…)</label><input placeholder="S48587" /></div>
+    <div><label>Date de sortie</label><input type="date" value="2026-07-03" /></div>
+    <div><label>Note (optionnel)</label><input placeholder="ex : à récupérer avec le plateau" /></div>
+    <div class="full">
+      <button class="btn" onclick="document.getElementById('f').classList.remove('open')">Annuler</button>
+      <button class="btn primary">Enregistrer la sortie</button>
+    </div>
+  </div>
+
+  <!-- DEHORS -->
+  <div class="sectitle">
+    <h2>Dehors (pas encore rendus)</h2>
+  </div>
+  <table>
+    <thead><tr><th>Support</th><th>Qté</th><th>Chez qui</th><th>Commande</th><th>Sorti</th><th></th></tr></thead>
+    <tbody>
+      <tr class="late">
+        <td><span class="thumb v sm" style="display:inline-flex;vertical-align:middle;margin-right:7px">🥂</span>Verrines rondes</td><td>24</td>
+        <td><span class="tag ocp">OCP</span></td><td>S48587</td>
+        <td><span class="days late">il y a 11 j</span></td>
+        <td><button class="ret">Retour</button></td>
+      </tr>
+      <tr class="late">
+        <td><span class="thumb p sm" style="display:inline-flex;vertical-align:middle;margin-right:7px">🍽️</span>Plateaux argentés</td><td>6</td>
+        <td><span class="tag cli">Sara Bennani</span></td><td>S48610</td>
+        <td><span class="days late">il y a 8 j</span></td>
+        <td><button class="ret">Retour</button></td>
+      </tr>
+      <tr>
+        <td><span class="thumb v sm" style="display:inline-flex;vertical-align:middle;margin-right:7px">🥂</span>Verrines rondes</td><td>4</td>
+        <td><span class="tag cli">Karim O.</span></td><td>S48699</td>
+        <td><span class="days">il y a 2 j</span></td>
+        <td><button class="ret">Retour</button></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="sub" style="margin-top:14px">« Retour » ouvre un mini choix : <b>tout rendu</b> ou <b>partiel</b> (ex. 20 verrines rendues sur 24) → le stock se remet à jour, et la ligne disparaît quand tout est rendu.</p>
+</body>
+</html>

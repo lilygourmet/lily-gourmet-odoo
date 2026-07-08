@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refonte — Calendrier Lily Gourmet</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#1a0f0a; --ink-soft:#5b4a40; --ink-mute:#9b8b80;
+    --cream:#fcfbf8; --card:#ffffff; --deep:#efe7d9;
+    --bordeaux:#9a3357; --bordeaux-deep:#7c2944; --bordeaux-soft:#b85273;
+    --gold:#b8893c; --gold-pale:#f3e6cb; --tint:#f7eef1;
+    --line:#ece3d4; --ok:#2f7d4f; --ok-bg:#e9f5ec;
+    --r:14px; --r-lg:20px;
+    --sh-1:0 1px 2px rgba(60,30,20,.05); --sh-2:0 4px 16px rgba(90,40,30,.07); --sh-3:0 18px 50px rgba(70,30,25,.16);
+    --t:.18s cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Geist',-apple-system,'Segoe UI',sans-serif;background:var(--cream);color:var(--ink);line-height:1.5;font-size:14px;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.serif{font-family:'Fraunces',Georgia,serif;font-weight:600;letter-spacing:-.01em}
+  .muted{color:var(--ink-mute)}
+  svg{stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+  .topbar{position:sticky;top:0;z-index:30;background:rgba(252,251,248,.82);backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--line)}
+  .topbar .in{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:11px 22px}
+  .brand{display:flex;align-items:center;gap:10px;font-family:'Fraunces',serif;font-weight:600;font-size:18px}
+  .brand .dot{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--bordeaux),var(--bordeaux-deep));color:#fff;display:grid;place-items:center;font-size:15px;box-shadow:var(--sh-1)}
+  .brand small{font-weight:500;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);display:block;margin-top:-3px}
+  .nav{display:flex;gap:3px;margin-left:8px}
+  .nav button{white-space:nowrap;padding:8px 14px;border:none;background:none;border-radius:11px;font-family:inherit;font-weight:500;font-size:13.5px;color:var(--ink-soft);transition:var(--t);cursor:pointer}
+  .nav button:hover{background:#fff;color:var(--ink)}
+  .nav button.active{background:var(--bordeaux);color:#fff;box-shadow:0 4px 14px rgba(154,51,87,.28)}
+  .spacer{flex:1}
+  .iconbtn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh-1);transition:var(--t);color:var(--ink-soft);cursor:pointer}
+  .iconbtn:hover{border-color:var(--bordeaux-soft);color:var(--bordeaux);transform:translateY(-1px);box-shadow:var(--sh-2)}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--gold-pale);color:var(--bordeaux-deep);display:grid;place-items:center;font-weight:600;border:1px solid var(--line)}
+
+  .wrap{max-width:1200px;margin:0 auto;padding:22px}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+  .page-head h1{font-size:29px}
+  .page-head p{color:var(--ink-mute);font-size:13px;margin-top:2px}
+  .tools{display:flex;align-items:center;gap:10px}
+  .seg{display:inline-flex;background:var(--deep);padding:4px;border-radius:13px;gap:2px}
+  .seg button{padding:7px 15px;border:none;background:none;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;transition:var(--t)}
+  .seg button.on{background:#fff;color:var(--bordeaux-deep);box-shadow:var(--sh-1)}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border:none;border-radius:12px;font-family:inherit;font-weight:500;font-size:13.5px;cursor:pointer;transition:var(--t);box-shadow:var(--sh-1)}
+  .btn-primary{background:var(--bordeaux);color:#fff}
+  .btn-primary:hover{background:var(--bordeaux-deep);transform:translateY(-1px);box-shadow:0 6px 18px rgba(154,51,87,.3)}
+
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:12px}
+  @media(max-width:900px){.week{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:600px){.week{grid-template-columns:1fr}}
+  .day{background:transparent}
+  .dayhead{display:flex;align-items:baseline;justify-content:space-between;padding:2px 4px 10px}
+  .dayhead .dow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-mute);font-weight:600}
+  .dayhead .num{font-family:'Fraunces',serif;font-size:20px;color:var(--ink)}
+  .day.today .num{color:#fff;background:var(--bordeaux);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:15px}
+  .col{display:flex;flex-direction:column;gap:9px;min-height:60px}
+
+  .oc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-1);padding:9px;transition:var(--t);cursor:pointer}
+  .oc:hover{transform:translateY(-2px);box-shadow:var(--sh-2);border-color:var(--bordeaux-soft)}
+  .oc .top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .thumb{width:38px;height:38px;border-radius:10px;flex:0 0 auto;background:linear-gradient(135deg,var(--tint),var(--gold-pale));border:1px solid var(--line)}
+  .thumb.b{background:linear-gradient(135deg,#eef3ec,#dfeee6)}
+  .oc .ref{font-size:10.5px;font-weight:600;letter-spacing:.06em;color:var(--bordeaux)}
+  .oc .time{margin-left:auto;font-size:11px;color:var(--ink-mute);display:inline-flex;align-items:center;gap:4px}
+  .oc .title{font-family:'Fraunces',serif;font-size:14px;color:var(--ink);line-height:1.25}
+  .oc .sub{font-size:12px;color:var(--ink-soft);margin-top:1px}
+  .row{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:500;border:1px solid var(--line);background:#fff;color:var(--ink-soft)}
+  .chip-ok{background:var(--ok-bg);border-color:transparent;color:var(--ok)}
+  .chip-gold{background:var(--gold-pale);border-color:transparent;color:var(--bordeaux-deep)}
+  .chip .sw{width:9px;height:9px;border-radius:50%}
+  .empty{border:1px dashed var(--line);border-radius:var(--r);padding:14px;text-align:center;color:var(--ink-mute);font-size:12px;font-style:italic}
+  .note{max-width:1200px;margin:20px auto 0;text-align:center;color:var(--ink-mute);font-size:12.5px}
+</style>
+</head>
+<body>
+  <div class="topbar"><div class="in">
+    <div class="brand"><span class="dot">LG</span><span>Lily Gourmet<small>Traiteur · Casablanca</small></span></div>
+    <div class="nav">
+      <button class="active">Calendrier</button>
+      <button>Commandes</button>
+      <button>Production</button>
+      <button>Caisse</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="iconbtn" title="Rechercher"><svg width="18" height="18" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
+    <button class="iconbtn" title="Synchroniser"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v5h-5"/></svg></button>
+    <div class="avatar">L</div>
+  </div></div>
+
+  <div class="wrap">
+    <div class="page-head">
+      <div>
+        <h1>Calendrier</h1>
+        <p>Semaine du 6 au 12 juillet · 23 commandes</p>
+      </div>
+      <div class="tools">
+        <div class="seg"><button>Jour</button><button class="on">Semaine</button><button>Mois</button></div>
+        <button class="btn btn-primary"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Nouvelle commande</button>
+      </div>
+    </div>
+
+    <div class="week" id="week"></div>
+  </div>
+
+  <div class="note">Maquette — direction visuelle validée appliquée au calendrier · aucune donnée réelle</div>
+
+<script>
+  const days = [
+    { dow:'Lun', num:6 }, { dow:'Mar', num:7 }, { dow:'Mer', num:8, today:true },
+    { dow:'Jeu', num:9 }, { dow:'Ven', num:10 }, { dow:'Sam', num:11 }, { dow:'Dim', num:12 },
+  ]
+  const orders = {
+    6:[{ref:'CD-4821',t:'10h',title:'Number cake',sub:'20 pers · licorne',chips:[['ok','Confirmée']],sw:'#cdb4d9'}],
+    7:[{ref:'CD-4830',t:'16h',title:'Étages fleuri',sub:'3 étages · 40 pers',chips:[['gold','Acompte']],sw:'#f695b6'},
+       {ref:'GM-1290',t:'16h',b:1,title:'40 cupcakes',sub:'Vanille · rose',chips:[['ok','Confirmée']],sw:'#a8d4e8'}],
+    8:[{ref:'CD-4841',t:'13h',title:'Coeur rouge',sub:'10 pers',chips:[['','À faire']],sw:'#e32400'},
+       {ref:'CD-4842',t:'15h',title:'Gâteau photo',sub:'à l\'identique',chips:[['ok','Confirmée']],sw:'#f5d537'},
+       {ref:'GM-1301',t:'17h',b:1,title:'Sablés coeur',sub:'×24 · beige',chips:[['gold','Achat']],sw:'#d4c2a0'}],
+    9:[{ref:'CD-4855',t:'11h',title:'Bombé 18cm',sub:'praliné',chips:[['ok','Confirmée']],sw:'#be7027'}],
+    10:[{ref:'CD-4860',t:'14h',title:'Letter cake',sub:'"M" · or',chips:[['ok','Confirmée']],sw:'#b8893c'},
+        {ref:'CD-4861',t:'18h',title:'Number 2 étages',sub:'50 pers · bleu',chips:[['gold','Acompte']],sw:'#004fd3'}],
+    11:[{ref:'CD-4870',t:'12h',title:'Coeur fleurs',sub:'vraies fleurs',chips:[['ok','Confirmée']],sw:'#f695b6'},
+        {ref:'GM-1320',t:'12h',b:1,title:'Magnums',sub:'×30 · zigzag',chips:[['','À faire']],sw:'#132357'},
+        {ref:'CD-4871',t:'16h',title:'Rond 25cm',sub:'oréo',chips:[['ok','Confirmée']],sw:'#000000'}],
+    12:[],
+  }
+  const clock = '<svg width="12" height="12" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
+  const wk = document.getElementById('week')
+  wk.innerHTML = days.map(d => `
+    <div class="day ${d.today?'today':''}">
+      <div class="dayhead"><span class="dow">${d.dow}</span><span class="num">${d.num}</span></div>
+      <div class="col">
+        ${(orders[d.num]||[]).map(o=>`
+          <div class="oc">
+            <div class="top">
+              <div class="thumb ${o.b?'b':''}"></div>
+              <span class="ref">${o.ref}</span>
+              <span class="time">${clock}${o.t}</span>
+            </div>
+            <div class="title">${o.title}</div>
+            <div class="sub">${o.sub}</div>
+            <div class="row">
+              <span class="chip"><span class="sw" style="background:${o.sw}"></span>couleur</span>
+              ${o.chips.map(c=>`<span class="chip ${c[0]?'chip-'+c[0]:''}">${c[1]}</span>`).join('')}
+            </div>
+          </div>`).join('') || '<div class="empty">Aucune commande</div>'}
+      </div>
+    </div>`).join('')
+</script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maquette — Paramétrage des modèles</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<style>
+:root{--cream:#F4F0EA;--cream-warm:#FBF7F0;--ink:#1a0f0a;--ink-soft:#5b4a40;--ink-mute:#8a7a70;--bordeaux:#993556;--line:#e8dcc9;--green:#1a9d55}
+*{box-sizing:border-box}body{margin:0;background:#e9e2d6;color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px}
+.fr{font-family:'Fraunces',serif}
+header{background:var(--bordeaux);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header .count{background:#fff;color:var(--bordeaux);border-radius:20px;padding:2px 12px;font-weight:800;font-size:13px}
+.wrap{max-width:1100px;margin:0 auto;padding:14px}
+.hint{font-size:12px;color:var(--ink-mute);margin:2px 0 12px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--bordeaux);margin:18px 0 8px}
+/* grille des modèles à paramétrer */
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+@media(max-width:800px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px;text-align:center;cursor:pointer;transition:.15s;position:relative}
+.card:hover{border-color:var(--bordeaux);box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.card.sel{border-color:var(--bordeaux);box-shadow:0 0 0 2px var(--bordeaux)}
+.card .ph{height:90px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:40px}
+.card .nm{font-size:11px;font-weight:700;margin-top:5px;height:30px;overflow:hidden;line-height:1.15}
+.card .num{font-size:10px;color:var(--ink-mute)}
+.card .ok{margin-top:6px;width:100%;background:var(--green);color:#fff;border:none;border-radius:8px;padding:7px;font-weight:800;font-size:12px;cursor:pointer}
+.card.leaving{opacity:0;transform:scale(.85);pointer-events:none}
+.empty{grid-column:1/-1;text-align:center;color:var(--ink-mute);padding:30px;background:#fff;border-radius:12px;border:1px dashed var(--line)}
+/* détail commande */
+.detail{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:8px}
+.detail .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:10px}
+.detail .top b{font-size:15px}
+.chip{display:inline-block;background:#fbeef2;color:var(--bordeaux);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700}
+.cake{display:flex;gap:14px;flex-wrap:wrap}
+.cake .big{width:150px;height:150px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:60px;flex-shrink:0}
+.specs{flex:1;min-width:220px}
+.specs .row{display:flex;gap:8px;padding:3px 0;font-size:12.5px;border-bottom:1px dashed #f0e8db}
+.specs .k{color:var(--ink-mute);width:90px;flex-shrink:0}
+.acc{margin-top:14px}
+.acc .list{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.acc .a{background:var(--cream-warm);border:1px solid var(--line);border-radius:10px;padding:6px;text-align:center;width:96px}
+.acc .a .ph{height:60px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:28px}
+.acc .a .nm{font-size:10px;margin-top:3px;height:26px;overflow:hidden;line-height:1.1}
+.btnopen{margin-left:auto;background:var(--bordeaux);color:#fff;border:none;border-radius:8px;padding:7px 13px;font-weight:700;cursor:pointer;font-size:12px}
+.none{color:var(--ink-mute);font-style:italic;font-size:12px}
+.note{background:#fff7e0;border:1px solid #f0d89a;border-radius:10px;padding:10px;font-size:12px;color:#7a5a10;margin-top:14px}
+</style></head><body>
+
+<header>
+  <span class="fr" style="font-size:16px">🎯 Modèles à paramétrer</span>
+  <span class="count" id="count">10</span>
+  <span style="flex:1"></span>
+  <span style="font-size:12px;opacity:.9">Coche « ✓ Paramétré » → la photo part, la suivante arrive.</span>
+</header>
+
+<div class="wrap">
+  <p class="hint">Maquette — pour valider l'idée. Les photos sont symbolisées par des icônes ; en vrai ce seront les vraies photos des gâteaux des commandes.</p>
+
+  <h2>À paramétrer (10 affichés, file qui se remplit toute seule)</h2>
+  <div class="grid" id="grid"></div>
+
+  <h2>Détail de la commande sélectionnée</h2>
+  <div id="detail"></div>
+
+  <div class="note">💡 Idée : on traite <b>photo après photo</b>. Tu cliques une vignette → tu vois la commande + ses accessoires en bas. Tu paramètres, tu coches « ✓ Paramétré » → elle disparaît et la suivante de la file apparaît, jusqu'à ce qu'il n'en reste plus.</div>
+</div>
+
+<script>
+// Données d'exemple (en vrai : tirées des commandes Odoo non encore paramétrées)
+const COLORS=['#ffe3ef','#e3f0ff','#fff2d6','#e8ffe6','#f0e6ff','#ffe6e6','#e6fff8','#fdeccf'];
+const MODELS=[
+ {num:'S50012',client:'Sara B.',date:'26/06',cake:'🦄',nom:'Licorne pastel',theme:'Licorne',age:'5 ans',msg:'Joyeux anniversaire Lina',taille:'20 cm (15 pers)',parfum:'Vanille / Fraise',acc:[{e:'🧁',n:'12 cupcakes licorne'},{e:'🎀',n:'Topper prénom'}]},
+ {num:'S50018',client:'Karim O.',date:'26/06',cake:'⚽',nom:'Ballon de foot',theme:'Football',age:'8 ans',msg:'Bon anniv Adam',taille:'24 cm (20 pers)',parfum:'Chocolat',acc:[{e:'🏆',n:'Mini coupe'}]},
+ {num:'S50021',client:'Nadia F.',date:'27/06',cake:'👑',nom:'Princesse',theme:'Princesse',age:'4 ans',msg:'Maya',taille:'18 cm',parfum:'Vanille',acc:[]},
+ {num:'S50025',client:'Yassine',date:'27/06',cake:'🕷️',nom:'Spiderman',theme:'Spiderman',age:'6 ans',msg:'Rayan',taille:'20 cm',parfum:'Praliné',acc:[{e:'🍪',n:'Sablés déco'},{e:'🎈',n:'Ballon chiffre 6'}]},
+ {num:'S50030',client:'Imane',date:'28/06',cake:'🌸',nom:'Fleurs roses',theme:'Fleurs',age:'—',msg:'Bravo !',taille:'26 cm',parfum:'Citron',acc:[]},
+ {num:'S50031',client:'Omar T.',date:'28/06',cake:'🦁',nom:'Roi Lion',theme:'Roi Lion',age:'3 ans',msg:'Sami',taille:'20 cm',parfum:'Vanille',acc:[{e:'🧁',n:'6 cupcakes'}]},
+ {num:'S50033',client:'Lina',date:'28/06',cake:'🚗',nom:'Voiture rouge',theme:'Voiture',age:'5 ans',msg:'Ziad',taille:'22 cm',parfum:'Chocolat',acc:[]},
+ {num:'S50037',client:'Hajar',date:'29/06',cake:'🐰',nom:'Lapin',theme:'Animaux',age:'2 ans',msg:'Joyeux anniv',taille:'18 cm',parfum:'Fraise',acc:[{e:'🥕',n:'Déco carottes'}]},
+ {num:'S50040',client:'Reda',date:'29/06',cake:'🎮',nom:'Manette de jeu',theme:'Gaming',age:'10 ans',msg:'Anas',taille:'24 cm',parfum:'Oreo',acc:[]},
+ {num:'S50044',client:'Salma',date:'30/06',cake:'🌈',nom:'Arc-en-ciel',theme:'Arc-en-ciel',age:'7 ans',msg:'Aya',taille:'20 cm',parfum:'Vanille',acc:[{e:'🍭',n:'Sucettes'}]},
+ // file d'attente (apparaissent au fur et à mesure)
+ {num:'S50048',client:'Mehdi',date:'30/06',cake:'🦖',nom:'Dinosaure',theme:'Dino',age:'5 ans',msg:'Iyad',taille:'22 cm',parfum:'Chocolat',acc:[]},
+ {num:'S50051',client:'Wafa',date:'01/07',cake:'🐠',nom:'Monde marin',theme:'Mer',age:'4 ans',msg:'Nour',taille:'20 cm',parfum:'Vanille',acc:[{e:'🐚',n:'Coquillages sucre'}]},
+ {num:'S50055',client:'Bilal',date:'01/07',cake:'🏎️',nom:'F1',theme:'Course',age:'9 ans',msg:'Zakaria',taille:'26 cm',parfum:'Praliné',acc:[]},
+ {num:'S50060',client:'Sofia',date:'02/07',cake:'🦋',nom:'Papillons',theme:'Nature',age:'6 ans',msg:'Malak',taille:'18 cm',parfum:'Citron',acc:[]},
+];
+const VISIBLE=10;
+let queue=MODELS.map((m,i)=>({...m,color:COLORS[i%COLORS.length]}));
+let selNum=null;
+
+function render(){
+  const grid=document.getElementById('grid');
+  const shown=queue.slice(0,VISIBLE);
+  document.getElementById('count').textContent=queue.length;
+  grid.innerHTML = queue.length===0
+   ? '<div class="empty">✅ Tout est paramétré, bravo !</div>'
+   : shown.map(m=>`
+     <div class="card ${selNum===m.num?'sel':''}" data-num="${m.num}" onclick="select('${m.num}')">
+       <div class="ph" style="background:${m.color}">${m.cake}</div>
+       <div class="nm">${m.nom}</div>
+       <div class="num">${m.num} · ${m.client}</div>
+       <button class="ok" onclick="event.stopPropagation();param('${m.num}',this)">✓ Paramétré</button>
+     </div>`).join('');
+  renderDetail();
+}
+function select(num){selNum=num;render();}
+function param(num,btn){
+  const card=btn.closest('.card'); card.classList.add('leaving');
+  setTimeout(()=>{ queue=queue.filter(m=>m.num!==num); if(selNum===num) selNum=null; render(); },180);
+}
+function renderDetail(){
+  const d=document.getElementById('detail');
+  const m=queue.find(x=>x.num===selNum);
+  if(!m){ d.innerHTML='<div class="detail none">Clique une vignette pour voir la commande et ses accessoires.</div>'; return; }
+  d.innerHTML=`
+   <div class="detail">
+     <div class="top">
+       <b>${m.num}</b><span class="chip">${m.client}</span><span class="chip">📅 ${m.date}</span>
+       <button class="btnopen" onclick="alert('Ouvrirait la commande ${m.num} dans l\\'app')">Ouvrir la commande ↗</button>
+     </div>
+     <div class="cake">
+       <div class="big" style="background:${m.color}">${m.cake}</div>
+       <div class="specs">
+         <div class="row"><span class="k">Modèle</span><b>${m.nom}</b></div>
+         <div class="row"><span class="k">Thème</span><span>${m.theme}</span></div>
+         <div class="row"><span class="k">Âge</span><span>${m.age}</span></div>
+         <div class="row"><span class="k">Message</span><span>${m.msg}</span></div>
+         <div class="row"><span class="k">Taille</span><span>${m.taille}</span></div>
+         <div class="row"><span class="k">Parfum</span><span>${m.parfum}</span></div>
+       </div>
+     </div>
+     <div class="acc">
+       <b style="font-size:12px">Accessoires de la commande</b>
+       ${m.acc.length? `<div class="list">${m.acc.map(a=>`<div class="a"><div class="ph" style="background:${COLORS[(a.n.length)%COLORS.length]}">${a.e}</div><div class="nm">${a.n}</div></div>`).join('')}</div>`
+                     : '<div class="none">Aucun accessoire sur cette commande.</div>'}
+     </div>
+   </div>`;
+}
+render();
+</script>
+</body></html>

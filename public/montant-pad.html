@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clavier montant — aperçu</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+  body{background:#2b2422;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:32px 12px;gap:20px;flex-wrap:wrap}
+  .cap{color:#cbb9a8;font-size:13px;text-align:center;margin-bottom:10px}
+  .modal{width:320px;background:white;border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+  .title{font-size:15px;font-weight:600;margin-bottom:8px}
+  .lbl{font-size:11px;color:#4a3a30;margin-bottom:2px}
+  .disp{text-align:center;font-size:40px;font-weight:600;padding:10px 0 16px;letter-spacing:.5px}
+  .pad{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .key{padding:18px 0;border-radius:12px;border:1px solid #e5d8c3;background:white;font-size:22px;font-weight:500;text-align:center;cursor:pointer}
+  .key.del{background:#FCEEE8;color:#99201E}
+  .actions{display:flex;gap:6px;margin-top:16px}
+  .btn{padding:11px;border-radius:8px;font-size:13px;text-align:center}
+  .annuler{flex:1;border:1px solid #e5d8c3;background:white}
+  .ok{flex:2;color:white;font-weight:500;border:none}
+</style></head><body>
+  <div>
+    <div class="cap"><strong style="color:#fff">Sortie (Meriem / Hamid)</strong></div>
+    <div class="modal">
+      <div class="title" style="color:#99201E">↑ Ajouter une sortie</div>
+      <div class="lbl">Montant</div>
+      <div class="disp" style="color:#99201E">250 dh</div>
+      <div class="pad">
+        <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+        <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+        <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+        <div class="key">00</div><div class="key">0</div><div class="key del">⌫</div>
+      </div>
+      <div class="actions"><div class="btn annuler">Annuler</div><div class="btn ok" style="background:#993556">Enregistrer</div></div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><strong style="color:#fff">Entrée (Meriem)</strong></div>
+    <div class="modal">
+      <div class="title" style="color:#1D7A5C">↓ Ajouter une entrée</div>
+      <div class="lbl">Montant</div>
+      <div class="disp" style="color:#1D7A5C">600 dh</div>
+      <div class="pad">
+        <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+        <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+        <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+        <div class="key">00</div><div class="key">0</div><div class="key del">⌫</div>
+      </div>
+      <div class="actions"><div class="btn annuler">Annuler</div><div class="btn ok" style="background:#1D7A5C">Enregistrer</div></div>
+    </div>
+  </div>
+</body></html>

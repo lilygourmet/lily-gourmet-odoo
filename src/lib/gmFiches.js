@@ -361,6 +361,45 @@ export function findColor(palette, id) {
   return palette.find(c => c.id === id) || null
 }
 
+// Helper : nom de couleur -> id (insensible casse/accents). Renvoie null si introuvable.
+export function colorIdByName(palette, name) {
+  if (!name || !Array.isArray(palette)) return null
+  const t = stripAccents(name)
+  const hit = palette.find(c => stripAccents(c.nom) === t)
+  return hit ? hit.id : null
+}
+function stripAccents(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+}
+
+// Pré-fiche accessoire saisie à la prise de commande (table gm_prefiches, clé = odoo_line_id).
+export async function loadGmPrefiche(odooLineId) {
+  if (!odooLineId) return null
+  const { data, error } = await supabase
+    .from('gm_prefiches')
+    .select('*')
+    .eq('odoo_line_id', odooLineId)
+    .maybeSingle()
+  if (error) { console.error('[gm_prefiches] load', error); return null }
+  return data || null
+}
+
+// Parse la ligne « Accessoire : 12 pièces · couleur Rose · forme Cœur » (saisie à la prise
+// de commande, colonne order_items.acc_details) → { qty, couleur, forme } (null si vide).
+export function parseAccDetails(str) {
+  if (!str) return null
+  const s = String(str)
+  const qtyM = s.match(/(\d+)\s*pi[eè]ce/i)
+  const colM = s.match(/couleur\s+([^·]+)/i)
+  const formeM = s.match(/forme\s+([^·]+)/i)
+  const out = {
+    qty: qtyM ? parseInt(qtyM[1], 10) : null,
+    couleur: colM ? colM[1].trim() : null,
+    forme: formeM ? formeM[1].trim() : null,
+  }
+  return (out.qty || out.couleur || out.forme) ? out : null
+}
+
 // ============================================================
 // GM_DONE : marquer un lot ou un item comme fait
 // ============================================================
@@ -389,9 +428,11 @@ export async function loadDoneForDate(date) {
 }
 
 export async function markLotDone(orderItemId, lotIdx, userId) {
+  // upsert (et non insert) : re-cocher un lot déjà fait ne lève plus d'erreur d'unicité
+  // (cas d'un lot identique partagé par plusieurs commandes en vue « par produit »).
   const { data, error } = await supabase
     .from('gm_done')
-    .insert({ order_item_id: orderItemId, lot_idx: lotIdx, done_by: userId })
+    .upsert({ order_item_id: orderItemId, lot_idx: lotIdx, done_by: userId }, { onConflict: 'order_item_id,lot_idx' })
     .select()
     .single()
   if (error) throw error
@@ -492,7 +533,7 @@ async function _loadOrdersWithFichesForBounds(start, end) {
   const orderIds = orders.map(o => o.id)
   const { data: items, error: e2 } = await supabase
     .from('order_items')
-    .select('id, order_id, type, title, quantity, pers, parfum, parfums, image_urls, taille_value')
+    .select('id, order_id, type, title, quantity, pers, parfum, parfums, image_urls, taille_value, acc_details, odoo_line_id')
     .in('order_id', orderIds)
     .eq('type', 'GM')
 
@@ -523,10 +564,25 @@ async function _loadOrdersWithFichesForBounds(start, end) {
     })
   }
 
-  // Filtrer les commandes qui ont au moins 1 item GM
-  return orders
-    .filter(o => itemsByOrder[o.id] && itemsByOrder[o.id].length > 0)
-    .map(o => ({ order: o, items: itemsByOrder[o.id] }))
+  // Commandes qui ont au moins 1 item GM
+  const gmOrders = orders.filter(o => itemsByOrder[o.id] && itemsByOrder[o.id].length > 0)
+
+  // Agent RÉEL qui a pris la commande (créé/confirmé le devis dans l'app), depuis
+  // devis_traitements. On préfère celui qui a « confirmé », sinon le 1er qui l'a traitée.
+  const nums = [...new Set(gmOrders.map(o => o.order_num).filter(Boolean))]
+  if (nums.length) {
+    const { data: tr } = await supabase
+      .from('devis_traitements').select('order_num, action, user_name, created_at')
+      .in('order_num', nums).order('created_at', { ascending: true })
+    const byOrder = {}
+    for (const r of (tr || [])) { (byOrder[r.order_num] ||= []).push(r) }
+    for (const o of gmOrders) {
+      const rows = byOrder[o.order_num] || []
+      o.handler = (rows.find(r => r.action === 'confirme' && r.user_name) || rows.find(r => r.user_name) || {}).user_name || null
+    }
+  }
+
+  return gmOrders.map(o => ({ order: o, items: itemsByOrder[o.id] }))
 }
 
 // Verifie si un lot est marque fait (compare lot_idx)

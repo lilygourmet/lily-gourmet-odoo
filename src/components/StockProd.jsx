@@ -97,7 +97,7 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
   const lowCount = merged.filter(m => m.actif && m.qty <= m.stock_min).length
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="mb-5 flex items-start justify-between gap-3 flex-wrap">

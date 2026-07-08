@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import SearchSelect from '../SearchSelect'
 import {
   User, Users, Calendar, RefreshCw, Clock, Lock, Unlock, Building2,
@@ -12,6 +12,7 @@ import {
 import { createDemandeConge, validerConge } from '../../lib/conges'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
+import { groupLabel } from '../../lib/presence'
 
 // Congés annuels : le jour off "fixe" (jour complet de repos chaque semaine)
 // ne compte PAS dans le décompte des jours de congé pris.
@@ -80,6 +81,13 @@ export default function PointageTab({ user, isAdmin }) {
   const [success, setSuccess] = useState(null)
   const [selectedEmpId, setSelectedEmpId] = useState(null)
   const [vue, setVue] = useState(isAdmin ? 'single' : 'recup')  // 'single' | 'all' | 'recup' | 'absences'
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    const h = e => setIsMobile(e.matches)
+    mq.addEventListener?.('change', h)
+    return () => mq.removeEventListener?.('change', h)
+  }, [])
   const [editingTranches, setEditingTranches] = useState(null)  // { date, sessions } | null
   const [editingEmp, setEditingEmp] = useState(null)  // employé édité dans modal
 
@@ -89,28 +97,53 @@ export default function PointageTab({ user, isAdmin }) {
     try {
       const d = await loadMonthData(mois, annee)
       setData(d)
-      if (d.employes.length > 0 && !selectedEmpId) {
-        setSelectedEmpId(d.employes[0].id)
-      }
     } catch (e) {
       setError(e.message)
     }
     setLoading(false)
-  }, [mois, annee, selectedEmpId])
+  }, [mois, annee])
 
   useEffect(() => {
-    // 1er affichage d'un mois dans la session → synchro auto depuis Odoo ; sinon rechargement simple.
-    if (syncedRef.current.has(`${mois}-${annee}`)) reload()
-    else doSync({ confirmFirst: false, silent: true })
+    // Affichage INSTANTANÉ depuis les données déjà enregistrées (Supabase), PUIS
+    // synchro Odoo en arrière-plan au 1er affichage du mois (l'écran se met à jour
+    // tout seul quand elle finit). Plus rapide à l'ouverture.
+    reload()
+    if (!syncedRef.current.has(`${mois}-${annee}`)) doSync({ confirmFirst: false, silent: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mois, annee])
 
-  // Calculs (mémorisés pour éviter recalcul à chaque render)
+  // Calculs (mémorisés pour éviter recalcul à chaque render).
+  // ⚠️ Un mois VALIDÉ est FIGÉ : on réaffiche la photo enregistrée à la validation
+  // (solde, heures…) au lieu de recalculer en direct. Il ne se recalcule que si on
+  // le débloque (= à la demande). Les mois non validés se calculent normalement.
   const resultats = useMemo(() => {
     if (!data) return {}
     const out = {}
+    const synthByEmp = new Map((data.synthese || []).map(s => [s.employe_id, s]))
     for (const emp of data.employes) {
-      out[emp.id] = calculerMois(emp, mois, annee, data)
+      const stored = synthByEmp.get(emp.id)
+      if (stored?.valide) {
+        out[emp.id] = {
+          employe: emp,
+          journal: Array.isArray(stored.journal_jsonb) && stored.journal_jsonb.length
+            ? stored.journal_jsonb
+            : calculerMois(emp, mois, annee, data).journal,
+          synthese: {
+            heures_prevues: stored.heures_prevues,
+            heures_travaillees: stored.heures_travaillees,
+            heures_sup: stored.heures_sup,
+            heures_manquantes: stored.heures_manquantes,
+            jours_recup: stored.jours_recuperation,
+            jours_absents: stored.jours_absents,
+            jours_travailles: stored.jours_travailles,
+            solde_reporte_precedent: stored.solde_reporte_precedent,
+            solde_mois: stored.solde_mois,
+            valide: true,
+          },
+        }
+      } else {
+        out[emp.id] = calculerMois(emp, mois, annee, data)
+      }
     }
     return out
   }, [data, mois, annee])
@@ -137,15 +170,6 @@ export default function PointageTab({ user, isAdmin }) {
       console.log('[SYNC ATTENDANCE]', r1)
       console.log('[SYNC LEAVES]', r2)
       syncedRef.current.add(`${mois}-${annee}`)
-      let msg = `✅ ${r1.inserted} pointages + ${r2.inserted} congés importés.`
-      if (r1.matched_fuzzy && r1.matched_fuzzy.length > 0) {
-        msg += `\n🔗 ${r1.matched_fuzzy.length} employé(s) matché(s) par similarité (mémorisés pour les prochaines syncs).`
-      }
-      if (r1.unmatched > 0) {
-        msg += `\n⚠️ ${r1.unmatched_names?.length || 0} employé(s) Odoo non rattaché(s) :\n  • ${(r1.unmatched_names || []).join('\n  • ')}`
-      }
-      // Bouton manuel : message complet. Auto : on n'affiche que s'il y a un employé non rattaché.
-      if (!silent || r1.unmatched > 0) setSuccess(msg)
     } catch (e) {
       setError('Erreur sync : ' + e.message)
     }
@@ -159,8 +183,8 @@ export default function PointageTab({ user, isAdmin }) {
   async function handleEditCell(dateJour, champ, valeur) {
     if (!canEdit) {
       toast.error(isLocked
-        ? '🔒 Ce mois est validé. Débloquez-le pour modifier.'
-        : '🔒 Modification réservée à l\'admin.')
+        ? 'Ce mois est validé. Débloquez-le pour modifier.'
+        : 'Modification réservée à l\'admin.')
       return
     }
     try {
@@ -321,7 +345,7 @@ export default function PointageTab({ user, isAdmin }) {
       }
       // Générer le récap PDF + Excel
       await genererRecapMensuel()
-      setSuccess('✅ Mois validé pour tous les employés. PDF + Excel téléchargés.')
+      setSuccess('Mois validé pour tous les employés. PDF + Excel téléchargés.')
       await reload()
     } catch (e) {
       setError('Erreur validation : ' + e.message)
@@ -447,7 +471,7 @@ export default function PointageTab({ user, isAdmin }) {
     try {
       const r = resultats[empSelected.id]
       if (r) await validerMois(empSelected.id, mois, annee, r.synthese, r.journal, user.id)
-      setSuccess(`✅ ${empSelected.nom} validé(e).`)
+      toast.success(`${empSelected.nom} validé(e).`)
       await reload()
     } catch (e) {
       setError('Erreur validation : ' + e.message)
@@ -467,7 +491,7 @@ export default function PointageTab({ user, isAdmin }) {
         .eq('mois', mois).eq('annee', annee)
       if (error) throw error
       await reload()
-      setSuccess('🔓 Mois débloqué pour cet employé.')
+      setSuccess('Mois débloqué pour cet employé.')
     } catch (e) {
       setError('Erreur déblocage : ' + e.message)
     }
@@ -488,6 +512,31 @@ export default function PointageTab({ user, isAdmin }) {
     } catch (e) {
       toast.error('Erreur : ' + e.message)
     }
+  }
+
+  // Enlever les heures sup du mois affiché (sup → 0 sur chaque jour qui en a ;
+  // les heures manquantes restent). Réversible. = l'édition par ligne, mais en 1 clic.
+  async function handleEnleverSupMois() {
+    if (!canEdit) { toast.error(isLocked ? 'Ce mois est validé. Débloquez-le pour modifier.' : 'Modification réservée à l\'admin.'); return }
+    const jours = (result?.journal || []).filter(j => Number(j.heures_sup) > 0)
+    if (jours.length === 0) { toast('Aucune heure sup à enlever ce mois.'); return }
+    if (!await confirmDialog(`Enlever les heures sup de ${empSelected?.nom} pour ${MOIS_FR[mois - 1]} ${annee} ?\n\n${result.synthese.heures_sup}h sup → 0 (les heures manquantes restent). Réversible.`, { confirmLabel: 'Enlever' })) return
+    try {
+      await Promise.all(jours.map(j => setAjustement(selectedEmpId, j.date, 'heures_sup', '0', user.id)))
+      await reload()
+      toast.success('Heures sup retirées pour ce mois.')
+    } catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+  // Remettre les heures sup calculées (annule les mises à 0 du mois pour cet employé).
+  async function handleRemettreSupMois() {
+    if (!canEdit) return
+    if (!await confirmDialog(`Remettre les heures sup calculées pour ${empSelected?.nom} (${MOIS_FR[mois - 1]} ${annee}) ?`, { confirmLabel: 'Remettre' })) return
+    try {
+      const aves = (data?.ajustements || []).filter(a => Number(a.employe_id) === Number(selectedEmpId) && a.champ === 'heures_sup')
+      await Promise.all(aves.map(a => removeAjustement(selectedEmpId, a.date_jour, 'heures_sup')))
+      await reload()
+      toast.success('Heures sup remises.')
+    } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   // Modal pour transformer une absence en congé : on demande le type
@@ -553,9 +602,10 @@ export default function PointageTab({ user, isAdmin }) {
 
   return (
     <div>
-      {/* Toolbar */}
+      {/* Toolbar (figée en haut au défilement) */}
       <div style={{
-        display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap'
+        display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap',
+        position: 'sticky', top: 52, zIndex: 20, background: '#fcfbf8', padding: '10px 0',
       }}>
         <button onClick={prevMonth} style={btnNav}>◀</button>
         <div style={{ minWidth: 160, textAlign: 'center', fontSize: 15, fontWeight: 500, color: '#1a0f0a' }}>
@@ -591,9 +641,9 @@ export default function PointageTab({ user, isAdmin }) {
         </div>
 
         {(vue === 'single' || vue === 'annee') && (
-          <div style={{ display: 'flex', gap: 4, flex: 1, minWidth: 200, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 4, flex: 1, minWidth: 200, alignItems: 'center', justifyContent: 'center' }}>
             <button onClick={prevEmp} style={btnNav} title="Employé précédent (←)">◀</button>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, maxWidth: 360 }}>
               <SearchSelect
                 value={selectedEmpId ? String(selectedEmpId) : ''}
                 onChange={v => setSelectedEmpId(Number(v))}
@@ -625,13 +675,7 @@ export default function PointageTab({ user, isAdmin }) {
           {error}
         </div>
       )}
-      {success && (
-        <div style={{ padding: '10px 14px', background: '#E8F8F0', color: '#1E7E4F', borderRadius: 6, fontSize: 13, marginBottom: 12 }}>
-          {success}
-        </div>
-      )}
-
-      {loading && <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>}
+      {loading &&<div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>}
 
       {!loading && vue === 'annee' && data && isAdmin && result && (
         <VueAnnee
@@ -668,7 +712,24 @@ export default function PointageTab({ user, isAdmin }) {
 
 
 
-      {!loading && vue === 'single' && result && isAdmin && (
+      {!loading && vue === 'single' && isAdmin && data && (
+        <div style={{ display: isMobile ? 'block' : 'flex', gap: 16, alignItems: isMobile ? 'flex-start' : 'stretch', height: isMobile ? undefined : 'calc(100vh - 175px)' }}>
+          <div style={{ width: isMobile ? '100%' : 240, flexShrink: 0, display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: 4, overflowX: isMobile ? 'auto' : 'visible', overflowY: isMobile ? 'visible' : 'auto', marginBottom: isMobile ? 12 : 0, paddingRight: isMobile ? 0 : 4 }}>
+            {(data.employes || []).map(e => (
+              <button key={e.id} onClick={() => setSelectedEmpId(e.id)} title={e.nom} style={{
+                padding: '9px 12px', fontSize: 13, textAlign: 'left', cursor: 'pointer',
+                background: e.id === selectedEmpId ? '#993556' : 'white',
+                color: e.id === selectedEmpId ? '#faf7f2' : '#1a0f0a',
+                border: '1px solid ' + (e.id === selectedEmpId ? '#993556' : '#e5d8c3'), borderRadius: 8,
+                display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', flexShrink: 0,
+              }}>
+                <User size={14} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.nom}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1, minWidth: 0, overflowY: isMobile ? 'visible' : 'auto', height: isMobile ? undefined : '100%', paddingRight: isMobile ? 0 : 4 }}>
+          {!result && (<div style={{ padding: 40, textAlign: 'center', color: '#8a7a70', fontSize: 14 }}>← Choisis un employé dans la liste</div>)}
+          {result && (
         <>
           {/* Nom employé cliquable → ouvre modal */}
           <div style={{
@@ -684,29 +745,33 @@ export default function PointageTab({ user, isAdmin }) {
             }} title="Cliquer pour éditer la fiche employé">
               <User size={14} /> {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <Pencil size={12} />
             </button>
-            {empSelected?.societe?.code && (
-              <span style={{
-                fontSize: 11, padding: '3px 8px', borderRadius: 999,
-                background: empSelected.societe.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
-                color: empSelected.societe.code === 'LG' ? '#993556' : '#27500A',
-                fontWeight: 500,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                <Building2 size={12} /> {empSelected.societe.nom}
-              </span>
-            )}
-          </div>
-
-          {isLocked && (
-            <div style={{
-              padding: '8px 12px', background: '#FCEEE8', color: '#A32D2D',
-              borderRadius: 6, fontSize: 12, marginBottom: 12,
-              border: '1px solid #F5BFBC',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <Lock size={14} /> <strong>Mois validé</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {empSelected?.societe?.code && (
+                <span style={{
+                  fontSize: 11, padding: '3px 8px', borderRadius: 999,
+                  background: empSelected.societe.code === 'LG' ? '#FCEEE8' : '#EAF3DE',
+                  color: empSelected.societe.code === 'LG' ? '#993556' : '#27500A',
+                  fontWeight: 500,
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}>
+                  <Building2 size={12} /> {empSelected.societe.nom}
+                </span>
+              )}
+              {isAdmin && (
+                <>
+                  <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
+                  <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
+                  {isLocked && (
+                    <button onClick={handleDebloquer} style={{
+                      padding: '8px 14px', fontSize: 13, background: '#A32D2D', color: 'white',
+                      border: '1px solid #A32D2D', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}><Unlock size={14} /> Débloquer le mois</button>
+                  )}
+                </>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Cartes synthèse */}
           <div style={{
@@ -721,7 +786,7 @@ export default function PointageTab({ user, isAdmin }) {
             <Carte label="Jours récup"         val={result.synthese.jours_recup}      color="#3C3489" unit="j" />
             <Carte label="Solde reporté"       val={result.synthese.solde_reporte_precedent} color={result.synthese.solde_reporte_precedent < 0 ? '#A32D2D' : '#27500A'} signed />
             <Carte label="Solde du mois"       val={result.synthese.solde_mois}        color={result.synthese.solde_mois < 0 ? '#A32D2D' : '#27500A'} signed bold />
-            {isAdmin && empSelected?.salaire_net > 0 && (
+            {isAdmin && empSelected?.salaire_net > 0 && !empSelected?.declare && (
               <CarteSalaire
                 salaire={Number(empSelected.salaire_net)}
                 heuresSup={empSelected.heures_sup_mensuelles === false ? 0 : result.synthese.heures_sup}
@@ -729,6 +794,26 @@ export default function PointageTab({ user, isAdmin }) {
               />
             )}
           </div>
+
+          {/* Enlever / remettre les heures sup du mois (admin, mois non verrouillé) */}
+          {canEdit && (() => {
+            const supRetireesCeMois = (data?.ajustements || []).some(a => Number(a.employe_id) === Number(selectedEmpId) && a.champ === 'heures_sup')
+            if (result.synthese.heures_sup > 0) {
+              return (
+                <button onClick={handleEnleverSupMois} style={btnSupOff} title="Met les heures sup de ce mois à 0 (les heures manquantes restent). Réversible.">
+                  ✕ Enlever les heures sup de ce mois
+                </button>
+              )
+            }
+            if (supRetireesCeMois) {
+              return (
+                <button onClick={handleRemettreSupMois} style={btnSupOn} title="Remettre les heures sup calculées">
+                  ↺ Remettre les heures sup
+                </button>
+              )
+            }
+            return null
+          })()}
 
           {/* Tableau journal */}
           <JournalTable
@@ -744,36 +829,23 @@ export default function PointageTab({ user, isAdmin }) {
           {/* Légende */}
           <Legende />
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
-            {isAdmin && (
-              <>
-                <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
-                <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
-                {isLocked ? (
-                  <button onClick={handleDebloquer} style={{
-                    padding: '10px 18px', fontSize: 13, background: '#A32D2D', color: 'white',
-                    border: '1px solid #A32D2D', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}>
-                    <Unlock size={14} /> Débloquer le mois
-                  </button>
-                ) : (
-                  <>
-                    <button onClick={handleValiderEmploye} style={{
-                      padding: '10px 16px', fontSize: 13, background: '#3C3489', color: 'white',
-                      border: '1px solid #3C3489', borderRadius: 8, cursor: 'pointer',
-                    }}>
-                      ✓ Valider {empSelected?.nom?.split(' ')[0] || 'cet employé'}
-                    </button>
-                    <button onClick={handleValider} style={btnPrimaryGreen}>
-                      ✓ Tout valider (avec PDF+CSV)
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
+          {isAdmin && !isLocked && (
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={handleValiderEmploye} style={{
+                padding: '10px 16px', fontSize: 13, background: '#3C3489', color: 'white',
+                border: '1px solid #3C3489', borderRadius: 8, cursor: 'pointer',
+              }}>
+                ✓ Valider {empSelected?.nom?.split(' ')[0] || 'cet employé'}
+              </button>
+              <button onClick={handleValider} style={btnPrimaryGreen}>
+                ✓ Tout valider (avec PDF+CSV)
+              </button>
+            </div>
+          )}
         </>
+          )}
+          </div>
+        </div>
       )}
 
       {editingTranches && (
@@ -1413,8 +1485,88 @@ function VueRecup({ data, resultats, mois, annee }) {
 }
 
 function VueGlobale({ data, resultats, mois, annee }) {
+  const [byEquipe, setByEquipe] = useState(() => { try { return localStorage.getItem('lily.pointage.byEquipe') === '1' } catch { return false } })
+  useEffect(() => { try { localStorage.setItem('lily.pointage.byEquipe', byEquipe ? '1' : '0') } catch {} }, [byEquipe])
+
+  const list = data.employes.map(emp => [emp, resultats[emp.id]]).filter(([, r]) => r)
+
+  const empRow = (emp, r) => {
+    const s = r.synthese
+    return (
+      <tr key={emp.id} style={{ borderTop: '1px solid #F4F0EA' }}>
+        <td style={{ padding: '8px 12px' }}>
+          <strong style={{ fontSize: 12 }}>{emp.nom}</strong>
+          {emp.poste && <div style={{ fontSize: 10, color: '#8a7a70' }}>{emp.poste}</div>}
+        </td>
+        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_prevues.toFixed(2)}</td>
+        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_travaillees.toFixed(2)}</td>
+        <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_sup > 0 ? '#27500A' : '#8a7a70', fontWeight: s.heures_sup > 0 ? 500 : 400 }}>
+          {s.heures_sup > 0 ? '+' + s.heures_sup.toFixed(2) : '—'}
+        </td>
+        <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_manquantes > 0 ? '#A32D2D' : '#8a7a70', fontWeight: s.heures_manquantes > 0 ? 500 : 400 }}>
+          {s.heures_manquantes > 0 ? '-' + s.heures_manquantes.toFixed(2) : '—'}
+        </td>
+        <td style={{ padding: '8px 12px', textAlign: 'right', color: s.jours_recup > 0 ? '#3C3489' : '#8a7a70' }}>
+          {s.jours_recup > 0 ? s.jours_recup.toFixed(2) + ' j' : '—'}
+        </td>
+        <td style={{ padding: '8px 12px', textAlign: 'right', color: s.solde_reporte_precedent === 0 ? '#8a7a70' : (s.solde_reporte_precedent > 0 ? '#27500A' : '#A32D2D') }}>
+          {s.solde_reporte_precedent === 0 ? '—' : (s.solde_reporte_precedent > 0 ? '+' : '') + s.solde_reporte_precedent.toFixed(2)}
+        </td>
+        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: s.solde_mois === 0 ? '#8a7a70' : (s.solde_mois > 0 ? '#27500A' : '#A32D2D') }}>
+          {(s.solde_mois > 0 ? '+' : '') + s.solde_mois.toFixed(2)}
+        </td>
+        <td style={{ padding: '8px 12px', textAlign: 'center', color: s.jours_absents > 0 ? '#A32D2D' : '#8a7a70' }}>
+          {s.jours_absents > 0 ? s.jours_absents : '—'}
+        </td>
+      </tr>
+    )
+  }
+
+  const sousTotal = (team, items) => {
+    const sum = k => items.reduce((a, [, r]) => a + (Number(r.synthese[k]) || 0), 0)
+    return (
+      <tr key={'st-' + team} style={{ borderTop: '1px solid #e5d8c3', background: '#FBF7F0', fontWeight: 600 }}>
+        <td style={{ padding: '7px 12px', fontSize: 11, color: '#4a3a30' }}>Total {team}</td>
+        <td /><td />
+        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#27500A' }}>+{sum('heures_sup').toFixed(2)}</td>
+        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#A32D2D' }}>-{sum('heures_manquantes').toFixed(2)}</td>
+        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#3C3489' }}>{sum('jours_recup').toFixed(2)} j</td>
+        <td />
+        <td style={{ padding: '7px 12px', textAlign: 'right' }}>{sum('solde_mois').toFixed(2)}</td>
+        <td style={{ padding: '7px 12px', textAlign: 'center', color: '#A32D2D' }}>{sum('jours_absents') || '—'}</td>
+      </tr>
+    )
+  }
+
+  let body
+  if (byEquipe) {
+    const groups = new Map()
+    for (const [emp, r] of list) {
+      const k = emp.groupe || '__none__'
+      if (!groups.has(k)) groups.set(k, [])
+      groups.get(k).push([emp, r])
+    }
+    const label = k => k === '__none__' ? 'Sans groupe' : groupLabel(k)
+    body = [...groups.entries()].sort((a, b) => label(a[0]).localeCompare(label(b[0]))).map(([team, items]) => (
+      <Fragment key={team}>
+        <tr style={{ background: '#EFE7DA' }}>
+          <td colSpan={9} style={{ padding: '8px 12px', fontWeight: 600, fontSize: 12, color: '#1a0f0a' }}>👥 {label(team)} <span style={{ color: '#8a7a70', fontWeight: 400 }}>({items.length})</span></td>
+        </tr>
+        {items.map(([emp, r]) => empRow(emp, r))}
+        {sousTotal(label(team), items)}
+      </Fragment>
+    ))
+  } else {
+    body = list.map(([emp, r]) => empRow(emp, r))
+  }
+
   return (
     <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5d8c3', overflowX: 'auto', boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid #F4F0EA' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#4a3a30', cursor: 'pointer' }}>
+          <input type="checkbox" checked={byEquipe} onChange={e => setByEquipe(e.target.checked)} /> Regrouper par groupe
+        </label>
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: '#F4F0EA', fontSize: 11, color: '#4a3a30' }}>
@@ -1429,44 +1581,7 @@ function VueGlobale({ data, resultats, mois, annee }) {
             <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 500 }}>Abs.</th>
           </tr>
         </thead>
-        <tbody>
-          {data.employes.map(emp => {
-            const r = resultats[emp.id]
-            if (!r) return null
-            const s = r.synthese
-            return (
-              <tr key={emp.id} style={{ borderTop: '1px solid #F4F0EA' }}>
-                <td style={{ padding: '8px 12px' }}>
-                  <strong style={{ fontSize: 12 }}>{emp.nom}</strong>
-                  {emp.poste && <div style={{ fontSize: 10, color: '#8a7a70' }}>{emp.poste}</div>}
-                </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_prevues.toFixed(2)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{s.heures_travaillees.toFixed(2)}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_sup > 0 ? '#27500A' : '#8a7a70', fontWeight: s.heures_sup > 0 ? 500 : 400 }}>
-                  {s.heures_sup > 0 ? '+' + s.heures_sup.toFixed(2) : '—'}
-                </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.heures_manquantes > 0 ? '#A32D2D' : '#8a7a70', fontWeight: s.heures_manquantes > 0 ? 500 : 400 }}>
-                  {s.heures_manquantes > 0 ? '-' + s.heures_manquantes.toFixed(2) : '—'}
-                </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.jours_recup > 0 ? '#3C3489' : '#8a7a70' }}>
-                  {s.jours_recup > 0 ? s.jours_recup.toFixed(2) + ' j' : '—'}
-                </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', color: s.solde_reporte_precedent === 0 ? '#8a7a70' : (s.solde_reporte_precedent > 0 ? '#27500A' : '#A32D2D') }}>
-                  {s.solde_reporte_precedent === 0 ? '—' : (s.solde_reporte_precedent > 0 ? '+' : '') + s.solde_reporte_precedent.toFixed(2)}
-                </td>
-                <td style={{
-                  padding: '8px 12px', textAlign: 'right', fontWeight: 600,
-                  color: s.solde_mois === 0 ? '#8a7a70' : (s.solde_mois > 0 ? '#27500A' : '#A32D2D'),
-                }}>
-                  {(s.solde_mois > 0 ? '+' : '') + s.solde_mois.toFixed(2)}
-                </td>
-                <td style={{ padding: '8px 12px', textAlign: 'center', color: s.jours_absents > 0 ? '#A32D2D' : '#8a7a70' }}>
-                  {s.jours_absents > 0 ? s.jours_absents : '—'}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
+        <tbody>{body}</tbody>
       </table>
     </div>
   )
@@ -1487,4 +1602,13 @@ const btnPrimaryGreen = {
   padding: '10px 18px', fontSize: 13, background: '#27500A', color: 'white',
   border: '1px solid #27500A', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
   display: 'inline-flex', alignItems: 'center', gap: 6,
+}
+
+const btnSupOff = {
+  marginBottom: 18, padding: '9px 16px', fontSize: 13, background: '#FCE9E8', color: '#A32D2D',
+  border: '1px solid #E5B8B8', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+}
+const btnSupOn = {
+  marginBottom: 18, padding: '9px 16px', fontSize: 13, background: '#EAF3DE', color: '#27500A',
+  border: '1px solid #A9CE86', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
 }

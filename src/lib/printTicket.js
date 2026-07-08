@@ -15,14 +15,21 @@
 //   "Contenu non securise : Autoriser") -- une fois par appareil.
 // ============================================================
 
-// URL du helper. On imprime depuis le PC qui fait tourner le helper, donc on
-// passe par "localhost" : aucune dependance a l'IP du PC (qui peut changer avec
-// la box), et pas de certificat a accepter (http://localhost n'est pas bloque
-// par le navigateur, meme depuis un site HTTPS).
-// Surchargeable au build via VITE_PRINTER_HELPER_URL si besoin (autre appareil).
-export const PRINTER_HELPER_URL =
-  import.meta.env?.VITE_PRINTER_HELPER_URL ||
-  'http://localhost:9999'
+// Adresses possibles du helper, essayees DANS L'ORDRE jusqu'a ce qu'une reponde :
+//  1) http://localhost:9999  -> le PC qui pilote l'imprimante (jamais bloque par le navigateur)
+//  2) http://192.168.1.241:9999 -> l'IP du PC sur le reseau, pour les TABLETTES / autres ordis
+//     (HTTP depuis un site HTTPS : il faut autoriser le "contenu non securise" 1x par appareil)
+// Surchargeable au build via VITE_PRINTER_HELPER_URL (placee en tete si definie).
+const PC_LAN_URL = 'http://192.168.1.241:9999'
+function helperCandidates() {
+  const list = []
+  if (import.meta.env?.VITE_PRINTER_HELPER_URL) list.push(import.meta.env.VITE_PRINTER_HELPER_URL)
+  list.push('http://localhost:9999', PC_LAN_URL)
+  return [...new Set(list.map(u => u.replace(/\/+$/, '')))]
+}
+// Memorise la base qui a marche pour ne pas re-sonder a chaque ticket.
+let _workingBase = null
+export const PRINTER_HELPER_URL = PC_LAN_URL   // compat (non utilise directement)
 
 // ----- Helpers de formatage du texte ticket -----
 
@@ -136,36 +143,93 @@ export function buildTicketTextA({ deliveryAt, orderNum, clientName, productName
   return lines.join('\n')
 }
 
+// ----- Format groupé : plusieurs articles d'une même commande sur UN ticket -----
+// Même en-tête que le format A (Lily Gourmet, nom client en grand, code/date/heure),
+// puis la LISTE des articles (ex : tous les jus, ou tous les GS- d'une commande).
+export function buildTicketGroup({ deliveryAt, orderNum, clientName, items }) {
+  const dateStr = formatDateLong(deliveryAt)
+  const hourStr = formatHour(deliveryAt)
+  const lines = []
+
+  lines.push('\x1ba\x01')              // centrer
+  lines.push('Lily Gourmet')
+  lines.push('-----------------')
+
+  if (clientName) {
+    lines.push('')
+    lines.push('\x1bE\x01')             // gras ON
+    lines.push('\x1d!\x22')             // taille 4x4
+    lines.push(clientName.toUpperCase())
+    lines.push('\x1d!\x00')             // reset taille
+    lines.push('\x1bE\x00')             // gras OFF
+    lines.push('-----------------')
+  }
+
+  lines.push('\x1ba\x00')              // aligner a gauche
+  lines.push('')
+  if (orderNum) lines.push(orderNum)
+  if (dateStr) lines.push(dateStr.charAt(0).toUpperCase() + dateStr.slice(1))
+  if (hourStr) lines.push(hourStr)
+  lines.push('')
+
+  // --- Liste des articles (chacun en moyen-large) ---
+  for (const it of (items || [])) {
+    const product = cleanProductName(it.productName)
+    const qty = it.quantity || 1
+    lines.push(`\x1b!\x10x${qty} ${product}\x1b!\x00`)
+  }
+
+  lines.push('', '', '', '')
+  return lines.join('\n')
+}
+
+// Imprime UN ticket groupé (plusieurs articles). Résout en succès, rejette sinon.
+export async function printGroupTicket({ deliveryAt, orderNum, clientName, items }) {
+  return sendTicket(buildTicketGroup({ deliveryAt, orderNum, clientName, items }))
+}
+
 // ----- Envoi au helper -----
 
 // Envoie un ticket et resout en cas de succes. Throw sinon.
+// Essaie chaque base candidate (localhost, puis IP du PC) jusqu'a ce qu'une reponde.
 export async function sendTicket(ticketText) {
-  const url = `${PRINTER_HELPER_URL}/print`
   // L'imprimante ne gere pas l'UTF-8 : on retire les accents (é->e, è->e, à->a,
   // ç->c...) pour eviter les caracteres bizarres sur le ticket.
   const safeText = ticketText.normalize('NFD').replace(/[̀-ͯ]/g, '')
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: safeText, cut: true }),
-  })
-  if (!resp.ok) {
-    const txt = await resp.text().catch(() => '')
-    throw new Error(`Helper a renvoye ${resp.status} - ${txt}`)
+  const cands = helperCandidates()
+  const bases = _workingBase ? [_workingBase, ...cands.filter(b => b !== _workingBase)] : cands
+  let lastErr = null
+  for (const base of bases) {
+    try {
+      const resp = await fetch(`${base}/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: safeText, cut: true }),
+      })
+      if (!resp.ok) { const txt = await resp.text().catch(() => ''); lastErr = new Error(`Helper a renvoye ${resp.status} - ${txt}`); continue }
+      const data = await resp.json().catch(() => ({ ok: true }))
+      // Le helper peut répondre HTTP 200 mais { ok:false } (ex. imprimante hors-ligne) → c'est un échec.
+      if (data && data.ok === false) { lastErr = new Error(data.error || 'Imprimante hors-ligne'); continue }
+      _workingBase = base
+      return data
+    } catch (e) { lastErr = e }
   }
-  return resp.json().catch(() => ({ ok: true }))
+  throw lastErr || new Error('Aucun helper joignable')
 }
 
-// Healthcheck simple : verifie que le helper repond
+// Healthcheck simple : verifie que le helper repond (sur n'importe quelle base candidate)
 export async function pingPrinter() {
-  try {
-    const resp = await fetch(`${PRINTER_HELPER_URL}/health`, { method: 'GET' })
-    if (!resp.ok) return false
-    const data = await resp.json().catch(() => null)
-    return !!(data && data.ok)
-  } catch (e) {
-    return false
+  const cands = helperCandidates()
+  const bases = _workingBase ? [_workingBase, ...cands.filter(b => b !== _workingBase)] : cands
+  for (const base of bases) {
+    try {
+      const resp = await fetch(`${base}/health`, { method: 'GET' })
+      if (!resp.ok) continue
+      const data = await resp.json().catch(() => null)
+      if (data && data.ok) { _workingBase = base; return true }
+    } catch (e) { /* essaie la suivante */ }
   }
+  return false
 }
 
 // Imprime un article complet en utilisant le format A.

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Palette, Tags, Wallet, Store, Eye, EyeOff, Trash2, Pencil, Loader2, Search } from 'lucide-react'
+import { Palette, Tags, Wallet, Store, Eye, EyeOff, Trash2, Pencil, Loader2, Search, Truck } from 'lucide-react'
 import { loadDestinataires, createDestinataire, updateDestinataire, deleteDestinataire,
          loadCategories, createCategorie, updateCategorie,
          loadSalairesDefaut, setSalaireDefaut,
-         loadPosConfigs, togglePosConfig } from '../../lib/caisse'
+         loadPosConfigs, togglePosConfig,
+         loadLivreurFavoris, addLivreurFavori, deleteLivreurFavori } from '../../lib/caisse'
 import { COLOR_PALETTE, COLORS_BY_TYPE } from './_helpers'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
@@ -25,11 +26,68 @@ const EMOJI_PICKER = [
 export default function ParametresView({ user }) {
   return (
     <div>
+      <FavorisLivreurSection user={user} />
       <DestinatairesSection />
       <CategoriesSection />
       <SalairesDefautSection />
       <PosSessionsSection />
     </div>
+  )
+}
+
+// ---- Favoris dépenses livreur (Hamid) ----
+function FavorisLivreurSection({ user }) {
+  const [list, setList] = useState([])
+  const [cats, setCats] = useState([])
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState({ label: '', category: '', needsProof: true })
+
+  useEffect(() => { reload(); loadCategories('meriem').then(setCats) }, [])
+  async function reload() { setList(await loadLivreurFavoris()) }
+
+  async function handleAdd() {
+    if (!form.label.trim()) { toast.error('Donne un nom au favori.'); return }
+    await addLivreurFavori({ label: form.label.trim(), category: form.category || cats[0]?.name || null, needsProof: form.needsProof, userId: user?.id })
+    setAdding(false); setForm({ label: '', category: '', needsProof: true }); reload()
+  }
+  async function handleDelete(f) {
+    if (!await confirmDialog(`Retirer le favori « ${f.label} » ?`, { danger: true, confirmLabel: 'Retirer' })) return
+    await deleteLivreurFavori(f.id); reload()
+  }
+
+  return (
+    <Section title="Favoris de dépense du livreur (Hamid)" icon={<Truck size={16} />}
+      desc="Raccourcis que Hamid voit dans « Déclarer une dépense ». Décoche « photo obligatoire » pour un pourboire.">
+      {list.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70', padding: '4px 0 10px' }}>Aucun favori pour l'instant.</div>}
+      {list.map(f => (
+        <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 130px 32px', gap: 12, alignItems: 'center', padding: '10px 14px', borderRadius: 8, marginBottom: 5, background: '#F4F0EA' }}>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>{f.label}</div>
+          <div style={{ fontSize: 11, color: '#4a3a30' }}>{f.category || '—'}</div>
+          <div style={{ fontSize: 11, color: f.needs_proof ? '#99201E' : '#7A5510' }}>{f.needs_proof ? 'Photo obligatoire' : 'Sans photo'}</div>
+          <button onClick={() => handleDelete(f)} style={iconBtn} title="Retirer"><Trash2 size={15} /></button>
+        </div>
+      ))}
+
+      {!adding && <button onClick={() => setAdding(true)} style={addBtn}>+ Ajouter un favori</button>}
+      {adding && (
+        <div style={{ marginTop: 12, padding: 14, background: '#F9F6F1', borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: '#4a3a30', marginBottom: 4 }}>Nom (ex : Essence, Pourboire)</div>
+          <input type="text" value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} style={inputStyle} autoFocus />
+          <div style={{ fontSize: 11, color: '#4a3a30', margin: '10px 0 4px' }}>Catégorie</div>
+          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+            {cats.map(c => <option key={c.id} value={c.name}>{c.emoji} {c.name}</option>)}
+          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 4px', fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.needsProof} onChange={e => setForm({ ...form, needsProof: e.target.checked })} />
+            Photo du ticket obligatoire <span style={{ color: '#8a7a70', fontSize: 11 }}>(décoche pour un pourboire)</span>
+          </label>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+            <button onClick={() => setAdding(false)} style={btnSlim}>Annuler</button>
+            <button onClick={handleAdd} style={btnPrimary}>Créer</button>
+          </div>
+        </div>
+      )}
+    </Section>
   )
 }
 

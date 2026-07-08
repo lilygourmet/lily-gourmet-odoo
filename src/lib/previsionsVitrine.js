@@ -57,20 +57,20 @@ export async function loadVitrineReservations(day) {
 
 /** IDs (Odoo) des réservations vitrine déjà rangées ce jour. */
 export async function loadResaRangees(day) {
-  const { data, error } = await supabase.from('vitrine_resa_rangee').select('order_id').eq('day', day)
-  if (error) throw error
-  return new Set((data || []).map(r => r.order_id))
+  const { data, error } = await supabase.from('vitrine_resa_rangee').select('line_id').eq('day', day)
+  if (error) return new Set()   // colonne line_id pas encore créée → aucun rangé (le SQL reste à lancer)
+  return new Set((data || []).map(r => r.line_id).filter(v => v != null))
 }
 
-/** Marque une réservation comme rangée (mise de côté). */
-export async function markResaRangee({ day, orderId, orderName, clientName, userId }) {
+/** Marque un ARTICLE (ligne) de réservation comme rangé. */
+export async function markResaRangee({ day, lineId, orderId, orderName, clientName, productName, userId }) {
   const { error } = await supabase.from('vitrine_resa_rangee')
-    .upsert({ day, order_id: orderId, order_name: orderName || null, client_name: clientName || null, marked_by: userId || null }, { onConflict: 'day,order_id' })
+    .upsert({ day, line_id: lineId, order_id: orderId, order_name: orderName || null, client_name: clientName || null, product_name: productName || null, marked_by: userId || null }, { onConflict: 'day,line_id' })
   if (error) throw error
 }
 
-/** Annule le « rangé » d'une réservation. */
-export async function unmarkResaRangee(day, orderId) {
-  const { error } = await supabase.from('vitrine_resa_rangee').delete().eq('day', day).eq('order_id', orderId)
+/** Annule le « rangé » d'un article (ligne). */
+export async function unmarkResaRangee(day, lineId) {
+  const { error } = await supabase.from('vitrine_resa_rangee').delete().eq('day', day).eq('line_id', lineId)
   if (error) throw error
 }

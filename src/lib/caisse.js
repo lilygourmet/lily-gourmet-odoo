@@ -152,8 +152,9 @@ export async function assignEnveloppe(envId, destinataireId, userId, assignedDat
     .eq('id', envId)
     .single()
   if (env?.destinataire?.type === 'caisse_geree' && env.destinataire.linked_caisse_owner) {
+    const owner = env.destinataire.linked_caisse_owner
     await supabase.from('caisse_mouvements').insert({
-      caisse_owner: env.destinataire.linked_caisse_owner,
+      caisse_owner: owner,
       type: 'entree',
       source_type: 'enveloppe',
       source_ref: env.id,
@@ -161,6 +162,8 @@ export async function assignEnveloppe(envId, destinataireId, userId, assignedDat
       label: `Enveloppe ${env.source} · ${env.session_date}`,
       mvt_date: effectiveDate, // date d'effet = date d'affectation
       created_by: userId,
+      // Layla LG doit valider la réception de l'enveloppe avant qu'elle compte dans son solde.
+      ...(owner === 'layla_lg' ? { reception_status: 'pending' } : {}),
     })
   }
 
@@ -557,19 +560,23 @@ export async function loadMouvementsMonth(caisseOwner, year, month) {
   return data || []
 }
 
-export async function loadCaisseBalance(caisseOwner) {
+export async function loadCaisseBalance(caisseOwner, beforeDate = null) {
   // Solde = somme des entrées - somme des sorties depuis la dernière clôture
   // Pour v1 : on prend tout depuis le début
-  const { data: entrees } = await supabase
+  // beforeDate (optionnel) : ne compte que les mouvements AVANT cette date (solde de départ d'un mois).
+  let qEntrees = supabase
     .from('caisse_mouvements')
     .select('amount, reception_status')
     .eq('caisse_owner', caisseOwner)
     .eq('type', 'entree')
-  const { data: sorties } = await supabase
+  let qSorties = supabase
     .from('caisse_mouvements')
     .select('amount')
     .eq('caisse_owner', caisseOwner)
     .eq('type', 'sortie')
+  if (beforeDate) { qEntrees = qEntrees.lt('mvt_date', beforeDate); qSorties = qSorties.lt('mvt_date', beforeDate) }
+  const { data: entrees } = await qEntrees
+  const { data: sorties } = await qSorties
   // Exclure les entrées en attente de validation
   const totalIn  = (entrees || [])
     .filter(m => m.reception_status !== 'pending')
@@ -603,6 +610,7 @@ export async function loadCategoryStats(year, month) {
       .eq('caisse_owner', 'meriem').eq('type', 'sortie')
       .gte('mvt_date', start).lt('mvt_date', end),
     supabase.from('caisse_hamid_depenses').select('amount, category')
+      .neq('confirm_status', 'pending')
       .gte('depense_date', start).lt('depense_date', end),
     supabase.from('caisse_courses_depenses').select('amount, category, course:caisse_courses(given_date)'),
   ])
@@ -1020,6 +1028,88 @@ export async function loadHamidDepensesMonth(year, month) {
   return data || []
 }
 
+// ============================================================
+// FAVORIS DE DÉPENSE DU LIVREUR (gérés par Hamid lui-même)
+// ============================================================
+export async function loadLivreurFavoris() {
+  const { data, error } = await supabase
+    .from('caisse_livreur_favoris')
+    .select('*')
+    .eq('active', true)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function addLivreurFavori({ label, category, needsProof, userId }) {
+  const { data, error } = await supabase
+    .from('caisse_livreur_favoris')
+    .insert({ label, category: category || null, needs_proof: !!needsProof, created_by: userId })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteLivreurFavori(id) {
+  const { error } = await supabase
+    .from('caisse_livreur_favoris')
+    .update({ active: false })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// Dépenses déclarées par Hamid en attente de confirmation par Meriem.
+export async function loadPendingHamidDepenses() {
+  const { data, error } = await supabase
+    .from('caisse_hamid_depenses')
+    .select('*')
+    .eq('confirm_status', 'pending')
+    .order('depense_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Meriem met / change la catégorie d'une dépense Hamid (Hamid ne saisit pas de catégorie).
+export async function setHamidDepenseCategory(id, category, actorId = null) {
+  const { error } = await supabase
+    .from('caisse_hamid_depenses')
+    .update({ category: category || null })
+    .eq('id', id)
+  if (error) throw error
+  try {
+    await logAction({ entityType: 'hamid_depense', entityId: id, action: 'set_category', description: `Catégorie Hamid : ${category || '—'}`, actorId })
+  } catch (_) {}
+}
+
+// Meriem décide si une dépense Hamid a une facture à récupérer (chèque).
+export async function setHamidDepenseFacture(id, isFacture, actorId = null) {
+  const { error } = await supabase
+    .from('caisse_hamid_depenses')
+    .update({ is_facture: !!isFacture, facture_status: isFacture ? 'pending' : null })
+    .eq('id', id)
+  if (error) throw error
+  try {
+    await logAction({ entityType: 'hamid_depense', entityId: id, action: isFacture ? 'facture_add' : 'facture_remove', description: isFacture ? 'Marqué « facture à récupérer »' : 'Retiré des factures', actorId })
+  } catch (_) {}
+}
+
+// Meriem confirme une dépense déclarée par Hamid -> elle compte dans le solde.
+export async function confirmHamidDepense(id, actorId = null) {
+  const { data: before } = await supabase.from('caisse_hamid_depenses').select('*').eq('id', id).single()
+  const { error } = await supabase
+    .from('caisse_hamid_depenses')
+    .update({ confirm_status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_by: actorId })
+    .eq('id', id)
+  if (error) throw error
+  try {
+    await logAction({
+      entityType: 'hamid_depense', entityId: id, action: 'confirm',
+      description: `Dépense Hamid confirmée : ${before?.label || ''} (${before?.amount} dh)`,
+      amount: -Number(before?.amount || 0), actorId,
+    })
+  } catch (_) {}
+}
+
 export async function loadHamidBalance() {
   // Solde Hamid = somme des avances - somme des dépenses
   const { data: avances } = await supabase
@@ -1031,6 +1121,7 @@ export async function loadHamidBalance() {
   const { data: depenses } = await supabase
     .from('caisse_hamid_depenses')
     .select('amount')
+    .neq('confirm_status', 'pending')   // les dépenses déclarées par Hamid ne comptent qu'après confirmation
   // Aussi les "Hamid rend l'argent" (entrée caisse Meriem source_type='hamid_rendu')
   const { data: rendus } = await supabase
     .from('caisse_mouvements')
@@ -1068,7 +1159,7 @@ export async function ajouterDepenseHamid({ amount, category, label, mvtDate, us
 
 // Crée une session Hamid groupée : N lignes + 1 preuve commune optionnelle.
 // Chaque ligne = { amount, category, label, isFacture }.
-export async function addHamidSession({ sessionDate, lignes, userId, proofFile = null }) {
+export async function addHamidSession({ sessionDate, lignes, userId, proofFile = null, confirmStatus = 'confirmed' }) {
   const validLignes = (lignes || []).filter(l => Number(l.amount) > 0)
   if (validLignes.length === 0) throw new Error('Au moins une ligne avec un montant > 0 est requise')
 
@@ -1089,6 +1180,7 @@ export async function addHamidSession({ sessionDate, lignes, userId, proofFile =
     is_facture: !!l.isFacture,
     facture_status: l.isFacture ? 'pending' : null,
     hamid_session_id: session.id,
+    confirm_status: confirmStatus,
   }))
   const { error: dErr } = await supabase.from('caisse_hamid_depenses').insert(rows)
   if (dErr) {

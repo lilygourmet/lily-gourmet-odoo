@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caisse — parcours complet (toutes les étapes)</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+  body{background:#211c1a;color:#1a0f0a;padding:30px 18px 60px}
+  h1{color:#fff;font-size:20px;text-align:center;margin-bottom:6px}
+  .sub{color:#cbb9a8;font-size:13px;text-align:center;margin-bottom:28px}
+  .band{color:#fff;font-size:15px;font-weight:600;margin:30px 0 14px;padding-left:10px;border-left:4px solid #B14A6F}
+  .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+  .step{width:236px}
+  .num{display:inline-flex;align-items:center;gap:8px;color:#fff;font-size:13px;font-weight:600;margin-bottom:8px}
+  .num b{width:24px;height:24px;border-radius:50%;background:#993556;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .cap{color:#cbb9a8;font-size:12px;margin-top:8px;line-height:1.45}
+  /* mini écran */
+  .scr{background:#fcfbf8;border-radius:22px;border:6px solid #111;overflow:hidden}
+  .bar{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:.5px solid #e5d8c3}
+  .brand{font-family:Georgia,serif;font-size:13px;color:#993556;font-weight:600}
+  .dot{width:22px;height:22px;border-radius:6px;border:1px solid #e5d8c3}
+  .pad{padding:12px}
+  .solde{color:#fff;border-radius:12px;padding:14px}
+  .solde .l{font-size:11px;opacity:.9}
+  .solde .v{font-size:26px;font-weight:600;margin-top:3px}
+  .big{display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px;border-radius:12px;font-size:15px;font-weight:600;border:1px solid}
+  .big small{font-size:10px;font-weight:400;opacity:.8}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px}
+  .tile{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px;border-radius:10px;background:#fff;border:1px solid #e5d8c3;font-size:11px;color:#993556}
+  .fav{display:flex;align-items:center;gap:6px;padding:10px;border-radius:10px;border:1px solid #e5d8c3;background:#fff;font-size:12px;font-weight:500}
+  .fav.on{border:1.5px solid #993556;background:#FCEEF3;color:#993556}
+  .fav .t{margin-left:auto;font-size:8px;color:#7A5510}
+  .disp{text-align:center;font-size:30px;font-weight:600;padding:6px 0 10px}
+  .keys{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+  .k{padding:10px 0;border-radius:9px;border:1px solid #e5d8c3;background:#fff;text-align:center;font-size:16px}
+  .k.del{background:#FCEEE8;color:#99201E}
+  .photo{display:flex;align-items:center;gap:8px;padding:11px;border-radius:9px;border:.5px dashed #C4BFB6;background:#F4F0EA;font-size:12px;color:#4a3a30;margin-top:6px}
+  .ff{font-size:10px;color:#4a3a30;margin:10px 0 3px}
+  .req{color:#99201E}
+  .alert{display:flex;align-items:center;gap:8px;padding:10px;border-radius:9px;font-size:11px}
+  .row2{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;border-radius:9px;background:#fff;border:.5px solid #e5d8c3;border-left:3px solid #E5C0B6;margin-top:6px;font-size:12px}
+  .badge{font-size:9px;padding:1px 6px;border-radius:99px;display:inline-block}
+  .confirm{font-size:10px;padding:3px 8px;background:#1D7A5C;color:#fff;border-radius:6px}
+  .btnrow{display:flex;gap:5px;margin-top:12px}
+  .b1{flex:1;border:1px solid #e5d8c3;background:#fff;border-radius:8px;padding:9px;text-align:center;font-size:12px}
+  .b2{flex:2;color:#fff;border-radius:8px;padding:9px;text-align:center;font-size:12px;font-weight:500}
+  .lbl{font-size:11px;color:#4a3a30;margin-bottom:6px}
+  .arrow{align-self:center;color:#B14A6F;font-size:26px;padding:0 2px}
+  .manage{display:grid;grid-template-columns:1fr 90px 70px 22px;gap:6px;align-items:center;background:#F4F0EA;border-radius:7px;padding:8px 10px;font-size:11px;margin-bottom:5px}
+</style></head><body>
+<h1>Caisse — parcours complet</h1>
+<div class="sub">Toutes les étapes, dans l'ordre · liens : ?view=caisse-rapide (Meriem) · ?view=caisse-livreur (Hamid)</div>
+
+<!-- ============ A. HAMID DÉCLARE ============ -->
+<div class="band">A · Hamid (livreur) déclare une dépense sur son téléphone</div>
+<div class="row">
+  <div class="step">
+    <div class="num"><b>1</b> Son écran caisse</div>
+    <div class="scr">
+      <div class="bar"><div class="brand">Lily Gourmet</div><div class="dot"></div></div>
+      <div class="pad">
+        <div class="solde" style="background:linear-gradient(135deg,#B97A14,#EF9F27)"><div class="l">Argent de Lily chez toi</div><div class="v">1 300 dh</div></div>
+        <div class="big" style="background:#FCE9E8;border-color:#C0392B;color:#99201E;margin-top:12px">↑ Déclarer une dépense<small>argent que tu as dépensé</small></div>
+      </div>
+    </div>
+    <div class="cap">Il voit son solde et appuie sur « Déclarer une dépense ».</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="num"><b>2</b> Il choisit un favori</div>
+    <div class="scr"><div class="pad">
+      <div class="lbl">Choisis le type</div>
+      <div class="grid2">
+        <div class="fav on">🏷 Essence</div>
+        <div class="fav">🏷 Pourboire <span class="t">sans photo</span></div>
+        <div class="fav">🏷 Courses</div>
+        <div class="fav">🏷 Autre</div>
+      </div>
+    </div></div>
+    <div class="cap">Les favoris sont ceux que <b>toi (admin)</b> as créés. Sinon « Autre ».</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="num"><b>3</b> Le clavier montant</div>
+    <div class="scr"><div class="pad">
+      <div class="lbl">Montant</div>
+      <div class="disp" style="color:#99201E">250 dh</div>
+      <div class="keys">
+        <div class="k">1</div><div class="k">2</div><div class="k">3</div>
+        <div class="k">4</div><div class="k">5</div><div class="k">6</div>
+        <div class="k">7</div><div class="k">8</div><div class="k">9</div>
+        <div class="k">00</div><div class="k">0</div><div class="k del">⌫</div>
+      </div>
+    </div></div>
+    <div class="cap">Gros clavier simple, il tape le montant.</div>
+  </div>
+</div>
+
+<div class="row" style="margin-top:18px">
+  <div class="step">
+    <div class="num"><b>4</b> Photo du ticket</div>
+    <div class="scr"><div class="pad">
+      <div class="ff">Photo du ticket <b class="req">(obligatoire)</b></div>
+      <div class="photo">📷 Prendre une photo du ticket</div>
+      <div class="alert" style="background:#FCEEE8;color:#633806;margin-top:10px">ℹ Part en attente de confirmation par Meriem.</div>
+      <div class="btnrow"><div class="b1">Annuler</div><div class="b2" style="background:#993556">Envoyer</div></div>
+    </div></div>
+    <div class="cap">Photo <b>obligatoire</b> — sauf pour un pourboire (réglé par favori).</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="num"><b>5</b> Sa liste</div>
+    <div class="scr"><div class="pad">
+      <div class="lbl">Mes dépenses ce mois</div>
+      <div class="row2"><span>Essence</span><span><span class="badge" style="background:#FFF6E5;color:#7A5510">En attente</span></span></div>
+      <div class="row2"><span>Pourboire pâtissier</span><span class="badge" style="background:#E6F4E6;color:#27500A">Confirmée</span></div>
+    </div></div>
+    <div class="cap">Il suit l'état : « En attente » puis « Confirmée ».</div>
+  </div>
+</div>
+
+<!-- ============ B. MERIEM CONFIRME ============ -->
+<div class="band">B · Meriem confirme (sinon ça ne compte pas)</div>
+<div class="row">
+  <div class="step">
+    <div class="num"><b>6</b> Onglet Hamid</div>
+    <div class="scr"><div class="pad">
+      <div class="alert" style="background:#FFF6E5;border:1px solid #F5C46B;color:#7A5510">⏱ 1 dépense déclarée par Hamid à confirmer (250 dh) — non comptée tant que pas confirmée.</div>
+      <div style="background:#fff;border:.5px solid #e5d8c3;border-radius:11px;margin-top:10px;overflow:hidden">
+        <div style="background:#FAF0E5;padding:8px 11px;font-size:11px;color:#633806">Session · 28/06 · 1 ligne</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 11px;background:#FFFBF0;font-size:12px">
+          <span>Essence <span class="badge" style="background:#FFF6E5;color:#7A5510">À confirmer</span></span>
+          <span style="display:flex;gap:6px;align-items:center"><span class="confirm">✓ Confirmer</span><b style="color:#99201E">− 250</b></span>
+        </div>
+      </div>
+    </div></div>
+    <div class="cap">Bandeau + bouton <b>Confirmer</b> sur la dépense (avec la photo).</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="num"><b>7</b> Confirmée</div>
+    <div class="scr"><div class="pad">
+      <div class="solde" style="background:linear-gradient(135deg,#B97A14,#EF9F27)"><div class="l">Solde Hamid (après confirmation)</div><div class="v">1 050 dh</div></div>
+      <div class="row2"><span>Essence</span><span class="badge" style="background:#E6F4E6;color:#27500A">Confirmée</span></div>
+    </div></div>
+    <div class="cap">La dépense compte enfin : le solde Hamid baisse (1 300 → 1 050).</div>
+  </div>
+</div>
+
+<!-- ============ C. ADMIN FAVORIS ============ -->
+<div class="band">C · Toi (admin) gères les favoris — Caisse › Paramètres</div>
+<div class="row">
+  <div class="step" style="width:300px">
+    <div class="num"><b>8</b> Favoris du livreur</div>
+    <div class="scr"><div class="pad">
+      <div class="lbl">🚚 Favoris de dépense du livreur (Hamid)</div>
+      <div class="manage"><span>Essence</span><span style="color:#4a3a30">Carburant</span><span style="color:#99201E">Photo oblig.</span><span>🗑</span></div>
+      <div class="manage"><span>Pourboire</span><span style="color:#4a3a30">Pourboire</span><span style="color:#7A5510">Sans photo</span><span>🗑</span></div>
+      <div style="border:1px solid #e5d8c3;border-radius:8px;padding:8px;text-align:center;font-size:12px;margin-top:6px">+ Ajouter un favori</div>
+    </div></div>
+    <div class="cap">Tu ajoutes / retires les favoris. Coche « photo obligatoire » (décochée = pourboire).</div>
+  </div>
+</div>
+
+<!-- ============ D. MERIEM CAISSE RAPIDE ============ -->
+<div class="band">D · Meriem — caisse rapide (entrée / sortie au clavier)</div>
+<div class="row">
+  <div class="step">
+    <div class="num"><b>9</b> Son écran</div>
+    <div class="scr"><div class="pad">
+      <div class="solde" style="background:linear-gradient(135deg,#993556,#B14A6F)"><div class="l">Caisse Meriem · solde</div><div class="v">2 450 dh</div></div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="big" style="background:#E1F5EE;border-color:#1D7A5C;color:#085041">Entrée<small>argent reçu</small></div>
+        <div class="big" style="background:#FCE9E8;border-color:#C0392B;color:#99201E">Sortie<small>argent dépensé</small></div>
+      </div>
+      <div class="grid3">
+        <div class="tile">🚗 Hamid</div><div class="tile">🤝 Avances</div><div class="tile">🛒 Courses</div>
+      </div>
+    </div></div>
+    <div class="cap">2 gros boutons + 3 raccourcis (Hamid / Avances / Courses).</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <div class="step">
+    <div class="num"><b>10</b> Le même clavier</div>
+    <div class="scr"><div class="pad">
+      <div class="lbl">Montant</div>
+      <div class="disp" style="color:#1D7A5C">600 dh</div>
+      <div class="keys">
+        <div class="k">1</div><div class="k">2</div><div class="k">3</div>
+        <div class="k">4</div><div class="k">5</div><div class="k">6</div>
+        <div class="k">7</div><div class="k">8</div><div class="k">9</div>
+        <div class="k">00</div><div class="k">0</div><div class="k del">⌫</div>
+      </div>
+    </div></div>
+    <div class="cap">Entrées ET sorties : même gros clavier (vert = entrée, rouge = sortie).</div>
+  </div>
+</div>
+
+</body></html>

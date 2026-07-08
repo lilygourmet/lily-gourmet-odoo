@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Studio photos — pages en onglets</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --cream:#faf6f0; --ink:#2b2320; --line:#e4dad0; --bg:#e9e2d6; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--ink); height:100vh; display:flex; flex-direction:column; }
+
+  /* barre d'outils du studio */
+  .top { background:var(--bordeaux); color:#fff; display:flex; align-items:center; gap:8px; padding:8px 12px; flex-wrap:wrap; }
+  .top .title { font-style:italic; font-size:16px; margin-right:6px; }
+  .top button { background:rgba(255,255,255,.2); color:#fff; border:none; border-radius:8px; padding:6px 11px; font-size:12px; font-weight:700; cursor:pointer; }
+  .top .sp { flex:1; }
+
+  /* ===== barre des ONGLETS de pages ===== */
+  .tabs { display:flex; align-items:flex-end; gap:4px; background:#dcd2c4; padding:6px 10px 0; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .tab { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#cfc4b4; border:1px solid var(--line); border-bottom:none; border-radius:9px 9px 0 0; font-size:13px; font-weight:600; color:#6b5e50; cursor:pointer; white-space:nowrap; }
+  .tab:hover { background:#e7ddcf; }
+  .tab.on { background:var(--cream); color:var(--ink); padding-bottom:10px; box-shadow:0 -2px 0 var(--bordeaux) inset; }
+  .tab .x { width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; color:#a08e7c; }
+  .tab .x:hover { background:#00000010; color:#c0392b; }
+  .tab.add { background:transparent; border:1px dashed #b3a692; color:var(--bordeaux); font-weight:700; }
+
+  /* zone de travail */
+  .work { flex:1; overflow:auto; display:flex; justify-content:center; padding:24px; }
+  .page { width:340px; min-height:480px; background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 6px 24px rgba(0,0,0,.12); position:relative; }
+  .page .lbl { position:absolute; top:8px; left:10px; font-size:11px; color:#b3a692; letter-spacing:.1em; text-transform:uppercase; }
+  .ph { position:absolute; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; font-weight:700; }
+
+  .note { background:#fff; border-top:1px solid var(--line); padding:10px 16px; font-size:13px; color:#6b5e50; }
+  .note b { color:var(--ink); }
+</style>
+</head>
+<body>
+
+  <div class="top">
+    <span class="title">🎨 Studio photos</span>
+    <button>✍️ Texte</button>
+    <button>⬤ Forme</button>
+    <button>🪄 Ranger</button>
+    <button>🖨️ Imprimer</button>
+    <span class="sp"></span>
+    <button>🗑️ Tout vider</button>
+  </div>
+
+  <!-- ===== ONGLETS DE PAGES ===== -->
+  <div class="tabs" id="tabs"></div>
+
+  <div class="work"><div class="page" id="page"><span class="lbl" id="lbl"></span></div></div>
+
+  <div class="note">👆 Chaque <b>page = un onglet</b> en haut. Clique un onglet pour l'ouvrir · <b>×</b> pour le supprimer · <b>＋</b> pour ajouter une page. (Données d'exemple)</div>
+
+<script>
+  // pages d'exemple avec des "photos" placées (couleur + position)
+  const PAGES = [
+    { name:'Page 1', items:[ {x:30,y:50,w:120,h:90,c:'#c0392b',t:'Photo'}, {x:170,y:60,w:130,h:160,c:'#2980b9',t:'Gâteau'}, {x:40,y:170,w:110,h:110,c:'#8e44ad',t:'Déco'} ] },
+    { name:'Page 2', items:[ {x:60,y:80,w:220,h:140,c:'#16a085',t:'Bannière'}, {x:90,y:250,w:160,h:120,c:'#e67e22',t:'Logo'} ] },
+    { name:'Page 3', items:[ {x:50,y:60,w:90,h:90,c:'#d35400',t:'1'}, {x:160,y:60,w:90,h:90,c:'#27ae60',t:'2'}, {x:50,y:170,w:90,h:90,c:'#7a1f2b',t:'3'}, {x:160,y:170,w:90,h:90,c:'#b8860b',t:'4'} ] },
+  ];
+  let active = 0;
+
+  function renderTabs() {
+    const el = document.getElementById('tabs'); el.innerHTML = '';
+    PAGES.forEach((p, i) => {
+      const t = document.createElement('div'); t.className = 'tab' + (i === active ? ' on' : '');
+      t.innerHTML = `📄 ${p.name} <span class="x" title="Supprimer">×</span>`;
+      t.onclick = e => { if (e.target.classList.contains('x')) { if (PAGES.length>1){ PAGES.splice(i,1); if(active>=PAGES.length)active=PAGES.length-1; render(); } return; } active = i; render(); };
+      el.appendChild(t);
+    });
+    const add = document.createElement('div'); add.className = 'tab add'; add.textContent = '＋ Page';
+    add.onclick = () => { PAGES.push({ name:'Page '+(PAGES.length+1), items:[] }); active = PAGES.length-1; render(); };
+    el.appendChild(add);
+  }
+  function renderPage() {
+    const pg = document.getElementById('page'); pg.querySelectorAll('.ph').forEach(n=>n.remove());
+    document.getElementById('lbl').textContent = PAGES[active].name;
+    for (const it of PAGES[active].items) {
+      const d = document.createElement('div'); d.className='ph';
+      d.style.cssText = `left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;background:${it.c}`;
+      d.textContent = it.t; pg.appendChild(d);
+    }
+  }
+  function render(){ renderTabs(); renderPage(); }
+  render();
+</script>
+</body>
+</html>

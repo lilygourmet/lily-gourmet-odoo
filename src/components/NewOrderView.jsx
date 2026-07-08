@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadOrderCatalog, loadOrderProduct, searchClients, createClient, createDevis, loadWarehouses } from '../lib/commande'
+import { filePhoto } from '../lib/photoCompress'
 import { loadPrevisions, loadVitrineReserved } from '../lib/previsionsVitrine'
 import { confirmDevis, recordDevisTraitement, recordDevisEnvoi, searchOrders } from '../lib/conversations'
 import NewConversationModal from './Conversations/NewConversationModal'
@@ -11,17 +12,7 @@ import Skeleton from './Skeleton'
 import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
 
-// Lit un fichier image en base64 (sans le préfixe data:) pour l'envoyer à Odoo.
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result).split(',')[1] || '')
-    r.onerror = reject
-    r.readAsDataURL(file)
-  })
-}
-
-export default function NewOrderView({ user, initialClient = null }) {
+export default function NewOrderView({ user, initialClient = null, embedded = false }) {
   const [cats, setCats] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -165,7 +156,9 @@ export default function NewOrderView({ user, initialClient = null }) {
 
   async function handleCreate() {
     if (!client) { toast.error('Choisis ou crée un client d\'abord.'); return }
-    if ((client.name || '').trim().split(/\s+/).filter(Boolean).length < 2) {
+    // Client EXISTANT (déjà dans Odoo, donc avec un id) : on prend sa fiche telle quelle,
+    // sans imposer le nom complet. (Les nouveaux clients sont créés avec prénom + nom.)
+    if (!client.id && (client.name || '').trim().split(/\s+/).filter(Boolean).length < 2) {
       toast.error('Le client doit avoir un nom ET un prénom (2 mots). Corrige sa fiche ou crée un client complet.')
       return
     }
@@ -180,10 +173,8 @@ export default function NewOrderView({ user, initialClient = null }) {
       // Lignes structurées (description aérée + warning + photo base64)
       const lines = await Promise.all(cart.map(async l => {
         const base = { variantId: l.variantId, qty: l.qty, price: l.price, discount: Number(l.discount) || 0, name: l.name, desc: l.desc || '', warn: l.warn || '', tmplId: l.tmplId || null, combo: l.combo || null }
-        if (l.photoFile) {
-          const data = await fileToBase64(l.photoFile)
-          base.photo = { name: l.photoName || l.photoFile.name, data, mimetype: l.photoFile.type || 'image/jpeg' }
-        }
+        if (l.photoFiles?.length) base.photos = await Promise.all(l.photoFiles.map(filePhoto))
+        if (l.accPrefiche) base.accPrefiche = l.accPrefiche
         return base
       }))
       const r = await createDevis({
@@ -235,6 +226,10 @@ export default function NewOrderView({ user, initialClient = null }) {
       return [...prev, { ...line, key: Date.now() + '' + Math.random(), qty: 1 }]
     })
   }
+  function setQtyAbs(key, v) {
+    const n = Math.max(1, Math.floor(Number(v) || 1))
+    setCart(prev => prev.map(x => x.key === key ? { ...x, qty: n } : x))
+  }
   function setQty(key, d) {
     setCart(prev => prev.flatMap(x => x.key === key ? (x.qty + d <= 0 ? [] : [{ ...x, qty: x.qty + d }]) : [x]))
   }
@@ -265,11 +260,11 @@ export default function NewOrderView({ user, initialClient = null }) {
   }
 
   return (
-    <div className="md:flex md:items-start min-h-[calc(100dvh-60px)]">
+    <div className={embedded ? 'flex flex-col' : 'md:flex md:items-start min-h-[calc(100dvh-60px)]'}>
       {/* Colonne articles */}
-      <div className="md:flex-1 md:min-w-0 p-4">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h1 className="font-fraunces italic text-[26px] text-ink">Nouvelle commande</h1>
+      <div className={embedded ? 'p-4' : 'md:flex-1 md:min-w-0 p-4'}>
+        <div className={`flex items-center ${embedded ? 'justify-end' : 'justify-between'} gap-2 mb-3`}>
+          {!embedded && <h1 className="font-fraunces italic text-[26px] text-ink">Nouvelle commande</h1>}
           <button onClick={refresh} disabled={refreshing}
             title="Resynchroniser le catalogue depuis Odoo (articles ajoutés / retirés / prix)"
             className="px-3 py-1.5 border border-line text-ink-soft rounded-full text-[12px] font-medium hover:border-bordeaux transition-all disabled:opacity-50">
@@ -291,7 +286,7 @@ export default function NewOrderView({ user, initialClient = null }) {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            <div className={`grid grid-cols-2 sm:grid-cols-3 ${embedded ? '' : 'lg:grid-cols-4'} gap-2.5`}>
               {(cat?.items || []).map(item => (
                 <button key={item.tmplId} onClick={() => onTileClick(item)}
                   className={`text-center rounded-xl border p-2 bg-cream-warm hover:border-bordeaux hover:-translate-y-px transition-all shadow-sm ${item.configurable ? 'border-dashed border-bordeaux/50' : 'border-line'}`}>
@@ -310,7 +305,7 @@ export default function NewOrderView({ user, initialClient = null }) {
       </div>
 
       {/* Panier */}
-      <div className="md:w-[360px] md:flex-shrink-0 md:border-l border-line bg-cream-warm p-4 md:sticky md:top-0 md:h-[calc(100dvh-60px)] md:overflow-y-auto">
+      <div className={embedded ? 'border-t border-line bg-cream-warm p-4' : 'md:w-[360px] md:flex-shrink-0 md:border-l border-line bg-cream-warm p-4 md:sticky md:top-0 md:h-[calc(100dvh-60px)] md:overflow-y-auto'}>
         <h2 className="font-fraunces italic text-[20px] text-ink mb-2">🛒 Panier</h2>
 
         {/* Client */}
@@ -366,7 +361,10 @@ export default function NewOrderView({ user, initialClient = null }) {
                     )}
                     <span className="text-[11px] text-ink-mute">DH</span>
                     <button onClick={() => setQty(it.key, -1)} className="w-6 h-6 rounded border border-line text-bordeaux">−</button>
-                    <span className="w-5 text-center text-[13px] font-semibold">{it.qty}</span>
+                    <input type="number" min="1" value={it.qty}
+                      onChange={e => setQtyAbs(it.key, e.target.value)}
+                      onFocus={e => e.target.select()}
+                      className="w-12 text-center text-[13px] font-semibold border border-line rounded py-0.5" />
                     <button onClick={() => setQty(it.key, 1)} className="w-6 h-6 rounded border border-line text-bordeaux">+</button>
                     <span className="text-[11px] text-ink-mute ml-2">remise</span>
                     <input type="number" min="0" max="100" value={it.discount || 0} onChange={e => setDiscount(it.key, e.target.value)}
@@ -481,6 +479,7 @@ export default function NewOrderView({ user, initialClient = null }) {
           onClose={() => setCfg(null)}
           onAdd={(line) => { addLine(line); setCfg(null) }}
           priceEditable={PRICE_EDITABLE.has(activeCat)}
+          embedded={embedded}
         />
       )}
 

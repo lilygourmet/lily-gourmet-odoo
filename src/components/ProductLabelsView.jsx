@@ -74,7 +74,7 @@ export default function ProductLabelsView({ user, activeView, onNavigate, onLogo
   const toPrint = selected.flatMap(it => Array.from({ length: it.qty }, () => it))
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       {/* CSS d'impression : on masque tout sauf la zone d'étiquettes */}

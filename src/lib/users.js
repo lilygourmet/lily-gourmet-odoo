@@ -11,7 +11,7 @@ import { memoCache } from './memoCache'
 async function _loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_stock_poly, perm_simu_gateaux, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_besoins_achat, perm_achat, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -50,6 +50,8 @@ export async function createUser({
   perm_commande = false,
   perm_ai_tools = false,
   perm_photoshop = false,
+  perm_stock_poly = false,
+  perm_simu_gateaux = false,
   perm_notif_modif = false,
   perm_modification = false,
   livreur_defaut = false,
@@ -58,6 +60,7 @@ export async function createUser({
   perm_vitrine_sale = false,
   perm_stock_prod_vitrine = false, perm_stock_prod_annexe = false, perm_stock_minmax = false,
   perm_livraisons_dispatch = false, perm_livreur_defaut = false, perm_livreur_assigne = false,
+  perm_besoins_achat = false, perm_achat = false,
   employe_id = null,
 }) {
   const { data, error } = await supabase.rpc('create_user_v2', {
@@ -96,6 +99,8 @@ export async function createUser({
           perm_commande,
           perm_ai_tools,
           perm_photoshop,
+          perm_stock_poly,
+          perm_simu_gateaux,
           perm_notif_modif,
           perm_modification,
           livreur_defaut,
@@ -104,6 +109,8 @@ export async function createUser({
           perm_validate_payments,
           economat_profil,
           perm_econome,
+          perm_besoins_achat,
+          perm_achat,
           perm_vitrine_sale,
           perm_stock_prod_vitrine,
           perm_stock_prod_annexe,
@@ -256,6 +263,8 @@ export async function updateUser(userId, {
   perm_commande,
   perm_ai_tools,
   perm_photoshop,
+  perm_stock_poly,
+  perm_simu_gateaux,
   perm_notif_modif,
   perm_modification,
   livreur_defaut,
@@ -264,6 +273,7 @@ export async function updateUser(userId, {
   perm_vitrine_sale,
   perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax,
   perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne,
+  perm_besoins_achat, perm_achat,
   employe_id,
 }) {
   const updates = {}
@@ -307,6 +317,8 @@ export async function updateUser(userId, {
   if (perm_commande !== undefined) updates.perm_commande = perm_commande
   if (perm_ai_tools !== undefined) updates.perm_ai_tools = perm_ai_tools
   if (perm_photoshop !== undefined) updates.perm_photoshop = perm_photoshop
+  if (perm_stock_poly !== undefined) updates.perm_stock_poly = perm_stock_poly
+  if (perm_simu_gateaux !== undefined) updates.perm_simu_gateaux = perm_simu_gateaux
   if (perm_notif_modif !== undefined) updates.perm_notif_modif = perm_notif_modif
   if (perm_modification !== undefined) updates.perm_modification = perm_modification
   if (livreur_defaut !== undefined) updates.livreur_defaut = livreur_defaut
@@ -315,6 +327,8 @@ export async function updateUser(userId, {
   if (perm_validate_payments !== undefined) updates.perm_validate_payments = perm_validate_payments
   if (economat_profil !== undefined) updates.economat_profil = economat_profil
   if (perm_econome !== undefined) updates.perm_econome = perm_econome
+  if (perm_besoins_achat !== undefined) updates.perm_besoins_achat = perm_besoins_achat
+  if (perm_achat !== undefined) updates.perm_achat = perm_achat
   if (perm_vitrine_sale !== undefined) updates.perm_vitrine_sale = perm_vitrine_sale
   if (perm_stock_prod_vitrine !== undefined) updates.perm_stock_prod_vitrine = perm_stock_prod_vitrine
   if (perm_stock_prod_annexe !== undefined) updates.perm_stock_prod_annexe = perm_stock_prod_annexe
@@ -388,6 +402,23 @@ export async function saveNavbarConfig(userId, config) {
     throw new Error('Disposition non enregistrée (RLS ou ID invalide ?)')
   }
   return data[0]
+}
+
+// Enregistre la disposition perso des onglets de L'UTILISATEUR CONNECTÉ.
+// Passe par un endpoint serveur qui vérifie le JWT et n'écrit QUE navbar_config
+// → chaque employé peut ranger SES onglets sans droit d'écriture direct sur profiles.
+export async function saveMyNavbarConfig(config) {
+  const token = localStorage.getItem('lily_jwt')
+  const res = await fetch('/api/wati-webhook?action=save-navbar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+    body: JSON.stringify({ config }),
+  })
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}))
+    throw new Error(d.error || `Erreur ${res.status}`)
+  }
+  return res.json()
 }
 
 // ============================================================

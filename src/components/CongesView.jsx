@@ -88,7 +88,7 @@ function typeCongeCouleur(t) {
 }
 
 // Calendrier d'équipe : vue mois, qui est en congé (lecture seule).
-function CalendrierEquipe({ valides, empById, isMobile }) {
+function CalendrierEquipe({ valides, empById, nameById = {}, isMobile }) {
   const now = new Date()
   const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() }) // m : 0-11
   const { y, m } = cur
@@ -149,7 +149,7 @@ function CalendrierEquipe({ valides, empById, isMobile }) {
                   </div>
                   {list.slice(0, 4).map(c => {
                     const col = typeCongeCouleur(c.type_conge)
-                    const nom = empById[c.employe_id]?.nom || '?'
+                    const nom = empById[c.employe_id]?.nom || nameById[c.employe_id] || '?'
                     return (
                       <div key={c.id} title={`${nom} · ${c.type_conge}`} style={{ background: col.bg, color: col.fg, fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</div>
                     )
@@ -180,7 +180,7 @@ function jourSemaine(d) {
   return d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long' }) : ''
 }
 
-export default function CongesView({ user, activeView, onNavigate, onLogout }) {
+export default function CongesView({ user, activeView, onNavigate, onLogout, embedded = false, congesTab = null }) {
   const isAdmin = user?.role === 'admin'
   // RH (perm_hr) : peut voir et IMPRIMER les congés, mais pas modifier/supprimer/valider.
   const canImprimerFeuille = isAdmin || !!user?.perm_hr
@@ -188,12 +188,15 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   const canManagePending = isAdmin || !!user?.perm_hr
   const [aTraiterCount, setATraiterCount] = useState(0)
   const [employes, setEmployes]     = useState([])
+  const [nomsTous, setNomsTous]     = useState([])  // id->nom de TOUS les employés (même partis/fantômes), pour afficher le nom
   const [conges, setConges]         = useState([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState('')
   const [showForm, setShowForm]     = useState(false)
   const [soldes, setSoldes]         = useState({})  // empId -> { dispo, ... }
   const [tab, setTab]               = usePersistedState('lily.conges.tab', 'demandes')  // 'demandes' | 'valides' | 'soldes'
+  useEffect(() => { if (congesTab) setTab(congesTab) }, [congesTab])  // ouverture d'un sous-onglet depuis le menu de gauche
+  const [soldeSearch, setSoldeSearch] = useState('')  // recherche dans « Soldes employés »
   const [filterEmp, setFilterEmp]   = useState('all')   // 'all' | empId
   const [filterYear, setFilterYear] = useState('all')   // 'all' | YYYY
   const [onlyUnsigned, setOnlyUnsigned] = useState(false)  // n'afficher que les congés pas encore signés
@@ -215,15 +218,17 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
     try {
       const annee = new Date().getFullYear()
       // 4 requêtes batchées au lieu de 2 par employé.
-      const [emps, all, allocs, recupRows, feries] = await Promise.all([
+      const [emps, all, allocs, recupRows, feries, noms] = await Promise.all([
         loadEmployes(true, true),   // exclut les employés fantômes des congés/soldes
         loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule'], `${annee - 1}-01-01`),
         loadAllocations({ annee, statut: ['valide', 'attente'] }),
         supabase.from('pointages_mois').select('employe_id, jours_recup').eq('annee', annee),
         loadJoursFeries(),
+        supabase.from('employes').select('id, nom'),   // TOUS les noms (partis/fantômes inclus) pour l'affichage
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
       setEmployes(empsActifs)
+      setNomsTous(noms?.data || [])
       setConges(all)
       setAllocations(allocs)
       setJoursFeries(feries)
@@ -327,6 +332,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
   }
 
   const empById = useMemo(() => Object.fromEntries(employes.map(e => [e.id, e])), [employes])
+  // Noms de TOUS les employés (même partis/fantômes), pour ne jamais afficher « Employé #x ».
+  const nameById = useMemo(() => Object.fromEntries(nomsTous.map(e => [e.id, e.nom])), [nomsTous])
   const feriesSet = useMemo(() => new Set(joursFeries.map(f => f.date)), [joursFeries])
 
   // Imprime la feuille de congé : calcule les allocations de récup de l'employé
@@ -452,12 +459,14 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
   return (
     <>
-      <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '14px 10px 80px' : '20px 16px 72px' }}>
+      {!embedded && <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />}
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: embedded ? 0 : (isMobile ? '14px 10px 80px' : '20px 16px 72px') }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-          <h1 style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, margin: 0, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-            <Palmtree size={22} /> Congés
-          </h1>
+          {embedded ? <div /> : (
+            <h1 style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 26, margin: 0, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              <Palmtree size={22} /> Congés
+            </h1>
+          )}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => setShowForm(true)} style={btnPrimary}>
               <Plus size={14} /> Nouvelle demande
@@ -509,7 +518,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                     {isAdmin && <input type="checkbox" checked={selDem.has(c.id)} onChange={() => toggleSel(selDem, setSelDem, c.id)} style={{ width: 18, height: 18, marginTop: 14, flexShrink: 0 }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <CongeCard
-                        c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
+                        c={c} emp={empById[c.employe_id]} nameById={nameById} joursFeries={joursFeries}
                         actions={canImprimerFeuille ? (
                           <>
                             <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
@@ -575,7 +584,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {list.map(c => (
                             <CongeCard
-                              key={c.id} c={c} emp={empById[c.employe_id]} joursFeries={joursFeries}
+                              key={c.id} c={c} emp={empById[c.employe_id]} nameById={nameById} joursFeries={joursFeries}
                               actions={canImprimerFeuille ? <>
                       <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                       <button onClick={() => handleToggleSigne(c)}
@@ -629,7 +638,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                   ) })()}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {allocations.filter(a => a.statut === 'attente').map(a => {
+                  {allocations.filter(a => a.statut === 'attente').sort((x, y) => (y.date_evt || `${y.annee}-01-01`).localeCompare(x.date_evt || `${x.annee}-01-01`)).map(a => {
                     const emp = empById[a.employe_id]
                     const t = ALLOC_TYPES.find(x => x.v === a.type)
                     const debutAlloc = a.date_evt || `${a.annee}-01-01`
@@ -637,7 +646,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                     return (
                       <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, background: 'white', padding: '6px 10px', borderRadius: 8 }}>
                         <input type="checkbox" checked={selAlloc.has(a.id)} onChange={() => toggleSel(selAlloc, setSelAlloc, a.id)} style={{ width: 16, height: 16 }} />
-                        <strong>{emp?.nom || `#${a.employe_id}`}</strong>
+                        <strong>{emp?.nom || nameById[a.employe_id] || `#${a.employe_id}`}</strong>
                         <span>· {t?.label || a.type}</span>
                         <span style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</span>
                         <span style={{ color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -694,7 +703,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {allocs.map(a => {
+                          {allocs.slice().sort((x, y) => (y.date_evt || `${y.annee}-01-01`).localeCompare(x.date_evt || `${x.annee}-01-01`)).map(a => {
                             const t = ALLOC_TYPES.find(t => t.v === a.type)
                             const debutAlloc = a.date_evt || `${a.annee}-01-01`
                             const finAlloc   = `${a.annee}-12-31`
@@ -779,6 +788,13 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
 
         {!loading && tab === 'soldes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <input
+              type="text"
+              value={soldeSearch}
+              onChange={e => setSoldeSearch(e.target.value)}
+              placeholder="🔍 Chercher un employé…"
+              style={{ width: '100%', maxWidth: 360, padding: '9px 12px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8, boxSizing: 'border-box', marginBottom: 6 }}
+            />
             {!isMobile && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 <div>Employé</div>
@@ -788,7 +804,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
                 <div style={{ textAlign: 'right' }} title="Allocations accumulé + récup − pris">Dispo</div>
               </div>
             )}
-            {employes.map(e => {
+            {employes.filter(e => !soldeSearch.trim() || String(e.nom).toLowerCase().includes(soldeSearch.trim().toLowerCase())).map(e => {
               const s = soldes[e.id]
               if (!s) return null
               if (isMobile) {
@@ -941,7 +957,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout }) {
         )}
 
         {!loading && tab === 'equipe' && (
-          <CalendrierEquipe valides={valides} empById={empById} isMobile={isMobile} />
+          <CalendrierEquipe valides={valides} empById={empById} nameById={nameById} isMobile={isMobile} />
         )}
       </div>
 
@@ -1546,7 +1562,7 @@ function joursDecomptesCalcul(c, emp, feriesSet = null) {
   return nbCal
 }
 
-function CongeCard({ c, emp, actions, joursFeries = [] }) {
+function CongeCard({ c, emp, actions, joursFeries = [], nameById = {} }) {
   const nbCal = nbJours(c.date_debut, c.date_fin)
   const feriesSet = useMemo(() => new Set((joursFeries || []).map(f => f.date)), [joursFeries])
   const nbDec = joursDecomptesConge(c, emp, feriesSet)
@@ -1556,7 +1572,7 @@ function CongeCard({ c, emp, actions, joursFeries = [] }) {
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a' }}>{emp?.nom || `Employé #${c.employe_id}`}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a' }}>{emp?.nom || nameById[c.employe_id] || `Employé #${c.employe_id}`}</div>
           <div style={{ fontSize: 12, color: '#4a3a30', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Calendar size={13} /> du <strong>{fmt(c.date_debut)}</strong> au <strong>{fmt(c.date_fin)}</strong>
             {' · '}

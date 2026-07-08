@@ -4,6 +4,7 @@ import {
   extractTailleFromName, getRealQuantity,
   TYPE_LABELS, TYPE_EMOJIS, TYPE_SPEC,
   loadFiche, saveFiche, makeEmptyLot, lotsTotal, isLotsValid, loadPalette,
+  parseAccDetails, colorIdByName, loadGmPrefiche,
 } from '../lib/gmFiches'
 import LotEditor from './LotEditor'
 
@@ -37,9 +38,10 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
     async function load() {
       try {
         setLoading(true)
-        const [paletteData, existing] = await Promise.all([
+        const [paletteData, existing, prefiche] = await Promise.all([
           loadPalette(),
           loadFiche(item.id),
+          loadGmPrefiche(item.odoo_line_id),
         ])
         if (!mounted) return
         setPalette(paletteData || [])
@@ -53,8 +55,14 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
           } else {
             setLots(initLots(typeGm, isMixte, odooParfums))
           }
+        } else if (prefiche && (prefiche.parfum_normal || (Array.isArray(prefiche.lots) && prefiche.lots.length > 0))) {
+          // Pré-fiche saisie à la prise de commande (structurée) → pré-remplissage fidèle.
+          setParfumNormal(!!prefiche.parfum_normal)
+          if (prefiche.tete_position) setTetePosition(prefiche.tete_position)
+          setLots(Array.isArray(prefiche.lots) && prefiche.lots.length > 0 ? prefiche.lots : initLots(typeGm, isMixte, odooParfums))
         } else {
-          setLots(initLots(typeGm, isMixte, odooParfums))
+          // Repli : pré-remplir depuis le texte « Accessoire : … » de la commande (si présent).
+          setLots(prefillLotsFromAcc(item.acc_details, paletteData) || initLots(typeGm, isMixte, odooParfums))
         }
       } catch (e) {
         console.error(e)
@@ -66,6 +74,22 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
     load()
     return () => { mounted = false }
   }, [item?.id, typeGm, isMixte])
+
+  // Pré-remplit 1 lot depuis les détails saisis à la prise de commande (order_items.acc_details).
+  // Renvoie null si rien à pré-remplir → on retombe sur initLots (comportement actuel).
+  function prefillLotsFromAcc(accStr, palette) {
+    const acc = parseAccDetails(accStr)
+    if (!acc) return null
+    const lot = makeEmptyLot(odooParfums?.[0] || null)
+    lot.qty = acc.qty || expectedQty || 0
+    const cid = colorIdByName(palette, acc.couleur)
+    if (cid) lot.couleur_id = cid
+    if (spec?.lotHasForme && acc.forme) {
+      const fo = (spec.formeOptions || []).find(f => f.label.toLowerCase() === acc.forme.toLowerCase())
+      if (fo) lot.forme = fo.value
+    }
+    return [lot]
+  }
 
   // Init des lots vides : si mixte -> 1 lot par parfum, sinon 1 lot vide
   function initLots(typeGm, isMixte, odooParfums) {

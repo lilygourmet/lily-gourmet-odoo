@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette — Écrans bloquants devis cake design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bordeaux:#7a2233; --bordeaux-deep:#5f1926; --gold:#b8873b;
+    --cream:#fcfbf8; --cream-warm:#f4efe6; --line:#e6ded0;
+    --ink:#2b2320; --ink-soft:#6b5f57; --ink-mute:#9a8f85;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);min-height:100vh}
+  .fraunces{font-family:'Fraunces',serif}
+
+  /* barre du haut pour basculer entre les 2 écrans (maquette seulement) */
+  .switcher{position:fixed;top:0;left:0;right:0;z-index:200;background:#fff;border-bottom:1px solid var(--line);
+    display:flex;gap:8px;align-items:center;padding:10px 16px}
+  .switcher b{font-size:12px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.08em;margin-right:8px}
+  .switcher button{font-family:'Geist';font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+    padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer}
+  .switcher button.active{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+
+  /* faux fond d'app derrière le pop-up */
+  .app-bg{padding:80px 20px 20px;filter:none}
+  .fakecard{max-width:520px;margin:0 auto 14px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px}
+  .fakecard h4{margin:0 0 6px;font-size:14px;color:var(--ink-soft)}
+  .fakebar{height:10px;border-radius:6px;background:var(--cream-warm);margin:8px 0}
+  .fakebar.short{width:55%}
+
+  /* overlay + pop-up */
+  .overlay{position:fixed;inset:0;z-index:150;display:flex;align-items:center;justify-content:center;padding:16px;
+    background:rgba(43,35,32,.55);backdrop-filter:blur(3px)}
+  .modal{background:var(--cream);border:1px solid var(--line);border-radius:22px;width:100%;max-width:440px;
+    box-shadow:0 24px 60px rgba(43,35,32,.28);overflow:hidden}
+  .modal-head{padding:22px 22px 0}
+  .kicker{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.1em;color:var(--bordeaux);background:rgba(122,34,51,.08);padding:6px 11px;border-radius:999px}
+  .modal h3{font-size:23px;line-height:1.2;margin:14px 0 4px;font-style:italic;font-weight:400}
+  .modal p.sub{margin:0;color:var(--ink-soft);font-size:13.5px;line-height:1.5}
+  .modal-body{padding:18px 22px 6px}
+
+  .item{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;border:1px solid var(--line);border-radius:14px;
+    background:#fff;margin-bottom:10px;cursor:pointer;transition:.15s}
+  .item:hover{border-color:var(--gold)}
+  .item.done{border-color:var(--bordeaux);background:rgba(122,34,51,.04)}
+  .box{width:22px;height:22px;border-radius:7px;border:2px solid var(--ink-mute);flex-shrink:0;margin-top:1px;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;transition:.15s}
+  .item.done .box{background:var(--bordeaux);border-color:var(--bordeaux)}
+  .item .txt{font-size:14px;line-height:1.45;color:var(--ink)}
+  .item .txt small{display:block;color:var(--ink-mute);font-size:12px;margin-top:2px}
+
+  .modal-foot{padding:8px 22px 22px;display:flex;gap:10px}
+  .btn{flex:1;font-family:'Geist';font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+    padding:13px;border-radius:12px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-soft)}
+  .btn.primary{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+  .btn.primary:disabled{opacity:.45;cursor:not-allowed}
+  .hint{font-size:11.5px;color:var(--ink-mute);text-align:center;padding:0 22px 16px;margin-top:-4px}
+
+  .tagcd{font-size:11px;color:var(--gold);font-weight:600;letter-spacing:.05em}
+</style>
+</head>
+<body>
+
+<div class="switcher">
+  <b>Maquette</b>
+  <button id="b1" class="active" onclick="show(1)">1 · Ajouter au panier (CD-)</button>
+  <button id="b2" onclick="show(2)">2 · Après envoi (acompte)</button>
+</div>
+
+<!-- Faux fond d'app -->
+<div class="app-bg">
+  <div class="fakecard">
+    <h4>Configurateur · <span class="tagcd">CD- Cake design</span></h4>
+    <div class="fakebar"></div>
+    <div class="fakebar short"></div>
+    <div style="margin-top:14px;text-align:center;background:var(--bordeaux);color:#fff;border-radius:999px;padding:11px;font-size:13px;font-weight:600">Ajouter au panier</div>
+  </div>
+</div>
+
+<!-- ÉCRAN 1 : avant de remplir le devis -->
+<div class="overlay" id="screen1">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="kicker">Cake design · à valider</span>
+      <h3 class="fraunces">Avant d'ajouter au panier</h3>
+      <p class="sub">Confirme ces points avec le client avant d'ajouter ce cake design. Ça évite les mauvaises surprises à la livraison.</p>
+    </div>
+    <div class="modal-body">
+      <div class="item" onclick="toggle(this,'s1')">
+        <div class="box">✓</div>
+        <div class="txt">J'ai confirmé la <b>fausse hauteur (poly)</b> avec le client
+          <small>Le support de présentation, la partie à manger correspond aux parts.</small></div>
+      </div>
+      <div class="item" onclick="toggle(this,'s1')">
+        <div class="box">✓</div>
+        <div class="txt">J'ai confirmé le <b>glaçage</b> avec le client</div>
+      </div>
+      <div class="item" onclick="toggle(this,'s1')">
+        <div class="box">✓</div>
+        <div class="txt">J'ai prévenu que le <b>modèle d'inspiration</b> sera approché
+          <small>On s'approche du modèle, sans copie à l'identique.</small></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn primary" id="cont1" disabled onclick="alert('→ Article ajouté au panier')">Ajouter au panier</button>
+    </div>
+    <div class="hint">Le bouton reste grisé tant que tout n'est pas coché.</div>
+  </div>
+</div>
+
+<!-- ÉCRAN 2 : une fois le devis envoyé -->
+<div class="overlay" id="screen2" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="kicker">Devis envoyé ✓</span>
+      <h3 class="fraunces">Pense à l'acompte</h3>
+      <p class="sub">Le devis vient de partir. Avant de fermer, confirme que tu as expliqué l'acompte au client.</p>
+    </div>
+    <div class="modal-body">
+      <div class="item" onclick="toggle(this,'s2')">
+        <div class="box">✓</div>
+        <div class="txt">J'ai expliqué l'<b>acompte</b> au client
+          <small>Pour réserver la date, un acompte est demandé ; la commande est confirmée dès réception.</small></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn primary" id="cont2" disabled onclick="alert('→ Fermé')">Terminé</button>
+    </div>
+    <div class="hint">Bloquant : on ne ferme qu'une fois coché.</div>
+  </div>
+</div>
+
+<script>
+  function show(n){
+    document.getElementById('screen1').style.display = n===1?'flex':'none';
+    document.getElementById('screen2').style.display = n===2?'flex':'none';
+    document.getElementById('b1').classList.toggle('active', n===1);
+    document.getElementById('b2').classList.toggle('active', n===2);
+  }
+  function toggle(el, group){
+    el.classList.toggle('done');
+    // active le bouton quand toutes les cases du groupe sont cochées
+    const screen = group==='s1'? 'screen1':'screen2';
+    const btn = group==='s1'? 'cont1':'cont2';
+    const items = document.querySelectorAll('#'+screen+' .item');
+    const allDone = [...items].every(i=>i.classList.contains('done'));
+    document.getElementById(btn).disabled = !allDone;
+  }
+</script>
+</body>
+</html>

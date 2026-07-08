@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Skeleton from './Skeleton'
 import { Phone, MapPin, Cake, Truck, Cookie, User, Croissant } from 'lucide-react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix, fetchInvoicePdf, openInvoicePdf, searchInvoices } from '../lib/salesLines'
@@ -256,15 +256,21 @@ function OdooTableView({ lines }) {
   const [articlesMode, setArticlesMode] = useState('contains')
   const [articlesTerms, setArticlesTerms] = useState('')
 
-  const filtered = filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms })
+  const filtered = useMemo(
+    () => filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms }),
+    [lines, clientsMode, clientsTerms, articlesMode, articlesTerms]
+  )
   const isFiltered = clientsTerms.trim() !== '' || articlesTerms.trim() !== ''
 
   // Filtrer aussi les lignes ou reste=0 (= tout livre, plus rien a faire)
-  const groupedRaw = groupByProductWithDelivered(filtered)
-  const grouped = new Map()
-  for (const [k, e] of groupedRaw.entries()) {
-    if (e.remaining > 0) grouped.set(k, e)
-  }
+  const grouped = useMemo(() => {
+    const groupedRaw = groupByProductWithDelivered(filtered)
+    const g = new Map()
+    for (const [k, e] of groupedRaw.entries()) {
+      if (e.remaining > 0) g.set(k, e)
+    }
+    return g
+  }, [filtered])
 
   let totalOrd = 0, totalDel = 0, totalRem = 0
   const rows = [...grouped.entries()]
@@ -404,16 +410,18 @@ function CategoryPopup({
   }
 
   // Pre-calcule le contenu groupe selon le mode
-  let groupedHourClient = null
-  if (!isProductMode && !isOdooTableMode) {
-    if (isDeliveryMode) {
-      groupedHourClient = groupDeliveriesWithFullOrder(lines, allLines)
-    } else if (isDeliveryAllMode) {
-      groupedHourClient = groupAllOrdersByHour(lines)
-    } else {
-      groupedHourClient = groupByHourThenClient(lines)
-    }
-  }
+  const groupedHourClient = useMemo(() => {
+    if (isProductMode || isOdooTableMode) return null
+    if (isDeliveryMode) return groupDeliveriesWithFullOrder(lines, allLines)
+    if (isDeliveryAllMode) return groupAllOrdersByHour(lines)
+    return groupByHourThenClient(lines)
+  }, [lines, allLines, isProductMode, isOdooTableMode, isDeliveryMode, isDeliveryAllMode])
+
+  // Pre-calcule la vue agregee par produit (mode PROD)
+  const productGroups = useMemo(
+    () => (isProductMode ? [...groupByProduct(lines).entries()] : []),
+    [lines, isProductMode]
+  )
 
   return (
     <div className="fixed inset-0 z-[60] bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
@@ -455,7 +463,7 @@ function CategoryPopup({
           ) : isProductMode ? (
             // Vue agregee par produit (PROD)
             <div className="space-y-1">
-              {[...groupByProduct(lines).entries()].map(([name, entry]) => {
+              {productGroups.map(([name, entry]) => {
                 const allRanged = isRanged && entry.lines.length > 0 && entry.lines.every(l => isRanged(l))
                 return (
                 <div key={name} className="flex gap-3 py-1.5 border-b border-line/30 last:border-0">
@@ -1218,7 +1226,10 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
   }
 
   // Lignes apres application des filtres (utilise pour les vues + popups + impression)
-  const filteredLines = filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms })
+  const filteredLines = useMemo(
+    () => filterLines(lines, { clientsMode, clientsTerms, articlesMode, articlesTerms }),
+    [lines, clientsMode, clientsTerms, articlesMode, articlesTerms]
+  )
   const isFiltered = clientsTerms.trim() !== '' || articlesTerms.trim() !== ''
 
   function linesForCategory(catId) {
@@ -1339,7 +1350,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
       )}
 
       <div className={fullscreen
-          ? "min-h-screen bg-cream"
+          ? "min-h-screen lg-vibrant"
           : "fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm overflow-y-auto p-4"}>
         <div className={fullscreen
             ? "max-w-7xl mx-auto"

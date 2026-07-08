@@ -17,6 +17,11 @@ function parsePage(text) {
   const t = text.replace(/\s+/g, ' ')
   const mat = t.match(/\b0\d{4}\b/)
   const matricule = mat ? mat[0] : null
+  // Vraie période imprimée sur le bulletin : « Période : 06/2026 » → "2026-06".
+  // On s'ancre sur le mot « Période » pour ne pas confondre avec les dates de
+  // naissance / embauche (ex. 28/11/1980, 01/09/2014).
+  const perM = t.match(/p[ée]riode\s*:?\s*(\d{1,2})\/(\d{4})/i)
+  const period = perM ? `${perM[2]}-${perM[1].padStart(2, '0')}` : null
   // CNSS = nombre de 8 à 10 chiffres (les montants ont une virgule décimale)
   const cnssMatch = t.match(/\b\d{8,10}\b/)
   const cnss = cnssMatch ? cnssMatch[0] : null
@@ -40,14 +45,21 @@ function parsePage(text) {
     nm.push(w)
     if (nm.length >= 4) break
   }
-  return { matricule, cnss, net, label: nm.join(' ') }
+  return { matricule, cnss, net, period, label: nm.join(' ') }
 }
 
 export default function BulletinsTab() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7))
+  // Par défaut : le mois précédent (le bulletin du mois en cours n'arrive qu'en fin de mois).
+  // Sert juste de secours — le vrai mois est lu automatiquement dans le PDF.
+  const [period, setPeriod] = useState(() => {
+    const d = new Date(); const m = d.getMonth()
+    const py = m === 0 ? d.getFullYear() - 1 : d.getFullYear()
+    const pm = m === 0 ? 12 : m
+    return `${py}-${String(pm).padStart(2, '0')}`
+  })
   const [progress, setProgress] = useState(null) // { done, total }
   const [busy, setBusy] = useState(false)
 
@@ -72,20 +84,24 @@ export default function BulletinsTab() {
       const srcDoc = await PDFDocument.load(buf.slice(0), { ignoreEncryption: true })
       const n = pdfjsDoc.numPages
       setProgress({ done: 0, total: n })
+      const detected = new Set()   // mois réellement lus dans le PDF
       for (let i = 0; i < n; i++) {
         const pg = await pdfjsDoc.getPage(i + 1)
         const tc = await pg.getTextContent()
         const text = tc.items.map(it => it.str).join(' ')
         const parsed = parsePage(text)
+        const usedPeriod = parsed.period || period   // date lue dans le PDF, sinon le sélecteur
+        detected.add(parsed.period ? parsed.period : `${period} (non détecté)`)
         const out = await PDFDocument.create()
         const [cp] = await out.copyPages(srcDoc, [i])
         out.addPage(cp)
         const bytes = await out.save()
-        await addBulletinPage(period, parsed, bytes)
+        await addBulletinPage(usedPeriod, parsed, bytes)
         setProgress({ done: i + 1, total: n })
       }
       await prunePeriods(3)
       await refresh()
+      toast.success(`Importé ✓ Mois détecté(s) dans le PDF : ${[...detected].join(', ')}`)
     } catch (e2) {
       setError('Erreur import : ' + e2.message)
     } finally {
@@ -96,6 +112,16 @@ export default function BulletinsTab() {
   async function handleView(path) {
     try { const url = await getBulletinSignedUrl(path); window.open(url, '_blank') }
     catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+
+  // Télécharge le bulletin d'un mois précis, nommé par sa date (ex. 2026-06.pdf).
+  async function handleDownloadMonth(r) {
+    setBusy(true)
+    try {
+      const bytes = await downloadBulletinBytes(r.storage_path)
+      saveAs(new Blob([bytes], { type: 'application/pdf' }), `${r.period}.pdf`)
+    } catch (e) { toast.error('Erreur : ' + e.message) }
+    finally { setBusy(false) }
   }
 
   async function handleRelabel(g) {
@@ -138,12 +164,21 @@ export default function BulletinsTab() {
     groups[key].rows.push(r)
     if (r.label && r.label !== 'À identifier') groups[key].label = r.label
   }
+  // Anti-doublon : un seul bulletin par mois et par employé (on garde le plus récent).
+  for (const g of Object.values(groups)) {
+    const byPeriod = {}
+    for (const r of g.rows) {
+      const ex = byPeriod[r.period]
+      if (!ex || r.id > ex.id) byPeriod[r.period] = r
+    }
+    g.rows = Object.values(byPeriod)
+  }
   const employes = Object.values(groups).sort((a, b) => (a.label || '').localeCompare(b.label || ''))
   const periodsAll = [...new Set(items.map(r => r.period))].sort().reverse()
 
   return (
     <div>
-      <p className="text-[12px] text-ink-mute mb-3">Le comptable t'envoie le PDF du mois (1 page par employé). Importe-le ici : il est découpé par employé. On garde les 3 derniers mois.</p>
+      <p className="text-[12px] text-ink-mute mb-3">Le comptable t'envoie le PDF du mois (1 page par employé). Importe-le ici : il est découpé par employé et <b>le mois est lu automatiquement dans le bulletin</b> (le sélecteur ci-dessous ne sert que si la date n'est pas trouvée). On garde les 3 derniers mois.</p>
 
       {/* Import */}
       <div className="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl bg-cream-warm border border-line">
@@ -178,10 +213,10 @@ export default function BulletinsTab() {
               </div>
               <div className="flex flex-wrap gap-1 mt-1">
                 {g.rows.sort((a, b) => b.period.localeCompare(a.period)).map(r => (
-                  <button key={r.id} onClick={() => handleView(r.storage_path)}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-cream border border-line text-ink-soft hover:border-bordeaux" title="Voir le bulletin">
-                    {r.period}
-                  </button>
+                  <span key={r.id} className="inline-flex items-center rounded-full bg-cream border border-line text-ink-soft overflow-hidden">
+                    <button onClick={() => handleView(r.storage_path)} className="text-[10px] pl-2 pr-1 py-0.5 hover:text-bordeaux" title="Voir le bulletin">{r.period}</button>
+                    <button onClick={() => handleDownloadMonth(r)} className="pr-2 pl-1 py-0.5 hover:text-bordeaux border-l border-line" title={`Télécharger (${r.period}.pdf)`}><Download size={11} /></button>
+                  </span>
                 ))}
               </div>
             </div>

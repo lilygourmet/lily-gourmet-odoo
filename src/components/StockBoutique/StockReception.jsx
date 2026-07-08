@@ -11,6 +11,7 @@ import NumpadInline from './NumpadInline'
 import PrintButton from './PrintButton'
 import {
   getOrCreateStockDay,
+  loadStockDay,
   loadDayItems,
   confirmReception,
   noteDiscrepancy,
@@ -38,6 +39,9 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   const [surpriseModalOpen, setSurpriseModalOpen] = useState(false)
   const [surpriseCart, setSurpriseCart] = useState({})
   const [dotFlash, setDotFlash] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)   // afficher l'historique J-7 (lecture seule)
+  const [historyDays, setHistoryDays] = useState(null)     // [{ date, items }] (null = pas encore chargé)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const subscriptionRef = useRef(null)
   const audioCtxRef = useRef(null)
 
@@ -143,6 +147,31 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
     setTimeout(() => setDotFlash(false), 600)
   }
 
+  // Bascule l'historique J-7. Au 1er affichage, charge les 7 jours passés (J-1 → J-7)
+  // via les fonctions existantes (loadStockDay puis loadDayItems). Lecture seule.
+  async function toggleHistory() {
+    const next = !showHistory
+    setShowHistory(next)
+    if (next && historyDays === null) {
+      setHistoryLoading(true)
+      try {
+        const days = []
+        for (let i = 1; i <= 7; i++) {
+          const d = new Date()
+          d.setDate(d.getDate() - i)
+          const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          const sd = await loadStockDay(iso)
+          if (!sd) continue
+          const its = await loadDayItems(sd.id)
+          days.push({ date: iso, items: its })
+        }
+        setHistoryDays(days) // J-1 en premier (plus récent en haut)
+      } finally {
+        setHistoryLoading(false)
+      }
+    }
+  }
+
   // Filtre : on n'affiche pas les lignes 'leftover' / 'evening' ni 'loss' dans la réception
   const visibleItems = items
     .filter(it => it.source === 'morning' && it.freshness !== 'loss')
@@ -242,7 +271,7 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen lg-vibrant">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       {/* MODAL BLOQUANT — Café répond après recompte vitrine */}
@@ -281,16 +310,32 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
 
         <div className="bg-white border border-line rounded-b-2xl p-4 shadow-[0_8px_24px_rgba(122,42,68,0.07)]">
           {/* Actions bar */}
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-between items-center gap-2 mb-4">
             <button
               type="button"
-              onClick={() => setSurpriseModalOpen(true)}
-              className="px-4 py-2 bg-green-700 text-white rounded-lg text-[12px] font-medium tracking-wider hover:bg-green-800 flex items-center gap-1"
+              onClick={toggleHistory}
+              className={`px-4 py-2 rounded-lg text-[12px] font-medium tracking-wider flex items-center gap-1 transition-colors ${
+                showHistory ? 'bg-ink text-cream' : 'border border-line text-ink-soft hover:border-bordeaux'
+              }`}
+              title="Afficher / masquer les 7 derniers jours (lecture seule)"
             >
-              + Ajouter article (non annoncé)
+              Historique J-7
             </button>
+            {!showHistory && (
+              <button
+                type="button"
+                onClick={() => setSurpriseModalOpen(true)}
+                className="px-4 py-2 bg-green-700 text-white rounded-lg text-[12px] font-medium tracking-wider hover:bg-green-800 flex items-center gap-1"
+              >
+                + Ajouter article (non annoncé)
+              </button>
+            )}
           </div>
 
+          {showHistory ? (
+            <HistoryDays days={historyDays} loading={historyLoading} />
+          ) : (
+          <>
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
             <StatCard label="À recevoir" value={stats.pending} color="bordeaux" />
@@ -322,6 +367,8 @@ export default function StockReception({ user, activeView, onNavigate, onLogout 
                 />
               ))}
             </div>
+          )}
+          </>
           )}
         </div>
       </div>
@@ -368,7 +415,55 @@ function StatCard({ label, value, color }) {
   )
 }
 
-function ReceptionRow({ item, isEditing, onEdit, onLocalQtyChange, onConfirm }) {
+// Historique J-7 : les 7 jours passés, groupés par jour (plus récent en haut), en lecture seule
+function HistoryDays({ days, loading }) {
+  if (loading) {
+    return <div className="p-8 text-center text-ink-mute text-[12px]">Chargement de l'historique…</div>
+  }
+  if (!days || days.length === 0) {
+    return (
+      <div className="p-12 text-center text-ink-mute border border-dashed border-line rounded-lg text-[13px]">
+        Aucun historique sur les 7 derniers jours
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-5">
+      {days.map(({ date, items }) => {
+        const dayItems = items
+          .filter(it => it.source === 'morning' && it.freshness !== 'loss')
+          .slice()
+          .sort((a, b) => new Date(b.announced_at || 0) - new Date(a.announced_at || 0))
+        return (
+          <div key={date}>
+            <div className="text-[12px] font-semibold text-bordeaux uppercase tracking-wider mb-2">
+              {new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            {dayItems.length === 0 ? (
+              <div className="text-[11px] text-ink-mute italic px-3 py-2">Aucune réception</div>
+            ) : (
+              <div className="space-y-2">
+                {dayItems.map(item => (
+                  <ReceptionRow
+                    key={item.id}
+                    item={item}
+                    isEditing={false}
+                    onEdit={() => {}}
+                    onLocalQtyChange={() => {}}
+                    onConfirm={() => {}}
+                    readOnly
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ReceptionRow({ item, isEditing, onEdit, onLocalQtyChange, onConfirm, readOnly = false }) {
   const currentQty = item._localQty !== undefined ? item._localQty : (item.qty_received !== null && item.qty_received !== undefined ? item.qty_received : item.qty_announced)
   const isPending = item.reception_status === 'pending'
   const isConfirmed = item.reception_status === 'confirmed'
@@ -404,7 +499,7 @@ function ReceptionRow({ item, isEditing, onEdit, onLocalQtyChange, onConfirm }) 
       </div>
 
       {/* Quantité */}
-      {isPending ? (
+      {isPending && !readOnly ? (
         <div className="flex flex-col items-end">
           <button
             type="button"
@@ -433,7 +528,7 @@ function ReceptionRow({ item, isEditing, onEdit, onLocalQtyChange, onConfirm }) 
       )}
 
       {/* Action droite */}
-      {isPending ? (
+      {isPending && !readOnly ? (
         <button
           type="button"
           onClick={onConfirm}
