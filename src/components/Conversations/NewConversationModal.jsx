@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { fetchTemplates, sendTemplate, searchOrders } from '../../lib/conversations'
+import { fetchTemplates, sendTemplate, searchOrders, sendMessage } from '../../lib/conversations'
 import { loadEmployes } from '../../lib/hr'
 import { toast } from '../../lib/toast'
 
@@ -114,6 +114,14 @@ Nous restons à votre disposition pour toute question 🙏
 
 Merci pour votre confiance !`
 
+// Explication « hauteur des gâteaux » proposée AVANT l'envoi d'un devis cake design (choix Oui/Non).
+// Le texte part via wati_info ; l'image part en pièce jointe (fenêtre 24h ouverte requise).
+const HAUTEUR_MESSAGE = `Pour être certaine que le rendu correspond bien à vos attentes, pourriez-vous prendre un instant pour ouvrir cette image ? Elle explique comment nous réalisons la hauteur de nos gâteaux et le résultat final obtenu.
+
+Est-ce que cela vous convient pour votre commande ?`
+const HAUTEUR_IMAGE_PATH = 'static/hauteur-gateaux.jpg'   // chemin dans le bucket Supabase conversation-media
+const HAUTEUR_IMAGE_PREVIEW = '/hauteur-gateaux.jpg'      // asset public pour l'aperçu dans l'app
+
 export default function NewConversationModal({ user, onClose, onSent, initialPhone = '', initialName = '', initialOrder = null }) {
   const [templates, setTemplates] = useState([])
   const [loadingT, setLoadingT] = useState(true)
@@ -129,6 +137,11 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
   const [acompteOpen, setAcompteOpen] = useState(false)
   const [acompteSending, setAcompteSending] = useState(false)
   const [sentConvId, setSentConvId] = useState(null)
+
+  // Pop-up hauteur bloquant, AVANT l'envoi d'un devis cake design : envoyer (Oui) ou non
+  // l'explication « hauteur des gâteaux » + l'image au client.
+  const [hauteurOpen, setHauteurOpen] = useState(false)
+  const [hauteurSending, setHauteurSending] = useState(false)
 
   // Mode d'envoi : 'client' (commandes) ou 'personnel' (employés)
   const [mode, setMode] = useState('client')
@@ -237,7 +250,18 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
     setPickedOrder(null)
   }
 
-  async function handleSend() {
+  // Clic « Envoyer » : pour un devis cake design, on demande d'abord (Oui/Non) d'envoyer
+  // l'explication « hauteur des gâteaux » + l'image AVANT le devis ; sinon on envoie direct.
+  function handleSend() {
+    if (!phone.trim() || !selected) return
+    if (selectedName === 'devis_validation' && pickedOrder && isCakeDesignOrder(pickedOrder)) {
+      setHauteurOpen(true)
+      return
+    }
+    doSendDevis()
+  }
+
+  async function doSendDevis() {
     if (!phone.trim() || !selected) return
     setSending(true)
     setErr('')
@@ -300,6 +324,39 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
     }
     onSent?.(sentConvId)
     onClose()
+  }
+
+  // Choix Oui/Non du pop-up hauteur (AVANT le devis) : si Oui, envoie l'explication + l'image,
+  // puis on envoie le devis dans tous les cas.
+  async function handleHauteurChoice(send) {
+    if (send) {
+      setHauteurSending(true)
+      try {
+        // Texte via wati_info (marche hors 24h), puis l'image en pièce jointe (fenêtre ouverte requise).
+        const r = await sendTemplate({
+          clientPhone: phone,
+          templateName: 'wati_info',
+          parameters: [{ name: '1', value: HAUTEUR_MESSAGE }],
+          bodyText: HAUTEUR_MESSAGE,
+          freeText: HAUTEUR_MESSAGE,
+          userId: user.id,
+        })
+        await sendMessage({
+          conversationId: r.conversationId,
+          clientPhone: phone,
+          userId: user.id,
+          mediaPath: HAUTEUR_IMAGE_PATH,
+          mediaType: 'image',
+        })
+        toast.success('Explication hauteur + image envoyées ✓')
+      } catch (e) {
+        toast.error("Explication hauteur NON envoyée (" + (e?.message || 'erreur') + "). La fenêtre WhatsApp est peut-être fermée — envoie-la à la main.")
+      } finally {
+        setHauteurSending(false)
+      }
+    }
+    setHauteurOpen(false)
+    doSendDevis()
   }
 
   return createPortal(
@@ -481,6 +538,31 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
         </div>
       </div>
     </div>
+
+    {hauteurOpen && (
+      <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm">
+        <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto">
+          <h3 className="font-fraunces italic text-[20px] text-ink mb-1">Avant d'envoyer le devis</h3>
+          <p className="text-[13px] text-ink-soft mb-3">Envoyer d'abord au client l'explication sur la hauteur des gâteaux (avec l'image) ?</p>
+          <div className="bg-cream-warm border border-bordeaux/40 rounded-lg p-3 mb-3">
+            <pre className="text-[12px] text-ink leading-snug whitespace-pre-wrap font-sans m-0">{HAUTEUR_MESSAGE}</pre>
+          </div>
+          <img src={HAUTEUR_IMAGE_PREVIEW} alt="Explication hauteur des gâteaux" className="w-full rounded-lg border border-line mb-4" />
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleHauteurChoice(false)}
+              disabled={hauteurSending}
+              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-cream-warm text-ink border border-line rounded-lg hover:bg-line/30 transition-all disabled:opacity-50"
+            >Non, envoyer juste le devis</button>
+            <button
+              onClick={() => handleHauteurChoice(true)}
+              disabled={hauteurSending}
+              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50"
+            >{hauteurSending ? 'Envoi…' : 'Oui, envoyer'}</button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {acompteOpen && (
       <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm">
