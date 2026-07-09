@@ -453,14 +453,13 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
         {lastCreated && (
           <div className="mt-3 p-3 rounded-xl bg-bordeaux/5 border border-bordeaux/30 text-center space-y-2">
             <div className="text-[12px] text-ink">Devis <b>{lastCreated.name}</b> créé ✓{lastCreated.confirmed ? ' · confirmé' : ''}</div>
-            {lastCreated.phone ? (
-              <button
-                onClick={() => openWaSend(false)}
-                className="w-full py-2.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full text-[13px] font-medium">
-                📱 Envoyer le devis sur WhatsApp
-              </button>
-            ) : (
-              <div className="text-[11px] text-ink-mute">Ce client n'a pas de numéro — ajoute-le dans Odoo pour pouvoir le contacter.</div>
+            <button
+              onClick={() => openWaSend(false)}
+              className="w-full py-2.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full text-[13px] font-medium">
+              📱 Envoyer le devis sur WhatsApp
+            </button>
+            {!lastCreated.phone && (
+              <div className="text-[11px] text-ink-mute">Ce client n'a pas de numéro en base — tu pourras le saisir dans l'écran d'envoi.</div>
             )}
             {!lastCreated.confirmed && (
               <button onClick={confirmOrder} disabled={confirming}
