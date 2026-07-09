@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { fetchTemplates, sendTemplate, searchOrders, sendMessage } from '../../lib/conversations'
+import { fetchTemplates, sendTemplate, searchOrders } from '../../lib/conversations'
 import { loadEmployes } from '../../lib/hr'
 import { toast } from '../../lib/toast'
 
@@ -115,12 +115,14 @@ Nous restons à votre disposition pour toute question 🙏
 Merci pour votre confiance !`
 
 // Explication « hauteur des gâteaux » proposée AVANT l'envoi d'un devis cake design (choix Oui/Non).
-// Le texte part via wati_info ; l'image part en pièce jointe (fenêtre 24h ouverte requise).
-const HAUTEUR_MESSAGE = `Pour être certaine que le rendu correspond bien à vos attentes, pourriez-vous prendre un instant pour ouvrir cette image ? Elle explique comment nous réalisons la hauteur de nos gâteaux et le résultat final obtenu.
+// On envoie un LIEN vers l'image (que le client ouvre sans télécharger) → marche même hors 24h.
+const HAUTEUR_IMAGE_PREVIEW = '/hauteur-gateaux.jpg'      // asset public pour l'aperçu dans l'app
+const HAUTEUR_IMAGE_URL = 'https://lily-gourmet-odoo.vercel.app/hauteur-gateaux.jpg'  // lien envoyé au client
+const HAUTEUR_MESSAGE = `Pour être certaine que le rendu correspond bien à vos attentes, pourriez-vous prendre un instant pour ouvrir ce lien ? Il explique comment nous réalisons la hauteur de nos gâteaux et le résultat final obtenu.
+
+👉 ${HAUTEUR_IMAGE_URL}
 
 Est-ce que cela vous convient pour votre commande ?`
-const HAUTEUR_IMAGE_PATH = 'static/hauteur-gateaux.jpg'   // chemin dans le bucket Supabase conversation-media
-const HAUTEUR_IMAGE_PREVIEW = '/hauteur-gateaux.jpg'      // asset public pour l'aperçu dans l'app
 
 // WhatsApp/Meta interdit les retours à la ligne dans une variable de template ({{1}}).
 // Hors fenêtre 24h (envoi via wati_info), on aplatit donc le message sur une seule ligne
@@ -331,14 +333,14 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
     onClose()
   }
 
-  // Choix Oui/Non du pop-up hauteur (AVANT le devis) : si Oui, envoie l'explication + l'image,
-  // puis on envoie le devis dans tous les cas.
+  // Choix Oui/Non du pop-up hauteur (AVANT le devis) : si Oui, envoie l'explication + le lien
+  // vers l'image (que le client ouvre sans télécharger), puis on envoie le devis dans tous les cas.
   async function handleHauteurChoice(send) {
     if (send) {
       setHauteurSending(true)
       try {
-        // Texte via wati_info (marche hors 24h), puis l'image en pièce jointe (fenêtre ouverte requise).
-        const r = await sendTemplate({
+        // Texte (avec le lien de l'image) via wati_info → marche même hors fenêtre 24h.
+        await sendTemplate({
           clientPhone: phone,
           templateName: 'wati_info',
           parameters: [{ name: '1', value: flattenForTemplate(HAUTEUR_MESSAGE) }],
@@ -346,16 +348,9 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
           freeText: HAUTEUR_MESSAGE,
           userId: user.id,
         })
-        await sendMessage({
-          conversationId: r.conversationId,
-          clientPhone: phone,
-          userId: user.id,
-          mediaPath: HAUTEUR_IMAGE_PATH,
-          mediaType: 'image',
-        })
-        toast.success('Explication hauteur + image envoyées ✓')
+        toast.success('Explication hauteur envoyée ✓')
       } catch (e) {
-        toast.error("Explication hauteur NON envoyée (" + (e?.message || 'erreur') + "). La fenêtre WhatsApp est peut-être fermée — envoie-la à la main.")
+        toast.error("Explication hauteur NON envoyée (" + (e?.message || 'erreur') + "). Envoie-la à la main.")
       } finally {
         setHauteurSending(false)
       }
@@ -548,7 +543,7 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
       <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm">
         <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto">
           <h3 className="font-fraunces italic text-[20px] text-ink mb-1">Avant d'envoyer le devis</h3>
-          <p className="text-[13px] text-ink-soft mb-3">Envoyer d'abord au client l'explication sur la hauteur des gâteaux (avec l'image) ?</p>
+          <p className="text-[13px] text-ink-soft mb-3">Envoyer d'abord au client l'explication sur la hauteur des gâteaux (avec le lien de la photo) ?</p>
           <div className="bg-cream-warm border border-bordeaux/40 rounded-lg p-3 mb-3">
             <pre className="text-[12px] text-ink leading-snug whitespace-pre-wrap font-sans m-0">{HAUTEUR_MESSAGE}</pre>
           </div>
