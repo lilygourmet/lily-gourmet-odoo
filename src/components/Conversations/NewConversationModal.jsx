@@ -145,10 +145,9 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
   const [acompteSending, setAcompteSending] = useState(false)
   const [sentConvId, setSentConvId] = useState(null)
 
-  // Pop-up hauteur bloquant, AVANT l'envoi d'un devis cake design : envoyer (Oui) ou non
-  // l'explication « hauteur des gâteaux » + l'image au client.
+  // Pop-up hauteur bloquant au clic « Envoyer » d'un devis cake design : choisir (Oui/Non)
+  // d'envoyer l'explication « hauteur » (le message part APRÈS le devis).
   const [hauteurOpen, setHauteurOpen] = useState(false)
-  const [hauteurSending, setHauteurSending] = useState(false)
 
   // Mode d'envoi : 'client' (commandes) ou 'personnel' (employés)
   const [mode, setMode] = useState('client')
@@ -257,18 +256,18 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
     setPickedOrder(null)
   }
 
-  // Clic « Envoyer » : pour un devis cake design, on demande d'abord (Oui/Non) d'envoyer
-  // l'explication « hauteur des gâteaux » + l'image AVANT le devis ; sinon on envoie direct.
+  // Clic « Envoyer » : pour un devis cake design, on demande d'abord (Oui/Non) si on envoie
+  // l'explication « hauteur des gâteaux » (le message part APRÈS le devis) ; sinon on envoie direct.
   function handleSend() {
     if (!phone.trim() || !selected) return
     if (selectedName === 'devis_validation' && pickedOrder && isCakeDesignOrder(pickedOrder)) {
       setHauteurOpen(true)
       return
     }
-    doSendDevis()
+    doSendDevis(false)
   }
 
-  async function doSendDevis() {
+  async function doSendDevis(sendHauteur = false) {
     if (!phone.trim() || !selected) return
     setSending(true)
     setErr('')
@@ -292,7 +291,23 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
         freeText,
         userId: user.id,
       })
-      // Devis cake design → pop-up bloquant « acompte expliqué » avant de fermer.
+      // APRÈS le devis : message « hauteur » (avec le lien de la photo) si demandé.
+      if (sendHauteur) {
+        try {
+          await sendTemplate({
+            clientPhone: phone,
+            templateName: 'wati_info',
+            parameters: [{ name: '1', value: flattenForTemplate(HAUTEUR_MESSAGE) }],
+            bodyText: HAUTEUR_MESSAGE,
+            freeText: HAUTEUR_MESSAGE,
+            userId: user.id,
+          })
+          toast.success('Explication hauteur envoyée ✓')
+        } catch (e) {
+          toast.error("Explication hauteur NON envoyée (" + (e?.message || 'erreur') + "). Envoie-la à la main.")
+        }
+      }
+      // Devis cake design → pop-up bloquant « acompte » avant de fermer.
       if (selectedName === 'devis_validation' && pickedOrder && isCakeDesignOrder(pickedOrder)) {
         setSentConvId(r.conversationId)
         setAcompteOpen(true)
@@ -333,30 +348,11 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
     onClose()
   }
 
-  // Choix Oui/Non du pop-up hauteur (AVANT le devis) : si Oui, envoie l'explication + le lien
-  // vers l'image (que le client ouvre sans télécharger), puis on envoie le devis dans tous les cas.
-  async function handleHauteurChoice(send) {
-    if (send) {
-      setHauteurSending(true)
-      try {
-        // Texte (avec le lien de l'image) via wati_info → marche même hors fenêtre 24h.
-        await sendTemplate({
-          clientPhone: phone,
-          templateName: 'wati_info',
-          parameters: [{ name: '1', value: flattenForTemplate(HAUTEUR_MESSAGE) }],
-          bodyText: HAUTEUR_MESSAGE,
-          freeText: HAUTEUR_MESSAGE,
-          userId: user.id,
-        })
-        toast.success('Explication hauteur envoyée ✓')
-      } catch (e) {
-        toast.error("Explication hauteur NON envoyée (" + (e?.message || 'erreur') + "). Envoie-la à la main.")
-      } finally {
-        setHauteurSending(false)
-      }
-    }
+  // Choix Oui/Non du pop-up hauteur : on ferme et on envoie le devis ; le message hauteur
+  // (avec le lien de la photo) part APRÈS le devis, à l'intérieur de doSendDevis.
+  function handleHauteurChoice(send) {
     setHauteurOpen(false)
-    doSendDevis()
+    doSendDevis(send)
   }
 
   return createPortal(
@@ -551,14 +547,12 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
           <div className="flex gap-2">
             <button
               onClick={() => handleHauteurChoice(false)}
-              disabled={hauteurSending}
-              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-cream-warm text-ink border border-line rounded-lg hover:bg-line/30 transition-all disabled:opacity-50"
+              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-cream-warm text-ink border border-line rounded-lg hover:bg-line/30 transition-all"
             >Non, envoyer juste le devis</button>
             <button
               onClick={() => handleHauteurChoice(true)}
-              disabled={hauteurSending}
-              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50"
-            >{hauteurSending ? 'Envoi…' : 'Oui, envoyer'}</button>
+              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all"
+            >Oui, envoyer</button>
           </div>
         </div>
       </div>
