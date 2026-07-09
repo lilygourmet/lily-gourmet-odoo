@@ -13,19 +13,8 @@ import LotEditor from './LotEditor'
 // Catégories où le prix est modifiable
 export const PRICE_EDITABLE = new Set(['cd', 'divers'])
 
-// Points à confirmer avec le client avant d'ajouter un cake design (CD-) au panier.
-const CD_CHECKS = [
-  { key: 'poly', label: "J'ai confirmé la fausse hauteur (poly) avec le client" },
-  { key: 'glacage', label: "J'ai confirmé le glaçage avec le client" },
-  { key: 'modele', label: "J'ai prévenu le client qu'on s'approchera du modèle d'inspiration, sans copie à l'identique" },
-]
-
 export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable, addLabel = 'Ajouter au panier', embedded = false }) {
   const { item, loading, attributes, variants, sel, text, warn } = cfg
-  // Pop-up bloquant « à valider » avant d'ajouter un cake design au panier.
-  const [checkOpen, setCheckOpen] = useState(false)
-  const [cdChecks, setCdChecks] = useState({})
-  const cdAllChecked = CD_CHECKS.every(it => cdChecks[it.key])
   const optionAttrs = attributes.filter(a => a.type === 'option')
   const textAttrs = attributes.filter(a => a.type === 'text')
   const photoFiles = cfg.photoFiles || []
@@ -489,7 +478,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
                   <b className="text-bordeaux text-[18px]">{price != null ? finalPrice + ' DH' : '—'}{burnSupp > 0 && price != null && <span className="text-[11px] font-normal text-ink-mute"> (dont 🔥 +{burnSupp})</span>}</b>
                 )}
               </div>
-              <button onClick={cfg.catKey === 'cd' ? () => setCheckOpen(true) : add} disabled={(price == null && !(priceEditable && cfg.priceOverride)) || !requiredOk}
+              <button onClick={add} disabled={(price == null && !(priceEditable && cfg.priceOverride)) || !requiredOk}
                 className="w-full py-3 bg-bordeaux text-cream rounded-full text-[14px] font-medium disabled:opacity-50">
                 {addLabel}
               </button>
@@ -502,34 +491,6 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       </div>
     </div>
 
-    {checkOpen && (
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-ink/60">
-        <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="bg-bordeaux text-cream px-4 py-3">
-            <h3 className="font-fraunces italic text-[18px]">Avant d'ajouter au panier</h3>
-          </div>
-          <div className="p-4">
-            <p className="text-[13px] text-ink-soft mb-3">Confirme ces points avec le client avant d'ajouter ce cake design.</p>
-            <div className="space-y-2 mb-4">
-              {CD_CHECKS.map(it => (
-                <label key={it.key} className="flex items-start gap-2 cursor-pointer border border-line rounded-lg p-3 bg-white">
-                  <input type="checkbox" checked={!!cdChecks[it.key]}
-                    onChange={e => setCdChecks(p => ({ ...p, [it.key]: e.target.checked }))}
-                    className="mt-0.5 accent-bordeaux" />
-                  <span className="text-[13px] text-ink leading-snug">{it.label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setCheckOpen(false)}
-                className="flex-1 py-2.5 border border-line text-ink-soft rounded-full text-[13px]">Retour</button>
-              <button onClick={add} disabled={!cdAllChecked}
-                className="flex-1 py-2.5 bg-bordeaux text-cream rounded-full text-[13px] font-medium disabled:opacity-50">Ajouter au panier</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )}
     </>,
     document.body
   )
