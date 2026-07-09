@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { fetchTemplates, sendTemplate, searchOrders } from '../../lib/conversations'
 import { loadEmployes } from '../../lib/hr'
+import { toast } from '../../lib/toast'
 
 // Détecte les variables {{1}}, {{2}}… dans le texte d'un template.
 function templateBody(t) {
@@ -95,6 +96,24 @@ function normalizePhoneFr(raw) {
   return d
 }
 
+// Message d'acompte proposé au client après un devis cake design (choix Oui/Non du commercial).
+// Envoyé via le template WATI déjà validé « wati_info » (variable {{1}} = le texte),
+// le même que le bouton « 📢 Info » de la conversation → marche aussi hors fenêtre 24h.
+const ACOMPTE_TEMPLATE = 'wati_info'
+const ACOMPTE_MESSAGE = `Petit rappel : *ce devis est valable 24h.*
+
+Pour confirmer votre commande, merci de bien vouloir verser un *acompte de 50 %*. Plusieurs options s'offrent à vous :
+
+✅ Passer en boutique pour régler
+✅ Effectuer un virement bancaire « INSTANTANÉ »
+✅ Régler par carte via un lien de paiement sécurisé (nous pouvons vous l'envoyer)
+
+⚠️ Passé ce délai, et sans acompte, nous ne pourrons malheureusement pas garantir la prise en charge de votre commande. Il se peut alors que le gâteau souhaité ne soit plus réalisable, que le créneau horaire ne soit plus disponible, ou que nous ne puissions tout simplement plus prendre la commande.
+
+Nous restons à votre disposition pour toute question 🙏
+
+Merci pour votre confiance !`
+
 export default function NewConversationModal({ user, onClose, onSent, initialPhone = '', initialName = '', initialOrder = null }) {
   const [templates, setTemplates] = useState([])
   const [loadingT, setLoadingT] = useState(true)
@@ -105,9 +124,10 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
 
-  // Pop-up acompte bloquant, affiché juste après l'envoi d'un devis cake design.
+  // Pop-up acompte bloquant, affiché juste après l'envoi d'un devis cake design :
+  // le commercial DOIT choisir d'envoyer (Oui) ou non le message d'acompte au client.
   const [acompteOpen, setAcompteOpen] = useState(false)
-  const [acompteChecked, setAcompteChecked] = useState(false)
+  const [acompteSending, setAcompteSending] = useState(false)
   const [sentConvId, setSentConvId] = useState(null)
 
   // Mode d'envoi : 'client' (commandes) ou 'personnel' (employés)
@@ -254,6 +274,32 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
     } finally {
       setSending(false)
     }
+  }
+
+  // Choix Oui/Non du pop-up acompte : si Oui, on envoie le message d'acompte au client.
+  async function handleAcompteChoice(send) {
+    if (send) {
+      setAcompteSending(true)
+      try {
+        // freeText = envoi joli si fenêtre 24h ouverte ; sinon repli sur le template wati_info
+        // (le texte va dans la variable {{1}}), exactement comme le bouton « 📢 Info ».
+        await sendTemplate({
+          clientPhone: phone,
+          templateName: ACOMPTE_TEMPLATE,
+          parameters: [{ name: '1', value: ACOMPTE_MESSAGE }],
+          bodyText: ACOMPTE_MESSAGE,
+          freeText: ACOMPTE_MESSAGE,
+          userId: user.id,
+        })
+        toast.success("Message d'acompte envoyé au client ✓")
+      } catch (e) {
+        toast.error("Message d'acompte NON envoyé (" + (e?.message || 'erreur') + "). La fenêtre WhatsApp est peut-être fermée — envoie-le à la main.")
+      } finally {
+        setAcompteSending(false)
+      }
+    }
+    onSent?.(sentConvId)
+    onClose()
   }
 
   return createPortal(
@@ -440,18 +486,22 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
       <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm">
         <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5">
           <h3 className="font-fraunces italic text-[20px] text-ink mb-1">Devis envoyé ✓</h3>
-          <p className="text-[13px] text-ink-soft mb-4">Avant de fermer, confirme que tu as expliqué l'acompte au client.</p>
-          <label className="flex items-start gap-2 cursor-pointer bg-cream-warm border border-bordeaux/40 rounded-lg p-3 mb-4">
-            <input type="checkbox" checked={acompteChecked}
-              onChange={e => setAcompteChecked(e.target.checked)}
-              className="mt-0.5 accent-bordeaux" />
-            <span className="text-[13px] text-ink leading-snug">J'ai expliqué l'acompte au client (pour réserver la date, la commande est confirmée dès réception de l'acompte).</span>
-          </label>
-          <button
-            onClick={() => { onSent?.(sentConvId); onClose() }}
-            disabled={!acompteChecked}
-            className="w-full px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50"
-          >Terminé</button>
+          <p className="text-[13px] text-ink-soft mb-3">Envoyer ce message d'acompte au client sur WhatsApp ?</p>
+          <div className="bg-cream-warm border border-bordeaux/40 rounded-lg p-3 mb-4 max-h-52 overflow-y-auto">
+            <pre className="text-[12px] text-ink leading-snug whitespace-pre-wrap font-sans m-0">{ACOMPTE_MESSAGE}</pre>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleAcompteChoice(false)}
+              disabled={acompteSending}
+              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-cream-warm text-ink border border-line rounded-lg hover:bg-line/30 transition-all disabled:opacity-50"
+            >Non, ne pas envoyer</button>
+            <button
+              onClick={() => handleAcompteChoice(true)}
+              disabled={acompteSending}
+              className="flex-1 px-3 py-2.5 text-[11px] font-medium tracking-wider uppercase bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep transition-all disabled:opacity-50"
+            >{acompteSending ? 'Envoi…' : 'Oui, envoyer'}</button>
+          </div>
         </div>
       </div>
     )}
