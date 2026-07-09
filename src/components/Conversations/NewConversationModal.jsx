@@ -122,6 +122,11 @@ Est-ce que cela vous convient pour votre commande ?`
 const HAUTEUR_IMAGE_PATH = 'static/hauteur-gateaux.jpg'   // chemin dans le bucket Supabase conversation-media
 const HAUTEUR_IMAGE_PREVIEW = '/hauteur-gateaux.jpg'      // asset public pour l'aperçu dans l'app
 
+// WhatsApp/Meta interdit les retours à la ligne dans une variable de template ({{1}}).
+// Hors fenêtre 24h (envoi via wati_info), on aplatit donc le message sur une seule ligne
+// (les émojis ✅/⚠️ servent de séparateurs). En fenêtre ouverte, on garde la version multi-lignes.
+const flattenForTemplate = (msg) => msg.replace(/\s*\n\s*/g, ' ').replace(/ {2,}/g, ' ').trim()
+
 export default function NewConversationModal({ user, onClose, onSent, initialPhone = '', initialName = '', initialOrder = null }) {
   const [templates, setTemplates] = useState([])
   const [loadingT, setLoadingT] = useState(true)
@@ -310,7 +315,7 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
         await sendTemplate({
           clientPhone: phone,
           templateName: ACOMPTE_TEMPLATE,
-          parameters: [{ name: '1', value: ACOMPTE_MESSAGE }],
+          parameters: [{ name: '1', value: flattenForTemplate(ACOMPTE_MESSAGE) }],
           bodyText: ACOMPTE_MESSAGE,
           freeText: ACOMPTE_MESSAGE,
           userId: user.id,
@@ -336,7 +341,7 @@ export default function NewConversationModal({ user, onClose, onSent, initialPho
         const r = await sendTemplate({
           clientPhone: phone,
           templateName: 'wati_info',
-          parameters: [{ name: '1', value: HAUTEUR_MESSAGE }],
+          parameters: [{ name: '1', value: flattenForTemplate(HAUTEUR_MESSAGE) }],
           bodyText: HAUTEUR_MESSAGE,
           freeText: HAUTEUR_MESSAGE,
           userId: user.id,
