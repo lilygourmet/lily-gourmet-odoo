@@ -8,7 +8,7 @@ import { createModification } from '../../lib/modifications'
 import NewConversationModal from './NewConversationModal'
 import OrderEditModal from '../OrderEditModal'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Search, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X, Copy } from 'lucide-react'
+import { ArrowLeft, Search, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X, Copy, Plus } from 'lucide-react'
 
 function fmtTime(ts) {
   if (!ts) return ''
@@ -1083,7 +1083,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                   <button onClick={toggleClientOrders} title="Voir l'historique des commandes / devis (Odoo)" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0">Historique</button>
                 )}
                 {conv && (
-                  <button onClick={openNewOrder} title="Créer une nouvelle commande pour ce client (nom + téléphone pré-remplis)" className="px-2.5 py-1 bg-cream text-bordeaux hover:bg-cream-warm rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 whitespace-nowrap">Nouvelle commande</button>
+                  <button onClick={openNewOrder} title="Nouvelle commande pour ce client (nom + téléphone pré-remplis)" className="w-8 h-8 rounded-full bg-cream text-bordeaux hover:bg-cream-warm flex items-center justify-center transition-all flex-shrink-0"><Plus size={18} strokeWidth={2} /></button>
                 )}
                 {conv && (
                   <button onClick={() => setLinkMenuOpen(true)} disabled={sending} title="Envoyer un lien de commande en ligne" className="px-2.5 py-1 bg-cream/15 text-cream hover:bg-cream/30 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 disabled:opacity-50">🔗 Lien</button>
