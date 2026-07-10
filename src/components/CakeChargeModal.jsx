@@ -24,11 +24,12 @@ function groupCakes(cakes) {
 
 function CakeThumb({ cake, onClick }) {
   const border = cake.isDevis ? 'border-amber-400' : 'border-red-500'
+  const [broken, setBroken] = useState(false)   // URL cassée/expirée → on retombe sur le 🎂
   return (
     <button type="button" onClick={onClick} title="Voir la commande" className="w-[62px] text-center flex-shrink-0 hover:opacity-80 transition-opacity cursor-zoom-in">
       <div className="relative">
-        {cake.photo
-          ? <img src={cake.photo} alt="" className={`w-[62px] h-[62px] rounded-[10px] object-cover border-[3px] ${border}`} />
+        {cake.photo && !broken
+          ? <img src={cake.photo} alt="" onError={() => setBroken(true)} className={`w-[62px] h-[62px] rounded-[10px] object-cover border-[3px] ${border}`} />
           : <div className={`w-[62px] h-[62px] rounded-[10px] border-[3px] ${border} bg-cream-warm flex items-center justify-center text-[26px]`}>🎂</div>}
         {cake.count > 1 && (
           <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-bordeaux text-cream text-[11px] font-bold flex items-center justify-center border-2 border-cream shadow">×{cake.count}</span>

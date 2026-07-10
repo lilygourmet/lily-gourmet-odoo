@@ -2859,8 +2859,9 @@ async function handleCdDay(req, res) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: orders } = await supabase
       .from('orders')
-      .select('order_num, delivery_at, odoo_state, order_items(type, title, pers, image_urls, quantity)')
+      .select('order_num, odoo_id, delivery_at, odoo_state, order_items(type, title, pers, image_urls, quantity, odoo_line_id)')
       .gte('delivery_at', startIso).lte('delivery_at', endIso)
+    const missing = []   // gâteaux confirmés sans photo Supabase → rattrapage direct depuis Odoo
     for (const o of orders || []) {
       if (o.odoo_state === 'cancel') continue   // commande annulée → exclue du planning
       const dt = new Date(o.delivery_at)
@@ -2870,7 +2871,40 @@ async function handleCdDay(req, res) {
         if (!types.includes(it.type) || isGanache(it.title)) continue
         const photo = Array.isArray(it.image_urls) && it.image_urls[0] ? it.image_urls[0] : null
         const qty = Math.max(1, Number(it.quantity) || 1)   // 1 vignette par gâteau (respecte la quantité)
-        for (let k = 0; k < qty; k++) (byHour[h] ||= []).push({ orderRef: o.order_num, pers: it.pers || null, photo, isDevis: false, title: it.title || '' })
+        for (let k = 0; k < qty; k++) {
+          const cake = { orderRef: o.order_num, pers: it.pers || null, photo, isDevis: false, title: it.title || '' }
+          ;(byHour[h] ||= []).push(cake)
+          if (!photo) missing.push({ cake, lineId: it.odoo_line_id || null, odooId: o.odoo_id })
+        }
+      }
+    }
+    // Rattrapage : photo pas copiée dans Supabase (ajoutée dans Odoo, vieille commande…) → lue en direct depuis Odoo.
+    // On cherche d'abord sur la ligne du gâteau, sinon n'importe quelle image de la commande (la photo peut être
+    // attachée à une autre ligne, ex. « bougies »).
+    if (missing.length) {
+      const uid = await odooAuthenticate()
+      const odooIds = [...new Set(missing.map(m => m.odooId).filter(Boolean))]
+      const soLines = odooIds.length ? await odooSearchRead(uid, 'sale.order', [['id', 'in', odooIds]], ['id', 'order_line']) : []
+      const lineToOrder = new Map(), allLineIds = []
+      for (const o of soLines) for (const lid of (o.order_line || [])) { lineToOrder.set(lid, o.id); allLineIds.push(lid) }
+      const atts = allLineIds.length ? await odooSearchRead(uid, 'ir.attachment',
+        ['&', ['mimetype', 'ilike', 'image'], '|',
+          '&', ['res_model', '=', 'sale.order.line'], ['res_id', 'in', allLineIds],
+          '&', ['res_model', '=', 'sale.order'], ['res_id', 'in', odooIds]],
+        ['res_model', 'res_id', 'mimetype', 'datas'], { limit: 200 }) : []
+      const byLine = new Map(), byOrder = new Map()
+      for (const a of (atts || [])) {
+        if (!a.datas) continue
+        const url = `data:${a.mimetype || 'image/jpeg'};base64,${a.datas}`
+        if (a.res_model === 'sale.order.line') {
+          if (!byLine.has(a.res_id)) byLine.set(a.res_id, url)
+          const oid = lineToOrder.get(a.res_id)
+          if (oid != null && !byOrder.has(oid)) byOrder.set(oid, url)
+        } else if (!byOrder.has(a.res_id)) byOrder.set(a.res_id, url)
+      }
+      for (const m of missing) {
+        const url = (m.lineId && byLine.get(m.lineId)) || byOrder.get(m.odooId)
+        if (url) m.cake.photo = url
       }
     }
   } catch (e) { console.warn('[cd-day supabase]', e?.message || e) }

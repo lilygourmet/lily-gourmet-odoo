@@ -11,6 +11,7 @@ import { canEditBesoinsAchat } from '../lib/auth'
 import { markOrderPrinted } from '../lib/printOrders'
 import { computeSizesForCake } from '../lib/cakeSizes'
 import { isBurnAway } from '../lib/burnAway'
+import { confirmDialog } from '../lib/confirmDialog'
 import { loadCakeDesignPrice, loadSalesLinesForOrders, stripOdooPrefix } from '../lib/salesLines'
 import { loadOrderHandler, loadOrderNote, loadOrderPhotosByNum } from '../lib/conversations'
 import {
@@ -400,6 +401,15 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
           return
         }
       }
+    }
+
+    // Avant de cocher « fini » sur un cake design : rappel d'avoir mis le message (inscription) sur le gâteau.
+    if (stepKey === 'fini' && item.type === 'CD' && (item.message || '').trim()) {
+      const ok = await confirmDialog(
+        `Avez-vous mis le message sur le gâteau ?\n\n« ${item.message.trim()} »`,
+        { confirmLabel: "Oui, c'est fait" }
+      )
+      if (!ok) return
     }
 
     setCheckedSteps(prev => ({
