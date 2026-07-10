@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
-import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationOpened, loadClientsCdCounts, markConversationsFidele, CONV_LABELS, loadConvLabels } from '../../lib/conversations'
+import { loadConversations, conversationUrgency, conversationWaitingSince, searchMessageConversationIds, markConversationOpened, loadClientsCdCounts, markConversationsFidele, CONV_LABELS, loadConvLabels, loadCleanupState, setCleanupDone, setCleanupSkip } from '../../lib/conversations'
+import ConversationCleanup from './ConversationCleanup'
 import LabelsManager from './LabelsManager'
 import { formatRelativeTime, isAdmin } from '../../lib/auth'
 import { toast } from '../../lib/toast'
@@ -52,6 +53,9 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
   const [showLabels, setShowLabels] = useState(false)
   // Dernière visite capturée au montage (pour repérer les nouveaux messages reçus)
   const visitedAtRef = useRef(user?.last_visited_conversations || null)
+  // « Nettoyage du jour » : écran bloquant au 1er accès du jour ({ items, escapeAllowed, today } | null).
+  const [cleanup, setCleanup] = useState(null)
+  const cleanupCheckedRef = useRef(false)
   // Conversations vues pendant cette session (id -> horodatage de la vue)
   const [seenAt, setSeenAt] = useState({})
   // Hauteur du bandeau de l'app (pour la colonne liste collante en desktop)
@@ -82,6 +86,36 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
 
   useEffect(() => { refresh() }, [filter])
   useEffect(() => { loadConvLabels().then(setLabels).catch(() => {}) }, [])
+
+  // Nettoyage du jour : vérifié une seule fois au montage.
+  useEffect(() => {
+    if (!user?.id || cleanupCheckedRef.current) return
+    cleanupCheckedRef.current = true
+    ;(async () => {
+      try {
+        const now = new Date()
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        const st = await loadCleanupState(user.id)
+        if (st.done === today) return   // déjà nettoyé aujourd'hui
+        const mine = await loadConversations('mine', user.id)
+        const myOpen = mine
+          .filter(c => c.status === 'en_cours')
+          .sort((a, b) => new Date(a.last_message_at || 0) - new Date(b.last_message_at || 0))
+        if (myOpen.length === 0) return   // rien d'ouvert à traiter
+        setCleanup({ items: myOpen, escapeAllowed: st.skip !== today, today })
+      } catch { /* colonnes pas encore créées (SQL non lancé) → pas de nettoyage */ }
+    })()
+  }, [user?.id])
+
+  async function handleCleanupExit(reason) {
+    const today = cleanup?.today
+    try {
+      if (reason === 'done' && today) await setCleanupDone(user.id, today)
+      else if (reason === 'skip' && today) await setCleanupSkip(user.id, today)
+    } catch { /* ignore */ }
+    setCleanup(null)
+    refresh(true)
+  }
 
   // Ouverture par téléphone (bouton « Relancer » depuis les Devis) : on
   // sélectionne le fil du client dès que la liste est chargée (match sur les 9 derniers chiffres).
@@ -218,6 +252,10 @@ export default function InboxView({ user, initialConversationId, initialPhone, i
 
   return (
     <div className="md:flex md:items-start" style={{ '--appbar': `${headerTop}px` }}>
+      {/* Nettoyage du jour : écran BLOQUANT (par-dessus tout) tant qu'il n'est pas fait. */}
+      {cleanup && (
+        <ConversationCleanup user={user} items={cleanup.items} escapeAllowed={cleanup.escapeAllowed} onExit={handleCleanupExit} />
+      )}
       {/* COLONNE LISTE (gauche) — collante en desktop */}
       <div className={`${panelOpen ? 'hidden' : selectedId ? 'hidden md:block' : 'block'} md:w-[35%] md:max-w-[400px] md:flex-shrink-0 md:border-r border-line md:sticky md:top-[var(--appbar)] md:h-[calc(100dvh-var(--appbar))] md:overflow-y-auto`}>
         {/* En-tête figé : titre + son + actions + recherche + filtres */}

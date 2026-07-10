@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nettoyage du jour — maquette</title>
+<style>
+  :root{
+    --bordeaux:#993556;
+    --bordeaux-deep:#7a1f2b;
+    --cream:#F7F2EA;
+    --cream-warm:#efe4cf;
+    --ink:#1a0f0a;
+    --gris:#8a7d78;
+    --line:#e5d8c3;
+    --alerte:#e2915a;
+    --vert:#2e9e6b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Geist","Segoe UI",system-ui,sans-serif;
+    background:#3a2c28;         /* fond sombre = écran bloqué derrière */
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:16px;
+  }
+  .fake-bg{position:fixed;inset:0;background:rgba(20,12,10,.55);backdrop-filter:blur(2px)}
+  .card{
+    position:relative;z-index:2;
+    width:100%;max-width:540px;
+    background:var(--cream);
+    border-radius:20px;overflow:hidden;
+    box-shadow:0 24px 60px rgba(0,0,0,.4);
+    display:flex;flex-direction:column;
+    max-height:92vh;
+  }
+  .head{background:var(--bordeaux);color:var(--cream);padding:18px 20px}
+  .head h1{font-family:"Fraunces",Georgia,serif;font-style:italic;font-size:22px;font-weight:600}
+  .head p{font-size:13px;opacity:.9;margin-top:3px}
+  .count{
+    display:inline-flex;align-items:center;gap:6px;margin-top:10px;
+    background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+    padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;
+  }
+  .list{overflow-y:auto;padding:10px 12px;flex:1}
+  .row{
+    background:#fff;border:1px solid var(--line);border-radius:14px;
+    padding:12px 13px;margin-bottom:9px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .row .info{flex:1;min-width:0}
+  .row .name{font-size:14.5px;font-weight:600;color:var(--ink)}
+  .row .snippet{font-size:12.5px;color:var(--gris);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+  .meta{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .chip{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px}
+  .chip.age{background:var(--cream-warm);color:#7a6a55}
+  .chip.you{background:#eef3ef;color:#4a7a63;border:1px solid #cfe3d6}
+  .chip.client{background:#fbeadd;color:#b56a34;border:1px solid #f0cdb1}
+  .row .acts{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+  .btn{border:none;cursor:pointer;font-size:12px;font-weight:600;padding:7px 14px;border-radius:999px;transition:.12s;white-space:nowrap}
+  .btn-close{background:var(--bordeaux);color:var(--cream)}
+  .btn-close:hover{background:var(--bordeaux-deep)}
+  .btn-keep{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn-keep:hover{background:var(--cream-warm)}
+  .foot{border-top:1px solid var(--line);padding:12px 16px;text-align:center;background:var(--cream)}
+  .escape{background:none;border:none;color:var(--gris);font-size:12.5px;text-decoration:underline;cursor:pointer}
+  .escape:disabled{opacity:.4;cursor:not-allowed;text-decoration:none}
+  .escape-note{font-size:11px;color:var(--alerte);margin-top:6px;display:none}
+  .done{padding:40px 24px;text-align:center;display:none}
+  .done .big{font-size:44px}
+  .done h2{font-family:"Fraunces",Georgia,serif;font-style:italic;color:var(--bordeaux);font-size:24px;margin:8px 0 4px}
+  .done p{font-size:13px;color:var(--gris);margin-bottom:18px}
+  .done .enter{background:var(--vert);color:#fff;border:none;padding:11px 24px;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer}
+  .hint{max-width:540px;margin:14px auto 0;color:#cbb8ad;font-size:12px;text-align:center;position:relative;z-index:2}
+</style>
+</head>
+<body>
+  <div class="fake-bg"></div>
+
+  <div>
+    <div class="card">
+      <div class="head">
+        <h1>🧹 Nettoyage du jour</h1>
+        <p>Avant d'utiliser les conversations, fais le point sur les tiennes.</p>
+        <span class="count">Reste <b id="n">6</b> à traiter</span>
+      </div>
+
+      <div class="list" id="list">
+        <!-- lignes générées en JS -->
+      </div>
+
+      <div class="foot" id="foot">
+        <button class="escape" id="escape" onclick="urgence()">Tout garder (urgence)</button>
+        <div class="escape-note" id="escNote">⚠️ Échappatoire utilisée pour aujourd'hui — ça se rebloquera à la prochaine ouverture des conversations.</div>
+      </div>
+
+      <div class="done" id="done">
+        <div class="big">✅</div>
+        <h2>Nettoyage fait !</h2>
+        <p>Bonne journée. On ne te le redemandera pas avant demain.</p>
+        <button class="enter">Entrer dans les conversations</button>
+      </div>
+    </div>
+    <div class="hint">Maquette cliquable — teste « Fermer / Garder » et le bouton « Tout garder (urgence) ».</div>
+  </div>
+
+<script>
+  const convos = [
+    { name:"Fatima Zahra", snippet:"Merci beaucoup, je vous recontacte 🙏", age:"il y a 6 jours", last:"you" },
+    { name:"Salma B.",     snippet:"Vous avez reçu mon acompte ?",           age:"il y a 4 jours", last:"client" },
+    { name:"Client Vitrine — 0661…", snippet:"D'accord pour samedi",          age:"il y a 4 jours", last:"you" },
+    { name:"Yasmine El F.", snippet:"Bonjour, une question sur le gâteau…",   age:"il y a 3 jours", last:"client" },
+    { name:"Hind M.",       snippet:"Parfait, à bientôt !",                    age:"il y a 3 jours", last:"you" },
+    { name:"Nawal",         snippet:"Le devis me convient ✅",                 age:"il y a 2 jours", last:"you" },
+  ];
+
+  let remaining = convos.length;
+  let escapeUsed = false;
+  const listEl = document.getElementById('list');
+  const nEl = document.getElementById('n');
+
+  function render(){
+    listEl.innerHTML = convos.map((c,i)=>`
+      <div class="row" id="row-${i}">
+        <div class="info">
+          <div class="name">${c.name}</div>
+          <div class="snippet">${c.snippet}</div>
+          <div class="meta">
+            <span class="chip age">${c.age}</span>
+            ${c.last==='client'
+              ? '<span class="chip client">⏳ En attente de VOUS</span>'
+              : '<span class="chip you">Vous avez répondu</span>'}
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-close" onclick="act(${i})">Fermer</button>
+          <button class="btn btn-keep" onclick="act(${i})">Garder</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function act(i){
+    const row = document.getElementById('row-'+i);
+    if(!row) return;
+    row.style.transition='.2s'; row.style.opacity='0'; row.style.transform='translateX(20px)';
+    setTimeout(()=>{ row.remove(); remaining--; nEl.textContent = remaining; if(remaining<=0) finish(); }, 180);
+  }
+
+  function urgence(){
+    if(escapeUsed) return;
+    escapeUsed = true;
+    document.getElementById('escape').disabled = true;
+    document.getElementById('escNote').style.display = 'block';
+    setTimeout(()=>alert("(Maquette) Tu entres dans les conversations… mais le nettoyage n'est PAS marqué comme fait → il rebloquera à la prochaine ouverture, sans échappatoire cette fois."), 300);
+  }
+
+  function finish(){
+    document.getElementById('list').style.display='none';
+    document.getElementById('foot').style.display='none';
+    document.querySelector('.head .count').style.display='none';
+    document.getElementById('done').style.display='block';
+  }
+
+  render();
+</script>
+</body>
+</html>

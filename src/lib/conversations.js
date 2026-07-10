@@ -130,6 +130,28 @@ export async function markConversationsVisited(userId) {
   if (error) throw error
 }
 
+// ============================================================
+// « Nettoyage du jour » : état par utilisateur (dates stockées sur profiles).
+// ============================================================
+/** Renvoie { done, skip } : le jour du dernier nettoyage fait / de la dernière échappatoire utilisée. */
+export async function loadCleanupState(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('conv_cleanup_date, conv_cleanup_skip_date')
+    .eq('id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return { done: data?.conv_cleanup_date || null, skip: data?.conv_cleanup_skip_date || null }
+}
+/** Marque le nettoyage comme FAIT pour ce jour (plus de blocage jusqu'à demain). */
+export async function setCleanupDone(userId, day) {
+  await supabase.from('profiles').update({ conv_cleanup_date: day }).eq('id', userId)
+}
+/** Marque l'échappatoire « Tout garder » comme utilisée pour ce jour (ne débloque pas définitivement). */
+export async function setCleanupSkip(userId, day) {
+  await supabase.from('profiles').update({ conv_cleanup_skip_date: day }).eq('id', userId)
+}
+
 /** Pose (true) ou enlève (false) l'étiquette "non lu" sur une conversation précise. */
 export async function setConversationUnread(conversationId, value) {
   const { error } = await supabase
@@ -233,8 +255,8 @@ export async function assignConversation(conversationId, userId) {
 export async function closeConversation(conversationId, userId) {
   const { data, error } = await supabase
     .from('conversations')
-    // Clôture = conversation terminée → on retire toutes les étiquettes (devis envoyé, important…).
-    .update({ status: 'fermee', assigned_to: null, labels: [], updated_at: new Date().toISOString() })
+    // Clôture : on GARDE les étiquettes (elles doivent survivre à une réouverture par le client ou un commercial).
+    .update({ status: 'fermee', assigned_to: null, updated_at: new Date().toISOString() })
     .eq('id', conversationId)
     .select(CONV_SEL)
     .single()
