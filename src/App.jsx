@@ -386,9 +386,9 @@ function App() {
       ? <TabLockGate label="RH"><HRWrapper {...navProps} hrDeep={hrDeep} /></TabLockGate>
       : <HRWrapper {...navProps} hrDeep={hrDeep} />
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} initialPhone={deepLinkPhone} initialRelanceRef={deepLinkRelanceRef} />
-    if (activeView === 'devis') return <DevisWrapper {...navProps} initialDevis={deepLinkDevis} />
+    if (activeView === 'devis') return <DevisWrapper key="devis" {...navProps} initialDevis={deepLinkDevis} />
     if (activeView === 'ocp-link') return <div className="min-h-screen bg-cream"><AppHeader {...navProps} /><OcpManage /></div>
-    if (activeView === 'devis-internet') return <DevisWrapper {...navProps} internetOnly />
+    if (activeView === 'devis-internet') return <DevisWrapper key="devis-internet" {...navProps} internetOnly />
     if (activeView === 'nouvelle-commande') return <NewOrderWrapper {...navProps} initialClient={deepLinkNewCmd} />
     if (activeView === 'modifications') return <ModificationsWrapper {...navProps} />
     if (activeView === 'livraisons') return <LivraisonsWrapper {...navProps} />
