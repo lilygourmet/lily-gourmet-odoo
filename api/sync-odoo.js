@@ -779,12 +779,14 @@ async function syncLineAttachments(supabase, uid, parsedOrders) {
     for (const po of parsedOrders) {
       const urls = urlsByOrder.get(po.odooId)
       if (!urls || urls.length === 0) continue
-      for (const item of po.items) {
-        if (item.type !== 'CD' || !item.lineId) continue
-        const merged = [...(result.get(item.lineId) || [])]
-        for (const u of urls) if (!merged.includes(u)) merged.push(u)
-        result.set(item.lineId, merged)
-      }
+      // On rattache les photos-commande à UN article : le 1er CD si présent,
+      // sinon le 1er article avec un lineId (GM-, entremets…) → pour que la carte
+      // du calendrier affiche une photo même sans article cake design.
+      const target = po.items.find(it => it.type === 'CD' && it.lineId) || po.items.find(it => it.lineId)
+      if (!target) continue
+      const merged = [...(result.get(target.lineId) || [])]
+      for (const u of urls) if (!merged.includes(u)) merged.push(u)
+      result.set(target.lineId, merged)
     }
   }
 
