@@ -637,7 +637,7 @@ function isTransfertVersMeriem(category) {
   return normalized === 'caisse meriem'
 }
 
-export async function addMouvement({ caisseOwner, type, sourceType, amount, category, label, mvtDate, hasFacture = false, userId }) {
+export async function addMouvement({ caisseOwner, type, sourceType, amount, category, label, mvtDate, hasFacture = false, receptionStatus = null, userId }) {
   const { data, error } = await supabase
     .from('caisse_mouvements')
     .insert({
@@ -650,6 +650,7 @@ export async function addMouvement({ caisseOwner, type, sourceType, amount, cate
       mvt_date: mvtDate,
       has_facture: hasFacture,
       facture_status: hasFacture ? 'pending' : null,
+      reception_status: receptionStatus,
       created_by: userId,
     })
     .select()
@@ -1479,6 +1480,9 @@ export async function recupererFacturesParCheque({ items, cheque, date, userId }
     if (error) throw error
   }
 
+  // L'entrée du chèque n'est PAS comptée tout de suite : le chèque met des jours à
+  // être débité. Elle arrive en « Réceptions à valider » (pending) et ne compte dans
+  // le solde qu'après validation (accord admin), quand le chèque est réellement débité.
   await addMouvement({
     caisseOwner: 'layla_lg',
     type: 'entree',
@@ -1486,6 +1490,7 @@ export async function recupererFacturesParCheque({ items, cheque, date, userId }
     amount: total,
     label: `Chèque ${chequeVal || '—'} · ${items.length} facture${items.length > 1 ? 's' : ''}`,
     mvtDate: date,
+    receptionStatus: 'pending',
     userId,
   })
 

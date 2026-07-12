@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Transferts matières premières</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bordeaux:#7b2233;
+    --bordeaux-soft:#9a4453;
+    --gold:#c19a4b;
+    --cream:#fcfbf8;
+    --card:#ffffff;
+    --ink:#3a2f2a;
+    --muted:#8c7f76;
+    --line:#ece7df;
+    --amber-bg:#fdf6e9; --amber-tx:#b07a12; --amber-bd:#f0dcae;
+    --green-bg:#eef7ee; --green-tx:#2e7d43; --green-bd:#cfe6cf;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);
+    font-family:"Geist",system-ui,-apple-system,Segoe UI,sans-serif;font-weight:400;line-height:1.5}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-family:"Fraunces",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:30px;margin:0 0 4px;color:var(--bordeaux)}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 26px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:26px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:20px;box-shadow:0 1px 2px rgba(60,40,30,.03)}
+  .card h2{font-family:"Fraunces",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:18px;margin:0 0 2px;color:var(--ink)}
+  .card .hint{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+  label{display:block;font-size:12px;font-weight:500;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;margin:0 0 6px}
+  select,input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
+    font-family:inherit;font-size:15px;color:var(--ink);background:#fff;margin-bottom:14px}
+  select:focus,input:focus{outline:none;border-color:var(--gold)}
+  .row2{display:flex;gap:12px}.row2>div{flex:1}
+  .btn{width:100%;padding:12px;border:none;border-radius:10px;font-family:inherit;
+    font-size:15px;font-weight:500;cursor:pointer;background:var(--bordeaux);color:#fff}
+  .btn:hover{background:#6a1c2b}
+  .btn.ghost{background:#fff;color:var(--bordeaux);border:1px solid var(--bordeaux)}
+  .btn.ghost:hover{background:#fbf2f3}
+  .btn.sm{width:auto;padding:8px 14px;font-size:13.5px}
+
+  /* file d'attente réception */
+  .pending{display:flex;flex-direction:column;gap:10px}
+  .pitem{border:1px solid var(--amber-bd);background:var(--amber-bg);border-radius:12px;
+    padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .pitem .m{font-weight:500}
+  .pitem .q{color:var(--amber-tx);font-weight:600}
+  .pitem .meta{font-size:12px;color:var(--muted)}
+  .empty{color:var(--muted);font-size:14px;text-align:center;padding:24px 0}
+
+  /* journal */
+  .jtitle{font-family:"Fraunces",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:20px;margin:0 0 14px;color:var(--bordeaux)}
+  table{width:100%;border-collapse:collapse;background:var(--card);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    font-weight:500;text-align:left;padding:12px 14px;background:#faf7f2;border-bottom:1px solid var(--line)}
+  td{padding:12px 14px;font-size:14.5px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:none}
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;
+    padding:3px 10px;border-radius:999px;white-space:nowrap}
+  .tag.ok{background:var(--green-bg);color:var(--green-tx);border:1px solid var(--green-bd)}
+  .tag.wait{background:var(--amber-bg);color:var(--amber-tx);border:1px solid var(--amber-bd)}
+  .qcell{font-weight:600}
+  .diff{color:var(--amber-tx);font-size:12px}
+  .note{margin-top:22px;font-size:12.5px;color:var(--muted);text-align:center}
+  .badge{display:inline-block;background:#f4eee6;color:var(--muted);font-size:11px;
+    padding:2px 8px;border-radius:6px;margin-left:8px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Transferts matières premières<span class="badge">maquette</span></h1>
+  <p class="sub">Envois de la <strong>prod annexe</strong> vers la <strong>prod boutique</strong> — quantités en kg.</p>
+
+  <div class="grid">
+    <!-- COLONNE ANNEXE : envoyer -->
+    <div class="card">
+      <h2>Envoyer un transfert</h2>
+      <p class="hint">Côté annexe — ce que tu envoies à la boutique.</p>
+      <label>Matière</label>
+      <select>
+        <option>Œuf blanc</option>
+        <option>Œuf jaune</option>
+        <option>Œuf entier</option>
+        <option>Crème whipping</option>
+        <option>Beurre entremet</option>
+        <option>Mascarpone</option>
+        <option>Amandes brut</option>
+      </select>
+      <div class="row2">
+        <div>
+          <label>Quantité (kg)</label>
+          <input type="number" placeholder="5" value="5">
+        </div>
+        <div>
+          <label>Date</label>
+          <input type="date" value="2026-07-12">
+        </div>
+      </div>
+      <button class="btn">Envoyer à la boutique</button>
+    </div>
+
+    <!-- COLONNE BOUTIQUE : confirmer réception -->
+    <div class="card">
+      <h2>À confirmer <span style="color:var(--amber-tx);font-style:normal;font-size:14px">(2)</span></h2>
+      <p class="hint">Côté boutique — confirme ce que tu as reçu (corrige si l'écart).</p>
+      <div class="pending">
+        <div class="pitem">
+          <div>
+            <div class="m">Œuf blanc</div>
+            <div class="meta">envoyé par Fatima · aujourd'hui 09:12</div>
+          </div>
+          <div style="text-align:right">
+            <div class="q">5 kg</div>
+            <button class="btn ghost sm" style="margin-top:6px">Confirmer</button>
+          </div>
+        </div>
+        <div class="pitem">
+          <div>
+            <div class="m">Beurre entremet</div>
+            <div class="meta">envoyé par Fatima · aujourd'hui 09:14</div>
+          </div>
+          <div style="text-align:right">
+            <div class="q">3 kg</div>
+            <button class="btn ghost sm" style="margin-top:6px">Confirmer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JOURNAL -->
+  <h2 class="jtitle">Journal des transferts</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Matière</th><th>Envoyé</th><th>Reçu</th><th>Par</th><th>Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>12/07</td><td>Œuf blanc</td><td class="qcell">5 kg</td>
+        <td>—</td><td>Fatima</td>
+        <td><span class="tag wait">En attente</span></td>
+      </tr>
+      <tr>
+        <td>12/07</td><td>Beurre entremet</td><td class="qcell">3 kg</td>
+        <td>—</td><td>Fatima</td>
+        <td><span class="tag wait">En attente</span></td>
+      </tr>
+      <tr>
+        <td>11/07</td><td>Mascarpone</td><td class="qcell">2 kg</td>
+        <td class="qcell">2 kg</td><td>Ali</td>
+        <td><span class="tag ok">Reçu</span></td>
+      </tr>
+      <tr>
+        <td>11/07</td><td>Crème whipping</td><td class="qcell">4 kg</td>
+        <td class="qcell">3,8 kg <span class="diff">(−0,2)</span></td><td>Ali</td>
+        <td><span class="tag ok">Reçu</span></td>
+      </tr>
+      <tr>
+        <td>10/07</td><td>Amandes brut</td><td class="qcell">6 kg</td>
+        <td class="qcell">6 kg</td><td>Fatima</td>
+        <td><span class="tag ok">Reçu</span></td>
+      </tr>
+      <tr>
+        <td>10/07</td><td>Œuf entier</td><td class="qcell">10 kg</td>
+        <td class="qcell">10 kg</td><td>Fatima</td>
+        <td><span class="tag ok">Reçu</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="note">Maquette non fonctionnelle (les boutons ne font rien) — sert à valider l'apparence et le fonctionnement avant de coder le vrai onglet.</p>
+</div>
+</body>
+</html>
