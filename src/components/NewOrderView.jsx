@@ -4,6 +4,7 @@ import { filePhoto } from '../lib/photoCompress'
 import { loadPrevisions, loadVitrineReserved } from '../lib/previsionsVitrine'
 import { confirmDevis, recordDevisTraitement, recordDevisEnvoi, searchOrders } from '../lib/conversations'
 import NewConversationModal from './Conversations/NewConversationModal'
+import ClientEditModal from './ClientEditModal'
 import { loadLivreurs, assignDelivery, setLivraisonLocalisation } from '../lib/deliveries'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
@@ -22,6 +23,7 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
   const [refreshing, setRefreshing] = useState(false)
   // Client + détails commande
   const [client, setClient] = useState(null)    // { id, name, phone }
+  const [editClientOpen, setEditClientOpen] = useState(false)
   const [clientQuery, setClientQuery] = useState('')
   const [clientResults, setClientResults] = useState([])
   const [deliveryDate, setDeliveryDate] = useState('')
@@ -185,9 +187,12 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
         lines,
       })
       recordDevisTraitement({ order_num: r.name, action: 'created', user_id: user?.id, user_name: user?.full_name || user?.username }).catch(() => {})
-      // Assignation livreur si une ligne « Livraison » est présente et un livreur choisi
+      // Assignation livreur si une ligne « Livraison » est présente et un livreur choisi.
+      // Livreur par défaut (Hamid) : accepté d'office, sans tâche (comme l'écran Livraisons).
       if (hasLivraison && livreurId) {
-        assignDelivery({ orderNum: r.name, livreurId, byUserId: user?.id, titre: `🚚 Livraison ${r.name}`, description: client.name || '', dueDate: deliveryDate || null }).catch(() => {})
+        const defaultLivreurId = livreurs.find(l => l.livreur_defaut || l.perm_livreur_defaut)?.id || null
+        const autoAccept = livreurId === defaultLivreurId
+        assignDelivery({ orderNum: r.name, livreurId, byUserId: user?.id, titre: `🚚 Livraison ${r.name}`, description: client.name || '', autoAccept }).catch(() => {})
       }
       // Adresse / localisation pour le livreur (champ dédié, table livraisons)
       if (hasLivraison && livraisonLoc.trim()) {
@@ -314,6 +319,7 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
           {client ? (
             <div className="flex items-center gap-2 bg-white border border-line rounded-lg px-3 py-2">
               <span className="flex-1 text-[13px] font-medium text-ink truncate">{client.name}{client.phone ? ` · ${client.phone}` : ''}</span>
+              {client.id && <button onClick={() => setEditClientOpen(true)} className="text-ink-soft hover:text-bordeaux text-[12px] font-medium" title="Modifier la fiche client">Modifier</button>}
               <button onClick={() => { setClient(null); setClientQuery('') }} className="text-ink-mute text-[13px]" title="Changer">✕</button>
             </div>
           ) : (
@@ -512,6 +518,16 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
             </div>
           </div>
         </div>
+      )}
+
+      {editClientOpen && client?.id && (
+        <ClientEditModal
+          partnerId={client.id}
+          phone={client.phone}
+          name={client.name}
+          onClose={() => setEditClientOpen(false)}
+          onSaved={({ name, phone }) => setClient(c => c ? { ...c, name, phone: phone || c.phone } : c)}
+        />
       )}
     </div>
   )

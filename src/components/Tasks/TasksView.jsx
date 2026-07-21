@@ -1,15 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
+import { todayISO } from '../../lib/dates'
 import SearchSelect from '../SearchSelect'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { toast } from '../../lib/toast'
 import {
   loadTasksReceived, loadTasksSent, countUnreadTasks,
-  markTaskRead, deleteTask, loadTeamTasks
+  markTaskRead, deleteTask, loadTeamTasks, loadTaskById
 } from '../../lib/tasks'
 import TaskDetailModal from './TaskDetailModal'
 import NewTaskModal from './NewTaskModal'
 import NewWatiInfoModal from './NewWatiInfoModal'
-import { canSeeWatiInfo } from '../../lib/auth'
 import { Trash2, Paperclip } from 'lucide-react'
 
 const MONTHS_FR = [
@@ -40,7 +40,7 @@ function fmtDate(isoString, withTime = true) {
   } catch { return isoString }
 }
 
-export default function TasksView({ user }) {
+export default function TasksView({ user, deepLinkTaskId }) {
   const [received, setReceived] = useState([])
   const [sent, setSent] = useState([])
   const [filter, setFilter] = useState('todo')
@@ -56,6 +56,14 @@ export default function TasksView({ user }) {
   const [teamPerson, setTeamPerson] = useState('all')
 
   useEffect(() => { reload(true) }, [user?.id])
+
+  // Lien direct « ?task=<id> » : ouvre la fiche de cette tâche précise.
+  useEffect(() => {
+    if (!deepLinkTaskId) return
+    loadTaskById(deepLinkTaskId)
+      .then(t => { if (t) openTask(t) })
+      .catch(e => console.warn('deep-link tâche:', e?.message))
+  }, [deepLinkTaskId])
 
   // Charge les tâches de l'équipe quand on ouvre l'onglet Équipe (admin)
   useEffect(() => {
@@ -176,11 +184,9 @@ export default function TasksView({ user }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {canSeeWatiInfo(user) && (
-            <button onClick={() => setShowInfo(true)} style={btnInfo}>
-              📢 Envoyer une info
-            </button>
-          )}
+          <button onClick={() => setShowInfo(true)} style={btnInfo}>
+            📢 Envoyer une info
+          </button>
           <button onClick={() => setShowNew(true)} style={btnPrimary}>
             Nouvelle tâche
           </button>
@@ -367,7 +373,7 @@ function TaskCard({ task, currentUserId, onClick, onDelete }) {
   const isDone = task.status === 'done'
   const wasEdited = (task.edited_count || 0) > 0
   const hasAttachment = !!task.attachment_path
-  const isOverdue = task.due_date && !isDone && task.due_date < new Date().toISOString().slice(0, 10)
+  const isOverdue = task.due_date && !isDone && task.due_date < todayISO()
   const dueLabel = task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''
 
   const fromName = task.from_user?.full_name || task.from_user?.username || '?'

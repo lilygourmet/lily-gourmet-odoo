@@ -266,7 +266,6 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
         cleanupOldOrders().then(res => {
           localStorage.setItem('lg_last_cleanup', todayKey)
           if (res.deleted > 0) {
-            console.log(`🧹 ${res.deleted} commande(s) ancienne(s) supprimée(s) (${res.photos} photos)`)
             loadAllOrders().then(data => setAllOrders(data))
             loadWeek()
           }

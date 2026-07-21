@@ -401,13 +401,10 @@ ${ordersHtml}
 
       // Marquer imprimees AVANT d'ouvrir l'apercu
       // (apres tout, l'utilisateur a clique "Imprimer toutes")
-      console.log('[print] DEBUT marquage', { userId: user?.id, ordersCount: orders.length })
       if (user?.id) {
         const ids = orders.map(o => o.id)
-        console.log('[print] IDs a marquer:', ids)
         try {
           const result = await markOrdersPrintedBatch(ids, user.id)
-          console.log('[print] markOrdersPrintedBatch resultat:', result)
           // Sauvegarde le batch pour permettre une réimpression en cas de pépin
           // d'imprimante (papier coincé, hors-ligne…). Stocké en local, valable
           // jusqu'au prochain batch.
@@ -427,9 +424,7 @@ ${ordersHtml}
       }
 
       // Notifier le parent pour rafraichir le compteur
-      console.log('[print] Appel onPrinted...')
       if (onPrinted) await onPrinted()
-      console.log('[print] onPrinted termine')
 
       // Imprimer (l'apercu va s'ouvrir maintenant)
       iframe.contentWindow.focus()

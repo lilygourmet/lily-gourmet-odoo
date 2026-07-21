@@ -167,8 +167,6 @@ export default function PointageTab({ user, isAdmin }) {
     try {
       const r1 = await syncAttendance(mois, annee)
       const r2 = await syncLeaves(mois, annee)
-      console.log('[SYNC ATTENDANCE]', r1)
-      console.log('[SYNC LEAVES]', r2)
       syncedRef.current.add(`${mois}-${annee}`)
     } catch (e) {
       setError('Erreur sync : ' + e.message)

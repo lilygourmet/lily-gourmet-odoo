@@ -314,7 +314,6 @@ function PosSessionsSection() {
   useEffect(() => { reload() }, [refreshKey])
   async function reload() {
     const data = await loadPosConfigs()
-    console.log('[PosSessionsSection] loaded', data?.length, 'configs')
     setList(data || [])
   }
 
@@ -323,7 +322,6 @@ function PosSessionsSection() {
     try {
       const res = await fetch('/api/caisse-api?action=list-pos', { method: 'POST' })
       const json = await res.json()
-      console.log('[detect-pos]', json)
       if (json.error) {
         toast.error('Erreur : ' + json.error)
       } else {

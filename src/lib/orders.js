@@ -143,7 +143,6 @@ export async function saveOrdersFromPdf(parsedOrders, pdfFilename, userId, force
         const item = order.items[idx]
         const imageUrls = item.image_urls || item.imageUrls || []
 
-        console.log('🔍 Item:', item.title, '— quantity:', item.quantity)
 
         const { error: itemErr } = await supabase
           .from('order_items')
@@ -297,7 +296,6 @@ export async function cleanupOldOrders() {
     return { deleted: 0, photos: 0 }
   }
 
-  console.log(`🧹 Nettoyage auto : ${oldOrders.length} commande(s) + ${imagePaths.length} photo(s) supprimée(s)`)
   return { deleted: oldOrders.length, photos: imagePaths.length }
 }
 

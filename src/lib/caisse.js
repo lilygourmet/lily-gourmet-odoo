@@ -1878,7 +1878,7 @@ export async function loadAvances({ beneficiaryId, status = 'pending' } = {}) {
 // espèces/virement → crée une ENTRÉE dans la caisse Meriem. achat_lg → baisse juste la dette.
 export async function addAvanceRemboursement({ avanceId, amount, mode, note, date, userId }) {
   const amt = Number(amount)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayISO()
   const { data: avance, error: errLoad } = await supabase
     .from('caisse_avances')
     .select(`*, beneficiaire:caisse_destinataires!caisse_avances_beneficiary_id_fkey(name), remboursements:caisse_avance_remboursements(amount)`)
@@ -1932,7 +1932,7 @@ export async function deleteAvanceRemboursement(rbId, actorId = null) {
 export async function addLgPaiementPerso({ beneficiaryId, amount, note, date, userId }) {
   const { error } = await supabase.from('caisse_lg_paiements_perso').insert({
     beneficiary_id: beneficiaryId, amount: Number(amount), note: note || null,
-    paid_date: date || new Date().toISOString().slice(0, 10), created_by: userId,
+    paid_date: date || todayISO(), created_by: userId,
   })
   if (error) throw error
   await logAction({ entityType: 'avance', entityId: beneficiaryId, action: 'paye_lg', description: `Payé pour LG : ${amount}${note ? ' — ' + note : ''}`, amount: Number(amount), actorId: userId })
@@ -1999,7 +1999,7 @@ export async function createAvance({ payerId, beneficiaryId, beneficiaryName, am
     amount: Number(amount),
     category: categoryName,
     label: labelSortie,
-    mvtDate: avanceDate || new Date().toISOString().slice(0, 10),
+    mvtDate: avanceDate || todayISO(),
     hasFacture: false,
     userId,
   })
@@ -2012,7 +2012,7 @@ export async function createAvance({ payerId, beneficiaryId, beneficiaryName, am
       beneficiary_id: beneficiaryId,
       amount: Number(amount),
       motif: motif || null,
-      avance_date: avanceDate || new Date().toISOString().slice(0, 10),
+      avance_date: avanceDate || todayISO(),
       created_by: userId,
       sortie_mouvement_id: mvt.id,
     })
@@ -2065,7 +2065,7 @@ export async function markAvanceRefunded(avanceId, note = null, userId = null) {
     amount: Number(avance.amount),
     category: categoryName,
     label: labelEntree,
-    mvtDate: new Date().toISOString().slice(0, 10),
+    mvtDate: todayISO(),
     hasFacture: false,
     userId: userId || avance.created_by,
   })

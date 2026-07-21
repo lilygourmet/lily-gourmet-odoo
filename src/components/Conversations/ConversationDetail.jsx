@@ -7,6 +7,7 @@ import ForwardModal from './ForwardModal'
 import { createModification } from '../../lib/modifications'
 import NewConversationModal from './NewConversationModal'
 import OrderEditModal from '../OrderEditModal'
+import ClientEditModal from '../ClientEditModal'
 import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Search, Phone, Forward, Banknote, Paperclip, Sparkles, Mic, Smile, MessageSquareText, Send, Image as ImageIcon, Check, X, Copy, Plus } from 'lucide-react'
 
@@ -152,6 +153,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   const [showReplies, setShowReplies] = useState(false)
   const [showPhone, setShowPhone] = useState(false)
   const [phoneCopied, setPhoneCopied] = useState(false)
+  const [editClient, setEditClient] = useState(false)
   const [repliesDrawerOpen, setRepliesDrawerOpen] = useState(false)
   const repliesDrawerRef = useRef(null)
   const [quickReplies, setQuickReplies] = useState([])
@@ -909,6 +911,12 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     finally { setNameBusy(false) }
   }
 
+  // Après modif de la fiche client (Odoo) : on garde aussi le nom du fil WhatsApp à jour.
+  async function handleClientSaved({ name }) {
+    try { setConv(await updateConversationClientName(conversationId, name)) }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+
   function openPaymentModal(m) {
     setPaymentMsg(m)
     // Auto-remplissage : n° de commande (S…) + nom depuis un message de
@@ -1046,6 +1054,10 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
                           <button onClick={() => { try { navigator.clipboard?.writeText(conv.client_phone) } catch { /* */ } setPhoneCopied(true); setTimeout(() => setPhoneCopied(false), 1400) }}
                             className={`text-[11px] font-bold px-2.5 py-1 rounded-md ${phoneCopied ? 'bg-emerald-600 text-white' : 'border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream'} transition-all`}>
                             {phoneCopied ? '✓ Copié' : 'Copier'}
+                          </button>
+                          <button onClick={() => { setShowPhone(false); setEditClient(true) }}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-md border border-line text-ink-soft hover:border-bordeaux hover:text-bordeaux transition-all">
+                            Modifier la fiche
                           </button>
                         </div>
                       </>
@@ -1451,6 +1463,16 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
           user={user}
           onClose={() => setEditOrder(null)}
           onChanged={() => { const ref = conv?.link_order_ref; if (ref) searchOrders(ref).then(os => { const o = (os || []).find(x => x.name === ref) || (os || [])[0]; if (o) setLinkedOrder(o) }).catch(() => {}) }}
+        />
+      )}
+
+      {editClient && (
+        <ClientEditModal
+          phone={conv?.client_phone}
+          name={conv?.client_name}
+          onClose={() => setEditClient(false)}
+          onSaved={handleClientSaved}
+          onNoPartner={handleClientSaved}
         />
       )}
 

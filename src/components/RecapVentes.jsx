@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { todayISO } from '../lib/dates'
 import Skeleton from './Skeleton'
 import { Phone, MapPin, Cake, Truck, Cookie, User, Croissant } from 'lucide-react'
 import { VENTE_CATEGORIES, loadSalesLinesForDate, groupByHourThenClient, groupByProduct, groupDeliveriesWithFullOrder, groupAllOrdersByHour, groupByProductWithDelivered, filterLines, sumQty, linesForCategory as linesForCategoryHelper, stripOdooPrefix, fetchInvoicePdf, openInvoicePdf, searchInvoices } from '../lib/salesLines'
@@ -1036,7 +1037,7 @@ function RecapCard({ cat, linesForCategory, linesForCategoryFull, allLines = [],
 //                     pas de bouton fermer, mais bouton "Déconnexion"
 // ============================================================
 export default function RecapVentes({ onClose, user = null, onLogout = null, fullscreen = false, activeView, onNavigate }) {
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = todayISO()
   // Restaure la derniere date selectionnee si l'utilisateur recharge la page,
   // mais seulement si elle est aujourd'hui ou dans le futur (sinon retour a today)
   const [date, setDate] = useState(() => {
@@ -1181,7 +1182,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `etiquettes-${new Date().toISOString().slice(0, 10)}.zpl`
+      a.download = `etiquettes-${todayISO()}.zpl`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)

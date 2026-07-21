@@ -26,29 +26,49 @@ function normalizePhone(raw) {
   return n
 }
 
-// Notifie le destinataire d'une tâche par WhatsApp. Non bloquant.
-// 1) Conversation ouverte (fenêtre 24 h) -> message de session (gratuit).
-// 2) Sinon -> modèle Wati générique.
-async function notifyTaskWhatsapp(toUserId, fromUserId, fromName, title) {
-  try {
-    const { data: u } = await supabase.from('profiles').select('whatsapp').eq('id', toUserId).maybeSingle()
-    const phone = normalizePhone(u?.whatsapp)
-    if (!phone) return
-    const text = `📋 Nouvelle tâche${fromName ? ' de ' + fromName : ''} : ${title}`
-    const { data: conv } = await supabase.from('conversations').select('id').eq('client_phone', phone).maybeSingle()
-    if (conv?.id) {
-      const r = await fetch('/api/wati-webhook?action=send', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: fromUserId, text }),
-      })
-      if (r.ok) return
-    }
-    await fetch('/api/wati-webhook?action=send-template', {
+// Envoi WhatsApp générique à un user : message de session si conversation ouverte
+// (fenêtre 24 h, gratuit), sinon modèle Wati à variable unique {{1}}. Non bloquant.
+async function sendUserWhatsapp(toUserId, fromUserId, text, tplValue, templateName) {
+  const { data: u } = await supabase.from('profiles').select('whatsapp').eq('id', toUserId).maybeSingle()
+  const phone = normalizePhone(u?.whatsapp)
+  if (!phone) return
+  const { data: conv } = await supabase.from('conversations').select('id').eq('client_phone', phone).maybeSingle()
+  if (conv?.id) {
+    const r = await fetch('/api/wati-webhook?action=send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientPhone: phone, templateName: WA_TASK_TEMPLATE, parameters: [{ name: '1', value: title }], userId: fromUserId }),
-    }).catch(() => {})
+      body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: fromUserId, text }),
+    })
+    if (r.ok) return
+  }
+  await fetch('/api/wati-webhook?action=send-template', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientPhone: phone, templateName, parameters: [{ name: '1', value: tplValue }], userId: fromUserId }),
+  }).catch(() => {})
+}
+
+// Notifie le destinataire d'une tâche par WhatsApp. Non bloquant.
+async function notifyTaskWhatsapp(toUserId, fromUserId, fromName, title, taskId) {
+  try {
+    // Lien direct vers la tâche (ouvre la fiche dans l'app). Absolu pour WhatsApp.
+    const link = taskId ? `${window.location.origin}/?task=${taskId}` : ''
+    const text = `📋 Nouvelle tâche${fromName ? ' de ' + fromName : ''} : ${title}` + (link ? `\n\n👉 Ouvrir : ${link}` : '')
+    // Modèle WATI : lien collé au titre (une seule ligne, pas de \n dans une variable).
+    // WhatsApp rend l'URL cliquable automatiquement.
+    const tplValue = link ? `${title} — ${link}` : title
+    await sendUserWhatsapp(toUserId, fromUserId, text, tplValue, WA_TASK_TEMPLATE)
   } catch (e) {
     console.warn('[tasks] WhatsApp notif:', e.message)
+  }
+}
+
+// Notifie un livreur qu'une livraison lui a été assignée — SANS créer de tâche.
+// (Il confirme/livre dans l'écran Livraisons ; on lui envoie juste l'alerte WhatsApp.)
+// sessionText = message riche (multi-ligne) ; tplValue = titre sur UNE ligne (variable WATI).
+export async function notifyLivraisonWhatsapp(toUserId, fromUserId, sessionText, tplValue) {
+  try {
+    await sendUserWhatsapp(toUserId, fromUserId, sessionText, tplValue, WA_TASK_TEMPLATE)
+  } catch (e) {
+    console.warn('[tasks] WhatsApp livraison:', e.message)
   }
 }
 
@@ -92,6 +112,19 @@ export async function loadTasksReceived(userId, statusFilter = 'all') {
   const { data, error } = await query
   if (error) throw error
   return data || []
+}
+
+/**
+* Charge une tâche précise par son id (pour l'ouverture directe via lien WhatsApp).
+*/
+export async function loadTaskById(taskId) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(SEL)
+    .eq('id', taskId)
+    .maybeSingle()
+  if (error) throw error
+  return data || null
 }
 
 /**
@@ -177,7 +210,7 @@ export async function createTask({ title, description, fromUserId, toUserId, isU
   // Notif WhatsApp au destinataire (sauf si on se l'envoie à soi-même). Non bloquant.
   if (toUserId && toUserId !== fromUserId) {
     const fromName = data.from_user?.full_name || data.from_user?.username || ''
-    notifyTaskWhatsapp(toUserId, fromUserId, fromName, payload.title)
+    notifyTaskWhatsapp(toUserId, fromUserId, fromName, payload.title, data.id)
   }
 
   return data

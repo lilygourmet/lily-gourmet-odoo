@@ -19,7 +19,8 @@ const RELIQUAT_DEADLINE_MM_DD = '05-31'  // le reliquat N-1 expire le 30 mai à 
 // HELPERS
 // ------------------------------------------------------------
 function todayYMD() {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function moisEntre(dateA, dateB) {
@@ -168,7 +169,7 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
 function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD(), feriesSet = null) {
   const ref = new Date(refDate + 'T00:00:00')
   const yearStart = `${ref.getFullYear()}-01-01`
-  const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, maternite: 0, autre: 0, recup: 0 }
+  const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, maternite: 0, autre: 0, recup: 0, sans_solde: 0 }
   for (const c of congesValides) {
     if (c.employe_id !== emp.id) continue
     if (c.statut !== 'valide') continue
@@ -195,7 +196,7 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD(), feriesS
     else if (t.includes('naissance'))       category = 'naissance'
     else if (t.includes('deces') || t.includes('décès')) category = 'deces'
     else if (t.includes('circoncis'))       category = 'circoncision'
-    else if (t.includes('sans solde') || t.includes('unpaid')) category = 'autre'
+    else if (t.includes('sans solde') || t.includes('unpaid')) category = 'sans_solde'
 
     // Si jours_decomptes est figé (validation ou édition), on l'utilise tel quel
     // pour tout congé entièrement dans l'ANNÉE — même s'il se termine après
@@ -338,6 +339,7 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
     maladie: { alloue: maladieAlloue, pris: maladiePris, dispo: maladieDispo },
     events:  { applicable: eventsApplicable, pris: prisEvents, detail: eventsDetail },
     maladieLonguePrise: prisType.maladie_longue, // informatif, n'entre pas dans dispo
+    sansSoldePris: prisType.sans_solde,          // congé sans solde : informatif, n'entre pas dans dispo
   }
 }
 

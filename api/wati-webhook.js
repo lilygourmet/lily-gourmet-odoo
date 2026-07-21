@@ -75,6 +75,7 @@ export default async function handler(req, res) {
   if (action === 'order-product-search') return handleOrderProductSearch(req, res)
   if (action === 'order-clients-search') return handleOrderClientsSearch(req, res)
   if (action === 'order-create-client') return handleOrderCreateClient(req, res)
+  if (action === 'client-update') return handleClientUpdate(req, res)
   if (action === 'order-create-devis') return handleOrderCreateDevis(req, res)
   if (action === 'order-create-ocp') return handleOrderCreateOcp(req, res)
   if (action === 'order-sizes') return handleOrderSizes(req, res)
@@ -85,6 +86,7 @@ export default async function handler(req, res) {
   if (action === 'vitrine-order-add') return handleVitrineOrderAdd(req, res)
   if (action === 'cake-vision') return handleCakeVision(req, res)
   if (action === 'poly-estimate') return handlePolyEstimate(req, res)
+  if (action === 'translate-ar') return handleTranslateAr(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
   if (action === 'count-devis-internet') return handleCountDevisInternet(req, res)
   return handleInbound(req, res)
@@ -1653,6 +1655,55 @@ async function handleOrderCreateClient(req, res) {
   }
 }
 
+// Modifie le NOM et/ou le TÉLÉPHONE d'un client Odoo (res.partner).
+// Résout la fiche par partnerId si fourni, sinon par téléphone (fiche la + ANCIENNE = même règle
+// que la dédup). Renvoie { ok:false, reason:'no_partner' } si aucune fiche trouvée.
+async function handleClientUpdate(req, res) {
+  const name = (req.body?.name || '').trim()
+  const newPhone = (req.body?.newPhone || '').trim()
+  const partnerId = req.body?.partnerId ? Number(req.body.partnerId) : null
+  const phone = (req.body?.phone || '').trim()
+  if (!name) return res.status(400).json({ error: 'nom requis' })
+  try {
+    const uid = await odooAuthenticate()
+
+    // 1) Trouver la fiche à modifier.
+    let id = partnerId
+    if (!id && phone) {
+      const digits = phone.replace(/\D/g, '')
+      if (digits.length >= 6) {
+        const last9 = digits.slice(-9), last6 = digits.slice(-6)
+        const found = await odooSearchRead(uid, 'res.partner',
+          ['|', ['phone', 'ilike', last6], ['mobile', 'ilike', last6]],
+          ['id', 'phone', 'mobile'], { order: 'id asc', limit: 20 })
+        const match = (found || []).find(c => {
+          const cd = String(c.phone || c.mobile || '').replace(/\D/g, '')
+          return cd && (cd.endsWith(last9) || digits.endsWith(cd.slice(-9)))
+        })
+        if (match) id = match.id
+      }
+    }
+    if (!id) return res.status(200).json({ ok: false, reason: 'no_partner' })
+
+    // 2) Valeurs à écrire (téléphone au format Maroc si fourni).
+    const vals = { name }
+    let normPhone = ''
+    if (newPhone) {
+      const d = newPhone.replace(/\D/g, '')
+      normPhone = newPhone
+      if (d.startsWith('0')) normPhone = '+212' + d.slice(1)
+      else if (d.startsWith('212')) normPhone = '+' + d
+      vals.phone = normPhone
+    }
+
+    await odooJsonRpc('object', 'execute_kw', [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, 'res.partner', 'write', [[id], vals]])
+    return res.status(200).json({ ok: true, id, name, phone: normPhone || null })
+  } catch (e) {
+    console.error('[client-update]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
 // Crée un DEVIS (sale.order en brouillon) avec ses lignes.
 function escapeHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1917,6 +1968,27 @@ Il doit y avoir exactement ${n} objet(s) dans "etages", du bas vers le haut.`
     return res.status(200).json(data)
   } catch (e) {
     console.error('[poly-estimate]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Traduit un texte français en arabe (étiquettes boîtes FR + AR).
+async function handleTranslateAr(req, res) {
+  const text = String(req.body?.text || '').trim()
+  if (!text) return res.status(400).json({ error: 'texte requis' })
+  try {
+    const result = await generateText({
+      model: 'claude-haiku-4-5',
+      messages: [{ role: 'user', content: [{ type: 'text', text:
+        `Traduis ce texte du français vers l'arabe, pour une étiquette de produit alimentaire. ` +
+        `Réponds UNIQUEMENT avec la traduction en arabe, sans guillemets, sans explication, sans translittération.\n\n` +
+        `Texte : ${text}` }] }],
+    })
+    const arabic = (result.text || '').trim()
+    if (!arabic) return res.status(502).json({ error: "L'IA n'a pas renvoyé de traduction." })
+    return res.status(200).json({ arabic })
+  } catch (e) {
+    console.error('[translate-ar]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

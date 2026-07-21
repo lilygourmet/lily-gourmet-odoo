@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { downloadBulletinBytes } from './bulletins'
 import { memoCache } from './memoCache'
+import { todayISO } from './dates'
 
 // Groupes/catégories d'employé (menu déroulant). Simple étiquette de classement :
 // n'active aucune permission (le dispatch des perms reste manuel).
@@ -438,6 +439,6 @@ function formatFilename(type, nom) {
   }
   const label = labels[type] || 'Document'
   const nomClean = (nom || 'Employe').replace(/\s+/g, '_').replace(/[^\w\-]/g, '')
-  const date = new Date().toISOString().slice(0, 10)  // YYYY-MM-DD
+  const date = todayISO()  // YYYY-MM-DD (heure locale)
   return `${label}_${nomClean}_${date}.docx`
 }

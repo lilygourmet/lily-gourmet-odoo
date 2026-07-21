@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { todayISO } from '../lib/dates'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
@@ -108,7 +109,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `etiquettes-articles-${new Date().toISOString().slice(0, 10)}.zpl`
+      a.download = `etiquettes-articles-${todayISO()}.zpl`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)

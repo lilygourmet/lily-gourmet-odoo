@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { todayISO } from './dates'
 
 // ============================================================
 // SUPPORTS (consignes : verrines, plateaux, présentoirs…)
@@ -69,7 +70,7 @@ export async function recordSortie({ support_id, qty, dest_type, client_name, or
     support_id, qty: Number(qty), dest_type,
     client_name: dest_type === 'ocp' ? 'OCP' : (client_name || null),
     order_num: order_num || null, note: note || null,
-    date_sortie: date_sortie || new Date().toISOString().slice(0, 10),
+    date_sortie: date_sortie || todayISO(),
     created_by: created_by || null,
   })
   if (error) throw error

@@ -137,7 +137,8 @@ export function monthBounds(year, month) {
   return { start, end }
 }
 
-// ISO YYYY-MM-DD du jour
+// ISO YYYY-MM-DD du jour (heure locale = Maroc, pas UTC)
 export function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }

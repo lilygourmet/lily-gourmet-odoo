@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import CopyableRef from './CopyableRef'
 import { loadOrderLines, addOrderLine, updateOrderLine, deleteOrderLine, addOrderWarning, removeOrderWarning, updateOrderDate, loadOrderCatalog, loadOrderProduct, loadWarehouses, setOrderWarehouse, removeOrderPhoto } from '../lib/commande'
+import { loadLivreurs, loadDeliveryStates, assignDelivery, setLivraisonLocalisation } from '../lib/deliveries'
 import { recordDevisTraitement, loadDevisPhotos } from '../lib/conversations'
 import { createModification } from '../lib/modifications'
 import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
@@ -114,6 +115,35 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
   }
   const [warehouses, setWarehouses] = useState([])
   useEffect(() => { loadWarehouses().then(setWarehouses).catch(() => {}) }, [])
+
+  // Livreur + adresse (table `livraisons`, indépendant d'Odoo) — pour les commandes avec livraison.
+  const [livreurs, setLivreurs] = useState([])
+  const [livreurId, setLivreurId] = useState(null)
+  const [livraisonLoc, setLivraisonLoc] = useState('')
+  useEffect(() => { loadLivreurs().then(setLivreurs).catch(() => {}) }, [])
+  useEffect(() => {
+    loadDeliveryStates([order.name]).then(m => {
+      const s = m[order.name]
+      if (s) { setLivreurId(s.livreur_id || null); setLivraisonLoc(s.localisation || '') }
+    }).catch(() => {})
+  }, [order.name])
+  // Détecte une ligne « Livraison (…) » (le produit livraison s'appelle toujours ainsi).
+  const hasLivraison = Array.isArray(lines) && lines.some(l => /^\s*livraison\b/i.test(firstLine(l.rawName ?? l.name ?? '')))
+
+  async function saveLivraison() {
+    if (!livreurId) { toast.error('Choisis un livreur.'); return }
+    setBusy(true)
+    try {
+      const defaultLivreurId = livreurs.find(l => l.livreur_defaut || l.perm_livreur_defaut)?.id || null
+      const autoAccept = livreurId === defaultLivreurId
+      await assignDelivery({ orderNum: order.name, livreurId, byUserId: user?.id, titre: `🚚 Livraison ${order.name}`, description: order.clientName || '', autoAccept })
+      await setLivraisonLocalisation(order.name, livraisonLoc)
+      logModif('Livreur / adresse mis à jour')
+      toast.success('Livreur / adresse enregistrés ✓')
+      onChanged?.()
+    } catch (e) { toast.error(e?.message || 'Échec') }
+    finally { setBusy(false) }
+  }
 
   // --- Articles à AJOUTER (panier temporaire) : reclique = quantité +1 ---
   function addToDraft(line) {
@@ -288,6 +318,28 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
               <option value="">— Choisir un entrepôt —</option>
               {[warehouses.find(w => !/vitrine/i.test(w.name)), ...warehouses.filter(w => /vitrine/i.test(w.name))].filter(Boolean).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
+          </div>
+        )}
+
+        {/* Livreur + adresse — seulement si la commande contient une livraison */}
+        {hasLivraison && (
+          <div className="mx-5 mb-3 p-2.5 rounded-lg bg-bordeaux/5 border border-bordeaux/20">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1.5">🚚 Assigner le livreur</div>
+            <div className="flex gap-1.5 flex-wrap">
+              {livreurs.length === 0 && <span className="text-[11px] text-ink-mute italic">Aucun livreur trouvé.</span>}
+              {livreurs.map(l => (
+                <button key={l.id} onClick={() => setLivreurId(livreurId === l.id ? null : l.id)}
+                  className={`px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${livreurId === l.id ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line hover:border-bordeaux'}`}>
+                  {l.full_name || l.username}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] font-semibold text-ink-soft mb-1 mt-2.5">📍 Adresse / localisation (pour le livreur)</div>
+            <textarea value={livraisonLoc} onChange={e => setLivraisonLoc(e.target.value)} rows={2}
+              placeholder="Adresse écrite, lien Google Maps / WhatsApp, ou coordonnées GPS…"
+              className="w-full px-3 py-2 border border-line rounded-lg text-[13px] bg-white focus:outline-none focus:border-bordeaux" />
+            <button onClick={saveLivraison} disabled={busy || !livreurId}
+              className="mt-2 px-3 py-1.5 bg-bordeaux text-cream rounded-lg text-[12px] font-medium disabled:opacity-50">Enregistrer le livreur / l'adresse</button>
           </div>
         )}
 

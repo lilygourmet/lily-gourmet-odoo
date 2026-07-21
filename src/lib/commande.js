@@ -74,6 +74,13 @@ export async function createDevis(payload) {
   return post('order-create-devis', payload)
 }
 
+/** Modifie le nom / téléphone d'un client Odoo (res.partner).
+ *  Fournir soit `partnerId` (depuis une commande), soit `phone` (depuis une conversation).
+ *  Renvoie { ok, id, name, phone } ou { ok:false, reason:'no_partner' }. */
+export async function updateClient({ partnerId, phone, name, newPhone }) {
+  return post('client-update', { partnerId, phone, name, newPhone })
+}
+
 /** Crée le devis OCP (lien dédié) : { zone, date, time, items:[{tmplId,kind,size,variantHint,name,qty,free,unit,autre}] }. */
 export async function createOcpDevis(payload) {
   return post('order-create-ocp', payload)

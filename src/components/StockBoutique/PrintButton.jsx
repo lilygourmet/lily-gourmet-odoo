@@ -12,6 +12,7 @@
 //   <PrintButton mode="audit" />
 
 import { useState } from 'react'
+import { todayISO } from '../../lib/dates'
 import { loadDaySummary, loadStockDay, loadDayItems, buildAuditReport } from '../../lib/stockBoutique'
 
 const MODE_TITLES = {
@@ -154,7 +155,7 @@ export default function PrintButton({ mode = 'vitrine' }) {
                     className="w-full px-3 py-2 text-[13px] border border-line rounded-md mb-3"
                   >
                     {days.map(d => {
-                      const isToday = d.day === new Date().toISOString().slice(0, 10)
+                      const isToday = d.day === todayISO()
                       const label = new Date(d.day).toLocaleDateString('fr-FR', {
                         weekday: 'long', day: 'numeric', month: 'long'
                       })

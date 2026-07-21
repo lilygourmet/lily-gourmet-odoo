@@ -8,6 +8,7 @@ const ProdView = lazy(() => import('./components/ProdView'))
 const FreezerView = lazy(() => import('./components/FreezerView'))
 const MessagesView = lazy(() => import('./components/MessagesView'))
 const EtiquettesView = lazy(() => import('./components/EtiquettesView'))
+const EtiquettesBoitesView = lazy(() => import('./components/EtiquettesBoitesView'))
 const ProductLabelsView = lazy(() => import('./components/ProductLabelsView'))
 const StockMorning = lazy(() => import('./components/StockBoutique/StockMorning'))
 const StockPrevisions = lazy(() => import('./components/StockBoutique/StockPrevisions'))
@@ -39,6 +40,7 @@ const CakeVisionView = lazy(() => import('./components/CakeVision/CakeVisionView
 const StockPolyView = lazy(() => import('./components/StockPolyView'))
 const PolyDecoupeView = lazy(() => import('./components/PolyDecoupeView'))
 const SimulationGateauxView = lazy(() => import('./components/SimulationGateauxView'))
+const TransfertsMpView = lazy(() => import('./components/TransfertsMpView'))
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
@@ -67,6 +69,8 @@ function App() {
   const [deepLinkDevis, setDeepLinkDevis] = useState(null)
   // Client (nom + téléphone) à pré-remplir dans « Nouvelle commande » (depuis une conversation)
   const [deepLinkNewCmd, setDeepLinkNewCmd] = useState(null)
+  // Tâche à ouvrir d'office dans l'onglet Tâches (depuis le lien du message WhatsApp)
+  const [deepLinkTask, setDeepLinkTask] = useState(null)
   // Onglet de la caisse Meriem à ouvrir directement (raccourcis depuis la caisse rapide)
   const [deepLinkCaisseSub, setDeepLinkCaisseSub] = useState(null)
   // Sous-onglet RH (+ sous-onglet Congés) à ouvrir depuis le menu de gauche
@@ -190,6 +194,11 @@ function App() {
       // Nouvelle commande pré-remplie avec le client (depuis une conversation WhatsApp)
       setActiveView('nouvelle-commande')
       setDeepLinkNewCmd({ phone: sp.get('cmdphone') || '', name: sp.get('cmdname') || '' })
+      try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
+    } else if (sp.get('task')) {
+      // Lien direct vers une tâche précise (depuis le message WhatsApp de notif)
+      setActiveView('tasks')
+      setDeepLinkTask(sp.get('task'))
       try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
     } else if (sp.get('view')) {
       // Favori / lien direct vers un onglet précis (ex. ?view=caisse)
@@ -359,7 +368,7 @@ function App() {
       if (activeView === 'caisse-livreur') return <CaisseLivreur {...navProps} />
       if (activeView === 'decoupe-poly') return <PolyDecoupeView {...navProps} />
       if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
-      if (activeView === 'tasks') return <TasksWrapper {...navProps} />
+      if (activeView === 'tasks') return <TasksWrapper {...navProps} taskDeep={deepLinkTask} />
       return <LivraisonsWrapper {...navProps} />
     }
     if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
@@ -370,6 +379,7 @@ function App() {
     if (activeView === 'messages') return <MessagesView {...navProps} />
     if (activeView === 'cake-vision-edit') return <CakeVisionView {...navProps} />
     if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />
+    if (activeView === 'etiquettes-boites') return <EtiquettesBoitesView {...navProps} />
     if (activeView === 'etiquettes-prix') return <ProductLabelsView {...navProps} />
     if (activeView === 'vitrine') return <StockMorning {...navProps} mode="sucre" />
     if (activeView === 'vitrine-previsions') return <StockPrevisions {...navProps} />
@@ -381,7 +391,7 @@ function App() {
     if (activeView === 'stock-gs') return <StockGS {...navProps} />
     if (activeView === 'stock-prod-vitrine') return <StockProd {...navProps} lieu="vitrine" />
     if (activeView === 'stock-prod-annexe') return <StockProd {...navProps} lieu="annexe" />
-    if (activeView === 'tasks') return <TasksWrapper {...navProps} />
+    if (activeView === 'tasks') return <TasksWrapper {...navProps} taskDeep={deepLinkTask} />
     if (activeView === 'hr') return isAdmin(user)
       ? <TabLockGate label="RH"><HRWrapper {...navProps} hrDeep={hrDeep} /></TabLockGate>
       : <HRWrapper {...navProps} hrDeep={hrDeep} />
@@ -405,6 +415,7 @@ function App() {
     if (activeView === 'stock-poly') return <StockPolyView {...navProps} />
     if (activeView === 'decoupe-poly') return <PolyDecoupeView {...navProps} />
     if (activeView === 'simu-gateaux') return <SimulationGateauxView {...navProps} />
+    if (activeView === 'transferts-mp') return <TransfertsMpView {...navProps} />
     if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
@@ -490,7 +501,7 @@ function App() {
 // (TasksView ne gere pas le header lui-meme)
 // ============================================================
 function TasksWrapper(props) {
-  const { user, onLogout, onNavigate, activeView, welcome } = props
+  const { user, onLogout, onNavigate, activeView, welcome, taskDeep } = props
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
@@ -502,7 +513,7 @@ function TasksWrapper(props) {
           </div>
         </div>
       )}
-      <TasksView user={user} />
+      <TasksView user={user} deepLinkTaskId={taskDeep} />
     </div>
   )
 }

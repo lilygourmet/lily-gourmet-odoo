@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Calendar, RefreshCw, Landmark, User, Briefcase } from 'lucide-react'
-import { fmtMoney, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
+import { fmtMoney, fmtDateLongue, COLOR_PALETTE, todayISO } from '../_helpers'
 import { toast } from '../../../lib/toast'
 import { confirmDialog } from '../../../lib/confirmDialog'
 
 export default function DetailReaffecterModal({ env, destinataires, onClose, onReassign, onUnassign, onUpdateDate }) {
   const [showReassign, setShowReassign] = useState(false)
   const [editingDate, setEditingDate] = useState(false)
-  const [dateValue, setDateValue] = useState(env.assigned_date || env.session_date || new Date().toISOString().slice(0, 10))
+  const [dateValue, setDateValue] = useState(env.assigned_date || env.session_date || todayISO())
   const [savingDate, setSavingDate] = useState(false)
   const c = COLOR_PALETTE[env.destinataire?.color_key] || COLOR_PALETTE.gris
 

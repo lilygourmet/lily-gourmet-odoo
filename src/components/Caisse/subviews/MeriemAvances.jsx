@@ -13,7 +13,7 @@ import {
 } from '../../../lib/caisse'
 import AuditLogPanel from '../AuditLogPanel'
 import { User, Info, Check, Clock, Trash2, HandCoins } from 'lucide-react'
-import { fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
+import { fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE, todayISO } from '../_helpers'
 import { toast } from '../../../lib/toast'
 import { confirmDialog } from '../../../lib/confirmDialog'
 
@@ -228,7 +228,7 @@ function PayeLGModal({ persoDests, onClose, onSubmit }) {
   const [beneficiaryId, setBeneficiaryId] = useState(persoDests[0]?.id || '')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayISO())
   const [submitting, setSubmitting] = useState(false)
 
   async function submit() {
@@ -278,7 +278,7 @@ function RemboursementModal({ avance, onClose, onSubmit }) {
   const [amount, setAmount] = useState(String(remaining))
   const [mode, setMode] = useState('especes')
   const [note, setNote] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayISO())
   const [submitting, setSubmitting] = useState(false)
 
   async function submit() {
@@ -331,7 +331,7 @@ function NewAvanceModal({ persoDests, onClose, onCreate }) {
   const [beneficiaryId, setBeneficiaryId] = useState(persoDests[0]?.id || '')
   const [amount, setAmount] = useState('')
   const [motif, setMotif] = useState('')
-  const [avanceDate, setAvanceDate] = useState(new Date().toISOString().slice(0, 10))
+  const [avanceDate, setAvanceDate] = useState(todayISO())
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit() {

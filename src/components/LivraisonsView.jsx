@@ -96,7 +96,7 @@ export default function LivraisonsView({ user }) {
         d.orderNum ? `N° ${d.orderNum}` : null,
       ].filter(Boolean).join('\n')
       const autoAccept = !!livreurId && livreurId === defaultLivreurId
-      await assignDelivery({ orderNum: d.orderNum, livreurId: livreurId || null, byUserId: user.id, titre, description: desc, dueDate: date, autoAccept })
+      await assignDelivery({ orderNum: d.orderNum, livreurId: livreurId || null, byUserId: user.id, titre, description: desc, autoAccept })
       setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livreur_id: livreurId || null, statut: livreurId ? (autoAccept ? 'acceptee' : 'assignee') : null } }))
       // Avertit si le livreur choisi n'a pas de WhatsApp (il ne sera prévenu que dans l'app).
       if (livreurId) {

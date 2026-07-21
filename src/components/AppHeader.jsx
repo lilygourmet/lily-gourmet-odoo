@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+import { todayISO } from '../lib/dates'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, isLivreurDefaut, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools, canSeeStockPoly} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeEtiquettesBoites, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, isLivreurDefaut, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools, canSeeStockPoly} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -31,7 +32,7 @@ const HEADER_ICONS = {
   prod: Croissant, sales: Sandwich, 'stock-gs': Boxes, 'stock-prod-vitrine': Boxes, 'stock-prod-annexe': Boxes,
   vitrine: Store, 'vitrine-sale': Store, 'reception-vitrine': PackageCheck, 'vitrine-previsions': BarChart3,
   'fin-journee': Moon, stock: ClipboardList, checklist: ListChecks,
-  etiquettes: Tag, 'etiquettes-prix': Tag, 'cake-vision-link': Camera, messages: MessageSquare,
+  etiquettes: Tag, 'etiquettes-prix': Tag, 'etiquettes-boites': Tag, 'cake-vision-link': Camera, messages: MessageSquare,
   conversations: MessageCircle, modifications: Pencil, livraisons: Truck, paiements: CreditCard, freezer: Snowflake,
   caisse: Banknote, 'caisse-livreur': Banknote, hr: Users, absences: Plane, economat: Receipt, supports: Boxes,
   devis: ShoppingBag, photoshop: Palette, 'decoupe-poly': Scissors, 'stock-poly': Snowflake,
@@ -169,7 +170,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     let cancelled = false
     let channel = null
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayISO()
 
     async function refreshBadge() {
       try {
@@ -282,7 +283,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     let cancelled = false
     let channels = []
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayISO()
     const PROD_PREFIXES = ['E-', 'V-', 'GS-', 'MI-']
     // Fenetre commandes : aujourd'hui + 3 jours futurs
     const dt = new Date(today)
@@ -530,7 +531,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       const lastStr = localStorage.getItem('lastSyncAt')
       const last = lastStr ? new Date(lastStr) : null
       if (last && (Date.now() - last.getTime()) < MIN_INTERVAL_MS) return
-      console.log('[auto-sync] declenchement')
       try {
         await handleSync()
       } catch (_) { /* handleSync gere deja l'erreur */ }
@@ -633,6 +633,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const menuOutils = [
     { view: 'etiquettes',       emoji: '🏷',  label: 'Étiquettes Café', visible: !isLivreur(user) && canSeeEtiquettes(user) },
     { view: 'etiquettes-prix',  emoji: '🏷',  label: 'Étiquettes produits', visible: !isLivreur(user) && canSeeEtiquettes(user) },
+    { view: 'etiquettes-boites', emoji: '🏷',  label: 'Étiquettes boîtes', visible: !isLivreur(user) && canSeeEtiquettesBoites(user) },
     // Galerie CD : pour les admins, c'est le bouton principal donc on l'enleve d'ici.
     // Pour les non-admins qui ont la perm, on la garde dans Outils.
     { view: 'cake-vision-link', emoji: '📸', label: 'Galerie CD',       visible: !isLivreur(user) && !admin && canSeeCakeVision(user), externalUrl: 'https://cake-vision-app.vercel.app' },

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { todayISO } from '../../lib/dates'
 import { Search, Building2, Plus, Calendar, Pencil, Trash2, PartyPopper, Palmtree, CheckCircle2, Moon, Eye, EyeOff } from 'lucide-react'
 import { loadEmployes, deleteEmploye } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
@@ -32,7 +33,7 @@ export default function EmployesTab({ user, isAdmin }) {
   }, [])
 
   // Date d'aujourd'hui pour calcul statut
-  const todayStr = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  const todayStr = todayISO() // YYYY-MM-DD
   const todayDate = new Date()
   const jourSemaineFR = JOURS_FR[todayDate.getDay()] // ex: "Mardi"
 

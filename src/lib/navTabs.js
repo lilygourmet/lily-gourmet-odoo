@@ -6,10 +6,11 @@
 // ============================================================
 import {
   isAdmin, isLivreur, canRecaps, canSeeCalendar, canSeeFreezer, canSeeMessages,
-  canSeeEtiquettes, canSeeCakeVision, canSeeChecklist, canStockPatissier, canStockCafe,
+  canSeeEtiquettes, canSeeEtiquettesBoites, canSeeCakeVision, canSeeChecklist, canStockPatissier, canStockCafe,
   canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canViewPayments,
   canSeePhotoshop, canSeeAiTools, canSeeStockPoly, canSeeSimuGateaux,
   canEditCakeVision, canSeeModifications, canSeeLivraisons, isLivreurDefaut,
+  canSeeTransferts,
 } from './auth'
 
 const TAB_DEFS = [
@@ -31,6 +32,7 @@ const TAB_DEFS = [
   { view: 'stock',             emoji: '📊', label: 'Stock',             can: u => !isLivreur(u) && canStockAudit(u) },
   { view: 'etiquettes',        emoji: '🏷', label: 'Étiquettes Café',   can: u => !isLivreur(u) && canSeeEtiquettes(u) },
   { view: 'etiquettes-prix',   emoji: '🏷', label: 'Étiquettes produits', can: u => !isLivreur(u) && canSeeEtiquettes(u) },
+  { view: 'etiquettes-boites', emoji: '🏷', label: 'Étiquettes boîtes',  can: u => !isLivreur(u) && canSeeEtiquettesBoites(u) },
   { view: 'messages',          emoji: '💬', label: 'Messages',          can: u => !isLivreur(u) && canSeeMessages(u) },
   { view: 'conversations',     emoji: '📱', label: 'Conversations',     can: u => !isLivreur(u) && canSeeConversations(u) },
   { view: 'devis',             emoji: '📄', label: 'Commandes',         can: u => !isLivreur(u) && canSeeDevis(u) },
@@ -48,6 +50,7 @@ const TAB_DEFS = [
   { view: 'photoshop',         emoji: '🎨', label: 'Studio photos',     can: u => !isLivreur(u) && canSeePhotoshop(u) },
   { view: 'stock-poly',        emoji: '🧊', label: 'Stock poly',        can: u => !isLivreur(u) && canSeeStockPoly(u) },
   { view: 'simu-gateaux',      emoji: '🍰', label: 'Simulation gâteaux', can: u => !isLivreur(u) && canSeeSimuGateaux(u) },
+  { view: 'transferts-mp',     emoji: '🔄', label: 'Transferts MP',      can: u => !isLivreur(u) && canSeeTransferts(u) },
   { view: 'decoupe-poly',      emoji: '✂️', label: 'Découpe poly',      can: u => canSeeStockPoly(u) },
   { view: 'ai-gemini',         emoji: '✨', label: 'Gemini',            can: u => !isLivreur(u) && canSeeAiTools(u) },
   { view: 'ai-chatgpt',        emoji: '🤖', label: 'ChatGPT',           can: u => !isLivreur(u) && canSeeAiTools(u) },

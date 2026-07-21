@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { createTask } from './tasks'
+import { createTask, notifyLivraisonWhatsapp } from './tasks'
 import { memoCache } from './memoCache'
 
 // ============================================================
@@ -72,7 +72,7 @@ async function notifyAssigner(orderNum, actorId, title, isUrgent, assignedBy = u
 
 // Assigne une livraison. Le livreur PAR DÉFAUT accepte d'office (statut 'acceptee').
 // Un autre livreur doit confirmer (statut 'assignee').
-export async function assignDelivery({ orderNum, livreurId, byUserId, titre, description, dueDate, autoAccept }) {
+export async function assignDelivery({ orderNum, livreurId, byUserId, titre, description, autoAccept }) {
   const { error } = await supabase
     .from('livraisons')
     .upsert({
@@ -83,11 +83,13 @@ export async function assignDelivery({ orderNum, livreurId, byUserId, titre, des
       updated_at: new Date().toISOString(),
     }, { onConflict: 'order_num' })
   if (error) throw error
-  // Pas de tâche pour le livreur PAR DÉFAUT (il accepte d'office et voit tout dans Livraisons).
-  // On garde la tâche pour un AUTRE livreur, qui doit confirmer.
+  // Livreur PAR DÉFAUT : rien (il accepte d'office et voit tout dans Livraisons).
+  // AUTRE livreur (doit confirmer) : simple alerte WhatsApp, SANS créer de tâche
+  // (il confirme/livre dans l'écran Livraisons, pas dans l'onglet Tâches).
   if (livreurId && byUserId && !autoAccept) {
+    const sessionText = `🚚 Nouvelle livraison :\n${description || titre || ''}`
     try {
-      await createTask({ title: titre || '🚚 Nouvelle livraison', description: description || null, fromUserId: byUserId, toUserId: livreurId, dueDate: dueDate || null })
+      await notifyLivraisonWhatsapp(livreurId, byUserId, sessionText, titre || '🚚 Nouvelle livraison')
     } catch { /* la notif ne doit pas bloquer l'assignation */ }
   }
 }

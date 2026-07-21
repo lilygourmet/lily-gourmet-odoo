@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { todayISO } from '../lib/dates'
 import Skeleton from './Skeleton'
 import { usePersistedState } from '../lib/usePersistedState'
 import { toast } from '../lib/toast'
@@ -1323,7 +1324,7 @@ function classifierConge(c) {
   if (t.includes('naissance'))     return 'naissance'
   if (t.includes('deces') || t.includes('décès')) return 'deces'
   if (t.includes('circoncis'))     return 'circoncision'
-  if (t.includes('sans solde') || t.includes('unpaid')) return 'autre'
+  if (t.includes('sans solde') || t.includes('unpaid')) return 'sans_solde'
   return 'annuel'
 }
 function compteJoursOffFixesPeriode(emp, debutYMD, finYMD) {
@@ -1349,7 +1350,7 @@ function compteJoursOffFixesPeriode(emp, debutYMD, finYMD) {
 function DetailEmployeModal({ emp, conges, solde, onClose }) {
   const annee = new Date().getFullYear()
   const yearStart = `${annee}-01-01`
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayISO()
   const congesAnnee = (conges || []).filter(c => c.statut === 'valide' && !(c.date_fin < yearStart || c.date_debut > today))
     .sort((a, b) => a.date_debut.localeCompare(b.date_debut))
 
@@ -1369,6 +1370,7 @@ function DetailEmployeModal({ emp, conges, solde, onClose }) {
   const totalPris = lignes.filter(l => l.dansPris).reduce((s, l) => s + l.compte, 0)
   const totalMaladieCourte = lignes.filter(l => l.cat === 'maladie_courte').reduce((s, l) => s + l.compte, 0)
   const totalMaladieLongue = lignes.filter(l => l.cat === 'maladie_longue').reduce((s, l) => s + l.compte, 0)
+  const totalSansSolde = lignes.filter(l => l.cat === 'sans_solde').reduce((s, l) => s + l.compte, 0)
   const totalRecup = lignes.filter(l => l.cat === 'recup').length
 
   return (
@@ -1422,6 +1424,7 @@ function DetailEmployeModal({ emp, conges, solde, onClose }) {
           <strong>Total qui apparaît dans la colonne « Pris »</strong> : {totalPris.toFixed(1)} j<br />
           <span style={{ color: '#0C447C' }}>Maladie courte (pool séparé) : {totalMaladieCourte}</span>{' · '}
           <span>Maladie longue (non payée, non décomptée) : {totalMaladieLongue}</span>{' · '}
+          <span>Sans solde (non payé, non décompté) : {totalSansSolde}</span>{' · '}
           <span>Récup (ignoré, s'ajoute au solde) : {totalRecup}</span>
         </div>
       </div>
@@ -1439,6 +1442,7 @@ function catLabel(c) {
     circoncision: 'Circoncision',
     autre: 'Autre',
     recup: 'Récup',
+    sans_solde: 'Sans solde',
   })[c] || c
 }
 function catColor(c) {
@@ -1452,6 +1456,7 @@ function catColor(c) {
     circoncision: '#993556',
     autre: '#4a3a30',
     recup: '#8a7a70',
+    sans_solde: '#A32D2D',
   })[c] || '#4a3a30'
 }
 

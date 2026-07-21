@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { todayISO } from '../lib/dates'
 import { Plus, Trash2, Pencil, PackageOpen, AlertTriangle } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
@@ -29,7 +30,7 @@ export default function SupportsView({ user, onLogout, onNavigate, activeView })
   const [typeModal, setTypeModal] = useState(null)   // { id?, name, total_qty, photo_url, file }
   // Formulaire sortie
   const [sortieOpen, setSortieOpen] = useState(false)
-  const [f, setF] = useState({ support_id: '', qty: '', dest_type: 'ocp', client_name: '', order_num: '', date_sortie: new Date().toISOString().slice(0, 10), note: '' })
+  const [f, setF] = useState({ support_id: '', qty: '', dest_type: 'ocp', client_name: '', order_num: '', date_sortie: todayISO(), note: '' })
   // Formulaire d'ajout de règle
   const [rf, setRf] = useState({ support_id: '', keyword: '', qty_mode: 'line_qty', qty_value: 1 })
 
@@ -75,7 +76,7 @@ export default function SupportsView({ user, onLogout, onNavigate, activeView })
     try {
       await recordSortie({ ...f, created_by: user?.id })
       setSortieOpen(false)
-      setF({ support_id: '', qty: '', dest_type: 'ocp', client_name: '', order_num: '', date_sortie: new Date().toISOString().slice(0, 10), note: '' })
+      setF({ support_id: '', qty: '', dest_type: 'ocp', client_name: '', order_num: '', date_sortie: todayISO(), note: '' })
       await refresh()
     } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusy(false) }
@@ -98,7 +99,7 @@ export default function SupportsView({ user, onLogout, onNavigate, activeView })
     setF({
       support_id: String(det.support.id), qty: String(det.qty),
       dest_type: isOcp ? 'ocp' : 'client', client_name: isOcp ? '' : (order.client_name || ''),
-      order_num: order.order_num || '', date_sortie: new Date().toISOString().slice(0, 10), note: '',
+      order_num: order.order_num || '', date_sortie: todayISO(), note: '',
     })
     setSortieOpen(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })

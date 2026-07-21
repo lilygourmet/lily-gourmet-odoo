@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Calendar, Landmark, User, Briefcase } from 'lucide-react'
-import { fmtMoney, fmtDateLongue, COLOR_PALETTE } from '../_helpers'
+import { fmtMoney, fmtDateLongue, COLOR_PALETTE, todayISO } from '../_helpers'
 
 export default function AttributionModal({ env, destinataires, onClose, onAssign }) {
-  const [assignedDate, setAssignedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [assignedDate, setAssignedDate] = useState(todayISO())
 
   // Trier : caisse-gérée puis perso puis banque
   const sorted = [...destinataires].sort((a, b) => {

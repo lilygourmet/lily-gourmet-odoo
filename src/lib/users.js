@@ -11,7 +11,7 @@ import { memoCache } from './memoCache'
 async function _loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_stock_poly, perm_simu_gateaux, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_besoins_achat, perm_achat, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_etiquettes_boites, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_stock_poly, perm_simu_gateaux, perm_transfert_annexe, perm_transfert_boutique, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_besoins_achat, perm_achat, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -38,7 +38,7 @@ export async function createUser({
   perm_delete = false, perm_patissier = false, perm_print_batch = false, perm_print_single = false, perm_recaps = false, perm_define_gm = false,
   prod_category = null,
   perm_prod = false, perm_sales = false, team_id = null, perm_calendar = false, perm_labels = false, perm_freezer = false,
-  perm_messages = false, perm_etiquettes = false,
+  perm_messages = false, perm_etiquettes = false, perm_etiquettes_boites = false,
   perm_cake_vision = false, perm_checklist = false,
   perm_stock_patissier = false, perm_stock_cafe = false, perm_stock_audit = false,
   perm_stock_gs = false,
@@ -52,6 +52,7 @@ export async function createUser({
   perm_photoshop = false,
   perm_stock_poly = false,
   perm_simu_gateaux = false,
+  perm_transfert_annexe = false, perm_transfert_boutique = false,
   perm_notif_modif = false,
   perm_modification = false,
   livreur_defaut = false,
@@ -75,15 +76,19 @@ export async function createUser({
 
   if (error) throw error
 
+  // create_user_v2 renvoie l'id DIRECTEMENT (chaîne uuid), pas un objet { id }.
+  const newId = typeof data === 'string' ? data : data?.id
+
   // Si l'utilisateur a ete cree, on s'assure que toutes les permissions
   // (y compris les nouvelles non gerees par la RPC) sont bien sauvegardees
-  if (data && data.id) {
+  if (newId) {
     try {
       await supabase
         .from('profiles')
         .update({
           perm_messages,
           perm_etiquettes,
+          perm_etiquettes_boites,
           perm_cake_vision,
           perm_checklist,
           perm_stock_patissier,
@@ -101,6 +106,8 @@ export async function createUser({
           perm_photoshop,
           perm_stock_poly,
           perm_simu_gateaux,
+          perm_transfert_annexe,
+          perm_transfert_boutique,
           perm_notif_modif,
           perm_modification,
           livreur_defaut,
@@ -121,13 +128,13 @@ export async function createUser({
           whatsapp,
           employe_id,
         })
-        .eq('id', data.id)
+        .eq('id', newId)
     } catch (e) {
       console.error('[createUser] Failed to sync extra perms:', e)
     }
   }
 
-  return data
+  return { id: newId }
 }
 
 // Alias compat
@@ -251,7 +258,7 @@ export async function updateUser(userId, {
   perm_print_batch, perm_print_single, perm_recaps, perm_define_gm,
   prod_category,
   perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer,
-  perm_messages, perm_etiquettes,
+  perm_messages, perm_etiquettes, perm_etiquettes_boites,
   perm_cake_vision, perm_cake_vision_edit, perm_checklist,
   perm_stock_patissier, perm_stock_cafe, perm_stock_audit,
   perm_stock_gs,
@@ -265,6 +272,7 @@ export async function updateUser(userId, {
   perm_photoshop,
   perm_stock_poly,
   perm_simu_gateaux,
+  perm_transfert_annexe, perm_transfert_boutique,
   perm_notif_modif,
   perm_modification,
   livreur_defaut,
@@ -299,6 +307,7 @@ export async function updateUser(userId, {
   if (perm_freezer !== undefined) updates.perm_freezer = perm_freezer
   if (perm_messages !== undefined) updates.perm_messages = perm_messages
   if (perm_etiquettes !== undefined) updates.perm_etiquettes = perm_etiquettes
+  if (perm_etiquettes_boites !== undefined) updates.perm_etiquettes_boites = perm_etiquettes_boites
   if (perm_cake_vision !== undefined) updates.perm_cake_vision = perm_cake_vision
   if (perm_cake_vision_edit !== undefined) updates.perm_cake_vision_edit = perm_cake_vision_edit
   if (perm_checklist !== undefined) updates.perm_checklist = perm_checklist
@@ -319,6 +328,8 @@ export async function updateUser(userId, {
   if (perm_photoshop !== undefined) updates.perm_photoshop = perm_photoshop
   if (perm_stock_poly !== undefined) updates.perm_stock_poly = perm_stock_poly
   if (perm_simu_gateaux !== undefined) updates.perm_simu_gateaux = perm_simu_gateaux
+  if (perm_transfert_annexe !== undefined) updates.perm_transfert_annexe = perm_transfert_annexe
+  if (perm_transfert_boutique !== undefined) updates.perm_transfert_boutique = perm_transfert_boutique
   if (perm_notif_modif !== undefined) updates.perm_notif_modif = perm_notif_modif
   if (perm_modification !== undefined) updates.perm_modification = perm_modification
   if (livreur_defaut !== undefined) updates.livreur_defaut = livreur_defaut
@@ -459,14 +470,10 @@ export async function deleteUser(userId) {
   return true
 }
 
-// Suppression dure (peut echouer si FK references actives). Reservee aux cas
-// ou on veut vraiment vider la ligne.
-export async function hardDeleteUser(userId) {
-  const { error } = await supabase
-    .from('profiles')
-    .delete()
-    .eq('id', userId)
-
+// Suppression dure via fonction serveur sécurisée (admin only + compte déjà désactivé).
+// Passe par une RPC car la RLS n'autorise pas le DELETE direct sur profiles.
+export async function hardDeleteUser(userId, adminId) {
+  const { error } = await supabase.rpc('hard_delete_user', { p_user_id: userId, p_admin_id: adminId })
   if (error) throw error
   return true
 }

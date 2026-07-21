@@ -132,6 +132,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_freezer: formData.permFreezer,
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
+        perm_etiquettes_boites: formData.permEtiquettesBoites,
         perm_stock_patissier: formData.permStockPatissier,
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
@@ -154,6 +155,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_photoshop: formData.permPhotoshop,
         perm_stock_poly: formData.permStockPoly,
         perm_simu_gateaux: formData.permSimuGateaux,
+        perm_transfert_annexe: formData.permTransfertAnnexe,
+        perm_transfert_boutique: formData.permTransfertBoutique,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
@@ -203,6 +206,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_freezer: formData.permFreezer,
         perm_messages: formData.permMessages,
         perm_etiquettes: formData.permEtiquettes,
+        perm_etiquettes_boites: formData.permEtiquettesBoites,
         perm_stock_patissier: formData.permStockPatissier,
         perm_stock_cafe: formData.permStockCafe,
         perm_stock_audit: formData.permStockAudit,
@@ -225,6 +229,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_photoshop: formData.permPhotoshop,
         perm_stock_poly: formData.permStockPoly,
         perm_simu_gateaux: formData.permSimuGateaux,
+        perm_transfert_annexe: formData.permTransfertAnnexe,
+        perm_transfert_boutique: formData.permTransfertBoutique,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
         livreur_defaut: formData.livreurDefaut,
@@ -272,7 +278,7 @@ export default function AdminUsers({ currentUser, onClose }) {
   // Suppression definitive : reservee aux users deja desactives.
   async function handleHardDelete(userId) {
     try {
-      await hardDeleteUser(userId)
+      await hardDeleteUser(userId, currentUser?.id)
       setConfirmHardDelete(null)
       await refresh()
     } catch (e) {
@@ -757,6 +763,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permFreezer: initialData?.perm_freezer !== undefined ? initialData.perm_freezer : false,
     permMessages: initialData?.perm_messages !== undefined ? initialData.perm_messages : false,
     permEtiquettes: initialData?.perm_etiquettes !== undefined ? initialData.perm_etiquettes : false,
+    permEtiquettesBoites: initialData?.perm_etiquettes_boites !== undefined ? initialData.perm_etiquettes_boites : false,
     permStockPatissier: initialData?.perm_stock_patissier !== undefined ? initialData.perm_stock_patissier : false,
     permStockCafe: initialData?.perm_stock_cafe !== undefined ? initialData.perm_stock_cafe : false,
     permStockAudit: initialData?.perm_stock_audit !== undefined ? initialData.perm_stock_audit : false,
@@ -779,6 +786,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permPhotoshop: initialData?.perm_photoshop !== undefined ? initialData.perm_photoshop : false,
     permStockPoly: initialData?.perm_stock_poly !== undefined ? initialData.perm_stock_poly : false,
     permSimuGateaux: initialData?.perm_simu_gateaux !== undefined ? initialData.perm_simu_gateaux : false,
+    permTransfertAnnexe: initialData?.perm_transfert_annexe !== undefined ? initialData.perm_transfert_annexe : false,
+    permTransfertBoutique: initialData?.perm_transfert_boutique !== undefined ? initialData.perm_transfert_boutique : false,
     permAiTools: initialData?.perm_ai_tools !== undefined ? initialData.perm_ai_tools : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
     livreurDefaut: initialData?.livreur_defaut !== undefined ? initialData.livreur_defaut : false,
@@ -982,12 +991,15 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-stock-minmax" label="Régler les seuils min/max" desc="Définir les alertes de réassort (GS- / Prod)." checked={isAdmin || formData.permStockMinMax} onChange={v => update('permStockMinMax', v)} />
             <PermCheckbox id="perm-stock-poly" label="Stock poly" desc="Gérer le stock de poly découpé (morceaux 5/2 cm) + alerte WhatsApp." checked={isAdmin || formData.permStockPoly} onChange={v => update('permStockPoly', v)} />
             <PermCheckbox id="perm-simu-gateaux" label="Simulation gâteaux" desc="Voir le simulateur visuel de gâteaux par nombre de personnes et d'étages." checked={isAdmin || formData.permSimuGateaux} onChange={v => update('permSimuGateaux', v)} />
+            <PermCheckbox id="perm-transfert-annexe" label="Transferts MP — Annexe (envoyer)" desc="Enregistrer les envois de matières premières de l'annexe vers la boutique." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
+            <PermCheckbox id="perm-transfert-boutique" label="Transferts MP — Boutique (confirmer)" desc="Confirmer la réception des matières premières envoyées par l'annexe." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
             <PermCheckbox id="perm-freezer" label="Sortie congélateur" desc="Voir la liste des sorties de congélateur." checked={isAdmin || formData.permFreezer} onChange={v => update('permFreezer', v)} />
           </PermGroup>
 
           <PermGroup emoji="🏷️" title="Étiquettes & visuels">
             <PermCheckbox id="perm-labels" label="Étiquettes gâteaux (Zebra)" desc="Imprimer les étiquettes cake design sur l'imprimante Zebra." checked={isAdmin || formData.permLabels} onChange={v => update('permLabels', v)} />
             <PermCheckbox id="perm-etiquettes" label="Étiquettes café & produits" desc="Onglets « Étiquettes Café » et « Étiquettes produits » (prix vitrine)." checked={isAdmin || formData.permEtiquettes} onChange={v => update('permEtiquettes', v)} />
+            <PermCheckbox id="perm-etiquettes-boites" label="Étiquettes boîtes (FR + arabe)" desc="Onglet « Étiquettes boîtes » : texte FR + arabe en gros, à coller sur les boîtes." checked={isAdmin || formData.permEtiquettesBoites} onChange={v => update('permEtiquettesBoites', v)} />
             <PermCheckbox id="perm-cake-vision" label="Galerie CD" desc="Accès à la galerie des modèles de gâteaux." checked={isAdmin || formData.permCakeVision} onChange={v => update('permCakeVision', v)} />
             <PermCheckbox id="perm-cake-vision-edit" label="Cake Vision" desc="Éditeur IA : modifier une photo de gâteau selon la demande client (utilise du crédit)." checked={isAdmin || formData.permCakeVisionEdit} onChange={v => update('permCakeVisionEdit', v)} />
             <PermCheckbox id="perm-photoshop" label="🎨 Studio photos" desc="Composer/éditer des photos imprimables pour gâteaux (bibliothèque, texte, formes, découpe…)." checked={isAdmin || formData.permPhotoshop} onChange={v => update('permPhotoshop', v)} />

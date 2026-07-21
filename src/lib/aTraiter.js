@@ -7,7 +7,7 @@ import { createDemandeConge, calculSoldeConges } from './conges'
 // détectés depuis le pointage. On scanne le mois courant + le mois précédent.
 // ============================================================
 
-const todayYMD = () => new Date().toISOString().slice(0, 10)
+const todayYMD = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 function periodsToScan() {
   const now = new Date()
