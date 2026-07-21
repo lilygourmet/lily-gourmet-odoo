@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof, setEnveloppeIgnore } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -79,6 +79,8 @@ function BanqueSection({ user }) {
   const [hideNoSugg, setHideNoSugg] = useState(false)
   const [ecartList, setEcartList] = useState([])
   const [linkFrom, setLinkFrom] = useState(null)   // 1er virement d'un lien manuel « 2 = 1 »
+  const [imports, setImports] = useState([])       // historique des relevés importés
+  const [showHistory, setShowHistory] = useState(false)
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -88,6 +90,7 @@ function BanqueSection({ user }) {
     try { setTakenLines(await loadConfirmedReleveLines()) } catch { /* ignore */ }
     try { setFreeLines(await loadAllFreeReleveLines()) } catch { /* ignore */ }
     try { setEcartList(await loadBanqueEnvelopesWithEcart()) } catch { /* ignore */ }
+    try { setImports(await loadReleveImports()) } catch { /* ignore */ }
   }
 
   // Montants disponibles dans le relevé par type (pour savoir si « Suggérer » servira)
@@ -255,11 +258,50 @@ function BanqueSection({ user }) {
         </label>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+        {imports.length > 0 && (
+          <button onClick={() => setShowHistory(v => !v)} style={btnNormal}>
+            🕑 Relevés importés ({imports.length})
+          </button>
+        )}
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
           <FileText size={14} /> Importer relevé bancaire
         </button>
       </div>
+
+      {showHistory && (
+        <div style={{ marginBottom: 14, border: '1px solid #e5d8c3', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ background: '#F4F0EA', padding: '8px 12px', fontSize: 13, fontWeight: 600, color: '#4a3a30' }}>
+            Historique des relevés importés
+          </div>
+          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+            {imports.map(im => (
+              <div key={im.id} style={{ padding: '8px 12px', borderTop: '1px solid #efe7d9', fontSize: 12, color: '#4a3a30' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600 }}>{fmtDateLongue(im.imported_at)}</span>
+                  <span style={{ color: '#8a7a70' }}>
+                    par {im.importer?.full_name || im.importer?.username || '—'}
+                  </span>
+                </div>
+                <div style={{ marginTop: 2 }}>
+                  📄 {im.files || '—'}{im.banks ? ` · 🏦 ${im.banks}` : ''}
+                </div>
+                {(im.period_start || im.period_end) && (
+                  <div style={{ marginTop: 2, color: '#8a7a70' }}>
+                    Période : {im.period_start ? fmtDateCourte(im.period_start) : '?'} → {im.period_end ? fmtDateCourte(im.period_end) : '?'}
+                  </div>
+                )}
+                <div style={{ marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ color: '#0a7d3d' }}>✓ {im.nb_trouve} trouvés</span>
+                  <span style={{ color: '#a9620a' }}>⚠ {im.nb_a_confirmer} à confirmer</span>
+                  <span style={{ color: '#8a7a70' }}>○ {im.nb_absent} absents</span>
+                  {im.recompute ? <span style={{ color: '#993556' }}>↻ recalcul</span> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 16px', borderRadius: 8, marginBottom: 14, background: '#E6F1FB', color: '#0C447C' }}>
@@ -369,7 +411,7 @@ function BanqueSection({ user }) {
       )}
 
       {showImport && (
-        <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} />
+        <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} user={user} />
       )}
 
       {linkFrom && (

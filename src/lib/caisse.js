@@ -359,6 +359,23 @@ export async function saveUnmatchedReleveLines(lines) {
   if (error) throw error
 }
 
+// Trace d'un import de relevé bancaire (historique « qu'est-ce que j'ai déjà importé »).
+export async function saveReleveImport(row) {
+  const { error } = await supabase.from('caisse_releve_imports').insert(row)
+  if (error) throw error
+}
+
+// Liste des derniers imports de relevés, du plus récent au plus ancien.
+export async function loadReleveImports(limit = 50) {
+  const { data, error } = await supabase
+    .from('caisse_releve_imports')
+    .select('*, importer:profiles!caisse_releve_imports_imported_by_fkey(username, full_name)')
+    .order('imported_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data || []
+}
+
 // Toutes les lignes du relevé encore libres (reçues en banque, non liées à Odoo).
 export async function loadAllFreeReleveLines() {
   const { data, error } = await supabase

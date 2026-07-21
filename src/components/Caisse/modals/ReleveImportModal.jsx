@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
 import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
-import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines } from '../../../lib/caisse'
+import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, saveReleveImport } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 import { confirmDialog } from '../../../lib/confirmDialog'
 
 // Import d'un relevé/extrait bancaire (PDF) → rapprochement auto des enveloppes Banque.
 // Reconnaît BMCI (relevé + extrait) et Attijariwafa. Étapes : choisir → aperçu → enregistrer.
-export default function ReleveImportModal({ onClose, onDone }) {
+export default function ReleveImportModal({ onClose, onDone, user }) {
   const [step, setStep] = useState('pick') // pick | working | preview | saving | done
   const [error, setError] = useState('')
   const [files, setFiles] = useState([])
@@ -107,6 +107,19 @@ export default function ReleveImportModal({ onClose, onDone }) {
         }
       })
       await saveUnmatchedReleveLines(freeLines)
+      // Trace de l'import (historique) — non bloquant.
+      try {
+        await saveReleveImport({
+          imported_by: user?.id || null,
+          files: files.map(f => f.name).join(', ').slice(0, 500),
+          banks: [...new Set(banks)].join(', ').slice(0, 200),
+          period_start: recon.period?.min || null,
+          period_end: recon.period?.max || null,
+          nb_trouve: s.trouve, nb_a_confirmer: s.a_confirmer, nb_absent: s.absent,
+          nb_unmatched: (recon.unmatched || []).length,
+          recompute,
+        })
+      } catch { /* la trace ne doit pas bloquer l'import */ }
       setStep('done')
       onDone && onDone()
     } catch (e) { setError(e.message || String(e)); setStep('preview') }
