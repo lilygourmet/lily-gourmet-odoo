@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { todayISO } from '../lib/dates'
 import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
-import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeEtiquettesBoites, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, isLivreurDefaut, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools, canSeeStockPoly} from '../lib/auth'
+import { isAdmin, canRecaps, canSync, canSeeCalendar, canPrintLabels, canSeeFreezer, canSeeMessages, canSeeEtiquettes, canSeeEtiquettesBoites, canSeeCakeVision, canEditCakeVision, canSeeChecklist, isLivreur, isLivreurDefaut, canStockPatissier, canStockCafe, canStockAudit, canStockGS, canStockProdVitrine, canStockProdAnnexe, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canSeeModifications, canSeeLivraisons, canViewPayments, canSeeCommande, canSeePhotoshop, canSeeAiTools, canSeeStockPoly, canSeeTransferts} from '../lib/auth'
 import { countUnreadTasks } from '../lib/tasks'
 import { countConversationBadges, markConversationsVisited, countDevisInternetNonTraites } from '../lib/conversations'
 import { countModificationsATraiter } from '../lib/modifications'
@@ -619,6 +619,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'stock-prod-annexe',  emoji: '🏭', label: 'Stock Prod Annexe',  visible: !isLivreur(user) && canStockProdAnnexe(user) },
     { view: 'patissier',  emoji: '🧁', label: 'Accessoires', visible: !isLivreur(user) && (admin || isPatissierUser) },
     { view: 'stock-poly', emoji: '🧊', label: 'Stock poly',  visible: !isLivreur(user) && canSeeStockPoly(user) },
+    { view: 'transferts-mp', emoji: '🔄', label: 'Transferts MP', visible: !isLivreur(user) && canSeeTransferts(user) },
   ].filter(i => i.visible)
 
   const menuVitrine = [
