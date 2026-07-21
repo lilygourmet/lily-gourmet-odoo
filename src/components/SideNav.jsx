@@ -13,7 +13,7 @@ const EXTERNAL_URLS = {
 }
 const GROUPS = [
   { id: 'prod',   label: 'Production',     emoji: '🥐', views: ['prod', 'sales', 'stock-gs', 'patissier', 'stock-poly', 'transferts-mp'] },
-  { id: 'cafe',   label: 'Café / Vitrine', emoji: '☕', views: ['vitrine', 'vitrine-previsions', 'vitrine-sale', 'reception-vitrine', 'fin-journee', 'stock'] },
+  { id: 'cafe',   label: 'Café / Vitrine', emoji: '☕', views: ['vitrine', 'vitrine-previsions', 'vitrine-sale', 'reception-vitrine', 'fin-journee', 'reglements-livraisons', 'stock'] },
   { id: 'outils', label: 'Outils',         emoji: '🧰', views: ['etiquettes', 'etiquettes-prix', 'etiquettes-boites', 'messages', 'devis', 'modifications', 'livraisons', 'paiements', 'freezer', 'economat', 'supports', 'simu-gateaux', 'ocp-link', 'cake-vision-link', 'cake-vision-edit', 'ai-gemini', 'ai-chatgpt'] },
 ]
 

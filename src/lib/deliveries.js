@@ -29,10 +29,10 @@ export async function loadDeliveryStates(orderNums) {
   if (nums.length === 0) return {}
   let { data, error } = await supabase
     .from('livraisons')
-    .select('order_num, livreur_id, livraison_faite, statut, assigned_by, preuve_path, localisation')
+    .select('order_num, livreur_id, livraison_faite, statut, assigned_by, preuve_path, localisation, regle, moyen_paiement, remis_boutique')
     .in('order_num', nums)
   if (error) {
-    // Repli si une colonne (preuve_path / localisation) n'existe pas encore (SQL pas lancé) → on ne casse rien.
+    // Repli si une colonne (preuve_path / localisation / règlement) n'existe pas encore (SQL pas lancé) → on ne casse rien.
     ;({ data, error } = await supabase
       .from('livraisons')
       .select('order_num, livreur_id, livraison_faite, statut, assigned_by')
@@ -40,7 +40,7 @@ export async function loadDeliveryStates(orderNums) {
     if (error) throw error
   }
   const map = {}
-  for (const o of (data || [])) map[o.order_num] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite, statut: o.statut, assigned_by: o.assigned_by, preuve_path: o.preuve_path || null, localisation: o.localisation || null }
+  for (const o of (data || [])) map[o.order_num] = { livreur_id: o.livreur_id, livraison_faite: o.livraison_faite, statut: o.statut, assigned_by: o.assigned_by, preuve_path: o.preuve_path || null, localisation: o.localisation || null, regle: o.regle ?? null, moyen_paiement: o.moyen_paiement || null, remis_boutique: o.remis_boutique ?? null }
   return map
 }
 
@@ -135,4 +135,48 @@ export async function setLivraisonPreuve(orderNum, path) {
     .from('livraisons')
     .upsert({ order_num: orderNum, preuve_path: path, updated_at: new Date().toISOString() }, { onConflict: 'order_num' })
   if (error) throw error
+}
+
+// Le livreur indique s'il a encaissé le règlement + le moyen (espèce/virement/chèque).
+// clientName + montant (le « reste ») sont mémorisés pour l'écran café (affichage autonome).
+// Virement = rien à remettre en main → marqué « reçu » d'office (juste tracé).
+export async function setLivraisonReglement(orderNum, { regle, moyen, clientName, montant, userId }) {
+  const now = new Date().toISOString()
+  const patch = {
+    order_num: orderNum,
+    regle: !!regle,
+    moyen_paiement: regle ? (moyen || null) : null,
+    regle_montant: regle ? (montant ?? null) : null,
+    regle_client: regle ? (clientName || null) : null,
+    regle_at: now,
+    regle_by: userId || null,
+    updated_at: now,
+  }
+  if (regle && moyen === 'virement') { patch.remis_boutique = true; patch.remis_at = now; patch.remis_by = userId || null }
+  else if (regle && (moyen === 'espece' || moyen === 'cheque')) { patch.remis_boutique = false; patch.remis_at = null; patch.remis_by = null }
+  else { patch.remis_boutique = null; patch.remis_at = null; patch.remis_by = null }
+  const { error } = await supabase.from('livraisons').upsert(patch, { onConflict: 'order_num' })
+  if (error) throw error
+}
+
+// Le café confirme avoir reçu l'argent/chèque remis par le livreur.
+export async function confirmRemiseBoutique(orderNum, userId) {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('livraisons')
+    .upsert({ order_num: orderNum, remis_boutique: true, remis_at: now, remis_by: userId || null, updated_at: now }, { onConflict: 'order_num' })
+  if (error) throw error
+}
+
+// Règlements encaissés en espèce/chèque, pas encore remis au café (écran de confirmation).
+export async function loadReglementsAConfirmer() {
+  const { data, error } = await supabase
+    .from('livraisons')
+    .select('order_num, moyen_paiement, regle_montant, regle_client, regle_at, regleur:profiles!livraisons_regle_by_fkey(username, full_name)')
+    .eq('regle', true)
+    .in('moyen_paiement', ['espece', 'cheque'])
+    .or('remis_boutique.is.null,remis_boutique.eq.false')
+    .order('regle_at', { ascending: true })
+  if (error) throw error
+  return data || []
 }

@@ -41,6 +41,7 @@ const TAB_DEFS = [
   { view: 'modifications',     emoji: '✏️', label: 'Modifications',     can: u => !isLivreur(u) && canSeeModifications(u) },
   { view: 'livraisons',        emoji: '🚚', label: 'Livraisons',        can: u => canSeeLivraisons(u) },
   { view: 'paiements',         emoji: '💰', label: 'Paiements',         can: u => !isLivreur(u) && canViewPayments(u) },
+  { view: 'reglements-livraisons', emoji: '💵', label: 'Règlements livr.', can: u => !isLivreur(u) && canStockCafe(u) },
   { view: 'freezer',           emoji: '❄️', label: 'CD Négatif',        can: u => !isLivreur(u) && canSeeFreezer(u) },
   { view: 'caisse',            emoji: '💰', label: 'Caisse',            can: u => !isLivreur(u) && canSeeCaisse(u) && (isAdmin(u) || !u?.perm_admin_users) },
   { view: 'caisse-livreur',    emoji: '💰', label: 'Caisse livreur',    can: u => isLivreurDefaut(u) },

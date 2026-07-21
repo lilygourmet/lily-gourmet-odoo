@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders, groupDeliveriesWithFullOrder, stripOdooPrefix } from '../lib/salesLines'
-import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite, setLivraisonPreuve, setLivraisonLocalisation } from '../lib/deliveries'
+import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite, setLivraisonPreuve, setLivraisonLocalisation, setLivraisonReglement } from '../lib/deliveries'
 import { uploadConversationMedia, getMediaSignedUrl } from '../lib/conversations'
 import { canDispatchLivraisons, isLivreurDefaut, isLivreurAssigne } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
@@ -135,6 +135,18 @@ export default function LivraisonsView({ user }) {
     try {
       await setLivraisonFaite(d.orderNum, faite)
       setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], livraison_faite: faite } }))
+    } catch (e) { setErr(e.message) }
+    finally { setBusy('') }
+  }
+
+  // Le livreur indique s'il a encaissé le règlement (et le moyen). Non réglé : regle=false.
+  async function handleReglement(d, regle, moyen) {
+    setBusy(d.orderNum); setErr('')
+    try {
+      const reste = typeof d.orderTotal === 'number' ? Math.max(0, d.orderTotal - (d.orderAcompte || 0)) : null
+      await setLivraisonReglement(d.orderNum, { regle, moyen, clientName: d.clientName, montant: reste, userId: user.id })
+      const remis = regle && moyen === 'virement' ? true : (regle ? false : null)
+      setStates(s => ({ ...s, [d.orderNum]: { ...s[d.orderNum], regle, moyen_paiement: regle ? moyen : null, remis_boutique: remis } }))
     } catch (e) { setErr(e.message) }
     finally { setBusy('') }
   }
@@ -323,6 +335,27 @@ export default function LivraisonsView({ user }) {
                     </span>
                   )}
                 </div>
+                {/* Règlement encaissé — livreur (ses livraisons) ou admin */}
+                {(!livreur || (mine && statut !== 'assignee')) && (() => {
+                  const reste = typeof d.orderTotal === 'number' ? Math.max(0, d.orderTotal - (d.orderAcompte || 0)) : null
+                  if (reste === 0 && s.regle == null) return null   // rien à encaisser & jamais renseigné
+                  const moyen = s.moyen_paiement
+                  const btn = active => ({ padding: '5px 10px', fontSize: 12, borderRadius: 8, cursor: 'pointer', border: '1px solid ' + (active ? '#993556' : '#e5d8c3'), background: active ? '#993556' : 'white', color: active ? 'white' : '#4a3a30' })
+                  return (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e5d8c3', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 600 }}>Réglé ?</span>
+                      <button onClick={() => handleReglement(d, true, 'espece')} disabled={busy === d.orderNum} style={btn(s.regle === true && moyen === 'espece')}>💵 Espèce</button>
+                      <button onClick={() => handleReglement(d, true, 'virement')} disabled={busy === d.orderNum} style={btn(s.regle === true && moyen === 'virement')}>🏦 Virement</button>
+                      <button onClick={() => handleReglement(d, true, 'cheque')} disabled={busy === d.orderNum} style={btn(s.regle === true && moyen === 'cheque')}>🧾 Chèque</button>
+                      <button onClick={() => handleReglement(d, false, null)} disabled={busy === d.orderNum} style={btn(s.regle === false)}>✖ Non</button>
+                      {s.regle === true && (moyen === 'espece' || moyen === 'cheque') && (
+                        <span style={{ fontSize: 11, marginLeft: 'auto', padding: '3px 8px', borderRadius: 20, background: s.remis_boutique ? '#EAF3DE' : '#FBF1D8', color: s.remis_boutique ? '#27500A' : '#8a6d3b' }}>
+                          {s.remis_boutique ? '✓ remis au café' : '⏳ à remettre au café'}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
               </Fragment>
             )
