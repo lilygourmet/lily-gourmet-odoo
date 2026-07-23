@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 export const MATIERES = [
   'Œuf blanc', 'Œuf jaune', 'Œuf entier',
   'Crème whipping', 'Beurre entremet', 'Mascarpone', 'Amandes brut',
+  "Aiguillette d'orange", 'Pectine NH', 'Pecan',
 ]
 
 export async function loadTransferts() {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { todayISO } from '../lib/dates'
-import { Plus, Check } from 'lucide-react'
+import { Plus, Check, Printer } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { MATIERES, loadTransferts, addTransfert, confirmTransfert } from '../lib/transfertsMp'
@@ -18,6 +18,7 @@ export default function TransfertsMpView({ user, activeView, onNavigate, onLogou
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [f, setF] = useState({ matiere: MATIERES[0], qty: '', date: todayISO() })
+  const [filterDate, setFilterDate] = useState('')   // '' = tout l'historique
 
   async function refresh() {
     setLoading(true)
@@ -49,6 +50,38 @@ export default function TransfertsMpView({ user, activeView, onNavigate, onLogou
   }
 
   const pending = rows.filter(r => r.statut === 'en_attente')
+  // Journal filtré par date (si une date est choisie), sinon tout l'historique.
+  const journal = filterDate ? rows.filter(r => (r.transfer_date || '').slice(0, 10) === filterDate) : rows
+
+  // Imprime le journal (filtré si une date est choisie) → dialogue d'impression du navigateur.
+  function printTransferts() {
+    const w = window.open('', '_blank')
+    if (!w) { toast.error('Autorise les pop-ups pour imprimer.'); return }
+    const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+    const titre = filterDate ? `Transferts du ${frDate(filterDate)}` : 'Journal complet'
+    const trs = journal.map(t => {
+      const recu = t.statut === 'recu' ? `${fmt(t.qty_recu)} kg` : '—'
+      const statut = t.statut === 'recu' ? 'Reçu' : 'En attente'
+      return `<tr><td>${frDate(t.transfer_date)}</td><td>${esc(t.matiere)}</td><td>${fmt(t.qty_envoye)} kg</td><td>${recu}</td><td>${esc(t.envoye_par || '—')}</td><td>${statut}</td></tr>`
+    }).join('')
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Transferts MP</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#1a0f0a}
+        h1{font-size:20px;margin:0 0 4px}
+        .sub{font-size:12px;color:#666;margin:0 0 16px}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
+        th{background:#f3efe9;font-size:11px;text-transform:uppercase}
+      </style></head><body>
+      <h1>Transferts matières premières — ${titre}</h1>
+      <p class="sub">Prod annexe → prod boutique · imprimé le ${new Date().toLocaleString('fr-FR')}</p>
+      <table><thead><tr><th>Date</th><th>Matière</th><th>Envoyé</th><th>Reçu</th><th>Par</th><th>Statut</th></tr></thead>
+      <tbody>${trs}</tbody></table>
+      </body></html>`)
+    w.document.close()
+    w.focus()
+    w.print()
+  }
 
   return (
     <div className="min-h-screen bg-cream">
@@ -113,10 +146,24 @@ export default function TransfertsMpView({ user, activeView, onNavigate, onLogou
           )}
 
           {/* ---- JOURNAL ---- */}
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-2">Journal des transferts</h2>
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute">Journal des transferts</h2>
+            <div className="flex items-center gap-2">
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="px-2 py-1.5 border border-line rounded-lg text-[12px] bg-white" />
+              {filterDate && (
+                <button onClick={() => setFilterDate('')} className="text-[12px] text-ink-mute hover:text-bordeaux">Tout</button>
+              )}
+              {journal.length > 0 && (
+                <button onClick={printTransferts} className="inline-flex items-center gap-1 text-[12px] font-medium px-3 py-1.5 border border-line text-ink-soft rounded-lg hover:border-bordeaux hover:text-bordeaux transition-all">
+                  <Printer size={13} /> Imprimer
+                </button>
+              )}
+            </div>
+          </div>
           <div className="bg-white border border-line rounded-2xl overflow-hidden">
-            {rows.length === 0 ? (
-              <div className="text-center py-6 text-ink-mute italic text-[13px]">Aucun transfert pour l'instant.</div>
+            {journal.length === 0 ? (
+              <div className="text-center py-6 text-ink-mute italic text-[13px]">{filterDate ? 'Aucun transfert ce jour-là.' : "Aucun transfert pour l'instant."}</div>
             ) : (
               <table className="w-full text-[13px]">
                 <thead>
@@ -130,7 +177,7 @@ export default function TransfertsMpView({ user, activeView, onNavigate, onLogou
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(t => {
+                  {journal.map(t => {
                     const diff = t.statut === 'recu' ? Number(t.qty_recu) - Number(t.qty_envoye) : 0
                     return (
                       <tr key={t.id} className="border-t border-line">
