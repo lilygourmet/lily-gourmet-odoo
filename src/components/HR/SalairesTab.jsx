@@ -166,6 +166,13 @@ export default function SalairesTab({ user }) {
     const validEmp = employesSociete.filter(e => parseFloat(montants[e.id]) > 0)
     if (validEmp.length === 0) { setError('Aucun montant saisi'); return }
 
+    // Bloc : pas d'ordre de virement si un RIB manque (sinon virement invalide envoyé à la banque)
+    const sansRib = validEmp.filter(e => !e.rib || !String(e.rib).trim())
+    if (sansRib.length > 0) {
+      setError(`RIB manquant pour : ${sansRib.map(e => e.nom).join(', ')}. Complète le RIB (onglet Employés) avant de générer l'ordre de virement.`)
+      return
+    }
+
     setGenerating(true); setError(null); setSuccess(null)
     try {
       // 1) Sauvegarde silencieuse
@@ -194,7 +201,7 @@ export default function SalairesTab({ user }) {
         nom: e.nom,
         montant: parseFloat(montants[e.id]),
         banque: e.banque || '—',
-        rib: e.rib || '⚠️ RIB manquant',
+        rib: e.rib,
       }))
 
       // 4) Génération PDF (le fichier est téléchargé directement)

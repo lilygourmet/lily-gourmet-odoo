@@ -1207,10 +1207,17 @@ export async function addHamidSession({ sessionDate, lignes, userId, proofFile =
     throw dErr
   }
 
-  // 3) Upload de la preuve commune si fournie (best-effort)
+  // 3) Upload de la preuve commune. La photo est obligatoire (sauf pourboire) :
+  // si elle est fournie mais que l'envoi échoue, on ANNULE toute la session
+  // pour ne jamais enregistrer une dépense « sans preuve ».
   if (proofFile) {
-    try { await uploadHamidSessionProof(session.id, proofFile, userId) }
-    catch (e) { console.warn('[addHamidSession] preuve échouée:', e?.message || e) }
+    try {
+      await uploadHamidSessionProof(session.id, proofFile, userId)
+    } catch (e) {
+      await supabase.from('caisse_hamid_depenses').delete().eq('hamid_session_id', session.id)
+      await supabase.from('caisse_hamid_sessions').delete().eq('id', session.id)
+      throw new Error('La photo n\'a pas pu être envoyée. Réessaie (vérifie ta connexion).')
+    }
   }
 
   return session

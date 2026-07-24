@@ -109,9 +109,9 @@ export async function loadOrderLines(orderId) {
   return (await post('order-line', { op: 'list', orderId })).lines || []
 }
 
-/** Ajoute un article à une commande existante (photo optionnelle). */
-export async function addOrderLine(orderId, { variantId, qty, price, name, desc, photo, photos, tmplId, combo }) {
-  return post('order-line', { op: 'add', orderId, variantId, qty, price, name, desc, photo, photos, tmplId, combo })
+/** Ajoute un article à une commande existante (photo + pré-fiche accessoire optionnelles). */
+export async function addOrderLine(orderId, { variantId, qty, price, name, desc, photo, photos, tmplId, combo, accPrefiche }) {
+  return post('order-line', { op: 'add', orderId, variantId, qty, price, name, desc, photo, photos, tmplId, combo, accPrefiche })
 }
 
 /** Modifie un article : quantité, prix, libellé (thème/âge/message), remise %, photo. */

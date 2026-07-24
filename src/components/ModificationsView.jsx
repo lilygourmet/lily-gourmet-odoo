@@ -50,7 +50,7 @@ export default function ModificationsView({ user }) {
 
   async function handleFait(m) {
     setBusy(m.id); setErr('')
-    try { await markModificationFaite(m.id, notes[m.id] || null, user.id); await reload() }
+    try { await markModificationFaite(m.id, notes[m.id] || null, user?.id); await reload() }
     catch (e) { setErr(e.message) }
     finally { setBusy('') }
   }

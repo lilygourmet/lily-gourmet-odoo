@@ -35,6 +35,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
         if (cats.length > 0) setActiveCat(cats[0].id)
       } catch (e) {
         console.error('[Économat] catégories', e)
+        toast.error('Impossible de charger les catégories : ' + (e?.message || e))
       } finally {
         setLoading(false)
       }
@@ -60,6 +61,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
         })
       } catch (e) {
         console.error('[Économat] contenu', e)
+        if (!cancelled) toast.error('Impossible de charger les articles : ' + (e?.message || e))
       } finally {
         if (!cancelled) setLoadingContent(false)
       }

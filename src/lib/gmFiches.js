@@ -541,13 +541,18 @@ async function _loadOrdersWithFichesForBounds(start, end) {
   if (!items || items.length === 0) return []
 
   const itemIds = items.map(i => i.id)
-  const [{ data: fiches }, { data: dones }] = await Promise.all([
+  const lineIds = items.map(i => i.odoo_line_id).filter(Boolean)
+  const [{ data: fiches }, { data: dones }, { data: prefiches }] = await Promise.all([
     supabase.from('gm_fiches').select('*').in('order_item_id', itemIds),
     supabase.from('gm_done').select('*').in('order_item_id', itemIds),
+    lineIds.length ? supabase.from('gm_prefiches').select('*').in('odoo_line_id', lineIds) : Promise.resolve({ data: [] }),
   ])
 
   const fichesByItem = {}
   for (const f of fiches || []) fichesByItem[f.order_item_id] = f
+  // Brouillons saisis par le commercial à la prise de commande (clé = odoo_line_id).
+  const prefByLine = {}
+  for (const p of prefiches || []) prefByLine[p.odoo_line_id] = p
   const donesByItem = {}
   for (const d of dones || []) {
     if (!donesByItem[d.order_item_id]) donesByItem[d.order_item_id] = []
@@ -557,9 +562,24 @@ async function _loadOrdersWithFichesForBounds(start, end) {
   const itemsByOrder = {}
   for (const it of items) {
     if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
+    let fiche = fichesByItem[it.id] || null
+    // Pas de fiche validée mais un brouillon du commercial → on l'affiche directement
+    // (marqué _fromPrefiche pour l'étiquette « à confirmer »).
+    if (!fiche && it.odoo_line_id) {
+      const pf = prefByLine[it.odoo_line_id]
+      if (pf && pf.type_gm) {
+        fiche = {
+          type_gm: pf.type_gm,
+          lots: Array.isArray(pf.lots) ? pf.lots : [],
+          parfum_normal: !!pf.parfum_normal,
+          tete_position: pf.tete_position || null,
+          _fromPrefiche: true,
+        }
+      }
+    }
     itemsByOrder[it.order_id].push({
       item: it,
-      fiche: fichesByItem[it.id] || null,
+      fiche,
       dones: donesByItem[it.id] || [],
     })
   }

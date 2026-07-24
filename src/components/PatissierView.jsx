@@ -522,6 +522,12 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-[12px] font-medium text-ink">{TYPE_LABELS[typeGm]} ({realQty})</span>
+            {fiche.tete_position && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium">tête en {fiche.tete_position === 'haut' ? 'haut' : 'bas'}</span>
+            )}
+            {fiche._fromPrefiche && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800" title="Saisi par le commercial à la prise de commande — à confirmer">✎ commercial · à confirmer</span>
+            )}
             {fiche.is_mixte && <span className="text-[9px] font-mono text-bordeaux uppercase tracking-wider">MIXTE</span>}
             {fiche.parfum_normal && (
               <span className="text-[10px] text-ink-mute italic">
@@ -812,7 +818,9 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
             lotsHtml += part
           }
         }
-        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${lotsHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
+        const teteHtml = fiche.tete_position ? ` <span style="color:#a8324b">[tête en ${fiche.tete_position}]</span>` : ''
+        const draftHtml = fiche._fromPrefiche ? ' <em style="color:#a85">(saisi commercial)</em>' : ''
+        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${teteHtml}${lotsHtml}${draftHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
       }
       body += `<div style="margin:8px 0;padding:6px;border-bottom:1px solid #ccc">
         <div style="font-size:11px"><strong style="color:#a8324b">${order.order_num}</strong> · ${order.client_name || ''} <span style="color:#888;float:right">${hour}</span></div>

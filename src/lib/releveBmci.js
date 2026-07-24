@@ -226,20 +226,70 @@ const BANK_LABEL = {
   awb_mvt: 'Attijariwafa (mouvement)',
 }
 
+// Rend chaque page du PDF en image (pour les relevés scannés, sans couche texte).
+async function renderPagesToImages(file) {
+  const buf = await file.arrayBuffer()
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf).slice() }).promise
+  const images = []
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p)
+    const viewport = page.getViewport({ scale: 2 })   // x2 = texte net pour l'IA
+    const canvas = document.createElement('canvas')
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+    images.push(canvas.toDataURL('image/jpeg', 0.75))
+    canvas.width = canvas.height = 0   // libère la mémoire
+  }
+  return images
+}
+
+// Lecture par IA d'un relevé SCANNÉ (image) : chaque page → l'IA renvoie les opérations.
+// Envoi par petits lots pour éviter un envoi trop lourd / un délai trop long.
+async function ocrStatement(file) {
+  const images = await renderPagesToImages(file)
+  const out = []
+  const BATCH = 3
+  for (let i = 0; i < images.length; i += BATCH) {
+    const r = await fetch('/api/wati-webhook?action=releve-ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images: images.slice(i, i + BATCH) }),
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      throw new Error(`Lecture IA échouée (pages ${i + 1}+) : ${err.error || r.status}`)
+    }
+    const data = await r.json()
+    for (const t of (data.transactions || [])) {
+      out.push({ dateIso: t.date || null, label: t.label || '', debit: t.debit ?? null, credit: t.credit ?? null, type: classify(t.label || '') })
+    }
+  }
+  return out
+}
+
 // Lit le PDF et renvoie { format, bankLabel, transactions }
 export async function parseStatement(file) {
   const items = await extractItems(file)
-  const format = detectFormat(items)
-  let transactions = []
-  if (format === 'bmci_releve') transactions = parseBmciReleve(items)
-  else if (format === 'bmci_extrait') transactions = parseBmciExtrait(items)
-  else if (format === 'awb') transactions = parseAwb(items)
-  else if (format === 'awb_mvt') transactions = parseAwbMvt(items)
-  else throw new Error("Banque non reconnue (ni BMCI ni Attijariwafa). Vérifie que c'est bien un relevé/extrait PDF.")
+  const detected = detectFormat(items)
+  let format = detected, transactions = [], bankLabel
+  // PDF sans texte (scanné/photo) OU banque non reconnue → lecture par IA (OCR).
+  if (items.length < 20 || detected === 'inconnu') {
+    format = 'ocr'
+    transactions = await ocrStatement(file)
+    if (!transactions.length) throw new Error("Lecture impossible : l'IA n'a trouvé aucune opération dans ce PDF.")
+    bankLabel = 'Relevé scanné (IA)'
+  } else {
+    if (format === 'bmci_releve') transactions = parseBmciReleve(items)
+    else if (format === 'bmci_extrait') transactions = parseBmciExtrait(items)
+    else if (format === 'awb') transactions = parseAwb(items)
+    else if (format === 'awb_mvt') transactions = parseAwbMvt(items)
+    bankLabel = BANK_LABEL[format] || format
+  }
   // Exclure les lignes TPE « Lanacash » : ce sont des encaissements carte/TPE,
   // pas des enveloppes (espèces/chèque/virement) → on ne les rapproche pas.
   transactions = transactions.filter(t => !/lanacash/i.test(t.label || ''))
-  return { format, bankLabel: BANK_LABEL[format] || format, transactions }
+  return { format, bankLabel, transactions }
 }
 
 const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ')

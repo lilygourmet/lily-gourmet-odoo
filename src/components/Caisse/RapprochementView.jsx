@@ -543,7 +543,7 @@ export default function RapprochementView({ user }) {
     excelRef.current = []; pdfRef.current = []
     setRes(null); setFileNames([]); setErr(''); setSearch('')
     idbDel('bank'); idbDel('odoo'); idbDel('odoo2')
-    clearRapproBank().catch(() => {})   // efface aussi le relevé partagé
+    clearRapproBank().catch(e => setErr('⚠️ Le relevé partagé n’a pas pu être effacé : ' + (e?.message || e)))   // efface aussi le relevé partagé
     try { localStorage.removeItem('rappro_bank_v1'); localStorage.removeItem('rappro_odoo_v1') } catch { /* ancien cache */ }
   }
 

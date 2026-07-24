@@ -165,7 +165,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
       // Le ⚠️ part dans la description → repéré comme warning sur l'article (cf. op list).
       const desc = [line.desc, line.warn ? `⚠️ ${line.warn}` : ''].filter(Boolean).join('\n')
       const photos = line.photoFiles?.length ? await Promise.all(line.photoFiles.map(filePhoto)) : null
-      await addOrderLine(order.id, { variantId: line.variantId, qty: line.qty, price: line.price, name: line.name, desc, photos, tmplId: line.tmplId, combo: line.combo })
+      await addOrderLine(order.id, { variantId: line.variantId, qty: line.qty, price: line.price, name: line.name, desc, photos, tmplId: line.tmplId, combo: line.combo, accPrefiche: line.accPrefiche || null })
       logModif(`Article ajouté : ${line.name}${line.qty > 1 ? ` ×${line.qty}` : ''}`)
     }
     setDraft([])

@@ -232,7 +232,12 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
       tmplId: item.tmplId || null,
       combo: combo.length ? combo : null,
       // Pré-fiche accessoire (GM-) : lots structurés + type, pour pré-remplir la fiche de production.
-      accPrefiche: (isGm && gmType && (accParfumNormal || accLots.some(l => l.qty || l.couleur_id || l.forme)))
+      // On enregistre dès qu'il y a du contenu : lot (qty/couleur/forme/zigzag/perles) OU tête en haut (cake pop).
+      accPrefiche: (isGm && gmType && (
+        accParfumNormal
+        || accLots.some(l => l.qty || l.couleur_id || l.forme || l.has_zigzag || l.has_perles || l.zigzag_couleur_id || l.perles_couleur_id)
+        || (gmSpec?.hasTetePosition && accTete === 'haut')
+      ))
         ? { type_gm: gmType, lots: accParfumNormal ? [] : accLots, parfum_normal: accParfumNormal, tete_position: gmSpec?.hasTetePosition ? accTete : null }
         : null,
     })

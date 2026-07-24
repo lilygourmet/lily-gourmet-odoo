@@ -86,6 +86,7 @@ export default async function handler(req, res) {
   if (action === 'vitrine-order-add') return handleVitrineOrderAdd(req, res)
   if (action === 'cake-vision') return handleCakeVision(req, res)
   if (action === 'poly-estimate') return handlePolyEstimate(req, res)
+  if (action === 'releve-ocr') return handleReleveOcr(req, res)
   if (action === 'translate-ar') return handleTranslateAr(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
   if (action === 'count-devis-internet') return handleCountDevisInternet(req, res)
@@ -1352,7 +1353,7 @@ async function mirrorPhotoToSupabase(checksum, mimetype, lineId, add) {
 // Modifie les articles d'une commande existante (sale.order). op = list | add | update | delete.
 // On écrit via le champ order_line (commandes one2many Odoo) → les totaux se recalculent.
 async function handleOrderLine(req, res) {
-  const { op, orderId, lineId, variantId, qty, price, name, desc, discount, photo, photos, tmplId, combo } = req.body || {}
+  const { op, orderId, lineId, variantId, qty, price, name, desc, discount, photo, photos, tmplId, combo, accPrefiche } = req.body || {}
   if (!orderId) return res.status(400).json({ error: 'commande requise' })
   const DB = process.env.ODOO_DB, PWD = process.env.ODOO_PASSWORD
   try {
@@ -1527,6 +1528,26 @@ async function handleOrderLine(req, res) {
       } catch (e) { console.warn('[order-line photo]', e?.message || e) }
     }
 
+    // Pré-fiche accessoire (GM-) ajoutée via « Modifier » → table gm_prefiches, reliée à la
+    // nouvelle ligne Odoo (comme à la création). L'onglet Accessoires l'affiche direct.
+    if (op === 'add' && accPrefiche && accPrefiche.type_gm) {
+      try {
+        const ord = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['order_line'])
+        const ids = ord[0]?.order_line || []
+        const newLineId = ids.length ? Math.max(...ids) : null
+        if (newLineId) {
+          const supabase = createClient(supabaseUrl, supabaseServiceKey)
+          await supabase.from('gm_prefiches').upsert({
+            odoo_line_id: newLineId,
+            type_gm: accPrefiche.type_gm || null,
+            lots: Array.isArray(accPrefiche.lots) ? accPrefiche.lots : [],
+            parfum_normal: !!accPrefiche.parfum_normal,
+            tete_position: accPrefiche.tete_position || null,
+          }, { onConflict: 'odoo_line_id' })
+        }
+      } catch (e) { console.warn('[gm-prefiche add]', e?.message || e) }
+    }
+
     return res.status(200).json({ ok: true })
   } catch (e) {
     console.error('[order-line]', e?.message || e)
@@ -1574,7 +1595,10 @@ async function countDevisInternetNonTraitesServer(res) {
     const [env, tr, msgs, convs] = await Promise.all([
       supabase.from('devis_envois').select('order_num'),
       supabase.from('devis_traitements').select('order_num, action'),
-      supabase.from('messages').select('body').in('sender_type', ['agent', 'system']).ilike('body', '%S%'),
+      // 8000 messages les plus récents (comme l'onglet) : sans .order/.limit,
+      // Supabase plafonne à 1000 messages NON triés → le badge ratait des devis
+      // déjà cités dans une conversation récente et les comptait à tort.
+      supabase.from('messages').select('body').in('sender_type', ['agent', 'system']).ilike('body', '%S%').order('id', { ascending: false }).limit(8000),
       supabase.from('conversations').select('client_phone'),
     ])
     const envSet = new Set((env.data || []).map(e => e.order_num))
@@ -1968,6 +1992,53 @@ Il doit y avoir exactement ${n} objet(s) dans "etages", du bas vers le haut.`
     return res.status(200).json(data)
   } catch (e) {
     console.error('[poly-estimate]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Lecture par IA d'un relevé bancaire SCANNÉ (images de pages) → opérations JSON.
+// Utilisé quand le PDF n'a pas de couche texte. Une page = une image.
+async function handleReleveOcr(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST requis' })
+
+  const { images } = req.body || {}
+  if (!Array.isArray(images) || !images.length) return res.status(400).json({ error: 'images requis' })
+
+  const prompt = `Tu lis l'image d'UNE page d'un relevé bancaire marocain (BMCI ou Attijariwafa).
+Le tableau a les colonnes : DATE, OPERATIONS (libellé), DEBIT, CREDIT.
+Extrais CHAQUE opération du tableau (une ligne = une opération). Pour chacune :
+- "date" : la date de l'opération (colonne DATE de gauche), au format "AAAA-MM-JJ".
+- "label" : le libellé complet de l'opération (ex "VIR INST RECU RABIA BENABDALLA", "VERSEMENT ESPECE N 1656994103", "PAIEMENT CHEQUE N 0949140"). Ne garde PAS les longs codes de référence numériques.
+- "debit" : le montant de la colonne DEBIT en nombre, sinon null.
+- "credit" : le montant de la colonne CREDIT en nombre, sinon null.
+Une opération a un montant SOIT en debit SOIT en credit (jamais les deux).
+Convertis les montants en nombre : "8 307,00" -> 8307.00 ; "1.110,00" -> 1110.00 (virgule = décimale).
+IGNORE les lignes de solde/total : SOLDE PRECEDENT, NOUVEAU SOLDE, TOTAL MOUVEMENTS, Report mouvements.
+Si la page ne contient aucune opération, renvoie une liste vide.
+Réponds UNIQUEMENT en JSON strict, sans aucun texte autour :
+{"transactions":[{"date":"AAAA-MM-JJ","label":"<libellé>","debit":<nombre ou null>,"credit":<nombre ou null>}]}`
+
+  try {
+    const all = []
+    for (const image of images) {
+      const result = await generateText({
+        model: 'claude-haiku-4-5',
+        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', image }] }],
+      })
+      const m = (result.text || '').match(/\{[\s\S]*\}/)
+      if (!m) continue
+      try {
+        const data = JSON.parse(m[0])
+        if (Array.isArray(data.transactions)) all.push(...data.transactions)
+      } catch { /* page illisible → on passe à la suivante */ }
+    }
+    return res.status(200).json({ transactions: all })
+  } catch (e) {
+    console.error('[releve-ocr]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }
