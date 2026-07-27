@@ -311,7 +311,10 @@ export default function ClientOrderView() {
         source: 'client', firm: firmOrder, clientName: name.trim(), hasCake,
       })
       setScreen('done')
-    } catch (e) { alert('Erreur : ' + (e?.message || e)) }
+    } catch (e) {
+      const msg = e?.message || (typeof e === 'string' ? e : "L'envoi a échoué. Vérifiez votre connexion et réessayez.")
+      alert('Erreur : ' + msg)
+    }
     finally { setSubmitting(false) }
   }
 
