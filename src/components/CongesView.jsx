@@ -312,15 +312,19 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   const validesGroupedByMonth = useMemo(() => {
     const filtered = valides.filter(c => {
       if (filterEmp !== 'all' && String(c.employe_id) !== String(filterEmp)) return false
-      if (filterYear !== 'all' && c.date_debut.slice(0, 4) !== String(filterYear)) return false
+      // Année : le congé compte s'il DÉBUTE ou FINIT dans l'année filtrée (cas à cheval déc→janv).
+      if (filterYear !== 'all' && c.date_debut.slice(0, 4) !== String(filterYear) && c.date_fin.slice(0, 4) !== String(filterYear)) return false
       if (onlyUnsigned && c.signe) return false
       return true
     })
     const map = new Map() // YYYY-MM -> [c]
     for (const c of filtered) {
-      const key = c.date_debut.slice(0, 7)
-      if (!map.has(key)) map.set(key, [])
-      map.get(key).push(c)
+      // Un congé à cheval sur plusieurs mois apparaît dans CHAQUE mois qu'il traverse.
+      for (const key of monthsBetween(c.date_debut, c.date_fin)) {
+        if (filterYear !== 'all' && key.slice(0, 4) !== String(filterYear)) continue
+        if (!map.has(key)) map.set(key, [])
+        map.get(key).push(c)
+      }
     }
     // Tri descendant (mois le plus récent en premier)
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
@@ -570,8 +574,9 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
               : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                   {validesGroupedByMonth.map(([monthKey, list]) => {
-                    // Total jours décomptés du mois (= ce qui sera décompté du quota)
-                    const totalJ = list.reduce((s, c) => s + joursDecomptesConge(c, empById[c.employe_id], feriesSet), 0)
+                    // Total jours décomptés du mois : pour un congé à cheval, on ne compte
+                    // que la part qui tombe DANS ce mois (le reste est compté le mois suivant).
+                    const totalJ = list.reduce((s, c) => s + joursDecomptesMois(c, empById[c.employe_id], feriesSet, monthKey), 0)
                     return (
                       <div key={monthKey}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '6px 10px', background: '#F4F0EA', borderRadius: 8 }}>
@@ -1565,6 +1570,41 @@ function joursDecomptesCalcul(c, emp, feriesSet = null) {
     return Math.max(0, nbCal - off - feries)
   }
   return nbCal
+}
+
+// Bornes d'un mois "YYYY-MM" → { first: 'YYYY-MM-01', last: 'YYYY-MM-<dernier jour>' }
+function monthBounds(monthKey) {
+  const [y, m] = monthKey.split('-').map(Number)
+  const lastDay = new Date(y, m, 0).getDate()
+  return { first: `${monthKey}-01`, last: `${monthKey}-${String(lastDay).padStart(2, '0')}` }
+}
+
+// Liste des mois "YYYY-MM" traversés par la période [dateDebut, dateFin] (inclus).
+function monthsBetween(dateDebut, dateFin) {
+  const keys = []
+  let [y, m] = String(dateDebut).slice(0, 7).split('-').map(Number)
+  const endKey = String(dateFin).slice(0, 7)
+  let key = `${y}-${String(m).padStart(2, '0')}`
+  while (key <= endKey) {
+    keys.push(key)
+    m++; if (m > 12) { m = 1; y++ }
+    key = `${y}-${String(m).padStart(2, '0')}`
+  }
+  return keys.length ? keys : [String(dateDebut).slice(0, 7)]
+}
+
+// Jours décomptés d'un congé qui tombent DANS un mois donné.
+// Congé entièrement dans le mois → valeur normale (respecte le figé jours_decomptes).
+// Congé à cheval → on borne au mois et on RECALCULE la part de ce mois.
+function joursDecomptesMois(c, emp, feriesSet, monthKey) {
+  const { first, last } = monthBounds(monthKey)
+  if (c.date_debut >= first && c.date_fin <= last) return joursDecomptesConge(c, emp, feriesSet)
+  const clipped = {
+    ...c,
+    date_debut: c.date_debut < first ? first : c.date_debut,
+    date_fin: c.date_fin > last ? last : c.date_fin,
+  }
+  return joursDecomptesCalcul(clipped, emp, feriesSet)
 }
 
 function CongeCard({ c, emp, actions, joursFeries = [], nameById = {} }) {
