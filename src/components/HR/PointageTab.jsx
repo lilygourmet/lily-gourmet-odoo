@@ -263,7 +263,8 @@ export default function PointageTab({ user, isAdmin }) {
   // n'est PAS recomptée le mois d'après). Catégorie décidée sur la durée totale.
   // Retourne { annuel, evenement, maladieLongue, sansSolde }.
   function congesParTypeDuMois(emp) {
-    let annuel = 0, evenement = 0, maladieLongue = 0, sansSolde = 0
+    let annuel = 0, recup = 0, maladieLongue = 0, sansSolde = 0
+    const events = {}   // { deces: n, mariage: n, … } — détaillé par type d'événement
     const monthKey = `${annee}-${String(mois).padStart(2, '0')}`
     const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
     for (const c of congesEmp) {
@@ -272,26 +273,47 @@ export default function PointageTab({ user, isAdmin }) {
       const fin   = new Date(c.date_fin + 'T00:00:00')
       const nb = Math.round((fin - debut) / 86400000) + 1           // durée TOTALE (continuité incluse)
       const cat = classifierConge(c)
-      if (cat === 'maladie_courte' || cat === 'recup') continue   // non payé au bulletin / récup gérée à part
+      if (cat === 'maladie_courte') continue   // ≤ 3 j : non payé au bulletin
+      if (cat === 'recup')          { recup += nb - compteJoursOffFixesDansPeriode(emp, debut, fin); continue }
       if (cat === 'maladie_longue') { maladieLongue += nb; continue }
       if (cat === 'sans_solde')     { sansSolde += nb; continue }
-      if (CONGE_EVENEMENT.has(cat)) { evenement += nb - compteJoursOffFixesDansPeriode(emp, debut, fin); continue }
+      if (CONGE_EVENEMENT.has(cat)) { events[cat] = (events[cat] || 0) + (nb - compteJoursOffFixesDansPeriode(emp, debut, fin)); continue }
       annuel += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)   // congé annuel
     }
-    return { annuel, evenement, maladieLongue, sansSolde }
+    return { annuel, recup, events, maladieLongue, sansSolde }
   }
 
   function exportRowsConges() {
+    const EVENT_LABELS = { deces: 'Décès', mariage: 'Mariage', naissance: 'Naissance', circoncision: 'Circoncision', maternite: 'Maternité' }
+    const EVENT_ORDER = ['deces', 'mariage', 'naissance', 'circoncision', 'maternite']
+    const z = n => (Number(n) > 0 ? Number(n) : '')   // case vide au lieu de 0 (lecture plus facile)
+
+    // 1) Calcul par employé + total par type d'événement (pour savoir quelles colonnes afficher).
+    const lignes = []
+    const eventTotals = {}
+    for (const emp of data.employes) {
+      if (!emp.declare) continue
+      const r = congesParTypeDuMois(emp)
+      for (const k of Object.keys(r.events)) eventTotals[k] = (eventTotals[k] || 0) + r.events[k]
+      lignes.push({ nom: emp.nom, ...r })
+    }
+    // 2) Colonnes d'événement : UNIQUEMENT celles qui ont au moins 1 jour ce mois-ci.
+    const eventCols = EVENT_ORDER.filter(k => eventTotals[k] > 0)
+
     const rows = [
       [`Congés — ${MOIS_FR[mois - 1]} ${annee}`],
       [],
-      ['Employé', 'Congé annuel (hors récup)', 'Événement (décès/mariage…)', 'Maladie > 3 j', 'Sans solde'],
+      ['Employé', 'Congé annuel', 'Récup', ...eventCols.map(k => EVENT_LABELS[k]), 'Maladie > 3 j', 'Sans solde', 'Total jours'],
     ]
-    for (const emp of data.employes) {
-      if (!emp.declare) continue
-      // Tous les employés déclarés apparaissent (même à 0), pas seulement ceux qui ont pris un congé.
-      const { annuel, evenement, maladieLongue, sansSolde } = congesParTypeDuMois(emp)
-      rows.push([emp.nom, annuel, evenement, maladieLongue, sansSolde])
+    for (const l of lignes) {
+      const evSum = Object.values(l.events).reduce((s, n) => s + n, 0)
+      const total = l.annuel + l.recup + evSum + l.maladieLongue + l.sansSolde
+      rows.push([
+        l.nom,
+        z(l.annuel), z(l.recup),
+        ...eventCols.map(k => z(l.events[k] || 0)),
+        z(l.maladieLongue), z(l.sansSolde), z(total),
+      ])
     }
     return rows
   }
@@ -356,8 +378,12 @@ export default function PointageTab({ user, isAdmin }) {
       const r = resultats[emp.id]
       if (!r) continue
 
-      // Heures sup (respect toggle heures_sup_mensuelles)
-      const sup = emp.heures_sup_mensuelles === false ? 0 : r.synthese.heures_sup
+      // Heures sup : employés dont on ne compte PAS les heures sup → tout le bloc heures à 0
+      // (heures sup, heures manquantes ET solde du mois), pas seulement les heures sup.
+      const noSup = emp.heures_sup_mensuelles === false
+      const sup = noSup ? 0 : r.synthese.heures_sup
+      const manquantes = noSup ? 0 : r.synthese.heures_manquantes
+      const soldeMois = noSup ? 0 : r.synthese.solde_mois
 
       // Jours congés + maladie (≥ 4 jours)
       const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
@@ -380,27 +406,29 @@ export default function PointageTab({ user, isAdmin }) {
         nom: emp.nom,
         societe: emp.societe_id,
         sup: sup.toFixed(2),
-        manquantes: r.synthese.heures_manquantes.toFixed(2),
+        manquantes: manquantes.toFixed(2),
         recup: r.synthese.jours_recup.toFixed(2),
         conge: joursConge,
         evenement: joursEvenement,
         maladie: joursMaladie,
-        solde_mois: r.synthese.solde_mois.toFixed(2),
+        solde_mois: soldeMois.toFixed(2),
       })
     }
     rows.sort((a, b) => a.nom.localeCompare(b.nom))
 
     // 1) Excel xlsx natif via SheetJS (chargé dynamiquement depuis CDN)
+    const zn = v => (Number(v) === 0 ? '' : Number(v))   // case vide au lieu de 0
     const headers = ['Employé', 'Heures sup', 'Heures manquantes', 'Jours récup', 'Jours congé', 'Événement', 'Jours maladie (4+)', 'Solde mois (h)']
     const xlsxRows = [headers]
     for (const r of rows) {
-      xlsxRows.push([r.nom, Number(r.sup), Number(r.manquantes), Number(r.recup), r.conge, r.evenement, r.maladie, Number(r.solde_mois)])
+      xlsxRows.push([r.nom, zn(r.sup), zn(r.manquantes), zn(r.recup), zn(r.conge), zn(r.evenement), zn(r.maladie), zn(r.solde_mois)])
     }
     await downloadXLSX('recap_pointage_' + monthName + '.xlsx', xlsxRows, 'Récap ' + monthName)
 
     // 2) PDF (simple, via window.print sur une page HTML cachée)
     // ou via jsPDF si disponible. On va générer un HTML imprimable en téléchargement.
     const today = new Date().toLocaleDateString('fr-FR')
+    const zt = (v, u = '') => (Number(v) === 0 ? '' : `${v}${u}`)   // case vide au lieu de 0
     const html = `
 <!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Récap pointage ${MOIS_FR[mois - 1]} ${annee}</title>
@@ -435,13 +463,13 @@ export default function PointageTab({ user, isAdmin }) {
     <tbody>
       ${rows.map(r => `<tr>
         <td><strong>${r.nom}</strong></td>
-        <td class="right green">${r.sup}h</td>
-        <td class="right red">${r.manquantes}h</td>
-        <td class="right purple">${r.recup}j</td>
-        <td class="right">${r.conge}</td>
-        <td class="right">${r.evenement}</td>
-        <td class="right">${r.maladie}</td>
-        <td class="right ${Number(r.solde_mois) >= 0 ? 'green' : 'red'}"><strong>${r.solde_mois}h</strong></td>
+        <td class="right green">${zt(r.sup, 'h')}</td>
+        <td class="right red">${zt(r.manquantes, 'h')}</td>
+        <td class="right purple">${zt(r.recup, 'j')}</td>
+        <td class="right">${zt(r.conge)}</td>
+        <td class="right">${zt(r.evenement)}</td>
+        <td class="right">${zt(r.maladie)}</td>
+        <td class="right ${Number(r.solde_mois) >= 0 ? 'green' : 'red'}"><strong>${zt(r.solde_mois, 'h')}</strong></td>
       </tr>`).join('')}
     </tbody>
   </table>
