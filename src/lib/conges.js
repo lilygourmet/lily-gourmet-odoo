@@ -166,6 +166,31 @@ async function joursRecupGagnesAnnee(emp, refDate = todayYMD()) {
 //   - 'mariage' / 'naissance' / 'deces' / 'circoncision' / 'autre' : événements
 // Retourne un objet { type: jours }.
 // ------------------------------------------------------------
+// Classe un congé en catégorie, à partir de son type ET de sa durée TOTALE
+// (maladie ≤ 3 j = courte, > 3 j = longue). Gère les libellés Odoo anglais
+// (Paid Time Off, Sick Time Off, Compensatory Days…). Sert au récap/export Pointage
+// pour compter juste, y compris les congés à cheval sur 2 mois.
+export function classifierConge(c) {
+  const t = (c.type_conge || '').toLowerCase()
+  if (t === 'maladie_courte') return 'maladie_courte'
+  if (t === 'maladie_longue') return 'maladie_longue'
+  if (t.includes('maternit')) return 'maternite'
+  if (t.includes('récup') || t.includes('recup') || t.includes('compensatory')) return 'recup'
+  if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
+    const duree = (new Date(c.date_fin + 'T00:00:00') - new Date(c.date_debut + 'T00:00:00')) / 86400000 + 1
+    return duree <= 3 ? 'maladie_courte' : 'maladie_longue'
+  }
+  if (t.includes('mariage'))    return 'mariage'
+  if (t.includes('naissance'))  return 'naissance'
+  if (t.includes('deces') || t.includes('décès')) return 'deces'
+  if (t.includes('circoncis'))  return 'circoncision'
+  if (t.includes('sans solde') || t.includes('unpaid')) return 'sans_solde'
+  return 'annuel'
+}
+
+// Catégories « événement » (congé exceptionnel : décès, mariage, naissance, circoncision, maternité).
+export const CONGE_EVENEMENT = new Set(['mariage', 'naissance', 'deces', 'circoncision', 'maternite'])
+
 function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD(), feriesSet = null) {
   const ref = new Date(refDate + 'T00:00:00')
   const yearStart = `${ref.getFullYear()}-01-01`

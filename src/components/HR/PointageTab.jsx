@@ -9,7 +9,7 @@ import {
   setAjustement, removeAjustement, updatePointage, validerMois,
   nomJour,
 } from '../../lib/pointage'
-import { createDemandeConge, validerConge } from '../../lib/conges'
+import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT } from '../../lib/conges'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { groupLabel } from '../../lib/presence'
@@ -258,43 +258,40 @@ export default function PointageTab({ user, isAdmin }) {
     await downloadXLSX('heures_sup_' + monthName + '.xlsx', exportRowsHeuresSup(), 'Heures sup ' + monthName)
   }
 
-  // Calcule les jours de congé par catégorie pour un employé dans le mois affiché.
-  // Retourne { annuel, maladieLongue, sansSolde }.
+  // Jours de congé par catégorie pour un employé, rattachés au mois de leur DATE DE DÉBUT
+  // et comptés EN ENTIER (la partie qui déborde sur le mois suivant est incluse ici, et
+  // n'est PAS recomptée le mois d'après). Catégorie décidée sur la durée totale.
+  // Retourne { annuel, evenement, maladieLongue, sansSolde }.
   function congesParTypeDuMois(emp) {
-    let annuel = 0, maladieLongue = 0, sansSolde = 0
+    let annuel = 0, evenement = 0, maladieLongue = 0, sansSolde = 0
+    const monthKey = `${annee}-${String(mois).padStart(2, '0')}`
     const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
     for (const c of congesEmp) {
-      const debut = new Date(Math.max(new Date(c.date_debut), new Date(annee, mois - 1, 1)))
-      const fin   = new Date(Math.min(new Date(c.date_fin),   new Date(annee, mois, 0)))
-      if (fin < debut) continue
-      const nb = Math.floor((fin - debut) / 86400000) + 1
-      const t = (c.type_conge || '').toLowerCase()
-      if (t === 'maladie_courte')          continue   // ≤ 3 j : non payé en bulletin
-      if (t === 'maladie_longue')          { maladieLongue += nb; continue }
-      if (t.includes('récup') || t.includes('recup')) continue
-      if (t.includes('sans solde') || t.includes('unpaid')) { sansSolde += nb; continue }
-      if (t.includes('maladie') || t.includes('sick') || t.includes('malade')) {
-        if (nb > 3) maladieLongue += nb   // > 3 j → maladie longue
-        continue                          // ≤ 3 j : ignoré
-      }
-      // Tout le reste (annuel, événementiel) → catégorie 'annuel' pour le bulletin
-      annuel += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)
+      if ((c.date_debut || '').slice(0, 7) !== monthKey) continue   // rattaché au mois de début
+      const debut = new Date(c.date_debut + 'T00:00:00')
+      const fin   = new Date(c.date_fin + 'T00:00:00')
+      const nb = Math.round((fin - debut) / 86400000) + 1           // durée TOTALE (continuité incluse)
+      const cat = classifierConge(c)
+      if (cat === 'maladie_courte' || cat === 'recup') continue   // non payé au bulletin / récup gérée à part
+      if (cat === 'maladie_longue') { maladieLongue += nb; continue }
+      if (cat === 'sans_solde')     { sansSolde += nb; continue }
+      if (CONGE_EVENEMENT.has(cat)) { evenement += nb - compteJoursOffFixesDansPeriode(emp, debut, fin); continue }
+      annuel += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)   // congé annuel
     }
-    return { annuel, maladieLongue, sansSolde }
+    return { annuel, evenement, maladieLongue, sansSolde }
   }
 
   function exportRowsConges() {
     const rows = [
       [`Congés — ${MOIS_FR[mois - 1]} ${annee}`],
       [],
-      ['Employé', 'Congé annuel (hors récup)', 'Maladie > 3 j', 'Sans solde'],
+      ['Employé', 'Congé annuel (hors récup)', 'Événement (décès/mariage…)', 'Maladie > 3 j', 'Sans solde'],
     ]
     for (const emp of data.employes) {
       if (!emp.declare) continue
-      const { annuel, maladieLongue, sansSolde } = congesParTypeDuMois(emp)
-      if (annuel > 0 || maladieLongue > 0 || sansSolde > 0) {
-        rows.push([emp.nom, annuel, maladieLongue, sansSolde])
-      }
+      // Tous les employés déclarés apparaissent (même à 0), pas seulement ceux qui ont pris un congé.
+      const { annuel, evenement, maladieLongue, sansSolde } = congesParTypeDuMois(emp)
+      rows.push([emp.nom, annuel, evenement, maladieLongue, sansSolde])
     }
     return rows
   }
@@ -365,20 +362,19 @@ export default function PointageTab({ user, isAdmin }) {
       // Jours congés + maladie (≥ 4 jours)
       const congesEmp = data.conges.filter(c => c.employe_id === emp.id)
       let joursConge = 0
+      let joursEvenement = 0
       let joursMaladie = 0
+      const monthKeyRecap = `${annee}-${String(mois).padStart(2, '0')}`
       for (const cg of congesEmp) {
-        const debut = new Date(Math.max(new Date(cg.date_debut), new Date(annee, mois - 1, 1)))
-        const fin = new Date(Math.min(new Date(cg.date_fin), new Date(annee, mois, 0)))
-        if (fin < debut) continue
-        const nb = Math.floor((fin - debut) / 86400000) + 1
-        const t = (cg.type_conge || '').toLowerCase()
-        if (t.includes('maladie') || t.includes('sick')) {
-          if (nb >= 4) joursMaladie += nb
-        } else if (t.includes('récup') || t.includes('recup')) {
-          continue
-        } else {
-          joursConge += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)
-        }
+        if ((cg.date_debut || '').slice(0, 7) !== monthKeyRecap) continue   // rattaché au mois de début, compté en entier
+        const debut = new Date(cg.date_debut + 'T00:00:00')
+        const fin = new Date(cg.date_fin + 'T00:00:00')
+        const nb = Math.round((fin - debut) / 86400000) + 1
+        const cat = classifierConge(cg)   // catégorie décidée sur la durée totale
+        if (cat === 'recup' || cat === 'maladie_courte') continue
+        if (cat === 'maladie_longue') { joursMaladie += nb; continue }
+        if (CONGE_EVENEMENT.has(cat)) { joursEvenement += nb - compteJoursOffFixesDansPeriode(emp, debut, fin); continue }
+        joursConge += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)   // annuel + sans solde
       }
       rows.push({
         nom: emp.nom,
@@ -387,6 +383,7 @@ export default function PointageTab({ user, isAdmin }) {
         manquantes: r.synthese.heures_manquantes.toFixed(2),
         recup: r.synthese.jours_recup.toFixed(2),
         conge: joursConge,
+        evenement: joursEvenement,
         maladie: joursMaladie,
         solde_mois: r.synthese.solde_mois.toFixed(2),
       })
@@ -394,10 +391,10 @@ export default function PointageTab({ user, isAdmin }) {
     rows.sort((a, b) => a.nom.localeCompare(b.nom))
 
     // 1) Excel xlsx natif via SheetJS (chargé dynamiquement depuis CDN)
-    const headers = ['Employé', 'Heures sup', 'Heures manquantes', 'Jours récup', 'Jours congé', 'Jours maladie (4+)', 'Solde mois (h)']
+    const headers = ['Employé', 'Heures sup', 'Heures manquantes', 'Jours récup', 'Jours congé', 'Événement', 'Jours maladie (4+)', 'Solde mois (h)']
     const xlsxRows = [headers]
     for (const r of rows) {
-      xlsxRows.push([r.nom, Number(r.sup), Number(r.manquantes), Number(r.recup), r.conge, r.maladie, Number(r.solde_mois)])
+      xlsxRows.push([r.nom, Number(r.sup), Number(r.manquantes), Number(r.recup), r.conge, r.evenement, r.maladie, Number(r.solde_mois)])
     }
     await downloadXLSX('recap_pointage_' + monthName + '.xlsx', xlsxRows, 'Récap ' + monthName)
 
@@ -431,6 +428,7 @@ export default function PointageTab({ user, isAdmin }) {
       <th class="right">Manquantes</th>
       <th class="right">Récup</th>
       <th class="right">Jours congé</th>
+      <th class="right">Événement</th>
       <th class="right">Maladie (4+)</th>
       <th class="right">Solde mois</th>
     </tr></thead>
@@ -441,6 +439,7 @@ export default function PointageTab({ user, isAdmin }) {
         <td class="right red">${r.manquantes}h</td>
         <td class="right purple">${r.recup}j</td>
         <td class="right">${r.conge}</td>
+        <td class="right">${r.evenement}</td>
         <td class="right">${r.maladie}</td>
         <td class="right ${Number(r.solde_mois) >= 0 ? 'green' : 'red'}"><strong>${r.solde_mois}h</strong></td>
       </tr>`).join('')}
