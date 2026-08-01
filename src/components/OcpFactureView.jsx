@@ -123,6 +123,13 @@ export default function OcpFactureView({ user }) {
           .fac input, .fac .des { border-color: transparent !important; background: transparent !important }
           .fac .zero { background: transparent !important }
           .no-print { display: none !important }
+          /* Serré à l'impression : le détail des articles tient en peu de pages. */
+          .fac td, .fac th, .fac input, .fac .des { font-size: 9px !important; padding: 0 4px !important; line-height: 1.25 !important }
+          .fac input { height: auto !important }
+          .fac .evt { margin-bottom: 10px !important }
+          .fac .evt-h { font-size: 11px !important; padding: 3px 8px !important; break-after: avoid; page-break-after: avoid }
+          .fac .evt table { margin-top: 2px !important }
+          .fac .sous { font-size: 10px !important; padding-top: 2px !important }
         }
       `}</style>
 
@@ -194,8 +201,8 @@ export default function OcpFactureView({ user }) {
           {evts.map((e, ei) => {
             const sous = e.lignes.reduce((s, l) => s + (l.q || 0) * (l.pu || 0), 0)
             return (
-              <div key={e.id} style={{ marginBottom: 20, breakInside: 'avoid' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#faf5ef', borderLeft: `3px solid ${B}`, padding: '6px 10px', fontWeight: 800, color: B, fontSize: 13.5 }}>
+              <div key={e.id} className="evt" style={{ marginBottom: 20 }}>
+                <div className="evt-h" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#faf5ef', borderLeft: `3px solid ${B}`, padding: '6px 10px', fontWeight: 800, color: B, fontSize: 13.5 }}>
                   Événement du {e.dateFr}
                   <span style={{ fontWeight: 600, color: SOFT, fontSize: 11.5 }}>réf. {e.ref}</span>
                   <span style={{ flex: 1 }} />
@@ -235,7 +242,7 @@ export default function OcpFactureView({ user }) {
                   style={{ border: `1px dashed ${LINE}`, background: '#fffdf9', color: B, borderRadius: 7, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 6 }}>
                   + ajouter une ligne
                 </button>
-                <div style={{ textAlign: 'right', fontSize: 12.5, color: SOFT, padding: '5px 6px 0' }}>
+                <div className="sous" style={{ textAlign: 'right', fontSize: 12.5, color: SOFT, padding: '5px 6px 0' }}>
                   Sous-total événement : <b style={{ color: '#2b2320', fontSize: 14 }}>{fmt(sous)} DH</b>
                 </div>
               </div>
