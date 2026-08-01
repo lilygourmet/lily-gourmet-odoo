@@ -58,6 +58,21 @@ function groupRows(items) {
   return [...m.values()]
 }
 
+// Comme groupRows mais TOLÈRE un décalage vertical de quelques pixels sur une même
+// ligne. Sur certains relevés Attijariwafa, le libellé et le montant d'une opération
+// sont à ~1px d'écart en Y ; l'arrondi strict les mettait dans 2 lignes différentes
+// → le montant se retrouvait sans son libellé (versement espèce classé « autre »).
+function groupRowsTol(items, tol = 3) {
+  const sorted = [...items].sort((a, b) => a.page - b.page || b.y - a.y)
+  const rows = []
+  for (const it of sorted) {
+    const last = rows[rows.length - 1]
+    if (last && last.page === it.page && Math.abs(last.y - it.y) <= tol) last.items.push(it)
+    else rows.push({ page: it.page, y: it.y, items: [it] })
+  }
+  return rows
+}
+
 function detectFormat(items) {
   const head = items.slice(0, 120).map(i => i.str).join(' ')
   const all = items.map(i => i.str).join(' ')
@@ -141,7 +156,7 @@ function parseBmciExtrait(items) {
 function parseAwb(items) {
   const DV = /^\d{2} \d{2} \d{4}$/
   const out = []
-  for (const r of groupRows(items)) {
+  for (const r of groupRowsTol(items)) {
     let amt = null, credit = false, dv = null
     const lab = []
     for (const it of r.items) {
@@ -286,9 +301,10 @@ export async function parseStatement(file) {
     else if (format === 'awb_mvt') transactions = parseAwbMvt(items)
     bankLabel = BANK_LABEL[format] || format
   }
-  // Exclure les lignes TPE « Lanacash » : ce sont des encaissements carte/TPE,
-  // pas des enveloppes (espèces/chèque/virement) → on ne les rapproche pas.
-  transactions = transactions.filter(t => !/lanacash/i.test(t.label || ''))
+  // Exclure les lignes TPE (« Lanacash » ou sa forme abrégée « VIRT RECU LNC. ») :
+  // ce sont des encaissements carte/TPE, pas des enveloppes (espèces/chèque/virement)
+  // → on ne les rapproche pas.
+  transactions = transactions.filter(t => !/lanacash|\bLNC\.\d/i.test(t.label || ''))
   return { format, bankLabel, transactions }
 }
 
@@ -304,9 +320,12 @@ function candidatesFor(method, credits) {
 }
 
 // Fenêtre de dates par moyen (en jours). Virement : ±5 (instantané/classique).
-// Espèces/chèques : dépôt APRÈS la vente, souvent en retard (jusqu'à ~100 j).
+// Espèces : dépôt le jour même ou APRÈS l'encaissement boutique — JAMAIS avant
+// (on ne peut pas déposer un argent pas encore encaissé) → min 0.
+// Chèque : dépôt après la vente, petite tolérance amont pour les dates de remise.
 function windowFor(method) {
   if (method === 'virement') return { min: -5, max: 5 }
+  if (method === 'cash')     return { min: 0, max: 100 }
   return { min: -2, max: 100 }
 }
 
@@ -337,10 +356,13 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     cheque: credits.some(c => c.type === 'cheque_depot'),
   }
 
+  // Enveloppe déjà justifiée par une PREUVE PHOTO manuelle = proof_url posé sans
+  // rapprochement relevé (releve_status vide). On n'y touche jamais (même en recompute).
+  const isManualProof = e => !!e.proof_url && !e.releve_status
   // Gros montants d'abord (moins d'ambiguïté)
-  const pending = [...envelopes.filter(e => recompute
+  const pending = [...envelopes.filter(e => !isManualProof(e) && (recompute
     ? covered[e.payment_method || 'cash']           // tout recalculer (moyens présents seulement)
-    : e.releve_status !== 'trouve')]                // normal : on ne retouche pas les vertes
+    : e.releve_status !== 'trouve'))]               // normal : on ne retouche pas les vertes
     .sort((a, b) => Number(b.amount_cash) - Number(a.amount_cash))
   const used = new Set()
 
@@ -355,6 +377,17 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     const amt = Number(env.amount_cash)
     const m = credits.find(c => !used.has(c) && Math.abs(c.credit - amt) < 0.005 && c.dateIso === npDate &&
       (c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30))))
+    if (m) used.add(m)
+  }
+
+  // Réserver la ligne du relevé qui correspond à une PREUVE PHOTO manuelle (dans les 2
+  // modes) : un même dépôt ne doit jamais être re-proposé à une autre enveloppe (anti-doublon).
+  for (const env of envelopes) {
+    if (!isManualProof(env)) continue
+    const amt = Number(env.amount_proof ?? env.amount_cash)
+    if (!(amt > 0)) continue
+    const m = credits.find(c => !used.has(c) && Math.abs(c.credit - amt) < 0.005 &&
+      (!env.proof_date || Math.abs(signedDays(c.dateIso, env.proof_date)) <= 7))
     if (m) used.add(m)
   }
 

@@ -162,8 +162,9 @@ export async function assignEnveloppe(envId, destinataireId, userId, assignedDat
       label: `Enveloppe ${env.source} · ${env.session_date}`,
       mvt_date: effectiveDate, // date d'effet = date d'affectation
       created_by: userId,
-      // Layla LG doit valider la réception de l'enveloppe avant qu'elle compte dans son solde.
-      ...(owner === 'layla_lg' ? { reception_status: 'pending' } : {}),
+      // Le/la propriétaire de la caisse (Layla LG, Meriem…) doit valider la réception
+      // de l'enveloppe avant qu'elle compte dans son solde.
+      reception_status: 'pending',
     })
   }
 
@@ -311,16 +312,18 @@ export async function loadEnveloppesForSuivi({ type, month, year, statusFilter =
   if (error) throw error
   const list = (data || []).filter(e => e.destinataire?.type === type)
   // « En attente » : on cache les versements marqués « ignorés » (ils restent visibles dans « Toutes »).
+  if (statusFilter === 'ignored')   return list.filter(e =>  e.releve_ignore)
   if (statusFilter === 'pending')   return list.filter(e => !e.proof_url && !e.releve_ignore)
   if (statusFilter === 'done')      return list.filter(e =>  e.proof_url)
   return list
 }
 
 // Marque un versement comme « ignoré » (ou réactive) → sort/rentre dans « En attente ».
-export async function setEnveloppeIgnore(envId, ignore) {
+// reason : raison facultative (« rien à lier », etc.), effacée à la réactivation.
+export async function setEnveloppeIgnore(envId, ignore, reason = null) {
   const { error } = await supabase
     .from('caisse_enveloppes')
-    .update({ releve_ignore: !!ignore })
+    .update({ releve_ignore: !!ignore, releve_ignore_reason: ignore ? (reason || null) : null })
     .eq('id', envId)
   if (error) throw error
 }
@@ -382,7 +385,9 @@ export async function loadAllFreeReleveLines() {
     .from('caisse_releve_lignes')
     .select('*')
     .is('used_by', null)
+    .not('ignored', 'is', true)            // lignes ignorées manuellement exclues
     .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
+    .not('label', 'ilike', '%LNC.%')       // idem, forme abrégée « VIRT RECU LNC. »
     .order('ligne_date', { ascending: false })
   if (error) throw error
   // Dédoublonnage : un même dépôt vu sous 2 dates (opération vs valeur) ou 2 libellés
@@ -398,6 +403,26 @@ export async function loadAllFreeReleveLines() {
     seen.add(k); out.push(r)
   }
   return out
+}
+
+// Ignore (ou réactive) une ligne de relevé « à lier », avec une raison facultative.
+export async function setReleveLineIgnore(key, ignore, reason = null) {
+  const { error } = await supabase
+    .from('caisse_releve_lignes')
+    .update({ ignored: !!ignore, ignore_reason: ignore ? (reason || null) : null })
+    .eq('key', key)
+  if (error) throw error
+}
+
+// Lignes de relevé IGNORÉES (rangées à part), avec leur raison.
+export async function loadIgnoredReleveLines() {
+  const { data, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('*')
+    .eq('ignored', true)
+    .order('ligne_date', { ascending: false })
+  if (error) throw error
+  return data || []
 }
 
 // Lignes du relevé DÉJÀ liées (used_by ≠ NULL), avec l'enveloppe/versement rattaché·e
@@ -433,7 +458,9 @@ export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
     .from('caisse_releve_lignes')
     .select('*')
     .is('used_by', null)
+    .not('ignored', 'is', true)            // lignes ignorées manuellement exclues
     .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
+    .not('label', 'ilike', '%LNC.%')       // idem, forme abrégée « VIRT RECU LNC. »
     .gte('amount', a - 0.005)
     .lte('amount', a + 0.005)
     .in('type', types)
@@ -488,18 +515,47 @@ export async function loadPendingBanqueEnvelopes() {
   return (data || []).filter(e => e.destinataire?.type === 'banque' && !e.releve_ignore)
 }
 
-// Enveloppes Banque ayant un ÉCART : montant réel du relevé (amount_proof) ≠ montant Odoo.
+// Enveloppes Banque ayant un ÉCART de montant (amount_proof ≠ amount_cash),
+// PAS encore validé. Les écarts validés partent dans « Validés » (loadBanqueEcartsValides).
 export async function loadBanqueEnvelopesWithEcart() {
   const { data, error } = await supabase
     .from('caisse_enveloppes')
     .select('*, destinataire:caisse_destinataires(*)')
     .not('destinataire_id', 'is', null)
     .not('amount_proof', 'is', null)
+    .is('ecart_valide_at', null)
     .order('session_date', { ascending: false })
   if (error) throw error
   return (data || []).filter(e =>
     e.destinataire?.type === 'banque' &&
     Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= 0.005)
+}
+
+// Écarts déjà VALIDÉS (vérifiés) : rangés à part, plus dans la liste « Écart ».
+export async function loadBanqueEcartsValides() {
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select('*, destinataire:caisse_destinataires(*)')
+    .not('destinataire_id', 'is', null)
+    .not('amount_proof', 'is', null)
+    .not('ecart_valide_at', 'is', null)
+    .order('ecart_valide_at', { ascending: false })
+  if (error) throw error
+  return (data || []).filter(e =>
+    e.destinataire?.type === 'banque' &&
+    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= 0.005)
+}
+
+// Valide un écart (le sort de la liste « Écart ») / annule la validation.
+export async function setEcartValide(envId, valide, userId = null) {
+  const { error } = await supabase
+    .from('caisse_enveloppes')
+    .update({
+      ecart_valide_at: valide ? new Date().toISOString() : null,
+      ecart_valide_by: valide ? userId : null,
+    })
+    .eq('id', envId)
+  if (error) throw error
 }
 
 // Lignes du relevé déjà attribuées à des enveloppes "trouvées" (pour ne pas les reproposer).

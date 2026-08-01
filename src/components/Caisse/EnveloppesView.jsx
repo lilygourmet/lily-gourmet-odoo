@@ -18,7 +18,7 @@ export default function EnveloppesView({ user }) {
   const [salaires, setSalaires] = useState([])
   const [filter, setFilter] = useState('all') // 'all' | 'unassigned' | dest.id | 'sal-<id>'
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('cash') // 'cash' | 'cheque'
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)  // spinner au 1er chargement seulement
   const [syncing, setSyncing] = useState(false)
   const [attributionEnv, setAttributionEnv] = useState(null)
   const [detailEnv, setDetailEnv]       = useState(null)
@@ -30,8 +30,9 @@ export default function EnveloppesView({ user }) {
 
   useEffect(() => { reload() }, [year, month])
 
+  // Rechargement SILENCIEUX : pas de « Chargement… » qui démonte la liste (sinon
+  // la page remonte en haut à chaque affectation). Spinner au 1er chargement seulement.
   async function reload() {
-    setLoading(true)
     try {
       const [data, sals] = await Promise.all([loadEnveloppesByMonth(year, month), loadSalairesYear(year)])
       setEnveloppes(data)

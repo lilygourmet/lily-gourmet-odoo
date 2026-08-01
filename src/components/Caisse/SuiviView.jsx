@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, linkReleveLineToEnv, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, linkReleveLineToEnv, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -78,9 +78,12 @@ function BanqueSection({ user }) {
   const [freeLines, setFreeLines] = useState([])
   const [hideNoSugg, setHideNoSugg] = useState(false)
   const [ecartList, setEcartList] = useState([])
+  const [ecartValidesList, setEcartValidesList] = useState([])
   const [linkFrom, setLinkFrom] = useState(null)   // 1er virement d'un lien manuel « 2 = 1 »
   const [imports, setImports] = useState([])       // historique des relevés importés
   const [showHistory, setShowHistory] = useState(false)
+  const [ignoreEnv, setIgnoreEnv] = useState(null) // enveloppe en cours d'« ignorer » (saisie de la raison)
+  const [ignoreReason, setIgnoreReason] = useState('')
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -90,6 +93,7 @@ function BanqueSection({ user }) {
     try { setTakenLines(await loadConfirmedReleveLines()) } catch { /* ignore */ }
     try { setFreeLines(await loadAllFreeReleveLines()) } catch { /* ignore */ }
     try { setEcartList(await loadBanqueEnvelopesWithEcart()) } catch { /* ignore */ }
+    try { setEcartValidesList(await loadBanqueEcartsValides()) } catch { /* ignore */ }
     try { setImports(await loadReleveImports()) } catch { /* ignore */ }
   }
 
@@ -112,6 +116,7 @@ function BanqueSection({ user }) {
   // Filtrer par méthode de paiement + recherche texte (montant, client, source)
   const filteredList = useMemo(() => {
     let l = methodFilter === 'ecart' ? ecartList
+      : methodFilter === 'ecart_valide' ? ecartValidesList
       : methodFilter === 'all' ? list
       : list.filter(e => (e.payment_method || 'cash') === methodFilter)
     const q = query.trim().toLowerCase()
@@ -122,9 +127,9 @@ function BanqueSection({ user }) {
         (e.source || '').toLowerCase().includes(q) ||
         (e.note_proof || '').toLowerCase().includes(q))
     }
-    if (hideNoSugg && methodFilter !== 'ecart') l = l.filter(e => e.releve_status || e.proof_url || hasSuggestion(e))
+    if (hideNoSugg && methodFilter !== 'ecart' && methodFilter !== 'ecart_valide') l = l.filter(e => e.releve_status || e.proof_url || hasSuggestion(e))
     return l
-  }, [list, ecartList, methodFilter, query, hideNoSugg, availByMethod])
+  }, [list, ecartList, ecartValidesList, methodFilter, query, hideNoSugg, availByMethod])
 
   const total = useMemo(() => filteredList.reduce((s, e) => s + Number(e.amount_cash), 0), [filteredList])
   const totalEcart = useMemo(() => filteredList.reduce((s, e) => {
@@ -144,8 +149,13 @@ function BanqueSection({ user }) {
     reload()
   }
 
-  async function handleIgnore(envId, ignore) {
-    try { await setEnveloppeIgnore(envId, ignore); reload() }
+  async function handleIgnore(envId, ignore, reason = null) {
+    try { await setEnveloppeIgnore(envId, ignore, reason); setIgnoreEnv(null); reload() }
+    catch (e) { alert('Erreur : ' + (e?.message || e)) }
+  }
+
+  async function handleValiderEcart(envId, valide) {
+    try { await setEcartValide(envId, valide, user?.id || null); reload() }
     catch (e) { alert('Erreur : ' + (e?.message || e)) }
   }
 
@@ -232,6 +242,9 @@ function BanqueSection({ user }) {
         <button onClick={() => setMethodFilter('ecart')} style={methodFilterBtn(methodFilter === 'ecart')}>
           ⚠️ Écart ({ecartList.length})
         </button>
+        <button onClick={() => setMethodFilter('ecart_valide')} style={methodFilterBtn(methodFilter === 'ecart_valide')}>
+          ✅ Validés ({ecartValidesList.length})
+        </button>
       </div>
 
       {/* Recherche (montant, client, source) */}
@@ -245,12 +258,12 @@ function BanqueSection({ user }) {
 
       {/* Filtre statut */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
-        {['pending', 'done', 'all'].map(s => (
+        {['pending', 'done', 'ignored', 'all'].map(s => (
           <button key={s} onClick={() => setStatusFilter(s)} style={{
             fontSize: 12, padding: '5px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
             background: statusFilter === s ? '#1a0f0a' : '#F4F0EA',
             color:      statusFilter === s ? 'white'   : '#4a3a30',
-          }}>{s === 'pending' ? 'En attente' : s === 'done' ? 'Versées' : 'Toutes'}</button>
+          }}>{s === 'pending' ? 'En attente' : s === 'done' ? 'Versées' : s === 'ignored' ? '🚫 Ignorés' : 'Toutes'}</button>
         ))}
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#4a3a30', cursor: 'pointer', marginLeft: 'auto' }}>
           <input type="checkbox" checked={hideNoSugg} onChange={e => setHideNoSugg(e.target.checked)} />
@@ -392,13 +405,26 @@ function BanqueSection({ user }) {
               )
             )}
             {!env.releve_status && !env.proof_url && !env.releve_ignore && (
-              <button onClick={() => handleIgnore(env.id, true)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#8a7a70' }}>
+              <button onClick={() => { setIgnoreEnv(env); setIgnoreReason('') }} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#8a7a70' }}>
                 🚫 Ignorer
               </button>
+            )}
+            {env.releve_ignore && env.releve_ignore_reason && (
+              <span style={{ fontSize: 11, color: '#8a7a70', fontStyle: 'italic', alignSelf: 'center' }}>🚫 {env.releve_ignore_reason}</span>
             )}
             {env.releve_ignore && (
               <button onClick={() => handleIgnore(env.id, false)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#0a7d3d', border: '1px solid #B6E2C8' }}>
                 ↩ Réactiver
+              </button>
+            )}
+            {methodFilter === 'ecart' && (
+              <button onClick={() => handleValiderEcart(env.id, true)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#0a7d3d', border: '1px solid #B6E2C8' }}>
+                ✓ Valider l'écart
+              </button>
+            )}
+            {methodFilter === 'ecart_valide' && (
+              <button onClick={() => handleValiderEcart(env.id, false)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#8a7a70' }}>
+                ↩ Remettre en écart
               </button>
             )}
           </div>
@@ -408,6 +434,25 @@ function BanqueSection({ user }) {
       {uploadEnv && (
         <UploadPreuveModal env={uploadEnv} kind="banque"
           onClose={() => setUploadEnv(null)} onUpload={handleUpload} />
+      )}
+
+      {ignoreEnv && (
+        <div onClick={() => setIgnoreEnv(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%', border: '0.5px solid #e5d8c3' }}>
+            <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 6 }}>Ignorer ce versement</div>
+            <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 14 }}>
+              {fmtMoney(ignoreEnv.amount_cash)} · {ignoreEnv.virement_client || ignoreEnv.source || '—'}
+            </div>
+            <label style={{ fontSize: 12, color: '#4a3a30' }}>Raison (facultative)</label>
+            <textarea value={ignoreReason} onChange={e => setIgnoreReason(e.target.value)} autoFocus rows={3}
+              placeholder="Ex : rien à lier dans le relevé, versement jamais déposé…"
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, padding: '8px 12px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10, resize: 'vertical' }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button onClick={() => setIgnoreEnv(null)} style={btnNormal}>Annuler</button>
+              <button onClick={() => handleIgnore(ignoreEnv.id, true, ignoreReason.trim() || null)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>🚫 Ignorer</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showImport && (
@@ -436,10 +481,13 @@ function NonLieSection() {
   const [linkLine, setLinkLine] = useState(null)
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useState('all') // all | cash | cheque | virement
-  const [view, setView] = useState('free')            // 'free' = non liés | 'linked' = déjà liés
+  const [view, setView] = useState('free')            // 'free' = non liés | 'linked' = déjà liés | 'ignored' = ignorés
+  const [ignoreLine, setIgnoreLine] = useState(null)  // ligne en cours d'« ignorer » (saisie raison)
+  const [ignoreReason, setIgnoreReason] = useState('')
   async function reload() {
     setLines(null)
-    try { setLines(await (view === 'linked' ? loadAllLinkedReleveLines() : loadAllFreeReleveLines())) } catch { setLines([]) }
+    const loader = view === 'linked' ? loadAllLinkedReleveLines : view === 'ignored' ? loadIgnoredReleveLines : loadAllFreeReleveLines
+    try { setLines(await loader()) } catch { setLines([]) }
     try { setPendingEnvs(await loadPendingBanqueEnvelopes()) } catch { setPendingEnvs([]) }
   }
   useEffect(() => { reload() }, [view])
@@ -447,6 +495,10 @@ function NonLieSection() {
     await linkReleveLineToEnv(env, line)
     setLinkLine(null)
     reload()
+  }
+  async function handleIgnore(key, ignore, reason = null) {
+    try { await setReleveLineIgnore(key, ignore, reason); setIgnoreLine(null); reload() }
+    catch (e) { alert('Erreur : ' + (e?.message || e)) }
   }
   async function handleDelier(l) {
     if (!l.used_by) return
@@ -473,6 +525,7 @@ function NonLieSection() {
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
         <button onClick={() => setView('free')} style={methodFilterBtn(view === 'free')}>Non liés</button>
         <button onClick={() => setView('linked')} style={methodFilterBtn(view === 'linked')}>Déjà liés</button>
+        <button onClick={() => setView('ignored')} style={methodFilterBtn(view === 'ignored')}>🚫 Ignorés</button>
       </div>
       <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>
         {view === 'linked'
@@ -507,22 +560,53 @@ function NonLieSection() {
                 → {l.env.destinataire?.name || l.env.source || 'enveloppe'} · {l.env.session_date}{l.env.amount_cash != null ? ` · ${fmtMoney(l.env.amount_cash)}` : ''}
               </div>
             )}
+            {view === 'ignored' && l.ignore_reason && (
+              <div style={{ fontSize: 11, color: '#8a7a70', fontStyle: 'italic', marginTop: 2 }}>🚫 {l.ignore_reason}</div>
+            )}
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#5b2a86' }}>{fmtMoney(l.amount)}</div>
           {view === 'linked' ? (
             <button onClick={() => handleDelier(l)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#A32D2D', border: '1px solid #f0c9c9', marginLeft: 8 }}>
               Délier
             </button>
-          ) : (
-            <button onClick={() => setLinkLine(l)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA', marginLeft: 8 }}>
-              🔗 Lier
+          ) : view === 'ignored' ? (
+            <button onClick={() => handleIgnore(l.key, false)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#0a7d3d', border: '1px solid #B6E2C8', marginLeft: 8 }}>
+              ↩ Réactiver
             </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 6, marginLeft: 8 }}>
+              <button onClick={() => setLinkLine(l)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
+                🔗 Lier
+              </button>
+              <button onClick={() => { setIgnoreLine(l); setIgnoreReason('') }} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#8a7a70' }}>
+                🚫 Ignorer
+              </button>
+            </div>
           )}
         </div>
       ))}
 
       {linkLine && (
         <LinkLineModal line={linkLine} envs={pendingEnvs} onClose={() => setLinkLine(null)} onLink={handleLink} />
+      )}
+
+      {ignoreLine && (
+        <div onClick={() => setIgnoreLine(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%', border: '0.5px solid #e5d8c3' }}>
+            <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 6 }}>Ignorer ce versement</div>
+            <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 14 }}>
+              {fmtMoney(ignoreLine.amount)} · {ignoreLine.ligne_date}{ignoreLine.label ? ` · ${ignoreLine.label}` : ''}
+            </div>
+            <label style={{ fontSize: 12, color: '#4a3a30' }}>Raison (facultative)</label>
+            <textarea value={ignoreReason} onChange={e => setIgnoreReason(e.target.value)} autoFocus rows={3}
+              placeholder="Ex : encaissement TPE, remboursement, virement interne…"
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, padding: '8px 12px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10, resize: 'vertical' }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button onClick={() => setIgnoreLine(null)} style={btnNormal}>Annuler</button>
+              <button onClick={() => handleIgnore(ignoreLine.key, true, ignoreReason.trim() || null)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>🚫 Ignorer</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
