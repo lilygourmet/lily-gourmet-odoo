@@ -33,3 +33,12 @@ backups/
 
 # Photos sources (lourd, hors git)
 cake-photos/
+
+# Fichiers d'analyse locaux (données, pas du code)
+*.xlsx
+*.numbers
+~$*
+analyse_*.csv
+correspondance_*.csv
+personnes_*.csv
+rattachement_*.csv
