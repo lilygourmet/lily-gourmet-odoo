@@ -78,6 +78,7 @@ export default async function handler(req, res) {
   if (action === 'client-update') return handleClientUpdate(req, res)
   if (action === 'order-create-devis') return handleOrderCreateDevis(req, res)
   if (action === 'order-create-ocp') return handleOrderCreateOcp(req, res)
+  if (action === 'ocp-facture-data') return handleOcpFactureData(req, res)
   if (action === 'order-sizes') return handleOrderSizes(req, res)
   if (action === 'order-warehouses') return handleOrderWarehouses(req, res)
   if (action === 'order-set-warehouse') return handleSetWarehouse(req, res)
@@ -3259,6 +3260,92 @@ async function handleOrderSizes(req, res) {
     for (const t in sizes) sizes[t].sort((a, b) => (parseInt(a.size) || 0) - (parseInt(b.size) || 0))
     return res.status(200).json({ sizes })
   } catch (e) { console.error('[order-sizes]', e?.message || e); return res.status(200).json({ sizes: {} }) }
+}
+
+// ============================================================
+// FACTURE OCP (?action=ocp-facture-data)
+// Renvoie les commandes OCP à facturer livrées entre deux dates, une par
+// « événement », avec leur détail. LECTURE SEULE : rien n'est écrit dans Odoo.
+//   - commandes CONFIRMÉES uniquement (state=sale) et « à facturer » côté Odoo :
+//     les devis restés en brouillon ne sont pas des ventes.
+//   - les 2 fiches « LG traiteur OCP » (doublon Odoo) = le même client.
+//     « Ocp Fondation » est une autre entité : exclue.
+//   - les commandes déjà mises sur une facture émise par l'app (ocp_factures)
+//     sont retirées, pour ne pas les facturer deux fois.
+// ============================================================
+async function handleOcpFactureData(req, res) {
+  const { from, to } = req.body || {}
+  if (!from || !to) return res.status(400).json({ error: 'dates manquantes' })
+  try {
+    const uid = await odooAuthenticate()
+    const partners = await odooSearchRead(uid, 'res.partner', [['name', 'ilike', 'traiteur OCP']], ['id', 'name'])
+    if (!partners.length) return res.status(404).json({ error: 'Client OCP introuvable dans Odoo' })
+    const pName = {}; partners.forEach(p => { pName[p.id] = p.name })
+
+    const orders = await odooSearchRead(uid, 'sale.order', [
+      ['partner_id', 'in', partners.map(p => p.id)],
+      ['state', '=', 'sale'],
+      ['invoice_status', '=', 'to invoice'],
+      ['commitment_date', '>=', moroccoLocalToUtc(from, '00:00')],
+      ['commitment_date', '<=', moroccoLocalToUtc(to, '23:59')],
+    ], ['id', 'name', 'partner_id', 'commitment_date'], { order: 'commitment_date asc', limit: 500 })
+    if (!orders.length) return res.status(200).json({ evenements: [] })
+
+    // Retire celles déjà facturées par l'app.
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
+    const { data: faites } = await supabase.from('ocp_factures').select('order_ids')
+    const deja = new Set((faites || []).flatMap(f => f.order_ids || []))
+    const kept = orders.filter(o => !deja.has(o.id))
+    if (!kept.length) return res.status(200).json({ evenements: [] })
+
+    const lines = await odooSearchRead(uid, 'sale.order.line', [['order_id', 'in', kept.map(o => o.id)]],
+      ['order_id', 'name', 'product_uom_qty', 'price_unit', 'discount', 'tax_id', 'display_type'], { limit: 5000 })
+    const taxIds = [...new Set(lines.flatMap(l => l.tax_id || []))]
+    const taxes = taxIds.length ? await odooSearchRead(uid, 'account.tax', [['id', 'in', taxIds]], ['id', 'amount', 'price_include']) : []
+    const taxById = {}; taxes.forEach(t => { taxById[t.id] = t })
+
+    const byOrder = {}
+    for (const l of lines) {
+      if (l.display_type) continue          // titres de section / notes : pas des articles
+      const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id
+      const t = taxById[(l.tax_id || [])[0]]
+      const net = (l.price_unit || 0) * (1 - (l.discount || 0) / 100)
+      // Les taxes de vente sont « prix TTC inclus » → price_unit est déjà TTC.
+      const puTtc = t && !t.price_include ? net * (1 + (t.amount || 0) / 100) : net
+      ;(byOrder[oid] ||= []).push({
+        d: l.name || '',
+        q: l.product_uom_qty || 0,
+        pu: Math.round(puTtc * 100) / 100,
+        tva: t ? (t.amount || 0) : 0,
+      })
+    }
+
+    const evenements = kept.map(o => {
+      const dt = utcToMarocDate(o.commitment_date)
+      return {
+        id: o.id,
+        ref: o.name,
+        date: dt.iso,
+        dateFr: dt.fr,
+        fiche: pName[Array.isArray(o.partner_id) ? o.partner_id[0] : o.partner_id] || '',
+        lignes: byOrder[o.id] || [],
+      }
+    }).filter(e => e.lignes.length)
+
+    return res.status(200).json({ evenements })
+  } catch (e) {
+    console.error('[ocp-facture-data]', e)
+    return res.status(500).json({ error: e.message || 'erreur' })
+  }
+}
+
+// Date Odoo (UTC) → date du Maroc, en ISO (tri/filtre) et en format lisible.
+function utcToMarocDate(s) {
+  if (!s) return { iso: '', fr: '—' }
+  const d = new Date(String(s).replace(' ', 'T') + 'Z')
+  const p = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Casablanca', day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(d)
+  const g = t => p.find(x => x.type === t)?.value
+  return { iso: `${g('year')}-${g('month')}-${g('day')}`, fr: `${g('day')}/${g('month')}/${g('year')}` }
 }
 
 async function handleOrderCreateOcp(req, res) {

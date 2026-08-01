@@ -28,6 +28,7 @@ const HRView = lazy(() => import('./components/HR/HRView'))
 const InboxView = lazy(() => import('./components/Conversations/InboxView'))
 const DevisView = lazy(() => import('./components/DevisView'))
 const OcpManage = lazy(() => import('./components/OcpManage'))
+const OcpFactureView = lazy(() => import('./components/OcpFactureView'))
 const NewOrderView = lazy(() => import('./components/NewOrderView'))
 const SupportsView = lazy(() => import('./components/SupportsView'))
 const ModificationsView = lazy(() => import('./components/ModificationsView'))
@@ -399,6 +400,7 @@ function App() {
     if (activeView === 'conversations') return <ConversationsWrapper {...navProps} initialConversationId={deepLinkConv} initialPhone={deepLinkPhone} initialRelanceRef={deepLinkRelanceRef} />
     if (activeView === 'devis') return <DevisWrapper key="devis" {...navProps} initialDevis={deepLinkDevis} />
     if (activeView === 'ocp-link') return <div className="min-h-screen bg-cream"><AppHeader {...navProps} /><OcpManage /></div>
+    if (activeView === 'facture-ocp') return <div className="min-h-screen bg-cream"><AppHeader {...navProps} /><OcpFactureView user={user} /></div>
     if (activeView === 'devis-internet') return <DevisWrapper key="devis-internet" {...navProps} internetOnly />
     if (activeView === 'nouvelle-commande') return <NewOrderWrapper {...navProps} initialClient={deepLinkNewCmd} />
     if (activeView === 'modifications') return <ModificationsWrapper {...navProps} />

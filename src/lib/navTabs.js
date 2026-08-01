@@ -10,7 +10,7 @@ import {
   canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canViewPayments,
   canSeePhotoshop, canSeeAiTools, canSeeStockPoly, canSeeSimuGateaux,
   canEditCakeVision, canSeeModifications, canSeeLivraisons, isLivreurDefaut,
-  canSeeTransferts,
+  canSeeTransferts, canSeeFactureOcp,
 } from './auth'
 
 const TAB_DEFS = [
@@ -37,6 +37,7 @@ const TAB_DEFS = [
   { view: 'conversations',     emoji: '📱', label: 'Conversations',     can: u => !isLivreur(u) && canSeeConversations(u) },
   { view: 'devis',             emoji: '📄', label: 'Commandes',         can: u => !isLivreur(u) && canSeeDevis(u) },
   { view: 'ocp-link',          emoji: '🍽️', label: 'Lien OCP',          can: u => isAdmin(u) },
+  { view: 'facture-ocp',       emoji: '🧾', label: 'Facture OCP',       can: u => !isLivreur(u) && canSeeFactureOcp(u) },
   { view: 'devis-internet',    emoji: '🌐', label: 'Devis internet',    can: u => !isLivreur(u) && canSeeDevis(u) },
   { view: 'modifications',     emoji: '✏️', label: 'Modifications',     can: u => !isLivreur(u) && canSeeModifications(u) },
   { view: 'livraisons',        emoji: '🚚', label: 'Livraisons',        can: u => canSeeLivraisons(u) },
