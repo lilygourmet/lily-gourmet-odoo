@@ -467,7 +467,7 @@ export async function getJustificatifUrl(path) {
   return data?.signedUrl || null
 }
 
-export async function createDemandeConge({ employe_id, date_debut, date_fin, type_conge = 'annuel', motif = null, demande_par, justificatif_path = null }) {
+export async function createDemandeConge({ employe_id, date_debut, date_fin, type_conge = 'annuel', motif = null, demande_par, justificatif_path = null, jours_decomptes = null }) {
   if (!employe_id || !date_debut || !date_fin) throw new Error('employé, date_debut et date_fin requis')
   if (date_fin < date_debut) throw new Error('La date de fin doit être ≥ date de début')
   // Bloque le chevauchement avec un congé existant (demande ou validé) du même employé.
@@ -488,13 +488,14 @@ export async function createDemandeConge({ employe_id, date_debut, date_fin, typ
       motif, statut: 'demande',
       demande_par, demande_le: new Date().toISOString(),
       source: 'app', justificatif_path,
+      ...(jours_decomptes != null ? { jours_decomptes: Number(jours_decomptes) } : {}),
     })
     .select().single()
   if (error) throw error
   return data
 }
 
-export async function validerConge(congeId, userId, joursDecomptes = null) {
+export async function validerConge(congeId, userId, joursDecomptes = null, silent = false) {
   const patch = { statut: 'valide', valide_par: userId, valide_le: new Date().toISOString() }
   if (joursDecomptes !== null && joursDecomptes !== undefined) {
     patch.jours_decomptes = Number(joursDecomptes)
@@ -505,17 +506,20 @@ export async function validerConge(congeId, userId, joursDecomptes = null) {
     .eq('id', congeId)
     .select().single()
   if (error) throw error
-  // Solde (récup incluse) pour l'afficher dans le message de validation
-  let extra = ''
-  try {
-    const { data: emp } = await supabase.from('employes').select('*').eq('id', data.employe_id).maybeSingle()
-    if (emp) {
-      const s = await calculSoldeConges(emp)
-      extra = `&pris=${encodeURIComponent(s.pris)}&dispo=${encodeURIComponent(s.dispo)}`
-    }
-  } catch (e) { console.warn('[solde notif]', e.message) }
-  // Tire la notif WATI (best-effort, ne bloque pas en cas d'échec)
-  try { await notifierWATI(congeId, 'validation', extra) } catch (e) { console.warn('[notif validation]', e.message) }
+  // silent = validation interne → pas de WhatsApp envoyé à l'employé.
+  if (!silent) {
+    // Solde (récup incluse) pour l'afficher dans le message de validation
+    let extra = ''
+    try {
+      const { data: emp } = await supabase.from('employes').select('*').eq('id', data.employe_id).maybeSingle()
+      if (emp) {
+        const s = await calculSoldeConges(emp)
+        extra = `&pris=${encodeURIComponent(s.pris)}&dispo=${encodeURIComponent(s.dispo)}`
+      }
+    } catch (e) { console.warn('[solde notif]', e.message) }
+    // Tire la notif WATI (best-effort, ne bloque pas en cas d'échec)
+    try { await notifierWATI(congeId, 'validation', extra) } catch (e) { console.warn('[notif validation]', e.message) }
+  }
   return data
 }
 
@@ -530,14 +534,17 @@ export async function rejeterConge(congeId, userId) {
   return data
 }
 
-export async function annulerConge(congeId, userId) {
+export async function annulerConge(congeId, userId, silent = false) {
   const { data, error } = await supabase
     .from('conges')
     .update({ statut: 'annule', valide_par: userId, valide_le: new Date().toISOString() })
     .eq('id', congeId)
     .select().single()
   if (error) throw error
-  try { await notifierWATI(congeId, 'rejet') } catch (e) { console.warn('[notif annulation]', e.message) }
+  // silent = correction interne → pas de WhatsApp envoyé à l'employé.
+  if (!silent) {
+    try { await notifierWATI(congeId, 'rejet') } catch (e) { console.warn('[notif annulation]', e.message) }
+  }
   return data
 }
 

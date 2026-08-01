@@ -403,17 +403,28 @@ async function actionSyncAttendance({ mois, annee }) {
     await sb.from('employes').update({ nom_odoo_match: nomOdoo }).eq('id', empId)
   }
 
-  // Supprimer les pointages existants (sauf manuels)
+  // Supprimer UNIQUEMENT les pointages venant d'Odoo (on préserve 'manuel' ET
+  // 'pointeuse' : la nouvelle pointeuse écrit dans l'app, pas dans Odoo).
   await sb.from('pointages')
     .delete()
     .gte('date_pointage', `${annee}-${String(mois).padStart(2, '0')}-01`)
     .lt('date_pointage',  `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`)
-    .neq('source', 'manuel')
+    .eq('source', 'odoo')
+
+  // Ne pas ré-importer les pointages Odoo déjà « adoptés » par la pointeuse
+  // (une entrée badgeuse fermée par la pointeuse → source 'pointeuse', odoo_id gardé).
+  const { data: adopted } = await sb.from('pointages')
+    .select('odoo_id')
+    .gte('date_pointage', `${annee}-${String(mois).padStart(2, '0')}-01`)
+    .lt('date_pointage',  `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`)
+    .neq('source', 'odoo').not('odoo_id', 'is', null)
+  const adoptedIds = new Set((adopted || []).map(a => a.odoo_id))
+  const rowsToInsert = rows.filter(r => !adoptedIds.has(r.odoo_id))
 
   // Insérer par batches
   let inserted = 0
-  for (let i = 0; i < rows.length; i += 100) {
-    const batch = rows.slice(i, i + 100)
+  for (let i = 0; i < rowsToInsert.length; i += 100) {
+    const batch = rowsToInsert.slice(i, i + 100)
     const { error } = await sb.from('pointages').insert(batch)
     if (error) console.error('insert pointages batch error:', error)
     else inserted += batch.length
@@ -738,6 +749,41 @@ async function actionImportAllocations({ annee } = {}) {
 // Action : list-employees (récupérer tous les employés Odoo)
 // ============================================================
 
+// Importe les photos des employés depuis Odoo (hr.employee.image_256) → bucket
+// public 'photos-employes' + employes.photo_url. Match par nom (comme la synchro).
+async function actionImportPhotosOdoo() {
+  const uid = await odooAuth()
+  const emps = await odooExec(uid, 'hr.employee', 'search_read',
+    [[['active', '=', true]], ['id', 'name', 'image_256']], { limit: 1000 })
+  const { data: employesDb } = await sb
+    .from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
+
+  let updated = 0, unmatched = 0, sansImage = 0
+  const noms = []
+  const unmatchedNoms = []
+  for (const e of emps || []) {
+    const img = e.image_256
+    if (!img || typeof img !== 'string') { sansImage++; continue }
+    const match = findBestMatch(e.name, employesDb, 0.70)
+    if (!match) { unmatched++; unmatchedNoms.push(e.name); continue }
+    try {
+      const buf = Buffer.from(img, 'base64')
+      const path = `${match.employe.id}/odoo.png`
+      const up = await sb.storage.from('photos-employes').upload(path, buf, { contentType: 'image/png', upsert: true })
+      if (up.error) throw up.error
+      const { data: pub } = sb.storage.from('photos-employes').getPublicUrl(path)
+      await sb.from('employes').update({ photo_url: pub.publicUrl }).eq('id', match.employe.id)
+      updated++; noms.push(match.employe.nom)
+    } catch (err) { console.error('[photo odoo]', e.name, err.message) }
+  }
+  return {
+    ok: true, total_odoo: emps?.length || 0, updated, unmatched, sans_image: sansImage,
+    noms: noms.slice(0, 80),
+    unmatched_noms: unmatchedNoms,
+    db_noms: (employesDb || []).map(e => e.nom).sort(),
+  }
+}
+
 async function actionListEmployees() {
   const uid = await odooAuth()
   const employees = await odooExec(uid, 'hr.employee', 'search_read', [
@@ -854,22 +900,567 @@ async function actionDebugAttendance({ mois, annee }) {
   return debug
 }
 
+// ============================================================
+// RÉCEPTEUR POINTEUSE ZKTeco (protocole PUSH / ADMS)
+// L'appareil (ex. SenseFace 2A) pousse ici via /iclock/* (routé par vercel.json).
+// v1 : on JOURNALISE tout (pour observer le format réel) et on répond aux
+// handshakes. L'écriture Odoo hr.attendance viendra en v2, une fois le format vu.
+// ============================================================
+// Parse le corps d'un POST rtlog : lignes de paires clé=valeur séparées par TAB.
+// Ex. "time=2026-07-30 14:23:05\tpin=3\tcardno=0\teventaddr=1\tevent=3"
+function parseRtlog(body) {
+  const out = []
+  for (const line of String(body || '').split('\n')) {
+    const t = line.trim()
+    if (!t) continue
+    const kv = {}
+    for (const part of t.split('\t')) {
+      const eq = part.indexOf('=')
+      if (eq === -1) continue
+      kv[part.slice(0, eq).trim().toLowerCase()] = part.slice(eq + 1).trim()
+    }
+    if (kv.pin && kv.time) out.push({ pin: kv.pin, time: kv.time })
+  }
+  return out
+}
+
+// Heure Maroc (UTC+1) → heure UTC pour Odoo (hr.attendance stocke en UTC).
+// ⚠️ Suppose UTC+1 toute l'année. Pendant le Ramadan le Maroc passe à UTC+0 :
+// les pointages de cette période seraient décalés de 1 h → à ajuster ce mois-là.
+function localMarocToUtc(s) {
+  const d = new Date(String(s).replace(' ', 'T') + 'Z')
+  if (isNaN(d.getTime())) return s
+  d.setUTCHours(d.getUTCHours() - 1)
+  return d.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+// Écrit un pointage dans Odoo par BASCULE : s'il y a une entrée ouverte (sans
+// sortie) → ce pointage la ferme (sortie) ; sinon → il ouvre une entrée.
+// Gère la course « déjà entré » (pointages rapprochés) : si Odoo refuse la
+// création car une entrée existe déjà, on la ferme au lieu de planter.
+// Odoo échoue parfois à SÉRIALISER sa réponse XML-RPC (None/allow_none) alors que
+// l'opération (create/write) a bien eu lieu → on tolère ce cas précis.
+function isSerQuirk(e) { return /allow_none|dumps/i.test(String(e && e.message)) }
+
+async function odooWriteCheckout(uid, id, utc) {
+  try { await odooExec(uid, 'hr.attendance', 'write', [[id], { check_out: utc }]) }
+  catch (e) { if (!isSerQuirk(e)) throw e }   // sérialisation ratée = l'écriture a eu lieu
+}
+
+async function odooToggleAttendance(uid, empId, utc) {
+  const findOpen = () => odooExec(uid, 'hr.attendance', 'search_read',
+    [[['employee_id', '=', empId], ['check_out', '=', false]], ['id', 'check_in']],
+    { limit: 1, order: 'check_in desc' })
+
+  let open = await findOpen()
+  if (open && open.length) {
+    if (utc > open[0].check_in) {
+      await odooWriteCheckout(uid, open[0].id, utc)
+      return { odooId: open[0].id, action: 'out' }
+    }
+    return { odooId: open[0].id, action: 'skip' }   // pointage <= entrée ouverte : doublon
+  }
+  try {
+    const id = await odooExec(uid, 'hr.attendance', 'create', [{ employee_id: empId, check_in: utc }])
+    return { odooId: id, action: 'in' }
+  } catch (e) {
+    if (isSerQuirk(e)) {
+      // création probablement faite mais réponse ratée → on retrouve l'id de l'entrée ouverte
+      const found = await findOpen()
+      return { odooId: found?.[0]?.id || null, action: 'in' }
+    }
+    if (/already checked in/i.test(String(e.message))) {
+      open = await findOpen()   // une entrée a été ouverte entre-temps → on la ferme
+      if (open && open.length && utc > open[0].check_in) {
+        await odooWriteCheckout(uid, open[0].id, utc)
+        return { odooId: open[0].id, action: 'out' }
+      }
+      return { odooId: open?.[0]?.id || null, action: 'skip' }
+    }
+    throw e
+  }
+}
+
+// Écrit les pointages en attente dans Odoo hr.attendance (entrée/sortie par bascule).
+// N'AJOUTE que des pointages « pointeuse » : ne touche jamais à l'import de l'ancien
+// système. Idempotent : chaque punch stocké n'est traité qu'une fois (status→done).
+// statuses = quels punchs (re)traiter. Temps réel = ['pending'] ; relance manuelle
+// (après avoir rempli la correspondance) = ['pending','unmapped','error'].
+// Écrit les pointages dans l'APP (table `pointages`, source 'pointeuse') — PAS
+// dans Odoo. Aucune interférence avec la badgeuse existante (qui, elle, remplit
+// Odoo). Bascule entrée/sortie sur nos propres sessions, anti-doublon inclus.
+async function pushPunchesToPointages({ statuses = ['pending'] } = {}) {
+  const { data: pend } = await sb.from('pointeuse_punches')
+    .select('*').in('status', statuses).order('punch_local', { ascending: true }).limit(500)
+  if (!pend || !pend.length) return { processed: 0, done: 0, unmapped: 0, dups: 0, errors: 0 }
+
+  const { data: mapRows } = await sb.from('pointeuse_users').select('sn, pin, employe_odoo_id, employe_nom')
+  const map = new Map((mapRows || []).map(m => [`${m.sn}|${m.pin}`, m]))
+
+  // Résolution nom (Odoo) → employé de l'app (même logique que la synchro Odoo).
+  const { data: employesDb } = await sb.from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
+  const empCache = new Map()
+  const resolveEmp = (nom) => {
+    if (empCache.has(nom)) return empCache.get(nom)
+    const m = findBestMatch(nom, employesDb, 0.70)
+    const id = m ? m.employe.id : null
+    empCache.set(nom, id); return id
+  }
+
+  const batchLast = new Map()
+  let done = 0, unmapped = 0, dups = 0, errors = 0
+  for (const p of pend) {
+    // Verrou atomique : un seul traitement prend ce pointage.
+    const { data: claimed } = await sb.from('pointeuse_punches')
+      .update({ status: 'processing' }).eq('id', p.id).eq('status', p.status).select('id')
+    if (!claimed || !claimed.length) continue
+
+    const m = map.get(`${p.sn}|${p.pin}`)
+    const empId = m ? resolveEmp(m.employe_nom) : null
+    if (!empId) {
+      await sb.from('pointeuse_punches').update({ status: 'unmapped' }).eq('id', p.id)
+      unmapped++; continue
+    }
+
+    // Anti-doublon : ignorer un pointage trop proche du dernier ACCEPTÉ de ce numéro.
+    const key = `${p.sn}|${p.pin}`
+    let last = batchLast.get(key)
+    if (last === undefined) {
+      const { data: prev } = await sb.from('pointeuse_punches')
+        .select('punch_local').eq('sn', p.sn).eq('pin', p.pin)
+        .in('odoo_action', ['in', 'out']).lt('punch_local', p.punch_local)
+        .order('punch_local', { ascending: false }).limit(1)
+      last = prev?.[0]?.punch_local || null
+    }
+    if (last && secondsBetween(last, p.punch_local) < DEDUP_SECONDS) {
+      await sb.from('pointeuse_punches').update({
+        status: 'dup', odoo_action: 'dup', employe_odoo_id: m.employe_odoo_id, processed_at: new Date().toISOString(), err: null,
+      }).eq('id', p.id)
+      dups++; continue
+    }
+
+    try {
+      const utc = localMarocToUtc(p.punch_local)
+      // Bascule sur la dernière session OUVERTE de l'employé, PEU IMPORTE la source
+      // (badgeuse/odoo OU pointeuse) → timeline unifié : entrée badgeuse le matin +
+      // sortie pointeuse le soir se rejoignent.
+      const { data: openS } = await sb.from('pointages')
+        .select('id, arrivee, source').eq('employe_id', empId).is('depart', null)
+        .order('arrivee', { ascending: false }).limit(1)
+      let action
+      // Comparer de VRAIS instants (arrivee revient en ISO tz depuis la base ;
+      // utc est "YYYY-MM-DD HH:MM:SS" en UTC → on ajoute 'Z').
+      const utcMs = new Date(utc.replace(' ', 'T') + 'Z').getTime()
+      if (openS && openS.length && utcMs > new Date(openS[0].arrivee).getTime()) {
+        const upd = { depart: utc }
+        // Si on ferme une entrée venant d'Odoo, on l'« adopte » (source pointeuse)
+        // pour qu'elle survive à la synchro Odoo (qui ne touche que source='odoo').
+        if (openS[0].source === 'odoo') upd.source = 'pointeuse'
+        await sb.from('pointages').update(upd).eq('id', openS[0].id)
+        action = 'out'
+      } else {
+        await sb.from('pointages').insert({
+          employe_id: empId, date_pointage: utc.slice(0, 10), arrivee: utc, depart: null, source: 'pointeuse',
+        })
+        action = 'in'
+      }
+      await sb.from('pointeuse_punches').update({
+        status: 'done', odoo_action: action, employe_odoo_id: m.employe_odoo_id,
+        processed_at: new Date().toISOString(), err: null,
+      }).eq('id', p.id)
+      if (action === 'in' || action === 'out') batchLast.set(key, p.punch_local)
+      done++
+    } catch (e) {
+      await sb.from('pointeuse_punches').update({
+        status: 'error', err: String(e.message || e).slice(0, 300),
+      }).eq('id', p.id)
+      errors++
+    }
+  }
+  return { processed: pend.length, done, unmapped, dups, errors }
+}
+
+// Écart en secondes entre deux heures "YYYY-MM-DD HH:MM:SS".
+function secondsBetween(a, b) {
+  return Math.abs(new Date(String(b).replace(' ', 'T')) - new Date(String(a).replace(' ', 'T'))) / 1000
+}
+
+// Deux pointages du même numéro à moins de DEDUP_SECONDS = double-clic → on ignore.
+const DEDUP_SECONDS = 120
+
+async function pushPunchesToOdoo({ statuses = ['pending'] } = {}) {
+  const { data: pend } = await sb.from('pointeuse_punches')
+    .select('*').in('status', statuses).order('punch_local', { ascending: true }).limit(300)
+  if (!pend || !pend.length) return { processed: 0, done: 0, unmapped: 0, dups: 0, errors: 0 }
+
+  const { data: mapRows } = await sb.from('pointeuse_users').select('sn, pin, employe_odoo_id')
+  // Correspondance PAR MACHINE : clé = "sn|pin" (le même numéro sur 2 machines = 2 personnes).
+  const map = new Map((mapRows || []).map(m => [`${m.sn}|${m.pin}`, m.employe_odoo_id]))
+
+  const batchLast = new Map()   // sn|pin -> heure du dernier pointage ACCEPTÉ (ancre anti-doublon)
+  let uid = null
+  let done = 0, unmapped = 0, dups = 0, errors = 0
+  for (const p of pend) {
+    // Verrou atomique : un seul traitement prend ce pointage (évite les courses
+    // entre l'envoi temps réel des machines et une relance manuelle).
+    const { data: claimed } = await sb.from('pointeuse_punches')
+      .update({ status: 'processing' }).eq('id', p.id).eq('status', p.status).select('id')
+    if (!claimed || !claimed.length) continue
+
+    const empId = map.get(`${p.sn}|${p.pin}`)
+    if (!empId) {
+      await sb.from('pointeuse_punches').update({ status: 'unmapped' }).eq('id', p.id)
+      unmapped++; continue
+    }
+
+    // Anti-doublon : ignorer un pointage trop proche du dernier ACCEPTÉ de ce numéro.
+    const key = `${p.sn}|${p.pin}`
+    let last = batchLast.get(key)
+    if (last === undefined) {
+      const { data: prev } = await sb.from('pointeuse_punches')
+        .select('punch_local').eq('sn', p.sn).eq('pin', p.pin)
+        .in('odoo_action', ['in', 'out']).lt('punch_local', p.punch_local)
+        .order('punch_local', { ascending: false }).limit(1)
+      last = prev?.[0]?.punch_local || null
+    }
+    if (last && secondsBetween(last, p.punch_local) < DEDUP_SECONDS) {
+      await sb.from('pointeuse_punches').update({
+        status: 'dup', odoo_action: 'dup', employe_odoo_id: empId, processed_at: new Date().toISOString(), err: null,
+      }).eq('id', p.id)
+      dups++; continue   // on NE met PAS à jour l'ancre (= dernier accepté)
+    }
+
+    try {
+      if (!uid) uid = await odooAuth()
+      const utc = localMarocToUtc(p.punch_local)
+      const { odooId, action } = await odooToggleAttendance(uid, empId, utc)
+      await sb.from('pointeuse_punches').update({
+        status: 'done', odoo_attendance_id: odooId, odoo_action: action,
+        employe_odoo_id: empId, processed_at: new Date().toISOString(), err: null,
+      }).eq('id', p.id)
+      if (action === 'in' || action === 'out') batchLast.set(key, p.punch_local)
+      done++
+    } catch (e) {
+      await sb.from('pointeuse_punches').update({
+        status: 'error', err: String(e.message || e).slice(0, 300),
+      }).eq('id', p.id)
+      errors++
+    }
+  }
+  return { processed: pend.length, done, unmapped, dups, errors }
+}
+
+async function readRawBody(req) {
+  if (typeof req.body === 'string') return req.body
+  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length) {
+    try { return JSON.stringify(req.body) } catch { return '' }
+  }
+  return await new Promise(resolve => {
+    let data = ''; let done = false
+    const finish = () => { if (!done) { done = true; resolve(data) } }
+    req.on('data', c => { data += c })
+    req.on('end', finish); req.on('error', finish)
+    setTimeout(finish, 1000)
+  })
+}
+
+async function handleIclock(req, res) {
+  const seg = String(req.query?.iclock || '').split('/')[0].toLowerCase()
+  const sn = req.query?.SN || req.query?.sn || ''
+  const method = req.method || 'GET'
+  let body = ''
+  if (method === 'POST' || method === 'PUT') body = await readRawBody(req)
+
+  // On NE journalise QUE les événements utiles (connexion + vrais pointages rtlog).
+  // On ignore le bruit : poll /getrequest toutes les 3s, /ping, et l'état rtstate.
+  const table = req.query?.table || ''
+  const noise = seg === 'getrequest' || seg === 'ping' || table === 'rtstate'
+  if (!noise) {
+    try {
+      await sb.from('zk_events').insert({
+        sn, method, path: String(req.query?.iclock || ''),
+        query: req.query || {},
+        body: body ? body.slice(0, 20000) : null,
+      })
+    } catch (e) { console.error('[iclock] log:', e.message) }
+  }
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-store')
+
+  // VRAIS POINTAGES (temps réel) : POST /iclock/cdata?table=rtlog.
+  // On les stocke (durable, anti-doublon) puis on les pousse dans Odoo. L'envoi
+  // Odoo est protégé (try/catch) : il ne bloque JAMAIS la réponse à la pointeuse.
+  if (table === 'rtlog' && method === 'POST') {
+    const punches = parseRtlog(body)
+    if (punches.length) {
+      const rows = punches.map(p => ({ sn, pin: p.pin, punch_local: p.time, status: 'pending' }))
+      try {
+        await sb.from('pointeuse_punches').upsert(rows, { onConflict: 'sn,pin,punch_local', ignoreDuplicates: true })
+        await pushPunchesToPointages({ statuses: ['pending'] })
+      } catch (e) { console.error('[iclock] rtlog:', e.message) }
+    }
+    return res.status(200).send('OK')
+  }
+
+  // /registry → RegistryCode NUMÉRIQUE (MMddHHmmss), comme les serveurs qui marchent.
+  if (seg === 'registry') {
+    const d = new Date(), p = n => String(n).padStart(2, '0')
+    const code = p(d.getMonth() + 1) + p(d.getDate()) + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds())
+    return res.status(200).send('RegistryCode=' + code + '\n')
+  }
+  // Config version SÉCURISÉE (pushver présent) ou /push : EXACTEMENT les champs
+  // d'une implémentation Security PUSH qui fonctionne (AdvacSys), rien de plus.
+  if (seg === 'push' || (seg === 'cdata' && method === 'GET' && req.query.pushver)) {
+    const cfg = [
+      'ServerVersion=3.0.1',
+      'ServerName=ADMS',
+      'PushVersion=3.0.1',
+      'ErrorDelay=10',
+      'RequestDelay=3',
+      'TransInterval=1',
+      'TransTables=User Transaction Facev7 templatev10',
+      'TimeZone=1',
+      'RealTime=1',
+      'TimeoutSec=10',
+    ].join('\r\n') + '\r\n'
+    return res.status(200).send(cfg)
+  }
+  // Config version CLASSIQUE (cdata GET sans pushver).
+  if (seg === 'cdata' && method === 'GET') {
+    const opt = [
+      `GET OPTION FROM: ${sn}`,
+      'Stamp=0', 'OpStamp=0', 'ErrorDelay=30', 'Delay=10',
+      'TransTimes=00:00;23:59', 'TransInterval=1', 'TransFlag=1111111111',
+      'Realtime=1', 'Encrypt=0',
+    ].join('\r\n') + '\r\n'
+    return res.status(200).send(opt)
+  }
+  // Reste (querydata = données, getrequest, ping, devicecmd, cdata POST…) → OK
+  return res.status(200).send('OK')
+}
+
+// État des pointages pointeuse (debug, protégé par clé). À retirer plus tard.
+async function actionPointeuseStatus(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  const { data } = await sb.from('pointeuse_punches')
+    .select('*').order('created_at', { ascending: false }).limit(Number(params.limit) || 60)
+  const counts = {}
+  for (const p of data || []) counts[p.status] = (counts[p.status] || 0) + 1
+  const erreurs = (data || []).filter(p => p.status === 'error')
+    .map(p => ({ pin: p.pin, t: p.punch_local, emp: p.employe_odoo_id, err: p.err }))
+  return {
+    counts,
+    erreurs: erreurs.slice(0, 15),
+    derniers: (data || []).slice(0, 20).map(p => ({ pin: p.pin, t: p.punch_local, status: p.status, action: p.odoo_action })),
+  }
+}
+
+// Efface tous les pointages de test (clé requise). Reset avant la vraie mise en service.
+// Avec odoo=1 : supprime aussi les hr.attendance de test créés dans Odoo.
+async function actionPointeuseClear(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  let odooDeleted = 0
+  if (params.odoo === '1' || params.odoo === 1) {
+    const { data: done } = await sb.from('pointeuse_punches')
+      .select('odoo_attendance_id').eq('status', 'done').not('odoo_attendance_id', 'is', null)
+    const ids = [...new Set((done || []).map(d => d.odoo_attendance_id))]
+    if (ids.length) {
+      const uid = await odooAuth()
+      try { await odooExec(uid, 'hr.attendance', 'unlink', [ids]); odooDeleted = ids.length }
+      catch (e) {
+        // Odoo échoue parfois à SÉRIALISER sa réponse (None/allow_none) alors que
+        // la suppression a bien eu lieu. On tolère ce cas précis.
+        if (/allow_none|dumps/i.test(String(e.message))) odooDeleted = ids.length
+        else return { error: 'odoo unlink: ' + String(e.message).slice(0, 200) }
+      }
+    }
+  }
+  const { error } = await sb.from('pointeuse_punches').delete().neq('id', 0)
+  return error ? { error: error.message } : { ok: true, cleared: true, odooDeleted }
+}
+
+// Reconstruction propre : supprime dans Odoo les pointages déjà créés par la
+// pointeuse (ids connus + entrées ouvertes orphelines des employés reliés), puis
+// remet TOUS les pointages reçus en file d'attente pour un ré-envoi propre (avec
+// l'anti-doublon). Ne touche qu'aux employés reliés à la pointeuse. Clé requise.
+async function actionPointeuseReprocess(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  const uid = await odooAuth()
+  const rmOne = async (id) => {
+    try { await odooExec(uid, 'hr.attendance', 'unlink', [[id]]); return true }
+    catch (e) { return /allow_none|dumps|does not exist/i.test(String(e.message)) }
+  }
+
+  // 1) Supprimer les hr.attendance créés par la pointeuse (ids enregistrés)
+  const { data: tracked } = await sb.from('pointeuse_punches')
+    .select('odoo_attendance_id').not('odoo_attendance_id', 'is', null)
+  const ids = [...new Set((tracked || []).map(d => d.odoo_attendance_id))]
+  let deleted = 0
+  for (const id of ids) { if (await rmOne(id)) deleted++ }
+
+  // 2) Supprimer les entrées OUVERTES orphelines (serQuirk) des employés reliés
+  const { data: mrows } = await sb.from('pointeuse_users').select('employe_odoo_id')
+  const emps = [...new Set((mrows || []).map(m => m.employe_odoo_id))]
+  let orphans = 0
+  if (emps.length) {
+    const open = await odooExec(uid, 'hr.attendance', 'search',
+      [[['employee_id', 'in', emps], ['check_out', '=', false]]], {})
+    for (const id of (Array.isArray(open) ? open : [])) { if (await rmOne(id)) orphans++ }
+  }
+
+  // 3) Remettre tous les pointages reçus en attente (les lignes brutes restent)
+  await sb.from('pointeuse_punches').update({
+    status: 'pending', odoo_attendance_id: null, odoo_action: null,
+    employe_odoo_id: null, err: null, processed_at: null,
+  }).neq('id', 0)
+
+  return { ok: true, odooDeleted: deleted, orphansDeleted: orphans, reset: true }
+}
+
+// Nettoyage CIBLÉ dans Odoo : pour chaque employé relié, supprime UNIQUEMENT les
+// hr.attendance dont l'heure d'entrée correspond EXACTEMENT à un pointage reçu de
+// la pointeuse (donc créés par la pointeuse/mes tests), et ROUVRE les anciennes
+// entrées que la pointeuse aurait fermées. Ne touche à AUCUN autre enregistrement.
+// dry=1 : essai à blanc (ne modifie rien, montre seulement). Clé requise.
+async function actionPointeuseCleanupOdoo(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  const dry = params.dry === '1' || params.dry === 1
+  const uid = await odooAuth()
+
+  const { data: mrows } = await sb.from('pointeuse_users').select('sn, pin, employe_odoo_id')
+  const map = new Map((mrows || []).map(m => [`${m.sn}|${m.pin}`, m.employe_odoo_id]))
+  const empIds = [...new Set((mrows || []).map(m => m.employe_odoo_id))]
+
+  // Heures (UTC, format Odoo) des pointages reçus, par employé
+  const { data: punches } = await sb.from('pointeuse_punches').select('sn, pin, punch_local')
+  const timesByEmp = new Map()
+  for (const p of punches || []) {
+    const e = map.get(`${p.sn}|${p.pin}`); if (!e) continue
+    if (!timesByEmp.has(e)) timesByEmp.set(e, new Set())
+    timesByEmp.get(e).add(localMarocToUtc(p.punch_local))
+  }
+
+  let deleted = 0, reopened = 0
+  const details = []
+  for (const e of empIds) {
+    const times = timesByEmp.get(e) || new Set()
+    const att = await odooExec(uid, 'hr.attendance', 'search_read',
+      [[['employee_id', '=', e]], ['id', 'check_in', 'check_out']], { limit: 300, order: 'check_in desc' })
+    for (const a of att || []) {
+      const ci = a.check_in ? String(a.check_in).slice(0, 19) : null
+      const co = a.check_out ? String(a.check_out).slice(0, 19) : null
+      if (ci && times.has(ci)) {
+        if (!dry) { try { await odooExec(uid, 'hr.attendance', 'unlink', [[a.id]]) } catch (err) { if (!/allow_none|dumps|does not exist/i.test(String(err.message))) throw err } }
+        deleted++; if (details.length < 60) details.push({ emp: e, supprime: a.id, entree: ci })
+      } else if (co && times.has(co)) {
+        if (!dry) { try { await odooExec(uid, 'hr.attendance', 'write', [[a.id], { check_out: false }]) } catch (err) { if (!isSerQuirk(err)) throw err } }
+        reopened++; if (details.length < 60) details.push({ emp: e, rouvert: a.id, sortie_enlevee: co })
+      }
+    }
+  }
+  return { ok: true, dry, deleted, reopened, details }
+}
+
+// Diagnostic ciblé d'un numéro : ses pointages reçus + son état côté Odoo. Clé requise.
+async function actionPointeuseDebugPin(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  const pin = String(params.pin || '')
+  const { data: punches } = await sb.from('pointeuse_punches')
+    .select('sn, pin, punch_local, status, odoo_action, err').eq('pin', pin)
+    .order('punch_local', { ascending: true })
+  const { data: mrows } = await sb.from('pointeuse_users').select('sn, pin, employe_odoo_id, employe_nom').eq('pin', pin)
+  const empIds = [...new Set((mrows || []).map(m => m.employe_odoo_id))]
+  let odooAtt = []
+  if (empIds.length) {
+    const uid = await odooAuth()
+    odooAtt = await odooExec(uid, 'hr.attendance', 'search_read',
+      [[['employee_id', 'in', empIds]], ['id', 'check_in', 'check_out']],
+      { limit: 50, order: 'check_in desc' })
+  }
+  // Pointages de l'app pour l'employé résolu (par nom)
+  let appPointages = []
+  if (mrows && mrows.length) {
+    const { data: employesDb } = await sb.from('employes').select('id, nom, nom_odoo, nom_odoo_match').eq('actif', true)
+    const m = findBestMatch(mrows[0].employe_nom, employesDb, 0.70)
+    if (m) {
+      const { data: pts } = await sb.from('pointages')
+        .select('date_pointage, arrivee, depart, source').eq('employe_id', m.employe.id)
+        .order('arrivee', { ascending: false }).limit(15)
+      appPointages = pts || []
+    }
+  }
+  return {
+    mapping: mrows || [],
+    nb_punches: punches?.length || 0,
+    punches: (punches || []).map(p => ({ t: p.punch_local, s: p.status, a: p.odoo_action, err: p.err ? p.err.slice(0, 80) : null })),
+    app_pointages: appPointages,
+    odoo_attendances: odooAtt,
+  }
+}
+
+// Remet TOUS les pointages reçus en file d'attente (sans toucher Odoo). Sert à
+// reconstruire proprement dans l'app. Clé requise.
+async function actionPointeuseResetStatus(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  // Efface les lignes déjà écrites par la pointeuse (pour reconstruire propre).
+  // ⚠️ inclut les entrées badgeuse « adoptées » : elles reviendront via la synchro Odoo.
+  await sb.from('pointages').delete().eq('source', 'pointeuse')
+  const { error } = await sb.from('pointeuse_punches').update({
+    status: 'pending', odoo_action: null, odoo_attendance_id: null,
+    employe_odoo_id: null, err: null, processed_at: null,
+  }).neq('id', 0)
+  return error ? { error: error.message } : { ok: true, reset: true }
+}
+
+// Nommer une machine (sn → nom), pour la poser tout de suite. Clé requise.
+async function actionPointeuseSetDevice(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  if (!params.sn) return { error: 'sn requis' }
+  const { error } = await sb.from('pointeuse_devices')
+    .upsert({ sn: params.sn, nom: params.nom || null }, { onConflict: 'sn' })
+  return error ? { error: error.message } : { ok: true, sn: params.sn, nom: params.nom || null }
+}
+
+// Lecture du journal ZK (debug, protégé par clé). À retirer plus tard.
+async function actionZkLog(params) {
+  if (params.key !== 'zklog2026') return { error: 'unauthorized' }
+  const { data, error } = await sb.from('zk_events')
+    .select('*').order('id', { ascending: false }).limit(Number(params.limit) || 30)
+  if (error) return { error: error.message }
+  return { count: data?.length || 0, events: data || [] }
+}
+
 export default async function handler(req, res) {
   try {
+    // Pointeuse ZKTeco (push ADMS) : routes /iclock/* → réponse texte, pas JSON.
+    if (req.query?.iclock !== undefined) return await handleIclock(req, res)
+
     const action = req.query?.action || req.body?.action
     const params = req.body || req.query || {}
 
     let result
-    if (action === 'sync-attendance')         result = await actionSyncAttendance(params)
+    if (action === 'zk-log')                  result = await actionZkLog(params)
+    else if (action === 'push-pointeuse')     result = await pushPunchesToPointages({ statuses: ['pending', 'unmapped', 'error'] })
+    else if (action === 'pointeuse-status')   result = await actionPointeuseStatus(params)
+    else if (action === 'pointeuse-clear')    result = await actionPointeuseClear(params)
+    else if (action === 'pointeuse-set-device') result = await actionPointeuseSetDevice(params)
+    else if (action === 'pointeuse-reprocess') result = await actionPointeuseReprocess(params)
+    else if (action === 'pointeuse-debug-pin') result = await actionPointeuseDebugPin(params)
+    else if (action === 'pointeuse-cleanup-odoo') result = await actionPointeuseCleanupOdoo(params)
+    else if (action === 'pointeuse-reset-status') result = await actionPointeuseResetStatus(params)
+    else if (action === 'sync-attendance')    result = await actionSyncAttendance(params)
     else if (action === 'sync-leaves')        result = await actionSyncLeaves(params)
     else if (action === 'sync-leaves-year')   result = await actionSyncLeavesYear(params)
     else if (action === 'list-allocations')   result = await actionListAllocations(params)
     else if (action === 'import-allocations') result = await actionImportAllocations(params)
     else if (action === 'list-employees')     result = await actionListEmployees()
+    else if (action === 'import-photos-odoo') result = await actionImportPhotosOdoo()
     else if (action === 'debug-attendance')   result = await actionDebugAttendance(params)
     else if (action === 'audit-maladie-courte') result = await actionAuditMaladieCourte(params)
     else return res.status(400).json({ error: 'Unknown action: ' + action })
 
+    res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json(result)
   } catch (e) {
     console.error('pointage-api error:', e)

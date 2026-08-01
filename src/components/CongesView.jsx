@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { todayISO } from '../lib/dates'
 import Skeleton from './Skeleton'
+import Avatar from './Avatar'
 import { usePersistedState } from '../lib/usePersistedState'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
@@ -354,8 +355,17 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   async function handleValider(c) {
     if (!await confirmDialog(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.`, { confirmLabel: 'Valider' })) return
     try {
-      const jd = joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
+      const jd = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
       await validerConge(c.id, user.id, jd); await reload()
+    }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+  // Validation SILENCIEUSE : aucun WhatsApp (validation interne / rattrapage).
+  async function handleValiderSilencieux(c) {
+    if (!await confirmDialog(`Valider ce congé SANS prévenir l'employé ?\n\nAucun WhatsApp ne sera envoyé (validation interne).`, { confirmLabel: 'Valider sans notif' })) return
+    try {
+      const jd = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
+      await validerConge(c.id, user.id, jd, true); await reload()
     }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
@@ -366,7 +376,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
     if (!list.length) return
     if (!await confirmDialog(`Valider ${list.length} demande(s) de congé ?\n\nUne notification WhatsApp sera envoyée à chaque employé.`, { confirmLabel: 'Tout valider' })) return
     try {
-      for (const c of list) { const jd = joursDecomptesCalcul(c, empById[c.employe_id], feriesSet); await validerConge(c.id, user.id, jd) }
+      for (const c of list) { const jd = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, empById[c.employe_id], feriesSet); await validerConge(c.id, user.id, jd) }
       setSelDem(new Set()); await reload(); toast.success(`${list.length} congé(s) validé(s).`)
     } catch (e) { toast.error('Erreur : ' + e.message); await reload() }
   }
@@ -378,6 +388,12 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   async function handleAnnuler(c) {
     if (!await confirmDialog(`Annuler ce congé validé ?\n\nUne notification WhatsApp sera envoyée à l'employé.`, { danger: true, confirmLabel: 'Annuler le congé' })) return
     try { await annulerConge(c.id, user.id); await reload() }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+  // Annulation SILENCIEUSE : aucun WhatsApp (pour corriger une saisie interne).
+  async function handleAnnulerSilencieux(c) {
+    if (!await confirmDialog(`Annuler ce congé SANS prévenir l'employé ?\n\nAucun WhatsApp ne sera envoyé (correction interne). Les jours reviennent au solde.`, { danger: true, confirmLabel: 'Annuler sans notif' })) return
+    try { await annulerConge(c.id, user.id, true); await reload() }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
   // Supprime une demande NON validée (perm_hr ou admin).
@@ -526,6 +542,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                             <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                             {canManagePending && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier (non validé)"><Pencil size={13} /></button>}
                             {isAdmin && <button onClick={() => handleValider(c)} style={btnValider}><Check size={14} /> Valider</button>}
+                            {isAdmin && <button onClick={() => handleValiderSilencieux(c)} style={btnSlim} title="Valider sans envoyer de WhatsApp à l'employé"><Check size={13} /> Sans notif</button>}
                             {isAdmin && <button onClick={() => handleRejeter(c)} style={btnRejeter}><X size={14} /> Rejeter</button>}
                             {canManagePending && <button onClick={() => handleDeletePending(c)} style={btnRejeter} title="Supprimer la demande"><Trash2 size={14} /></button>}
                           </>
@@ -598,6 +615,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                       </button>
                       {isAdmin && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>}
                       {isAdmin && <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>}
+                      {isAdmin && <button onClick={() => handleAnnulerSilencieux(c)} style={btnSlim} title="Annuler sans envoyer de WhatsApp à l'employé (correction interne)"><Trash2 size={13} /> Sans notif</button>}
                     </> : null}
                             />
                           ))}
@@ -694,7 +712,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                     return (
                       <div key={emp.id} style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 14, padding: '12px 16px', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600 }}>{emp.nom}{emp.poste ? <span style={{ fontWeight: 400, fontSize: 12, color: '#8a7a70' }}> · {emp.poste}</span> : null}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 10 }}><Avatar emp={emp} size={56} style={{ objectPosition: '50% 22%' }} />{emp.nom}{emp.poste ? <span style={{ fontWeight: 400, fontSize: 12, color: '#8a7a70' }}> · {emp.poste}</span> : null}</div>
                           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                             <div style={{ fontSize: 13, color: '#085041', fontWeight: 600 }}>{totalAlloue} j alloués</div>
                             {totalMaladie > 0 && (
@@ -1378,9 +1396,12 @@ function DetailEmployeModal({ emp, conges, solde, onClose }) {
     <div style={overlay} onClick={onClose}>
       <div style={{ ...modal, maxWidth: 780 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 600 }}>{emp.nom}</div>
-            <div style={{ fontSize: 11, color: '#8a7a70' }}>Détail des congés validés en {annee}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Avatar emp={emp} size={64} style={{ objectPosition: '50% 22%' }} />
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>{emp.nom}</div>
+              <div style={{ fontSize: 11, color: '#8a7a70' }}>Détail des congés validés en {annee}</div>
+            </div>
           </div>
           <button onClick={onClose} style={btnSlim}>Fermer</button>
         </div>
@@ -1578,7 +1599,7 @@ function CongeCard({ c, emp, actions, joursFeries = [], nameById = {} }) {
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a' }}>{emp?.nom || nameById[c.employe_id] || `Employé #${c.employe_id}`}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 8 }}><Avatar emp={emp} size={26} />{emp?.nom || nameById[c.employe_id] || `Employé #${c.employe_id}`}</div>
           <div style={{ fontSize: 12, color: '#4a3a30', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Calendar size={13} /> du <strong>{fmt(c.date_debut)}</strong> au <strong>{fmt(c.date_fin)}</strong>
             {' · '}
@@ -1617,6 +1638,7 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved, joursF
   const [typeConge, setTypeConge] = useState('annuel')
   const [motif, setMotif]         = useState('')
   const [justif, setJustif]       = useState(null)
+  const [demi, setDemi]           = useState(false)
   const [busy, setBusy]           = useState(false)
   const [errMsg, setErrMsg]       = useState('')
 
@@ -1629,7 +1651,10 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved, joursF
   const offDemande   = excludeOff ? compteJoursOffFixesPeriode(emp, dateDebut, dateFin) : 0
   const ferieDemande = excludeOff ? compteFeriesHorsOff(emp, feriesSet, dateDebut, dateFin) : 0
   const feriesPeriode = (dateDebut && dateFin) ? feriesListePeriode(joursFeries, dateDebut, dateFin) : []
-  const nbDemande = excludeOff ? Math.max(0, nbCal - offDemande - ferieDemande) : nbCal
+  const nbDemandeBrut = excludeOff ? Math.max(0, nbCal - offDemande - ferieDemande) : nbCal
+  // ½ journée : uniquement sur une seule journée. Décompte 0,5 j au lieu de 1.
+  const journeeUnique = !!dateDebut && !!dateFin && dateDebut === dateFin
+  const nbDemande = (demi && journeeUnique) ? 0.5 : nbDemandeBrut
 
   // Types disponibles : on filtre ceux qui ont une allocation événementielle
   // (mariage / naissance / deces / circoncision / maternite / recup).
@@ -1673,6 +1698,7 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved, joursF
         motif: motif.trim() || null,
         demande_par: user.id,
         justificatif_path,
+        jours_decomptes: (demi && journeeUnique) ? 0.5 : null,
       })
       onSaved()
     } catch (e) {
@@ -1710,6 +1736,12 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved, joursF
             <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} style={ipt} />
           </div>
         </div>
+        {journeeUnique && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 13, color: '#4a3a30', cursor: 'pointer' }}>
+            <input type="checkbox" checked={demi} onChange={e => setDemi(e.target.checked)} />
+            ½ journée (0,5 j)
+          </label>
+        )}
         {nbCal > 0 && (
           <div style={{ fontSize: 11, color: '#4a3a30', marginTop: 4 }}>
             {nbDemande} jour{nbDemande > 1 ? 's' : ''} décompté{nbDemande > 1 ? 's' : ''}
@@ -1772,13 +1804,18 @@ const btnValider = { fontSize: 12, padding: '6px 12px', borderRadius: 8, border:
 const btnRejeter = { fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #E5BFB6', background: '#FCE9E8', color: '#99201E', cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }
 
 function Tab({ active, onClick, children }) {
+  const ref = useRef(null)
+  // Quand l'onglet devient actif, on le recentre à l'écran (barre qui défile sur mobile).
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+  }, [active])
   return (
-    <button onClick={onClick} style={{
+    <button ref={ref} onClick={onClick} style={{
       fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 999, cursor: 'pointer',
       background: active ? '#993556' : 'white',
       color:      active ? '#faf7f2' : '#1a0f0a',
       border:     active ? '1px solid #993556' : '1px solid #e5d8c3',
-      display: 'inline-flex', alignItems: 'center', gap: 6,
+      display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
     }}>{children}</button>
   )
 }

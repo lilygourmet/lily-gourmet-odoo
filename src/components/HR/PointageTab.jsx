@@ -2,14 +2,16 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'rea
 import SearchSelect from '../SearchSelect'
 import {
   User, Users, Calendar, RefreshCw, Clock, Lock, Unlock, Building2,
-  Pencil, Trash2, Plus, Download, Save, Hand, Eye, EyeOff, Wallet,
+  Pencil, Trash2, Plus, Download, Save, Hand, Eye, EyeOff, Wallet, Fingerprint,
 } from 'lucide-react'
+import PointeuseModal from './PointeuseModal'
+import Avatar from '../Avatar'
 import {
   loadMonthData, calculerMois, syncAttendance, syncLeaves,
   setAjustement, removeAjustement, updatePointage, validerMois,
-  nomJour,
+  nomJour, convertirHeuresEnJours,
 } from '../../lib/pointage'
-import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT } from '../../lib/conges'
+import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT, calculSoldeConges, dispoTypeConge } from '../../lib/conges'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { groupLabel } from '../../lib/presence'
@@ -75,7 +77,7 @@ export default function PointageTab({ user, isAdmin }) {
     localStorage.setItem('pointage_last_annee', String(annee))
   }, [mois, annee])
   const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)  // spinner au 1er chargement seulement
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
@@ -90,10 +92,15 @@ export default function PointageTab({ user, isAdmin }) {
   }, [])
   const [editingTranches, setEditingTranches] = useState(null)  // { date, sessions } | null
   const [editingEmp, setEditingEmp] = useState(null)  // employé édité dans modal
+  const [showPointeuse, setShowPointeuse] = useState(false)  // écran correspondance pointeuse
+  const [showConvert, setShowConvert] = useState(false)  // fenêtre conversion heures → jours
 
   // Charger les données du mois
+  // Rechargement SILENCIEUX : on ne rebascule pas sur « Chargement… » (sinon le
+  // tableau disparaît/réapparaît → la page remonte en haut à chaque modif). Le
+  // spinner ne s'affiche qu'au tout premier chargement (loading initial = true).
   const reload = useCallback(async () => {
-    setLoading(true); setError(null)
+    setError(null)
     try {
       const d = await loadMonthData(mois, annee)
       setData(d)
@@ -110,6 +117,15 @@ export default function PointageTab({ user, isAdmin }) {
     reload()
     if (!syncedRef.current.has(`${mois}-${annee}`)) doSync({ confirmFirst: false, silent: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mois, annee])
+
+  // Rafraîchissement auto (silencieux) : la vue se met à jour toute seule quand
+  // quelqu'un pointe, sans avoir à recharger la page.
+  useEffect(() => {
+    const id = setInterval(() => {
+      loadMonthData(mois, annee).then(setData).catch(() => {})
+    }, 30000)
+    return () => clearInterval(id)
   }, [mois, annee])
 
   // Calculs (mémorisés pour éviter recalcul à chaque render).
@@ -566,18 +582,28 @@ export default function PointageTab({ user, isAdmin }) {
 
   // Modal pour transformer une absence en congé : on demande le type
   const [congeModalDate, setCongeModalDate] = useState(null)
-  async function handleCreateConge(dateJour, typeConge) {
+  async function handleCreateConge(dateJour, typeConge, demi = false) {
     try {
+      const jours = demi ? 0.5 : 1
+      // Plafond au solde : on ne crée pas un congé qui dépasse le disponible.
+      // Types illimités (maladie longue, sans solde) → dispo = null → jamais bloqués.
+      const solde = await calculSoldeConges(empSelected)
+      const dispo = dispoTypeConge(solde, typeConge)
+      if (dispo !== null && (dispo === undefined || dispo < jours)) {
+        const reste = dispo === undefined ? 0 : dispo
+        toast.error(`Solde insuffisant pour ${empSelected?.nom} : il reste ${reste} jour(s). Congé non créé. (Choisis « Sans solde » si tu veux quand même.)`)
+        return
+      }
       const c = await createDemandeConge({
         employe_id: selectedEmpId,
         date_debut: dateJour,
         date_fin:   dateJour,
         type_conge: typeConge,
-        motif: 'Créé depuis pointage',
+        motif: 'Créé depuis pointage' + (demi ? ' (½ journée)' : ''),
         demande_par: user.id,
       })
       // Validation immédiate : le congé devient effectif tout de suite
-      await validerConge(c.id, user.id, 1)
+      await validerConge(c.id, user.id, jours)
       setCongeModalDate(null)
       await reload()
     } catch (e) {
@@ -693,6 +719,16 @@ export default function PointageTab({ user, isAdmin }) {
               : <><RefreshCw size={14} /> Sync Odoo</>}
           </button>
         )}
+
+        {isAdmin && (
+          <button onClick={() => setShowPointeuse(true)} style={{
+            padding: '9px 14px', fontSize: 13, background: 'white', color: '#993556',
+            border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            <Fingerprint size={14} /> Pointeuse
+          </button>
+        )}
       </div>
 
       {error && (
@@ -748,7 +784,7 @@ export default function PointageTab({ user, isAdmin }) {
                 border: '1px solid ' + (e.id === selectedEmpId ? '#993556' : '#e5d8c3'), borderRadius: 8,
                 display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', flexShrink: 0,
               }}>
-                <User size={14} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.nom}</span>
+                <Avatar emp={e} size={22} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.nom}</span>
               </button>
             ))}
           </div>
@@ -768,7 +804,7 @@ export default function PointageTab({ user, isAdmin }) {
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 6,
             }} title="Cliquer pour éditer la fiche employé">
-              <User size={14} /> {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <Pencil size={12} />
+              <Avatar emp={empSelected} size={22} /> {empSelected?.nom} {empSelected?.poste && <span style={{ fontSize: 12, color: '#4a3a30', fontWeight: 400 }}>· {empSelected.poste}</span>} <Pencil size={12} />
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {empSelected?.societe?.code && (
@@ -819,6 +855,17 @@ export default function PointageTab({ user, isAdmin }) {
               />
             )}
           </div>
+
+          {/* Convertir les heures (sup / manquantes) en jours */}
+          {canEdit && (result.synthese.heures_sup > 0 || result.synthese.heures_manquantes > 0) && (
+            <button onClick={() => setShowConvert(true)} style={{
+              padding: '9px 14px', fontSize: 13, background: '#3C3489', color: 'white',
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500,
+              display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 12,
+            }}>
+              <RefreshCw size={14} /> Convertir les heures en jours
+            </button>
+          )}
 
           {/* Enlever / remettre les heures sup du mois (admin, mois non verrouillé) */}
           {canEdit && (() => {
@@ -891,12 +938,38 @@ export default function PointageTab({ user, isAdmin }) {
         />
       )}
 
+      {showPointeuse && (
+        <PointeuseModal onClose={() => setShowPointeuse(false)} />
+      )}
+
+      {showConvert && result && (
+        <ConversionModal
+          empNom={empSelected?.nom || ''}
+          moisLabel={`${MOIS_FR[mois - 1]} ${annee}`}
+          supMax={result.synthese.heures_sup}
+          manqMax={result.synthese.heures_manquantes}
+          onClose={() => setShowConvert(false)}
+          onConfirm={async (supH, manqH) => {
+            try {
+              await convertirHeuresEnJours({
+                employe: empSelected, mois, annee,
+                supHeures: supH, manqHeures: manqH,
+                moisLabel: `${MOIS_FR[mois - 1]} ${annee}`, userId: user.id,
+              })
+              setShowConvert(false)
+              await reload()
+              toast.success('Conversion enregistrée.')
+            } catch (e) { toast.error('Erreur : ' + e.message) }
+          }}
+        />
+      )}
+
       {congeModalDate && (
         <CongeAbsenceModal
           date={congeModalDate}
           empNom={empSelected?.nom || ''}
           onClose={() => setCongeModalDate(null)}
-          onConfirm={(type) => handleCreateConge(congeModalDate, type)}
+          onConfirm={(type, demi) => handleCreateConge(congeModalDate, type, demi)}
         />
       )}
     </div>
@@ -906,6 +979,7 @@ export default function PointageTab({ user, isAdmin }) {
 // Mini modal pour transformer une absence en congé : choix du type.
 function CongeAbsenceModal({ date, empNom, onClose, onConfirm }) {
   const [type, setType] = useState('annuel')
+  const [demi, setDemi] = useState(false)
   const [busy, setBusy] = useState(false)
   const TYPES = [
     { v: 'annuel',         label: 'Congé annuel' },
@@ -928,9 +1002,71 @@ function CongeAbsenceModal({ date, empNom, onClose, onConfirm }) {
           {TYPES.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
         </select>
 
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, color: '#4a3a30', cursor: 'pointer' }}>
+          <input type="checkbox" checked={demi} onChange={e => setDemi(e.target.checked)} />
+          ½ journée (0,5 j)
+        </label>
+
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button onClick={onClose} disabled={busy} style={{ padding: '6px 12px', border: '1px solid #E5D8C3', borderRadius: 8, background: 'white', cursor: 'pointer', fontSize: 12 }}>Annuler</button>
-          <button onClick={async () => { setBusy(true); await onConfirm(type); setBusy(false) }} disabled={busy} style={{ padding: '6px 12px', border: 'none', borderRadius: 8, background: '#993556', color: 'white', cursor: 'pointer', fontSize: 12 }}>{busy ? '…' : 'Créer & valider'}</button>
+          <button onClick={async () => { setBusy(true); await onConfirm(type, demi); setBusy(false) }} disabled={busy} style={{ padding: '6px 12px', border: 'none', borderRadius: 8, background: '#993556', color: 'white', cursor: 'pointer', fontSize: 12 }}>{busy ? '…' : 'Créer & valider'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Fenêtre : convertir des heures (sup / manquantes) en jours. 8 h = 1 jour.
+function ConversionModal({ empNom, moisLabel, supMax, manqMax, onClose, onConfirm }) {
+  const [supH, setSupH]   = useState(supMax > 0 ? String(supMax) : '0')
+  const [manqH, setManqH] = useState(manqMax > 0 ? String(manqMax) : '0')
+  const [busy, setBusy]   = useState(false)
+  const clamp = (v, max) => Math.max(0, Math.min(max, Number(String(v).replace(',', '.')) || 0))
+  const supVal  = clamp(supH, supMax)
+  const manqVal = clamp(manqH, manqMax)
+  const r2 = n => Math.round(n / 8 * 100) / 100
+  const rien = supVal <= 0 && manqVal <= 0
+
+  const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
+  const modal   = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
+  const hin     = { width: 64, padding: '6px 8px', border: '1px solid #d9b9c4', borderRadius: 6, fontSize: 13, fontWeight: 600, textAlign: 'center', color: '#993556' }
+  const row     = (bg) => ({ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, marginBottom: 10, background: bg })
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 2 }}>Convertir les heures en jours</div>
+        <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 16 }}>{empNom} · {moisLabel} — 8 h = 1 jour</div>
+
+        {supMax > 0 && (
+          <div style={row('#EAF3DE')}>
+            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Heures sup
+              <div style={{ fontWeight: 400, fontSize: 11.5, color: '#4a3a30' }}>disponible : +{supMax} h</div>
+            </div>
+            <input style={hin} value={supH} onChange={e => setSupH(e.target.value)} inputMode="decimal" /> <span style={{ fontSize: 12, color: '#4a3a30' }}>h</span>
+            <span style={{ color: '#8a7a70' }}>→</span>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#3C3489', minWidth: 92 }}>{r2(supVal)} j récup</div>
+          </div>
+        )}
+
+        {manqMax > 0 && (
+          <div style={row('#FCEBEB')}>
+            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Heures manquantes
+              <div style={{ fontWeight: 400, fontSize: 11.5, color: '#4a3a30' }}>disponible : −{manqMax} h</div>
+            </div>
+            <input style={hin} value={manqH} onChange={e => setManqH(e.target.value)} inputMode="decimal" /> <span style={{ fontSize: 12, color: '#4a3a30' }}>h</span>
+            <span style={{ color: '#8a7a70' }}>→</span>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0C447C', minWidth: 92 }}>{r2(manqVal)} j décompté</div>
+          </div>
+        )}
+
+        <div style={{ fontSize: 12, color: '#4a3a30', background: '#F4F0EA', padding: '9px 12px', borderRadius: 10, margin: '4px 0 16px' }}>
+          Les heures converties seront <b>retirées du solde du mois</b> (pas de double comptage). Traçable dans <b>Congés → Allocations</b>, et réversible.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} disabled={busy} style={{ padding: '8px 14px', border: '1px solid #E5D8C3', borderRadius: 8, background: 'white', cursor: 'pointer', fontSize: 13 }}>Annuler</button>
+          <button onClick={async () => { setBusy(true); await onConfirm(supVal, manqVal); setBusy(false) }} disabled={busy || rien} style={{ padding: '8px 14px', border: 'none', borderRadius: 8, background: rien ? '#c9b8c0' : '#3C3489', color: 'white', cursor: rien ? 'default' : 'pointer', fontSize: 13, fontWeight: 500 }}>{busy ? '…' : 'Convertir'}</button>
         </div>
       </div>
     </div>
@@ -965,8 +1101,10 @@ function TranchesEditModal({ data, onClose, onSave }) {
     const final = sessions
       .filter(s => s.arrivee_hm || s.depart_hm)
       .map(s => {
-        const arrivee = s.arrivee_hm ? `${date}T${s.arrivee_hm}:00` : null
-        const depart  = s.depart_hm  ? `${date}T${s.depart_hm}:00`  : null
+        // new Date(...).toISOString() convertit l'heure locale saisie (Maroc) en UTC,
+        // comme sont stockés les autres pointages → pas de décalage d'1 h à la sauvegarde.
+        const arrivee = s.arrivee_hm ? new Date(`${date}T${s.arrivee_hm}:00`).toISOString() : null
+        const depart  = s.depart_hm  ? new Date(`${date}T${s.depart_hm}:00`).toISOString()  : null
         return { id: s.id, arrivee, depart }
       })
     onSave(date, final)
@@ -1323,8 +1461,8 @@ function Th({ children, w, align = 'left' }) {
   )
 }
 
-function Td({ children, style = {} }) {
-  return <td style={{ padding: '7px 10px', ...style }}>{children}</td>
+function Td({ children, style = {}, ...rest }) {
+  return <td style={{ padding: '7px 10px', ...style }} {...rest}>{children}</td>
 }
 
 function Legende() {

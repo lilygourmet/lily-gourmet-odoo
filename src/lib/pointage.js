@@ -56,6 +56,11 @@ export async function loadMonthData(mois, annee) {
     .from('pointages_mois').select('employe_id, solde_mois')
     .eq('mois', prevMois).eq('annee', prevAnnee)
 
+  // Conversions heures → jours du mois (retirées du solde d'heures, cf. calculerMois)
+  const { data: conversions } = await supabase
+    .from('heures_conversions').select('*')
+    .eq('mois', mois).eq('annee', annee)
+
   // Le salaire net vit dans une table séparée (admin-only). On le rattache pour
   // le calcul de coût (réservé à l'admin) ; vide pour un non-admin (RLS).
   const { data: remu } = await supabase.from('employes_remuneration').select('employe_id, salaire_net')
@@ -70,6 +75,7 @@ export async function loadMonthData(mois, annee) {
     ajustements: ajustements || [],
     synthese: synthese || [],
     prevSynthese: prevSynthese || [],
+    conversions: conversions || [],
   }
 }
 
@@ -232,7 +238,11 @@ export function calculerHeuresPointees(sessions) {
     heures: round2(totalMin / 60),
     anomalie,
     nb_punchs: valid.length * 2 + incompletes,  // 2 punchs par session complète
-    tranches: valid.map(s => formatSession(s)).join(' ; '),
+    // Affiche TOUTES les sessions (dont celles encore ouvertes « HH:MM–? »), triées,
+    // pour voir une personne encore présente (pointée à l'entrée, pas encore sortie).
+    tranches: sessions.slice()
+      .sort((a, b) => new Date(a.arrivee || a.depart) - new Date(b.arrivee || b.depart))
+      .map(s => formatSession(s)).join(' ; '),
     nb_sessions: valid.length,
   }
 }
@@ -369,7 +379,7 @@ export function calculerJour(prevu, pointe, employe) {
  * Calcule le journal complet du mois pour un employé.
  */
 export function calculerMois(employe, mois, annee, data) {
-  const { feries, pointages, conges, ajustements, prevSynthese } = data
+  const { feries, pointages, conges, ajustements, prevSynthese, conversions = [] } = data
 
   // Index : férié date -> nom
   const feriesMap = new Map()
@@ -497,6 +507,16 @@ export function calculerMois(employe, mois, annee, data) {
     else if (resultat.heures_travaillees > 0) total.travailles++
   }
 
+  // Retirer les heures DÉJÀ converties en jours (récup / décompte) pour ne pas
+  // les compter deux fois (en heures ET en jours).
+  const convEmp = (conversions || []).filter(c => String(c.employe_id) === empId)
+  if (convEmp.length) {
+    const supConverti  = convEmp.reduce((s, c) => s + Number(c.sup_heures  || 0), 0)
+    const manqConverti = convEmp.reduce((s, c) => s + Number(c.manq_heures || 0), 0)
+    total.sup        = Math.max(0, round2(total.sup - supConverti))
+    total.manquantes = Math.max(0, round2(total.manquantes - manqConverti))
+  }
+
   // Solde du mois = sup - manquantes + solde reporté
   const solde_brut = round2(total.sup - total.manquantes)
   const solde_mois = round2(solde_brut + solde_reporte)
@@ -521,6 +541,44 @@ export function calculerMois(employe, mois, annee, data) {
 // ============================================================
 // SAUVEGARDE / AJUSTEMENT
 // ============================================================
+
+// Convertit des heures (sup et/ou manquantes) en jours. 8 h = 1 jour.
+//  - heures sup      → allocation récup (+jours) dans conges_allocations
+//  - heures manquantes → allocation décompte (−jours) dans conges_allocations
+// Enregistre la conversion (heures_conversions) → les heures sont retirées du
+// solde du mois par calculerMois (pas de double comptage). Tout est réversible
+// (annuler l'allocation + supprimer la ligne de conversion).
+export async function convertirHeuresEnJours({ employe, mois, annee, supHeures = 0, manqHeures = 0, moisLabel, userId }) {
+  const HRS_PAR_JOUR = 8
+  const r2 = n => Math.round(n * 100) / 100
+  const dateEvt = `${annee}-${String(mois).padStart(2, '0')}-01`
+  let alloc_sup_id = null, alloc_manq_id = null
+
+  if (supHeures > 0) {
+    const { data, error } = await supabase.from('conges_allocations').insert({
+      employe_id: employe.id, annee, type: 'autre', jours: r2(supHeures / HRS_PAR_JOUR),
+      raison: `Conversion ${r2(supHeures)} h sup → récup · ${moisLabel}`,
+      date_evt: dateEvt, source: 'manuel', statut: 'valide', created_by: userId,
+    }).select('id').single()
+    if (error) throw error
+    alloc_sup_id = data.id
+  }
+  if (manqHeures > 0) {
+    const { data, error } = await supabase.from('conges_allocations').insert({
+      employe_id: employe.id, annee, type: 'autre', jours: -r2(manqHeures / HRS_PAR_JOUR),
+      raison: `Conversion ${r2(manqHeures)} h manquantes → décompte · ${moisLabel}`,
+      date_evt: dateEvt, source: 'manuel', statut: 'valide', created_by: userId,
+    }).select('id').single()
+    if (error) throw error
+    alloc_manq_id = data.id
+  }
+  const { error: e2 } = await supabase.from('heures_conversions').insert({
+    employe_id: employe.id, mois, annee,
+    sup_heures: r2(supHeures), manq_heures: r2(manqHeures),
+    alloc_sup_id, alloc_manq_id, created_by: userId,
+  })
+  if (e2) throw e2
+}
 
 /**
  * Enregistre un ajustement manuel sur une cellule.
