@@ -10,7 +10,12 @@ export function usePersistedState(key, initial) {
     } catch { return initial }
   })
   useEffect(() => {
-    try { localStorage.setItem(key, value) } catch { /* ignore */ }
+    try {
+      localStorage.setItem(key, value)
+      // Prévient les autres composants (ex. barre latérale) qui lisent cette clé
+      // pour qu'ils rafraîchissent leur surlignage.
+      window.dispatchEvent(new CustomEvent('lily-persist', { detail: { key } }))
+    } catch { /* ignore */ }
   }, [key, value])
   return [value, setValue]
 }

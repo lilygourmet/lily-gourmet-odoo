@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { navTabsForUser } from '../lib/navTabs'
 import { useNavBadges } from '../lib/useNavBadges'
@@ -95,6 +95,15 @@ export default function SideNav({ user, activeView, onNavigate, width, mode, onS
   const entries = buildEntries(user, byView, allowed)
   const badges = useNavBadges(user)   // { conversations, tasks, paiements, modifications, livraisons, devis-internet, hr }
   const sumBadges = (tabs) => tabs.reduce((s, t) => s + (badges[t.view] || 0), 0)
+
+  // Re-lit le localStorage (sous-onglet actif) quand il change ailleurs (barre du
+  // haut) → le surlignage de la barre latérale suit le changement d'onglet.
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const h = () => bump(n => n + 1)
+    window.addEventListener('lily-persist', h)
+    return () => window.removeEventListener('lily-persist', h)
+  }, [])
 
   const onHr = activeView === 'hr'
   const onCaisse = activeView === 'caisse'
