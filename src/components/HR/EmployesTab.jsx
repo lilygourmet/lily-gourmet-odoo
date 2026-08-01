@@ -5,6 +5,7 @@ import { loadEmployes, deleteEmploye } from '../../lib/hr'
 import { supabase } from '../../lib/supabase'
 import { createMissingEmployeUsers, deactivateUserForEmploye } from '../../lib/users'
 import EmployeEditModal from './EmployeEditModal'
+import Avatar from '../Avatar'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 
@@ -294,7 +295,7 @@ export default function EmployesTab({ user, isAdmin }) {
                     onMouseEnter={ev => ev.currentTarget.style.background = '#FCFAF7'}
                     onMouseLeave={ev => ev.currentTarget.style.background = 'transparent'}
                   >
-                    <Td><strong>{e.nom}</strong></Td>
+                    <Td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Avatar emp={e} size={24} /><strong>{e.nom}</strong></span></Td>
                     <Td>
                       <span style={{
                         fontSize: 10, padding: '2px 8px', borderRadius: 999,
@@ -373,7 +374,7 @@ export default function EmployesTab({ user, isAdmin }) {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                  <strong style={{ fontSize: 15 }}>{e.nom}</strong>
+                  <strong style={{ fontSize: 15, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Avatar emp={e} size={26} />{e.nom}</strong>
                   <span style={{
                     fontSize: 10, padding: '2px 8px', borderRadius: 999,
                     background: e.societe?.code === 'LG' ? '#FCEEE8' : '#EAF3DE',

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Plus, Pencil, Clock, Lock, CheckCircle2 } from 'lucide-react'
-import { createEmploye, updateEmploye, loadEmployes, EMPLOYE_GROUPES, loadGroupes } from '../../lib/hr'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Pencil, Clock, Lock, CheckCircle2, Camera } from 'lucide-react'
+import { createEmploye, updateEmploye, loadEmployes, EMPLOYE_GROUPES, loadGroupes, uploadPhotoEmploye } from '../../lib/hr'
+import Avatar from '../Avatar'
 import { createAllocation } from '../../lib/conges'
 import GroupesManager from './GroupesManager'
 import { supabase } from '../../lib/supabase'
@@ -40,6 +41,23 @@ export default function EmployeEditModal({
   // - Sinon on charge tous les actifs depuis Supabase (mode autonome)
   const [employesListAuto, setEmployesListAuto] = useState([])
   const [currentEmploye, setCurrentEmploye] = useState(employe)
+  const [photoUrl, setPhotoUrl] = useState(employe?.photo_url || null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const photoInputRef = useRef(null)
+
+  useEffect(() => { setPhotoUrl(currentEmploye?.photo_url || null) }, [currentEmploye])
+
+  async function handlePhoto(e) {
+    const file = e.target.files?.[0]
+    if (!file || !currentEmploye?.id) return
+    setPhotoBusy(true); setError(null)
+    try {
+      const url = await uploadPhotoEmploye(file, currentEmploye.id, user.id)
+      setPhotoUrl(url)
+      setCurrentEmploye(prev => prev ? { ...prev, photo_url: url } : prev)
+    } catch (err) { setError('Erreur photo : ' + err.message) }
+    setPhotoBusy(false)
+  }
 
   const employesList = employesListProp || employesListAuto
 
@@ -253,6 +271,20 @@ export default function EmployeEditModal({
 
           <button onClick={onClose} style={btnClose} title="Fermer">✕</button>
         </div>
+
+        {!isNew && currentEmploye?.id && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <Avatar emp={{ ...displayedEmploye, photo_url: photoUrl }} size={76} />
+            <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
+            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={photoBusy} style={{
+              padding: '6px 12px', fontSize: 12, background: 'white', color: '#993556',
+              border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              <Camera size={13} /> {photoBusy ? 'Envoi…' : (photoUrl ? 'Changer la photo' : 'Ajouter une photo')}
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <Row>

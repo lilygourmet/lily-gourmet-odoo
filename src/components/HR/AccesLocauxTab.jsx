@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { toast } from '../../lib/toast'
+import Avatar from '../Avatar'
 
 // Locaux (colonnes). L'ordre ici = l'ordre d'affichage.
 const LOCAUX = [
@@ -27,7 +28,7 @@ export default function AccesLocauxTab() {
     setLoading(true)
     try {
       const [{ data: e }, { data: a }] = await Promise.all([
-        supabase.from('employes').select('id, nom, groupe').eq('actif', true).eq('fantome', false).order('nom'),
+        supabase.from('employes').select('id, nom, groupe, photo_url').eq('actif', true).eq('fantome', false).order('nom'),
         supabase.from('acces_locaux').select('employe_id, codes'),
       ])
       setEmps(e || [])
@@ -96,7 +97,7 @@ export default function AccesLocauxTab() {
             {visible.map(e => (
               <tr key={e.id} className="border-t border-line">
                 <td className="px-3 py-2 sticky left-0 bg-cream z-10 min-w-[150px]">
-                  <div className="font-medium text-ink">{empName(e)}</div>
+                  <div className="font-medium text-ink" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Avatar emp={e} size={22} />{empName(e)}</div>
                   {e.groupe && <div className="text-[11px] text-ink-mute">{e.groupe}</div>}
                   {savingId === e.id && <div className="text-[10px] text-bordeaux">enregistrement…</div>}
                 </td>

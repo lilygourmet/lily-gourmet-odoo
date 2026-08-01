@@ -107,6 +107,20 @@ export async function createEmploye(emp, userId) {
 /**
  * Modifie un employé.
  */
+// Photo de l'employé : upload dans le bucket public + enregistre l'URL sur la fiche.
+const PHOTO_BUCKET = 'photos-employes'
+export async function uploadPhotoEmploye(file, empId, userId) {
+  if (!file || !empId) return null
+  const ext = (String(file.name || 'jpg').split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase()
+  const path = `${empId}/photo_${Date.now()}.${ext}`
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, { upsert: true, contentType: file.type })
+  if (error) throw error
+  const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path)
+  const url = data?.publicUrl || null
+  await updateEmploye(empId, { photo_url: url }, userId)
+  return url
+}
+
 export async function updateEmploye(id, updates, userId) {
   // Le salaire net est stocké à part (table admin-only) : on l'isole du reste.
   const { salaire_net, ...rest } = updates

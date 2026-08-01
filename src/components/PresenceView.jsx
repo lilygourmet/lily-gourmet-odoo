@@ -155,9 +155,11 @@ export default function PresenceView({ user, activeView, onNavigate, onLogout })
                     <div className="flex flex-wrap gap-3.5">
                       {g.employes.map(e => (
                         <div key={e.id} className="w-[68px] flex flex-col items-center text-center">
-                          <div className="relative w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[15px]" style={{ background: color }}>
-                            {initials(e.nom)}
-                            <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white bg-[#2f9e5e]" />
+                          <div className="relative w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[15px] overflow-hidden" style={{ background: color }}>
+                            {e.photo_url
+                              ? <img src={e.photo_url} alt="" className="w-full h-full object-cover" />
+                              : initials(e.nom)}
+                            <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white bg-[#2f9e5e] z-10" />
                           </div>
                           <div className="text-[11px] mt-1.5 leading-tight">{e.nom}</div>
                         </div>

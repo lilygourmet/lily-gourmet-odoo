@@ -40,7 +40,7 @@ export async function refreshTodayAttendance() {
 export async function loadPresence() {
   const today = todayYMD()
   const [{ data: employes }, { data: pointages }] = await Promise.all([
-    supabase.from('employes').select('id, nom, groupe').eq('actif', true).eq('fantome', false).order('nom'),
+    supabase.from('employes').select('id, nom, groupe, photo_url').eq('actif', true).eq('fantome', false).order('nom'),
     supabase.from('pointages').select('employe_id, arrivee, depart').eq('date_pointage', today),
   ])
   // employé présent = au moins une session aujourd'hui avec arrivée et sans départ
@@ -53,7 +53,7 @@ export async function loadPresence() {
     if (!presentIds.has(String(e.id))) continue
     const g = e.groupe || 'Aucun'
     if (!byGroup.has(g)) byGroup.set(g, [])
-    byGroup.get(g).push({ id: e.id, nom: e.nom })
+    byGroup.get(g).push({ id: e.id, nom: e.nom, photo_url: e.photo_url })
   }
   // ordre des groupes = celui de GROUP_COLORS, puis les autres
   const order = Object.keys(GROUP_COLORS)
