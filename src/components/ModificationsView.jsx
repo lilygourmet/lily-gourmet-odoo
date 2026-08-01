@@ -126,6 +126,12 @@ export default function ModificationsView({ user }) {
                     {m.description}
                   </div>
                 )}
+                {m.auto_odoo && (
+                  <div className="text-[13px] text-ink bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-2 whitespace-pre-wrap">
+                    <span className="text-[10px] uppercase tracking-wider text-blue-700 block mb-0.5">🤖 Déjà fait par l'app dans Odoo</span>
+                    {m.auto_odoo}
+                  </div>
+                )}
                 {m.justificatif_path && (
                   <button onClick={async () => { const u = await getJustificatifUrl(m.justificatif_path); if (u) window.open(u, '_blank') }}
                     className="text-[12px] text-bordeaux underline mb-2 inline-block">📎 Voir le justificatif</button>
@@ -164,6 +170,9 @@ export default function ModificationsView({ user }) {
                 </div>
                 {m.description && (
                   <div className="text-[12px] text-ink-soft mb-1"><span className="uppercase text-[10px] tracking-wider text-ink-mute">Demandé : </span>{m.description}</div>
+                )}
+                {m.auto_odoo && (
+                  <div className="text-[12px] text-ink bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 mb-1 whitespace-pre-wrap"><span className="uppercase text-[10px] tracking-wider text-blue-700 block">🤖 Fait par l'app dans Odoo</span>{m.auto_odoo}</div>
                 )}
                 {m.note && (
                   <div className="text-[12px] text-ink bg-green-50 border border-green-200 rounded-lg px-3 py-1.5 whitespace-pre-wrap"><span className="uppercase text-[10px] tracking-wider text-green-700 block">Ce qui a été fait</span>{m.note}</div>

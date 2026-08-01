@@ -6,10 +6,13 @@ import { supabase } from './supabase'
 // L'équipe perm_modification les traite dans l'onglet « Modifications ».
 // ============================================================
 
-export async function createModification({ order_ref, client_name, client_phone, conversation_id, requested_by, description = null, justificatif_path = null }) {
+// `auto_odoo` = compte-rendu de ce que l'app a déjà fait toute seule dans Odoo
+// (ordres de fabrication annulés). Champ à part : `description` part dans la
+// notification WhatsApp, qui refuse les retours à la ligne.
+export async function createModification({ order_ref, client_name, client_phone, conversation_id, requested_by, description = null, justificatif_path = null, auto_odoo = null }) {
   const { data, error } = await supabase
     .from('modifications')
-    .insert({ order_ref, client_name, client_phone, conversation_id, requested_by, status: 'a_traiter', description, justificatif_path })
+    .insert({ order_ref, client_name, client_phone, conversation_id, requested_by, status: 'a_traiter', description, justificatif_path, auto_odoo })
     .select().single()
   if (error) throw error
   notifyModifUsers(data).catch(() => {})   // notif WhatsApp aux personnes désignées (non bloquant)

@@ -124,6 +124,13 @@ export async function deleteOrderLine(orderId, lineId) {
   return post('order-line', { op: 'delete', orderId, lineId })
 }
 
+/** Après modification d'une commande confirmée : annule dans Odoo les ordres de
+ *  fabrication des articles retirés (et leurs enfants).
+ *  `changes` = [{ lineId, label, from, to }]. Renvoie { recap, pending }. */
+export async function syncManufacturingOrders(changes) {
+  return post('sync-mos', { changes })
+}
+
 /** Ajoute un warning (⚠️ Attention) dans la description d'un ARTICLE précis. */
 export async function addOrderWarning(orderId, lineId, warn) {
   return post('order-line', { op: 'warn', orderId, lineId, warn })

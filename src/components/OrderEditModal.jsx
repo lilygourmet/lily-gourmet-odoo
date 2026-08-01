@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import CopyableRef from './CopyableRef'
-import { loadOrderLines, addOrderLine, updateOrderLine, deleteOrderLine, addOrderWarning, removeOrderWarning, updateOrderDate, loadOrderCatalog, loadOrderProduct, loadWarehouses, setOrderWarehouse, removeOrderPhoto } from '../lib/commande'
+import { loadOrderLines, addOrderLine, updateOrderLine, deleteOrderLine, addOrderWarning, removeOrderWarning, updateOrderDate, loadOrderCatalog, loadOrderProduct, loadWarehouses, setOrderWarehouse, removeOrderPhoto, syncManufacturingOrders } from '../lib/commande'
 import { loadLivreurs, loadDeliveryStates, assignDelivery, setLivraisonLocalisation } from '../lib/deliveries'
 import { recordDevisTraitement, loadDevisPhotos } from '../lib/conversations'
 import { createModification } from '../lib/modifications'
@@ -23,13 +23,13 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
   // Demande « Modifications » + notif WhatsApp aux « 🔧 Notif modifications » :
   // UNIQUEMENT pour une vraie modification = quantité qui BAISSE / passe à 0, ou suppression.
   // (Pas pour : ajout d'article, hausse de quantité, prix, remise, message, date…)
-  const notifyModif = (detail) => {
+  const notifyModif = (detail, autoOdoo = null) => {
     // Si la commande est encore un DEVIS (non confirmée), pas de demande de modification :
     // modifier un devis fait partie de la prise de commande normale, rien n'est en production.
     if (order.state !== 'sale') return
     createModification({
       order_ref: order.name, client_name: order.clientName || null, client_phone: order.clientPhone || null,
-      requested_by: user?.id || null, description: `✏️ ${detail}`,
+      requested_by: user?.id || null, description: `✏️ ${detail}`, auto_odoo: autoOdoo,
     }).catch(() => {})
   }
   const [lines, setLines] = useState(null)        // null = chargement
@@ -189,7 +189,20 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
         return Number.isFinite(o) && Number.isFinite(n) && n < o
       })
       if (reductions.length) {
-        notifyModif(reductions.map(l => `${firstLine(l.rawName ?? l.name)} : qté ${origRef.current[l.id]?.qty}→${l.qty}${Number(l.qty) === 0 ? ' (retiré)' : ''}`).join(' ; '))
+        // Les ordres de fabrication des articles RETIRÉS sont annulés dans Odoo
+        // par le serveur ; on joint son compte-rendu à la demande de modification.
+        const sync = order.state === 'sale'
+          ? await syncManufacturingOrders(reductions.map(l => ({
+              lineId: l.id,
+              label: firstLine(l.rawName ?? l.name),
+              from: origRef.current[l.id]?.qty,
+              to: Number(l.qty),
+            }))).catch(e => ({ recap: `❌ Synchro Odoo impossible : ${e?.message || e} — ordres de fabrication à annuler à la main` }))
+          : null
+        notifyModif(
+          reductions.map(l => `${firstLine(l.rawName ?? l.name)} : qté ${origRef.current[l.id]?.qty}→${l.qty}${Number(l.qty) === 0 ? ' (retiré)' : ''}`).join(' ; '),
+          sync?.recap || null,
+        )
       }
       toast.success('Modifications enregistrées ✅')
       onChanged?.()

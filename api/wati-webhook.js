@@ -89,6 +89,7 @@ export default async function handler(req, res) {
   if (action === 'releve-ocr') return handleReleveOcr(req, res)
   if (action === 'translate-ar') return handleTranslateAr(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
+  if (action === 'sync-mos') return handleSyncMos(req, res)
   if (action === 'count-devis-internet') return handleCountDevisInternet(req, res)
   return handleInbound(req, res)
 }
@@ -1552,6 +1553,99 @@ async function handleOrderLine(req, res) {
   } catch (e) {
     console.error('[order-line]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// ============================================================
+// SYNCHRO DES ORDRES DE FABRICATION (?action=sync-mos)
+// Appelé après modification d'une commande CONFIRMÉE, pour les articles dont
+// la quantité a baissé :
+//   - passée à 0 (retiré) → on annule l'OF de CETTE ligne + ses enfants
+//   - simplement réduite  → on ne touche à rien, on le signale (changer la
+//     quantité d'un OF fait recalculer les composants par Odoo : pas dans le dos
+//     de l'utilisateur)
+// Un OF déjà « en cours » ou « terminé » n'est JAMAIS annulé.
+// Renvoie { recap, pending } : le texte affiché dans l'onglet Modifications,
+// et pending = il reste quelque chose à faire à la main.
+// ============================================================
+const MO_ANNULABLE = ['draft', 'confirmed']
+
+// Enfants en cascade : un OF enfant porte le NOM de son parent dans `origin`.
+async function moDescendants(uid, names) {
+  const out = []
+  const vus = new Set()
+  let niveau = names
+  while (niveau.length) {
+    const enfants = await odooSearchRead(uid, 'mrp.production', [['origin', 'in', niveau]],
+      ['id', 'name', 'state', 'product_qty', 'product_id'])
+    const nouveaux = enfants.filter(e => !vus.has(e.id))
+    if (!nouveaux.length) break
+    nouveaux.forEach(e => vus.add(e.id))
+    out.push(...nouveaux)
+    niveau = nouveaux.map(e => e.name)
+  }
+  return out
+}
+
+async function handleSyncMos(req, res) {
+  try {
+    const changes = Array.isArray(req.body?.changes) ? req.body.changes : []
+    if (!changes.length) return res.status(200).json({ ok: true, recap: '', pending: false })
+
+    const uid = await odooAuthenticate()
+    const recap = []
+    let pending = false
+
+    for (const c of changes) {
+      const label = String(c.label || `ligne ${c.lineId}`).trim()
+
+      if (Number(c.to) > 0) {
+        recap.push(`⚠️ ${label} : qté ${c.from}→${c.to} — quantité de l'ordre de fabrication à ajuster à la main`)
+        pending = true
+        continue
+      }
+
+      // On remonte à l'OF par la LIGNE exacte (sale_line_id), jamais par nom de
+      // produit : une commande peut contenir deux fois le même article.
+      const moves = await odooSearchRead(uid, 'stock.move', [['sale_line_id', '=', c.lineId]], ['created_production_id'])
+      const moIds = [...new Set(moves.map(m => m.created_production_id && m.created_production_id[0]).filter(Boolean))]
+      if (!moIds.length) { recap.push(`• ${label} : retiré (aucun ordre de fabrication)`); continue }
+
+      const parents = await odooSearchRead(uid, 'mrp.production', [['id', 'in', moIds]],
+        ['id', 'name', 'state', 'product_qty', 'product_id'])
+      const enfants = await moDescendants(uid, parents.map(p => p.name))
+
+      // Les plus profonds d'abord, les parents en dernier.
+      for (const mo of [...enfants.reverse(), ...parents]) {
+        const quoi = `${mo.name} (${mo.product_qty} × ${mo.product_id[1]})`
+        if (mo.state === 'cancel') { recap.push(`• ${label} → ${quoi} : déjà annulé`); continue }
+        if (!MO_ANNULABLE.includes(mo.state)) {
+          recap.push(`⚠️ ${label} → ${quoi} : ${mo.state === 'done' ? 'DÉJÀ TERMINÉ' : 'DÉJÀ EN COURS'}, non annulé — à voir avec la production`)
+          pending = true
+          continue
+        }
+        try {
+          await odooJsonRpc('object', 'execute_kw', [
+            process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD,
+            'mrp.production', 'action_cancel', [[mo.id]],
+          ])
+          recap.push(`✅ ${label} → ${quoi} annulé`)
+        } catch (e) {
+          recap.push(`❌ ${label} → ${quoi} : échec de l'annulation (${String(e?.message || e).slice(0, 120)})`)
+          pending = true
+        }
+      }
+    }
+
+    return res.status(200).json({ ok: true, recap: recap.join('\n'), pending })
+  } catch (e) {
+    // On ne renvoie JAMAIS d'erreur HTTP : l'enregistrement de la modification
+    // ne doit pas échouer parce qu'Odoo est indisponible.
+    console.error('[sync-mos]', e?.message || e)
+    return res.status(200).json({
+      ok: false, pending: true,
+      recap: `❌ Synchro Odoo impossible : ${String(e?.message || e).slice(0, 200)} — ordres de fabrication à annuler à la main`,
+    })
   }
 }
 
