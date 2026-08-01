@@ -4,11 +4,22 @@ import { loadEmployes } from '../../lib/hr'
 import { loadBulletinsForPeriod } from '../../lib/bulletins'
 import { supabase } from '../../lib/supabase'
 import { genererOrdreVirementPDF } from '../../lib/ordreVirementPdf'
+import { confirmDialog } from '../../lib/confirmDialog'
 
 const MOIS_FR = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
 ]
+
+// La case Montant accepte « 3 500,50 » (virgule et espaces) autant que « 3500.5 ».
+// Un champ type="number" renvoie une valeur VIDE dès qu'on tape une virgule ou un
+// espace : la saisie restait affichée à l'écran mais l'employé disparaissait du PDF.
+const toNombre = v => {
+  const s = String(v ?? '').replace(/\s/g, '')
+  // S'il y a une virgule, elle est décimale et les points séparent les milliers
+  // (« 3.500,50 ») ; sinon le point est décimal (« 3500.5 »).
+  return parseFloat(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s)
+}
 
 export default function SalairesTab({ user }) {
   const today = new Date()
@@ -68,10 +79,11 @@ export default function SalairesTab({ user }) {
             if (k) byName[k] = b.net_amount
           }
         } catch (_) { /* pas bloquant */ }
-        // Le bulletin du mois fait foi : s'il existe un net pour l'employé (par
-        // CNSS puis par nom), il REMPLACE le montant déjà saisi. Sinon on garde
-        // ce qui est en base (employé sans bulletin).
+        // La saisie manuelle fait foi : le bulletin (par CNSS puis par nom) ne
+        // sert qu'à pré-remplir les cases encore VIDES. Un montant déjà
+        // enregistré pour ce mois n'est jamais écrasé.
         for (const e of all) {
+          if (mObj[e.id] != null) continue
           const fromBulletin = byCnss[normCnss(e.cnss)] ?? byName[nameKey(e.nom)]
           if (fromBulletin != null) mObj[e.id] = String(fromBulletin)
         }
@@ -107,7 +119,7 @@ export default function SalairesTab({ user }) {
 
   // Total à virer
   const totalMontants = useMemo(() => {
-    return employesSociete.reduce((sum, e) => sum + (parseFloat(montants[e.id]) || 0), 0)
+    return employesSociete.reduce((sum, e) => sum + (toNombre(montants[e.id]) || 0), 0)
   }, [employesSociete, montants])
 
   // Comptes pour les stats / badges
@@ -126,7 +138,7 @@ export default function SalairesTab({ user }) {
       // Upsert tous les montants saisis pour le mois (toutes sociétés confondues)
       const rows = []
       for (const e of employes) {
-        const m = parseFloat(montants[e.id])
+        const m = toNombre(montants[e.id])
         if (m > 0) {
           rows.push({
             employe_id: e.id,
@@ -163,14 +175,31 @@ export default function SalairesTab({ user }) {
 
   async function handleGenererPDF() {
     if (employesSociete.length === 0) { setError('Aucun employé déclaré pour cette société'); return }
-    const validEmp = employesSociete.filter(e => parseFloat(montants[e.id]) > 0)
-    if (validEmp.length === 0) { setError('Aucun montant saisi'); return }
+    // Un virement exige un RIB : sans RIB l'employé est écarté du PDF (et annoncé
+    // plus bas) au lieu de bloquer tout l'ordre de virement.
+    const aRib = e => !!e.rib && !!String(e.rib).trim()
+    const validEmp = employesSociete.filter(e => toNombre(montants[e.id]) > 0 && aRib(e))
+    if (validEmp.length === 0) { setError('Aucun employé avec un montant saisi et un RIB'); return }
 
-    // Bloc : pas d'ordre de virement si un RIB manque (sinon virement invalide envoyé à la banque)
-    const sansRib = validEmp.filter(e => !e.rib || !String(e.rib).trim())
-    if (sansRib.length > 0) {
-      setError(`RIB manquant pour : ${sansRib.map(e => e.nom).join(', ')}. Complète le RIB (onglet Employés) avant de générer l'ordre de virement.`)
-      return
+    // Annoncer qui n'ira PAS dans le PDF : sans ça l'exclusion est silencieuse
+    // (case montant vide ou illisible, employé masqué par le filtre en cours).
+    const ecartes = []
+    for (const e of employes) {
+      if (e.societe?.code !== societeFilter || validEmp.includes(e)) continue
+      const m = toNombre(montants[e.id])
+      const visible = employesSociete.includes(e)
+      let raison = null
+      if (!(m > 0)) { if (visible) raison = 'montant vide ou illisible' }
+      else if (!visible) raison = e.declare ? 'masqué par le filtre en cours' : 'non déclaré'
+      else raison = 'RIB manquant'
+      if (raison) ecartes.push(`• ${e.nom}${m > 0 ? ` (${m} dh)` : ''} — ${raison}`)
+    }
+    if (ecartes.length > 0) {
+      const ok = await confirmDialog(
+        `${ecartes.length} employé(s) ne seront PAS dans l'ordre de virement :\n\n${ecartes.join('\n')}\n\nGénérer quand même ?`,
+        { confirmLabel: 'Générer quand même' }
+      )
+      if (!ok) return
     }
 
     setGenerating(true); setError(null); setSuccess(null)
@@ -199,7 +228,7 @@ export default function SalairesTab({ user }) {
       // 3) Liste des employés pour le PDF
       const employesData = validEmp.map(e => ({
         nom: e.nom,
-        montant: parseFloat(montants[e.id]),
+        montant: toNombre(montants[e.id]),
         banque: e.banque || '—',
         rib: e.rib,
       }))
@@ -351,8 +380,8 @@ export default function SalairesTab({ user }) {
                   </td>
                   <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={montants[e.id] || ''}
                       onChange={ev => setMontants(m => ({ ...m, [e.id]: ev.target.value }))}
                       placeholder="0"
