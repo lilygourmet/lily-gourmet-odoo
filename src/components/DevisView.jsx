@@ -135,11 +135,14 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
           client_phone: d.clientPhone || null,
           requested_by: user?.id || null,
           description: `❌ ANNULATION — commande ${d.name}${d.amountText ? ` (${d.amountText})` : ''} (annulée dans Odoo)`,
+          auto_odoo: r.mosRecap || null,
         })
       }
       await recordDevisTraitement({ order_num: d.name, action: 'annulation', user_id: user?.id, user_name: user?.full_name || user?.username })
       reloadTraitements()
       toast.success(isConfirmed ? `${r.name || d.name} annulée dans Odoo + demande Modifications` : `${r.name || d.name} annulé dans Odoo ✅`)
+      // Un ordre de fabrication n'a pas pu être annulé (déjà en cours / terminé).
+      if (r.mosPending) toast.error(`${r.name || d.name} : ordres de fabrication à vérifier — voir l'onglet Modifications`)
       run(query.trim())   // recharge : l'élément annulé sort de la liste
     } catch (e) {
       toast.error(e?.message || "Échec de l'annulation")

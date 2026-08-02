@@ -1588,6 +1588,36 @@ async function moDescendants(uid, names) {
   return out
 }
 
+// Annule une liste d'OF PARENTS et tous leurs enfants (les plus profonds d'abord).
+// Un OF déjà « en cours » ou « terminé » n'est JAMAIS annulé : on le signale.
+// `label` = ce qu'on affiche devant chaque ligne (nom d'article ou n° de commande).
+async function annulerOFs(uid, parents, label) {
+  const recap = []
+  let pending = false
+  const enfants = await moDescendants(uid, parents.map(p => p.name))
+
+  for (const mo of [...enfants.reverse(), ...parents]) {
+    const quoi = `${mo.name} (${mo.product_qty} × ${mo.product_id[1]})`
+    if (mo.state === 'cancel') { recap.push(`• ${label} → ${quoi} : déjà annulé`); continue }
+    if (!MO_ANNULABLE.includes(mo.state)) {
+      recap.push(`⚠️ ${label} → ${quoi} : ${mo.state === 'done' ? 'DÉJÀ TERMINÉ' : 'DÉJÀ EN COURS'}, non annulé — à voir avec la production`)
+      pending = true
+      continue
+    }
+    try {
+      await odooJsonRpc('object', 'execute_kw', [
+        process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD,
+        'mrp.production', 'action_cancel', [[mo.id]],
+      ])
+      recap.push(`✅ ${label} → ${quoi} annulé`)
+    } catch (e) {
+      recap.push(`❌ ${label} → ${quoi} : échec de l'annulation (${String(e?.message || e).slice(0, 120)})`)
+      pending = true
+    }
+  }
+  return { recap, pending }
+}
+
 async function handleSyncMos(req, res) {
   try {
     const changes = Array.isArray(req.body?.changes) ? req.body.changes : []
@@ -1614,28 +1644,10 @@ async function handleSyncMos(req, res) {
 
       const parents = await odooSearchRead(uid, 'mrp.production', [['id', 'in', moIds]],
         ['id', 'name', 'state', 'product_qty', 'product_id'])
-      const enfants = await moDescendants(uid, parents.map(p => p.name))
 
-      // Les plus profonds d'abord, les parents en dernier.
-      for (const mo of [...enfants.reverse(), ...parents]) {
-        const quoi = `${mo.name} (${mo.product_qty} × ${mo.product_id[1]})`
-        if (mo.state === 'cancel') { recap.push(`• ${label} → ${quoi} : déjà annulé`); continue }
-        if (!MO_ANNULABLE.includes(mo.state)) {
-          recap.push(`⚠️ ${label} → ${quoi} : ${mo.state === 'done' ? 'DÉJÀ TERMINÉ' : 'DÉJÀ EN COURS'}, non annulé — à voir avec la production`)
-          pending = true
-          continue
-        }
-        try {
-          await odooJsonRpc('object', 'execute_kw', [
-            process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD,
-            'mrp.production', 'action_cancel', [[mo.id]],
-          ])
-          recap.push(`✅ ${label} → ${quoi} annulé`)
-        } catch (e) {
-          recap.push(`❌ ${label} → ${quoi} : échec de l'annulation (${String(e?.message || e).slice(0, 120)})`)
-          pending = true
-        }
-      }
+      const r = await annulerOFs(uid, parents, label)
+      recap.push(...r.recap)
+      if (r.pending) pending = true
     }
 
     return res.status(200).json({ ok: true, recap: recap.join('\n'), pending })
@@ -2639,6 +2651,10 @@ async function handleDevisConfirm(req, res) {
 
 // Annule une commande/devis (sale.order) directement dans Odoo (action_cancel).
 // Effet réel côté Odoo. Idempotent : si déjà annulé, on renvoie ok.
+// Odoo ne touche PAS aux ordres de fabrication quand une commande est annulée :
+// on s'en charge nous-mêmes (mêmes règles que le retrait d'un article).
+// Renvoie en plus { mosRecap, mosPending } : le compte-rendu de ce qui a été
+// annulé, et pending = il reste quelque chose à faire à la main.
 async function handleDevisCancel(req, res) {
   const id = Number(req.body?.id)
   if (!id) return res.status(400).json({ error: 'id de la commande requis' })
@@ -2655,9 +2671,28 @@ async function handleDevisCancel(req, res) {
     const after = await odooSearchRead(uid, 'sale.order', [['id', '=', id]], ['name', 'state'])
     const newState = after[0]?.state || 'cancel'
     console.log(`[devis-cancel] ${name} (id ${id}) annulé par user=${req.body?.actorId || '?'} → ${newState}`)
+
+    // Les ordres de fabrication de la commande (un OF porte le n° de commande
+    // dans `origin`), puis leurs enfants en cascade.
+    let mosRecap = '', mosPending = false
+    try {
+      const parents = await odooSearchRead(uid, 'mrp.production', [['origin', '=', name]],
+        ['id', 'name', 'state', 'product_qty', 'product_id'])
+      if (parents.length) {
+        const r = await annulerOFs(uid, parents, name)
+        mosRecap = r.recap.join('\n')
+        mosPending = r.pending
+      }
+    } catch (e) {
+      // L'annulation de la commande a réussi : on ne la fait pas échouer pour ça.
+      console.error('[devis-cancel mos]', e?.message || e)
+      mosRecap = `❌ Ordres de fabrication : synchro impossible (${String(e?.message || e).slice(0, 150)}) — à annuler à la main`
+      mosPending = true
+    }
+
     // Devis OCP annulé → notif aux mêmes destinataires (admins + « Notif devis OCP »).
     if (/\bOCP\b/i.test(partnerName)) notifyOcpCancel(name).catch(() => {})
-    return res.status(200).json({ ok: true, name, state: newState })
+    return res.status(200).json({ ok: true, name, state: newState, mosRecap, mosPending })
   } catch (e) {
     console.error('[devis-cancel]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })

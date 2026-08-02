@@ -334,7 +334,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     if (!(await confirmDialog(`Annuler ${isConfirmed ? 'la commande' : 'le devis'} ${linkedOrder.name} dans Odoo ?\n\n(Effet réel : ${isConfirmed ? 'la commande' : 'le devis'} sera annulé·e.)`, { danger: true, confirmLabel: 'Annuler dans Odoo' }))) return
     setConfirmingOrder(true)
     try {
-      await cancelDevis(linkedOrder.id, user?.id)
+      const r = await cancelDevis(linkedOrder.id, user?.id)
       recordDevisTraitement({ order_num: linkedOrder.name, action: 'annulation', user_id: user?.id, user_name: user?.full_name || user?.username }).catch(() => {})
       // Commande confirmée annulée → on la trace dans l'onglet Modifications (comme l'onglet Devis).
       if (isConfirmed) {
@@ -345,10 +345,13 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
           conversation_id: conversationId,
           requested_by: user?.id || null,
           description: `❌ ANNULATION — commande ${linkedOrder.name}${linkedOrder.amountText ? ` (${linkedOrder.amountText})` : ''} (annulée dans Odoo)`,
+          auto_odoo: r?.mosRecap || null,
         }).catch(() => {})
       }
       setLinkedOrder(o => o ? { ...o, state: 'cancel' } : o)
       toast.success(`${linkedOrder.name} annulée`)
+      // Un ordre de fabrication n'a pas pu être annulé (déjà en cours / terminé).
+      if (r?.mosPending) toast.error(`${linkedOrder.name} : ordres de fabrication à vérifier — voir l'onglet Modifications`)
     } catch (e) { toast.error(e?.message || "Échec de l'annulation") }
     finally { setConfirmingOrder(false) }
   }
