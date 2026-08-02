@@ -6,10 +6,12 @@
     { "source": "/api/push-send", "destination": "/api/push?action=send" },
     { "source": "/api/push-subscribe", "destination": "/api/push?action=subscribe" },
     { "source": "/api/task-reminders", "destination": "/api/wati-webhook?action=task-reminders" },
+    { "source": "/api/close-open-sessions", "destination": "/api/pointage-api?action=close-open-sessions" },
     { "source": "/iclock/:path*", "destination": "/api/pointage-api?iclock=:path*" }
   ],
   "crons": [
     { "path": "/api/task-reminders", "schedule": "0 7 * * *" },
-    { "path": "/api/sync-etiquettes", "schedule": "0 6 * * *" }
+    { "path": "/api/sync-etiquettes", "schedule": "0 6 * * *" },
+    { "path": "/api/close-open-sessions", "schedule": "0 23 * * *" }
   ]
 }

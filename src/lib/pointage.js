@@ -17,6 +17,39 @@ export const MIN_SESSION_MIN = 5
 // Si > 45 min entre 2 sessions = pause détectée
 export const PAUSE_THRESHOLD_MIN = 45
 
+// Marque (colonne pointages.notes) d'une session fermée d'office à minuit parce que
+// la sortie n'a jamais été pointée. L'heure de départ est donc ARTIFICIELLE : on ne
+// compte pas ses heures et on lève une anomalie → la journée devient neutre
+// (ni heures sup ni heures manquantes, cf. calculerJour).
+export const SORTIE_AUTO = 'sortie_auto_minuit'
+
+// Le 31 juillet 2026, le temps de travail est passé à 8 h/jour et presque tout le
+// monde a été basculé en équipe « café ». La fiche employé ne garde qu'UN réglage,
+// sans date d'effet : sans cette règle, le nouveau recalculerait aussi juillet et
+// tous les mois d'avant. AVANT cette date on applique donc l'ancien fonctionnement :
+// 8,5 h fixes pour tout le monde, et le régime café réservé aux groupes qui y étaient
+// vraiment (le champ `equipe` a été passé à 'cafe' en masse sur 38 des 42 employés).
+// Groupes retenus avec Layla : serveurs, commerciales et ménage.
+export const REGLAGE_AVANT = {
+  date: '2026-07-31',
+  heures: 8.50,
+  groupes_cafe: ['Serveur', 'Commercial', 'Menage'],
+}
+
+/** Heures dues pour une journée complète, en tenant compte du changement du 31 juillet. */
+export function heuresJourComplet(employe, date) {
+  if (date && formatYMD(date) < REGLAGE_AVANT.date) return REGLAGE_AVANT.heures
+  return Number(employe.heures_jour_complet || 8.50)
+}
+
+/** L'employé suit-il le régime café (8 h avec pause pointée, 9 h sinon) ce jour-là ? */
+export function suitRegimeCafe(employe, date) {
+  if (date && formatYMD(date) < REGLAGE_AVANT.date) {
+    return REGLAGE_AVANT.groupes_cafe.includes(employe.groupe)
+  }
+  return employe.equipe === 'cafe'
+}
+
 // ============================================================
 // CHARGEMENT DES DONNÉES
 // ============================================================
@@ -132,10 +165,14 @@ export function nomJour(date) {
  */
 export function statutPrevu(date, employe, feriesMap, congesByEmp) {
   const ymd = formatYMD(date)
+  // Portés par `prevu` : calculerJour en a besoin (jours OFF/fériés/congés TRAVAILLÉS
+  // et régime café) alors qu'il ne connaît pas la date.
+  const hjc = heuresJourComplet(employe, date)
+  const cafe = suitRegimeCafe(employe, date)
 
   // 1) Férié ?
   if (feriesMap.has(ymd)) {
-    return { statut: 'ferie', heures_prevues: 0, label: feriesMap.get(ymd) }
+    return { statut: 'ferie', heures_prevues: 0, label: feriesMap.get(ymd), heures_jour_complet: hjc, regime_cafe: cafe }
   }
 
   // 2) Congé ?
@@ -149,6 +186,7 @@ export function statutPrevu(date, employe, feriesMap, congesByEmp) {
         heures_prevues: 0,
         label: c.type_conge || 'Congé',
         isMaladie,
+        heures_jour_complet: hjc, regime_cafe: cafe,
       }
     }
   }
@@ -170,9 +208,9 @@ export function statutPrevu(date, employe, feriesMap, congesByEmp) {
     }
   }
 
-  if (estOff)  return { statut: 'off',    heures_prevues: 0,                                          label: 'OFF' }
-  if (estDemi) return { statut: 'demi',   heures_prevues: Number(employe.heures_demi_journee || 4),   label: 'Demi-journée' }
-  return         { statut: 'normal', heures_prevues: Number(employe.heures_jour_complet || 8.50), label: 'Journée' }
+  if (estOff)  return { statut: 'off',    heures_prevues: 0,                                        label: 'OFF',          heures_jour_complet: hjc, regime_cafe: cafe }
+  if (estDemi) return { statut: 'demi',   heures_prevues: Number(employe.heures_demi_journee || 4), label: 'Demi-journée', heures_jour_complet: hjc, regime_cafe: cafe }
+  return         { statut: 'normal', heures_prevues: hjc,                                           label: 'Journée',      heures_jour_complet: hjc, regime_cafe: cafe }
 }
 
 // ============================================================
@@ -208,6 +246,12 @@ export function calculerHeuresPointees(sessions) {
   let totalMin = 0
   let anomalie = null
   for (const s of valid) {
+    // Sortie jamais pointée, fermée d'office à minuit : l'heure de départ est
+    // inventée → on ne compte rien et on signale (la journée sera neutralisée).
+    if (s.notes === SORTIE_AUTO) {
+      anomalie = 'sortie_oubliee'
+      continue
+    }
     const dArr = new Date(s.arrivee)
     const dDep = new Date(s.depart)
     let diffMs = dDep - dArr
@@ -234,6 +278,22 @@ export function calculerHeuresPointees(sessions) {
     anomalie = anomalie || 'pointage_incomplet'
   }
 
+  // Sortie oubliée en cours de journée (ex. « 08:19–14:12 ; 17:13–? » : le retour de
+  // pause n'a pas été pointé, 17:13 est en fait le départ du soir). Plutôt que de
+  // neutraliser la journée, on la reconstitue du PREMIER au DERNIER badge — ici
+  // 08:19 → 17:13. La pause non pointée est donc comptée comme du temps de présence,
+  // ce que le régime café compense en exigeant 9 h ce jour-là.
+  const reconstitue = amplitudeSiBadgeManquant(sessions)
+  if (reconstitue !== null) {
+    return {
+      heures: round2(reconstitue.minutes / 60),
+      anomalie: 'sortie_reconstituee',
+      nb_punchs: sessions.length * 2 - 1,
+      tranches: formatHM(reconstitue.debut) + '–' + formatHM(reconstitue.fin) + ' (reconstitué)',
+      nb_sessions: 1,
+    }
+  }
+
   return {
     heures: round2(totalMin / 60),
     anomalie,
@@ -247,9 +307,42 @@ export function calculerHeuresPointees(sessions) {
   }
 }
 
+/**
+ * Journée à laquelle il manque un badge : le dernier pointage de la journée n'a pas
+ * de vraie sortie (jamais pointée, ou fermée d'office à minuit) alors qu'il y a eu
+ * au moins un autre badge avant. On retient alors l'amplitude premier → dernier badge.
+ * Retourne { debut, fin, minutes } ou null si la journée ne correspond pas à ce cas.
+ */
+function amplitudeSiBadgeManquant(sessions) {
+  const tri = sessions.slice()
+    .filter(s => s.arrivee)
+    .sort((a, b) => new Date(a.arrivee) - new Date(b.arrivee))
+  if (tri.length < 2) return null                        // un seul badge : rien à reconstituer
+
+  // Attention à ne PAS reconstituer une journée en cours : une session encore ouverte
+  // aujourd'hui, c'est quelqu'un qui travaille toujours — pas une sortie oubliée.
+  const derniere = tri[tri.length - 1]
+  const jourFini = formatYMD(new Date(derniere.arrivee)) < formatYMD(new Date())
+  const sortieManquante = derniere.notes === SORTIE_AUTO || (!derniere.depart && jourFini)
+  if (!sortieManquante) return null
+
+  // Les sessions précédentes doivent être complètes, sinon la journée est trop
+  // abîmée pour être devinée (on la laisse en anomalie neutre).
+  const avant = tri.slice(0, -1)
+  if (avant.some(s => !s.depart || s.notes === SORTIE_AUTO)) return null
+
+  const debut = new Date(tri[0].arrivee)
+  const fin = new Date(derniere.arrivee)
+  const minutes = (fin - debut) / 60000
+  if (minutes <= 0 || minutes > 16 * 60) return null     // incohérent : on ne devine pas
+  return { debut, fin, minutes }
+}
+
 function formatSession(s) {
   const a = s.arrivee ? new Date(s.arrivee) : null
   const d = s.depart ? new Date(s.depart) : null
+  // Fermeture d'office à minuit : ne pas afficher l'heure inventée, montrer qu'il manque la sortie.
+  if (s.notes === SORTIE_AUTO) return (a ? formatHM(a) : '?') + '–?'
   if (!a) return '?–' + (d ? formatHM(d) : '?')
   if (!d) return formatHM(a) + '–?'
   return formatHM(a) + '–' + formatHM(d)
@@ -281,8 +374,11 @@ export function calculerJour(prevu, pointe, employe) {
   let label = prevu.label
   let anomalie = pointe.anomalie
 
-  // Cas équipe café : ajuster prévu selon nb sessions
-  if (employe.equipe === 'cafe' && prevu.statut === 'normal') {
+  // Cas équipe café : ajuster prévu selon nb sessions.
+  // `prevu.regime_cafe` tient compte de la date (cf. REGLAGE_AVANT) ; le repli sur
+  // `employe.equipe` sert aux appels qui ne passent pas par statutPrevu.
+  const estCafe = prevu.regime_cafe ?? (employe.equipe === 'cafe')
+  if (estCafe && prevu.statut === 'normal') {
     if (pointe.nb_sessions >= 2) {
       heures_prevues = 8.00  // pause détectée → 8h
     } else {
@@ -297,7 +393,9 @@ export function calculerJour(prevu, pointe, employe) {
 
   // Anomalies : pointage incomplet/anormal sur jour normal OU demi-journée → on met prévu
   // (la personne a bien pointé, juste un oubli de départ : on ne la pénalise pas).
-  if (anomalie && (prevu.statut === 'normal' || prevu.statut === 'demi')) {
+  // Exception : 'sortie_reconstituee' — les heures ont pu être retrouvées du premier au
+  // dernier badge, on garde donc ce vrai temps de présence au lieu de neutraliser.
+  if (anomalie && anomalie !== 'sortie_reconstituee' && (prevu.statut === 'normal' || prevu.statut === 'demi')) {
     heures_travaillees = heures_prevues
   }
 
@@ -323,7 +421,7 @@ export function calculerJour(prevu, pointe, employe) {
     statut = 'off_travaille'
     label = 'OFF travaillé'
     jours_recup = 1
-    heures_prevues = Number(employe.heures_jour_complet || 8.50)
+    heures_prevues = Number(prevu.heures_jour_complet || employe.heures_jour_complet || 8.50)
     if (heures_travaillees >= heures_prevues) {
       heures_sup = round2(heures_travaillees - heures_prevues)
     } else {
@@ -336,7 +434,7 @@ export function calculerJour(prevu, pointe, employe) {
     statut = 'ferie_travaille'
     label = label + ' (travaillé)'
     jours_recup = 1
-    heures_prevues = Number(employe.heures_jour_complet || 8.50)
+    heures_prevues = Number(prevu.heures_jour_complet || employe.heures_jour_complet || 8.50)
     if (heures_travaillees >= heures_prevues) {
       heures_sup = round2(heures_travaillees - heures_prevues)
     } else {
@@ -349,7 +447,7 @@ export function calculerJour(prevu, pointe, employe) {
     statut = 'conge_travaille'
     label = label + ' (travaillé)'
     jours_recup = prevu.isMaladie ? 0 : 1  // ⚠️ pas de récup si maladie
-    heures_prevues = Number(employe.heures_jour_complet || 8.50)
+    heures_prevues = Number(prevu.heures_jour_complet || employe.heures_jour_complet || 8.50)
     if (heures_travaillees >= heures_prevues) {
       heures_sup = round2(heures_travaillees - heures_prevues)
     } else {
@@ -406,6 +504,7 @@ export function calculerMois(employe, mois, annee, data) {
       id: p.id,
       arrivee: p.arrivee,
       depart: p.depart,
+      notes: p.notes,
     })
   }
 
@@ -651,6 +750,7 @@ export async function upsertPointagesDuJour(employeId, date, sessions, userId) {
           arrivee: s.arrivee,
           depart: s.depart,
           source: 'manuel',
+          notes: null,   // saisie à la main = l'heure n'est plus artificielle, le jour redevient calculé
           updated_by: userId,
           updated_at: new Date().toISOString(),
         })

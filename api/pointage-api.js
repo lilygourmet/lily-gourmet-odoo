@@ -934,6 +934,29 @@ function localMarocToUtc(s) {
   return d.toISOString().slice(0, 19).replace('T', ' ')
 }
 
+// Jour civil marocain (UTC+1) d'un instant stocké en base.
+function jourLocalMaroc(iso) {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  d.setUTCHours(d.getUTCHours() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+// Marque des sessions fermées d'office à minuit (cf. SORTIE_AUTO dans src/lib/pointage.js).
+const SORTIE_AUTO = 'sortie_auto_minuit'
+
+// Ferme une session restée ouverte à 23:59:59 (heure Maroc) de SON jour, et la marque
+// comme artificielle pour que la journée ne compte ni heures sup ni heures manquantes.
+async function fermerSessionAMinuit(session) {
+  const jour = session.date_pointage || jourLocalMaroc(session.arrivee)
+  const upd = { depart: localMarocToUtc(`${jour} 23:59:59`), notes: SORTIE_AUTO }
+  // Une ligne restée en source 'odoo' est SUPPRIMÉE puis réimportée telle quelle à
+  // chaque synchro Odoo (où l'erreur existe toujours) : la correction serait perdue.
+  // On l'« adopte » comme les autres corrections pour qu'elle survive.
+  if (session.source === 'odoo') upd.source = 'manuel'
+  await sb.from('pointages').update(upd).eq('id', session.id)
+}
+
 // Écrit un pointage dans Odoo par BASCULE : s'il y a une entrée ouverte (sans
 // sortie) → ce pointage la ferme (sortie) ; sinon → il ouvre une entrée.
 // Gère la course « déjà entré » (pointages rapprochés) : si Odoo refuse la
@@ -1045,12 +1068,21 @@ async function pushPunchesToPointages({ statuses = ['pending'] } = {}) {
       // (badgeuse/odoo OU pointeuse) → timeline unifié : entrée badgeuse le matin +
       // sortie pointeuse le soir se rejoignent.
       const { data: openS } = await sb.from('pointages')
-        .select('id, arrivee, source').eq('employe_id', empId).is('depart', null)
+        .select('id, arrivee, source, date_pointage').eq('employe_id', empId).is('depart', null)
         .order('arrivee', { ascending: false }).limit(1)
       let action
       // Comparer de VRAIS instants (arrivee revient en ISO tz depuis la base ;
       // utc est "YYYY-MM-DD HH:MM:SS" en UTC → on ajoute 'Z').
       const utcMs = new Date(utc.replace(' ', 'T') + 'Z').getTime()
+      // Un badge ne peut fermer une session ouverte QUE le même jour. Sinon (sortie
+      // jamais pointée la veille), le badge du matin fermait la session de la veille :
+      // la veille devenait une journée de 15 h et le jour même perdait son entrée —
+      // parfois sur plusieurs jours d'affilée. On clôt donc la veille à minuit et ce
+      // badge ouvre bien une nouvelle entrée.
+      if (openS && openS.length && jourLocalMaroc(openS[0].arrivee) !== p.punch_local.slice(0, 10)) {
+        await fermerSessionAMinuit(openS[0])
+        openS.length = 0
+      }
       if (openS && openS.length && utcMs > new Date(openS[0].arrivee).getTime()) {
         const upd = { depart: utc }
         // Si on ferme une entrée venant d'Odoo, on l'« adopte » (source pointeuse)
@@ -1431,6 +1463,21 @@ async function actionZkLog(params) {
   return { count: data?.length || 0, events: data || [] }
 }
 
+// Clôture de fin de journée (cron à minuit, heure Maroc) : toute session d'un jour
+// PASSÉ restée sans sortie est fermée à 23:59:59 de son jour et marquée artificielle.
+// Sans ça la personne resterait « présente » et le badge suivant viendrait fermer
+// une session vieille de plusieurs jours.
+async function actionCloseOpenSessions() {
+  const aujourdHui = jourLocalMaroc(new Date().toISOString())
+  const { data: ouvertes, error } = await sb.from('pointages')
+    .select('id, employe_id, arrivee, date_pointage, source')
+    .is('depart', null).lt('date_pointage', aujourdHui)
+    .order('date_pointage', { ascending: false }).limit(500)
+  if (error) return { error: error.message }
+  for (const s of ouvertes || []) await fermerSessionAMinuit(s)
+  return { ok: true, fermees: (ouvertes || []).length, jour: aujourdHui }
+}
+
 export default async function handler(req, res) {
   try {
     // Pointeuse ZKTeco (push ADMS) : routes /iclock/* → réponse texte, pas JSON.
@@ -1442,6 +1489,7 @@ export default async function handler(req, res) {
     let result
     if (action === 'zk-log')                  result = await actionZkLog(params)
     else if (action === 'push-pointeuse')     result = await pushPunchesToPointages({ statuses: ['pending', 'unmapped', 'error'] })
+    else if (action === 'close-open-sessions') result = await actionCloseOpenSessions()
     else if (action === 'pointeuse-status')   result = await actionPointeuseStatus(params)
     else if (action === 'pointeuse-clear')    result = await actionPointeuseClear(params)
     else if (action === 'pointeuse-set-device') result = await actionPointeuseSetDevice(params)
