@@ -4,7 +4,62 @@ import { describe, it, expect, vi } from 'vitest'
 // mais les calculs testés ici sont purs.
 vi.mock('./supabase', () => ({ supabase: {} }))
 
-const { calculerHeuresPointees, calculerJour, statutPrevu, SORTIE_AUTO } = await import('./pointage')
+const { calculerHeuresPointees, calculerJour, statutPrevu, SORTIE_AUTO, parseHoraires } = await import('./pointage')
+
+describe('parseHoraires — texte collé → sessions', () => {
+  it('format pointeuse « 08:00 12:00 14:00 18:00 »', () => {
+    expect(parseHoraires('08:00 12:00 14:00 18:00')).toEqual([
+      { arrivee_hm: '08:00', depart_hm: '12:00' },
+      { arrivee_hm: '14:00', depart_hm: '18:00' },
+    ])
+  })
+
+  it('format « 8h-12h / 14h-18h » (h seul = minutes à 00)', () => {
+    expect(parseHoraires('8h-12h / 14h-18h')).toEqual([
+      { arrivee_hm: '08:00', depart_hm: '12:00' },
+      { arrivee_hm: '14:00', depart_hm: '18:00' },
+    ])
+  })
+
+  it('minutes et heures mêlées « 8h30 12h 14h 18h30 »', () => {
+    expect(parseHoraires('8h30 12h 14h 18h30')).toEqual([
+      { arrivee_hm: '08:30', depart_hm: '12:00' },
+      { arrivee_hm: '14:00', depart_hm: '18:30' },
+    ])
+  })
+
+  it('format affiché par l\'app « 08:00–12:00 ; 14:00–18:00 »', () => {
+    expect(parseHoraires('08:00–12:00 ; 14:00–18:00')).toEqual([
+      { arrivee_hm: '08:00', depart_hm: '12:00' },
+      { arrivee_hm: '14:00', depart_hm: '18:00' },
+    ])
+  })
+
+  it('ignore les secondes « 08:00:00 12:30:00 »', () => {
+    expect(parseHoraires('08:00:00 12:30:00')).toEqual([
+      { arrivee_hm: '08:00', depart_hm: '12:30' },
+    ])
+  })
+
+  it('nombre impair d\'heures → dernière session sans départ', () => {
+    expect(parseHoraires('08:00 12:00 14:00')).toEqual([
+      { arrivee_hm: '08:00', depart_hm: '12:00' },
+      { arrivee_hm: '14:00', depart_hm: '' },
+    ])
+  })
+
+  it('texte vide ou sans heure → aucune session', () => {
+    expect(parseHoraires('')).toEqual([])
+    expect(parseHoraires('bonjour')).toEqual([])
+    expect(parseHoraires(null)).toEqual([])
+  })
+
+  it('rejette les heures impossibles (25:00, 12:99)', () => {
+    expect(parseHoraires('25:00 12:99 09:15')).toEqual([
+      { arrivee_hm: '09:15', depart_hm: '' },
+    ])
+  })
+})
 
 describe('changement du temps de travail au 31 juillet 2026', () => {
   // Fiches d'aujourd'hui : 8 h + équipe « café » mise en masse. Avant le 31/07 on

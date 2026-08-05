@@ -769,6 +769,37 @@ export async function upsertPointagesDuJour(employeId, date, sessions, userId) {
 }
 
 /**
+ * Transforme un texte d'horaires collé (ex. copié depuis la pointeuse) en
+ * sessions éditables [{ arrivee_hm, depart_hm }]. Accepte des heures type
+ * 08:00, 8:00, 8h, 8h30, 8.30, avec ou sans secondes, séparées par n'importe
+ * quoi (espace, tiret, –, →, /, point-virgule, retour à la ligne). Les heures
+ * trouvées sont appariées 2 par 2 : arrivée, départ, arrivée, départ…
+ */
+export function parseHoraires(text) {
+  if (!text) return []
+  // Retire d'abord les secondes (08:00:00 → 08:00) pour ne pas les confondre
+  // avec une heure isolée.
+  const clean = String(text).replace(/(\d{1,2}[:hH.]\d{2})[:.]\d{2}\b/g, '$1')
+  // Une heure = HH:MM / HHhMM / HH.MM, OU « HHh » seul (minutes à 00).
+  // Pas d'espace entre le séparateur et les minutes, sinon « 12h 14h » serait
+  // lu comme 12:14 au lieu de 12:00 puis 14:00.
+  const re = /(\d{1,2})[:hH.](\d{2})|(\d{1,2})[hH](?![0-9])/g
+  const heures = []
+  let m
+  while ((m = re.exec(clean)) !== null) {
+    const h = parseInt(m[1] ?? m[3], 10)
+    const min = parseInt(m[2] ?? '0', 10)
+    if (h > 23 || min > 59) continue
+    heures.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`)
+  }
+  const sessions = []
+  for (let i = 0; i < heures.length; i += 2) {
+    sessions.push({ arrivee_hm: heures[i], depart_hm: heures[i + 1] || '' })
+  }
+  return sessions
+}
+
+/**
  * Valide un mois pour un employé : enregistre dans pointages_mois.
  */
 export async function validerMois(employeId, mois, annee, syntheseObj, journal, userId) {

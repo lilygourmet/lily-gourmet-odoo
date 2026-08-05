@@ -9,7 +9,7 @@ import Avatar from '../Avatar'
 import {
   loadMonthData, calculerMois, syncAttendance, syncLeaves,
   setAjustement, removeAjustement, updatePointage, validerMois,
-  nomJour, convertirHeuresEnJours,
+  nomJour, convertirHeuresEnJours, parseHoraires,
 } from '../../lib/pointage'
 import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT, calculSoldeConges, dispoTypeConge } from '../../lib/conges'
 import { toast } from '../../lib/toast'
@@ -1086,6 +1086,8 @@ function TranchesEditModal({ data, onClose, onSave }) {
     }))
   })
 
+  const [pasteText, setPasteText] = useState('')
+
   function update(i, field, value) {
     setSessions(s => s.map((row, idx) => idx === i ? { ...row, [field]: value } : row))
   }
@@ -1094,6 +1096,19 @@ function TranchesEditModal({ data, onClose, onSave }) {
   }
   function remove(i) {
     setSessions(s => s.filter((_, idx) => idx !== i))
+  }
+
+  // Colle-coller : transforme le texte des horaires (ex. pointeuse) en sessions.
+  // Si aucune heure n'est reconnue, on ne touche à rien (pas d'effacement).
+  function appliquerColle() {
+    const parsed = parseHoraires(pasteText)
+    if (parsed.length === 0) {
+      toast.error('Aucune heure reconnue. Exemple : 08:00 12:00 14:00 18:00')
+      return
+    }
+    setSessions(parsed)
+    setPasteText('')
+    toast.success(`${parsed.length} session(s) remplie(s). Vérifie puis Enregistre.`)
   }
 
   function save() {
@@ -1119,6 +1134,23 @@ function TranchesEditModal({ data, onClose, onSave }) {
         <p style={{ fontSize: 12, color: '#4a3a30', marginTop: 0, marginBottom: 14 }}>
           Chaque ligne = 1 session (arrivée → départ). Format HH:MM.
         </p>
+
+        {/* Colle-coller des horaires (pratique sur téléphone) */}
+        <div style={{ background: '#F9F6F1', border: '1px solid #e5d8c3', borderRadius: 10, padding: 10, marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: '#4a3a30', fontWeight: 500, display: 'block', marginBottom: 6 }}>
+            Coller les horaires (ex. depuis la pointeuse)
+          </label>
+          <textarea
+            value={pasteText}
+            onChange={e => setPasteText(e.target.value)}
+            placeholder="08:00  12:00  14:00  18:00"
+            rows={2}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, resize: 'vertical', fontFamily: 'monospace' }}
+          />
+          <button onClick={appliquerColle} style={{ marginTop: 8, padding: '8px 14px', fontSize: 13, background: '#0C447C', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}>
+            Remplir depuis le texte
+          </button>
+        </div>
 
         {sessions.map((s, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}>
