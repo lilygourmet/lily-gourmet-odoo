@@ -26,6 +26,20 @@ import crypto from 'crypto'
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
+// fetch avec minuteur : si le service externe (WATI, Anthropic, Odoo) ne répond
+// pas en `ms` ms, on abandonne (au lieu d'attendre sans fin et de consommer du
+// compute Vercel). Le timeout se déclenche comme une erreur réseau normale,
+// gérée par les try/catch existants.
+async function fetchWithTimeout(url, opts = {}, ms = 25000) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  try {
+    return await globalThis.fetch(url, { ...opts, signal: ctrl.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'fetch-photo' && req.query?.action !== 'conges-notif') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -420,7 +434,7 @@ async function sendAutoReply(supabase, conv, phone, text) {
   const base = apiEndpoint.replace(/\/$/, '')
   const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
   const url = `${base}/api/v1/sendSessionMessage/${number}?${new URLSearchParams({ messageText: text })}`
-  const r = await fetch(url, { method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' } })
+  const r = await fetchWithTimeout(url, { method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' } })
   if (!r.ok) { console.warn('[auto-reply] WATI status', r.status); return }
   const now = new Date().toISOString()
   await supabase.from('messages').insert({
@@ -521,7 +535,7 @@ async function handleSend(req, res) {
       watiUrl = `${base}/api/v1/sendSessionMessage/${number}?${qs.toString()}`
     }
     console.log(`[WATI session] to ${number} · ${fileUrl ? 'file' : 'text'} · url ${watiUrl.split('?')[0]}`)
-    const watiRes = await fetch(watiUrl, {
+    const watiRes = await fetchWithTimeout(watiUrl, {
       method: 'POST',
       headers: { Authorization: authHeader, Accept: 'application/json' },
     })
@@ -761,7 +775,7 @@ async function handleSuggest(req, res) {
 
   try {
     const system = await buildSuggestSystem(supabase)
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'x-api-key': apiKey,
@@ -835,7 +849,7 @@ async function prepareSuggestedReply(supabase, conversationId) {
     : `Pour la réponse DIRECTE : commence par une salutation (si tu réponds en français, écris « ${greeting} » ; sinon salue dans la langue de ta réponse), garde une petite formule de politesse minimale, va à l'essentiel sans blabla et sans émoji.`
 
   const system = await buildSuggestSystem(supabase)
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
+  const r = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
@@ -909,7 +923,7 @@ async function handleDeleteMessage(req, res) {
     const base = apiEndpoint.replace(/\/$/, '')
     const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
     try {
-      const r = await fetch(`${base}/api/v1/deleteMessage/${msg.wa_message_id}`, {
+      const r = await fetchWithTimeout(`${base}/api/v1/deleteMessage/${msg.wa_message_id}`, {
         method: 'DELETE',
         headers: { Authorization: authHeader, Accept: 'application/json' },
       })
@@ -969,7 +983,7 @@ Règles strictes :
 - Renvoie UNIQUEMENT le texte corrigé, sans préambule, sans guillemets, sans explication.`
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'x-api-key': apiKey,
@@ -1015,7 +1029,7 @@ async function handleTemplates(req, res) {
   const base = apiEndpoint.replace(/\/$/, '')
   const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
   try {
-    const r = await fetch(`${base}/api/v1/getMessageTemplates?pageSize=100&pageNumber=1`, {
+    const r = await fetchWithTimeout(`${base}/api/v1/getMessageTemplates?pageSize=100&pageNumber=1`, {
       method: 'GET',
       headers: { Authorization: authHeader, Accept: 'application/json' },
     })
@@ -1061,7 +1075,7 @@ async function handleSendTemplate(req, res) {
   async function sendTemplateMessage() {
     const url = `${base}/api/v1/sendTemplateMessage?whatsappNumber=${number}`
     const payload = { template_name: templateName, broadcast_name: broadcastName || `lily_${Date.now()}`, parameters: parameters || [] }
-    const r = await fetch(url, {
+    const r = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(payload),
@@ -1076,7 +1090,7 @@ async function handleSendTemplate(req, res) {
   async function sendFreeMessage(textToSend) {
     const qs = new URLSearchParams({ messageText: textToSend })
     const url = `${base}/api/v1/sendSessionMessage/${digits}?${qs.toString()}`
-    const r = await fetch(url, { method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' } })
+    const r = await fetchWithTimeout(url, { method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' } })
     const raw = await r.text(); let data = {}; try { data = JSON.parse(raw) } catch { /* non JSON */ }
     if (!r.ok || data?.result === false) return { ok: false, err: data?.info || data?.message || `Wati erreur ${r.status}` }
     return { ok: true, waId: data?.id || data?.messageId || null }
@@ -1164,7 +1178,7 @@ async function handleSendTemplate(req, res) {
 // ============================================================
 async function odooJsonRpc(service, method, args) {
   const url = `${process.env.ODOO_URL}/jsonrpc`
-  const r = await fetch(url, {
+  const r = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { service, method, args }, id: Date.now() }),
@@ -2392,7 +2406,7 @@ async function handleOrderCreateDevis(req, res) {
 
 // Ouvre une session web Odoo (pour télécharger le PDF d'un rapport). Renvoie le cookie session_id.
 async function odooWebLogin() {
-  const r = await fetch(`${process.env.ODOO_URL}/web/session/authenticate`, {
+  const r = await fetchWithTimeout(`${process.env.ODOO_URL}/web/session/authenticate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', params: { db: process.env.ODOO_DB, login: process.env.ODOO_USERNAME, password: process.env.ODOO_PASSWORD } }),
@@ -2887,7 +2901,7 @@ async function handleInvoicePdf(req, res) {
     // Télécharger le PDF du rapport facture (session web).
     const session = await odooWebLogin()
     const pdfUrl = `${process.env.ODOO_URL}/report/pdf/account.report_invoice/${target.id}`
-    const pr = await fetch(pdfUrl, { headers: { Cookie: `session_id=${session}` } })
+    const pr = await fetchWithTimeout(pdfUrl, { headers: { Cookie: `session_id=${session}` } })
     if (!pr.ok) return res.status(502).json({ error: `PDF Odoo indisponible (HTTP ${pr.status})` })
     const b64 = Buffer.from(await pr.arrayBuffer()).toString('base64')
     return res.status(200).json({ name: target.name, state: target.state, pdf: b64 })
@@ -3663,7 +3677,7 @@ async function rehostWatiMedia(supabase, watiUrl) {
     const apiToken = process.env.WATI_API_TOKEN
     if (!apiToken) return null
     const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
-    const r = await fetch(watiUrl, { headers: { Authorization: authHeader } })
+    const r = await fetchWithTimeout(watiUrl, { headers: { Authorization: authHeader } })
     if (!r.ok) return null
     const m = /fileName=([^&]+)/.exec(watiUrl)
     const fileName = m ? decodeURIComponent(m[1]) : watiUrl
@@ -3842,7 +3856,7 @@ async function sendReminderWhatsapp(supabase, rawPhone, text, template = null) {
   // 1) Message de session (gratuit, si le client a écrit dans les 24 h)
   try {
     const qs = new URLSearchParams({ messageText: text }).toString()
-    const r = await fetch(`${base}/api/v1/sendSessionMessage/${number}?${qs}`, {
+    const r = await fetchWithTimeout(`${base}/api/v1/sendSessionMessage/${number}?${qs}`, {
       method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' },
     })
     const d = await r.json().catch(() => ({}))
@@ -3854,7 +3868,7 @@ async function sendReminderWhatsapp(supabase, rawPhone, text, template = null) {
 
   // 2) Modèle (hors fenêtre 24 h) — numéro en ?whatsappNumber=
   try {
-    const r = await fetch(`${base}/api/v1/sendTemplateMessage?whatsappNumber=${number}`, {
+    const r = await fetchWithTimeout(`${base}/api/v1/sendTemplateMessage?whatsappNumber=${number}`, {
       method: 'POST',
       headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(template
@@ -3907,7 +3921,7 @@ async function handleFetchPhoto(req, res) {
   let photoUrl = null
   try {
     const url = `${base}/api/v1/getContacts?attribute=wAid&attributeValue=${encodeURIComponent(wAid)}&pageSize=1&pageNumber=1`
-    const watiRes = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } })
+    const watiRes = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${apiToken}` } })
     if (watiRes.ok) {
       const data = await watiRes.json()
       const list = data?.contact_list || data?.contacts || data?.items || (Array.isArray(data) ? data : [])
