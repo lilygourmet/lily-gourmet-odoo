@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
-import { loadPresence, loadHabitualOff, refreshTodayAttendance, GROUP_COLORS, groupLabel } from '../lib/presence'
+import { loadPresence, loadHabitualOff, refreshTodayAttendance, GROUP_COLORS, groupLabel, ETAT_COLORS, ETAT_NON_ATTENDU } from '../lib/presence'
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 const WD = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
@@ -67,7 +67,12 @@ export default function PresenceView({ user, activeView, onNavigate, onLogout })
     .filter(g => !filterGroupP || g.groupe === filterGroupP)
     .map(g => ({ ...g, employes: g.employes.filter(e => !qP || e.nom.toLowerCase().includes(qP)) }))
     .filter(g => g.employes.length)
-  const shownPresents = shownGroups.reduce((s, g) => s + g.employes.length, 0)
+  const shownAll = shownGroups.flatMap(g => g.employes)
+  const nbEtat = etat => shownAll.filter(e => e.etat === etat).length
+  const shownPresents = nbEtat('present')
+  const shownAttendus = shownAll.filter(e => !ETAT_NON_ATTENDU.has(e.etat)).length
+  const shownPasPointe = nbEtat('attendu')
+  const shownNonAttendus = shownAll.filter(e => ETAT_NON_ATTENDU.has(e.etat)).length
   const qC = searchC.trim().toLowerCase()
 
   function prevMonth() { setCalM(m => { if (m === 0) { setCalY(y => y - 1); return 11 } return m - 1 }) }
@@ -83,8 +88,10 @@ export default function PresenceView({ user, activeView, onNavigate, onLogout })
           <h1 className="font-fraunces italic text-[24px] text-ink leading-none">Présence</h1>
           {syncing && <span className="text-[11px] text-ink-mute">🔄 mise à jour…</span>}
         </div>
-        <div className="text-[13px] text-ink-mute mb-4 ml-12">
-          <b className="text-[#2f9e5e]">{shownPresents} présent{shownPresents > 1 ? 's' : ''}</b>
+        <div className="text-[13px] text-ink-mute mb-4 ml-12 flex flex-wrap gap-x-3 gap-y-1">
+          <span><b className="text-[#2f9e5e]">{shownPresents}</b> présent{shownPresents > 1 ? 's' : ''} sur {shownAttendus} attendu{shownAttendus > 1 ? 's' : ''}</span>
+          {shownPasPointe > 0 && <span>· <b className="text-[#b45309]">{shownPasPointe}</b> pas encore pointé{shownPasPointe > 1 ? 's' : ''}</span>}
+          {shownNonAttendus > 0 && <span className="text-[#b8ada4]">· {shownNonAttendus} non attendu{shownNonAttendus > 1 ? 's' : ''}</span>}
         </div>
 
         {/* sous-onglets */}
@@ -136,9 +143,9 @@ export default function PresenceView({ user, activeView, onNavigate, onLogout })
           loading ? (
             <div className="text-center text-ink-mute py-10">Chargement…</div>
           ) : groups.length === 0 ? (
-            <div className="bg-white border border-line rounded-2xl p-8 text-center text-ink-mute">Personne n'a encore pointé aujourd'hui.</div>
+            <div className="bg-white border border-line rounded-2xl p-8 text-center text-ink-mute">Aucun employé actif.</div>
           ) : shownGroups.length === 0 ? (
-            <div className="bg-white border border-line rounded-2xl p-8 text-center text-ink-mute">Aucun présent pour ce filtre.</div>
+            <div className="bg-white border border-line rounded-2xl p-8 text-center text-ink-mute">Personne pour ce filtre.</div>
           ) : (
             <div className="space-y-3">
               {shownGroups.map(g => {
@@ -148,26 +155,47 @@ export default function PresenceView({ user, activeView, onNavigate, onLogout })
                     <div className="flex items-center gap-2.5 mb-3">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
                       <h2 className="text-[12px] uppercase tracking-wider font-semibold text-ink">{groupLabel(g.groupe)}</h2>
-                      <span className="ml-auto text-[12px] text-ink-mute font-semibold">
-                        <b className="text-[#2f9e5e]">{g.employes.length}</b> présent{g.employes.length > 1 ? 's' : ''}
-                      </span>
+                      {(() => {
+                        const att = g.employes.filter(e => !ETAT_NON_ATTENDU.has(e.etat))
+                        const pres = att.filter(e => e.etat === 'present').length
+                        const manque = att.filter(e => e.etat === 'attendu').length
+                        const horsEff = g.employes.length - att.length
+                        return (
+                          <span className="ml-auto text-[12px] text-ink-mute font-medium">
+                            <b className="text-[#2f9e5e]">{pres}</b>/{att.length} présent{att.length > 1 ? 's' : ''}
+                            {manque > 0 && <> · <b className="text-[#b45309]">{manque} manque{manque > 1 ? 'nt' : ''}</b></>}
+                            {horsEff > 0 && <span className="text-[#b8ada4]"> · {horsEff} non attendu{horsEff > 1 ? 's' : ''}</span>}
+                          </span>
+                        )
+                      })()}
                     </div>
                     <div className="flex flex-wrap gap-3.5">
-                      {g.employes.map(e => (
-                        <div key={e.id} className="w-[68px] flex flex-col items-center text-center">
-                          <div className="relative w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[15px] overflow-hidden" style={{ background: color }}>
-                            {e.photo_url
-                              ? <img src={e.photo_url} alt="" className="w-full h-full object-cover" />
-                              : initials(e.nom)}
-                            <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white bg-[#2f9e5e] z-10" />
+                      {g.employes.map(e => {
+                        const horsEff = ETAT_NON_ATTENDU.has(e.etat)
+                        return (
+                          <div key={e.id} className={`w-[88px] flex flex-col items-center text-center ${horsEff ? 'opacity-[.38]' : ''}`} title={`${e.nom} · ${e.note}`}>
+                            <div className={`relative w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-[15px] overflow-hidden ${horsEff ? 'grayscale' : ''}`} style={{ background: color }}>
+                              {e.photo_url
+                                ? <img src={e.photo_url} alt="" className="w-full h-full object-cover" />
+                                : initials(e.nom)}
+                              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white z-10" style={{ background: ETAT_COLORS[e.etat] || '#9aa0a6' }} />
+                            </div>
+                            <div className="text-[11px] mt-1.5 leading-tight">{e.nom}</div>
+                            <div className={`text-[9.5px] mt-0.5 leading-tight ${e.etat === 'attendu' ? 'text-[#b45309] font-semibold' : 'text-ink-mute'}`}>{e.note}</div>
                           </div>
-                          <div className="text-[11px] mt-1.5 leading-tight">{e.nom}</div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )
               })}
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-ink px-1">
+                {[['present', 'présent'], ['attendu', 'pas encore pointé'], ['parti', 'déjà reparti'], ['conge', 'congé'], ['off', 'repos']].map(([k, lab]) => (
+                  <span key={k} className={`inline-flex items-center gap-1.5 ${ETAT_NON_ATTENDU.has(k) ? 'opacity-[.45]' : ''}`}>
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: ETAT_COLORS[k] }} />{lab}
+                  </span>
+                ))}
+              </div>
             </div>
           )
         )}
