@@ -159,7 +159,7 @@ export default function ATraiterTab({ user, onChange }) {
   async function processRecup(r, action) {
     const key = `${r.employe_id}|${r.date}`
     const f = form[key] || {}
-    const args = { employe_id: r.employe_id, date: r.date, jours: r.jours, raison: (f.raison || '').trim() || null, userId: user.id }
+    const args = { employe_id: r.employe_id, date: r.date, jours: r.jours, label: r.label, raison: (f.raison || '').trim() || null, userId: user.id }
     if (action === 'valider') await validerRecup(args)
     else await refuserRecup(args)
   }

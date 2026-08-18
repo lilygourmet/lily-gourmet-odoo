@@ -209,15 +209,19 @@ export async function ignorerAbsence({ employe_id, date, raison, userId }) {
  * liste « à traiter » (cf. recupDejaAllouee dans loadATraiter), donc pas de
  * double crédit possible en revalidant.
  */
-export async function validerRecup({ employe_id, date, jours = 0, raison, userId }) {
-  await setAjustement(employe_id, date, 'recup_raison', raison || '', userId)
+export async function validerRecup({ employe_id, date, jours = 0, label = null, raison, userId }) {
+  // À défaut de raison saisie, on garde le motif déjà affiché à l'écran
+  // (« Allégeance Oued Eddahab (travaillé) », « OFF travaillé »…) : c'est plus
+  // parlant qu'un « Récup jour travaillé » générique dans l'onglet Allocations.
+  const motif = raison || label || 'Récup jour travaillé'
+  await setAjustement(employe_id, date, 'recup_raison', motif, userId)
   if (!(Number(jours) > 0)) return
   await createAllocation({
     employe_id,
     annee: Number(String(date).slice(0, 4)),
     type: 'autre',
     jours: Number(jours),
-    raison: raison ? `Récup jour travaillé — ${raison}` : 'Récup jour travaillé',
+    raison: motif,
     date_evt: date,
     source: 'manuel',
     created_by: userId,
