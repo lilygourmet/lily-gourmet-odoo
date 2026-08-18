@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { loadMonthData, calculerMois, firstDay, setAjustement } from './pointage'
-import { createDemandeConge, calculSoldeConges } from './conges'
+import { createDemandeConge, calculSoldeConges, createAllocation } from './conges'
 
 // ============================================================
 // "À TRAITER" — absences non justifiées + jours de repos travaillés (récup)
@@ -195,11 +195,33 @@ export async function ignorerAbsence({ employe_id, date, raison, userId }) {
 }
 
 /**
- * VALIDE une récup : on garde le jour de récup (déjà compté par le pointage —
- * source unique, donc PAS de double comptage) et on enregistre la raison.
+ * VALIDE une récup : enregistre la raison ET crédite le jour gagné sous forme
+ * d'allocation (type 'autre', datée du jour travaillé).
+ *
+ * L'allocation est la SEULE source des jours de récup dans le solde. Le
+ * commentaire d'origine disait qu'il ne fallait pas en créer parce que le
+ * pointage comptait déjà ces jours — c'était faux : `joursRecupGagnesAnnee`
+ * lit une colonne `jours_recup` qui n'existe pas (elle s'appelle
+ * `jours_recuperation`) et renvoie 0 en silence. Sans allocation, valider une
+ * récup ne créditait donc rien du tout.
+ *
+ * `date_evt` = le jour travaillé : c'est ce qui fait disparaître la ligne de la
+ * liste « à traiter » (cf. recupDejaAllouee dans loadATraiter), donc pas de
+ * double crédit possible en revalidant.
  */
-export async function validerRecup({ employe_id, date, raison, userId }) {
+export async function validerRecup({ employe_id, date, jours = 0, raison, userId }) {
   await setAjustement(employe_id, date, 'recup_raison', raison || '', userId)
+  if (!(Number(jours) > 0)) return
+  await createAllocation({
+    employe_id,
+    annee: Number(String(date).slice(0, 4)),
+    type: 'autre',
+    jours: Number(jours),
+    raison: raison ? `Récup jour travaillé — ${raison}` : 'Récup jour travaillé',
+    date_evt: date,
+    source: 'manuel',
+    created_by: userId,
+  })
 }
 
 /**
