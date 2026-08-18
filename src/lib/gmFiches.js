@@ -52,6 +52,19 @@ export function getRealQuantity(item) {
   return qty
 }
 
+// Repartit la quantite totale entre les parfums listes par Odoo.
+// Odoo repete un parfum par "case" de la boite : "boite de 24 (Oréo, Vanille, Oréo, Vanille)"
+// = 2 cases Oréo + 2 cases Vanille. Sur 2 boites (48 cupcakes) -> 24 Oréo + 24 Vanille.
+export function splitParfums(item) {
+  const list = Array.isArray(item?.parfums) ? item.parfums.filter(Boolean) : []
+  if (list.length === 0) return []
+  const total = getRealQuantity(item)
+  if (!total) return []
+  const counts = new Map()
+  for (const p of list) counts.set(p, (counts.get(p) || 0) + 1)
+  return [...counts].map(([parfum, n]) => ({ parfum, qty: Math.round(total * n / list.length) }))
+}
+
 // Pour les produits mixtes, retourne les 2 sous-parfums automatiques
 export function getMixteParfums(typeGm) {
   if (typeGm === 'sellou_nougat') return ['Sellou', 'Nougat']
@@ -515,6 +528,17 @@ export async function loadGmLogs(daysBack = 14) {
 
 // Charge toutes les commandes (avec items + fiches GM) pour une date
 // Retourne : [{ order, items: [{ item, fiche }] }]
+// Le commercial saisit la repartition des lots pour UNE boite ("9 ; 9" sur une boite de 18).
+// Sur 2 boites il faut 18 + 18, pas 9 + 9. On ne corrige que si le compte tombe juste,
+// pour ne pas toucher aux prefiches deja saisies en total.
+function scalePreficheLots(lots, item) {
+  const boites = parseFloat(item?.quantity) || 0
+  if (boites <= 1 || lots.length === 0) return lots
+  const total = lots.reduce((s, l) => s + (parseFloat(l.qty) || 0), 0)
+  if (total * boites !== getRealQuantity(item)) return lots
+  return lots.map(l => ({ ...l, qty: (parseFloat(l.qty) || 0) * boites }))
+}
+
 export async function loadOrdersWithFichesForDate(date) {
   const [yyyy, mm, dd] = String(date).split('-').map(Number)
   const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
@@ -581,7 +605,7 @@ async function _loadOrdersWithFichesForBounds(start, end) {
       if (pf && pf.type_gm) {
         fiche = {
           type_gm: pf.type_gm,
-          lots: Array.isArray(pf.lots) ? pf.lots : [],
+          lots: scalePreficheLots(Array.isArray(pf.lots) ? pf.lots : [], it),
           parfum_normal: !!pf.parfum_normal,
           tete_position: pf.tete_position || null,
           _fromPrefiche: true,

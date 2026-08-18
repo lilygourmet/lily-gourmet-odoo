@@ -4,7 +4,7 @@ import {
   isLotDone, isItemFullyDone, aggregateByProduct,
   markLotDone, unmarkLotDone, markItemAllDone, unmarkItemAllDone,
   TYPE_LABELS, TYPE_EMOJIS,
-  getRealQuantity, loadGmLogs, extractTailleFromName,
+  getRealQuantity, loadGmLogs, extractTailleFromName, splitParfums,
 } from '../lib/gmFiches'
 import { toast } from '../lib/toast'
 import AppHeader from './AppHeader'
@@ -547,8 +547,8 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
             {fiche.is_mixte && <span className="text-[9px] font-mono text-bordeaux uppercase tracking-wider">MIXTE</span>}
             {fiche.parfum_normal && (
               <span className="text-[10px] text-ink-mute italic">
-                {Array.isArray(item.parfums) && item.parfums.length > 0
-                  ? item.parfums.join(', ')
+                {splitParfums(item).length > 0
+                  ? splitParfums(item).map(p => `${p.qty} ${p.parfum}`).join(', ')
                   : 'parfum normal'}
               </span>
             )}
@@ -819,8 +819,9 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         const label = TYPE_LABELS[typeGm] || typeGm
         let lotsHtml = ''
         if (fiche.parfum_normal) {
-          const parfumsLabel = Array.isArray(item.parfums) && item.parfums.length > 0
-            ? item.parfums.join(', ')
+          const split = splitParfums(item)
+          const parfumsLabel = split.length > 0
+            ? split.map(p => `${p.qty} ${p.parfum}`).join(', ')
             : 'parfum normal'
           lotsHtml = ` <em style="color:#888">${parfumsLabel}</em>`
         } else {
