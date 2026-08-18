@@ -4,7 +4,7 @@ import {
   isLotDone, isItemFullyDone, aggregateByProduct,
   markLotDone, unmarkLotDone, markItemAllDone, unmarkItemAllDone,
   TYPE_LABELS, TYPE_EMOJIS,
-  getRealQuantity, loadGmLogs,
+  getRealQuantity, loadGmLogs, extractTailleFromName,
 } from '../lib/gmFiches'
 import { toast } from '../lib/toast'
 import AppHeader from './AppHeader'
@@ -438,6 +438,8 @@ function AllDoneButton({ fullyDone, onToggle }) {
 // Article « à définir » (sans fiche) : 2 touches pour marquer fait, annuler instantané.
 function UndefItem({ item, dones, currentUserId, onChange }) {
   const undefDone = isLotDone(dones, -1)
+  const qty = parseFloat(item.quantity) || 0
+  const realQty = getRealQuantity(item)
   async function doToggle(mark) {
     try {
       if (!mark) await unmarkLotDone(item.id, -1)
@@ -453,8 +455,14 @@ function UndefItem({ item, dones, currentUserId, onChange }) {
         {undefDone ? '✓' : armed ? '●' : <AlertTriangle size={15} strokeWidth={2} />}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`text-[12px] font-medium text-amber-900 truncate ${undefDone ? 'line-through' : ''}`}>{item.title}</div>
-        <div className="text-[10px] text-amber-700 italic">{undefDone ? 'Fait' : armed ? 'Toucher pour valider' : 'À définir'}</div>
+        <div className={`text-[12px] font-medium text-amber-900 ${undefDone ? 'line-through' : ''}`}>
+          <span className="truncate">{item.title}</span>
+          {qty > 1 && <span className="ml-1.5 font-semibold">×{qty}</span>}
+        </div>
+        <div className="text-[10px] text-amber-700 italic">
+          {undefDone ? 'Fait' : armed ? 'Toucher pour valider' : 'À définir'}
+          {realQty !== qty && ` · ${realQty} pièces`}
+        </div>
       </div>
     </button>
   )
@@ -462,6 +470,8 @@ function UndefItem({ item, dones, currentUserId, onChange }) {
 
 function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhotoClick }) {
   const realQty = getRealQuantity(item)
+  const nbBoites = parseFloat(item.quantity) || 0
+  const taille = extractTailleFromName(item.title)
   const photoUrl = Array.isArray(item.image_urls) && item.image_urls[0] ? item.image_urls[0] : null
 
   if (!fiche) {
@@ -522,6 +532,12 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-[12px] font-medium text-ink">{TYPE_LABELS[typeGm]} ({realQty})</span>
+            {realQty !== nbBoites && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium">{nbBoites} boîte{nbBoites > 1 ? 's' : ''}</span>
+            )}
+            {taille && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium capitalize">{taille.toLowerCase()}</span>
+            )}
             {fiche.tete_position && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium">tête en {fiche.tete_position === 'haut' ? 'haut' : 'bas'}</span>
             )}
@@ -703,6 +719,7 @@ function AggLotChip({ entry, palette, currentUserId, onChange, fusionKey, expand
         }`}
       >
         <span className="font-medium">×{entry.qty}</span>
+        {entry.taille && <span className="text-bordeaux font-medium capitalize">{entry.taille.toLowerCase()}</span>}
         {couleur && <span className="w-3 h-3 rounded-full border border-line/40" style={{ backgroundColor: couleur.hex }} title={couleur.nom} />}
         {entry.lot.forme && <span className="capitalize">{entry.lot.forme}</span>}
         {entry.lot.has_zigzag && zigzag && (
@@ -762,6 +779,7 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
           const zigzag = findCol(e.lot.zigzag_couleur_id)
           const perles = findCol(e.lot.perles_couleur_id)
           let extras = ''
+          if (e.taille) extras += ` · ${e.taille.toLowerCase()}`
           if (couleur) extras += ` <span style="background:${couleur.hex};display:inline-block;width:9px;height:9px;border-radius:50%;border:1px solid #999"></span> ${couleur.nom}`
           if (e.lot.forme) extras += ` · ${e.lot.forme}`
           if (e.lot.has_zigzag && zigzag) extras += ` · zig ${zigzag.nom}`
@@ -790,9 +808,11 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
       let itemsHtml = ''
       for (const { item, fiche, dones } of items) {
         const realQty = getRealQuantity(item)
+        const nbBoites = parseFloat(item.quantity) || 0
+        const boitesHtml = realQty !== nbBoites ? ` <span style="color:#a8324b">(${nbBoites} boîte${nbBoites > 1 ? 's' : ''})</span>` : ''
         if (!fiche) {
           if (isLotDone(dones, -1)) continue
-          itemsHtml += `<div style="margin:2px 0;color:#a85"><strong>×${realQty}</strong> ${item.title} <em>(à définir)</em></div>`
+          itemsHtml += `<div style="margin:2px 0;color:#a85"><strong>×${realQty}</strong> ${item.title}${boitesHtml} <em>(à définir)</em></div>`
           continue
         }
         const typeGm = fiche.type_gm
@@ -818,9 +838,11 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
             lotsHtml += part
           }
         }
+        const tailleImp = extractTailleFromName(item.title)
+        const tailleHtml = tailleImp ? ` <span style="color:#a8324b">${tailleImp.toLowerCase()}</span>` : ''
         const teteHtml = fiche.tete_position ? ` <span style="color:#a8324b">[tête en ${fiche.tete_position}]</span>` : ''
         const draftHtml = fiche._fromPrefiche ? ' <em style="color:#a85">(saisi commercial)</em>' : ''
-        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${teteHtml}${lotsHtml}${draftHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
+        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${boitesHtml}${tailleHtml}${teteHtml}${lotsHtml}${draftHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
       }
       body += `<div style="margin:8px 0;padding:6px;border-bottom:1px solid #ccc">
         <div style="font-size:11px"><strong style="color:#a8324b">${order.order_num}</strong> · ${order.client_name || ''} <span style="color:#888;float:right">${hour}</span></div>

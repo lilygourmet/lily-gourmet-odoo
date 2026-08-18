@@ -63,11 +63,21 @@ export function getMixteParfums(typeGm) {
 // Ex: "Cupcake boite de 12 (Mini personnalisé, Chocolat, Vanille)"
 //     -> taille = "Mini personnalisé", parfums = ["Chocolat", "Vanille"]
 const TAILLE_KEYWORDS = /(grand|petit|mini)\s+(personnalis[ée]?|simple)/i
+// Certains produits n'ont que la taille seule dans la parenthese
+// Ex: "Sablés boite de 18 (Grand)" -> taille = "Grand", et surtout PAS un parfum
+const TAILLE_SEULE = /^(grand|petit|mini|moyen)$/i
 
 export function extractTailleFromName(productName) {
   if (!productName) return null
   const m = String(productName).match(TAILLE_KEYWORDS)
-  return m ? m[0] : null
+  if (m) return m[0]
+  // Taille seule : uniquement dans la parenthese (sinon "Plateau grand format" matcherait)
+  const paren = String(productName).match(/\(([^)]+)\)/)
+  if (paren) {
+    const seule = paren[1].split(',').map(s => s.trim()).find(p => TAILLE_SEULE.test(p))
+    if (seule) return seule
+  }
+  return null
 }
 
 // Extrait les parfums depuis les parentheses du nom Odoo
@@ -101,8 +111,9 @@ export function extractParfumsFromName(productName, typeGm) {
     // ignore les nombres purs et "boite de X"
     if (/^\d+$/.test(p)) continue
     if (/^boite\s+de/i.test(p)) continue
-    // ignore les tailles (Grand personnalisé, Mini simple, etc.)
+    // ignore les tailles (Grand personnalisé, Mini simple, mais aussi "Grand" seul)
     if (TAILLE_KEYWORDS.test(p)) continue
+    if (TAILLE_SEULE.test(p)) continue
     if (p) result.push(p)
   }
 
@@ -623,10 +634,11 @@ export function isItemFullyDone(fiche, dones) {
   return true
 }
 
-// Cle de fusion pour aggreger des lots IDENTIQUES (meme parfum, couleur, zigzag, perles, forme, bord)
-function lotFusionKey(lot, productType) {
+// Cle de fusion pour aggreger des lots IDENTIQUES (meme taille, parfum, couleur, zigzag, perles, forme, bord)
+function lotFusionKey(lot, productType, taille) {
   return [
     productType,
+    taille || '',
     lot.parfum || '',
     lot.couleur_id || '',
     lot.has_zigzag ? '1' : '0',
@@ -671,6 +683,8 @@ export function aggregateByProduct(ordersWithFiches) {
 
       if (!tree[typeGm]) tree[typeGm] = {}
 
+      const taille = extractTailleFromName(item.title)
+
       // Cas parfum_normal : 1 entree speciale
       if (fiche.parfum_normal) {
         const parfum = '__normal__'
@@ -678,6 +692,7 @@ export function aggregateByProduct(ordersWithFiches) {
         if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
         tree[typeGm][parfum][key] = {
           qty: getRealQuantity(item),
+          taille,
           lot: { parfum: 'Parfum normal', qty: getRealQuantity(item) },
           sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, note: fiche.note_patissier || null }],
           doneCount: dones.length > 0 ? 1 : 0,
@@ -690,11 +705,12 @@ export function aggregateByProduct(ordersWithFiches) {
       lots.forEach((lot, lotIdx) => {
         const parfum = lot.parfum || '__sansparfum__'
         if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
-        const key = lotFusionKey(lot, typeGm)
+        const key = lotFusionKey(lot, typeGm, taille)
 
         if (!tree[typeGm][parfum][key]) {
           tree[typeGm][parfum][key] = {
             qty: 0,
+            taille,
             lot: { ...lot },  // exemplaire
             sources: [],
             doneCount: 0,
