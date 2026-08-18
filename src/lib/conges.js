@@ -194,15 +194,18 @@ export const CONGE_EVENEMENT = new Set(['mariage', 'naissance', 'deces', 'circon
 function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD(), feriesSet = null) {
   const ref = new Date(refDate + 'T00:00:00')
   const yearStart = `${ref.getFullYear()}-01-01`
+  const yearEnd   = `${ref.getFullYear()}-12-31`
   const out = { annuel: 0, maladie_courte: 0, maladie_longue: 0, mariage: 0, naissance: 0, deces: 0, circoncision: 0, maternite: 0, autre: 0, recup: 0, sans_solde: 0 }
   for (const c of congesValides) {
     if (c.employe_id !== emp.id) continue
     if (c.statut !== 'valide') continue
-    if (c.date_fin < yearStart || c.date_debut > refDate) continue
+    // Un congé VALIDÉ est retiré du solde dès sa validation, sans attendre
+    // qu'il commence (règle Layla). Les bornes sont donc l'ANNÉE, pas refDate.
+    if (c.date_fin < yearStart || c.date_debut > yearEnd) continue
     const t = (c.type_conge || '').toLowerCase()
 
     const debut = c.date_debut < yearStart ? yearStart : c.date_debut
-    const fin   = c.date_fin   > refDate    ? refDate   : c.date_fin
+    const fin   = c.date_fin   > yearEnd    ? yearEnd   : c.date_fin
     const nb = (new Date(fin + 'T00:00:00') - new Date(debut + 'T00:00:00')) / 86400000 + 1
     if (nb <= 0) continue
 
@@ -226,7 +229,6 @@ function joursPrisParTypeAnnee(emp, congesValides, refDate = todayYMD(), feriesS
     // Si jours_decomptes est figé (validation ou édition), on l'utilise tel quel
     // pour tout congé entièrement dans l'ANNÉE — même s'il se termine après
     // aujourd'hui : un congé validé compte EN ENTIER (pas seulement jusqu'à ce jour).
-    const yearEnd = `${ref.getFullYear()}-12-31`
     const conge_entier = (c.date_debut >= yearStart && c.date_fin <= yearEnd)
     let compte
     if (conge_entier && c.jours_decomptes !== null && c.jours_decomptes !== undefined) {

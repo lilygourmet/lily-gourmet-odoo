@@ -36,3 +36,52 @@ describe('calculSoldeConges — congé sans solde', () => {
     expect(s.dispo).toBeCloseTo(3.5)           // 8,5 − 5 (et NON 8,5 − 5 − 10 = 0)
   })
 })
+
+describe('calculSoldeConges — congé validé dans le futur', () => {
+  const emp = { id: 1, date_entree: '2020-01-01', date_anciennete: '2020-01-01' }
+  const refDate = '2026-07-13'
+
+  const prefetched = {
+    allocsByEmp: new Map([[1, [
+      { employe_id: 1, annee: 2026, type: 'annuel', jours: 10, statut: 'valide', date_evt: null },
+    ]]]),
+    recupByEmp: new Map([[1, 0]]),
+    feriesSet: new Set(),
+  }
+
+  it('un congé validé qui commence plus tard est déjà retiré du solde', async () => {
+    const conges = [
+      { employe_id: 1, statut: 'valide', type_conge: 'annuel', date_debut: '2026-09-01', date_fin: '2026-09-05', jours_decomptes: 5 },
+    ]
+    const s = await calculSoldeConges(emp, conges, refDate, prefetched)
+    expect(s.pris).toBeCloseTo(5)
+    expect(s.dispo).toBeCloseTo(5)
+  })
+
+  it('un congé validé à cheval sur aujourd\'hui compte en entier', async () => {
+    const conges = [
+      { employe_id: 1, statut: 'valide', type_conge: 'annuel', date_debut: '2026-07-10', date_fin: '2026-07-17', jours_decomptes: 8 },
+    ]
+    const s = await calculSoldeConges(emp, conges, refDate, prefetched)
+    expect(s.pris).toBeCloseTo(8)
+    expect(s.dispo).toBeCloseTo(2)
+  })
+
+  it('un congé de l\'année suivante n\'entame pas le solde de cette année', async () => {
+    const conges = [
+      { employe_id: 1, statut: 'valide', type_conge: 'annuel', date_debut: '2027-02-01', date_fin: '2027-02-05', jours_decomptes: 5 },
+    ]
+    const s = await calculSoldeConges(emp, conges, refDate, prefetched)
+    expect(s.pris).toBeCloseTo(0)
+    expect(s.dispo).toBeCloseTo(10)
+  })
+
+  it('une simple DEMANDE non validée n\'entame pas le solde', async () => {
+    const conges = [
+      { employe_id: 1, statut: 'demande', type_conge: 'annuel', date_debut: '2026-09-01', date_fin: '2026-09-05', jours_decomptes: 5 },
+    ]
+    const s = await calculSoldeConges(emp, conges, refDate, prefetched)
+    expect(s.pris).toBeCloseTo(0)
+    expect(s.dispo).toBeCloseTo(10)
+  })
+})
