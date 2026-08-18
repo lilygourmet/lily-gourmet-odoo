@@ -15,6 +15,7 @@ import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT, cal
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { groupLabel } from '../../lib/presence'
+import { creerRecupOubliee, traiterAbsence } from '../../lib/aTraiter'
 
 // Congés annuels : le jour off "fixe" (jour complet de repos chaque semaine)
 // ne compte PAS dans le décompte des jours de congé pris.
@@ -761,7 +762,7 @@ export default function PointageTab({ user, isAdmin }) {
 
       {!loading && vue === 'recup' && data && (
         <>
-          <VueRecup data={data} resultats={resultats} mois={mois} annee={annee} />
+          <VueRecup data={data} resultats={resultats} mois={mois} annee={annee} user={user} canEdit={canEdit} onChange={reload} />
           {isAdmin && (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
               <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
@@ -1498,7 +1499,50 @@ function Legende() {
 
 
 
-function VueRecup({ data, resultats, mois, annee }) {
+function VueRecup({ data, resultats, mois, annee, user, canEdit, onChange }) {
+  const [busy, setBusy] = useState('')
+  const [typeAbs, setTypeAbs] = useState({})   // { 'empId|date': 'annuel' }
+  const [joursRec, setJoursRec] = useState({}) // { 'empId|date': '1' | '0.5' }
+
+  // Ce qui est DÉJÀ régularisé : jour de récup crédité (allocation datée du jour
+  // travaillé) et absence déjà envoyée en demande de congé.
+  const dejaCredite = new Set((data.allocationsRecup || [])
+    .filter(a => a.statut !== 'annule')
+    .map(a => `${a.employe_id}|${a.date_evt}`))
+  const dejaDemande = new Set()
+  for (const c of (data.congesDemandes || [])) {
+    // Date construite à la main : toISOString() repasserait en UTC et décalerait
+    // d'un jour (minuit local = 23 h la veille en UTC).
+    const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const fin = new Date(c.date_fin + 'T00:00:00')
+    for (let d = new Date(c.date_debut + 'T00:00:00'); d <= fin; d.setDate(d.getDate() + 1)) {
+      dejaDemande.add(`${c.employe_id}|${ymd(d)}`)
+    }
+  }
+
+  async function crediterRecup(emp, j) {
+    const key = `${emp.id}|${j.date}`
+    setBusy(key)
+    try {
+      const jours = Number(joursRec[key] || j.jours_recup || 1)
+      await creerRecupOubliee({ employe_id: emp.id, date: j.date, jours, raison: j.label || 'Récup jour travaillé', userId: user.id })
+      toast.success(`${jours} j crédité${jours > 1 ? 's' : ''} à ${emp.nom} ✓`)
+      onChange && await onChange()
+    } catch (e) { toast.error(e.message || 'Échec') }
+    finally { setBusy('') }
+  }
+
+  async function enregistrerAbsence(emp, j) {
+    const key = `${emp.id}|${j.date}`
+    setBusy(key)
+    try {
+      await traiterAbsence({ employe_id: emp.id, date_debut: j.date, date_fin: j.date, classification: typeAbs[key] || 'annuel', raison: null, userId: user.id })
+      toast.success(`${emp.nom} — congé enregistré, à valider dans Congés ✓`)
+      onChange && await onChange()
+    } catch (e) { toast.error(e.message || 'Échec') }
+    finally { setBusy('') }
+  }
+
   // Pour chaque employé, collecter ses jours de récup + absences (triés chronologiquement)
   const lignes = []
   for (const emp of data.employes) {
@@ -1625,7 +1669,7 @@ function VueRecup({ data, resultats, mois, annee }) {
                         ? `${j.heures_travaillees.toFixed(2)}h travaillées`
                         : `${j.heures_prevues.toFixed(2)}h prévues`}
                     </td>
-                    <td style={{ padding: '7px 14px', textAlign: 'right', width: 130 }}>
+                    <td style={{ padding: '7px 8px', textAlign: 'right', width: 110 }}>
                       {isRecup ? (
                         <span style={{ fontSize: 11, fontWeight: 500, color: '#3C3489', background: '#EEEDFE', padding: '3px 8px', borderRadius: 999 }}>
                           +{j.jours_recup.toFixed(2)} j
@@ -1635,6 +1679,48 @@ function VueRecup({ data, resultats, mois, annee }) {
                           -{j.heures_manquantes.toFixed(2)}h
                         </span>
                       )}
+                    </td>
+                    {/* Régularisation : le jour a-t-il été crédité / le congé enregistré ? */}
+                    <td style={{ padding: '7px 14px', textAlign: 'right', width: 230 }}>
+                      {(() => {
+                        const key = `${emp.id}|${j.date}`
+                        const enCours = busy === key
+                        if (isRecup) {
+                          if (dejaCredite.has(key)) return <span style={{ fontSize: 11, color: '#27500A' }}>✓ jour crédité</span>
+                          if (!canEdit) return <span style={{ fontSize: 11, color: '#b45309' }}>jour non crédité</span>
+                          return (
+                            <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                              <select value={joursRec[key] || String(j.jours_recup || 1)} onChange={e => setJoursRec(v => ({ ...v, [key]: e.target.value }))}
+                                style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #e5d8c3', borderRadius: 6 }}>
+                                <option value="1">1 j</option>
+                                <option value="0.5">½ j</option>
+                              </select>
+                              <button onClick={() => crediterRecup(emp, j)} disabled={enCours}
+                                style={{ fontSize: 11, padding: '4px 9px', borderRadius: 999, border: 'none', background: '#27500A', color: 'white', cursor: enCours ? 'not-allowed' : 'pointer', opacity: enCours ? 0.5 : 1 }}>
+                                {enCours ? '…' : 'Créditer'}
+                              </button>
+                            </span>
+                          )
+                        }
+                        if (dejaDemande.has(key)) return <span style={{ fontSize: 11, color: '#27500A' }}>✓ congé demandé</span>
+                        if (!canEdit) return <span style={{ fontSize: 11, color: '#b45309' }}>aucun congé</span>
+                        return (
+                          <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            <select value={typeAbs[key] || 'annuel'} onChange={e => setTypeAbs(v => ({ ...v, [key]: e.target.value }))}
+                              style={{ padding: '3px 6px', fontSize: 11, border: '1px solid #e5d8c3', borderRadius: 6 }}>
+                              <option value="annuel">Congé annuel</option>
+                              <option value="maladie_courte">Maladie ≤ 3 j</option>
+                              <option value="maladie_longue">Maladie &gt; 3 j</option>
+                              <option value="recup">Récupération</option>
+                              <option value="sans solde">Sans solde</option>
+                            </select>
+                            <button onClick={() => enregistrerAbsence(emp, j)} disabled={enCours}
+                              style={{ fontSize: 11, padding: '4px 9px', borderRadius: 999, border: 'none', background: '#993556', color: 'white', cursor: enCours ? 'not-allowed' : 'pointer', opacity: enCours ? 0.5 : 1 }}>
+                              {enCours ? '…' : 'Enregistrer'}
+                            </button>
+                          </span>
+                        )
+                      })()}
                     </td>
                   </tr>
                 )

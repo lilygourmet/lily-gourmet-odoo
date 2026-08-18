@@ -65,6 +65,8 @@ export async function loadMonthData(mois, annee) {
     { data: conges },
     { data: ajustements },
     { data: synthese },
+    { data: allocationsRecup },
+    { data: congesDemandes },
   ] = await Promise.all([
     supabase.from('employes').select('*').eq('actif', true).eq('fantome', false).order('nom'),
     supabase.from('jours_feries').select('*'),
@@ -80,6 +82,17 @@ export async function loadMonthData(mois, annee) {
       .lte('date_jour', lastDay(mois, annee)),
     supabase.from('pointages_mois').select('*')
       .eq('mois', mois).eq('annee', annee),
+    // Jours de récup DÉJÀ crédités (allocation 'autre' datée du jour travaillé)
+    // et demandes de congé en cours : servent à la vue « Récup & Absences » pour
+    // savoir ce qui reste à régulariser.
+    supabase.from('conges_allocations').select('employe_id, date_evt, jours, statut')
+      .eq('type', 'autre')
+      .gte('date_evt', firstDay(mois, annee))
+      .lte('date_evt', lastDay(mois, annee)).limit(2000),
+    supabase.from('conges').select('employe_id, date_debut, date_fin, type_conge, statut')
+      .eq('statut', 'demande')
+      .lte('date_debut', lastDay(mois, annee))
+      .gte('date_fin', firstDay(mois, annee)).limit(2000),
   ])
 
   // Solde reporté du mois précédent
@@ -109,6 +122,8 @@ export async function loadMonthData(mois, annee) {
     synthese: synthese || [],
     prevSynthese: prevSynthese || [],
     conversions: conversions || [],
+    allocationsRecup: allocationsRecup || [],
+    congesDemandes: congesDemandes || [],
   }
 }
 
