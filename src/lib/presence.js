@@ -65,7 +65,9 @@ export async function loadPresence() {
     sessionsBy.get(k).push(p)
   }
 
-  const hhmm = ts => (ts ? String(ts).slice(11, 16) : '')
+  // Les timestamps arrivent en UTC : on affiche l'heure LOCALE (Maroc = UTC+1),
+  // comme le reste de l'app (cf. PointageTab). Un slice() sur l'ISO perdait 1 h.
+  const hhmm = ts => (ts ? new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
   const byGroup = new Map()
   for (const e of (employes || [])) {
     const k = String(e.id)
