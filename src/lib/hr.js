@@ -101,6 +101,13 @@ export async function createEmploye(emp, userId) {
       .upsert({ employe_id: data.id, salaire_net })
     if (e2) throw e2
   }
+  // Allocations de congé de l'année en cours (annuel accumulé + maladie ≤ 3 j).
+  // Sans ça, une nouvelle recrue n'a aucune allocation : c'est ce qui est arrivé
+  // aux arrivées de fin juin 2026. Best-effort : ne bloque pas la création.
+  try {
+    const { ensureAutoAllocationsForEmploye } = await import('./conges')
+    await ensureAutoAllocationsForEmploye(data, new Date().getFullYear(), userId)
+  } catch (e) { console.warn('[createEmploye:allocations]', e?.message || e) }
   return data
 }
 

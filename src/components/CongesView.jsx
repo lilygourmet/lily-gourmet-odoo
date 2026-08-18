@@ -30,7 +30,7 @@ import {
   calculSoldeConges, quotaAnnuel,
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
-  loadAllocations, createAllocation, cancelAllocation,
+  loadAllocations, createAllocation, cancelAllocation, initAutoAllocationsTous,
   validerAllocation, rejeterAllocation,
   ALLOC_TYPES,
   updateAllocation, updateConge, deleteConge,
@@ -356,8 +356,31 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
     imprimerFeuilleConge({ conge: c, emp, solde: soldes[c.employe_id], joursFeries, recupAllocs, recupDejaConsomme })
   }
 
+  // Le solde ne compte QUE les congés validés : plusieurs demandes peuvent donc
+  // passer le contrôle de création alors qu'ensemble elles dépassent le solde.
+  // On avertit ici, au dernier moment — sans bloquer : un congé peut être accordé
+  // exceptionnellement au-delà du solde, c'est la décision de l'admin.
+  function alerteSolde(list) {
+    const parEmp = new Map()
+    for (const c of list) {
+      const jd = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
+      const e = parEmp.get(c.employe_id) || { jours: 0 }
+      e.jours += jd
+      parEmp.set(c.employe_id, e)
+    }
+    const negatifs = []
+    for (const [empId, { jours }] of parEmp) {
+      const dispo = soldes[empId]?.dispo
+      if (typeof dispo !== 'number') continue
+      const apres = dispo - jours
+      if (apres < 0) negatifs.push(`${empById[empId]?.nom || '?'} : ${dispo.toFixed(1)} j dispo − ${jours} j → ${apres.toFixed(1)} j`)
+    }
+    if (!negatifs.length) return ''
+    return `\n\n⚠️ SOLDE DÉPASSÉ\n${negatifs.join('\n')}\n\nValider quand même ?`
+  }
+
   async function handleValider(c) {
-    if (!await confirmDialog(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.`, { confirmLabel: 'Valider' })) return
+    if (!await confirmDialog(`Valider le congé de ${empById[c.employe_id]?.nom || '?'} du ${fmt(c.date_debut)} au ${fmt(c.date_fin)} ?\n\nUne notification WhatsApp sera envoyée à l'employé.${alerteSolde([c])}`, { confirmLabel: 'Valider' })) return
     try {
       const jd = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
       await validerConge(c.id, user.id, jd); await reload()
@@ -366,7 +389,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   }
   // Validation SILENCIEUSE : aucun WhatsApp (validation interne / rattrapage).
   async function handleValiderSilencieux(c) {
-    if (!await confirmDialog(`Valider ce congé SANS prévenir l'employé ?\n\nAucun WhatsApp ne sera envoyé (validation interne).`, { confirmLabel: 'Valider sans notif' })) return
+    if (!await confirmDialog(`Valider ce congé SANS prévenir l'employé ?\n\nAucun WhatsApp ne sera envoyé (validation interne).${alerteSolde([c])}`, { confirmLabel: 'Valider sans notif' })) return
     try {
       const jd = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, empById[c.employe_id], feriesSet)
       await validerConge(c.id, user.id, jd, true); await reload()
@@ -378,7 +401,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   async function handleValiderLot() {
     const list = demandes.filter(c => selDem.has(c.id))
     if (!list.length) return
-    if (!await confirmDialog(`Valider ${list.length} demande(s) de congé ?\n\nUne notification WhatsApp sera envoyée à chaque employé.`, { confirmLabel: 'Tout valider' })) return
+    if (!await confirmDialog(`Valider ${list.length} demande(s) de congé ?\n\nUne notification WhatsApp sera envoyée à chaque employé.${alerteSolde(list)}`, { confirmLabel: 'Tout valider' })) return
     try {
       for (const c of list) { const jd = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, empById[c.employe_id], feriesSet); await validerConge(c.id, user.id, jd) }
       setSelDem(new Set()); await reload(); toast.success(`${list.length} congé(s) validé(s).`)
@@ -426,6 +449,20 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
   // validation GROUPÉE des allocations cochées
+  // Employés actifs sans aucune allocation « annuel » : arrivés après la dernière
+  // génération en lot (rien ne les crée automatiquement avant ce jour).
+  const sansAlloc = employes.filter(e =>
+    !allocations.some(a => a.employe_id === e.id && a.type === 'annuel' && a.statut !== 'annule'))
+
+  async function handleCreerAllocsManquantes() {
+    if (!await confirmDialog(`Créer les allocations de congé pour ${sansAlloc.length} employé(s) sans allocation annuelle ?\n\n${sansAlloc.map(e => e.nom).join(', ')}\n\nLe nombre de jours est calculé selon leur ancienneté : 1,5 j par mois écoulé.`, { confirmLabel: 'Créer' })) return
+    try {
+      const n = await initAutoAllocationsTous(sansAlloc, new Date().getFullYear(), user.id)
+      toast.success(`${n} allocation(s) créée(s).`)
+      await reload()
+    } catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+
   async function handleValiderAllocLot() {
     const list = allocations.filter(a => a.statut === 'attente' && selAlloc.has(a.id))
     if (!list.length) return
@@ -639,6 +676,13 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
               <button onClick={() => setShowAllocForm(true)} style={btnPrimary}>
                 <Plus size={14} /> Allouer des jours
               </button>
+              {isAdmin && sansAlloc.length > 0 && (
+                <button onClick={handleCreerAllocsManquantes}
+                  style={{ ...btnPrimary, background: '#854F0B' }}
+                  title={sansAlloc.map(e => e.nom).join(', ')}>
+                  <AlertCircle size={14} /> {sansAlloc.length} sans allocation annuelle
+                </button>
+              )}
               <div style={{ flex: 1 }} />
               <div>
                 <div style={{ fontSize: 10, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Filtrer employé</div>
