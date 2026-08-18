@@ -44,6 +44,7 @@ import {
 import { imprimerFeuilleConge } from '../lib/feuilleConge'
 import ATraiterTab from './HR/ATraiterTab'
 import { countATraiter } from '../lib/aTraiter'
+import { GROUP_COLORS, groupLabel } from '../lib/presence'
 
 const TYPES = [
   { v: 'annuel',           label: 'Congé annuel' },
@@ -90,9 +91,12 @@ function typeCongeCouleur(t) {
 }
 
 // Calendrier d'équipe : vue mois, qui est en congé (lecture seule).
+const TEAMS_CONGES = Object.keys(GROUP_COLORS).filter(g => g !== 'Aucun')
+
 function CalendrierEquipe({ valides, empById, nameById = {}, isMobile }) {
   const now = new Date()
   const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() }) // m : 0-11
+  const [filterGroup, setFilterGroup] = useState(null)
   const { y, m } = cur
   const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
   const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
@@ -105,7 +109,8 @@ function CalendrierEquipe({ valides, empById, nameById = {}, isMobile }) {
   const next = () => setCur(c => c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 })
   const congesJour = d => {
     const ds = `${y}-${pad(m + 1)}-${pad(d)}`
-    return valides.filter(c => c.date_debut <= ds && c.date_fin >= ds)
+    return valides.filter(c => c.date_debut <= ds && c.date_fin >= ds
+      && (!filterGroup || empById[c.employe_id]?.groupe === filterGroup))
   }
 
   const cellules = []
@@ -120,6 +125,29 @@ function CalendrierEquipe({ valides, empById, nameById = {}, isMobile }) {
         <button onClick={prev} style={btn}>‹</button>
         <div style={{ fontSize: 16, fontWeight: 600, color: '#1a0f0a', minWidth: 180, textAlign: 'center' }}>{MOIS[m]} {y}</div>
         <button onClick={next} style={btn}>›</button>
+      </div>
+
+      {/* Filtre par groupe — mêmes couleurs et libellés que l'onglet Présence */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginBottom: 14 }}>
+        <button onClick={() => setFilterGroup(null)}
+          style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid ' + (filterGroup ? '#e4dad0' : '#993556'),
+            background: filterGroup ? '#fff' : '#993556', color: filterGroup ? '#4a3a30' : '#fff' }}>
+          Toutes
+        </button>
+        {TEAMS_CONGES.map(g => {
+          const on = filterGroup === g
+          return (
+            <button key={g} onClick={() => setFilterGroup(on ? null : g)}
+              style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                border: '1px solid ' + (on ? GROUP_COLORS[g] : '#e4dad0'),
+                background: on ? GROUP_COLORS[g] : '#fff', color: on ? '#fff' : '#4a3a30' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: on ? '#fff' : GROUP_COLORS[g] }} />
+              {groupLabel(g)}
+            </button>
+          )
+        })}
       </div>
 
       <div style={{ overflowX: 'auto' }}>
