@@ -4,7 +4,7 @@ import {
   isLotDone, isItemFullyDone, aggregateByProduct,
   markLotDone, unmarkLotDone, markItemAllDone, unmarkItemAllDone,
   TYPE_LABELS, TYPE_EMOJIS,
-  getRealQuantity, loadGmLogs,
+  getRealQuantity, extractTailleFromName, loadGmLogs,
 } from '../lib/gmFiches'
 import { toast } from '../lib/toast'
 import AppHeader from './AppHeader'
@@ -462,6 +462,7 @@ function UndefItem({ item, dones, currentUserId, onChange }) {
 
 function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhotoClick }) {
   const realQty = getRealQuantity(item)
+  const taille = extractTailleFromName(item.title)
   const photoUrl = Array.isArray(item.image_urls) && item.image_urls[0] ? item.image_urls[0] : null
 
   if (!fiche) {
@@ -522,6 +523,9 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-[12px] font-medium text-ink">{TYPE_LABELS[typeGm]} ({realQty})</span>
+            {taille && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium lowercase">{taille}</span>
+            )}
             {fiche.tete_position && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium">tête en {fiche.tete_position === 'haut' ? 'haut' : 'bas'}</span>
             )}
@@ -703,6 +707,7 @@ function AggLotChip({ entry, palette, currentUserId, onChange, fusionKey, expand
         }`}
       >
         <span className="font-medium">×{entry.qty}</span>
+        {entry.taille && <span className="text-bordeaux lowercase">{entry.taille}</span>}
         {couleur && <span className="w-3 h-3 rounded-full border border-line/40" style={{ backgroundColor: couleur.hex }} title={couleur.nom} />}
         {entry.lot.forme && <span className="capitalize">{entry.lot.forme}</span>}
         {entry.lot.has_zigzag && zigzag && (
@@ -762,6 +767,7 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
           const zigzag = findCol(e.lot.zigzag_couleur_id)
           const perles = findCol(e.lot.perles_couleur_id)
           let extras = ''
+          if (e.taille) extras += ` · ${e.taille}`
           if (couleur) extras += ` <span style="background:${couleur.hex};display:inline-block;width:9px;height:9px;border-radius:50%;border:1px solid #999"></span> ${couleur.nom}`
           if (e.lot.forme) extras += ` · ${e.lot.forme}`
           if (e.lot.has_zigzag && zigzag) extras += ` · zig ${zigzag.nom}`
@@ -797,6 +803,8 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         }
         const typeGm = fiche.type_gm
         const label = TYPE_LABELS[typeGm] || typeGm
+        const taille = extractTailleFromName(item.title)
+        const tailleHtml = taille ? ` <span style="color:#a8324b">${taille}</span>` : ''
         let lotsHtml = ''
         if (fiche.parfum_normal) {
           const parfumsLabel = Array.isArray(item.parfums) && item.parfums.length > 0
@@ -820,7 +828,7 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         }
         const teteHtml = fiche.tete_position ? ` <span style="color:#a8324b">[tête en ${fiche.tete_position}]</span>` : ''
         const draftHtml = fiche._fromPrefiche ? ' <em style="color:#a85">(saisi commercial)</em>' : ''
-        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${teteHtml}${lotsHtml}${draftHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
+        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${tailleHtml}${teteHtml}${lotsHtml}${draftHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
       }
       body += `<div style="margin:8px 0;padding:6px;border-bottom:1px solid #ccc">
         <div style="font-size:11px"><strong style="color:#a8324b">${order.order_num}</strong> · ${order.client_name || ''} <span style="color:#888;float:right">${hour}</span></div>

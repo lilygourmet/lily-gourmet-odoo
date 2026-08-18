@@ -623,10 +623,11 @@ export function isItemFullyDone(fiche, dones) {
   return true
 }
 
-// Cle de fusion pour aggreger des lots IDENTIQUES (meme parfum, couleur, zigzag, perles, forme, bord)
-function lotFusionKey(lot, productType) {
+// Cle de fusion pour aggreger des lots IDENTIQUES (meme taille, parfum, couleur, zigzag, perles, forme, bord)
+function lotFusionKey(lot, productType, taille) {
   return [
     productType,
+    taille || '',
     lot.parfum || '',
     lot.couleur_id || '',
     lot.has_zigzag ? '1' : '0',
@@ -669,6 +670,9 @@ export function aggregateByProduct(ordersWithFiches) {
       const typeGm = fiche.type_gm
       if (!typeGm) continue
 
+      // Taille lue dans le nom Odoo (« Mini personnalisé »…) : elle distingue 2 lots identiques
+      const taille = extractTailleFromName(item.title)
+
       if (!tree[typeGm]) tree[typeGm] = {}
 
       // Cas parfum_normal : 1 entree speciale
@@ -678,6 +682,7 @@ export function aggregateByProduct(ordersWithFiches) {
         if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
         tree[typeGm][parfum][key] = {
           qty: getRealQuantity(item),
+          taille,
           lot: { parfum: 'Parfum normal', qty: getRealQuantity(item) },
           sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, note: fiche.note_patissier || null }],
           doneCount: dones.length > 0 ? 1 : 0,
@@ -690,11 +695,12 @@ export function aggregateByProduct(ordersWithFiches) {
       lots.forEach((lot, lotIdx) => {
         const parfum = lot.parfum || '__sansparfum__'
         if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
-        const key = lotFusionKey(lot, typeGm)
+        const key = lotFusionKey(lot, typeGm, taille)
 
         if (!tree[typeGm][parfum][key]) {
           tree[typeGm][parfum][key] = {
             qty: 0,
+            taille,
             lot: { ...lot },  // exemplaire
             sources: [],
             doneCount: 0,
