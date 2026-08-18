@@ -5,6 +5,7 @@
 
 import { supabase } from './supabase'
 import { syncAttendance, nomJour, paireOuImpaire } from './pointage'
+import { formatTypeConge } from './conges'
 
 export function todayYMD() {
   const d = new Date()
@@ -87,7 +88,7 @@ export async function loadPresence() {
     const present = sessions.some(s => s.arrivee && !s.depart)
 
     let etat, note
-    if (conge) { etat = 'conge'; note = conge }
+    if (conge) { etat = 'conge'; note = formatTypeConge(conge) }
     else if (off) { etat = 'off'; note = 'Repos' }
     else if (present) { etat = 'present'; note = `Arrivé ${hhmm(arrivee)}` + (demi ? ' · demi-journée' : '') }
     else if (arrivee) { etat = 'parti'; note = `Arrivé ${hhmm(arrivee)}, reparti` }

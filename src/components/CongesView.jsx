@@ -45,33 +45,9 @@ import { imprimerFeuilleConge } from '../lib/feuilleConge'
 import ATraiterTab from './HR/ATraiterTab'
 import { countATraiter } from '../lib/aTraiter'
 import { GROUP_COLORS, groupLabel } from '../lib/presence'
+import { CONGE_TYPES as TYPES, formatTypeConge } from '../lib/conges'
 
-const TYPES = [
-  { v: 'annuel',           label: 'Congé annuel' },
-  { v: 'maladie_courte',   label: 'Congé maladie ≤ 3 j' },
-  { v: 'maladie_longue',   label: 'Congé maladie > 3 j' },
-  { v: 'mariage',          label: 'Mariage' },
-  { v: 'naissance',        label: 'Naissance' },
-  { v: 'deces',            label: 'Décès' },
-  { v: 'circoncision',     label: 'Circoncision' },
-  { v: 'maternite',        label: 'Congé maternité' },
-  { v: 'sans solde',       label: 'Sans solde' },
-  { v: 'recup',            label: 'Récupération' },
-]
 
-// Traduction des libellés Odoo (en anglais) → français pour l'affichage.
-function formatTypeConge(t) {
-  if (!t) return '—'
-  const match = TYPES.find(x => x.v === t)
-  if (match) return match.label
-  const s = String(t).toLowerCase()
-  if (s.includes('paid time off'))    return 'Congé annuel'
-  if (s.includes('compensatory days')) return 'Récupération'
-  if (s.includes('maternity'))         return 'Congé maternité'
-  if (s.includes('sick'))              return 'Congé maladie'
-  if (s.includes('unpaid'))            return 'Sans solde'
-  return t
-}
 
 // dispoTypeConge / debutPossibleType : déplacés dans lib/conges.js
 // (réutilisés par l'onglet « À traiter »).

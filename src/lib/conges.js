@@ -579,6 +579,35 @@ export async function syncCongesAnneeOdoo(annee = null) {
   return resp.json()
 }
 
+// Types de congé PRIS + libellés d'affichage.
+export const CONGE_TYPES = [
+  { v: 'annuel',           label: 'Congé annuel' },
+  { v: 'maladie_courte',   label: 'Congé maladie ≤ 3 j' },
+  { v: 'maladie_longue',   label: 'Congé maladie > 3 j' },
+  { v: 'mariage',          label: 'Mariage' },
+  { v: 'naissance',        label: 'Naissance' },
+  { v: 'deces',            label: 'Décès' },
+  { v: 'circoncision',     label: 'Circoncision' },
+  { v: 'maternite',        label: 'Congé maternité' },
+  { v: 'sans solde',       label: 'Sans solde' },
+  { v: 'recup',            label: 'Récupération' },
+]
+
+// Libellé lisible d'un type de congé : les valeurs brutes viennent soit de
+// l'app ('annuel'), soit d'Odoo en anglais ('Paid Time Off').
+export function formatTypeConge(t) {
+  if (!t) return '—'
+  const match = CONGE_TYPES.find(x => x.v === t)
+  if (match) return match.label
+  const s = String(t).toLowerCase()
+  if (s.includes('paid time off'))     return 'Congé annuel'
+  if (s.includes('compensatory days')) return 'Récupération'
+  if (s.includes('maternity'))         return 'Congé maternité'
+  if (s.includes('sick'))              return 'Congé maladie'
+  if (s.includes('unpaid'))            return 'Sans solde'
+  return t
+}
+
 // ============================================================
 // ALLOCATIONS (table conges_allocations)
 //   Source de vérité pour « combien de jours chacun a droit cette année ».
