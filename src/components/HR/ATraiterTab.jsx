@@ -37,6 +37,28 @@ function nbJours(d1, d2) {
 
 const fmtJour = ymd => (ymd ? ymd.split('-').reverse().join('/') : '')
 
+// Barre « tout sélectionner » + bouton d'action groupée, au-dessus d'une section.
+function BarreSelection({ rows, prefix, sel, onToggleAll, nb, busy, onRun, libelle, couleur }) {
+  const tousCoches = rows.length > 0 && rows.every(x => sel.has(`${prefix}${x.employe_id}|${x.date}`))
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+      <label style={{ fontSize: 12, color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+        <input type="checkbox" checked={tousCoches} onChange={onToggleAll} style={{ cursor: 'pointer' }} />
+        Tout sélectionner
+      </label>
+      {nb > 0 && (
+        <>
+          <span style={{ fontSize: 12, color: '#4a3a30' }}>{nb} sélectionnée{nb > 1 ? 's' : ''}</span>
+          <button onClick={onRun} disabled={busy}
+            style={{ padding: '7px 14px', fontSize: 13, background: couleur, color: 'white', border: 'none', borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {busy ? '…' : `${libelle} (${nb})`}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function ATraiterTab({ user, onChange }) {
   const [data, setData] = useState({ absences: [], recups: [] })
   const [loading, setLoading] = useState(true)
@@ -46,12 +68,15 @@ export default function ATraiterTab({ user, onChange }) {
   const [form, setForm] = useState({})
   // fichier justificatif par ligne : { 'empId|date': File }
   const [files, setFiles] = useState({})
+  // lignes cochées pour un traitement groupé : clés 'a:empId|date' / 'r:empId|date'
+  const [sel, setSel] = useState(() => new Set())
 
   async function reload() {
     setLoading(true); setErr('')
     try {
       const d = await loadATraiter()
       setData(d)
+      setSel(new Set())
       onChange?.(d.absences.length + d.recups.length)
     } catch (e) { setErr(e.message) }
     finally { setLoading(false) }
@@ -70,53 +95,108 @@ export default function ATraiterTab({ user, onChange }) {
   const setField = (key, field, value) =>
     setForm(f => ({ ...f, [key]: { ...f[key], [field]: value } }))
 
-  async function handleAbsence(a) {
+  const toggleSel = key => setSel(prev => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    return next
+  })
+  // Coche / décoche toute une section d'un coup
+  const toggleAll = (prefix, rows) => setSel(prev => {
+    const next = new Set(prev)
+    const keys = rows.map(x => `${prefix}${x.employe_id}|${x.date}`)
+    const tousCoches = keys.every(k => next.has(k))
+    keys.forEach(k => (tousCoches ? next.delete(k) : next.add(k)))
+    return next
+  })
+  const selectionOf = (prefix, rows) => rows.filter(x => sel.has(`${prefix}${x.employe_id}|${x.date}`))
+
+  // Traite UNE absence avec les réglages de sa ligne. Lève une erreur si le
+  // solde ne suffit pas ou si les dates sont incohérentes (pas de setErr ici :
+  // l'appelant décide quoi en faire, seul ou en traitement groupé).
+  async function processAbsence(a) {
     const key = `${a.employe_id}|${a.date}`
     const f = form[key] || {}
     const classification = f.classification || 'annuel'
+    if (classification === 'oubli') {
+      await traiterOubliPointage({ employe_id: a.employe_id, date: a.date, heures_prevues: a.heures_prevues, userId: user.id })
+      return 'oubli'
+    }
+    if (classification === 'ancien_jour_off' || classification === 'deja_traite') {
+      // Classer sans suite : aucune demande de congé, aucun ajustement de pointage.
+      await ignorerAbsence({ employe_id: a.employe_id, date: a.date, raison: classification, userId: user.id })
+      return 'sans_suite'
+    }
+    const date_debut = f.date_debut || a.date
+    const date_fin = f.date_fin || a.date
+    if (date_fin < date_debut) throw new Error(`${a.nom} : la date de fin est avant la date de début.`)
+    const dispo = dispoTypeConge(a.solde, classification)
+    if (typeof dispo === 'number' && nbJours(date_debut, date_fin) > dispo) {
+      const lbl = CLASSIFS.find(c => c.v === classification)?.label || classification
+      throw new Error(`Solde « ${lbl} » épuisé (${dispo} j dispo) pour ${a.nom}. Choisis un autre type.`)
+    }
+    let justificatif_path = null
+    if (files[key]) justificatif_path = await uploadJustificatif(files[key], user.id)
+    await traiterAbsence({ employe_id: a.employe_id, date_debut, date_fin, classification, raison: f.raison || null, userId: user.id, justificatif_path })
+    return 'conge'
+  }
+
+  async function handleAbsence(a) {
+    const key = `${a.employe_id}|${a.date}`
     setBusyKey(key); setErr('')
     try {
-      if (classification === 'oubli') {
-        await traiterOubliPointage({ employe_id: a.employe_id, date: a.date, heures_prevues: a.heures_prevues, userId: user.id })
-      } else if (classification === 'ancien_jour_off' || classification === 'deja_traite') {
-        // Classer sans suite : aucune demande de congé, aucun ajustement de pointage.
-        await ignorerAbsence({ employe_id: a.employe_id, date: a.date, raison: classification, userId: user.id })
-      } else {
-        const date_debut = f.date_debut || a.date
-        const date_fin = f.date_fin || a.date
-        if (date_fin < date_debut) { setErr('La date de fin est avant la date de début.'); setBusyKey(''); return }
-        const dispo = dispoTypeConge(a.solde, classification)
-        if (typeof dispo === 'number' && nbJours(date_debut, date_fin) > dispo) {
-          const lbl = CLASSIFS.find(c => c.v === classification)?.label || classification
-          setErr(`Solde « ${lbl} » épuisé (${dispo} j dispo) pour ${a.nom}. Choisis un autre type.`); setBusyKey(''); return
-        }
-        let justificatif_path = null
-        if (files[key]) justificatif_path = await uploadJustificatif(files[key], user.id)
-        await traiterAbsence({ employe_id: a.employe_id, date_debut, date_fin, classification, raison: f.raison || null, userId: user.id, justificatif_path })
-      }
+      const kind = await processAbsence(a)
       await reload()
       toast.success(
-        classification === 'oubli' ? `${a.nom} marqué présent ✓`
-          : (classification === 'ancien_jour_off' || classification === 'deja_traite') ? `Absence classée sans suite ✓`
+        kind === 'oubli' ? `${a.nom} marqué présent ✓`
+          : kind === 'sans_suite' ? `Absence classée sans suite ✓`
           : `${a.nom} envoyé en validation ✓`
       )
     } catch (e) { setErr(e.message); toast.error(e.message || 'Échec') }
     finally { setBusyKey('') }
   }
 
-  async function handleRecup(r, action) {
+  // La raison est facultative : on peut valider une récup sans l'écrire (elle est juste enregistrée si remplie).
+  async function processRecup(r, action) {
     const key = `${r.employe_id}|${r.date}`
     const f = form[key] || {}
-    // La raison est facultative : on peut valider une récup sans l'écrire (elle est juste enregistrée si remplie).
+    const args = { employe_id: r.employe_id, date: r.date, raison: (f.raison || '').trim() || null, userId: user.id }
+    if (action === 'valider') await validerRecup(args)
+    else await refuserRecup(args)
+  }
+
+  async function handleRecup(r, action) {
+    const key = `${r.employe_id}|${r.date}`
     setBusyKey(key); setErr('')
     try {
-      const args = { employe_id: r.employe_id, date: r.date, raison: (f.raison || '').trim() || null, userId: user.id }
-      if (action === 'valider') await validerRecup(args)
-      else await refuserRecup(args)
+      await processRecup(r, action)
       toast.success(action === 'valider' ? `Récup de ${r.nom} validée ✓` : `Récup de ${r.nom} refusée`)
       await reload()
     } catch (e) { setErr(e.message); toast.error(e.message || 'Échec') }
     finally { setBusyKey('') }
+  }
+
+  // Traitement groupé : on enchaîne les lignes cochées une par une et on
+  // rapporte ce qui n'est pas passé, sans bloquer le reste.
+  async function handleBulk(kind) {
+    const rows = kind === 'abs' ? selectionOf('a:', data.absences) : selectionOf('r:', data.recups)
+    if (rows.length === 0) return
+    setBusyKey(`bulk-${kind}`); setErr('')
+    let ok = 0
+    const echecs = []
+    for (const row of rows) {
+      try {
+        if (kind === 'abs') await processAbsence(row)
+        else await processRecup(row, 'valider')
+        ok++
+      } catch (e) { echecs.push(`${row.nom} ${fmtJour(row.date)} — ${e.message}`) }
+    }
+    await reload()
+    setBusyKey('')
+    if (ok > 0) toast.success(kind === 'abs' ? `${ok} absence${ok > 1 ? 's' : ''} traitée${ok > 1 ? 's' : ''} ✓` : `${ok} récup${ok > 1 ? 's' : ''} validée${ok > 1 ? 's' : ''} ✓`)
+    if (echecs.length > 0) {
+      setErr(`${echecs.length} non traitée${echecs.length > 1 ? 's' : ''} : ${echecs.join(' · ')}`)
+      toast.error(`${echecs.length} non traitée${echecs.length > 1 ? 's' : ''}`)
+    }
   }
 
   if (loading) return <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
@@ -139,6 +219,10 @@ export default function ATraiterTab({ user, onChange }) {
           <div style={{ fontSize: 14, fontWeight: 600, color: '#A32D2D', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <AlertTriangle size={16} /> Absences à justifier ({data.absences.length})
           </div>
+          <BarreSelection rows={data.absences} prefix="a:" sel={sel}
+            onToggleAll={() => toggleAll('a:', data.absences)}
+            nb={selectionOf('a:', data.absences).length} busy={busyKey === 'bulk-abs'}
+            onRun={() => handleBulk('abs')} libelle="Envoyer en validation" couleur="#993556" />
           {data.absences.map(a => {
             const key = `${a.employe_id}|${a.date}`
             const f = form[key] || {}
@@ -148,6 +232,8 @@ export default function ATraiterTab({ user, onChange }) {
             const depasse = typeof dispoSel === 'number' && nbJours(f.date_debut || a.date, f.date_fin || a.date) > dispoSel
             return (
               <div key={key} style={{ background: 'white', border: '1px solid #f0d9d2', borderRadius: 12, padding: '12px 14px', marginBottom: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                <input type="checkbox" checked={sel.has(`a:${key}`)} onChange={() => toggleSel(`a:${key}`)}
+                  style={{ cursor: 'pointer', flexShrink: 0 }} />
                 <div style={{ minWidth: 170 }}>
                   <strong style={{ fontSize: 14 }}>{a.nom}</strong>
                   <div style={{ fontSize: 12, color: '#A32D2D' }}>Absent le {a.jour} {fmtJour(a.date)}</div>
@@ -195,11 +281,17 @@ export default function ATraiterTab({ user, onChange }) {
           <div style={{ fontSize: 14, fontWeight: 600, color: '#3C3489', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <Clock size={16} /> Jours de repos travaillés — récup à documenter ({data.recups.length})
           </div>
+          <BarreSelection rows={data.recups} prefix="r:" sel={sel}
+            onToggleAll={() => toggleAll('r:', data.recups)}
+            nb={selectionOf('r:', data.recups).length} busy={busyKey === 'bulk-rec'}
+            onRun={() => handleBulk('rec')} libelle="Valider" couleur="#27500A" />
           {data.recups.map(r => {
             const key = `${r.employe_id}|${r.date}`
             const f = form[key] || {}
             return (
               <div key={key} style={{ background: 'white', border: '1px solid #ddd9f5', borderRadius: 12, padding: '12px 14px', marginBottom: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                <input type="checkbox" checked={sel.has(`r:${key}`)} onChange={() => toggleSel(`r:${key}`)}
+                  style={{ cursor: 'pointer', flexShrink: 0 }} />
                 <div style={{ minWidth: 170 }}>
                   <strong style={{ fontSize: 14 }}>{r.nom}</strong>
                   <div style={{ fontSize: 12, color: '#3C3489' }}>{r.label} travaillé le {r.jour} {fmtJour(r.date)} → +{String(r.jours ?? 1).replace('.', ',')} récup</div>
