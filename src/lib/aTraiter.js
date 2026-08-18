@@ -133,6 +133,73 @@ export async function loadATraiter() {
   return { absences, recups }
 }
 
+/**
+ * OUBLIS : journées de récup marquées « traitées » mais dont le jour n'a jamais
+ * été crédité (aucune allocation en face). Cas hérité d'avant le 18/08/2026 :
+ * valider une récup n'écrivait qu'une raison, sans rien créditer.
+ *
+ * On ne recalcule pas le pointage ici (ces jours sont souvent hors de la fenêtre
+ * de scan de loadATraiter) : on compare directement les marqueurs aux allocations.
+ * Exclus : les récups REFUSÉES (ajustement jours_recup = 0) et celles déjà
+ * classées sans suite (ajustement recup_ignoree).
+ */
+export async function loadOublisRecup(depuis = null) {
+  const minDate = depuis || `${new Date().getFullYear() - 1}-01-01`
+  const [{ data: ajusts }, { data: allocs }, { data: emps }] = await Promise.all([
+    supabase.from('pointages_ajustements')
+      .select('employe_id, date_jour, champ, valeur')
+      .in('champ', ['recup_raison', 'jours_recup', 'recup_ignoree'])
+      .gte('date_jour', minDate).limit(5000),
+    supabase.from('conges_allocations')
+      .select('employe_id, date_evt').eq('type', 'autre').not('date_evt', 'is', null)
+      .gte('date_evt', minDate).limit(5000),
+    supabase.from('employes').select('id, nom').eq('actif', true).eq('fantome', false).limit(500),
+  ])
+
+  const nomById = new Map((emps || []).map(e => [String(e.id), e.nom]))
+  const alloue = new Set((allocs || []).map(a => `${a.employe_id}|${a.date_evt}`))
+  const raisons = new Map(), refuses = new Set(), ignores = new Set()
+  for (const a of (ajusts || [])) {
+    const k = `${a.employe_id}|${a.date_jour}`
+    if (a.champ === 'recup_raison') raisons.set(k, a.valeur || '')
+    else if (a.champ === 'jours_recup' && Number(a.valeur) === 0) refuses.add(k)
+    else if (a.champ === 'recup_ignoree') ignores.add(k)
+  }
+
+  const out = []
+  for (const [k, raison] of raisons) {
+    if (alloue.has(k) || refuses.has(k) || ignores.has(k)) continue
+    // Filet : d'anciens refus n'ont que la mention dans la raison, sans
+    // l'ajustement jours_recup = 0. On ne propose jamais de créditer un refus.
+    if (/^refus/i.test(String(raison).trim())) continue
+    const [empId, date] = k.split('|')
+    const nom = nomById.get(empId)
+    if (!nom) continue   // employé parti / fantôme : on ne propose rien
+    out.push({ employe_id: Number(empId), nom, date, raison })
+  }
+  out.sort((a, b) => b.date.localeCompare(a.date))
+  return out
+}
+
+/** Crédite enfin le jour d'une récup oubliée. */
+export async function creerRecupOubliee({ employe_id, date, jours, raison, userId }) {
+  await createAllocation({
+    employe_id,
+    annee: Number(String(date).slice(0, 4)),
+    type: 'autre',
+    jours: Number(jours),
+    raison: raison || 'Récup jour travaillé',
+    date_evt: date,
+    source: 'manuel',
+    created_by: userId,
+  })
+}
+
+/** Laisse la journée telle quelle : elle ne réapparaîtra plus dans les oublis. */
+export async function ignorerOubliRecup({ employe_id, date, userId }) {
+  await setAjustement(employe_id, date, 'recup_ignoree', '1', userId)
+}
+
 export async function countATraiter() {
   const { absences, recups } = await loadATraiter()
   return absences.length + recups.length

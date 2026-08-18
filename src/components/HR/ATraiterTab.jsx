@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react'
-import { loadATraiter, traiterAbsence, traiterOubliPointage, ignorerAbsence, validerRecup, refuserRecup } from '../../lib/aTraiter'
+import { loadATraiter, traiterAbsence, traiterOubliPointage, ignorerAbsence, validerRecup, refuserRecup, loadOublisRecup, creerRecupOubliee, ignorerOubliRecup } from '../../lib/aTraiter'
 import { uploadJustificatif, dispoTypeConge } from '../../lib/conges'
 import { toast } from '../../lib/toast'
 
@@ -61,6 +61,9 @@ function BarreSelection({ rows, prefix, sel, onToggleAll, nb, busy, onRun, libel
 
 export default function ATraiterTab({ user, onChange }) {
   const [data, setData] = useState({ absences: [], recups: [] })
+  // Récups « traitées » avant le 18/08/2026 dont le jour n'a jamais été crédité
+  const [oublis, setOublis] = useState([])
+  const [oubliJours, setOubliJours] = useState({})   // { 'empId|date': '1' | '0.5' }
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [busyKey, setBusyKey] = useState('')
@@ -74,8 +77,9 @@ export default function ATraiterTab({ user, onChange }) {
   async function reload() {
     setLoading(true); setErr('')
     try {
-      const d = await loadATraiter()
+      const [d, o] = await Promise.all([loadATraiter(), loadOublisRecup()])
       setData(d)
+      setOublis(o)
       setSel(new Set())
       onChange?.(d.absences.length + d.recups.length)
     } catch (e) { setErr(e.message) }
@@ -84,8 +88,8 @@ export default function ATraiterTab({ user, onChange }) {
   // Chargement initial (sans setState synchrone dans le corps de l'effet)
   useEffect(() => {
     let cancelled = false
-    loadATraiter()
-      .then(d => { if (!cancelled) { setData(d); onChange?.(d.absences.length + d.recups.length) } })
+    Promise.all([loadATraiter(), loadOublisRecup()])
+      .then(([d, o]) => { if (!cancelled) { setData(d); setOublis(o); onChange?.(d.absences.length + d.recups.length) } })
       .catch(e => { if (!cancelled) setErr(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -175,6 +179,23 @@ export default function ATraiterTab({ user, onChange }) {
     finally { setBusyKey('') }
   }
 
+  async function handleOubli(o, action) {
+    const key = `oubli:${o.employe_id}|${o.date}`
+    setBusyKey(key); setErr('')
+    try {
+      if (action === 'creer') {
+        const jours = Number(oubliJours[`${o.employe_id}|${o.date}`] || 1)
+        await creerRecupOubliee({ employe_id: o.employe_id, date: o.date, jours, raison: o.raison, userId: user.id })
+        toast.success(`${jours} j crédité${jours > 1 ? 's' : ''} à ${o.nom} ✓`)
+      } else {
+        await ignorerOubliRecup({ employe_id: o.employe_id, date: o.date, userId: user.id })
+        toast.success('Journée laissée telle quelle')
+      }
+      await reload()
+    } catch (e) { setErr(e.message); toast.error(e.message || 'Échec') }
+    finally { setBusyKey('') }
+  }
+
   // Traitement groupé : on enchaîne les lignes cochées une par une et on
   // rapporte ce qui n'est pas passé, sans bloquer le reste.
   async function handleBulk(kind) {
@@ -201,7 +222,7 @@ export default function ATraiterTab({ user, onChange }) {
 
   if (loading) return <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>Chargement…</div>
 
-  const rien = data.absences.length === 0 && data.recups.length === 0
+  const rien = data.absences.length === 0 && data.recups.length === 0 && oublis.length === 0
 
   return (
     <div>
@@ -210,6 +231,46 @@ export default function ATraiterTab({ user, onChange }) {
       {rien && (
         <div style={{ padding: 40, textAlign: 'center', color: '#27500A', background: '#EAF3DE', borderRadius: 12, fontSize: 14, display: 'inline-flex', gap: 8, width: '100%', justifyContent: 'center' }}>
           <CheckCircle2 size={18} /> Rien à traiter 🎉
+        </div>
+      )}
+
+      {/* OUBLIS : récup traitée mais jamais créditée */}
+      {oublis.length > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#854F0B', marginBottom: 4, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <AlertTriangle size={16} /> Traité mais rien enregistré ({oublis.length})
+          </div>
+          <div style={{ fontSize: 11.5, color: '#8a7a70', marginBottom: 10 }}>
+            Ces journées de récup ont été validées mais le jour n'a jamais été crédité (anomalie corrigée le 18/08). Choisis le nombre de jours puis crédite, ou laisse la journée telle quelle.
+          </div>
+          {oublis.map(o => {
+            const key = `${o.employe_id}|${o.date}`
+            const busy = busyKey === `oubli:${key}`
+            return (
+              <div key={key} style={{ background: '#FFFDF6', border: '1px solid #F0D89A', borderRadius: 12, padding: '12px 14px', marginBottom: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                <div style={{ minWidth: 170 }}>
+                  <strong style={{ fontSize: 14 }}>{o.nom}</strong>
+                  <div style={{ fontSize: 12, color: '#854F0B' }}>Le {fmtJour(o.date)}</div>
+                </div>
+                <span style={{ flex: 1, minWidth: 140, fontSize: 12, color: '#4a3a30', fontStyle: o.raison ? 'normal' : 'italic' }}>
+                  {o.raison || 'aucune raison notée'}
+                </span>
+                <select value={oubliJours[key] || '1'} onChange={e => setOubliJours(j => ({ ...j, [key]: e.target.value }))}
+                  style={{ padding: '7px 10px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }}>
+                  <option value="1">1 jour</option>
+                  <option value="0.5">½ journée</option>
+                </select>
+                <button onClick={() => handleOubli(o, 'creer')} disabled={busy}
+                  style={{ padding: '8px 12px', fontSize: 13, background: '#27500A', color: 'white', border: 'none', borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <CheckCircle2 size={13} /> {busy ? '…' : 'Créditer le jour'}
+                </button>
+                <button onClick={() => handleOubli(o, 'ignorer')} disabled={busy}
+                  style={{ padding: '8px 12px', fontSize: 13, background: 'white', color: '#4a3a30', border: '1px solid #e5d8c3', borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer' }}>
+                  Laisser ainsi
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
 
