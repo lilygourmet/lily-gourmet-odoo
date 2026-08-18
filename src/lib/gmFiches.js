@@ -56,7 +56,7 @@ export function getRealQuantity(item) {
 // Odoo repete un parfum par "case" de la boite : "boite de 24 (Oréo, Vanille, Oréo, Vanille)"
 // = 2 cases Oréo + 2 cases Vanille. Sur 2 boites (48 cupcakes) -> 24 Oréo + 24 Vanille.
 export function splitParfums(item) {
-  const list = Array.isArray(item?.parfums) ? item.parfums.filter(Boolean) : []
+  const list = Array.isArray(item?.parfums) ? item.parfums.filter(p => p && !/^mixte$/i.test(p)) : []
   if (list.length === 0) return []
   const total = getRealQuantity(item)
   if (!total) return []
@@ -612,6 +612,18 @@ async function _loadOrdersWithFichesForBounds(start, end) {
         }
       }
     }
+    // "Parfum normal" + parfums connus -> un lot par parfum, pour pouvoir cocher
+    // "6 Caramel Beurre salé faits, le reste pas encore" comme sur les cakepops.
+    if (fiche && fiche.parfum_normal && !fiche.is_mixte) {
+      const split = splitParfums(it)
+      if (split.length > 0) {
+        fiche = {
+          ...fiche,
+          parfum_normal: false,
+          lots: split.map(p => ({ ...makeEmptyLot(p.parfum), qty: p.qty })),
+        }
+      }
+    }
     itemsByOrder[it.order_id].push({
       item: it,
       fiche,
@@ -650,6 +662,8 @@ export function isLotDone(dones, lotIdx) {
 export function isItemFullyDone(fiche, dones) {
   if (!fiche || !Array.isArray(dones)) return false
   if (fiche.parfum_normal) return dones.length > 0  // 1 done suffit pour parfum_normal
+  // Item coche "tout fait" avant d'etre eclate en lots par parfum : on le laisse fait
+  if (dones.some(d => d.lot_idx === -1)) return true
   const lotsCount = (fiche.lots || []).length
   if (lotsCount === 0) return false
   for (let i = 0; i < lotsCount; i++) {

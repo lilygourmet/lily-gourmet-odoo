@@ -470,7 +470,6 @@ function UndefItem({ item, dones, currentUserId, onChange }) {
 
 function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhotoClick }) {
   const realQty = getRealQuantity(item)
-  const nbBoites = parseFloat(item.quantity) || 0
   const taille = extractTailleFromName(item.title)
   const photoUrl = Array.isArray(item.image_urls) && item.image_urls[0] ? item.image_urls[0] : null
 
@@ -532,9 +531,6 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-[12px] font-medium text-ink">{TYPE_LABELS[typeGm]} ({realQty})</span>
-            {realQty !== nbBoites && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium">{nbBoites} boîte{nbBoites > 1 ? 's' : ''}</span>
-            )}
             {taille && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-bordeaux/10 text-bordeaux font-medium capitalize">{taille.toLowerCase()}</span>
             )}
@@ -843,7 +839,7 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         const tailleHtml = tailleImp ? ` <span style="color:#a8324b">${tailleImp.toLowerCase()}</span>` : ''
         const teteHtml = fiche.tete_position ? ` <span style="color:#a8324b">[tête en ${fiche.tete_position}]</span>` : ''
         const draftHtml = fiche._fromPrefiche ? ' <em style="color:#a85">(saisi commercial)</em>' : ''
-        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${boitesHtml}${tailleHtml}${teteHtml}${lotsHtml}${draftHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
+        itemsHtml += `<div style="margin:2px 0"><strong>×${realQty} ${label}</strong>${tailleHtml}${teteHtml}${lotsHtml}${draftHtml}${fiche.note_patissier ? ' <em style="color:#a85">📝 ' + fiche.note_patissier + '</em>' : ''}</div>`
       }
       body += `<div style="margin:8px 0;padding:6px;border-bottom:1px solid #ccc">
         <div style="font-size:11px"><strong style="color:#a8324b">${order.order_num}</strong> · ${order.client_name || ''} <span style="color:#888;float:right">${hour}</span></div>
