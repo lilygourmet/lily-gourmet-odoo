@@ -15,6 +15,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   // Précision libre par article : la couleur d'un colorant gel, une taille…
   // Elle est accolée au nom envoyé à l'économe, donc aucune colonne en plus.
   const [precision, setPrecision] = useState({})  // { [articleId]: string }
+  const [recherche, setRecherche] = useState('')  // filtre par nom, dans la catégorie ouverte
   const [articleInfo, setArticleInfo] = useState({}) // { [id]: { name, unit, catName } }
   const [customLines, setCustomLines] = useState([]) // articles ajoutés à la main : { name, unit, qty, catName }
   const [customName, setCustomName] = useState('')
@@ -206,6 +207,23 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       </div>
 
       <div className="max-w-2xl mx-auto p-4">
+        {/* Recherche par nom — utile surtout sur téléphone, où faire défiler
+            une catégorie de 80 articles est pénible. */}
+        {!loading && categories.length > 0 && (
+          <div className="relative mb-4">
+            <input
+              value={recherche}
+              onChange={e => setRecherche(e.target.value)}
+              placeholder="🔎 Chercher un article…"
+              className="w-full px-3 py-2.5 pr-9 text-[14px] border border-line rounded-xl bg-white"
+            />
+            {recherche && (
+              <button onClick={() => setRecherche('')} aria-label="Effacer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-mute hover:text-bordeaux px-1 text-[16px]">×</button>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center text-ink-mute italic py-12">Chargement...</div>
         ) : categories.length === 0 ? (
@@ -214,9 +232,20 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
           </div>
         ) : loadingContent ? (
           <div className="text-center text-ink-mute italic py-12">Chargement des articles...</div>
-        ) : (
+        ) : (() => {
+          // Filtre par mot tapé, insensible aux accents et à la casse.
+          const q = recherche.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          const garde = a => !q || String(a.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)
+          const groups = content.groups.map(g => ({ ...g, articles: g.articles.filter(garde) })).filter(g => g.articles.length)
+          const ungrouped = content.ungrouped.filter(garde)
+          const rien = groups.length === 0 && ungrouped.length === 0
+          return rien ? (
+            <div className="text-center text-ink-mute italic py-10">
+              {q ? `Aucun article ne contient « ${recherche.trim()} » dans cette catégorie.` : 'Aucun article.'}
+            </div>
+          ) : (
           <div className="space-y-5">
-            {content.groups.map(group => (
+            {groups.map(group => (
               <div key={group.id}>
                 <div className="lg-mono mb-2">{group.name}</div>
                 <div className="space-y-1.5">
@@ -228,11 +257,11 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                 </div>
               </div>
             ))}
-            {content.ungrouped.length > 0 && (
+            {ungrouped.length > 0 && (
               <div>
                 <div className="lg-mono mb-2" style={{ color: '#8a7a70' }}>Autres</div>
                 <div className="space-y-1.5">
-                  {content.ungrouped.map(a => (
+                  {ungrouped.map(a => (
                     <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)}
                       precision={precision[a.id] || ''}
                       onPrecision={v => setPrecision(p => ({ ...p, [a.id]: v }))} />
@@ -293,7 +322,8 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
       </div>
 
       {/* Barre récap fixe en bas */}
