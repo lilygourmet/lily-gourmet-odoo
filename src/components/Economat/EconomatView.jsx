@@ -419,9 +419,10 @@ function ArticleRow({ article, qty, onChange, precision = '', onPrecision }) {
   return (
     <div className={`bg-white rounded-xl border border-line/70 p-2.5 shadow-sm transition-all ${active ? 'border-l-4 border-l-bordeaux' : ''}`}>
     <div className="flex items-center gap-3">
-      {/* Emplacement photo (rempli depuis Odoo plus tard) */}
-      <div className="w-11 h-11 rounded-lg bg-cream-deep border border-line/40 flex-shrink-0 overflow-hidden">
-        {article.photo_url && <img src={article.photo_url} alt="" className="w-full h-full object-cover" />}
+      {/* Photo : vignette plus grande et zoomée — les visuels produit ont
+          souvent beaucoup de blanc autour, l'article paraissait lointain. */}
+      <div className="w-14 h-14 rounded-lg bg-cream-deep border border-line/40 flex-shrink-0 overflow-hidden">
+        {article.photo_url && <img src={article.photo_url} alt="" className="w-full h-full object-cover scale-[1.35]" />}
       </div>
 
       <div className="flex-1 min-w-0">
