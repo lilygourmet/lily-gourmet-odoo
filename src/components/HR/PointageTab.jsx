@@ -11,7 +11,7 @@ import {
   setAjustement, removeAjustement, updatePointage, validerMois,
   nomJour, convertirHeuresEnJours,
 } from '../../lib/pointage'
-import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT, calculSoldeConges, dispoTypeConge } from '../../lib/conges'
+import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT, calculSoldeConges, dispoTypeConge, loadCongesByStatuts, loadAllocations } from '../../lib/conges'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { groupLabel } from '../../lib/presence'
@@ -100,6 +100,8 @@ export default function PointageTab({ user, isAdmin }) {
   // Rechargement SILENCIEUX : on ne rebascule pas sur « Chargement… » (sinon le
   // tableau disparaît/réapparaît → la page remonte en haut à chaque modif). Le
   // spinner ne s'affiche qu'au tout premier chargement (loading initial = true).
+  const soldesRef = useRef(false)
+
   const reload = useCallback(async () => {
     setError(null)
     try {
@@ -110,6 +112,43 @@ export default function PointageTab({ user, isAdmin }) {
     }
     setLoading(false)
   }, [mois, annee])
+
+  // Solde de congé par employé, pour la colonne « Solde congés » de la vue
+  // globale. Chargé une seule fois (admin) : ce sont les mêmes données que
+  // l'écran Congés, préchargées en lot pour éviter N requêtes.
+  const [soldesConges, setSoldesConges] = useState({})
+  useEffect(() => {
+    if (!isAdmin || !data?.employes?.length || soldesRef.current) return
+    soldesRef.current = true
+    let annule = false
+    ;(async () => {
+      try {
+        const an = new Date().getFullYear()
+        const [tousConges, allocs] = await Promise.all([
+          loadCongesByStatuts(['valide'], `${an - 1}-01-01`),
+          loadAllocations({ annee: an, statut: ['valide'] }),
+        ])
+        const validesParEmp = new Map(), allocsByEmp = new Map()
+        for (const c of tousConges) {
+          if (!validesParEmp.has(c.employe_id)) validesParEmp.set(c.employe_id, [])
+          validesParEmp.get(c.employe_id).push(c)
+        }
+        for (const a of allocs) {
+          if (!allocsByEmp.has(a.employe_id)) allocsByEmp.set(a.employe_id, [])
+          allocsByEmp.get(a.employe_id).push(a)
+        }
+        const feriesSet = new Set((data.feries || []).map(f => f.date))
+        const prefetched = { allocsByEmp, recupByEmp: new Map(), feriesSet }
+        const arr = await Promise.all(data.employes.map(emp =>
+          calculSoldeConges(emp, validesParEmp.get(emp.id) || [], undefined, prefetched)))
+        if (annule) return
+        const out = {}
+        data.employes.forEach((emp, i) => { out[emp.id] = arr[i] })
+        setSoldesConges(out)
+      } catch (e) { console.warn('[soldes congés]', e?.message || e) }
+    })()
+    return () => { annule = true }
+  }, [isAdmin, data])
 
   useEffect(() => {
     // Affichage INSTANTANÉ depuis les données déjà enregistrées (Supabase), PUIS
@@ -757,7 +796,7 @@ export default function PointageTab({ user, isAdmin }) {
 
       {!loading && vue === 'all' && data && isAdmin && (
         <>
-          <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} isAdmin={isAdmin} />
+          <VueGlobale data={data} resultats={resultats} mois={mois} annee={annee} isAdmin={isAdmin} soldesConges={soldesConges} />
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
             <button onClick={handleExportSup} style={btnExport}><Download size={14} /> Export heures sup</button>
             <button onClick={handleExportConges} style={btnExport}><Download size={14} /> Export congés</button>
@@ -1797,7 +1836,7 @@ function VueRecup({ data, resultats, mois, annee, user, canEdit, onChange }) {
   )
 }
 
-function VueGlobale({ data, resultats, mois, annee }) {
+function VueGlobale({ data, resultats, mois, annee, isAdmin, soldesConges = {} }) {
   const [byEquipe, setByEquipe] = useState(() => { try { return localStorage.getItem('lily.pointage.byEquipe') === '1' } catch { return false } })
   useEffect(() => { try { localStorage.setItem('lily.pointage.byEquipe', byEquipe ? '1' : '0') } catch {} }, [byEquipe])
 
@@ -1831,6 +1870,17 @@ function VueGlobale({ data, resultats, mois, annee }) {
         <td style={{ padding: '8px 12px', textAlign: 'center', color: s.jours_absents > 0 ? '#A32D2D' : '#8a7a70' }}>
           {s.jours_absents > 0 ? s.jours_absents : '—'}
         </td>
+        {isAdmin && (() => {
+          // Solde de congé restant (récup incluse), toutes années confondues :
+          // sans rapport avec le mois affiché, c'est le compteur de l'employé.
+          const d = soldesConges[emp.id]?.dispo
+          if (typeof d !== 'number') return <td style={{ padding: '8px 12px', textAlign: 'right', color: '#c9bfb5' }}>…</td>
+          return (
+            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: d < 0 ? '#A32D2D' : (d === 0 ? '#8a7a70' : '#085041') }}>
+              {d.toFixed(1)} j
+            </td>
+          )
+        })()}
       </tr>
     )
   }
@@ -1847,6 +1897,7 @@ function VueGlobale({ data, resultats, mois, annee }) {
         <td />
         <td style={{ padding: '7px 12px', textAlign: 'right' }}>{sum('solde_mois').toFixed(2)}</td>
         <td style={{ padding: '7px 12px', textAlign: 'center', color: '#A32D2D' }}>{sum('jours_absents') || '—'}</td>
+        {isAdmin && <td />}
       </tr>
     )
   }
@@ -1863,7 +1914,7 @@ function VueGlobale({ data, resultats, mois, annee }) {
     body = [...groups.entries()].sort((a, b) => label(a[0]).localeCompare(label(b[0]))).map(([team, items]) => (
       <Fragment key={team}>
         <tr style={{ background: '#EFE7DA' }}>
-          <td colSpan={9} style={{ padding: '8px 12px', fontWeight: 600, fontSize: 12, color: '#1a0f0a' }}>👥 {label(team)} <span style={{ color: '#8a7a70', fontWeight: 400 }}>({items.length})</span></td>
+          <td colSpan={isAdmin ? 10 : 9} style={{ padding: '8px 12px', fontWeight: 600, fontSize: 12, color: '#1a0f0a' }}>👥 {label(team)} <span style={{ color: '#8a7a70', fontWeight: 400 }}>({items.length})</span></td>
         </tr>
         {items.map(([emp, r]) => empRow(emp, r))}
         {sousTotal(label(team), items)}
@@ -1892,6 +1943,7 @@ function VueGlobale({ data, resultats, mois, annee }) {
             <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Reporté</th>
             <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }}>Solde mois</th>
             <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 500 }}>Abs.</th>
+            {isAdmin && <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }} title="Jours de congé restants (récup incluse), tous mois confondus">Solde congés</th>}
           </tr>
         </thead>
         <tbody>{body}</tbody>
