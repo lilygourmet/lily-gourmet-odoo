@@ -894,6 +894,16 @@ export default function PointageTab({ user, isAdmin }) {
             <Carte label="Jours récup"         val={result.synthese.jours_recup}      color="#3C3489" unit="j" />
             <Carte label="Solde reporté"       val={result.synthese.solde_reporte_precedent} color={result.synthese.solde_reporte_precedent < 0 ? '#A32D2D' : '#27500A'} signed />
             <Carte label="Solde du mois"       val={result.synthese.solde_mois}        color={result.synthese.solde_mois < 0 ? '#A32D2D' : '#27500A'} signed bold />
+            {/* Solde de CONGÉ (jours restants, récup incluse) — pas un chiffre du mois :
+                c'est le compteur de l'employé, affiché ici pour l'avoir sous les yeux. */}
+            {isAdmin && (
+              <Carte
+                label="Solde congés"
+                val={soldesConges[empSelected?.id]?.dispo}
+                color={(soldesConges[empSelected?.id]?.dispo ?? 0) < 0 ? '#A32D2D' : '#085041'}
+                unit="j" bold
+              />
+            )}
             {isAdmin && empSelected?.salaire_net > 0 && !empSelected?.declare && (
               <CarteSalaire
                 salaire={Number(empSelected.salaire_net)}
@@ -1439,6 +1449,15 @@ function CarteSalaire({ salaire, heuresSup, heuresManquantes = 0 }) {
 
 function Carte({ label, val, color = '#1a0f0a', sign = '', unit = 'h', signed = false, bold = false }) {
   let displayVal = ''
+  // Valeur pas encore chargée (ex. solde de congé en cours de calcul)
+  if (typeof val !== 'number' || Number.isNaN(val)) {
+    return (
+      <div style={{ background: '#F4F0EA', padding: 12, borderRadius: 12, boxShadow: '0 4px 14px rgba(122,42,68,0.05)' }}>
+        <p style={{ fontSize: 11, color: '#4a3a30', margin: 0, marginBottom: 4 }}>{label}</p>
+        <p style={{ fontSize: 18, fontWeight: 500, color: '#c9bfb5', margin: 0 }}>…</p>
+      </div>
+    )
+  }
   if (signed) displayVal = (val > 0 ? '+' : '') + val.toFixed(2) + unit
   else if (sign && val > 0) displayVal = sign + val.toFixed(2) + unit
   else displayVal = val.toFixed(unit === 'j' ? 2 : 2) + unit
