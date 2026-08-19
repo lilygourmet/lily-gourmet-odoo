@@ -827,18 +827,16 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                               }}>
                                 {isMobile ? (
                                   <>
-                                    <div style={{ minWidth: 0 }}>
-                                      <div style={{ color: '#1a0f0a', fontWeight: 500 }}>
-                                        {t?.label || a.type}
-                                        {' · '}
-                                        <span style={{ color: Number(a.jours) < 0 ? '#A32D2D' : '#085041', fontWeight: 600 }}>{Number(a.jours) > 0 ? '+' : ''}{a.jours} j</span>
-                                        {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
-                                      </div>
-                                      <div style={{ color: '#4a3a30', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                        <Calendar size={10} />
-                                        {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} → {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
-                                      </div>
-                                      {a.raison && <div style={{ color: '#8a7a70', fontSize: 11, marginTop: 2 }}>{a.raison}</div>}
+                                    {/* Tout sur une seule ligne, qui se replie si besoin */}
+                                    <div style={{ minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '0 6px', fontSize: 12 }}>
+                                      <span style={{ color: '#1a0f0a', fontWeight: 500 }}>{t?.label || a.type}</span>
+                                      <span style={{ color: Number(a.jours) < 0 ? '#A32D2D' : '#085041', fontWeight: 600 }}>{Number(a.jours) > 0 ? '+' : ''}{a.jours} j</span>
+                                      {a.source === 'auto' && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
+                                      <span style={{ color: '#8a7a70' }}>·</span>
+                                      <span style={{ color: '#4a3a30', fontSize: 11 }}>
+                                        {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)} → {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}
+                                      </span>
+                                      {a.raison && <><span style={{ color: '#8a7a70' }}>·</span><span style={{ color: '#8a7a70', fontSize: 11 }}>{a.raison}</span></>}
                                     </div>
                                     {isAdmin && (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1679,18 +1677,21 @@ function joursDecomptesConge(c, emp, feriesSet = null) {
 // ============================================================
 function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSet, isMobile }) {
   const annee = new Date().getFullYear()
-  const [selId, setSelId] = useState(() => employes[0]?.id ?? null)
+  // Aucun employé sélectionné au départ, et on n'affiche la liste qu'une fois
+  // une équipe choisie ou un nom cherché : 36 photos d'un coup, c'est illisible.
+  const [selId, setSelId] = useState(null)
   const [q, setQ] = useState('')
   const [filterGroup, setFilterGroup] = useState(null)
 
-  const emp = employes.find(e => e.id === selId) || employes[0]
+  const emp = employes.find(e => e.id === selId) || null
   const ql = q.trim().toLowerCase()
-  const visibles = employes.filter(e =>
-    (!filterGroup || (e.groupe || 'Aucun') === filterGroup) &&
-    (!ql || (e.nom || '').toLowerCase().includes(ql)))
+  const aChoisi = !!filterGroup || !!ql
 
   // Employés groupés par équipe, dans l'ordre d'affichage habituel
   const groupes = useMemo(() => {
+    const visibles = !aChoisi ? [] : employes.filter(e =>
+      (!filterGroup || (e.groupe || 'Aucun') === filterGroup) &&
+      (!ql || (e.nom || '').toLowerCase().includes(ql)))
     const by = new Map()
     for (const e of visibles) {
       const g = e.groupe || 'Aucun'
@@ -1701,7 +1702,7 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
     return [...by.keys()]
       .sort((a, b) => (ordre.indexOf(a) === -1 ? 99 : ordre.indexOf(a)) - (ordre.indexOf(b) === -1 ? 99 : ordre.indexOf(b)))
       .map(g => [g, by.get(g)])
-  }, [visibles])
+  }, [employes, aChoisi, filterGroup, ql])
 
   const debutAn = `${annee}-01-01`, finAn = `${annee}-12-31`
 
@@ -1801,7 +1802,11 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
             )
           })}
         </div>
-        {groupes.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70' }}>Aucun employé pour cette recherche.</div>}
+        {groupes.length === 0 && (
+          <div style={{ fontSize: 12, color: '#8a7a70' }}>
+            {aChoisi ? 'Aucun employé pour cette recherche.' : 'Choisis une équipe ci-dessus, ou cherche un nom.'}
+          </div>
+        )}
         {groupes.map(([g, list]) => {
           const c = GROUP_COLORS[g] || '#95a5a6'
           return (
