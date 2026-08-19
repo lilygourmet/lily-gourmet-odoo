@@ -1,0 +1,424 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Récap annuel congés</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#fcfbf8;color:#1a0f0a;font:14px/1.5 Geist,system-ui,sans-serif;padding:24px}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:600}
+.sub{color:#8a7a70;font-size:13px;margin-bottom:20px}
+.note{background:#FFF7E0;border:1px solid #F0D89A;color:#854F0B;border-radius:10px;padding:9px 13px;font-size:12px;margin-bottom:20px}
+.tot{display:flex;gap:28px;flex-wrap:wrap;padding:16px 0;border-top:1px solid #e5d8c3;border-bottom:1px solid #e5d8c3;margin-bottom:8px}
+.tot div{min-width:96px}
+.tot .k{font-size:11px;color:#8a7a70;text-transform:uppercase;letter-spacing:.5px}
+.tot .v{font-family:Fraunces,serif;font-size:21px;font-weight:600;margin-top:2px}
+.solde .v{color:#085041}.solde.neg .v{color:#A32D2D}
+.leg{display:flex;gap:16px;font-size:11.5px;color:#4a3a30;margin-bottom:12px}
+.leg span{display:inline-flex;align-items:center;gap:6px}
+.leg i{width:11px;height:11px;border-radius:3px;display:inline-block}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;font-size:11px;color:#8a7a70;text-transform:uppercase;letter-spacing:.5px;padding:0 8px 8px}
+td{padding:7px 8px;border-top:1px solid #f3ece1}
+tr.alloc{background:#F2F8EC}
+tr.conge{background:#FBF1F1}
+tr.alloc td:first-child{box-shadow:inset 3px 0 0 #85B84F}
+tr.conge td:first-child{box-shadow:inset 3px 0 0 #D98A8A}
+.tag{display:inline-block;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;padding:1px 6px;border-radius:999px;margin-right:8px;font-weight:600;vertical-align:1px}
+.tag.alloc{background:#DCEBCB;color:#3F6B12}
+.tag.conge{background:#F4DADA;color:#A32D2D}
+.d{color:#8a7a70;width:56px;font-variant-numeric:tabular-nums}
+.n{text-align:right;font-variant-numeric:tabular-nums;width:64px}
+.pos{color:#085041;font-weight:500}.neg{color:#A32D2D;font-weight:500}
+.cum{color:#4a3a30;font-weight:600}
+tr.fin td{border-top:1.5px solid #1a0f0a;font-weight:600;padding-top:10px;background:#fff;box-shadow:none}
+h2{font-family:Fraunces,serif;font-size:15px;font-weight:600;margin:26px 0 8px}
+.hors{font-size:12.5px;color:#4a3a30}
+.hors div{display:flex;justify-content:space-between;padding:6px 8px;border-top:1px solid #f3ece1}
+.pick{background:#fff;border:1px solid #e5d8c3;border-radius:14px;padding:12px 14px}
+.grp{margin-bottom:10px}
+.grp:last-child{margin-bottom:0}
+.gh{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:#4a3a30;font-weight:600;display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.gd{width:8px;height:8px;border-radius:999px}
+.gn{color:#b8ada4;font-weight:400}
+.ppl{display:flex;flex-wrap:wrap;gap:10px}
+.p{width:56px;text-align:center;cursor:pointer;opacity:.55}
+.p.on{opacity:1}
+.av{width:38px;height:38px;border-radius:999px;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:12px;overflow:hidden}
+.p.on .av{outline:2.5px solid #993556;outline-offset:2px}
+.av img{width:100%;height:100%;object-fit:cover}
+.nm{font-size:10px;margin-top:5px;line-height:1.15;color:#4a3a30}
+.p.on .nm{font-weight:600;color:#1a0f0a}
+.modal{border:1px solid #e5d8c3;border-radius:14px;padding:16px;background:#fff;max-width:430px;margin-top:10px}
+.modal .t{font-size:15px;font-weight:600;margin-bottom:2px}
+.modal .s{font-size:11.5px;color:#8a7a70;margin-bottom:14px}
+.blk{background:#F4F0EA;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px}
+.blk div{display:flex;justify-content:space-between;padding:1px 0}
+.blk .tt{border-top:1px solid #e5d8c3;margin-top:6px;padding-top:6px;font-weight:600;font-size:13px}
+.deja{background:#EEEDFE;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;color:#3C3489}
+.deja b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.deja div{display:flex;justify-content:space-between;padding:1px 0}
+</style></head><body><div class="wrap">
+
+<h1 style="margin-bottom:14px">Récapitulatif annuel</h1>
+<div class="note"><b>Maquette</b> — vraies données au 19/08. Rien n'est codé.</div>
+
+<div class="pick">
+<div class="grp">
+      <div class="gh"><span class="gd" style="background:#d35400"></span>Cuisine <span class="gn">5</span></div>
+      <div class="ppl">
+        <div class="p on" title="FATIHA MOUTAWAKIL">
+          <div class="av" style="background:#d35400"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/43/odoo.png" alt=""></div>
+          <div class="nm">FATIHA</div>
+        </div>
+        <div class="p" title="FATIMA-ZAHRAE CHOUHAB">
+          <div class="av" style="background:#d35400"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/13/odoo.png" alt=""></div>
+          <div class="nm">FATIMA-ZAHRAE</div>
+        </div>
+        <div class="p" title="HANANE BOULAK">
+          <div class="av" style="background:#d35400"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/24/odoo.png" alt=""></div>
+          <div class="nm">HANANE</div>
+        </div>
+        <div class="p" title="KHAOULA ZAKRI">
+          <div class="av" style="background:#d35400"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/26/odoo.png" alt=""></div>
+          <div class="nm">KHAOULA</div>
+        </div>
+        <div class="p" title="ZAKIA EL AROUI">
+          <div class="av" style="background:#d35400"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/42/odoo.png" alt=""></div>
+          <div class="nm">ZAKIA</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#c0392b"></span>CD <span class="gn">5</span></div>
+      <div class="ppl">
+        <div class="p" title="BADIA DOUKALI">
+          <div class="av" style="background:#c0392b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/2/odoo.png" alt=""></div>
+          <div class="nm">BADIA</div>
+        </div>
+        <div class="p" title="CHAIMAE EDHAKIR">
+          <div class="av" style="background:#c0392b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/39/odoo.png" alt=""></div>
+          <div class="nm">CHAIMAE</div>
+        </div>
+        <div class="p" title="CHOROUK BENMALEK">
+          <div class="av" style="background:#c0392b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/35/odoo.png" alt=""></div>
+          <div class="nm">CHOROUK</div>
+        </div>
+        <div class="p" title="DONYA HOUMMADI">
+          <div class="av" style="background:#c0392b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/41/odoo.png" alt=""></div>
+          <div class="nm">DONYA</div>
+        </div>
+        <div class="p" title="MERYEM LAMSAGUAD">
+          <div class="av" style="background:#c0392b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/5/odoo.png" alt=""></div>
+          <div class="nm">MERYEM</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#e67e22"></span>CD Prod <span class="gn">2</span></div>
+      <div class="ppl">
+        <div class="p" title="HAYAT MOUKADDEM">
+          <div class="av" style="background:#e67e22"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/23/odoo.png" alt=""></div>
+          <div class="nm">HAYAT</div>
+        </div>
+        <div class="p" title="YOUSSEF EL KRYMY">
+          <div class="av" style="background:#e67e22"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/28/odoo.png" alt=""></div>
+          <div class="nm">YOUSSEF</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#8e44ad"></span>Prod <span class="gn">5</span></div>
+      <div class="ppl">
+        <div class="p" title="BOUCHTA BHILILI">
+          <div class="av" style="background:#8e44ad"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/1/odoo.png" alt=""></div>
+          <div class="nm">BOUCHTA</div>
+        </div>
+        <div class="p" title="FATIMA EZZAHRA EL MAAROURI">
+          <div class="av" style="background:#8e44ad"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/40/odoo.png" alt=""></div>
+          <div class="nm">FATIMA</div>
+        </div>
+        <div class="p" title="HANAE MOUJAHID">
+          <div class="av" style="background:#8e44ad"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/31/odoo.png" alt=""></div>
+          <div class="nm">HANAE</div>
+        </div>
+        <div class="p" title="MOHCINE ELBARI">
+          <div class="av" style="background:#8e44ad"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/53/odoo.png" alt=""></div>
+          <div class="nm">MOHCINE</div>
+        </div>
+        <div class="p" title="MOUHCINE BOUBELLA">
+          <div class="av" style="background:#8e44ad"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/10/odoo.png" alt=""></div>
+          <div class="nm">MOUHCINE</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#9b59b6"></span>Prod Vitrine <span class="gn">3</span></div>
+      <div class="ppl">
+        <div class="p" title="ASMAA EL AABADI">
+          <div class="av" style="background:#9b59b6"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/4/odoo.png" alt=""></div>
+          <div class="nm">ASMAA</div>
+        </div>
+        <div class="p" title="HASSANIA LAGNINA">
+          <div class="av" style="background:#9b59b6"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/8/odoo.png" alt=""></div>
+          <div class="nm">HASSANIA</div>
+        </div>
+        <div class="p" title="NAJOUA ELBOUZAYD">
+          <div class="av" style="background:#9b59b6"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/52/odoo.png" alt=""></div>
+          <div class="nm">NAJOUA</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#b8860b"></span>Service <span class="gn">3</span></div>
+      <div class="ppl">
+        <div class="p" title="HAMZA SAIDI">
+          <div class="av" style="background:#b8860b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/19/odoo.png" alt=""></div>
+          <div class="nm">HAMZA</div>
+        </div>
+        <div class="p" title="MOHCINE EL BYED">
+          <div class="av" style="background:#b8860b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/12/odoo.png" alt=""></div>
+          <div class="nm">MOHCINE</div>
+        </div>
+        <div class="p" title="YOUNES ABBOUDI">
+          <div class="av" style="background:#b8860b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/14/odoo.png" alt=""></div>
+          <div class="nm">YOUNES</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#7a1f2b"></span>Commercial <span class="gn">2</span></div>
+      <div class="ppl">
+        <div class="p" title="HANANE OUARDA">
+          <div class="av" style="background:#7a1f2b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/32/odoo.png" alt=""></div>
+          <div class="nm">HANANE</div>
+        </div>
+        <div class="p" title="ZINEB HAJOUJ">
+          <div class="av" style="background:#7a1f2b"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/18/odoo.png" alt=""></div>
+          <div class="nm">ZINEB</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#16a085"></span>Menage <span class="gn">5</span></div>
+      <div class="ppl">
+        <div class="p" title="BOUCHRA LAMNAOUAR">
+          <div class="av" style="background:#16a085"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/7/odoo.png" alt=""></div>
+          <div class="nm">BOUCHRA</div>
+        </div>
+        <div class="p" title="HIBA BELAHRACH">
+          <div class="av" style="background:#16a085"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/36/odoo.png" alt=""></div>
+          <div class="nm">HIBA</div>
+        </div>
+        <div class="p" title="KHADIJA EL HACHIMI">
+          <div class="av" style="background:#16a085"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/25/odoo.png" alt=""></div>
+          <div class="nm">KHADIJA</div>
+        </div>
+        <div class="p" title="NAJAT EL HAIMER">
+          <div class="av" style="background:#16a085"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/15/odoo.png" alt=""></div>
+          <div class="nm">NAJAT</div>
+        </div>
+        <div class="p" title="SOUAD YEDDARI">
+          <div class="av" style="background:#16a085"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/6/odoo.png" alt=""></div>
+          <div class="nm">SOUAD</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#34495e"></span>Admin <span class="gn">5</span></div>
+      <div class="ppl">
+        <div class="p" title="ISMAIL EL IDRISSI">
+          <div class="av" style="background:#34495e"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/22/odoo.png" alt=""></div>
+          <div class="nm">ISMAIL</div>
+        </div>
+        <div class="p" title="KALTOUME MASSAOUDI">
+          <div class="av" style="background:#34495e"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/21/odoo.png" alt=""></div>
+          <div class="nm">KALTOUME</div>
+        </div>
+        <div class="p" title="MERIEM MRABTT">
+          <div class="av" style="background:#34495e"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/9/odoo.png" alt=""></div>
+          <div class="nm">MERIEM</div>
+        </div>
+        <div class="p" title="SALIMA HRARI">
+          <div class="av" style="background:#34495e"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/11/odoo.png" alt=""></div>
+          <div class="nm">SALIMA</div>
+        </div>
+        <div class="p" title="YASMINA BENATTABOU">
+          <div class="av" style="background:#34495e"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/38/odoo.png" alt=""></div>
+          <div class="nm">YASMINA</div>
+        </div></div>
+    </div><div class="grp">
+      <div class="gh"><span class="gd" style="background:#95a5a6"></span>Aucun <span class="gn">1</span></div>
+      <div class="ppl">
+        <div class="p" title="HAMID EDDARIF">
+          <div class="av" style="background:#95a5a6"><img src="https://nsmwcrebjhvtopjdnsun.supabase.co/storage/v1/object/public/photos-employes/3/odoo.png" alt=""></div>
+          <div class="nm">HAMID</div>
+        </div></div>
+    </div>
+</div>
+
+<h1 style="margin-top:26px">FATIHA MOUTAWAKIL</h1>
+<div class="sub">Année 2026 — entrée le 01/10/2025</div>
+
+<div class="tot">
+  <div><div class="k">Droit annuel</div><div class="v">20 j</div></div>
+  <div><div class="k">Récup gagnée</div><div class="v">+5 j</div></div>
+  <div><div class="k">Pris</div><div class="v">−28 j</div></div>
+  <div class="solde neg"><div class="k">Restant</div><div class="v">-3 j</div></div>
+</div>
+
+<div class="leg">
+  <span><i style="background:#85B84F"></i> acquis — droit annuel, récup, conversions</span>
+  <span><i style="background:#D98A8A"></i> pris — congés et récups posés</span>
+</div>
+
+<table>
+  <thead><tr><th>Date</th><th>Mouvement</th><th class="n">Jours</th><th class="n">Solde</th></tr></thead>
+  <tbody>
+    <tr class="alloc">
+  <td class="d">01/01</td>
+  <td><span class="tag alloc">acquis</span>Droit annuel</td>
+  <td class="n pos">+2</td>
+  <td class="n cum">2</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">01/01</td>
+  <td><span class="tag alloc">acquis</span>Droit annuel</td>
+  <td class="n pos">+18</td>
+  <td class="n cum">20</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">04/01</td>
+  <td><span class="tag alloc">acquis</span>jour de récup</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">20.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">11/01</td>
+  <td><span class="tag alloc">acquis</span>Manifeste  de l'indépendance</td>
+  <td class="n pos">+1</td>
+  <td class="n cum">21.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">11/01</td>
+  <td><span class="tag alloc">acquis</span>jour de récup</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">22</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">14/01</td>
+  <td><span class="tag alloc">acquis</span>Nouvel An Amazigh</td>
+  <td class="n pos">+1</td>
+  <td class="n cum">23</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">18/01</td>
+  <td><span class="tag alloc">acquis</span>jour de récup</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">23.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">01/02</td>
+  <td><span class="tag alloc">acquis</span>récup de jour off</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">24</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">08/02</td>
+  <td><span class="tag alloc">acquis</span>récup de jour off</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">24.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">15/02</td>
+  <td><span class="tag alloc">acquis</span>récup de jour  off</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">25</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">22/02</td>
+  <td><span class="tag alloc">acquis</span>récup de jour off</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">25.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">08/03</td>
+  <td><span class="tag alloc">acquis</span>Récup de jour off</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">26</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">15/03</td>
+  <td><span class="tag alloc">acquis</span>Récup de jour off</td>
+  <td class="n pos">+0.5</td>
+  <td class="n cum">26.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">20/03</td>
+  <td><span class="tag alloc">acquis</span>Aïd al-Fitr</td>
+  <td class="n pos">+1</td>
+  <td class="n cum">27.5</td>
+</tr>
+    <tr class="conge">
+  <td class="d">22/03</td>
+  <td><span class="tag conge">pris</span>Récup prise</td>
+  <td class="n neg">-1</td>
+  <td class="n cum">26.5</td>
+</tr>
+    <tr class="conge">
+  <td class="d">07/04</td>
+  <td><span class="tag conge">pris</span>Congé (07/04 → 16/04)</td>
+  <td class="n neg">-9</td>
+  <td class="n cum">17.5</td>
+</tr>
+    <tr class="conge">
+  <td class="d">29/05</td>
+  <td><span class="tag conge">pris</span>Congé (29/05 → 09/06)</td>
+  <td class="n neg">-10</td>
+  <td class="n cum">7.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">17/06</td>
+  <td><span class="tag alloc">acquis</span>1 er moharram</td>
+  <td class="n pos">+1</td>
+  <td class="n cum">8.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">01/07</td>
+  <td><span class="tag alloc">acquis</span>Conversion solde Juillet 2026 : −32 h → −4 j récup</td>
+  <td class="n neg">-4</td>
+  <td class="n cum">4.5</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">01/07</td>
+  <td><span class="tag alloc">acquis</span>Conversion solde Juillet 2026 : −4 h → −0.5 j récup</td>
+  <td class="n neg">-0.5</td>
+  <td class="n cum">4</td>
+</tr>
+    <tr class="conge">
+  <td class="d">28/07</td>
+  <td><span class="tag conge">pris</span>Congé (28/07 → 06/08)</td>
+  <td class="n neg">-8</td>
+  <td class="n cum">-4</td>
+</tr>
+    <tr class="alloc">
+  <td class="d">14/08</td>
+  <td><span class="tag alloc">acquis</span>Allégeance Oued Eddahab (travaillé)</td>
+  <td class="n pos">+1</td>
+  <td class="n cum">-3</td>
+</tr>
+    <tr class="fin"><td></td><td>Solde au 19/08</td><td></td><td class="n">-3 j</td></tr>
+  </tbody>
+</table>
+
+<h2>Hors compteur</h2>
+<div class="hors">
+  <div><span>Maladie ≤ 3 j <span style="color:#8a7a70">(pool 6 j/an)</span></span><b>6 j</b></div>
+  <div><span>Maladie &gt; 3 j <span style="color:#8a7a70">(non payée)</span></span><b>21 j</b></div>
+  <div><span>Sans solde</span><b>2 j</b></div>
+</div>
+
+<h2>Et dans le Pointage, au moment de convertir</h2>
+<div class="modal">
+  <div class="t">Convertir les heures en jours</div>
+  <div class="s">FATIHA MOUTAWAKIL · Juillet 2026 — 8 h = 1 jour</div>
+  <div class="deja">
+    <b>Déjà converti pour ce mois</b>
+    <div><span>32 h → −4 j retirés de la récup</span><span>19/08</span></div>
+    <div><span>16 h → 2 j en sans solde</span><span>19/08</span></div>
+  </div>
+  <div class="blk">
+    <div><span>Heures sup du mois</span><b>+5,53 h</b></div>
+    <div><span>Heures manquantes</span><b>−16,14 h</b></div>
+    <div><span>Report du mois précédent</span><b>−43,06 h</b></div>
+    <div><span>Déjà converti</span><b>+48 h</b></div>
+    <div class="tt"><span>Solde du mois</span><span style="color:#A32D2D">−5,67 h</span></div>
+  </div>
+  <div style="font-size:12.5px;color:#4a3a30">Reste convertible : <b>0,5 j</b> (4 h)</div>
+</div>
+
+</div></body></html>

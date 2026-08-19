@@ -52,6 +52,9 @@ import { CONGE_TYPES as TYPES, formatTypeConge } from '../lib/conges'
 // dispoTypeConge / debutPossibleType : déplacés dans lib/conges.js
 // (réutilisés par l'onglet « À traiter »).
 
+// Date courte JJ/MM pour les relevés (colonnes étroites)
+const fmtCourt = d => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '')
+
 function fmt(d) {
   return d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 }
@@ -571,6 +574,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
             Allocations {allocations.filter(a => a.statut === 'attente').length > 0 && <span style={badge}>{allocations.filter(a => a.statut === 'attente').length}</span>}
           </Tab>
           <Tab active={tab === 'soldes'} onClick={() => setTab('soldes')}>Soldes employés</Tab>
+          <Tab active={tab === 'recap'} onClick={() => setTab('recap')}>Récap annuel</Tab>
           <Tab active={tab === 'equipe'} onClick={() => setTab('equipe')}><Calendar size={13} /> Calendrier équipe</Tab>
           {canManagePending && (
             <Tab active={tab === 'a_traiter'} onClick={() => setTab('a_traiter')}>
@@ -1050,6 +1054,13 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
 
         {!loading && tab === 'a_traiter' && canManagePending && (
           <ATraiterTab user={user} onChange={setATraiterCount} />
+        )}
+
+        {!loading && tab === 'recap' && (
+          <RecapAnnuel
+            employes={employes} conges={conges} allocations={allocations}
+            feriesSet={feriesSet} isMobile={isMobile}
+          />
         )}
 
         {!loading && tab === 'equipe' && (
@@ -1651,6 +1662,199 @@ function joursDecomptesConge(c, emp, feriesSet = null) {
     return Number(c.jours_decomptes)
   }
   return joursDecomptesCalcul(c, emp, feriesSet)
+}
+
+// ============================================================
+// Récap annuel : le relevé de compte d'un employé — tout ce qui a été
+// ACQUIS (droit annuel, récups, conversions) et tout ce qui a été PRIS,
+// dans l'ordre des dates, avec le solde recalculé à chaque ligne.
+// ============================================================
+function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
+  const annee = new Date().getFullYear()
+  const [selId, setSelId] = useState(() => employes[0]?.id ?? null)
+  const [q, setQ] = useState('')
+
+  const emp = employes.find(e => e.id === selId) || employes[0]
+  const ql = q.trim().toLowerCase()
+  const visibles = ql ? employes.filter(e => (e.nom || '').toLowerCase().includes(ql)) : employes
+
+  // Employés groupés par équipe, dans l'ordre d'affichage habituel
+  const groupes = useMemo(() => {
+    const by = new Map()
+    for (const e of visibles) {
+      const g = e.groupe || 'Aucun'
+      if (!by.has(g)) by.set(g, [])
+      by.get(g).push(e)
+    }
+    const ordre = Object.keys(GROUP_COLORS)
+    return [...by.keys()]
+      .sort((a, b) => (ordre.indexOf(a) === -1 ? 99 : ordre.indexOf(a)) - (ordre.indexOf(b) === -1 ? 99 : ordre.indexOf(b)))
+      .map(g => [g, by.get(g)])
+  }, [visibles])
+
+  const debutAn = `${annee}-01-01`, finAn = `${annee}-12-31`
+
+  const { mvts, totAcquis, totRecup, totPris, solde, hors } = useMemo(() => {
+    if (!emp) return { mvts: [], totAcquis: 0, totRecup: 0, totPris: 0, solde: 0, hors: {} }
+    const out = []
+    const entree = emp.date_anciennete || emp.date_entree
+    for (const a of allocations) {
+      if (a.employe_id !== emp.id || a.statut !== 'valide') continue
+      if (a.type === 'maladie_courte') continue          // pool séparé
+      const d = a.date_evt || (entree && entree > debutAn && entree <= finAn ? entree : debutAn)
+      const estDroit = a.type === 'annuel' || a.type === 'reliquat'
+      const lib = a.type === 'annuel' ? 'Droit annuel'
+        : a.type === 'reliquat' ? 'Reliquat année précédente'
+        : (a.raison || (ALLOC_TYPES.find(x => x.v === a.type)?.label || 'Récupération'))
+      out.push({ key: 'a' + a.id, date: d, lib, j: Number(a.jours), cat: 'acquis', droit: estDroit })
+    }
+    const h = { maladieCourte: 0, maladieLongue: 0, sansSolde: 0 }
+    for (const c of conges) {
+      if (c.employe_id !== emp.id || c.statut !== 'valide') continue
+      if (c.date_debut > finAn || c.date_fin < debutAn) continue
+      const cat = classifierConge(c)
+      const n = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, emp, feriesSet)
+      if (cat === 'maladie_courte') { h.maladieCourte += n; continue }
+      if (cat === 'maladie_longue') { h.maladieLongue += n; continue }
+      if (cat === 'sans_solde')     { h.sansSolde += n; continue }
+      const meme = c.date_debut === c.date_fin
+      const lib = (cat === 'recup' ? 'Récup prise' : (formatTypeConge(c.type_conge) || 'Congé'))
+        + (meme ? '' : ` (${fmtCourt(c.date_debut)} → ${fmtCourt(c.date_fin)})`)
+      out.push({ key: 'c' + c.id, date: c.date_debut, lib, j: -n, cat: 'pris' })
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date) || (b.cat === 'acquis' ? 1 : -1))
+    let cum = 0
+    for (const m of out) { cum = Math.round((cum + m.j) * 100) / 100; m.cum = cum }
+    const r2 = n => Math.round(n * 100) / 100
+    const ta = r2(out.filter(m => m.cat === 'acquis' && m.droit).reduce((s, m) => s + m.j, 0))
+    const tr = r2(out.filter(m => m.cat === 'acquis' && !m.droit).reduce((s, m) => s + m.j, 0))
+    const tp = r2(-out.filter(m => m.cat === 'pris').reduce((s, m) => s + m.j, 0))
+    return { mvts: out, totAcquis: ta, totRecup: tr, totPris: tp, solde: r2(ta + tr - tp), hors: h }
+  }, [emp, conges, allocations, feriesSet, debutAn, finAn])
+
+  if (!employes.length) return <div style={emptyBox}>Aucun employé.</div>
+
+  const tot = (k, v, color) => (
+    <div style={{ minWidth: 96 }}>
+      <div style={{ fontSize: 11, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: .5 }}>{k}</div>
+      <div style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 21, fontWeight: 600, marginTop: 2, color: color || '#1a0f0a' }}>{v}</div>
+    </div>
+  )
+
+  return (
+    <div>
+      {/* Choix de l'employé : par équipe, avec photo, + recherche */}
+      <div style={{ ...card, marginBottom: 16 }}>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔎 Rechercher un nom…"
+          style={{ ...ipt, width: '100%', marginBottom: 12 }} />
+        {groupes.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70' }}>Aucun employé pour cette recherche.</div>}
+        {groupes.map(([g, list]) => {
+          const c = GROUP_COLORS[g] || '#95a5a6'
+          return (
+            <div key={g} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: .8, color: '#4a3a30', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: c }} />
+                {groupLabel(g)} <span style={{ color: '#b8ada4', fontWeight: 400 }}>{list.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {list.map(e => {
+                  const on = e.id === emp?.id
+                  return (
+                    <button key={e.id} onClick={() => setSelId(e.id)} title={e.nom}
+                      style={{ width: 58, textAlign: 'center', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, opacity: on ? 1 : .55 }}>
+                      <div style={{ width: 38, height: 38, margin: '0 auto', borderRadius: 999, overflow: 'hidden', background: c, color: '#fff', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', outline: on ? '2.5px solid #993556' : 'none', outlineOffset: 2 }}>
+                        {e.photo_url ? <img src={e.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : (e.nom || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}
+                      </div>
+                      <div style={{ fontSize: 10, marginTop: 5, lineHeight: 1.15, color: on ? '#1a0f0a' : '#4a3a30', fontWeight: on ? 600 : 400 }}>
+                        {(e.nom || '').split(' ')[0]}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {emp && (
+        <div style={card}>
+          <div style={{ fontSize: 17, fontWeight: 600 }}>{emp.nom}</div>
+          <div style={{ fontSize: 12.5, color: '#8a7a70', marginBottom: 14 }}>
+            Année {annee}{(emp.date_anciennete || emp.date_entree) ? ` — entrée le ${fmt(emp.date_anciennete || emp.date_entree)}` : ''}
+          </div>
+
+          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', padding: '14px 0', borderTop: '1px solid #e5d8c3', borderBottom: '1px solid #e5d8c3', marginBottom: 8 }}>
+            {tot('Droit annuel', `${totAcquis} j`)}
+            {tot('Récup gagnée', `${totRecup > 0 ? '+' : ''}${totRecup} j`)}
+            {tot('Pris', `−${totPris} j`)}
+            {tot('Restant', `${solde} j`, solde < 0 ? '#A32D2D' : '#085041')}
+          </div>
+
+          <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#4a3a30', marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><i style={{ width: 11, height: 11, borderRadius: 3, background: '#85B84F', display: 'inline-block' }} /> acquis</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><i style={{ width: 11, height: 11, borderRadius: 3, background: '#D98A8A', display: 'inline-block' }} /> pris</span>
+          </div>
+
+          {mvts.length === 0 ? (
+            <div style={emptyBox}>Aucun mouvement en {annee}.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: isMobile ? 420 : 0 }}>
+                <thead>
+                  <tr style={{ fontSize: 11, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: .5 }}>
+                    <th style={{ textAlign: 'left', fontWeight: 500, padding: '0 8px 8px' }}>Date</th>
+                    <th style={{ textAlign: 'left', fontWeight: 500, padding: '0 8px 8px' }}>Mouvement</th>
+                    <th style={{ textAlign: 'right', fontWeight: 500, padding: '0 8px 8px' }}>Jours</th>
+                    <th style={{ textAlign: 'right', fontWeight: 500, padding: '0 8px 8px' }}>Solde</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mvts.map(m => {
+                    const acquis = m.cat === 'acquis'
+                    return (
+                      <tr key={m.key} style={{ background: acquis ? '#F2F8EC' : '#FBF1F1' }}>
+                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', color: '#8a7a70', width: 58, boxShadow: `inset 3px 0 0 ${acquis ? '#85B84F' : '#D98A8A'}` }}>{fmtCourt(m.date)}</td>
+                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1' }}>
+                          <span style={{ display: 'inline-block', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: .6, padding: '1px 6px', borderRadius: 999, marginRight: 8, fontWeight: 600, background: acquis ? '#DCEBCB' : '#F4DADA', color: acquis ? '#3F6B12' : '#A32D2D' }}>
+                            {acquis ? 'acquis' : 'pris'}
+                          </span>
+                          {m.lib}
+                        </td>
+                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', textAlign: 'right', width: 64, fontWeight: 500, color: m.j < 0 ? '#A32D2D' : '#085041' }}>
+                          {m.j > 0 ? '+' : ''}{m.j}
+                        </td>
+                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', textAlign: 'right', width: 64, fontWeight: 600, color: '#4a3a30' }}>{m.cum}</td>
+                      </tr>
+                    )
+                  })}
+                  <tr>
+                    <td />
+                    <td style={{ padding: '10px 8px', borderTop: '1.5px solid #1a0f0a', fontWeight: 600 }}>Solde aujourd'hui</td>
+                    <td style={{ borderTop: '1.5px solid #1a0f0a' }} />
+                    <td style={{ padding: '10px 8px', borderTop: '1.5px solid #1a0f0a', textAlign: 'right', fontWeight: 600, color: solde < 0 ? '#A32D2D' : '#085041' }}>{solde} j</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 15, fontWeight: 600, margin: '22px 0 6px' }}>Hors compteur</div>
+          <div style={{ fontSize: 12.5, color: '#4a3a30' }}>
+            {[['Maladie ≤ 3 j', hors.maladieCourte, 'pool 6 j/an'],
+              ['Maladie > 3 j', hors.maladieLongue, 'non payée'],
+              ['Sans solde', hors.sansSolde, '']].map(([k, v, note]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderTop: '1px solid #f3ece1' }}>
+                <span>{k} {note && <span style={{ color: '#8a7a70' }}>({note})</span>}</span>
+                <b>{Math.round((v || 0) * 100) / 100} j</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function joursDecomptesCalcul(c, emp, feriesSet = null) {

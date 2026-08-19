@@ -1010,6 +1010,7 @@ export default function PointageTab({ user, isAdmin }) {
             report: result.synthese.solde_reporte_precedent,
             dejaConverti: result.synthese.heures_converties || 0,
           }}
+          conversions={(data.conversions || []).filter(c => String(c.employe_id) === String(empSelected?.id))}
           onClose={() => setShowConvert(false)}
           onConfirm={async (supH, manqH, modeManq) => {
             try {
@@ -1081,7 +1082,7 @@ function CongeAbsenceModal({ date, empNom, onClose, onConfirm }) {
 // Fenêtre : convertir des heures (sup / manquantes) en jours. 8 h = 1 jour.
 // On convertit LE SOLDE DU MOIS (report inclus), pas les heures sup et
 // manquantes séparément : c'est le solde qui doit tomber à zéro.
-function ConversionModal({ empNom, moisLabel, soldeMois, detail, onClose, onConfirm }) {
+function ConversionModal({ empNom, moisLabel, soldeMois, detail, conversions = [], onClose, onConfirm }) {
   // On convertit par DEMI-JOURNÉES (4 h = 0,5 j, 8 h = 1 j) : un congé ne se
   // prend pas par quart de journée. Les heures qui ne complètent pas une
   // demi-journée restent au solde du mois.
@@ -1111,6 +1112,27 @@ function ConversionModal({ empNom, moisLabel, soldeMois, detail, onClose, onConf
       <div style={modal} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 2 }}>Convertir les heures en jours</div>
         <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 16 }}>{empNom} · {moisLabel} — 8 h = 1 jour</div>
+
+        {/* Ce qui a déjà été converti pour ce mois — pour ne pas refaire deux fois */}
+        {conversions.length > 0 && (
+          <div style={{ background: '#EEEDFE', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: '#3C3489', marginBottom: 10 }}>
+            <b style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 5 }}>Déjà converti pour ce mois</b>
+            {conversions.map(c => {
+              const sup = Number(c.sup_heures) || 0, manq = Number(c.manq_heures) || 0
+              const j = h => Math.round(h / 8 * 100) / 100
+              return (
+                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '1px 0' }}>
+                  <span>
+                    {sup > 0 && `${sup} h → +${j(sup)} j récup`}
+                    {sup > 0 && manq > 0 && ' · '}
+                    {manq > 0 && `${manq} h → ${c.alloc_manq_id ? `−${j(manq)} j retirés de la récup` : `${j(manq)} j en sans solde`}`}
+                  </span>
+                  <span style={{ color: '#8a7a70', whiteSpace: 'nowrap' }}>{c.created_at ? `${c.created_at.slice(8, 10)}/${c.created_at.slice(5, 7)}` : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Le détail qui compose le solde, pour comprendre le chiffre proposé */}
         <div style={{ fontSize: 12, color: '#4a3a30', background: '#F4F0EA', padding: '10px 12px', borderRadius: 10, marginBottom: 10 }}>
