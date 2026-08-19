@@ -30,7 +30,7 @@ import {
   calculSoldeConges, quotaAnnuel,
   loadCongesByStatuts, createDemandeConge,
   validerConge, rejeterConge, annulerConge,
-  loadAllocations, createAllocation, cancelAllocation, initAutoAllocationsTous,
+  loadAllocations, createAllocation, cancelAllocation, initAutoAllocationsTous, syncAllocationsAnnuelles,
   validerAllocation, rejeterAllocation,
   ALLOC_TYPES,
   updateAllocation, updateConge, deleteConge,
@@ -218,6 +218,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   const [showFerieForm, setShowFerieForm] = useState(false)
   const [editFerie, setEditFerie]         = useState(null)  // jour férié en cours d'édition
   const isMobile = useIsMobile()
+  const allocsSyncRef = useRef(false)   // la remise à jour des allocations ne tourne qu'une fois
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
@@ -233,6 +234,23 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
         supabase.from('employes').select('id, nom'),   // TOUS les noms (partis/fantômes inclus) pour l'affichage
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
+
+      // L'annuel accumulé grandit chaque mois : on remet les allocations AUTO à
+      // jour une fois par ouverture d'écran, sinon elles restent figées à leur
+      // valeur de création (et les nouvelles recrues n'en ont aucune).
+      // Admin uniquement, et une seule fois : ce sont des écritures.
+      if (isAdmin && !allocsSyncRef.current) {
+        allocsSyncRef.current = true
+        try {
+          const { maj, cree } = await syncAllocationsAnnuelles(empsActifs, annee, user.id)
+          if (maj + cree > 0) {
+            const fresh = await loadAllocations({ annee, statut: ['valide', 'attente'] })
+            allocs.length = 0
+            allocs.push(...fresh)
+          }
+        } catch (e) { console.warn('[syncAllocationsAnnuelles]', e?.message || e) }
+      }
+
       setEmployes(empsActifs)
       setNomsTous(noms?.data || [])
       setConges(all)

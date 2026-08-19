@@ -54,10 +54,12 @@ export function quotaAnnuel(emp, refDate = todayYMD()) {
   } else if (entryYear > refYear) {
     base = 0                                 // pas encore embauché
   } else {
-    // Même année : prorata mois travaillés (mois d'entrée inclus).
-    // Ex : entrée 2026-03-15 → 10 mois (mars→déc) × 1.5 = 15 j.
-    const moisDansAnnee = 12 - entry.getMonth()
-    base = moisDansAnnee * (QUOTA_BASE / 12)
+    // Même année : prorata des mois travaillés. Le mois d'entrée ne compte que si
+    // on arrive dans sa PREMIÈRE QUINZAINE (règle Layla, 19/08/2026 : entrée le
+    // 28/01 → janvier ne compte pas). Ex : entrée 2026-03-10 → 10 mois (mars→déc)
+    // = 15 j ; entrée 2026-01-28 → 11 mois (févr→déc) = 16,5 j.
+    const moisDansAnnee = (12 - entry.getMonth()) - (entry.getDate() > 15 ? 1 : 0)
+    base = Math.max(0, moisDansAnnee) * (QUOTA_BASE / 12)
   }
 
   // Bonus ancienneté (calculé depuis la date d'entrée, indépendamment de l'année)
@@ -805,15 +807,17 @@ export function joursAnnuelAccumules(emp, refDate = todayYMD(), annee = null) {
 
   const ancienneteMois = moisEntre(dateAnc, refDate)
 
-  // Bonus ancienneté (calculés depuis la date d'intégration)
-  let quotaPlein = QUOTA_BASE
-  const ancienneteAnnees = ancienneteMois / 12
-  if (ancienneteAnnees >= 5)  quotaPlein += BONUS_5_ANS
-  if (ancienneteAnnees >= 10) quotaPlein += BONUS_10_ANS
+  // Droit de l'année AU PRORATA des mois de présence (règle Layla, 19/08/2026) :
+  // une entrée en cours d'année ne donne pas les 18 j pleins. quotaAnnuel fait
+  // déjà ce calcul (mois d'entrée inclus) + les bonus d'ancienneté.
+  const droitAnnuel = quotaAnnuel(emp, refDate)
 
-  // ≥ 6 mois → plein quota d'un coup ; sinon ramping 1,5 j/mois.
-  if (ancienneteMois >= MOIS_AVANT_PRISE) return quotaPlein
-  return Number((ancienneteMois * 1.5).toFixed(2))
+  // Avant 6 mois d'ancienneté : le droit se remplit mois par mois (1,5 j/mois).
+  // À partir de 6 mois : le droit de l'année est acquis en entier.
+  // C'est la règle d'origine, à ceci près qu'on plafonne au droit PRORATISÉ et
+  // non plus aux 18 j pleins (une entrée de février recevait 18 j au lieu de 16,5).
+  if (ancienneteMois >= MOIS_AVANT_PRISE) return droitAnnuel
+  return Number(Math.min(ancienneteMois * 1.5, droitAnnuel).toFixed(2))
 }
 
 // Crée les allocations auto manquantes (annuel = accumulé à ce jour ;
@@ -852,6 +856,53 @@ export async function ensureAutoAllocationsForEmploye(emp, annee, createdBy = nu
       console.warn('[ensureAutoAllocations:create]', e?.message || e)
     }
   }
+}
+
+// Remet à jour les allocations AUTO de l'année en une passe (2 requêtes + les
+// écritures nécessaires), au lieu des ~3 requêtes par employé de
+// initAutoAllocationsTous. L'annuel accumulé grandit chaque mois : sans ce
+// rafraîchissement, l'allocation reste figée à sa valeur de création.
+// Ne touche QUE les lignes source='auto' : les allocations Odoo ou manuelles
+// sont laissées telles quelles.
+export async function syncAllocationsAnnuelles(employes, annee, userId = null) {
+  const today = todayYMD()
+  const yearStr = String(annee)
+  const refDate = today.startsWith(yearStr) ? today
+    : (today > `${yearStr}-12-31` ? `${yearStr}-12-31` : `${yearStr}-01-01`)
+
+  const { data: allocs, error } = await supabase
+    .from('conges_allocations')
+    .select('id, employe_id, type, jours, statut')
+    .eq('annee', annee).eq('source', 'auto').in('type', ['annuel', 'maladie_courte'])
+  if (error) throw error
+
+  const idx = new Map()
+  for (const a of (allocs || [])) {
+    if (a.statut === 'annule') continue
+    idx.set(`${a.employe_id}|${a.type}`, a)
+  }
+
+  const aCreer = []
+  let maj = 0
+  for (const emp of employes) {
+    const attendu = joursAnnuelAccumules(emp, refDate, annee)
+    const ex = idx.get(`${emp.id}|annuel`)
+    if (!ex) {
+      aCreer.push({ employe_id: emp.id, annee, type: 'annuel', jours: attendu, source: 'auto', statut: 'valide', created_by: userId })
+    } else if (Number(ex.jours) !== attendu) {
+      const { error: e2 } = await supabase.from('conges_allocations').update({ jours: attendu }).eq('id', ex.id)
+      if (!e2) maj++
+    }
+    if (!idx.get(`${emp.id}|maladie_courte`)) {
+      aCreer.push({ employe_id: emp.id, annee, type: 'maladie_courte', jours: 6, source: 'auto', statut: 'valide', created_by: userId })
+    }
+  }
+  let cree = 0
+  if (aCreer.length) {
+    const { error: e3 } = await supabase.from('conges_allocations').insert(aCreer)
+    if (!e3) cree = aCreer.length
+  }
+  return { maj, cree }
 }
 
 // Pour TOUS les employés actifs : crée les allocations auto manquantes.
