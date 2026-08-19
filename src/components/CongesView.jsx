@@ -52,6 +52,8 @@ import { CONGE_TYPES as TYPES, formatTypeConge } from '../lib/conges'
 // dispoTypeConge / debutPossibleType : déplacés dans lib/conges.js
 // (réutilisés par l'onglet « À traiter »).
 
+const MOIS_LABELS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+
 // Date courte JJ/MM pour les relevés (colonnes étroites)
 const fmtCourt = d => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '')
 
@@ -222,19 +224,23 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   const [editFerie, setEditFerie]         = useState(null)  // jour férié en cours d'édition
   const isMobile = useIsMobile()
   const allocsSyncRef = useRef(false)   // la remise à jour des allocations ne tourne qu'une fois
+  const [conversions, setConversions] = useState([])   // heures converties en jours
 
   const reload = useCallback(async () => {
     setLoading(true); setError('')
     try {
       const annee = new Date().getFullYear()
       // 4 requêtes batchées au lieu de 2 par employé.
-      const [emps, all, allocs, recupRows, feries, noms] = await Promise.all([
+      const [emps, all, allocs, recupRows, feries, noms, convRows] = await Promise.all([
         loadEmployes(true, true),   // exclut les employés fantômes des congés/soldes
         loadCongesByStatuts(['demande', 'valide', 'rejete', 'annule'], `${annee - 1}-01-01`),
         loadAllocations({ annee, statut: ['valide', 'attente'] }),
         supabase.from('pointages_mois').select('employe_id, jours_recup').eq('annee', annee),
         loadJoursFeries(),
         supabase.from('employes').select('id, nom'),   // TOUS les noms (partis/fantômes inclus) pour l'affichage
+        // Conversions d'heures en jours : celles passées en SANS SOLDE ne créent
+        // aucune allocation, il faut les lire ici pour les montrer dans le récap.
+        supabase.from('heures_conversions').select('*').eq('annee', annee),
       ])
       const empsActifs = emps.filter(e => e.actif !== false)
 
@@ -256,6 +262,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
 
       setEmployes(empsActifs)
       setNomsTous(noms?.data || [])
+      setConversions(convRows?.data || [])
       setConges(all)
       setAllocations(allocs)
       setJoursFeries(feries)
@@ -1059,7 +1066,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
         {!loading && tab === 'recap' && (
           <RecapAnnuel
             employes={employes} conges={conges} allocations={allocations}
-            feriesSet={feriesSet} isMobile={isMobile}
+            conversions={conversions} feriesSet={feriesSet} isMobile={isMobile}
           />
         )}
 
@@ -1669,7 +1676,7 @@ function joursDecomptesConge(c, emp, feriesSet = null) {
 // ACQUIS (droit annuel, récups, conversions) et tout ce qui a été PRIS,
 // dans l'ordre des dates, avec le solde recalculé à chaque ligne.
 // ============================================================
-function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
+function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSet, isMobile }) {
   const annee = new Date().getFullYear()
   const [selId, setSelId] = useState(() => employes[0]?.id ?? null)
   const [q, setQ] = useState('')
@@ -1709,7 +1716,10 @@ function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
       const lib = a.type === 'annuel' ? 'Droit annuel'
         : a.type === 'reliquat' ? 'Reliquat année précédente'
         : (a.raison || (ALLOC_TYPES.find(x => x.v === a.type)?.label || 'Récupération'))
-      out.push({ key: 'a' + a.id, date: d, lib, j: Number(a.jours), cat: 'acquis', droit: estDroit })
+      // Une allocation NÉGATIVE (conversion d'heures manquantes, régularisation)
+      // est un retrait : elle ne doit pas s'afficher comme un acquis.
+      const j = Number(a.jours)
+      out.push({ key: 'a' + a.id, date: d, lib, j, cat: j < 0 ? 'retrait' : 'acquis', droit: estDroit })
     }
     const h = { maladieCourte: 0, maladieLongue: 0, sansSolde: 0 }
     for (const c of conges) {
@@ -1725,15 +1735,31 @@ function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
         + (meme ? '' : ` (${fmtCourt(c.date_debut)} → ${fmtCourt(c.date_fin)})`)
       out.push({ key: 'c' + c.id, date: c.date_debut, lib, j: -n, cat: 'pris' })
     }
+    // Heures passées en SANS SOLDE : aucune allocation créée (alloc_manq_id vide),
+    // elles n'apparaîtraient nulle part sans ça. Hors compteur, mais affichées.
+    for (const c of conversions) {
+      if (String(c.employe_id) !== String(emp.id)) continue
+      const manq = Number(c.manq_heures) || 0
+      if (manq > 0 && !c.alloc_manq_id) {
+        const jrsSS = Math.round(manq / 8 * 100) / 100
+        h.sansSolde += jrsSS
+        out.push({
+          key: 'k' + c.id,
+          date: `${c.annee}-${String(c.mois).padStart(2, '0')}-01`,
+          lib: `Conversion solde ${MOIS_LABELS[c.mois - 1]} : ${manq} h → ${jrsSS} j en sans solde`,
+          j: 0, cat: 'info',
+        })
+      }
+    }
     out.sort((a, b) => a.date.localeCompare(b.date) || (b.cat === 'acquis' ? 1 : -1))
     let cum = 0
     for (const m of out) { cum = Math.round((cum + m.j) * 100) / 100; m.cum = cum }
     const r2 = n => Math.round(n * 100) / 100
-    const ta = r2(out.filter(m => m.cat === 'acquis' && m.droit).reduce((s, m) => s + m.j, 0))
-    const tr = r2(out.filter(m => m.cat === 'acquis' && !m.droit).reduce((s, m) => s + m.j, 0))
+    const ta = r2(out.filter(m => m.droit).reduce((s, m) => s + m.j, 0))
+    const tr = r2(out.filter(m => (m.cat === 'acquis' || m.cat === 'retrait') && !m.droit).reduce((s, m) => s + m.j, 0))
     const tp = r2(-out.filter(m => m.cat === 'pris').reduce((s, m) => s + m.j, 0))
     return { mvts: out, totAcquis: ta, totRecup: tr, totPris: tp, solde: r2(ta + tr - tp), hors: h }
-  }, [emp, conges, allocations, feriesSet, debutAn, finAn])
+  }, [emp, conges, allocations, conversions, feriesSet, debutAn, finAn])
 
   if (!employes.length) return <div style={emptyBox}>Aucun employé.</div>
 
@@ -1819,8 +1845,11 @@ function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
           </div>
 
           <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#4a3a30', marginBottom: 12, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><i style={{ width: 11, height: 11, borderRadius: 3, background: '#85B84F', display: 'inline-block' }} /> acquis</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><i style={{ width: 11, height: 11, borderRadius: 3, background: '#D98A8A', display: 'inline-block' }} /> pris</span>
+            {[['#85B84F', 'acquis'], ['#D9954F', 'retiré'], ['#D98A8A', 'pris'], ['#A9A4D6', 'sans solde']].map(([c, l]) => (
+              <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <i style={{ width: 11, height: 11, borderRadius: 3, background: c, display: 'inline-block' }} /> {l}
+              </span>
+            ))}
           </div>
 
           {mvts.length === 0 ? (
@@ -1838,18 +1867,23 @@ function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
                 </thead>
                 <tbody>
                   {mvts.map(m => {
-                    const acquis = m.cat === 'acquis'
+                    const st = {
+                      acquis:  { bg: '#F2F8EC', bar: '#85B84F', tagBg: '#DCEBCB', tagFg: '#3F6B12', tag: 'acquis' },
+                      retrait: { bg: '#FDF3EC', bar: '#D9954F', tagBg: '#F6E2CD', tagFg: '#854F0B', tag: 'retiré' },
+                      pris:    { bg: '#FBF1F1', bar: '#D98A8A', tagBg: '#F4DADA', tagFg: '#A32D2D', tag: 'pris' },
+                      info:    { bg: '#F6F5FC', bar: '#A9A4D6', tagBg: '#E6E4F5', tagFg: '#3C3489', tag: 'sans solde' },
+                    }[m.cat] || {}
                     return (
-                      <tr key={m.key} style={{ background: acquis ? '#F2F8EC' : '#FBF1F1' }}>
-                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', color: '#8a7a70', width: 58, boxShadow: `inset 3px 0 0 ${acquis ? '#85B84F' : '#D98A8A'}` }}>{fmtCourt(m.date)}</td>
+                      <tr key={m.key} style={{ background: st.bg }}>
+                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', color: '#8a7a70', width: 58, boxShadow: `inset 3px 0 0 ${st.bar}` }}>{fmtCourt(m.date)}</td>
                         <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1' }}>
-                          <span style={{ display: 'inline-block', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: .6, padding: '1px 6px', borderRadius: 999, marginRight: 8, fontWeight: 600, background: acquis ? '#DCEBCB' : '#F4DADA', color: acquis ? '#3F6B12' : '#A32D2D' }}>
-                            {acquis ? 'acquis' : 'pris'}
+                          <span style={{ display: 'inline-block', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: .6, padding: '1px 6px', borderRadius: 999, marginRight: 8, fontWeight: 600, background: st.tagBg, color: st.tagFg }}>
+                            {st.tag}
                           </span>
                           {m.lib}
                         </td>
-                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', textAlign: 'right', width: 64, fontWeight: 500, color: m.j < 0 ? '#A32D2D' : '#085041' }}>
-                          {m.j > 0 ? '+' : ''}{m.j}
+                        <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', textAlign: 'right', width: 64, fontWeight: 500, color: m.j < 0 ? '#A32D2D' : (m.j > 0 ? '#085041' : '#8a7a70') }}>
+                          {m.j === 0 ? '—' : (m.j > 0 ? '+' : '') + m.j}
                         </td>
                         <td style={{ padding: '7px 8px', borderTop: '1px solid #f3ece1', textAlign: 'right', width: 64, fontWeight: 600, color: '#4a3a30' }}>{m.cum}</td>
                       </tr>
