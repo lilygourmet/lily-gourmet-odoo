@@ -671,31 +671,68 @@ export async function convertirHeuresEnJours({ employe, mois, annee, supHeures =
   const HRS_PAR_JOUR = 8
   const r2 = n => Math.round(n * 100) / 100
   const dateEvt = `${annee}-${String(mois).padStart(2, '0')}-01`
-  let alloc_sup_id = null, alloc_manq_id = null
+  const enJours = h => r2(h / HRS_PAR_JOUR)
 
-  if (supHeures > 0) {
-    const { data, error } = await supabase.from('conges_allocations').insert({
-      employe_id: employe.id, annee, type: 'autre', jours: r2(supHeures / HRS_PAR_JOUR),
-      raison: `Conversion solde ${moisLabel} : +${r2(supHeures)} h → +${r2(supHeures / HRS_PAR_JOUR)} j récup`,
+  // Reconvertir un mois déjà converti CUMULE dans la même ligne, au lieu
+  // d'empiler une conversion (et une allocation) de plus.
+  // On ne regroupe que ce qui est de même nature : une ligne « sans solde » ne
+  // se mélange pas avec une ligne « récup » — elles ne se traduisent pas pareil.
+  const natureDe = c => (Number(c.manq_heures) > 0 && !c.alloc_manq_id) ? 'sans_solde' : 'recup'
+  const nature = (manqHeures > 0 && modeManq === 'sans_solde') ? 'sans_solde' : 'recup'
+
+  const { data: dejaLa } = await supabase.from('heures_conversions')
+    .select('*').eq('employe_id', employe.id).eq('mois', mois).eq('annee', annee)
+  const ligne = (dejaLa || []).find(c => natureDe(c) === nature) || null
+
+  const totalSup  = r2((ligne ? Number(ligne.sup_heures)  : 0) + supHeures)
+  const totalManq = r2((ligne ? Number(ligne.manq_heures) : 0) + manqHeures)
+
+  // --- allocation des heures sup (toujours de la récup) ---
+  let alloc_sup_id = ligne?.alloc_sup_id || null
+  if (totalSup > 0) {
+    const payload = {
+      employe_id: employe.id, annee, type: 'autre', jours: enJours(totalSup),
+      raison: `Conversion solde ${moisLabel} : +${totalSup} h → +${enJours(totalSup)} j récup`,
       date_evt: dateEvt, source: 'manuel', statut: 'valide', created_by: userId,
-    }).select('id').single()
-    if (error) throw error
-    alloc_sup_id = data.id
+    }
+    if (alloc_sup_id) {
+      const { error } = await supabase.from('conges_allocations')
+        .update({ jours: payload.jours, raison: payload.raison }).eq('id', alloc_sup_id)
+      if (error) throw error
+    } else {
+      const { data, error } = await supabase.from('conges_allocations').insert(payload).select('id').single()
+      if (error) throw error
+      alloc_sup_id = data.id
+    }
   }
-  if (manqHeures > 0 && modeManq !== 'sans_solde') {
-    const { data, error } = await supabase.from('conges_allocations').insert({
-      employe_id: employe.id, annee, type: 'autre', jours: -r2(manqHeures / HRS_PAR_JOUR),
-      raison: `Conversion solde ${moisLabel} : −${r2(manqHeures)} h → −${r2(manqHeures / HRS_PAR_JOUR)} j récup`,
+
+  // --- heures manquantes : retirées de la récup, ou passées en sans solde ---
+  let alloc_manq_id = ligne?.alloc_manq_id || null
+  if (totalManq > 0 && nature === 'recup') {
+    const payload = {
+      employe_id: employe.id, annee, type: 'autre', jours: -enJours(totalManq),
+      raison: `Conversion solde ${moisLabel} : −${totalManq} h → −${enJours(totalManq)} j récup`,
       date_evt: dateEvt, source: 'manuel', statut: 'valide', created_by: userId,
-    }).select('id').single()
-    if (error) throw error
-    alloc_manq_id = data.id
+    }
+    if (alloc_manq_id) {
+      const { error } = await supabase.from('conges_allocations')
+        .update({ jours: payload.jours, raison: payload.raison }).eq('id', alloc_manq_id)
+      if (error) throw error
+    } else {
+      const { data, error } = await supabase.from('conges_allocations').insert(payload).select('id').single()
+      if (error) throw error
+      alloc_manq_id = data.id
+    }
   }
-  const { error: e2 } = await supabase.from('heures_conversions').insert({
+
+  const row = {
     employe_id: employe.id, mois, annee,
-    sup_heures: r2(supHeures), manq_heures: r2(manqHeures),
+    sup_heures: totalSup, manq_heures: totalManq,
     alloc_sup_id, alloc_manq_id, created_by: userId,
-  })
+  }
+  const { error: e2 } = ligne
+    ? await supabase.from('heures_conversions').update(row).eq('id', ligne.id)
+    : await supabase.from('heures_conversions').insert(row)
   if (e2) throw e2
 }
 
