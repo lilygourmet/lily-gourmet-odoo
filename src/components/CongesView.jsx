@@ -1727,9 +1727,21 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
       if (c.date_debut > finAn || c.date_fin < debutAn) continue
       const cat = classifierConge(c)
       const n = (c.jours_decomptes != null) ? Number(c.jours_decomptes) : joursDecomptesCalcul(c, emp, feriesSet)
-      if (cat === 'maladie_courte') { h.maladieCourte += n; continue }
-      if (cat === 'maladie_longue') { h.maladieLongue += n; continue }
-      if (cat === 'sans_solde')     { h.sansSolde += n; continue }
+      const meme0 = c.date_debut === c.date_fin
+      const periode = meme0 ? '' : ` (${fmtCourt(c.date_debut)} → ${fmtCourt(c.date_fin)})`
+      // Maladie et sans solde : hors compteur (ils ne bougent pas le solde),
+      // mais ils doivent apparaître dans le relevé avec leurs dates.
+      if (cat === 'maladie_courte' || cat === 'maladie_longue' || cat === 'sans_solde') {
+        if (cat === 'maladie_courte') h.maladieCourte += n
+        else if (cat === 'maladie_longue') h.maladieLongue += n
+        else h.sansSolde += n
+        const etiq = cat === 'sans_solde' ? 'sans solde' : (cat === 'maladie_courte' ? 'maladie ≤ 3 j' : 'maladie > 3 j')
+        out.push({
+          key: 'c' + c.id, date: c.date_debut, cat: 'hors', etiq,
+          lib: `${formatTypeConge(c.type_conge)}${periode} — ${n} j`, j: 0,
+        })
+        continue
+      }
       const meme = c.date_debut === c.date_fin
       const lib = (cat === 'recup' ? 'Récup prise' : (formatTypeConge(c.type_conge) || 'Congé'))
         + (meme ? '' : ` (${fmtCourt(c.date_debut)} → ${fmtCourt(c.date_fin)})`)
@@ -1746,8 +1758,8 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
         out.push({
           key: 'k' + c.id,
           date: `${c.annee}-${String(c.mois).padStart(2, '0')}-01`,
-          lib: `Conversion solde ${MOIS_LABELS[c.mois - 1]} : ${manq} h → ${jrsSS} j en sans solde`,
-          j: 0, cat: 'info',
+          lib: `Conversion solde ${MOIS_LABELS[c.mois - 1]} : ${manq} h → ${jrsSS} j`,
+          j: 0, cat: 'hors', etiq: 'sans solde',
         })
       }
     }
@@ -1845,7 +1857,7 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
           </div>
 
           <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#4a3a30', marginBottom: 12, flexWrap: 'wrap' }}>
-            {[['#85B84F', 'acquis'], ['#D9954F', 'retiré'], ['#D98A8A', 'pris'], ['#A9A4D6', 'sans solde']].map(([c, l]) => (
+            {[['#85B84F', 'acquis'], ['#D9954F', 'retiré'], ['#D98A8A', 'pris'], ['#A9A4D6', 'hors compteur']].map(([c, l]) => (
               <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <i style={{ width: 11, height: 11, borderRadius: 3, background: c, display: 'inline-block' }} /> {l}
               </span>
@@ -1871,7 +1883,7 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
                       acquis:  { bg: '#F2F8EC', bar: '#85B84F', tagBg: '#DCEBCB', tagFg: '#3F6B12', tag: 'acquis' },
                       retrait: { bg: '#FDF3EC', bar: '#D9954F', tagBg: '#F6E2CD', tagFg: '#854F0B', tag: 'retiré' },
                       pris:    { bg: '#FBF1F1', bar: '#D98A8A', tagBg: '#F4DADA', tagFg: '#A32D2D', tag: 'pris' },
-                      info:    { bg: '#F6F5FC', bar: '#A9A4D6', tagBg: '#E6E4F5', tagFg: '#3C3489', tag: 'sans solde' },
+                      hors:    { bg: '#F6F5FC', bar: '#A9A4D6', tagBg: '#E6E4F5', tagFg: '#3C3489', tag: m.etiq || 'hors compteur' },
                     }[m.cat] || {}
                     return (
                       <tr key={m.key} style={{ background: st.bg }}>
