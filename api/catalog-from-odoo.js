@@ -317,8 +317,24 @@ async function handleEconomat(req, res) {
     if (ids) {
       domain = [['id', 'in', ids]]
     } else {
-      domain = [['purchase_ok', '=', true], ['active', '=', true], '|', ['name', '=ilike', 'MP-%'], ['name', '=ilike', 'P-%']]
-      if (q) domain.push(['name', 'ilike', q])
+      domain = [['purchase_ok', '=', true], ['active', '=', true]]
+      if (q) {
+        // Recherche MOT À MOT (OU) : « Canette Coca Cola » doit trouver
+        // « Coca Cola 33cl ». Chercher la phrase entière ne donnait rien.
+        // Et on ne restreint plus aux préfixes MP-/P- : les fournitures C-,
+        // FS-… sont aussi achetables et étaient invisibles ici.
+        const mots = q.split(/\s+/).map(w => w.trim()).filter(w => w.length >= 3).slice(0, 5)
+        if (mots.length) {
+          for (let i = 0; i < mots.length - 1; i++) domain.push('|')
+          for (const m of mots) domain.push(['name', 'ilike', m])
+        } else {
+          domain.push(['name', 'ilike', q])
+        }
+      } else {
+        // Sans recherche : la liste de référence reste les MP-/P- (sinon des
+        // milliers de lignes).
+        domain.push('|', ['name', '=ilike', 'MP-%'], ['name', '=ilike', 'P-%'])
+      }
     }
 
     const fields = ['id', 'name', 'display_name', 'uom_po_id']
@@ -327,13 +343,27 @@ async function handleEconomat(req, res) {
     const limit = ids ? ids.length : (q ? 60 : 2000)
     const rows = await odooSearchRead(uid, 'product.product', domain, fields, { limit })
 
-    const products = rows.map(p => ({
+    let products = rows.map(p => ({
       odoo_id: p.id,
       name: cleanEconomatName(p.display_name || p.name),
       odoo_name: p.display_name || p.name,
       unit: Array.isArray(p.uom_po_id) ? p.uom_po_id[1] : null,
       image_url: (withImage && p.image_128) ? `data:image/png;base64,${p.image_128}` : null,
-    })).sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    }))
+
+    if (q) {
+      // Les plus proches d'abord : nombre de mots de la recherche présents
+      // dans le nom du produit.
+      const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const mots = norm(q).split(/\s+/).filter(w => w.length >= 3)
+      const pertinence = t => { const n = norm(t); return mots.reduce((s, m) => s + (n.includes(m) ? 1 : 0), 0) }
+      products = products
+        .map(p => ({ p, s: pertinence(p.odoo_name) }))
+        .sort((a, b) => b.s - a.s || a.p.name.localeCompare(b.p.name, 'fr'))
+        .map(x => x.p)
+    } else {
+      products.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+    }
 
     return res.status(200).json({ count: products.length, products })
   } catch (e) {
