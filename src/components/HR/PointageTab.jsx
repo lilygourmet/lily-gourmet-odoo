@@ -947,8 +947,13 @@ export default function PointageTab({ user, isAdmin }) {
         <ConversionModal
           empNom={empSelected?.nom || ''}
           moisLabel={`${MOIS_FR[mois - 1]} ${annee}`}
-          supMax={result.synthese.heures_sup}
-          manqMax={result.synthese.heures_manquantes}
+          soldeMois={result.synthese.solde_mois}
+          detail={{
+            sup: result.synthese.heures_sup,
+            manq: result.synthese.heures_manquantes,
+            report: result.synthese.solde_reporte_precedent,
+            dejaConverti: result.synthese.heures_converties || 0,
+          }}
           onClose={() => setShowConvert(false)}
           onConfirm={async (supH, manqH) => {
             try {
@@ -1018,15 +1023,20 @@ function CongeAbsenceModal({ date, empNom, onClose, onConfirm }) {
 }
 
 // Fenêtre : convertir des heures (sup / manquantes) en jours. 8 h = 1 jour.
-function ConversionModal({ empNom, moisLabel, supMax, manqMax, onClose, onConfirm }) {
-  const [supH, setSupH]   = useState(supMax > 0 ? String(supMax) : '0')
-  const [manqH, setManqH] = useState(manqMax > 0 ? String(manqMax) : '0')
-  const [busy, setBusy]   = useState(false)
-  const clamp = (v, max) => Math.max(0, Math.min(max, Number(String(v).replace(',', '.')) || 0))
-  const supVal  = clamp(supH, supMax)
-  const manqVal = clamp(manqH, manqMax)
+// On convertit LE SOLDE DU MOIS (report inclus), pas les heures sup et
+// manquantes séparément : c'est le solde qui doit tomber à zéro.
+function ConversionModal({ empNom, moisLabel, soldeMois, detail, onClose, onConfirm }) {
+  const maxi = Math.abs(Number(soldeMois) || 0)
+  const positif = Number(soldeMois) > 0
+  const [heures, setHeures] = useState(maxi > 0 ? String(maxi) : '0')
+  const [busy, setBusy]     = useState(false)
+  const val = Math.max(0, Math.min(maxi, Number(String(heures).replace(',', '.')) || 0))
   const r2 = n => Math.round(n / 8 * 100) / 100
-  const rien = supVal <= 0 && manqVal <= 0
+  const rien = val <= 0
+  // Ce qui part en récup (solde positif) ou en décompte (solde négatif)
+  const supVal  = positif ? val : 0
+  const manqVal = positif ? 0 : val
+  const resteApres = Math.round((Number(soldeMois) - (positif ? val : -val)) * 100) / 100
 
   const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
   const modal   = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
@@ -1039,25 +1049,39 @@ function ConversionModal({ empNom, moisLabel, supMax, manqMax, onClose, onConfir
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 2 }}>Convertir les heures en jours</div>
         <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 16 }}>{empNom} · {moisLabel} — 8 h = 1 jour</div>
 
-        {supMax > 0 && (
-          <div style={row('#EAF3DE')}>
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Heures sup
-              <div style={{ fontWeight: 400, fontSize: 11.5, color: '#4a3a30' }}>disponible : +{supMax} h</div>
-            </div>
-            <input style={hin} value={supH} onChange={e => setSupH(e.target.value)} inputMode="decimal" /> <span style={{ fontSize: 12, color: '#4a3a30' }}>h</span>
-            <span style={{ color: '#8a7a70' }}>→</span>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#3C3489', minWidth: 92 }}>{r2(supVal)} j récup</div>
+        {/* Le détail qui compose le solde, pour comprendre le chiffre proposé */}
+        <div style={{ fontSize: 12, color: '#4a3a30', background: '#F4F0EA', padding: '10px 12px', borderRadius: 10, marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Heures sup du mois</span><b>+{detail?.sup ?? 0} h</b></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Heures manquantes</span><b>−{detail?.manq ?? 0} h</b></div>
+          {Number(detail?.report) !== 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Report du mois précédent</span><b>{detail.report} h</b></div>
+          )}
+          {Number(detail?.dejaConverti) !== 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Déjà converti en jours</span><b>−{detail.dejaConverti} h</b></div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e5d8c3', marginTop: 6, paddingTop: 6, fontSize: 13 }}>
+            <b>Solde du mois</b><b style={{ color: positif ? '#27500A' : '#A32D2D' }}>{soldeMois > 0 ? '+' : ''}{soldeMois} h</b>
           </div>
+        </div>
+
+        {maxi > 0 ? (
+          <div style={row(positif ? '#EAF3DE' : '#FCEBEB')}>
+            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>À convertir
+              <div style={{ fontWeight: 400, fontSize: 11.5, color: '#4a3a30' }}>maximum : {positif ? '+' : '−'}{maxi} h</div>
+            </div>
+            <input style={hin} value={heures} onChange={e => setHeures(e.target.value)} inputMode="decimal" /> <span style={{ fontSize: 12, color: '#4a3a30' }}>h</span>
+            <span style={{ color: '#8a7a70' }}>→</span>
+            <div style={{ fontSize: 13, fontWeight: 600, color: positif ? '#3C3489' : '#0C447C', minWidth: 92 }}>
+              {r2(val)} j {positif ? 'récup' : 'décompté'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ ...row('#F4F0EA'), fontSize: 13 }}>Le solde du mois est à zéro : rien à convertir.</div>
         )}
 
-        {manqMax > 0 && (
-          <div style={row('#FCEBEB')}>
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Heures manquantes
-              <div style={{ fontWeight: 400, fontSize: 11.5, color: '#4a3a30' }}>disponible : −{manqMax} h</div>
-            </div>
-            <input style={hin} value={manqH} onChange={e => setManqH(e.target.value)} inputMode="decimal" /> <span style={{ fontSize: 12, color: '#4a3a30' }}>h</span>
-            <span style={{ color: '#8a7a70' }}>→</span>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#0C447C', minWidth: 92 }}>{r2(manqVal)} j décompté</div>
+        {maxi > 0 && (
+          <div style={{ fontSize: 12.5, color: '#4a3a30', textAlign: 'right', marginBottom: 10 }}>
+            Solde du mois après conversion : <b style={{ color: resteApres === 0 ? '#27500A' : '#854F0B' }}>{resteApres > 0 ? '+' : ''}{resteApres} h</b>
           </div>
         )}
 

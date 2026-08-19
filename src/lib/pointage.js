@@ -621,19 +621,19 @@ export function calculerMois(employe, mois, annee, data) {
     else if (resultat.heures_travaillees > 0) total.travailles++
   }
 
-  // Retirer les heures DÉJÀ converties en jours (récup / décompte) pour ne pas
-  // les compter deux fois (en heures ET en jours).
+  // Heures déjà converties en jours (récup / décompte). Elles sortent du SOLDE,
+  // pas des totaux d'heures du mois : « heures sup » et « heures manquantes »
+  // restent le reflet de ce qui a été réellement travaillé.
+  // C'est bien le SOLDE qu'on convertit (règle Layla, 19/08/2026) — le déduire
+  // des totaux ne pouvait pas absorber un report négatif du mois précédent.
   const convEmp = (conversions || []).filter(c => String(c.employe_id) === empId)
-  if (convEmp.length) {
-    const supConverti  = convEmp.reduce((s, c) => s + Number(c.sup_heures  || 0), 0)
-    const manqConverti = convEmp.reduce((s, c) => s + Number(c.manq_heures || 0), 0)
-    total.sup        = Math.max(0, round2(total.sup - supConverti))
-    total.manquantes = Math.max(0, round2(total.manquantes - manqConverti))
-  }
+  const supConverti  = convEmp.reduce((s, c) => s + Number(c.sup_heures  || 0), 0)
+  const manqConverti = convEmp.reduce((s, c) => s + Number(c.manq_heures || 0), 0)
+  const heures_converties = round2(supConverti - manqConverti)
 
-  // Solde du mois = sup - manquantes + solde reporté
+  // Solde du mois = sup - manquantes + solde reporté - ce qui a été converti en jours
   const solde_brut = round2(total.sup - total.manquantes)
-  const solde_mois = round2(solde_brut + solde_reporte)
+  const solde_mois = round2(solde_brut + solde_reporte - heures_converties)
 
   return {
     employe,
@@ -647,6 +647,7 @@ export function calculerMois(employe, mois, annee, data) {
       jours_absents: total.absents,
       jours_travailles: total.travailles,
       solde_reporte_precedent: round2(solde_reporte),
+      heures_converties,
       solde_mois,
     },
   }

@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 // mais les calculs testés ici sont purs.
 vi.mock('./supabase', () => ({ supabase: {} }))
 
-const { calculerHeuresPointees, calculerJour, statutPrevu, SORTIE_AUTO } = await import('./pointage')
+const { calculerHeuresPointees, calculerJour, statutPrevu, SORTIE_AUTO, calculerMois } = await import('./pointage')
 
 describe('changement du temps de travail au 31 juillet 2026', () => {
   // Fiches d'aujourd'hui : 8 h + équipe « café » mise en masse. Avant le 31/07 on
@@ -151,5 +151,51 @@ describe('sortie jamais pointée, fermée d\'office à minuit', () => {
     expect(pointe.anomalie).toBe(null)
     expect(jour.heures_travaillees).toBe(9.5)
     expect(jour.heures_sup).toBe(1)
+  })
+})
+
+describe('conversion des heures en jours : c\'est le SOLDE du mois qui tombe à zéro', () => {
+  // Employé au repos le dimanche, 8 h/jour. Un seul jour travaillé dans le mois,
+  // avec 2 h de plus que prévu → 2 h sup. Et un report négatif du mois précédent.
+  const emp = {
+    id: 1, nom: 'TEST', actif: true, heures_jour_complet: 8, heures_demi_journee: 4,
+    groupe: 'Prod', planning_type: 'fixe', planning_jour_off: 'Dimanche',
+    date_entree: '2020-01-01',
+  }
+  const base = {
+    employes: [emp], feries: [], conges: [], ajustements: [], synthese: [],
+    // report : le mois précédent s'est fini à −5 h
+    prevSynthese: [{ employe_id: 1, solde_mois: -5 }],
+    pointages: [
+      { id: 1, employe_id: 1, date_pointage: '2026-09-01', arrivee: '2026-09-01T06:00:00Z', depart: '2026-09-01T16:00:00Z' },
+    ],
+  }
+
+  it('sans conversion : le solde vaut sup − manquantes + report', () => {
+    const { synthese } = calculerMois(emp, 9, 2026, { ...base, conversions: [] })
+    expect(synthese.heures_sup).toBe(2)
+    expect(synthese.solde_reporte_precedent).toBe(-5)
+    expect(synthese.solde_mois).toBe(-3)      // 2 − 0 − 5
+  })
+
+  it('convertir le solde négatif (3 h) le ramène à zéro, même si le report en est la cause', () => {
+    // 3 h manquantes converties alors que le mois n'a AUCUNE heure manquante :
+    // l'ancienne logique les déduisait de total.manquantes (déjà 0) et le solde
+    // restait à −3.
+    const conversions = [{ employe_id: 1, mois: 9, annee: 2026, sup_heures: 0, manq_heures: 3 }]
+    const { synthese } = calculerMois(emp, 9, 2026, { ...base, conversions })
+    expect(synthese.solde_mois).toBe(0)
+    expect(synthese.heures_sup).toBe(2)       // les heures réellement faites ne bougent pas
+    expect(synthese.heures_converties).toBe(-3)
+  })
+
+  it('convertir un solde positif le ramène aussi à zéro', () => {
+    const sansReport = { ...base, prevSynthese: [] }
+    const avant = calculerMois(emp, 9, 2026, { ...sansReport, conversions: [] })
+    expect(avant.synthese.solde_mois).toBe(2)
+    const conversions = [{ employe_id: 1, mois: 9, annee: 2026, sup_heures: 2, manq_heures: 0 }]
+    const { synthese } = calculerMois(emp, 9, 2026, { ...sansReport, conversions })
+    expect(synthese.solde_mois).toBe(0)
+    expect(synthese.heures_sup).toBe(2)
   })
 })
