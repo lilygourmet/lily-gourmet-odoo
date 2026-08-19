@@ -1934,6 +1934,7 @@ function CongeCard({ c, emp, actions, joursFeries = [], nameById = {}, compact =
             <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 8 }}><Avatar emp={emp} size={26} />{emp?.nom || nameById[c.employe_id] || `Employé #${c.employe_id}`}</div>
           )}
           <div style={{ fontSize: 12, color: '#4a3a30', marginTop: compact ? 0 : 2, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <strong style={{ color: '#1a0f0a' }}>{typeLabel}</strong>
             <Calendar size={13} /> du <strong>{fmt(c.date_debut)}</strong> au <strong>{fmt(c.date_fin)}</strong>
             {' · '}
             <strong style={{ color: '#993556' }}>{nbDec} jour{nbDec > 1 ? 's' : ''} décompté{nbDec > 1 ? 's' : ''}</strong>
@@ -1948,9 +1949,9 @@ function CongeCard({ c, emp, actions, joursFeries = [], nameById = {}, compact =
               <Flag size={11} /> Jour férié non décompté : {feriesPeriode.map(f => `${fmt(f.date)} (${f.nom})`).join(' · ')}
             </div>
           )}
-          <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>
-            {typeLabel}{c.motif ? ` · ${c.motif}` : ''}
-          </div>
+          {c.motif && (
+            <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 4 }}>{c.motif}</div>
+          )}
           {c.justificatif_path && (
             <button onClick={async () => { const u = await getJustificatifUrl(c.justificatif_path); if (u) window.open(u, '_blank') }}
               style={{ marginTop: 4, fontSize: 11, color: '#993556', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
