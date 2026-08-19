@@ -913,6 +913,38 @@ export default function PointageTab({ user, isAdmin }) {
             )}
           </div>
 
+          {/* Ce qui a déjà été converti ce mois-ci — visible sans ouvrir la modale */}
+          {(() => {
+            const convMois = (data.conversions || []).filter(c => String(c.employe_id) === String(empSelected?.id))
+            if (!convMois.length) return null
+            const j = h => Math.round(h / 8 * 100) / 100
+            return (
+              <div style={{ background: '#EEEDFE', border: '1px solid #DAD7F0', borderRadius: 12, padding: '10px 14px', marginBottom: 12, fontSize: 12.5, color: '#3C3489' }}>
+                <b style={{ display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 5 }}>
+                  Heures converties en jours ce mois-ci
+                </b>
+                {convMois.map(c => {
+                  const sup = Number(c.sup_heures) || 0, manq = Number(c.manq_heures) || 0
+                  return (
+                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '2px 0', flexWrap: 'wrap' }}>
+                      <span>
+                        {sup > 0 && `+${sup} h → +${j(sup)} j de récup`}
+                        {sup > 0 && manq > 0 && ' · '}
+                        {manq > 0 && `−${manq} h → ${c.alloc_manq_id ? `−${j(manq)} j retirés de la récup` : `${j(manq)} j en sans solde`}`}
+                      </span>
+                      <span style={{ color: '#8a7a70', whiteSpace: 'nowrap' }}>
+                        {c.created_at ? `${c.created_at.slice(8, 10)}/${c.created_at.slice(5, 7)}` : ''}
+                      </span>
+                    </div>
+                  )
+                })}
+                <div style={{ borderTop: '1px solid #DAD7F0', marginTop: 6, paddingTop: 6, fontSize: 11.5, color: '#4a3a30' }}>
+                  Ces heures sont retirées du solde du mois — elles ne sont donc comptées qu'une fois.
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Convertir les heures (sup / manquantes) en jours */}
           {canEdit && (result.synthese.heures_sup > 0 || result.synthese.heures_manquantes > 0) && (
             <button onClick={() => setShowConvert(true)} style={{
