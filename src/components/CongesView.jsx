@@ -1743,8 +1743,8 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
 
   const debutAn = `${annee}-01-01`, finAn = `${annee}-12-31`
 
-  const { mvts, totAcquis, totRecup, totPris, solde } = useMemo(() => {
-    if (!emp) return { mvts: [], totAcquis: 0, totRecup: 0, totPris: 0, solde: 0 }
+  const { mvts, totAcquis, totRecup, totPris, solde, moisFaits, droitAJour, soldeSiDepart } = useMemo(() => {
+    if (!emp) return { mvts: [], totAcquis: 0, totRecup: 0, totPris: 0, solde: 0, moisFaits: 0, droitAJour: 0, soldeSiDepart: 0 }
     const out = []
     const entree = emp.date_anciennete || emp.date_entree
     for (const a of allocations) {
@@ -1804,7 +1804,21 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
     const ta = r2(out.filter(m => m.droit).reduce((s, m) => s + m.j, 0))
     const tr = r2(out.filter(m => (m.cat === 'acquis' || m.cat === 'retrait') && !m.droit).reduce((s, m) => s + m.j, 0))
     const tp = r2(-out.filter(m => m.cat === 'pris').reduce((s, m) => s + m.j, 0))
-    return { mvts: out, totAcquis: ta, totRecup: tr, totPris: tp, solde: r2(ta + tr - tp) }
+    // « Si elle partait aujourd'hui » : le droit annuel n'est pas dû en entier,
+    // seulement 1,5 j par mois de service DÉJÀ effectué (art. 231). Sans ça on
+    // compte des jours qu'elle n'aura acquis qu'en décembre.
+    const today = todayISO()
+    const depart = (entree && entree > debutAn) ? entree : debutAn
+    const a = new Date(depart + 'T00:00:00'), b = new Date(today + 'T00:00:00')
+    let moisFaits = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+    if (b.getDate() < a.getDate()) moisFaits -= 1
+    moisFaits = Math.max(0, moisFaits)
+    const droitAJour = Math.min(r2(moisFaits * 1.5), ta)
+    return {
+      mvts: out, totAcquis: ta, totRecup: tr, totPris: tp,
+      solde: r2(ta + tr - tp),
+      moisFaits, droitAJour, soldeSiDepart: r2(droitAJour + tr - tp),
+    }
   }, [emp, conges, allocations, conversions, feriesSet, debutAn, finAn])
 
   if (!employes.length) return <div style={emptyBox}>Aucun employé.</div>
@@ -1884,6 +1898,14 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
             {tot('Récup gagnée', `${totRecup > 0 ? '+' : ''}${totRecup} j`)}
             {tot('Pris', `−${totPris} j`)}
             {tot('Restant', `${solde} j`, solde < 0 ? '#A32D2D' : '#085041')}
+            <div style={{ minWidth: 120, paddingLeft: 16, borderLeft: '1px solid #e5d8c3' }}
+              title={`Solde de tout compte : ${moisFaits} mois de service faits × 1,5 j = ${droitAJour} j de droit acquis, + ${totRecup} j de récup − ${totPris} j pris. Le droit annuel entier n'est dû qu'en fin d'année.`}>
+              <div style={{ fontSize: 11, color: '#8a7a70', textTransform: 'uppercase', letterSpacing: .5 }}>Si départ aujourd'hui</div>
+              <div style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 21, fontWeight: 600, marginTop: 2, color: soldeSiDepart < 0 ? '#A32D2D' : '#085041' }}>
+                {soldeSiDepart} j
+              </div>
+              <div style={{ fontSize: 10.5, color: '#8a7a70', marginTop: 2 }}>{moisFaits} mois faits → {droitAJour} j acquis</div>
+            </div>
           </div>
 
           {mvts.length === 0 ? (
