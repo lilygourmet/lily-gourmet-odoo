@@ -737,6 +737,22 @@ export async function convertirHeuresEnJours({ employe, mois, annee, supHeures =
 }
 
 /**
+ * Annule une conversion : supprime la ligne ET la ou les allocations créées.
+ * Les heures reviennent aussitôt au solde du mois (calculerMois ne les retire
+ * plus). Sans ça, une conversion passée en « sans solde » était irrattrapable :
+ * elle ne crée aucune allocation, il n'y avait donc rien à annuler côté Congés.
+ */
+export async function annulerConversion(conv) {
+  const ids = [conv.alloc_sup_id, conv.alloc_manq_id].filter(Boolean)
+  if (ids.length) {
+    const { error } = await supabase.from('conges_allocations').delete().in('id', ids)
+    if (error) throw error
+  }
+  const { error: e2 } = await supabase.from('heures_conversions').delete().eq('id', conv.id)
+  if (e2) throw e2
+}
+
+/**
  * Enregistre un ajustement manuel sur une cellule.
  */
 export async function setAjustement(employeId, dateJour, champ, valeur, userId) {

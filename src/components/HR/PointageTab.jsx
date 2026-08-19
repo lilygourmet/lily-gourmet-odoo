@@ -9,7 +9,7 @@ import Avatar from '../Avatar'
 import {
   loadMonthData, calculerMois, syncAttendance, syncLeaves,
   setAjustement, removeAjustement, updatePointage, validerMois,
-  nomJour, convertirHeuresEnJours,
+  nomJour, convertirHeuresEnJours, annulerConversion,
 } from '../../lib/pointage'
 import { createDemandeConge, validerConge, classifierConge, CONGE_EVENEMENT, calculSoldeConges, dispoTypeConge, loadCongesByStatuts, loadAllocations } from '../../lib/conges'
 import { toast } from '../../lib/toast'
@@ -112,6 +112,15 @@ export default function PointageTab({ user, isAdmin }) {
     }
     setLoading(false)
   }, [mois, annee])
+
+  async function handleAnnulerConversion(conv, libelle) {
+    if (!await confirmDialog(`Annuler cette conversion ?\n\n${libelle}\n\nLes heures reviennent au solde du mois, et le ou les jours crédités sont supprimés.`, { danger: true, confirmLabel: 'Annuler la conversion' })) return
+    try {
+      await annulerConversion(conv)
+      await reload()
+      toast.success('Conversion annulée.')
+    } catch (e) { toast.error('Erreur : ' + e.message) }
+  }
 
   // Solde de congé par employé, pour la colonne « Solde congés » de la vue
   // globale. Chargé une seule fois (admin) : ce sont les mêmes données que
@@ -925,15 +934,19 @@ export default function PointageTab({ user, isAdmin }) {
                 </b>
                 {convMois.map(c => {
                   const sup = Number(c.sup_heures) || 0, manq = Number(c.manq_heures) || 0
+                  const libelle = [
+                    sup > 0 && `+${sup} h → +${j(sup)} j de récup`,
+                    manq > 0 && `−${manq} h → ${c.alloc_manq_id ? `−${j(manq)} j retirés de la récup` : `${j(manq)} j en sans solde`}`,
+                  ].filter(Boolean).join(' · ')
                   return (
-                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '2px 0', flexWrap: 'wrap' }}>
-                      <span>
-                        {sup > 0 && `+${sup} h → +${j(sup)} j de récup`}
-                        {sup > 0 && manq > 0 && ' · '}
-                        {manq > 0 && `−${manq} h → ${c.alloc_manq_id ? `−${j(manq)} j retirés de la récup` : `${j(manq)} j en sans solde`}`}
-                      </span>
-                      <span style={{ color: '#8a7a70', whiteSpace: 'nowrap' }}>
-                        {c.created_at ? `${c.created_at.slice(8, 10)}/${c.created_at.slice(5, 7)}` : ''}
+                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '2px 0', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span>{libelle}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#8a7a70' }}>{c.created_at ? `${c.created_at.slice(8, 10)}/${c.created_at.slice(5, 7)}` : ''}</span>
+                        {canEdit && (
+                          <button onClick={() => handleAnnulerConversion(c, libelle)} title="Annuler cette conversion"
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#A32D2D', fontSize: 15, lineHeight: 1, padding: '0 2px' }}>×</button>
+                        )}
                       </span>
                     </div>
                   )
