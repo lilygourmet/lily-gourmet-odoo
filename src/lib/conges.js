@@ -358,7 +358,10 @@ export async function calculSoldeConges(emp, congesValides = null, refDate = tod
     pris: prisAnnuel + prisEvents + prisRecup,
     prisAnnuel,
     prisEvents,
-    dispo: Math.max(0, dispo),
+    // PAS de Math.max(0, …) : un solde négatif doit se voir (il signale un
+    // dépassement réel — congés accordés au-delà du droit, ou décompte d'heures
+    // manquantes supérieur à la récup disponible).
+    dispo: Math.round(dispo * 100) / 100,
     totalAllocations,
     peutPrendre,
     moisDepuisEntree,

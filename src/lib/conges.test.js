@@ -85,3 +85,26 @@ describe('calculSoldeConges — congé validé dans le futur', () => {
     expect(s.dispo).toBeCloseTo(10)
   })
 })
+
+describe('calculSoldeConges — un solde négatif doit rester négatif', () => {
+  const emp = { id: 1, date_entree: '2020-01-01', date_anciennete: '2020-01-01' }
+  const refDate = '2026-08-19'
+  const prefetched = {
+    allocsByEmp: new Map([[1, [
+      { employe_id: 1, annee: 2026, type: 'annuel', jours: 10, statut: 'valide', date_evt: null },
+      // décompte : conversion d'heures manquantes en récup, au-delà de la récup dispo
+      { employe_id: 1, annee: 2026, type: 'autre', jours: -4, statut: 'valide', date_evt: '2026-07-01' },
+    ]]]),
+    recupByEmp: new Map([[1, 0]]),
+    feriesSet: new Set(),
+  }
+
+  it('le dépassement est affiché tel quel, pas ramené à zéro', async () => {
+    const conges = [
+      { employe_id: 1, statut: 'valide', type_conge: 'annuel', date_debut: '2026-04-01', date_fin: '2026-04-08', jours_decomptes: 8 },
+    ]
+    const s = await calculSoldeConges(emp, conges, refDate, prefetched)
+    // 10 alloués − 4 de décompte − 8 pris = −2
+    expect(s.dispo).toBeCloseTo(-2)
+  })
+})
