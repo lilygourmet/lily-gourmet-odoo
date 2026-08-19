@@ -951,9 +951,6 @@ export default function PointageTab({ user, isAdmin }) {
                     </div>
                   )
                 })}
-                <div style={{ borderTop: '1px solid #DAD7F0', marginTop: 6, paddingTop: 6, fontSize: 11.5, color: '#4a3a30' }}>
-                  Ces heures sont retirées du solde du mois — elles ne sont donc comptées qu'une fois.
-                </div>
               </div>
             )
           })()}
