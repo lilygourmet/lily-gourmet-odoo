@@ -1704,8 +1704,8 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
 
   const debutAn = `${annee}-01-01`, finAn = `${annee}-12-31`
 
-  const { mvts, totAcquis, totRecup, totPris, solde, hors } = useMemo(() => {
-    if (!emp) return { mvts: [], totAcquis: 0, totRecup: 0, totPris: 0, solde: 0, hors: {} }
+  const { mvts, totAcquis, totRecup, totPris, solde } = useMemo(() => {
+    if (!emp) return { mvts: [], totAcquis: 0, totRecup: 0, totPris: 0, solde: 0 }
     const out = []
     const entree = emp.date_anciennete || emp.date_entree
     for (const a of allocations) {
@@ -1721,7 +1721,6 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
       const j = Number(a.jours)
       out.push({ key: 'a' + a.id, date: d, lib, j, cat: j < 0 ? 'retrait' : 'acquis', droit: estDroit })
     }
-    const h = { maladieCourte: 0, maladieLongue: 0, sansSolde: 0 }
     for (const c of conges) {
       if (c.employe_id !== emp.id || c.statut !== 'valide') continue
       if (c.date_debut > finAn || c.date_fin < debutAn) continue
@@ -1732,9 +1731,6 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
       // Maladie et sans solde : hors compteur (ils ne bougent pas le solde),
       // mais ils doivent apparaître dans le relevé avec leurs dates.
       if (cat === 'maladie_courte' || cat === 'maladie_longue' || cat === 'sans_solde') {
-        if (cat === 'maladie_courte') h.maladieCourte += n
-        else if (cat === 'maladie_longue') h.maladieLongue += n
-        else h.sansSolde += n
         const etiq = cat === 'sans_solde' ? 'sans solde' : (cat === 'maladie_courte' ? 'maladie ≤ 3 j' : 'maladie > 3 j')
         out.push({
           key: 'c' + c.id, date: c.date_debut, cat: 'hors', etiq,
@@ -1754,7 +1750,6 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
       const manq = Number(c.manq_heures) || 0
       if (manq > 0 && !c.alloc_manq_id) {
         const jrsSS = Math.round(manq / 8 * 100) / 100
-        h.sansSolde += jrsSS
         out.push({
           key: 'k' + c.id,
           date: `${c.annee}-${String(c.mois).padStart(2, '0')}-01`,
@@ -1770,7 +1765,7 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
     const ta = r2(out.filter(m => m.droit).reduce((s, m) => s + m.j, 0))
     const tr = r2(out.filter(m => (m.cat === 'acquis' || m.cat === 'retrait') && !m.droit).reduce((s, m) => s + m.j, 0))
     const tp = r2(-out.filter(m => m.cat === 'pris').reduce((s, m) => s + m.j, 0))
-    return { mvts: out, totAcquis: ta, totRecup: tr, totPris: tp, solde: r2(ta + tr - tp), hors: h }
+    return { mvts: out, totAcquis: ta, totRecup: tr, totPris: tp, solde: r2(ta + tr - tp) }
   }, [emp, conges, allocations, conversions, feriesSet, debutAn, finAn])
 
   if (!employes.length) return <div style={emptyBox}>Aucun employé.</div>
@@ -1845,23 +1840,13 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
       {emp && (
         <div style={card}>
           <div style={{ fontSize: 17, fontWeight: 600 }}>{emp.nom}</div>
-          <div style={{ fontSize: 12.5, color: '#8a7a70', marginBottom: 14 }}>
-            Année {annee}{(emp.date_anciennete || emp.date_entree) ? ` — entrée le ${fmt(emp.date_anciennete || emp.date_entree)}` : ''}
-          </div>
+          <div style={{ fontSize: 12.5, color: '#8a7a70', marginBottom: 14 }}>Année {annee}</div>
 
           <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', padding: '14px 0', borderTop: '1px solid #e5d8c3', borderBottom: '1px solid #e5d8c3', marginBottom: 8 }}>
             {tot('Droit annuel', `${totAcquis} j`)}
             {tot('Récup gagnée', `${totRecup > 0 ? '+' : ''}${totRecup} j`)}
             {tot('Pris', `−${totPris} j`)}
             {tot('Restant', `${solde} j`, solde < 0 ? '#A32D2D' : '#085041')}
-          </div>
-
-          <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#4a3a30', marginBottom: 12, flexWrap: 'wrap' }}>
-            {[['#85B84F', 'acquis'], ['#D9954F', 'retiré'], ['#D98A8A', 'pris'], ['#A9A4D6', 'hors compteur']].map(([c, l]) => (
-              <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <i style={{ width: 11, height: 11, borderRadius: 3, background: c, display: 'inline-block' }} /> {l}
-              </span>
-            ))}
           </div>
 
           {mvts.length === 0 ? (
@@ -1912,17 +1897,6 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
             </div>
           )}
 
-          <div style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 15, fontWeight: 600, margin: '22px 0 6px' }}>Hors compteur</div>
-          <div style={{ fontSize: 12.5, color: '#4a3a30' }}>
-            {[['Maladie ≤ 3 j', hors.maladieCourte, 'pool 6 j/an'],
-              ['Maladie > 3 j', hors.maladieLongue, 'non payée'],
-              ['Sans solde', hors.sansSolde, '']].map(([k, v, note]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderTop: '1px solid #f3ece1' }}>
-                <span>{k} {note && <span style={{ color: '#8a7a70' }}>({note})</span>}</span>
-                <b>{Math.round((v || 0) * 100) / 100} j</b>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>
