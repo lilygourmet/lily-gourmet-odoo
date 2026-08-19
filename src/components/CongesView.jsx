@@ -414,6 +414,16 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
     }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
+  // Début d'une allocation sans date d'événement : le 1er janvier, sauf pour
+  // quelqu'un entré en cours d'année — afficher « du 01/01 » n'a alors aucun
+  // sens, on part de sa date d'entrée.
+  const debutAllocation = (a, emp) => {
+    if (a.date_evt) return a.date_evt
+    const janvier = `${a.annee}-01-01`
+    const entree = emp?.date_anciennete || emp?.date_entree
+    return entree && entree > janvier && entree <= `${a.annee}-12-31` ? entree : janvier
+  }
+
   const toggleSel = (set, setter, id) => { const n = new Set(set); n.has(id) ? n.delete(id) : n.add(id); setter(n) }
   // validation GROUPÉE des demandes de congé cochées
   async function handleValiderLot() {
@@ -727,7 +737,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                   {allocations.filter(a => a.statut === 'attente').sort((x, y) => (y.date_evt || `${y.annee}-01-01`).localeCompare(x.date_evt || `${x.annee}-01-01`)).map(a => {
                     const emp = empById[a.employe_id]
                     const t = ALLOC_TYPES.find(x => x.v === a.type)
-                    const debutAlloc = a.date_evt || `${a.annee}-01-01`
+                    const debutAlloc = debutAllocation(a, emp)
                     const finAlloc   = `${a.annee}-12-31`
                     return (
                       <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, background: 'white', padding: '6px 10px', borderRadius: 8 }}>
@@ -791,7 +801,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {allocs.slice().sort((x, y) => (y.date_evt || `${y.annee}-01-01`).localeCompare(x.date_evt || `${x.annee}-01-01`)).map(a => {
                             const t = ALLOC_TYPES.find(t => t.v === a.type)
-                            const debutAlloc = a.date_evt || `${a.annee}-01-01`
+                            const debutAlloc = debutAllocation(a, emp)
                             const finAlloc   = `${a.annee}-12-31`
                             return (
                               <div key={a.id} style={{
