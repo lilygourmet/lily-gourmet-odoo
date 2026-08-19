@@ -75,7 +75,9 @@ export default function ATraiterTab({ user, onChange }) {
   const [sel, setSel] = useState(() => new Set())
 
   async function reload() {
-    setLoading(true); setErr('')
+    // Rechargement silencieux : sans ça la liste disparaît et la page remonte
+    // en haut à chaque ligne traitée (le spinner ne sert qu'au 1er chargement).
+    setErr('')
     try {
       const [d, o] = await Promise.all([loadATraiter(), loadOublisRecup()])
       setData(d)

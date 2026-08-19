@@ -226,8 +226,12 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   const allocsSyncRef = useRef(false)   // la remise à jour des allocations ne tourne qu'une fois
   const [conversions, setConversions] = useState([])   // heures converties en jours
 
+  // Rechargement SILENCIEUX : on ne repasse pas par « Chargement… », sinon la
+  // liste est démontée puis remontée et la page saute en haut à chaque
+  // modification. Le spinner ne sert qu'au tout premier chargement (loading
+  // vaut déjà true au départ).
   const reload = useCallback(async () => {
-    setLoading(true); setError('')
+    setError('')
     try {
       const annee = new Date().getFullYear()
       // 4 requêtes batchées au lieu de 2 par employé.
