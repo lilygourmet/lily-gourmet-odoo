@@ -1673,10 +1673,13 @@ function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
   const annee = new Date().getFullYear()
   const [selId, setSelId] = useState(() => employes[0]?.id ?? null)
   const [q, setQ] = useState('')
+  const [filterGroup, setFilterGroup] = useState(null)
 
   const emp = employes.find(e => e.id === selId) || employes[0]
   const ql = q.trim().toLowerCase()
-  const visibles = ql ? employes.filter(e => (e.nom || '').toLowerCase().includes(ql)) : employes
+  const visibles = employes.filter(e =>
+    (!filterGroup || (e.groupe || 'Aucun') === filterGroup) &&
+    (!ql || (e.nom || '').toLowerCase().includes(ql)))
 
   // Employés groupés par équipe, dans l'ordre d'affichage habituel
   const groupes = useMemo(() => {
@@ -1746,7 +1749,30 @@ function RecapAnnuel({ employes, conges, allocations, feriesSet, isMobile }) {
       {/* Choix de l'employé : par équipe, avec photo, + recherche */}
       <div style={{ ...card, marginBottom: 16 }}>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔎 Rechercher un nom…"
-          style={{ ...ipt, width: '100%', marginBottom: 12 }} />
+          style={{ ...ipt, width: '100%', marginBottom: 10 }} />
+
+        {/* Filtre par équipe — mêmes pastilles que l'onglet Présence */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+          <button onClick={() => setFilterGroup(null)}
+            style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: '1px solid ' + (filterGroup ? '#e4dad0' : '#993556'),
+              background: filterGroup ? '#fff' : '#993556', color: filterGroup ? '#4a3a30' : '#fff' }}>
+            Toutes
+          </button>
+          {TEAMS_CONGES.map(g => {
+            const on = filterGroup === g
+            return (
+              <button key={g} onClick={() => setFilterGroup(on ? null : g)}
+                style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  border: '1px solid ' + (on ? GROUP_COLORS[g] : '#e4dad0'),
+                  background: on ? GROUP_COLORS[g] : '#fff', color: on ? '#fff' : '#4a3a30' }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: on ? '#fff' : GROUP_COLORS[g] }} />
+                {groupLabel(g)}
+              </button>
+            )
+          })}
+        </div>
         {groupes.length === 0 && <div style={{ fontSize: 12, color: '#8a7a70' }}>Aucun employé pour cette recherche.</div>}
         {groupes.map(([g, list]) => {
           const c = GROUP_COLORS[g] || '#95a5a6'
