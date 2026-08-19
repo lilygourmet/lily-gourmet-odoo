@@ -1786,12 +1786,6 @@ function RecapAnnuel({ employes, conges, allocations, conversions = [], feriesSe
 
         {/* Filtre par équipe — mêmes pastilles que l'onglet Présence */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-          <button onClick={() => setFilterGroup(null)}
-            style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              border: '1px solid ' + (filterGroup ? '#e4dad0' : '#993556'),
-              background: filterGroup ? '#fff' : '#993556', color: filterGroup ? '#4a3a30' : '#fff' }}>
-            Toutes
-          </button>
           {TEAMS_CONGES.map(g => {
             const on = filterGroup === g
             return (
