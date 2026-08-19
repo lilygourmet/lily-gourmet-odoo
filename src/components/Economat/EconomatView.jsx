@@ -12,6 +12,9 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const [activeCat, setActiveCat] = useState(null)
   const [content, setContent] = useState({ groups: [], ungrouped: [] })
   const [qty, setQty] = useState({})              // { [articleId]: number }
+  // Précision libre par article : la couleur d'un colorant gel, une taille…
+  // Elle est accolée au nom envoyé à l'économe, donc aucune colonne en plus.
+  const [precision, setPrecision] = useState({})  // { [articleId]: string }
   const [articleInfo, setArticleInfo] = useState({}) // { [id]: { name, unit, catName } }
   const [customLines, setCustomLines] = useState([]) // articles ajoutés à la main : { name, unit, qty, catName }
   const [customName, setCustomName] = useState('')
@@ -104,7 +107,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
     const catalogLines = Object.entries(qty).map(([id, n]) => ({
       articleId: Number(id),
       qty: n,
-      name: articleInfo[id]?.name || 'Article',
+      name: [articleInfo[id]?.name || 'Article', (precision[id] || '').trim()].filter(Boolean).join(' · '),
       unit: articleInfo[id]?.unit || '',
       catName: articleInfo[id]?.catName || '',
     }))
@@ -218,7 +221,9 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                 <div className="lg-mono mb-2">{group.name}</div>
                 <div className="space-y-1.5">
                   {group.articles.map(a => (
-                    <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)} />
+                    <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)}
+                      precision={precision[a.id] || ''}
+                      onPrecision={v => setPrecision(p => ({ ...p, [a.id]: v }))} />
                   ))}
                 </div>
               </div>
@@ -228,7 +233,9 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                 <div className="lg-mono mb-2" style={{ color: '#8a7a70' }}>Autres</div>
                 <div className="space-y-1.5">
                   {content.ungrouped.map(a => (
-                    <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)} />
+                    <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)}
+                      precision={precision[a.id] || ''}
+                      onPrecision={v => setPrecision(p => ({ ...p, [a.id]: v }))} />
                   ))}
                 </div>
               </div>
@@ -309,6 +316,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       {showRecap && (
         <RecapModal
           qty={qty}
+          precision={precision}
           articleInfo={articleInfo}
           customLines={customLines}
           onChange={setArticleQty}
@@ -376,10 +384,11 @@ function HistoryModal({ demandes, onClose }) {
 }
 
 // Une ligne article : [photo réservée] [nom + unité] [− qté +]
-function ArticleRow({ article, qty, onChange }) {
+function ArticleRow({ article, qty, onChange, precision = '', onPrecision }) {
   const active = qty > 0
   return (
-    <div className={`flex items-center gap-3 bg-white rounded-xl border border-line/70 p-2.5 shadow-sm transition-all ${active ? 'border-l-4 border-l-bordeaux' : ''}`}>
+    <div className={`bg-white rounded-xl border border-line/70 p-2.5 shadow-sm transition-all ${active ? 'border-l-4 border-l-bordeaux' : ''}`}>
+    <div className="flex items-center gap-3">
       {/* Emplacement photo (rempli depuis Odoo plus tard) */}
       <div className="w-11 h-11 rounded-lg bg-cream-deep border border-line/40 flex-shrink-0 overflow-hidden">
         {article.photo_url && <img src={article.photo_url} alt="" className="w-full h-full object-cover" />}
@@ -405,14 +414,26 @@ function ArticleRow({ article, qty, onChange }) {
         >+</button>
       </div>
     </div>
+
+    {/* Précision libre — n'apparaît qu'une fois l'article choisi */}
+    {active && onPrecision && (
+      <input
+        value={precision}
+        onChange={e => onPrecision(e.target.value)}
+        placeholder={/colorant/i.test(article.name) ? 'Quelle couleur ?' : 'Précision (facultatif)'}
+        className="mt-2 w-full px-2.5 py-1.5 text-[12px] border border-line rounded-lg bg-cream-warm/40"
+      />
+    )}
+    </div>
   )
 }
 
-function RecapModal({ qty, articleInfo, customLines = [], onChange, onRemoveCustom, onClose, onSend, sending }) {
+function RecapModal({ qty, precision = {}, articleInfo, customLines = [], onChange, onRemoveCustom, onClose, onSend, sending }) {
   const lines = Object.entries(qty).map(([id, n]) => ({
     id,
     n,
-    name: articleInfo[id]?.name || 'Article',
+    // même libellé que celui envoyé à l'économe, précision comprise
+    name: [articleInfo[id]?.name || 'Article', (precision[id] || '').trim()].filter(Boolean).join(' · '),
     unit: articleInfo[id]?.unit || '',
     catName: articleInfo[id]?.catName || '',
   }))
