@@ -1000,9 +1000,6 @@ export default function PointageTab({ user, isAdmin }) {
             canEdit={canEdit}
           />
 
-          {/* Légende */}
-          <Legende />
-
           {isAdmin && !isLocked && (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
               <button onClick={handleValiderEmploye} style={{
@@ -1653,33 +1650,6 @@ function Th({ children, w, align = 'left' }) {
 
 function Td({ children, style = {}, ...rest }) {
   return <td style={{ padding: '7px 10px', ...style }} {...rest}>{children}</td>
-}
-
-function Legende() {
-  const items = [
-    { c: 'white',   border: '#e5d8c3', label: 'Journée normale' },
-    { c: '#FFF7E0', label: 'Demi-journée' },
-    { c: '#F5EFE7', label: 'OFF' },
-    { c: '#EEEDFE', label: 'OFF travaillé (récup)' },
-    { c: '#EAF3DE', label: 'Férié' },
-    { c: '#C0DD97', label: 'Férié travaillé (récup)' },
-    { c: '#E6F1FB', label: 'Congé' },
-    { c: '#FCEBEB', label: 'Absent / anomalie' },
-  ]
-  return (
-    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, color: '#4a3a30', marginBottom: 16 }}>
-      <span style={{ fontWeight: 500 }}>Légende :</span>
-      {items.map(i => (
-        <span key={i.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span style={{
-            width: 12, height: 12, background: i.c, borderRadius: 3,
-            border: '1px solid ' + (i.border || '#e5d8c3'),
-          }} />
-          {i.label}
-        </span>
-      ))}
-    </div>
-  )
 }
 
 
