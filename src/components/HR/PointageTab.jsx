@@ -297,6 +297,13 @@ export default function PointageTab({ user, isAdmin }) {
       if (CONGE_EVENEMENT.has(cat)) { events[cat] = (events[cat] || 0) + (nb - compteJoursOffFixesDansPeriode(emp, debut, fin)); continue }
       annuel += nb - compteJoursOffFixesDansPeriode(emp, debut, fin)   // congé annuel
     }
+    // Heures manquantes converties en SANS SOLDE (aucune allocation créée, donc
+    // alloc_manq_id vide) : elles s'ajoutent aux jours sans solde du mois.
+    const convSS = (data.conversions || []).filter(c =>
+      String(c.employe_id) === String(emp.id) && Number(c.manq_heures) > 0 && !c.alloc_manq_id)
+    if (convSS.length) {
+      sansSolde += convSS.reduce((s, c) => s + Number(c.manq_heures) / 8, 0)
+    }
     return { annuel, recup, events, maladieLongue, sansSolde }
   }
 
@@ -955,11 +962,11 @@ export default function PointageTab({ user, isAdmin }) {
             dejaConverti: result.synthese.heures_converties || 0,
           }}
           onClose={() => setShowConvert(false)}
-          onConfirm={async (supH, manqH) => {
+          onConfirm={async (supH, manqH, modeManq) => {
             try {
               await convertirHeuresEnJours({
                 employe: empSelected, mois, annee,
-                supHeures: supH, manqHeures: manqH,
+                supHeures: supH, manqHeures: manqH, modeManq,
                 moisLabel: `${MOIS_FR[mois - 1]} ${annee}`, userId: user.id,
               })
               setShowConvert(false)
@@ -1034,6 +1041,7 @@ function ConversionModal({ empNom, moisLabel, soldeMois, detail, onClose, onConf
   const positif = Number(soldeMois) > 0
   const maxiJ = Math.floor(maxiH / (HRS_JOUR / 2)) * 0.5     // paliers de 0,5 j
   const [jours, setJours] = useState(maxiJ > 0 ? String(maxiJ) : '0')
+  const [modeManq, setModeManq] = useState('recup')   // solde négatif : récup ou sans solde
   const [busy, setBusy]   = useState(false)
   const saisi = Number(String(jours).replace(',', '.')) || 0
   const val = Math.max(0, Math.min(maxiJ, Math.round(saisi * 2) / 2))   // arrondi au 0,5
@@ -1090,20 +1098,40 @@ function ConversionModal({ empNom, moisLabel, soldeMois, detail, onClose, onConf
           </div>
         )}
 
+        {maxiJ > 0 && !positif && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>Ces {val} j manquants sont :</div>
+            {[
+              { v: 'recup', t: `retirés de sa récup`, d: 'son compteur de congés baisse de ' + val + ' j' },
+              { v: 'sans_solde', t: 'passés en sans solde', d: 'non payés ; ses jours de congé ne bougent pas' },
+            ].map(o => (
+              <label key={o.v} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderRadius: 10, cursor: 'pointer', marginBottom: 4, border: '1px solid ' + (modeManq === o.v ? '#993556' : '#e5d8c3'), background: modeManq === o.v ? '#FDF6F0' : 'white' }}>
+                <input type="radio" name="modeManq" checked={modeManq === o.v} onChange={() => setModeManq(o.v)} style={{ marginTop: 2 }} />
+                <span style={{ fontSize: 13 }}>
+                  <b>{o.t}</b>
+                  <div style={{ fontSize: 11.5, color: '#8a7a70' }}>{o.d}</div>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
         {maxiJ > 0 && (
           <div style={{ fontSize: 12.5, color: '#4a3a30', textAlign: 'right', marginBottom: 10 }}>
-            {positif ? '+' : '−'}{val} j {positif ? 'de récup' : 'retirés de la récup'} · reste au solde du mois :{' '}
+            {positif
+              ? `+${val} j de récup`
+              : (modeManq === 'sans_solde' ? `${val} j en sans solde` : `−${val} j retirés de la récup`)} · reste au solde du mois :{' '}
             <b style={{ color: resteApres === 0 ? '#27500A' : '#854F0B' }}>{resteApres > 0 ? '+' : ''}{resteApres} h</b>
           </div>
         )}
 
         <div style={{ fontSize: 12, color: '#4a3a30', background: '#F4F0EA', padding: '9px 12px', borderRadius: 10, margin: '4px 0 16px' }}>
-          Les heures converties seront <b>retirées du solde du mois</b> (pas de double comptage). Traçable dans <b>Congés → Allocations</b>, et réversible.
+          Les heures converties sont <b>retirées du solde du mois</b> (pas de double comptage). Une conversion en récup est traçable dans <b>Congés → Allocations</b> et réversible ; un sans solde apparaît dans le <b>récap congés du mois</b>, colonne « Sans solde ».
         </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onClose} disabled={busy} style={{ padding: '8px 14px', border: '1px solid #E5D8C3', borderRadius: 8, background: 'white', cursor: 'pointer', fontSize: 13 }}>Annuler</button>
-          <button onClick={async () => { setBusy(true); await onConfirm(supVal, manqVal); setBusy(false) }} disabled={busy || rien} style={{ padding: '8px 14px', border: 'none', borderRadius: 8, background: rien ? '#c9b8c0' : '#3C3489', color: 'white', cursor: rien ? 'default' : 'pointer', fontSize: 13, fontWeight: 500 }}>{busy ? '…' : 'Convertir'}</button>
+          <button onClick={async () => { setBusy(true); await onConfirm(supVal, manqVal, modeManq); setBusy(false) }} disabled={busy || rien} style={{ padding: '8px 14px', border: 'none', borderRadius: 8, background: rien ? '#c9b8c0' : '#3C3489', color: 'white', cursor: rien ? 'default' : 'pointer', fontSize: 13, fontWeight: 500 }}>{busy ? '…' : 'Convertir'}</button>
         </div>
       </div>
     </div>

@@ -663,7 +663,11 @@ export function calculerMois(employe, mois, annee, data) {
 // Enregistre la conversion (heures_conversions) → les heures sont retirées du
 // solde du mois par calculerMois (pas de double comptage). Tout est réversible
 // (annuler l'allocation + supprimer la ligne de conversion).
-export async function convertirHeuresEnJours({ employe, mois, annee, supHeures = 0, manqHeures = 0, moisLabel, userId }) {
+// modeManq : 'recup' (par défaut) retire les jours de la récup via une allocation
+// négative ; 'sans_solde' ne crée AUCUNE allocation — les jours ne sont pas payés
+// mais les congés de l'employé ne bougent pas. On les reconnaît ensuite à
+// alloc_manq_id vide (pas besoin d'une colonne en plus).
+export async function convertirHeuresEnJours({ employe, mois, annee, supHeures = 0, manqHeures = 0, modeManq = 'recup', moisLabel, userId }) {
   const HRS_PAR_JOUR = 8
   const r2 = n => Math.round(n * 100) / 100
   const dateEvt = `${annee}-${String(mois).padStart(2, '0')}-01`
@@ -678,7 +682,7 @@ export async function convertirHeuresEnJours({ employe, mois, annee, supHeures =
     if (error) throw error
     alloc_sup_id = data.id
   }
-  if (manqHeures > 0) {
+  if (manqHeures > 0 && modeManq !== 'sans_solde') {
     const { data, error } = await supabase.from('conges_allocations').insert({
       employe_id: employe.id, annee, type: 'autre', jours: -r2(manqHeures / HRS_PAR_JOUR),
       raison: `Conversion solde ${moisLabel} : −${r2(manqHeures)} h → −${r2(manqHeures / HRS_PAR_JOUR)} j récup`,
