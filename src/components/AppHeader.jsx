@@ -69,6 +69,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return () => mq.removeEventListener?.('change', h)
   }, [])
   const hideHeaderNav = isWide && !isLivreur(user)
+  // Sur téléphone (<768px), les employés reçoivent les mêmes dossiers déroulants que
+  // l'admin : une file d'icônes sans nom est illisible sur petit écran (Économat introuvable).
+  const useDropdowns = admin || !isWide
 
   const [showCog, setShowCog] = useState(false)
   const cogRef = useRef(null)
@@ -607,6 +610,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return null
   }
   const primary = pickPrimaryNav()
+  // Dans les dossiers : on retire l'onglet deja affiche en bouton fixe (sauf admin,
+  // dont le bouton principal — Galerie CD — n'est de toute facon pas dans les menus).
+  const dropItems = (items) => admin ? items : items.filter(i => !primary || i.view !== primary.view)
 
   // ============================================================
   // Definition des menus deroulants
@@ -907,17 +913,18 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                 />
               )}
 
-              {/* Separateur visuel (admin uniquement, separe les boutons fixes des menus) */}
-              {admin && (menuProduction.length > 0 || menuVitrine.length > 0 || menuOutils.length > 0) && (
+              {/* Separateur visuel (separe les boutons fixes des menus deroulants) */}
+              {useDropdowns && (menuProduction.length > 0 || menuVitrine.length > 0 || menuOutils.length > 0) && (
                 <div className="w-px h-5 bg-line/60 mx-1" />
               )}
 
-              {admin ? (
+              {useDropdowns ? (
                 <>
-                  {/* Mode admin : 3 menus deroulants */}
-                  <DropdownMenu id="prod" label="Production" items={menuProduction} />
-                  <DropdownMenu id="vitrine" label="Vitrine" items={menuVitrine} />
-                  <DropdownMenu id="outils" label="Outils" items={menuOutils} footerSlot={showHeaderLabels ? <LabelsButton /> : null} />
+                  {/* Admin, et tout le monde sur téléphone : 3 menus deroulants.
+                      Pour un non-admin, l'onglet "primary" est deja un bouton fixe au-dessus. */}
+                  <DropdownMenu id="prod" label="Production" items={dropItems(menuProduction)} />
+                  <DropdownMenu id="vitrine" label="Vitrine" items={dropItems(menuVitrine)} />
+                  <DropdownMenu id="outils" label="Outils" items={dropItems(menuOutils)} footerSlot={admin && showHeaderLabels ? <LabelsButton /> : null} />
                 </>
               ) : (
                 <>
