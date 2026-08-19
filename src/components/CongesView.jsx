@@ -224,6 +224,8 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   const [editFerie, setEditFerie]         = useState(null)  // jour férié en cours d'édition
   const isMobile = useIsMobile()
   const allocsSyncRef = useRef(false)   // la remise à jour des allocations ne tourne qu'une fois
+  // Tri du tableau des soldes : colonne + sens. Nom croissant par défaut.
+  const [soldeTri, setSoldeTri] = useState({ col: 'nom', asc: true })
   const [conversions, setConversions] = useState([])   // heures converties en jours
 
   // Rechargement SILENCIEUX : on ne repasse pas par « Chargement… », sinon la
@@ -907,14 +909,45 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
             />
             {!isMobile && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 90px 90px 110px', gap: 8, padding: '10px 14px', fontSize: 10, fontWeight: 600, color: '#4a3a30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                <div>Employé</div>
-                <div title="Annuel permis + reliquat + événements applicables (hors maladie ≤ 3 j)">Total allocations</div>
-                <div title="Report N-1 (expire le 30 mai)">Reliquat</div>
-                <div title="Jours déjà pris (annuel + événements)">Pris</div>
-                <div style={{ textAlign: 'right' }} title="Allocations accumulé + récup − pris">Dispo</div>
+                {[
+                  ['nom', 'Employé', 'left', ''],
+                  ['total', 'Total allocations', 'left', 'Annuel permis + reliquat + événements applicables (hors maladie ≤ 3 j)'],
+                  ['reliquat', 'Reliquat', 'left', 'Report N-1 (expire le 30 mai)'],
+                  ['pris', 'Pris', 'left', 'Jours déjà pris (annuel + événements)'],
+                  ['dispo', 'Dispo', 'right', 'Allocations accumulé + récup − pris'],
+                ].map(([col, label, align, titre]) => {
+                  const actif = soldeTri.col === col
+                  return (
+                    <button key={col} title={titre ? `${titre} — cliquer pour trier` : 'Cliquer pour trier'}
+                      onClick={() => setSoldeTri(t => t.col === col ? { col, asc: !t.asc } : { col, asc: col === 'nom' })}
+                      style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', textTransform: 'inherit', letterSpacing: 'inherit',
+                        color: actif ? '#993556' : '#4a3a30', textAlign: align, justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+                        display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      {label}<span style={{ opacity: actif ? 1 : .25 }}>{actif && !soldeTri.asc ? '▼' : '▲'}</span>
+                    </button>
+                  )
+                })}
               </div>
             )}
-            {employes.filter(e => !soldeSearch.trim() || String(e.nom).toLowerCase().includes(soldeSearch.trim().toLowerCase())).map(e => {
+            {employes
+              .filter(e => !soldeSearch.trim() || String(e.nom).toLowerCase().includes(soldeSearch.trim().toLowerCase()))
+              .slice()
+              .sort((a, b) => {
+                const sa = soldes[a.id], sb = soldes[b.id]
+                const val = (e, s) => {
+                  switch (soldeTri.col) {
+                    case 'total':    return s?.totalAllocations ?? 0
+                    case 'reliquat': return s?.reliquatN1 ?? 0
+                    case 'pris':     return s?.pris ?? 0
+                    case 'dispo':    return s?.dispo ?? 0
+                    default:         return (e.nom || '').toLowerCase()
+                  }
+                }
+                const va = val(a, sa), vb = val(b, sb)
+                const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb
+                return soldeTri.asc ? cmp : -cmp
+              })
+              .map(e => {
               const s = soldes[e.id]
               if (!s) return null
               if (isMobile) {
