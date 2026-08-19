@@ -734,7 +734,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                         <input type="checkbox" checked={selAlloc.has(a.id)} onChange={() => toggleSel(selAlloc, setSelAlloc, a.id)} style={{ width: 16, height: 16 }} />
                         <strong>{emp?.nom || nameById[a.employe_id] || `#${a.employe_id}`}</strong>
                         <span>· {t?.label || a.type}</span>
-                        <span style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</span>
+                        <span style={{ color: Number(a.jours) < 0 ? '#A32D2D' : '#085041', fontWeight: 600 }}>{Number(a.jours) > 0 ? '+' : ''}{a.jours} j</span>
                         <span style={{ color: '#4a3a30', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <Calendar size={11} />
                           du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} au {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
@@ -809,7 +809,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                                       <div style={{ color: '#1a0f0a', fontWeight: 500 }}>
                                         {t?.label || a.type}
                                         {' · '}
-                                        <span style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</span>
+                                        <span style={{ color: Number(a.jours) < 0 ? '#A32D2D' : '#085041', fontWeight: 600 }}>{Number(a.jours) > 0 ? '+' : ''}{a.jours} j</span>
                                         {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
                                       </div>
                                       <div style={{ color: '#4a3a30', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
@@ -837,7 +837,7 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                                       {t?.label || a.type}
                                       {a.source === 'auto' && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041' }}>auto</span>}
                                     </div>
-                                    <div style={{ color: '#085041', fontWeight: 600 }}>{a.jours} j</div>
+                                    <div style={{ color: Number(a.jours) < 0 ? '#A32D2D' : '#085041', fontWeight: 600 }}>{Number(a.jours) > 0 ? '+' : ''}{a.jours} j</div>
                                     <div style={{ color: '#4a3a30', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                       <Calendar size={11} />
                                       du {debutAlloc.slice(8,10)}/{debutAlloc.slice(5,7)}/{debutAlloc.slice(0,4)} au {finAlloc.slice(8,10)}/{finAlloc.slice(5,7)}/{finAlloc.slice(0,4)}
