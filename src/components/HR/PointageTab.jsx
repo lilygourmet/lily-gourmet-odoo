@@ -1026,17 +1026,23 @@ function CongeAbsenceModal({ date, empNom, onClose, onConfirm }) {
 // On convertit LE SOLDE DU MOIS (report inclus), pas les heures sup et
 // manquantes séparément : c'est le solde qui doit tomber à zéro.
 function ConversionModal({ empNom, moisLabel, soldeMois, detail, onClose, onConfirm }) {
-  const maxi = Math.abs(Number(soldeMois) || 0)
+  // On convertit par DEMI-JOURNÉES (4 h = 0,5 j, 8 h = 1 j) : un congé ne se
+  // prend pas par quart de journée. Les heures qui ne complètent pas une
+  // demi-journée restent au solde du mois.
+  const HRS_JOUR = 8
+  const maxiH = Math.abs(Number(soldeMois) || 0)
   const positif = Number(soldeMois) > 0
-  const [heures, setHeures] = useState(maxi > 0 ? String(maxi) : '0')
-  const [busy, setBusy]     = useState(false)
-  const val = Math.max(0, Math.min(maxi, Number(String(heures).replace(',', '.')) || 0))
-  const r2 = n => Math.round(n / 8 * 100) / 100
+  const maxiJ = Math.floor(maxiH / (HRS_JOUR / 2)) * 0.5     // paliers de 0,5 j
+  const [jours, setJours] = useState(maxiJ > 0 ? String(maxiJ) : '0')
+  const [busy, setBusy]   = useState(false)
+  const saisi = Number(String(jours).replace(',', '.')) || 0
+  const val = Math.max(0, Math.min(maxiJ, Math.round(saisi * 2) / 2))   // arrondi au 0,5
+  const heuresVal = Math.round(val * HRS_JOUR * 100) / 100
   const rien = val <= 0
   // Ce qui part en récup (solde positif) ou en décompte (solde négatif)
-  const supVal  = positif ? val : 0
-  const manqVal = positif ? 0 : val
-  const resteApres = Math.round((Number(soldeMois) - (positif ? val : -val)) * 100) / 100
+  const supVal  = positif ? heuresVal : 0
+  const manqVal = positif ? 0 : heuresVal
+  const resteApres = Math.round((Number(soldeMois) - (positif ? heuresVal : -heuresVal)) * 100) / 100
 
   const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
   const modal   = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
@@ -1064,24 +1070,30 @@ function ConversionModal({ empNom, moisLabel, soldeMois, detail, onClose, onConf
           </div>
         </div>
 
-        {maxi > 0 ? (
+        {maxiJ > 0 ? (
           <div style={row(positif ? '#EAF3DE' : '#FCEBEB')}>
             <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>À convertir
-              <div style={{ fontWeight: 400, fontSize: 11.5, color: '#4a3a30' }}>maximum : {positif ? '+' : '−'}{maxi} h</div>
+              <div style={{ fontWeight: 400, fontSize: 11.5, color: '#4a3a30' }}>maximum : {maxiJ} j — par demi-journée</div>
             </div>
-            <input style={hin} value={heures} onChange={e => setHeures(e.target.value)} inputMode="decimal" /> <span style={{ fontSize: 12, color: '#4a3a30' }}>h</span>
-            <span style={{ color: '#8a7a70' }}>→</span>
-            <div style={{ fontSize: 13, fontWeight: 600, color: positif ? '#3C3489' : '#0C447C', minWidth: 92 }}>
-              {r2(val)} j {positif ? 'récup' : 'décompté'}
+            <input style={hin} value={jours} onChange={e => setJours(e.target.value)} inputMode="decimal" step="0.5" />
+            <span style={{ fontSize: 12, color: '#4a3a30' }}>j</span>
+            <span style={{ color: '#8a7a70' }}>=</span>
+            <div style={{ fontSize: 13, fontWeight: 600, color: positif ? '#3C3489' : '#0C447C', minWidth: 108 }}>
+              {heuresVal} h {positif ? 'ajoutées' : 'retirées'}
             </div>
           </div>
         ) : (
-          <div style={{ ...row('#F4F0EA'), fontSize: 13 }}>Le solde du mois est à zéro : rien à convertir.</div>
+          <div style={{ ...row('#F4F0EA'), fontSize: 13 }}>
+            {maxiH > 0
+              ? `Solde de ${maxiH} h : moins d'une demi-journée (4 h), rien à convertir.`
+              : 'Le solde du mois est à zéro : rien à convertir.'}
+          </div>
         )}
 
-        {maxi > 0 && (
+        {maxiJ > 0 && (
           <div style={{ fontSize: 12.5, color: '#4a3a30', textAlign: 'right', marginBottom: 10 }}>
-            Solde du mois après conversion : <b style={{ color: resteApres === 0 ? '#27500A' : '#854F0B' }}>{resteApres > 0 ? '+' : ''}{resteApres} h</b>
+            {positif ? '+' : '−'}{val} j {positif ? 'de récup' : 'retirés de la récup'} · reste au solde du mois :{' '}
+            <b style={{ color: resteApres === 0 ? '#27500A' : '#854F0B' }}>{resteApres > 0 ? '+' : ''}{resteApres} h</b>
           </div>
         )}
 

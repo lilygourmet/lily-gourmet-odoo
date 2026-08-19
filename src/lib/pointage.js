@@ -672,7 +672,7 @@ export async function convertirHeuresEnJours({ employe, mois, annee, supHeures =
   if (supHeures > 0) {
     const { data, error } = await supabase.from('conges_allocations').insert({
       employe_id: employe.id, annee, type: 'autre', jours: r2(supHeures / HRS_PAR_JOUR),
-      raison: `Conversion ${r2(supHeures)} h sup → récup · ${moisLabel}`,
+      raison: `Conversion solde ${moisLabel} : +${r2(supHeures)} h → +${r2(supHeures / HRS_PAR_JOUR)} j récup`,
       date_evt: dateEvt, source: 'manuel', statut: 'valide', created_by: userId,
     }).select('id').single()
     if (error) throw error
@@ -681,7 +681,7 @@ export async function convertirHeuresEnJours({ employe, mois, annee, supHeures =
   if (manqHeures > 0) {
     const { data, error } = await supabase.from('conges_allocations').insert({
       employe_id: employe.id, annee, type: 'autre', jours: -r2(manqHeures / HRS_PAR_JOUR),
-      raison: `Conversion ${r2(manqHeures)} h manquantes → décompte · ${moisLabel}`,
+      raison: `Conversion solde ${moisLabel} : −${r2(manqHeures)} h → −${r2(manqHeures / HRS_PAR_JOUR)} j récup`,
       date_evt: dateEvt, source: 'manuel', statut: 'valide', created_by: userId,
     }).select('id').single()
     if (error) throw error
