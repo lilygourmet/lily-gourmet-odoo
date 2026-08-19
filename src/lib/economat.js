@@ -287,6 +287,19 @@ export async function addArticleFromOdoo({ categoryId, groupId, odoo }) {
   if (error) throw error
   return data
 }
+/**
+ * Relie un article EXISTANT à un produit Odoo (ou débranche le lien avec null).
+ * Sans ce lien, l'article ne peut pas figurer dans un transfert Odoo.
+ * On ne touche ni au nom ni à l'unité affichés : ils restent ceux de l'économat.
+ */
+export async function linkArticleToOdoo(articleId, odoo) {
+  const patch = odoo
+    ? { odoo_product_id: odoo.odoo_id, odoo_name: odoo.odoo_name || odoo.name }
+    : { odoo_product_id: null, odoo_name: null }
+  const { error } = await supabase.from('economat_articles').update(patch).eq('id', articleId)
+  if (error) throw error
+}
+
 export async function setArticleActive(id, active) {
   const { error } = await supabase.from('economat_articles').update({ active }).eq('id', id)
   if (error) throw error

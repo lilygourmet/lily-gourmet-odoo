@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react'
 import {
   ECONOMAT_PROFILS, loadAllCategories, createCategory, deleteCategory,
   loadCategoryProfils, setCategoryProfils, createGroup, deleteGroup,
-  loadCategoryManage, addArticleFromOdoo, setArticleActive, deleteArticle,
+  loadCategoryManage, addArticleFromOdoo, setArticleActive, deleteArticle, linkArticleToOdoo,
   loadOdooProducts, syncWithOdoo,
 } from '../../lib/economat'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
-import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff } from 'lucide-react'
+import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff, Link2, X } from 'lucide-react'
 import SearchSelect from '../SearchSelect'
 
 // Gestion de l'économat (admin + économe) : catégories, groupes, articles (depuis Odoo).
@@ -89,6 +89,32 @@ export default function EconomatManageModal({ onClose, onChanged }) {
     try { await addArticleFromOdoo({ categoryId: catId, groupId: addGroupId, odoo: p }); await reloadManage(); notifyChanged() }
     catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
+  // Relier un article existant à un produit Odoo : la recherche part de son nom.
+  const [lierArt, setLierArt] = useState(null)      // article en cours de liaison
+  const [lierQ, setLierQ] = useState('')
+  const [lierRes, setLierRes] = useState([])
+  const [lierBusy, setLierBusy] = useState(false)
+
+  async function ouvrirLier(a) {
+    setLierArt(a); setLierQ(a.name); setLierRes([]); setLierBusy(true)
+    try { setLierRes(await loadOdooProducts({ q: a.name })) }
+    catch (e) { toast.error('Erreur Odoo : ' + e.message) }
+    finally { setLierBusy(false) }
+  }
+  async function chercherLier(terme) {
+    setLierBusy(true)
+    try { setLierRes(await loadOdooProducts({ q: terme.trim() })) }
+    catch (e) { toast.error('Erreur Odoo : ' + e.message) }
+    finally { setLierBusy(false) }
+  }
+  async function confirmerLier(prod) {
+    try {
+      await linkArticleToOdoo(lierArt.id, prod)
+      toast.success(`« ${lierArt.name} » relié à ${prod.odoo_name || prod.name}`)
+      setLierArt(null); await reloadManage(); notifyChanged()
+    } catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+
   async function toggleArticle(a) {
     try { await setArticleActive(a.id, !a.active); await reloadManage() }
     catch (e) { toast.error('Erreur : ' + e.message) }
@@ -211,13 +237,13 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                         <span className="text-[12px] font-semibold text-ink">{g.name}</span>
                         <button onClick={() => removeGroup(g)} title="Supprimer le groupe" className="text-ink-mute hover:text-red-600"><Trash2 size={13} strokeWidth={1.8} /></button>
                       </div>
-                      <ArticleList articles={articlesByGroup(g.id)} onToggle={toggleArticle} onRemove={removeArticle} />
+                      <ArticleList articles={articlesByGroup(g.id)} onToggle={toggleArticle} onRemove={removeArticle} onLier={ouvrirLier} />
                     </div>
                   ))}
                   {articlesByGroup(null).length > 0 && (
                     <div className="border border-line/60 rounded-lg p-2">
                       <div className="text-[12px] font-semibold text-ink-mute mb-1.5">Sans groupe</div>
-                      <ArticleList articles={articlesByGroup(null)} onToggle={toggleArticle} onRemove={removeArticle} />
+                      <ArticleList articles={articlesByGroup(null)} onToggle={toggleArticle} onRemove={removeArticle} onLier={ouvrirLier} />
                     </div>
                   )}
                   {manage.groups.length === 0 && articlesByGroup(null).length === 0 && (
@@ -229,11 +255,66 @@ export default function EconomatManageModal({ onClose, onChanged }) {
           </div>
         )}
       </div>
+
+      <LierPanel
+        article={lierArt} q={lierQ} setQ={setLierQ} results={lierRes} busy={lierBusy}
+        onSearch={chercherLier} onPick={confirmerLier}
+        onUnlink={async () => { await linkArticleToOdoo(lierArt.id, null); setLierArt(null); await reloadManage(); notifyChanged() }}
+        onClose={() => setLierArt(null)}
+      />
     </div>
   )
 }
 
-function ArticleList({ articles, onToggle, onRemove }) {
+// Panneau de liaison : recherche Odoo pré-remplie avec le nom de l'article.
+function LierPanel({ article, q, setQ, results, busy, onSearch, onPick, onUnlink, onClose }) {
+  if (!article) return null
+  return (
+    <div className="fixed inset-0 z-[1100] bg-black/45 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-line flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="text-[14px] font-semibold text-ink truncate">{article.name}</div>
+            <div className="text-[11px] text-ink-mute">
+              {article.odoo_product_id ? `Actuellement lié à ${article.odoo_name || '#' + article.odoo_product_id}` : 'Non lié à Odoo'}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-ink-mute hover:text-bordeaux p-1"><X size={18} /></button>
+        </div>
+
+        <div className="px-4 py-3 border-b border-line flex gap-2">
+          <input value={q} onChange={e => setQ(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && onSearch(q)}
+            placeholder="Chercher un produit Odoo…"
+            className="flex-1 px-3 py-2 text-[13px] border border-line rounded-lg" />
+          <button onClick={() => onSearch(q)} disabled={busy} className="lg-btn text-[13px] px-3">
+            {busy ? '…' : <Search size={15} />}
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+          {busy && <div className="text-[12px] text-ink-mute italic">Recherche…</div>}
+          {!busy && results.length === 0 && <div className="text-[12px] text-ink-mute italic">Aucun produit trouvé. Essaie un mot plus court.</div>}
+          {results.map(p => (
+            <button key={p.odoo_id} onClick={() => onPick(p)}
+              className="w-full text-left px-3 py-2 rounded-lg border border-line/70 hover:border-bordeaux hover:bg-cream-warm/40 text-[13px]">
+              {p.odoo_name || p.name}
+              {p.unit && <span className="text-[11px] text-ink-mute ml-2">{p.unit}</span>}
+            </button>
+          ))}
+        </div>
+
+        {article.odoo_product_id && (
+          <div className="px-4 py-3 border-t border-line">
+            <button onClick={onUnlink} className="text-[12px] text-red-600 hover:underline">Retirer le lien Odoo</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ArticleList({ articles, onToggle, onRemove, onLier }) {
   if (articles.length === 0) return <div className="text-[11px] text-ink-mute italic">Aucun article</div>
   return (
     <div className="space-y-1">
@@ -244,6 +325,12 @@ function ArticleList({ articles, onToggle, onRemove }) {
           </div>
           <span className="flex-1 text-ink">{a.name}{!a.odoo_product_id && <span className="text-[9px] text-amber-600 ml-1">(non lié Odoo)</span>}</span>
           {a.unit && <span className="text-[10px] text-ink-mute">{a.unit}</span>}
+          {onLier && (
+            <button onClick={() => onLier(a)} title={a.odoo_product_id ? 'Changer le produit Odoo lié' : 'Relier à un produit Odoo'}
+              className={`px-1 ${a.odoo_product_id ? 'text-ink-mute hover:text-bordeaux' : 'text-amber-600 hover:text-bordeaux'}`}>
+              <Link2 size={13} strokeWidth={1.8} />
+            </button>
+          )}
           <button onClick={() => onToggle(a)} title={a.active ? 'Désactiver' : 'Activer'} className="text-ink-mute hover:text-bordeaux px-1">{a.active ? <Eye size={14} strokeWidth={1.8} /> : <EyeOff size={14} strokeWidth={1.8} />}</button>
           <button onClick={() => onRemove(a)} title="Supprimer" className="text-ink-mute hover:text-red-600 px-1"><Trash2 size={13} strokeWidth={1.8} /></button>
         </div>

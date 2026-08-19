@@ -1,0 +1,306 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Économat ↔ Odoo</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#fcfbf8;color:#1a0f0a;font:13.5px/1.5 Geist,system-ui,sans-serif;padding:24px}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:600}
+.date{color:#8a7a70;font-size:13px;margin-bottom:16px}
+h2{font-family:Fraunces,serif;font-size:16px;font-weight:600;margin:26px 0 8px}
+h2 .sub{font-family:Geist,sans-serif;font-size:11.5px;font-weight:400;color:#8a7a70}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#8a7a70;font-weight:500;padding:0 8px 6px}
+td{padding:5px 8px;border-top:1px solid #f3ece1}
+tr.ok{background:#F2F8EC}tr.pr{background:#F6F9FC}tr.vo{background:#FFFBF0}tr.no{background:#FDF3F3}
+td.st{width:110px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;text-align:right}
+.st.ok{color:#3F6B12}.st.pr{color:#0C447C}.st.vo{color:#854F0B}.st.no{color:#A32D2D}
+.mut{color:#8a7a70}
+.tot{display:flex;gap:26px;flex-wrap:wrap;padding:14px 0;border-top:1px solid #e5d8c3;border-bottom:1px solid #e5d8c3;margin-bottom:8px}
+.tot .k{font-size:10.5px;color:#8a7a70;text-transform:uppercase;letter-spacing:.5px}
+.tot .v{font-family:Fraunces,serif;font-size:20px;font-weight:600;margin-top:2px}
+.note{background:#FFF7E0;border:1px solid #F0D89A;color:#854F0B;border-radius:10px;padding:10px 13px;font-size:12px;margin:14px 0}
+</style></head><body><div class="wrap">
+<h1>Économat ↔ Odoo</h1>
+<div class="date">Correspondances article → produit, au 19/08/2026</div>
+<div class="tot">
+  <div><div class="k">Déjà reliés</div><div class="v" style="color:#3F6B12">136</div></div>
+  <div><div class="k">Propositions sûres</div><div class="v" style="color:#0C447C">89</div></div>
+  <div><div class="k">À vérifier</div><div class="v" style="color:#854F0B">34</div></div>
+  <div><div class="k">Sans équivalent</div><div class="v" style="color:#A32D2D">9</div></div>
+</div>
+<div class="note"><b>Comment lire</b> — « déjà relié » : le lien existe, rien à faire. « Proposition sûre » : les mots du nom correspondent presque tous. « À vérifier » : ressemblance partielle, à confirmer par toi. « À créer » : aucun produit approchant dans Odoo.<br>
+⚠️ Une proposition reste une <b>suggestion automatique par le nom</b> : je ne peux pas deviner qu'un « Rhodoid 4 cm » n'est pas un « Rhodoid 3 cm ». À relire avant d'appliquer.</div>
+<h2>Boutique <span class="sub">3/50 reliés · #51 · Transferts internes achat → prod</span></h2>
+  <table><thead><tr><th>Article économat</th><th>Produit Odoo</th><th>État</th></tr></thead><tbody><tr class="vo"><td>Boite Bleue</td><td>GM- Donuts (boite de 12) <span class="mut">#3894</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Boite JAUNE</td><td>GM- Donuts (boite de 12) <span class="mut">#3894</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>boite kaki</td><td>P- Boite kaki 16X14X7cm <span class="mut">#4329</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Boite kaki</td><td>P- Boite kaki 16X14X7cm <span class="mut">#4329</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Boite Rose</td><td>GM- Donuts (boite de 12) <span class="mut">#3894</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Boite verte</td><td>P- Cc Boite 27,9x27,9 verte <span class="mut">#3521</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="no"><td>Bougies Blanches Grandes</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="no"><td>Bougies Blanches Petites</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="vo"><td>Bougies Fines</td><td>CD- Bougies (Fine) <span class="mut">#3033</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Bouteille jus 1L</td><td>C- Bouteille jus 1L <span class="mut">#3613</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>Canette  Sprite</td><td>B- Soda (Sprite) <span class="mut">#1807</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Canette Coca Cola</td><td>B- Coca Cola <span class="mut">#816</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Canette Coca Zéro</td><td>B- Coca Zéro <span class="mut">#817</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Canette Schweps citron</td><td>B- Schweps citron <span class="mut">#954</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="ok"><td>Celophane Emballage</td><td>P- Celophane Emballage</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Chocolat chaud Vergnano</td><td>B- Chocolat chaud Vergnano <span class="mut">#6018</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Citron</td><td>15 cm CD* (Citron) <span class="mut">#2050</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Couteau transparent</td><td>C- Couteau transparent <span class="mut">#4175</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="no"><td>Créme  fouettée spray</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="vo"><td>Essuis Mains</td><td>C- Savon mains <span class="mut">#2708</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Flamme</td><td>C- Flamme <span class="mut">#860</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Fourchette transparente</td><td>C- Fourchette transparente <span class="mut">#4170</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Gant latex noir 100 pcs</td><td>C- Gant latex noir 100 pcs <span class="mut">#869</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Gingembre</td><td>FS- Gingembre <span class="mut">#4357</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Gobelet grand</td><td>C- Gobelet grand <span class="mut">#3675</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Gobelet jus</td><td>C- Gobelet jus <span class="mut">#3676</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>Jus Ananas</td><td>MP- Pur Jus Ananas <span class="mut">#935</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Lait</td><td>MP- Lait Concentré <span class="mut">#6001</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Lingette</td><td>C- Lingette <span class="mut">#4598</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Myrtilles</td><td>F- Myrtilles <span class="mut">#903</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Orange</td><td>F- Orange <span class="mut">#911</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Pailles Noires (Pack 100)</td><td>C- Pailles Noires (Pack 250) <span class="mut">#2569</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Purée Ananas</td><td>MP- Purée d'Ananas <span class="mut">#937</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Purée Framboise</td><td>MP- Purée de Framboise <span class="mut">#939</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Purée mangue</td><td>MP- Purée de Mangue <span class="mut">#2910</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rame Papier A4</td><td>C- Rame Papier A4 <span class="mut">#5272</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau celophane</td><td>C- Rouleau celophane <span class="mut">#4172</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau de caisse</td><td>C- Rouleau de caisse <span class="mut">#946</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau TPE</td><td>C- Rouleau TPE <span class="mut">#6028</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="no"><td>Ruban</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="vo"><td>Sac Bleu</td><td>P- Cc Sac Bleu 27X27X27 <span class="mut">#949</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Sac jaune</td><td>C- Sac plastique <span class="mut">#3402</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>SAC Poubelle 30L</td><td>C- Sac poubelle 30L <span class="mut">#4767</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>Sac Vert</td><td>P- Cc Sac Vert 35x35x29 <span class="mut">#4301</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Sac vert craft</td><td>P- Cc Sac vert craft <span class="mut">#4058</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Sachet 8cm cookies</td><td>P- Sachet 8cm cookies</td><td class="st ok">déjà relié</td></tr>
+<tr class="vo"><td>Sachet viennoiserie 500u</td><td>P- Sachet viennoiserie Grand <span class="mut">#4339</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Serviettes 30x30 (100pc) BLANC</td><td>C-  Serviettes 30x30 (100pc) BLANC <span class="mut">#956</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Serviettes 30x30 (100pc) NOIR</td><td>C-  Serviettes 30x30 (100pc) NOIR <span class="mut">#957</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Signatures LG</td><td>P- Signatures LG</td><td class="st ok">déjà relié</td></tr></tbody></table>
+<h2>Cake Design <span class="sub">24/49 reliés · #51 · Transferts internes achat → prod</span></h2>
+  <table><thead><tr><th>Article économat</th><th>Produit Odoo</th><th>État</th></tr></thead><tbody><tr class="pr"><td>Boule Déco</td><td>C- Boule Déco <span class="mut">#6045</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>Bouquet de fleur</td><td>C- Fil de fleur <span class="mut">#3672</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="ok"><td>Cales rond 14cm</td><td>P- Cales rond 14cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>cales rond doré 18cm</td><td>P- cales rond doré 18cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>cales rond doré 22cm</td><td>P- cales rond doré 22cm <span class="mut">#6144</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>cales rond doré 28cm</td><td>P- cales rond doré 28cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="no"><td>Cercle  inox 5cm</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="pr"><td>Charlottes pack de 100</td><td>C- Charlottes pack de 100 <span class="mut">#804</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Chocolat Macao Blanc</td><td>MP- Chocolat Macao Blanc</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>CMC</td><td>MP- CMC</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant  GEL</td><td>MP- Colorant  GEL</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant bronze</td><td>MP- Colorant bronze</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant Or 10g</td><td>MP- Colorant Or 10g</td><td class="st ok">déjà relié</td></tr>
+<tr class="no"><td>Colorant Or Gold 56g</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="ok"><td>Cure dent</td><td>MP- Cure dent</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Devant</td><td>C- Devant <span class="mut">#4174</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Feuille d'or Bouteille</td><td>C- Feuille d'or Bouteille <span class="mut">#3691</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Feuille d'or FEUILLE</td><td>C- Feuille d'or FEUILLE <span class="mut">#2572</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Feuille Magique</td><td>C- Feuille Magique <span class="mut">#5005</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Feuille pate sucre a4</td><td>C- Feuille pate sucre A4 <span class="mut">#2768</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Gant latex noir 100 pcs</td><td>C- Gant latex noir 100 pcs <span class="mut">#869</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Glucose</td><td>MP- Glucose</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Glue Gun</td><td>C- Glue gun <span class="mut">#6216</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Maizena</td><td>MP- Maizena</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Papier Azyme épai</td><td>C- Papier Azyme épai <span class="mut">#855</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Pâte à Sucre Noire</td><td>MP- Pâte à Sucre Noire</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Perles CD</td><td>MP- Perles CD</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Poche patissière 100 pcs</td><td>C- Poche patissière 100 pcs <span class="mut">#928</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Poche patissière petit</td><td>C- Poche patissière petit <span class="mut">#3887</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rame Papier A4</td><td>C- Rame Papier A4 <span class="mut">#5272</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau celophane</td><td>C- Rouleau celophane <span class="mut">#4172</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau Essuie Main</td><td>C- Rouleau Essuie Main <span class="mut">#947</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>socle doré 60/40 cm (copie)</td><td>P- Socle doré 60/40 cm <span class="mut">#4173</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>SPRAY Réfrigérant</td><td>C- Spray Réfrigérant <span class="mut">#2570</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Sucre Glace</td><td>MP- Sucre Glace</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Support En Bois carré 50cm</td><td>P- Support Bois carré 50cm <span class="mut">#6041</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Support En Bois carré 60 cm</td><td>P- Support Bois Carré 25 cm <span class="mut">#7019</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>Support en bois fin 25 cm</td><td>P- Support Bois Carré 25 cm <span class="mut">#7019</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Support en bois fin 30 cm</td><td>P- Support Bois Carré 25 cm <span class="mut">#7019</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="ok"><td>Support En Bois Rond 50 cm</td><td>P- Support En Bois Rond 50 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support En Bois Rond 60 cm</td><td>P- Support En Bois Rond 60 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support En Bois Rond 80 cm</td><td>P- Support En Bois Rond 80 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support Gateau 25 cm</td><td>P- Support Gateau 25 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support Gateau 30 cm</td><td>P- Support Gateau 30 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support Gateau 35 cm</td><td>P- Support Gateau 35 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support Gateau 40 cm</td><td>P- Support Gateau 40 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support Gateau 45 cm</td><td>P- Support Gateau 45 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Support Gateau 50 cm</td><td>P- Support Gateau 50 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Vinaigre 50 cl</td><td>MP- Vinaigre 50 cl</td><td class="st ok">déjà relié</td></tr></tbody></table>
+<h2>Finition - CD Prod <span class="sub">60/87 reliés · #51 · Transferts internes achat → prod</span></h2>
+  <table><thead><tr><th>Article économat</th><th>Produit Odoo</th><th>État</th></tr></thead><tbody><tr class="ok"><td>Absolu cristal Nappage glace</td><td>MP- Absolu cristal Nappage glace</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Acide citrique</td><td>MP- Acide citrique</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Amandes Brutes</td><td>MP- Amandes Brutes</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Amandes en Poudre extra fine</td><td>MP- Amandes Poudre extra fine <span class="mut">#5833</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Amandes Poudre</td><td>MP- Amandes Poudre</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Arôme vanille artificielle</td><td>MP- Arôme vanille artificielle</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Bâtonnet Magnum</td><td>P- Bâtonnet Magnum</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Batonnet Pops 100P</td><td>C- Batonnet Pops 100P <span class="mut">#760</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Beurre de cacao</td><td>MP- Beurre de cacao</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Beurre entremets</td><td>MP- Beurre entremets</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Boite polystyrène P16</td><td>P- Boite polystyrène P16</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Boite polystyrène P9</td><td>P- Boite polystyrène P9</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Cacao Extra rouge</td><td>MP- Cacao Extra rouge</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Caissette Blanc n° 45</td><td>C- Caissette Blanc n° 45 <span class="mut">#791</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Caissette Blanc n° 5</td><td>C- Caissette Blanc n° 45 <span class="mut">#791</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Cales 14x4cm</td><td>P- Cales 14x4cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Cales 20x17</td><td>P- Cales 20x17</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Cales 22x9cm cakes</td><td>P- Cales 22x9cm cakes</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Cales 23*19 CM FN</td><td>P- Cales 23*19 CM FN</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Cales carrées 9X9 cm</td><td>P- Cales carrées 9X9 cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Cales rond 14cm</td><td>P- Cales rond 14cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Cales rond 19cm</td><td>P- Cales rond 19cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>cales rond 22cm</td><td>P- cales rond 22cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>cales rond 27cm</td><td>P- cales rond 27cm</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Callebaut Couverture Blanc</td><td>MP- Chocolat Callebaut Couverture Blanc <span class="mut">#5820</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Callebaut Couverture Noir</td><td>MP- Chocolat Callebaut Couverture Noir <span class="mut">#5819</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Celophane Emballage</td><td>P- Celophane Emballage</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Charlottes pack de 100</td><td>C- Charlottes pack de 100 <span class="mut">#804</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Chocolat Macao Blanc</td><td>MP- Chocolat Macao Blanc</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Chocolat Macao Noir</td><td>MP- Chocolat Macao Noir</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>CMC</td><td>MP- CMC</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Colorant alimentaire Lypo JAUNE</td><td>MP- Colorant Lypo Jaune <span class="mut">#3231</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Colorant alimentaire Lypo NOIR</td><td>MP- Colorant Lypo Noir <span class="mut">#3226</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Colorant bleu indigo</td><td>MP- Colorant bleu indigo</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant brun chocolat</td><td>MP- Colorant brun chocolat</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant Jaune tartazine</td><td>MP- Colorant Jaune tartazine</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant Noir intense</td><td>MP- Colorant Noir intense</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant Rouge</td><td>MP- Colorant Rouge</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Colorant vert</td><td>MP- Colorant vert</td><td class="st ok">déjà relié</td></tr>
+<tr class="vo"><td>Crème Vegetale</td><td>MP- Crème Cacahuètes <span class="mut">#6066</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Devant</td><td>C- Devant <span class="mut">#4174</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Etiquette petite</td><td>P- Etiquette petite</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Farine</td><td>MP- Farine</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Feuille d'or Bouteille</td><td>C- Feuille d'or Bouteille <span class="mut">#3691</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>feuille d'or FEUILLE</td><td>C- Feuille d'or FEUILLE <span class="mut">#2572</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Feuilletine</td><td>MP- Feuilletine</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Fraise</td><td>MP- Fraise</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Framboise fruit</td><td>F- Framboise fruit <span class="mut">#866</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Gelatine en poudre</td><td>MP- Gelatine en poudre</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Gelatine feuille</td><td>MP- Gelatine feuille</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Glucose</td><td>MP- Glucose</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Grue de Cacao</td><td>MP- Grue de Cacao</td><td class="st ok">déjà relié</td></tr>
+<tr class="no"><td>Jivara 40%</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="ok"><td>Lait UHT</td><td>MP- Lait UHT</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Levure chimique</td><td>MP- Levure chimique</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Maizena</td><td>MP- Maizena</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Malteser</td><td>MP- Malteser</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Margarine Bonna</td><td>MP- Margarine Bonna</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Mini camping gaz</td><td>C- Mini camping gaz <span class="mut">#2577</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Mixo</td><td>MP- Mixo</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Nappage</td><td>MP- Nappage</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Nutella</td><td>MP- Nutella</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Oeufs blanc</td><td>MP- Oeufs blanc</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Oeufs entier</td><td>MP- Oeufs entier</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Oeufs jaune</td><td>MP- Oeufs jaune</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Oreo</td><td>15 cm CD* (Oréo) <span class="mut">#2052</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Papier cuisson</td><td>C- Papier cuisson <span class="mut">#2906</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Pâte à glacer Brune</td><td>MP- Pâte à glacer Brune</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Plateau rectangle avec clôche et fenêtre</td><td>P- Plateau rectangle avec clôche et fenêtre</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Plateaux avec cloche</td><td>P- Plateaux avec cloche</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Poche patissière 100 pcs</td><td>C- Poche patissière 100 pcs <span class="mut">#928</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Poche patissière petit</td><td>C- Poche patissière petit <span class="mut">#3887</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>poudre amandes</td><td>MP- Amandes Poudre <span class="mut">#5837</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Praliné Noisette 50%</td><td>MP- Praliné Noisette 50%</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Préparation en poudre crème patissière</td><td>MP- Préparation en poudre crème patissière</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Purée passion</td><td>MP- Purée de Passion <span class="mut">#941</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rhodoid 5 cm</td><td>C- Rhodoid 3 cm <span class="mut">#5602</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau celophane</td><td>C- Rouleau celophane <span class="mut">#4172</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau Essuie Main</td><td>C- Rouleau Essuie Main <span class="mut">#947</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>Satilia Noir 62%</td><td>MP- Chocolat Valrhona Satilia Noir 62% <span class="mut">#5840</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="ok"><td>Spray de graissage</td><td>MP- Spray de graissage</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Sucre Glace</td><td>MP- Sucre Glace</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Sucre Granule</td><td>MP- Sucre Granule</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Sucre Neige</td><td>MP- Sucre Neige</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Trimoline sucre inverti</td><td>MP- Trimoline sucre inverti</td><td class="st ok">déjà relié</td></tr>
+<tr class="no"><td>Valrhonna Jivara</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="ok"><td>Vinaigre 50 cl</td><td>MP- Vinaigre 50 cl</td><td class="st ok">déjà relié</td></tr></tbody></table>
+<h2>Production <span class="sub">49/82 reliés · #74 · Transferts internes achat → prod annexe</span></h2>
+  <table><thead><tr><th>Article économat</th><th>Produit Odoo</th><th>État</th></tr></thead><tbody><tr class="ok"><td>Aiguilette orange</td><td>MP- Aiguilette orange</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Amandes Brutes</td><td>MP- Amandes Brutes</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Amandes Effilees</td><td>MP- Amandes Effilees</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Amandes Hachees</td><td>MP- Amandes Hachees</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Amandes Poudre</td><td>MP- Amandes Poudre</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Amandes Poudre extra fine</td><td>MP- Amandes Poudre extra fine</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Arôme Amer</td><td>MP- Arôme Amer</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Arôme vanille artificielle</td><td>MP- Arôme vanille artificielle</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Batons Chocolat Valrhonna 48%</td><td>MP- Batons Chocolat Valrhonna 48%</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Beurre de cacao</td><td>MP- Beurre de cacao</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Beurre entremets</td><td>MP- Beurre entremets</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Bicarbonate de soude</td><td>MP- Bicarbonate de soude</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Biscuit digestive</td><td>MP- Biscuit digestive</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Brochette en bois</td><td>C- Brochette en bois <span class="mut">#2578</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Cacao Extra rouge</td><td>MP- Cacao Extra rouge</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Callebaut Couverture Blanc</td><td>MP- Chocolat Callebaut Couverture Blanc <span class="mut">#5820</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Callebaut Couverture Lait</td><td>MP- Chocolat Callebaut Couverture Lait <span class="mut">#5821</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Callebaut Couverture Noir</td><td>MP- Chocolat Callebaut Couverture Noir <span class="mut">#5819</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Charlottes pack de 100</td><td>C- Charlottes pack de 100 <span class="mut">#804</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Chocolat Alunga Barry 41%</td><td>MP- Chocolat Barry Alunga 41% <span class="mut">#6048</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Chocolat blanc Zephyr</td><td>MP- Chocolat blanc Zephyr</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Chocolat Callebaut Couverture Gold</td><td>MP- Chocolat Callebaut Couverture Gold</td><td class="st ok">déjà relié</td></tr>
+<tr class="vo"><td>Chocolat Valrhonna Dulcey</td><td>MP- Batons Chocolat Valrhonna 48% <span class="mut">#5948</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Chocolat Valrhonna Guanaja</td><td>MP- Batons Chocolat Valrhonna 48% <span class="mut">#5948</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Chocolat Valrhonna Ivoire 35%</td><td>MP- Batons Chocolat Valrhonna 48% <span class="mut">#5948</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Chocolat Valrhonna Jivara 40%</td><td>MP- Batons Chocolat Valrhonna 48% <span class="mut">#5948</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Chocolat Valrhonna Satilia Noir 62%</td><td>MP- Chocolat Valrhona Satilia Noir 62% <span class="mut">#5840</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Chocolat Weiss Gianduja</td><td>MP- Chocolat Weiss Gianduja</td><td class="st ok">déjà relié</td></tr>
+<tr class="vo"><td>Creme cheese kiri</td><td>SA- Quiches U. (Pastrami, crème cheese) <span class="mut">#4466</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="no"><td>Crème chesse milkyfood</td><td class="mut">rien de proche dans Odoo</td><td class="st no">à créer</td></tr>
+<tr class="ok"><td>Crème whipping</td><td>MP- Crème whipping</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Devant</td><td>C- Devant <span class="mut">#4174</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Farine</td><td>MP- Farine</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Farine viennoiserie</td><td>MP- Farine viennoiserie</td><td class="st ok">déjà relié</td></tr>
+<tr class="vo"><td>FEUILLE GITARE 60*40</td><td>C- Feuille Magique <span class="mut">#5005</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="ok"><td>Feuilletine</td><td>MP- Feuilletine</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Gant latex noir 100 pcs</td><td>C- Gant latex noir 100 pcs <span class="mut">#869</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Gelatine en poudre</td><td>MP- Gelatine en poudre</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Gelatine feuille</td><td>MP- Gelatine feuille</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Gingembre</td><td>FS- Gingembre <span class="mut">#4357</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Glucose</td><td>MP- Glucose</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Glucose Atomisé</td><td>MP- Glucose Atomisé</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Huile de tournesol</td><td>MP- Huile de tournesol</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Lait Concentré</td><td>MP- Lait Concentré</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Lait UHT</td><td>MP- Lait UHT</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Levure chimique</td><td>MP- Levure chimique</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Maizena</td><td>MP- Maizena</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Mangue</td><td>F- Mangue <span class="mut">#2893</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Mascarpone</td><td>MP- Mascarpone</td><td class="st ok">déjà relié</td></tr>
+<tr class="vo"><td>Miel Eucalyptus Zemzami</td><td>MP- Miel Zemzami <span class="mut">#5980</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="ok"><td>Miel Zemzami</td><td>MP- Miel Zemzami</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Mini camping gaz</td><td>C- Mini camping gaz <span class="mut">#2577</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Mixo</td><td>MP- Mixo</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Nescafe Special Filtre</td><td>MP- Nescafe Special Filtre</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Noisette Entière</td><td>MP- Noisette Entière</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Oeufs blanc</td><td>MP- Oeufs blanc</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Oeufs entier</td><td>MP- Oeufs entier</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Oeufs jaune</td><td>MP- Oeufs jaune</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Papier cuisson</td><td>C- Papier cuisson <span class="mut">#2906</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Pâte à pistache</td><td>MP- Pâte de Pistache <span class="mut">#6002</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="vo"><td>Pate noisette</td><td>MP- Pâte de Noisette MONTEBIANCO <span class="mut">#6740</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="vo"><td>Pate pistache glace</td><td>MP- Pâte de Pistache <span class="mut">#6002</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Pecan 2</td><td>FS- Pecan <span class="mut">#5967</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Pectine NH</td><td>MP- Pectine NH</td><td class="st ok">déjà relié</td></tr>
+<tr class="vo"><td>Pistache Entier</td><td>MP- Crème Pistache <span class="mut">#5310</span></td><td class="st vo">à vérifier</td></tr>
+<tr class="pr"><td>Poche patissière 100 pcs</td><td>C- Poche patissière 100 pcs <span class="mut">#928</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Praliné Noisette 50%</td><td>MP- Praliné Noisette 50%</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Préparation en poudre crème patissière</td><td>MP- Préparation en poudre crème patissière</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Rhodoid 3 cm</td><td>C- Rhodoid 3 cm <span class="mut">#5602</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rhodoid 4 cm</td><td>C- Rhodoid 3 cm <span class="mut">#5602</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rhodoid 5 cm</td><td>C- Rhodoid 3 cm <span class="mut">#5602</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Riz soufflé</td><td>MP- Riz soufflé</td><td class="st ok">déjà relié</td></tr>
+<tr class="pr"><td>Rouleau celophane</td><td>C- Rouleau celophane <span class="mut">#4172</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau Essuie Main</td><td>C- Rouleau Essuie Main <span class="mut">#947</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="pr"><td>Rouleau Papier Aluminium</td><td>C- Rouleau Papier Aluminium <span class="mut">#2900</span></td><td class="st pr">proposition sûre</td></tr>
+<tr class="ok"><td>Sel</td><td>MP- Sel</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Spray de graissage</td><td>MP- Spray de graissage</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Sucre Cassonade</td><td>MP- Sucre Cassonade</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Sucre Glace</td><td>MP- Sucre Glace</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Sucre Granule</td><td>MP- Sucre Granule</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Trimoline sucre inverti</td><td>MP- Trimoline sucre inverti</td><td class="st ok">déjà relié</td></tr>
+<tr class="ok"><td>Vanille Gousse Bourbon</td><td>MP- Vanille Gousse Bourbon</td><td class="st ok">déjà relié</td></tr></tbody></table>
+</div></body></html>
