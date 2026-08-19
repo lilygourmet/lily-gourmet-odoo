@@ -681,10 +681,10 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                             {list.length} congé{list.length > 1 ? 's' : ''} · {totalJ} j décompté{totalJ > 1 ? 's' : ''}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
                           {list.map(c => (
                             <CongeCard
-                              key={c.id} c={c} emp={empById[c.employe_id]} nameById={nameById} joursFeries={joursFeries}
+                              key={c.id} c={c} emp={empById[c.employe_id]} nameById={nameById} joursFeries={joursFeries} compact
                               actions={canImprimerFeuille ? <>
                       <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
                       <button onClick={() => handleToggleSigne(c)}
@@ -1910,18 +1910,25 @@ function joursDecomptesCalcul(c, emp, feriesSet = null) {
   return nbCal
 }
 
-function CongeCard({ c, emp, actions, joursFeries = [], nameById = {} }) {
+// compact : la liste est déjà groupée par employé (onglet Congés validés) —
+// inutile de répéter sa photo et son nom sur chaque ligne, et pas de carte
+// dans la carte.
+function CongeCard({ c, emp, actions, joursFeries = [], nameById = {}, compact = false }) {
   const nbCal = nbJours(c.date_debut, c.date_fin)
   const feriesSet = useMemo(() => new Set((joursFeries || []).map(f => f.date)), [joursFeries])
   const nbDec = joursDecomptesConge(c, emp, feriesSet)
   const feriesPeriode = feriesListePeriode(joursFeries, c.date_debut, c.date_fin)
   const typeLabel = formatTypeConge(c.type_conge) || 'Congé'
   return (
-    <div style={card}>
+    <div style={compact
+      ? { padding: '7px 4px', borderTop: '1px solid #f3ece1' }
+      : card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 8 }}><Avatar emp={emp} size={26} />{emp?.nom || nameById[c.employe_id] || `Employé #${c.employe_id}`}</div>
-          <div style={{ fontSize: 12, color: '#4a3a30', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {!compact && (
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#1a0f0a', display: 'inline-flex', alignItems: 'center', gap: 8 }}><Avatar emp={emp} size={26} />{emp?.nom || nameById[c.employe_id] || `Employé #${c.employe_id}`}</div>
+          )}
+          <div style={{ fontSize: 12, color: '#4a3a30', marginTop: compact ? 0 : 2, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Calendar size={13} /> du <strong>{fmt(c.date_debut)}</strong> au <strong>{fmt(c.date_fin)}</strong>
             {' · '}
             <strong style={{ color: '#993556' }}>{nbDec} jour{nbDec > 1 ? 's' : ''} décompté{nbDec > 1 ? 's' : ''}</strong>
