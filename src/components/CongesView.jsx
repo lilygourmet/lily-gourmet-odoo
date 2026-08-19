@@ -686,17 +686,17 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
                             <CongeCard
                               key={c.id} c={c} emp={empById[c.employe_id]} nameById={nameById} joursFeries={joursFeries} compact
                               actions={canImprimerFeuille ? <>
-                      <button onClick={() => imprimerFeuille(c)} style={btnSlim} title="Imprimer la feuille de congé">📄 Feuille</button>
+                      <button onClick={() => imprimerFeuille(c)} style={btnMini} title="Imprimer la feuille de congé">📄 Feuille</button>
                       <button onClick={() => handleToggleSigne(c)}
                         style={c.signe
-                          ? { ...btnSlim, background: '#DCF0E2', color: '#085041', borderColor: '#B6E2C8' }
-                          : { ...btnSlim, color: '#a9620a', borderColor: '#f0d9b8' }}
+                          ? { ...btnMini, background: '#DCF0E2', color: '#085041', borderColor: '#B6E2C8' }
+                          : { ...btnMini, color: '#a9620a', borderColor: '#f0d9b8' }}
                         title={c.signe ? 'Feuille signée par l\'employé — cliquer pour annuler' : 'Marquer la feuille comme signée par l\'employé'}>
                         {c.signe ? '✓ Signé' : '☐ À signer'}
                       </button>
-                      {isAdmin && <button onClick={() => setEditConge(c)} style={btnSlim} title="Modifier ce congé"><Pencil size={13} /></button>}
-                      {isAdmin && <button onClick={() => handleAnnuler(c)} style={btnRejeter}><Trash2 size={14} /> Annuler</button>}
-                      {isAdmin && <button onClick={() => handleAnnulerSilencieux(c)} style={btnSlim} title="Annuler sans envoyer de WhatsApp à l'employé (correction interne)"><Trash2 size={13} /> Sans notif</button>}
+                      {isAdmin && <button onClick={() => setEditConge(c)} style={btnMini} title="Modifier ce congé"><Pencil size={12} /></button>}
+                      {isAdmin && <button onClick={() => handleAnnuler(c)} style={btnMiniRejeter}><Trash2 size={12} /> Annuler</button>}
+                      {isAdmin && <button onClick={() => handleAnnulerSilencieux(c)} style={btnMini} title="Annuler sans envoyer de WhatsApp à l'employé (correction interne)"><Trash2 size={12} /> Sans notif</button>}
                     </> : null}
                             />
                           ))}
@@ -2135,6 +2135,10 @@ const lbl = { display: 'block', fontSize: 11, fontWeight: 500, color: '#4a3a30',
 const btnSlim = { fontSize: 13, padding: '8px 14px', borderRadius: 10, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30' }
 const btnPrimary = { fontSize: 13, padding: '8px 14px', borderRadius: 10, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }
 const btnValider = { fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #1D9E75', background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }
+// Actions d'une ligne de congé : compactes, pour ne pas dominer la ligne.
+const btnMini = { fontSize: 11, padding: '3px 8px', borderRadius: 7, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer', color: '#4a3a30', lineHeight: 1.4 }
+const btnMiniRejeter = { ...btnMini, border: '1px solid #E5BFB6', background: '#FCE9E8', color: '#99201E', display: 'inline-flex', alignItems: 'center', gap: 3 }
+
 const btnRejeter = { fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #E5BFB6', background: '#FCE9E8', color: '#99201E', cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }
 
 function Tab({ active, onClick, children }) {
