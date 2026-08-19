@@ -342,31 +342,31 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
   }, [valides])
 
   // Application des filtres + regroupement par mois (clé "YYYY-MM")
-  const validesGroupedByMonth = useMemo(() => {
+  const empById = useMemo(() => Object.fromEntries(employes.map(e => [e.id, e])), [employes])
+
+  const validesParEmploye = useMemo(() => {
     const filtered = valides.filter(c => {
       if (filterEmp !== 'all' && String(c.employe_id) !== String(filterEmp)) return false
       if (filterYear !== 'all' && c.date_debut.slice(0, 4) !== String(filterYear)) return false
       if (onlyUnsigned && c.signe) return false
       return true
     })
-    const map = new Map() // YYYY-MM -> [c]
+    // Groupé par EMPLOYÉ, comme l'onglet Allocations : une carte par personne,
+    // ses congés dedans du plus récent au plus ancien.
+    const map = new Map()
     for (const c of filtered) {
-      // Rattaché au mois de sa DATE DE DÉBUT (compté en entier là, pas recompté le mois suivant).
-      const key = c.date_debut.slice(0, 7)
-      if (!map.has(key)) map.set(key, [])
-      map.get(key).push(c)
+      if (!map.has(c.employe_id)) map.set(c.employe_id, [])
+      map.get(c.employe_id).push(c)
     }
-    // Tri descendant (mois le plus récent en premier)
-    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [valides, filterEmp, filterYear, onlyUnsigned])
+    for (const list of map.values()) list.sort((a, b) => b.date_debut.localeCompare(a.date_debut))
+    return Array.from(map.entries())
+      .map(([id, list]) => ({ emp: empById[id], id, list }))
+      .filter(x => x.emp)
+      .sort((a, b) => (a.emp.nom || '').localeCompare(b.emp.nom || ''))
+  }, [valides, filterEmp, filterYear, onlyUnsigned, empById])
 
-  function fmtMonthLabel(key) {
-    const [y, m] = key.split('-')
-    const moisLong = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-    return `${moisLong[parseInt(m, 10) - 1]} ${y}`
-  }
 
-  const empById = useMemo(() => Object.fromEntries(employes.map(e => [e.id, e])), [employes])
+
   // Noms de TOUS les employés (même partis/fantômes), pour ne jamais afficher « Employé #x ».
   const nameById = useMemo(() => Object.fromEntries(nomsTous.map(e => [e.id, e.nom])), [nomsTous])
   const feriesSet = useMemo(() => new Set(joursFeries.map(f => f.date)), [joursFeries])
@@ -663,20 +663,21 @@ export default function CongesView({ user, activeView, onNavigate, onLogout, emb
               )}
             </div>
 
-            {validesGroupedByMonth.length === 0
+            {validesParEmploye.length === 0
               ? <div style={emptyBox}>Aucun congé validé pour ces filtres.</div>
               : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  {validesGroupedByMonth.map(([monthKey, list]) => {
-                    // Total jours décomptés du mois (congé entier rattaché à son mois de début)
-                    const totalJ = list.reduce((s, c) => s + joursDecomptesConge(c, empById[c.employe_id], feriesSet), 0)
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {validesParEmploye.map(({ emp, id, list }) => {
+                    const totalJ = list.reduce((s, c) => s + joursDecomptesConge(c, emp, feriesSet), 0)
                     return (
-                      <div key={monthKey}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '6px 10px', background: '#F4F0EA', borderRadius: 8 }}>
-                          <div style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 15, color: '#1a0f0a' }}>
-                            {fmtMonthLabel(monthKey)}
+                      <div key={id} style={{ background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 14, padding: '12px 16px', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                            <Avatar emp={emp} size={56} style={{ objectPosition: '50% 22%' }} />
+                            {emp.nom}
+                            {emp.poste ? <span style={{ fontWeight: 400, fontSize: 12, color: '#8a7a70' }}> · {emp.poste}</span> : null}
                           </div>
-                          <div style={{ fontSize: 11, color: '#4a3a30' }}>
+                          <div style={{ fontSize: 13, color: '#4a3a30', fontWeight: 600 }}>
                             {list.length} congé{list.length > 1 ? 's' : ''} · {totalJ} j décompté{totalJ > 1 ? 's' : ''}
                           </div>
                         </div>
