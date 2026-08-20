@@ -386,8 +386,12 @@ export async function loadAllFreeReleveLines() {
     .select('*')
     .is('used_by', null)
     .not('ignored', 'is', true)            // lignes ignorées manuellement exclues
-    .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
-    .not('label', 'ilike', '%LNC.%')       // idem, forme abrégée « VIRT RECU LNC. »
+    // Lignes TPE (encaissements carte) : ce ne sont pas des enveloppes → jamais « à lier ».
+    // La banque les écrit « Lanacash », « VIRT RECU LNC.9900887663 », « VIR INST RECU LNC
+    // 2425014 » (sans point) ou « TPE.9900887663 » → on couvre les trois formes.
+    .not('label', 'ilike', '%lanacash%')
+    .not('label', 'ilike', '%LNC%')
+    .not('label', 'ilike', '%TPE%')
     .order('ligne_date', { ascending: false })
   if (error) throw error
   // Dédoublonnage : un même dépôt vu sous 2 dates (opération vs valeur) ou 2 libellés
@@ -460,7 +464,6 @@ export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
     .is('used_by', null)
     .not('ignored', 'is', true)            // lignes ignorées manuellement exclues
     .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
-    .not('label', 'ilike', '%LNC.%')       // idem, forme abrégée « VIRT RECU LNC. »
     .gte('amount', a - 0.005)
     .lte('amount', a + 0.005)
     .in('type', types)
