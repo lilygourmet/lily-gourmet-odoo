@@ -1770,6 +1770,67 @@ export async function loadAvailableEnveloppesForSalaire(year, month) {
   return data || []
 }
 
+// ---- Piocher dans la caisse Layla LG pour composer un salaire ----
+
+// Enveloppes déjà rangées dans la caisse Layla LG et pas encore prises par un salaire.
+// En cocher une la fera SORTIR de la caisse (unassignEnveloppe à la sauvegarde).
+export async function loadCaisseLaylaEnveloppes(year) {
+  const { start, end } = monthBounds(year, 0)   // toute l'année
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select('*, destinataire:caisse_destinataires!inner(name, linked_caisse_owner)')
+    .eq('destinataire.linked_caisse_owner', 'layla_lg')
+    .is('salaire_id', null)
+    .gte('session_date', start)
+    .lt('session_date', end)
+    .order('session_date', { ascending: false })
+  if (error) throw error
+  return (data || []).map(e => ({ ...e, from_caisse: true }))
+}
+
+// Montants pris dans le solde de la caisse Layla LG pour ce salaire (= sorties liées).
+export async function loadSalaireCaissePrises(salaireId) {
+  const { data, error } = await supabase
+    .from('caisse_mouvements')
+    .select('*')
+    .eq('source_type', 'salaire')
+    .eq('source_ref', salaireId)
+    .order('mvt_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Prend un montant dans la caisse Layla LG (sortie de caisse) pour compléter un salaire.
+export async function addSalaireCaissePrise({ salaire, amount, userId }) {
+  const label = `Salaire ${salaire.beneficiaire} ${salaire.month}/${salaire.year}`
+  const { data, error } = await supabase
+    .from('caisse_mouvements')
+    .insert({
+      caisse_owner: 'layla_lg',
+      type: 'sortie',
+      source_type: 'salaire',
+      source_ref: salaire.id,
+      amount,
+      category: 'Salaire',
+      label,
+      mvt_date: todayISO(),
+      created_by: userId,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  await logAction({
+    entityType: 'mouvement',
+    entityId: data.id,
+    action: 'create',
+    description: `↑ Sortie caisse layla_lg : ${label}`,
+    amount: -Number(amount),
+    after: { caisse_owner: 'layla_lg', type: 'sortie', amount, label },
+    actorId: userId,
+  })
+  return data
+}
+
 export async function markSalairePret(salaireId, reliquatAmount, reliquatDestination) {
   const { error } = await supabase
     .from('caisse_salaires')
