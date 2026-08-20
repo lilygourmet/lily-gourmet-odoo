@@ -3,6 +3,7 @@ import AppHeader from '../AppHeader'
 import { loadCategoriesForUser, loadCategoryContent, createDemande, loadMyDemandes, loadMesHabitudes } from '../../lib/economat'
 import EconomatManageModal from './EconomatManageModal'
 import { toast } from '../../lib/toast'
+import { ICONES, picto } from '../../lib/economatPictos'
 
 // Écran employé : demande d'articles à l'économat.
 // L'employé entre directement sur les articles de sa catégorie (switch si plusieurs).
@@ -491,8 +492,14 @@ function ArticleRow({ article, qty, onChange, precision = '', onPrecision }) {
     <div className="flex items-center gap-3">
       {/* Photo : vignette plus grande et zoomée — les visuels produit ont
           souvent beaucoup de blanc autour, l'article paraissait lointain. */}
-      <div className="w-14 h-14 rounded-lg bg-cream-deep border border-line/40 flex-shrink-0 overflow-hidden">
-        {article.photo_url && <img src={article.photo_url} alt="" className="w-full h-full object-cover scale-[1.35]" />}
+      <div className="w-14 h-14 rounded-lg bg-cream-deep border border-line/40 flex-shrink-0 overflow-hidden flex items-center justify-center">
+        {article.photo_url ? (
+          <img src={article.photo_url} alt="" className="w-full h-full object-cover scale-[1.35]" />
+        ) : (
+          <svg viewBox="0 0 24 24" className="w-7 h-7 text-bordeaux/70" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: (ICONES[picto(article.name)] || ICONES.defaut).svg }} />
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
