@@ -142,6 +142,40 @@ function buildDemandeText(lines) {
  * vers chaque économe (avec le nom de l'employé, la date et le détail).
  * lines : [{ articleId, qty, name, unit, catName }]
  */
+/**
+ * Crée le transfert interne Odoo (brouillon) correspondant à la demande.
+ * BLOQUANT : si Odoo ne répond pas, on laisse l'erreur remonter et rien
+ * n'est enregistré (choix de Layla — la demande ne doit pas partir sans
+ * son transfert).
+ */
+async function creerTransfertOdoo({ user, categoryName, lines }) {
+  // article économat -> produit Odoo (les articles saisis à la main n'en ont pas)
+  const ids = lines.map(l => l.articleId).filter(Boolean)
+  const parId = new Map()
+  if (ids.length) {
+    const { data } = await supabase.from('economat_articles')
+      .select('id, odoo_product_id').in('id', ids)
+    for (const a of (data || [])) parId.set(a.id, a.odoo_product_id)
+  }
+  const payload = {
+    categorie: categoryName,
+    demandeur: user.full_name || user.username || 'Employé',
+    lignes: lines.map(l => ({
+      odooProductId: l.articleId ? parId.get(l.articleId) : null,
+      nom: l.name,
+      qty: l.qty,
+    })),
+  }
+  const res = await fetch('/api/economat-transfert', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || "Le transfert Odoo n'a pas pu être créé — demande non envoyée.")
+  return data
+}
+
 export async function createDemande({ user, categoryId, lines }) {
   if (!user?.id) throw new Error('Utilisateur manquant')
   if (!lines || lines.length === 0) throw new Error('Aucun article sélectionné')
@@ -150,6 +184,10 @@ export async function createDemande({ user, categoryId, lines }) {
   if (economes.length === 0) {
     throw new Error("Aucun économe défini. Coche « Économe » sur un compte dans Utilisateurs.")
   }
+
+  // 0) Transfert Odoo D'ABORD : s'il échoue, rien n'est créé côté app.
+  const categoryName = lines.find(l => l.catName)?.catName || ''
+  const transfert = await creerTransfertOdoo({ user, categoryName, lines })
 
   // 1) Demande
   const { data: dem, error: e1 } = await supabase
@@ -175,6 +213,7 @@ export async function createDemande({ user, categoryId, lines }) {
   const who = user.full_name || user.username || 'Employé'
   const title = `🧾 Demande d'articles — ${who}`
   const description = buildDemandeText(lines)
+    + (transfert?.name ? `\n\nTransfert Odoo : ${transfert.name} (brouillon)` : '')
   let firstTaskId = null
   for (const eco of economes) {
     const task = await createTask({ title, description, fromUserId: user.id, toUserId: eco.id })
