@@ -686,28 +686,18 @@ LEFT JOIN economat_groups g ON g.category_id = c.id AND g.name = 'Emballages'
 WHERE c.name = 'Cuisine'
   AND NOT EXISTS (SELECT 1 FROM economat_articles a WHERE a.category_id = c.id AND a.odoo_product_id = 4173);
 
--- 4) Badges : un badge par catégorie, pour que chacun ne voie que la sienne.
---    (le bloc ne s'exécute que si la table des badges existe déjà)
-DO $$
-BEGIN
-  IF to_regclass('public.economat_profils') IS NOT NULL THEN
-    INSERT INTO economat_profils (value, label, display_order) VALUES
-      ('chocolat', 'Chocolat', 60),
-      ('menage',   'Ménage',   70),
-      ('cuisine',  'Cuisine',  80)
-    ON CONFLICT (value) DO NOTHING;
-  END IF;
-END $$;
-
--- 5) Chaque badge voit sa catégorie
+-- 4) Visibilité : on N'AJOUTE AUCUN BADGE. Les 3 catégories sont rattachées
+--    au badge existant « Chocolat / Cuisine / Ménage », qui n'en avait aucune.
+--    Pour que chacun ne voie que la sienne, décocher dans Économat -> Gérer ->
+--    une catégorie -> « Visible par les profils ».
 INSERT INTO economat_profil_categories (profil, category_id)
-SELECT 'chocolat', c.id FROM economat_categories c WHERE c.name = 'Chocolat'
+SELECT 'chocolat_cuisine_menage', c.id FROM economat_categories c WHERE c.name = 'Chocolat'
 ON CONFLICT (profil, category_id) DO NOTHING;
 INSERT INTO economat_profil_categories (profil, category_id)
-SELECT 'menage', c.id FROM economat_categories c WHERE c.name = 'Ménage'
+SELECT 'chocolat_cuisine_menage', c.id FROM economat_categories c WHERE c.name = 'Ménage'
 ON CONFLICT (profil, category_id) DO NOTHING;
 INSERT INTO economat_profil_categories (profil, category_id)
-SELECT 'cuisine', c.id FROM economat_categories c WHERE c.name = 'Cuisine'
+SELECT 'chocolat_cuisine_menage', c.id FROM economat_categories c WHERE c.name = 'Cuisine'
 ON CONFLICT (profil, category_id) DO NOTHING;
 
 -- Vérification : nombre d'articles par catégorie
