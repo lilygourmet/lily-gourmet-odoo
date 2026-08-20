@@ -93,13 +93,20 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
         }
       }
       // Mémoriser les lignes du relevé non attribuées (pour rattachement manuel)
+      const vues = new Set()
       const freeLines = (recon.unmatched || []).map(u => {
         // Clé stable par MONTANT + n° de versement (unique) → un même dépôt réimporté
         // sous une autre date/format ne crée plus de doublon. Repli si pas de n°.
         const ref = (u.label || '').match(/\d{5,}/)
-        const key = ref
+        const base = ref
           ? `ref|${Math.round(u.credit * 100)}|${ref[0]}`
           : `${u.dateIso}|${Math.round(u.credit * 100)}|${(u.label || '').slice(0, 50)}`
+        // Deux opérations vraiment identiques le même jour (même montant, même libellé)
+        // auraient la même clé → une seule serait gardée. On numérote pour n'en perdre
+        // aucune (ordre du relevé = stable, donc un ré-import retombe sur les mêmes clés).
+        let key = base
+        for (let n = 2; vues.has(key); n++) key = `${base}#${n}`
+        vues.add(key)
         return {
           key,
           ligne_date: u.dateIso, amount: u.credit, label: (u.label || '').slice(0, 120), type: u.type,
