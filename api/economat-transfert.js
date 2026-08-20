@@ -66,11 +66,17 @@ export default async function handler(req, res) {
 
     const uid = await auth()
 
-    // Unité de mesure de chaque produit : obligatoire sur une ligne de transfert.
+    // Unité de chaque produit. On prend l'unité d'ACHAT (uom_po_id), pas celle
+    // de stock : c'est elle qui est affichée dans l'économat. « 1 » sur
+    // « MP- Chocolat Callebaut Couverture Noir » veut dire 1 pack de 2,5 kg,
+    // pas 1 kg — Odoo fait la conversion en kg tout seul.
     const ids = [...new Set(lignes.map(l => Number(l.odooProductId)).filter(Boolean))]
     ids.push(AUTRE_ACHAT)
-    const prods = await exec(uid, 'product.product', 'read', [ids, ['id', 'uom_id']])
-    const uomOf = new Map(prods.map(p => [p.id, Array.isArray(p.uom_id) ? p.uom_id[0] : null]))
+    const prods = await exec(uid, 'product.product', 'read', [ids, ['id', 'uom_id', 'uom_po_id']])
+    const uomOf = new Map(prods.map(p => [
+      p.id,
+      (Array.isArray(p.uom_po_id) ? p.uom_po_id[0] : null) || (Array.isArray(p.uom_id) ? p.uom_id[0] : null),
+    ]))
 
     const moves = lignes.map(l => {
       const pid = Number(l.odooProductId) || AUTRE_ACHAT
