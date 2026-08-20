@@ -3,7 +3,7 @@ import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, linkReleveLineToEnv, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
-import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
+import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
 
@@ -484,6 +484,8 @@ function NonLieSection() {
   const [view, setView] = useState('free')            // 'free' = non liés | 'linked' = déjà liés | 'ignored' = ignorés
   const [ignoreLine, setIgnoreLine] = useState(null)  // ligne en cours d'« ignorer » (saisie raison)
   const [ignoreReason, setIgnoreReason] = useState('')
+  const [parMois, setParMois] = useState(false)       // regrouper les lignes par mois
+  const [replies, setReplies] = useState([])          // mois repliés
   async function reload() {
     setLines(null)
     const loader = view === 'linked' ? loadAllLinkedReleveLines : view === 'ignored' ? loadIgnoredReleveLines : loadAllFreeReleveLines
@@ -520,37 +522,26 @@ function NonLieSection() {
     return l
   }, [lines, q, typeFilter])
   const total = useMemo(() => list.reduce((s, l) => s + Number(l.amount || 0), 0), [list])
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        <button onClick={() => setView('free')} style={methodFilterBtn(view === 'free')}>Non liés</button>
-        <button onClick={() => setView('linked')} style={methodFilterBtn(view === 'linked')}>Déjà liés</button>
-        <button onClick={() => setView('ignored')} style={methodFilterBtn(view === 'ignored')}>🚫 Ignorés</button>
-      </div>
-      <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>
-        {view === 'linked'
-          ? 'Lignes du relevé déjà rattachées à un versement (avec la destination). Tu peux les délier si besoin.'
-          : <>Lignes reçues sur les relevés bancaires qui n'ont <b>pas</b> trouvé d'enveloppe Odoo correspondante. Rattache-les via « 💡 Suggérer » sur les enveloppes grises.</>}
-      </div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-        <button onClick={() => setTypeFilter('all')} style={methodFilterBtn(typeFilter === 'all')}>Tout ({(lines || []).length})</button>
-        <button onClick={() => setTypeFilter('cash')} style={methodFilterBtn(typeFilter === 'cash')}><Banknote size={14} /> Espèces ({count.cash})</button>
-        <button onClick={() => setTypeFilter('cheque')} style={methodFilterBtn(typeFilter === 'cheque')}><ScrollText size={14} /> Chèques ({count.cheque})</button>
-        <button onClick={() => setTypeFilter('virement')} style={methodFilterBtn(typeFilter === 'virement')}><ArrowLeftRight size={14} /> Virements ({count.virement})</button>
-      </div>
-      <input type="search" value={q} onChange={e => setQ(e.target.value)}
-        placeholder="🔍 montant, nom, date…"
-        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: '#EDE4F6', color: '#5b2a86', fontSize: 13 }}>
-        <span>{lines === null ? 'Chargement…' : `${list.length} ligne(s) ${view === 'linked' ? 'liée(s)' : 'non liée(s)'}`}</span>
-        <span>{fmtMoney(total)}</span>
-      </div>
-      {lines !== null && list.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>
-          Rien ici. (Ré-importe tes relevés pour remplir cette liste.)
-        </div>
-      )}
-      {list.map(l => (
+  // Regroupement par mois (au choix) : avec plusieurs centaines de lignes, la liste
+  // à plat est illisible. Chaque mois se replie d'un clic.
+  const groupes = useMemo(() => {
+    const m = new Map()
+    for (const l of list) {
+      const k = (l.ligne_date || '').slice(0, 7)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(l)
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([mois, lignes]) => ({
+        mois,
+        titre: /^\d{4}-\d{2}$/.test(mois) ? `${fmtMois(Number(mois.slice(5, 7)) - 1)} ${mois.slice(0, 4)}` : 'Sans date',
+        lignes,
+        total: lignes.reduce((s, l) => s + Number(l.amount || 0), 0),
+      }))
+  }, [list])
+  const toggleMois = (m) => setReplies(r => (r.includes(m) ? r.filter(x => x !== m) : [...r, m]))
+  const ligneCard = (l) => (
         <div key={l.key} style={{ ...rowCard, gridTemplateColumns: '1fr auto auto', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 11, color: '#8a7a70', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -592,7 +583,57 @@ function NonLieSection() {
             </div>
           )}
         </div>
-      ))}
+  )
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <button onClick={() => setView('free')} style={methodFilterBtn(view === 'free')}>Non liés</button>
+        <button onClick={() => setView('linked')} style={methodFilterBtn(view === 'linked')}>Déjà liés</button>
+        <button onClick={() => setView('ignored')} style={methodFilterBtn(view === 'ignored')}>🚫 Ignorés</button>
+      </div>
+      <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>
+        {view === 'linked'
+          ? 'Lignes du relevé déjà rattachées à un versement (avec la destination). Tu peux les délier si besoin.'
+          : <>Lignes reçues sur les relevés bancaires qui n'ont <b>pas</b> trouvé d'enveloppe Odoo correspondante. Rattache-les via « 💡 Suggérer » sur les enveloppes grises.</>}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+        <button onClick={() => setTypeFilter('all')} style={methodFilterBtn(typeFilter === 'all')}>Tout ({(lines || []).length})</button>
+        <button onClick={() => setTypeFilter('cash')} style={methodFilterBtn(typeFilter === 'cash')}><Banknote size={14} /> Espèces ({count.cash})</button>
+        <button onClick={() => setTypeFilter('cheque')} style={methodFilterBtn(typeFilter === 'cheque')}><ScrollText size={14} /> Chèques ({count.cheque})</button>
+        <button onClick={() => setTypeFilter('virement')} style={methodFilterBtn(typeFilter === 'virement')}><ArrowLeftRight size={14} /> Virements ({count.virement})</button>
+        <button onClick={() => { setParMois(!parMois); setReplies([]) }} style={{ ...methodFilterBtn(parMois), marginLeft: 'auto' }}>
+          <Calendar size={14} /> {parMois ? 'Tout afficher' : 'Par mois'}
+        </button>
+      </div>
+      <input type="search" value={q} onChange={e => setQ(e.target.value)}
+        placeholder="🔍 montant, nom, date…"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: '#EDE4F6', color: '#5b2a86', fontSize: 13 }}>
+        <span>{lines === null ? 'Chargement…' : `${list.length} ligne(s) ${view === 'linked' ? 'liée(s)' : 'non liée(s)'}`}</span>
+        <span>{fmtMoney(total)}</span>
+      </div>
+      {lines !== null && list.length === 0 && (
+        <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 16 }}>
+          Rien ici. (Ré-importe tes relevés pour remplir cette liste.)
+        </div>
+      )}
+      {!parMois && list.map(l => ligneCard(l))}
+      {parMois && groupes.map(g => {
+        const replie = replies.includes(g.mois)
+        return (
+          <div key={g.mois} style={{ marginBottom: 10 }}>
+            <button onClick={() => toggleMois(g.mois)} style={{
+              width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+              padding: '9px 14px', marginBottom: 6, borderRadius: 10, cursor: 'pointer',
+              background: '#F4F0EA', border: '0.5px solid #e5d8c3', color: '#4a3a30', fontSize: 13,
+            }}>
+              <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{replie ? '▸' : '▾'} {g.titre}</span>
+              <span>{g.lignes.length} ligne(s) · <b>{fmtMoney(g.total)}</b></span>
+            </button>
+            {!replie && g.lignes.map(l => ligneCard(l))}
+          </div>
+        )
+      })}
 
       {linkLine && (
         <LinkLineModal line={linkLine} envs={pendingEnvs} onClose={() => setLinkLine(null)} onLink={handleLink} />
