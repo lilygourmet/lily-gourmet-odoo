@@ -8,7 +8,7 @@ import CompositionSalaireModal from './modals/CompositionSalaireModal'
 
 export default function SalairesView({ user }) {
   const [year, setYear] = useState(currentYear())
-  const [month] = useState(currentMonth())
+  const [month, setMonth] = useState(currentMonth())
   const [salaires, setSalaires] = useState([])
   const [defaults, setDefaults] = useState({})
   const [composing, setComposing] = useState(null) // salaire object
@@ -22,6 +22,14 @@ export default function SalairesView({ user }) {
     setSalaires(await loadSalairesYear(year))
     loadReliquatHistory().then(setReliquatHist).catch(() => setReliquatHist([]))
     loadCaissePrisesBySalaire().then(setPrisesBySal).catch(() => setPrisesBySal({}))
+  }
+
+  // Mois précédent / suivant — on peut préparer un salaire à l'avance (ex. septembre en août).
+  function shiftMonth(d) {
+    const m = month + d
+    if (m < 1) { setMonth(12); setYear(y => y - 1) }
+    else if (m > 12) { setMonth(1); setYear(y => y + 1) }
+    else setMonth(m)
   }
 
   async function ensureSalaireMonth(beneficiaire) {
@@ -44,6 +52,8 @@ export default function SalairesView({ user }) {
     await deleteSalaire(salaireId); reload()
   }
 
+  const isCurrentMonth = month === currentMonth() && year === currentYear()
+  const isFuture = year > currentYear() || (year === currentYear() && month > currentMonth())
   const currentMonthSalaires = salaires.filter(s => s.month === month)
   // Le mois en cours est dans les cartes du haut, sauf s'il est PAYÉ : on le garde
   // aussi dans l'historique pour ne pas le perdre de vue jusqu'au mois suivant.
@@ -55,10 +65,19 @@ export default function SalairesView({ user }) {
         <button onClick={() => setYear(y => y - 1)} style={btnSlim}>←</button>
         <div style={{ fontSize: 18, fontWeight: 500 }}>{year}</div>
         <button onClick={() => setYear(y => y + 1)} style={btnSlim}>→</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 18 }}>
+          <button onClick={() => shiftMonth(-1)} style={btnSlim}>←</button>
+          <div style={{ fontSize: 16, fontWeight: 500, minWidth: 86, textAlign: 'center', textTransform: 'capitalize' }}>{fmtMois(month - 1)}</div>
+          <button onClick={() => shiftMonth(1)} style={btnSlim}>→</button>
+        </div>
+        {!isCurrentMonth && (
+          <button onClick={() => { setYear(currentYear()); setMonth(currentMonth()) }} style={{ ...btnSlim, marginLeft: 4 }}>Mois en cours</button>
+        )}
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 500, color: '#4a3a30', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         Salaires de {fmtMois(month - 1)} {year}
+        {isFuture && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, background: '#E6F1FB', color: '#0C447C', fontSize: 11, textTransform: 'none', letterSpacing: 0 }}>préparé à l'avance</span>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 30 }}>
