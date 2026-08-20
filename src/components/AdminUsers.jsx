@@ -18,7 +18,7 @@ import {
   ROLE_COLORS,
   saveNavbarConfig,
 } from '../lib/users'
-import { ECONOMAT_PROFILS } from '../lib/economat'
+import { loadProfils } from '../lib/economat'
 import { loadEmployes } from '../lib/hr'
 import { navTabsForUser } from '../lib/navTabs'
 import NavbarConfigModal from './NavbarConfigModal'
@@ -808,6 +808,15 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     employe_id: initialData?.employe_id ?? '',
   })
 
+  // Badges économat : gérés dans Économat → Gérer, donc lus en base.
+  const [economatProfils, setEconomatProfils] = useState([])
+  useEffect(() => { loadProfils().then(setEconomatProfils).catch(() => {}) }, [])
+  // Le badge déjà porté reste affiché même si la liste n'est pas (encore) chargée,
+  // sinon la fiche laisserait croire que l'employé n'a aucun badge.
+  const economatOptions = formData.economatProfil && !economatProfils.some(p => p.value === formData.economatProfil)
+    ? [...economatProfils, { value: formData.economatProfil, label: formData.economatProfil }]
+    : economatProfils
+
   function handleSubmit() {
     if (isNew) {
       if (!formData.username.trim()) {
@@ -1091,7 +1100,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             className="w-full px-3 py-2 border border-line rounded-lg text-[12px] bg-cream-warm focus:outline-none focus:border-bordeaux mb-2"
           >
             <option value="">— Aucun profil (pas d'accès) —</option>
-            {ECONOMAT_PROFILS.map(p => (
+            {economatOptions.map(p => (
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </select>

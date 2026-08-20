@@ -5,18 +5,8 @@ import { createTask } from './tasks'
 // ÉCONOMAT — demandes d'articles par employé
 // ============================================================
 
-// Profils métier (alignés sur economat_profil_categories côté SQL)
-export const ECONOMAT_PROFILS = [
-  { value: 'prod_annex',              label: 'Prod Annex' },
-  { value: 'prod_finition_cd',        label: 'Prod Finition / CD' },
-  { value: 'cake_design',             label: 'Cake Design' },
-  { value: 'boutique',                label: 'Boutique' },
-  { value: 'chocolat_cuisine_menage', label: 'Chocolat / Cuisine / Ménage' },
-]
-
-export function economatProfilLabel(value) {
-  return ECONOMAT_PROFILS.find(p => p.value === value)?.label || value || '—'
-}
+// Les profils (« badges ») vivent dans la table economat_profils :
+// voir loadProfils / createProfil / renameProfil / deleteProfil plus bas.
 
 // Accès au module (pour afficher l'entrée de menu) : admin, employé avec profil,
 // ou l'économe qui reçoit les demandes.
@@ -283,6 +273,61 @@ export async function setCategoryProfils(categoryId, profils) {
       .insert(profils.map(p => ({ profil: p, category_id: categoryId })))
     if (error) throw error
   }
+}
+
+// ============================================================
+// Badges (profils) — gérés depuis Économat → Gérer
+// ============================================================
+
+export async function loadProfils() {
+  const { data, error } = await supabase
+    .from('economat_profils')
+    .select('value, label, display_order')
+    .order('display_order')
+  if (error) throw error
+  return data || []
+}
+
+// Code technique garde en base, derive du nom saisi (« Ménage » -> « menage »).
+// Il ne change JAMAIS ensuite : renommer un badge ne casse aucun acces.
+function profilValue(label) {
+  const base = norm(label).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return base || 'badge'
+}
+
+export async function createProfil(label) {
+  const { data: max } = await supabase.from('economat_profils')
+    .select('display_order').order('display_order', { ascending: false }).limit(1).maybeSingle()
+  let value = profilValue(label)
+  const { data: taken } = await supabase.from('economat_profils').select('value').like('value', value + '%')
+  const used = new Set((taken || []).map(r => r.value))
+  if (used.has(value)) { let n = 2; while (used.has(`${value}_${n}`)) n++; value = `${value}_${n}` }
+  const { data, error } = await supabase.from('economat_profils')
+    .insert({ value, label: label.trim(), display_order: (max?.display_order || 0) + 10 })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function renameProfil(value, label) {
+  const { error } = await supabase.from('economat_profils').update({ label: label.trim() }).eq('value', value)
+  if (error) throw error
+}
+
+// Employes qui portent encore ce badge (pour bloquer une suppression a l'aveugle).
+export async function profilUsers(value) {
+  const { data, error } = await supabase.from('profiles')
+    .select('full_name, username').eq('economat_profil', value)
+  if (error) throw error
+  return (data || []).map(u => u.full_name || u.username)
+}
+
+export async function deleteProfil(value) {
+  const users = await profilUsers(value)
+  if (users.length) throw new Error(`badge encore donné à ${users.join(', ')}`)
+  await supabase.from('economat_profil_categories').delete().eq('profil', value)
+  const { error } = await supabase.from('economat_profils').delete().eq('value', value)
+  if (error) throw error
 }
 
 // ---- Groupes ----

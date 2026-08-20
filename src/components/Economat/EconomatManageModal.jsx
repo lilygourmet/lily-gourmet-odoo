@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import {
-  ECONOMAT_PROFILS, loadAllCategories, createCategory, deleteCategory,
+  loadProfils, createProfil, renameProfil, deleteProfil,
+  loadAllCategories, createCategory, deleteCategory,
   loadCategoryProfils, setCategoryProfils, createGroup, deleteGroup,
   loadCategoryManage, addArticleFromOdoo, setArticleActive, deleteArticle, linkArticleToOdoo,
   loadOdooProducts, syncWithOdoo,
 } from '../../lib/economat'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
-import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff, Link2, X } from 'lucide-react'
+import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff, Link2, X, Pencil } from 'lucide-react'
 import SearchSelect from '../SearchSelect'
 
 // Gestion de l'économat (admin + économe) : catégories, groupes, articles (depuis Odoo).
@@ -15,6 +16,8 @@ export default function EconomatManageModal({ onClose, onChanged }) {
   const [categories, setCategories] = useState([])
   const [catId, setCatId] = useState(null)
   const [profils, setProfils] = useState([])
+  const [allProfils, setAllProfils] = useState([])   // badges existants
+  const [showBadges, setShowBadges] = useState(false)
   const [manage, setManage] = useState({ groups: [], articles: [] })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -39,7 +42,9 @@ export default function EconomatManageModal({ onClose, onChanged }) {
     setManage(m); setProfils(pr)
   }
 
-  useEffect(() => { (async () => { setLoading(true); try { await reloadCats() } finally { setLoading(false) } })() }, [])
+  async function reloadProfils() { setAllProfils(await loadProfils()) }
+
+  useEffect(() => { (async () => { setLoading(true); try { await Promise.all([reloadCats(), reloadProfils()]) } finally { setLoading(false) } })() }, [])
   useEffect(() => { if (catId) reloadManage(catId) }, [catId])
 
   function notifyChanged() { onChanged && onChanged() }
@@ -65,6 +70,27 @@ export default function EconomatManageModal({ onClose, onChanged }) {
     try { await setCategoryProfils(catId, next); notifyChanged() }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
+  async function addBadge() {
+    const label = window.prompt('Nom du nouveau badge (ex. Ménage) :')
+    if (!label?.trim()) return
+    setBusy(true)
+    try { await createProfil(label); await reloadProfils(); notifyChanged() }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
+  }
+  async function renameBadge(p) {
+    const label = window.prompt('Nouveau nom du badge :', p.label)
+    if (!label?.trim() || label.trim() === p.label) return
+    setBusy(true)
+    try { await renameProfil(p.value, label); await reloadProfils(); notifyChanged() }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
+  }
+  async function removeBadge(p) {
+    if (!await confirmDialog(`Supprimer le badge « ${p.label} » ?`, { danger: true, confirmLabel: 'Supprimer' })) return
+    setBusy(true)
+    try { await deleteProfil(p.value); await reloadProfils(); await reloadManage(); notifyChanged() }
+    catch (e) { toast.error('Suppression impossible : ' + e.message) } finally { setBusy(false) }
+  }
+
   async function addGroup() {
     const name = window.prompt('Nom du nouveau groupe (ex. Épicerie) :')
     if (!name?.trim()) return
@@ -157,6 +183,39 @@ export default function EconomatManageModal({ onClose, onChanged }) {
           <div className="text-center text-ink-mute italic py-12">Chargement...</div>
         ) : (
           <div className="px-5 py-4 space-y-4">
+            {/* Badges (profils) : qui a le droit de voir quoi. Global, pas par catégorie. */}
+            <div className="border border-line rounded-lg p-3 bg-cream-warm/30">
+              <button onClick={() => setShowBadges(v => !v)} className="flex items-center gap-1.5 text-[13px] font-medium text-bordeaux">
+                {showBadges ? <ChevronDown size={15} strokeWidth={1.8} /> : <ChevronRight size={15} strokeWidth={1.8} />}
+                Badges ({allProfils.length})
+              </button>
+              {showBadges && (
+                <div className="mt-2 space-y-2">
+                  <div className="text-[11px] text-ink-mute italic">
+                    Le badge donné à un employé décide des catégories qu'il peut demander.
+                  </div>
+                  <div className="space-y-1">
+                    {allProfils.map(p => (
+                      <div key={p.value} className="flex items-center gap-2 bg-white border border-line rounded-lg px-3 py-1.5">
+                        <span className="flex-1 text-[12px] text-ink truncate">{p.label}</span>
+                        <button onClick={() => renameBadge(p)} disabled={busy} title="Renommer"
+                                className="text-ink-mute hover:text-bordeaux"><Pencil size={13} strokeWidth={1.8} /></button>
+                        <button onClick={() => removeBadge(p)} disabled={busy} title="Supprimer"
+                                className="text-ink-mute hover:text-red-600"><Trash2 size={13} strokeWidth={1.8} /></button>
+                      </div>
+                    ))}
+                    {allProfils.length === 0 && (
+                      <div className="text-[12px] text-amber-700 italic">Aucun badge. Crées-en un pour donner accès à l'économat.</div>
+                    )}
+                  </div>
+                  <button onClick={addBadge} disabled={busy}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-bordeaux text-bordeaux text-[11px] font-medium hover:bg-bordeaux hover:text-cream disabled:opacity-50">
+                    <Plus size={13} strokeWidth={1.8} /> Nouveau badge
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Catégorie : sélecteur + créer/supprimer */}
             <div>
               <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Catégorie</div>
@@ -177,7 +236,7 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                 <div>
                   <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Visible par les profils</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {ECONOMAT_PROFILS.map(p => (
+                    {allProfils.map(p => (
                       <button key={p.value} onClick={() => toggleProfil(p.value)}
                               className={`px-3 py-1 rounded-full text-[11px] border transition-colors ${profils.includes(p.value) ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line hover:border-bordeaux/40'}`}>
                         {p.label}
