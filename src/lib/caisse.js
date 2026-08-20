@@ -1,6 +1,7 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
+import { marquerDoublons } from './releveDoublons'
 
 // ============================================================
 // AUDIT LOG (helper - silencieux, ne fait jamais planter l'appel parent)
@@ -406,7 +407,9 @@ export async function loadAllFreeReleveLines() {
     if (seen.has(k)) continue
     seen.add(k); out.push(r)
   }
-  return out
+  // Doublons sans n° d'opération : même montant + même nom vu sous 2 dates (opération /
+  // valeur) dans 2 imports → on n'en garde qu'une ; orthographe proche → on la signale.
+  return marquerDoublons(out)
 }
 
 // Ignore (ou réactive) une ligne de relevé « à lier », avec une raison facultative.

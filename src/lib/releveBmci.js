@@ -97,7 +97,16 @@ const DR = /^\d{2}\/\d{2}\/\d{4}$/
 // BMCI relevé : le montant est au milieu de son libellé (en-tête au-dessus, suite en dessous).
 function parseBmciReleve(items) {
   const a = {}
+  // Plafond des libellés, PAR PAGE : au-dessus, c'est l'en-tête, pas une opération.
+  // L'en-tête de colonnes (« Débit ») n'est imprimé que sur la 1re page ; les pages
+  // suivantes n'ont que le bandeau (qui se termine par « Période du: »). Appliquer le
+  // plafond de la page 1 à toutes les pages jetait le haut de chaque page → 50 libellés
+  // perdus sur un relevé de 26 pages (lignes « — » dans « à lier »).
+  const hyByPage = {}
+  let bandeauY = null
   for (const it of items) {
+    if (it.str === 'Débit' && hyByPage[it.page] == null) hyByPage[it.page] = it.y
+    if (it.str.startsWith('Période du')) bandeauY = bandeauY == null ? it.y : Math.min(bandeauY, it.y)
     if (it.str === 'Débit' && a.debit == null) { a.debit = it.x; a.hy = it.y }
     if (it.str === 'Crédit' && a.credit == null) a.credit = it.x
     if (it.str === 'Date valeur' && a.dv == null) a.dv = it.x
@@ -119,7 +128,8 @@ function parseBmciReleve(items) {
   const bp = {}
   for (const ar of ars) (bp[ar.page] || (bp[ar.page] = [])).push(ar)
   for (const it of items) {
-    if (it.y >= (a.hy || Infinity) || it.x >= lmax || DR.test(it.str) || parseAmount(it.str) != null) continue
+    const hy = hyByPage[it.page] ?? bandeauY ?? a.hy
+    if ((hy != null && it.y >= hy) || it.x >= lmax || DR.test(it.str) || parseAmount(it.str) != null) continue
     const c = bp[it.page]; if (!c) continue
     let b = c[0], bd = Math.abs(it.y - b.y)
     for (const ar of c) { const d = Math.abs(it.y - ar.y); if (d < bd) { bd = d; b = ar } }
@@ -166,18 +176,30 @@ function parseAwb(items) {
   const DV = /^\d{2} \d{2} \d{4}$/
   const out = []
   for (const r of groupRowsTol(items)) {
-    let amt = null, credit = false, dv = null
+    let amt = null, credit = false, dv = null, dop = null
     const lab = []
     for (const it of r.items) {
       const m = parseAmount(it.str)
       if (m != null && it.x > 360) { amt = Math.abs(m); credit = it.x > 500; continue }
       if (DV.test(it.str) && it.x > 270 && it.x < 360) { dv = it.str; continue }
+      // Colonne de gauche : « 0016CP 14 05 » = code opération + date d'OPÉRATION (jour mois).
+      if (it.x < 85) { const d = it.str.match(/(\d{2}) (\d{2})$/); if (d && !dop) dop = d; continue }
       if (it.x >= 85 && it.x < 270) lab.push({ x: it.x, s: it.str })
     }
     if (amt == null) continue
     const label = lab.sort((a, b) => a.x - b.x).map(p => p.s).join(' ')
     const mm = (dv || '').match(/(\d{2}) (\d{2}) (\d{4})/)
-    out.push({ dateIso: mm ? isoDate(mm[1], mm[2], mm[3]) : null, label, debit: credit ? null : amt, credit: credit ? amt : null, type: classify(label) })
+    // On garde TOUJOURS la date d'opération (comme les relevés BMCI) : sinon le même
+    // virement apparaît 2 fois — une fois au jour de l'opération, une fois au jour de
+    // valeur. L'année vient de la date de valeur (0-3 j plus tard).
+    let dateIso = null
+    if (mm) {
+      const yv = Number(mm[3])
+      dateIso = dop
+        ? isoDate(dop[1], dop[2], String(dop[2] === '12' && mm[2] === '01' ? yv - 1 : yv))
+        : isoDate(mm[1], mm[2], mm[3])
+    }
+    out.push({ dateIso, label, debit: credit ? null : amt, credit: credit ? amt : null, type: classify(label) })
   }
   return out
 }

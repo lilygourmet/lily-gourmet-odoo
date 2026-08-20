@@ -104,6 +104,7 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
           key,
           ligne_date: u.dateIso, amount: u.credit, label: (u.label || '').slice(0, 120), type: u.type,
           releve_url: paths[u._fileIdx ?? 0] || paths[0],
+          banque: banks[u._fileIdx ?? 0] || banks[0] || null,   // d'où vient le montant
         }
       })
       await saveUnmatchedReleveLines(freeLines)

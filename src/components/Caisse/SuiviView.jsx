@@ -553,8 +553,16 @@ function NonLieSection() {
       {list.map(l => (
         <div key={l.key} style={{ ...rowCard, gridTemplateColumns: '1fr auto auto', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.ligne_date}</div>
+            <div style={{ fontSize: 11, color: '#8a7a70', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {l.ligne_date}
+              {l.banque && <span style={{ padding: '1px 7px', borderRadius: 999, background: '#F4F0EA', color: '#4a3a30' }}>{l.banque}</span>}
+            </div>
             <div style={{ fontSize: 13, color: '#1a0f0a' }}>{l.label || '—'}</div>
+            {l.doublon_probable && (
+              <div style={{ fontSize: 11, color: '#8a5a2a', marginTop: 2 }}>
+                ⚠ doublon probable — même montant le {l.doublon_probable.date} : « {l.doublon_probable.label} »
+              </div>
+            )}
             {view === 'linked' && l.env && (
               <div style={{ fontSize: 11, color: '#0a7d3d', marginTop: 2 }}>
                 → {l.env.destinataire?.name || l.env.source || 'enveloppe'} · {l.env.session_date}{l.env.amount_cash != null ? ` · ${fmtMoney(l.env.amount_cash)}` : ''}
