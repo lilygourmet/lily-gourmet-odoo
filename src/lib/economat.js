@@ -138,7 +138,7 @@ function buildDemandeText(lines) {
  * n'est enregistré (choix de Layla — la demande ne doit pas partir sans
  * son transfert).
  */
-async function creerTransfertOdoo({ user, categoryName, lines }) {
+async function creerTransfertOdoo({ user, lines }) {
   // article économat -> produit Odoo (les articles saisis à la main n'en ont pas)
   const ids = lines.map(l => l.articleId).filter(Boolean)
   const parId = new Map()
@@ -147,8 +147,17 @@ async function creerTransfertOdoo({ user, categoryName, lines }) {
       .select('id, odoo_product_id').in('id', ids)
     for (const a of (data || [])) parId.set(a.id, a.odoo_product_id)
   }
+  // Le badge de l'employé décide de la destination du stock (son lieu de
+  // travail), pas la catégorie d'articles où il commande.
+  let badgeLabel = null
+  if (user.economat_profil) {
+    const { data } = await supabase.from('economat_profils')
+      .select('label').eq('value', user.economat_profil).maybeSingle()
+    badgeLabel = data?.label || null
+  }
   const payload = {
-    categorie: categoryName,
+    badge: user.economat_profil || null,
+    badgeLabel,
     demandeur: user.full_name || user.username || 'Employé',
     lignes: lines.map(l => ({
       odooProductId: l.articleId ? parId.get(l.articleId) : null,
@@ -176,8 +185,7 @@ export async function createDemande({ user, categoryId, lines }) {
   }
 
   // 0) Transfert Odoo D'ABORD : s'il échoue, rien n'est créé côté app.
-  const categoryName = lines.find(l => l.catName)?.catName || ''
-  const transfert = await creerTransfertOdoo({ user, categoryName, lines })
+  const transfert = await creerTransfertOdoo({ user, lines })
 
   // 1) Demande
   const { data: dem, error: e1 } = await supabase

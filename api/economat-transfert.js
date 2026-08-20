@@ -2,7 +2,7 @@
 // Crée dans Odoo un transfert interne EN BROUILLON à partir d'une demande
 // d'économat. Rien n'est confirmé : le brouillon attend une validation humaine.
 //
-// POST { categorie, demandeur, lignes: [{ odooProductId, nom, qty }] }
+// POST { badge, badgeLabel, demandeur, lignes: [{ odooProductId, nom, qty }] }
 //   → { ok, name, id }   (name = référence Odoo, ex. E-ACP/INTAPDX/02275)
 
 async function odooJsonRpc(service, method, args) {
@@ -27,14 +27,19 @@ async function auth() {
 const exec = (uid, model, method, args, kw = {}) =>
   odooJsonRpc('object', 'execute_kw', [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, method, args, kw])
 
-// Où va le stock, selon la catégorie d'articles demandée (décidé avec Layla).
-// src/dest sont ceux du type d'opération, repris explicitement pour que le
-// transfert ne dépende pas d'un réglage Odoo modifié plus tard.
+// Où va le stock, selon le BADGE de l'employé — pas la catégorie d'articles :
+// le stock part vers son lieu de travail, quel que soit l'onglet où il commande.
+// src/dest sont repris explicitement pour que le transfert ne dépende pas d'un
+// réglage Odoo modifié plus tard. Les 8 badges de la table economat_profils.
 const DESTINATIONS = {
-  'Boutique':           { type: 52, src: 8, dest: 51 },  // → WHLVP/Stock/Stock Vente
-  'Cake Design':        { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
-  'Finition - CD Prod': { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
-  'Production':         { type: 74, src: 8, dest: 62 },  // → WHPDX/Stock Prod annexe
+  boutique:                 { type: 52, src: 8, dest: 51 },  // → WHLVP/Stock/Stock Vente
+  cake_design:              { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
+  prod_finition_cd:         { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
+  menage_boutique:          { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
+  prod_annex:               { type: 74, src: 8, dest: 62 },  // → WHPDX/Stock Prod annexe
+  chocolat_cuisine_menage:  { type: 74, src: 8, dest: 62 },  // badge « Chocolat » (ancien code)
+  cuisine:                  { type: 74, src: 8, dest: 62 },
+  menage_annex:             { type: 74, src: 8, dest: 62 },
 }
 // Article fourre-tout pour ce qui n'est pas au catalogue Odoo (consommable :
 // n'affecte aucun stock). Le nom réel est porté par la description de la ligne.
@@ -46,13 +51,17 @@ export default async function handler(req, res) {
     if (!process.env.ODOO_URL || !process.env.ODOO_USERNAME) {
       return res.status(500).json({ error: 'Odoo non configuré côté serveur' })
     }
-    const { categorie, demandeur, lignes } = req.body || {}
+    const { badge, badgeLabel, demandeur, lignes } = req.body || {}
     if (!Array.isArray(lignes) || lignes.length === 0) {
       return res.status(400).json({ error: 'Aucune ligne à transférer' })
     }
-    const dest = DESTINATIONS[categorie]
+    const dest = DESTINATIONS[badge]
     if (!dest) {
-      return res.status(400).json({ error: `Catégorie « ${categorie} » sans destination Odoo définie` })
+      return res.status(400).json({
+        error: badge
+          ? `Le badge « ${badgeLabel || badge} » n'a pas de destination de stock définie.`
+          : "Aucun badge sur ce compte : impossible de savoir où envoyer le stock.",
+      })
     }
 
     const uid = await auth()
@@ -83,7 +92,7 @@ export default async function handler(req, res) {
       picking_type_id: dest.type,
       location_id: dest.src,
       location_dest_id: dest.dest,
-      origin: `ÉCONOMAT — ${demandeur || 'demande'}`,
+      origin: `ÉCONOMAT — ${demandeur || 'demande'}${badgeLabel ? ` (${badgeLabel})` : ''}`,
       move_ids_without_package: moves,
     }])
 
