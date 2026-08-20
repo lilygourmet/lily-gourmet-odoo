@@ -24,6 +24,19 @@ async function _loadLivreurs() {
 export const loadLivreurs = memoCache(_loadLivreurs, 5 * 60 * 1000)
 
 // État (livreur_id, livraison_faite, statut, assigned_by) pour une liste de n° de commande.
+/**
+ * Créneau annoncé au client par commande : { [order_num]: '22-08-26 13h-15h' }.
+ * Vient d'Odoo (livraison_hour) via la synchro. Les commandes prises avant la
+ * règle du créneau ont un créneau d'1 h : elles gardent leur heure d'origine.
+ */
+export async function loadDeliverySlots(orderNums) {
+  const nums = [...new Set((orderNums || []).filter(Boolean))]
+  if (!nums.length) return {}
+  const { data, error } = await supabase.from('orders').select('order_num, delivery_slot').in('order_num', nums)
+  if (error) return {}   // créneau non affiché : on ne casse pas la liste des livraisons
+  return Object.fromEntries((data || []).map(o => [o.order_num, o.delivery_slot]))
+}
+
 export async function loadDeliveryStates(orderNums) {
   const nums = (orderNums || []).filter(Boolean)
   if (nums.length === 0) return {}

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Truck, CheckCircle2, Phone, MapPin } from 'lucide-react'
 import { loadSalesLinesForDate, loadSalesLinesForRange, loadSalesLinesForOrders, groupDeliveriesWithFullOrder, stripOdooPrefix } from '../lib/salesLines'
-import { loadLivreurs, loadDeliveryStates, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite, setLivraisonPreuve, setLivraisonLocalisation, setLivraisonReglement } from '../lib/deliveries'
+import { loadLivreurs, loadDeliveryStates, loadDeliverySlots, assignDelivery, acceptDelivery, refuseDelivery, setLivraisonFaite, setLivraisonPreuve, setLivraisonLocalisation, setLivraisonReglement } from '../lib/deliveries'
+import { creneauDepuisSlot } from '../lib/creneau'
 import { uploadConversationMedia, getMediaSignedUrl } from '../lib/conversations'
 import { canDispatchLivraisons, isLivreurDefaut, isLivreurAssigne } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
@@ -69,6 +70,13 @@ export default function LivraisonsView({ user }) {
             list.push({ ...entry(e, date), hour })
         list.sort((a, b) => a.hour.localeCompare(b.hour))
       }
+      // Créneau annoncé au client : le livreur doit voir 13h-15h, pas l'heure de
+      // préparation (30 min avant) que porte la commande.
+      const slots = await loadDeliverySlots(list.map(d => d.orderNum))
+      for (const d of list) {
+        const c = creneauDepuisSlot(slots[d.orderNum])
+        if (c) d.creneau = c
+      }
       setStates(await loadDeliveryStates(list.map(d => d.orderNum)))
       setDeliveries(list)
     } catch (e) { setErr(e.message) }
@@ -81,15 +89,18 @@ export default function LivraisonsView({ user }) {
   }, [date])
 
   const effLivreur = d => states[d.orderNum]?.livreur_id || defaultLivreurId
+  // Le livreur voit le créneau annoncé au client (13h-15h) ; le tri, lui, reste sur
+  // l'heure de la commande (préparation).
+  const heureAffichee = d => d.creneau || d.hour
 
   async function handleAssign(d, livreurId) {
     setBusy(d.orderNum); setErr('')
     try {
       const dateCourte = date.split('-').reverse().slice(0, 2).join('/')   // "04/06"
-      const titre = `🚚 Livraison ${dateCourte} ${d.hour} · ${d.clientName}`
+      const titre = `🚚 Livraison ${dateCourte} ${heureAffichee(d)} · ${d.clientName}`
       const reste = typeof d.orderTotal === 'number' ? Math.max(0, d.orderTotal - (d.orderAcompte || 0)) : null
       const desc = [
-        `📅 ${labelDate(date)} · ${d.hour}`,
+        `📅 ${labelDate(date)} · ${heureAffichee(d)}`,
         `👤 ${d.clientName}${d.clientPhone ? ' · ' + d.clientPhone : ''}`,
         d.orderNote ? `📍 ${d.orderNote}` : null,
         reste !== null ? `💵 Reste à encaisser : ${reste.toLocaleString('fr-FR')} dh` : null,
@@ -110,7 +121,7 @@ export default function LivraisonsView({ user }) {
   }
 
   const livreurNom = user.full_name || user.username || ''
-  const labelLivraison = d => `${date.split('-').reverse().slice(0, 2).join('/')} ${d.hour} · ${d.clientName}`
+  const labelLivraison = d => `${date.split('-').reverse().slice(0, 2).join('/')} ${heureAffichee(d)} · ${d.clientName}`
 
   async function handleAccept(d) {
     setBusy(d.orderNum); setErr('')
@@ -226,7 +237,7 @@ export default function LivraisonsView({ user }) {
                 <div style={{ background: bg, border: '1px solid #e5d8c3', borderRadius: 12, padding: '12px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                   <div>
-                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#993556', marginRight: 8 }}>{d.hour}</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#993556', marginRight: 8 }}>{heureAffichee(d)}</span>
                     <strong style={{ fontSize: 14 }}>{d.clientName}</strong>
                     {d.orderNum && <span style={{ fontSize: 11, color: '#8a7a70', marginLeft: 6 }}>{d.orderNum}</span>}
                     {zone && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#1a5fb4', background: '#E8F0FB', padding: '2px 8px', borderRadius: 20 }}>📍 {zone}</span>}

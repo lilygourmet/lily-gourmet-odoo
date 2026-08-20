@@ -7,6 +7,7 @@ import { createModification } from '../lib/modifications'
 import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
 import { toast } from '../lib/toast'
+import { creneauClient, finCreneau, heurePreparation, heureLisible } from '../lib/creneau'
 import { confirmDialog } from '../lib/confirmDialog'
 import { filePhoto } from '../lib/photoCompress'
 
@@ -43,8 +44,12 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
   // Date + heure de retrait/livraison (modifiables, même si la commande est confirmée).
   // deliveryAt est en UTC (Odoo) → on l'affiche en heure du Maroc.
   const _pickup = moroccoParts(order.deliveryAt)
+  // Commande livrée (slotText présent) : Odoo stocke l'heure de PRÉPARATION, on
+  // affiche et on renvoie le DÉBUT du créneau client — sinon chaque enregistrement
+  // retirerait encore 30 min et l'heure reculerait à chaque fois.
+  const estLivree = !!order.slotText
   const [dDate, setDDate] = useState(_pickup.date)
-  const [dTime, setDTime] = useState(_pickup.time || '16:00')
+  const [dTime, setDTime] = useState((estLivree ? creneauClient(_pickup.time)?.debut : _pickup.time) || '16:00')
 
   async function saveDate() {
     if (!dDate) { toast.error('Choisis une date.'); return }
@@ -305,7 +310,9 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
 
         {/* Date + heure de retrait/livraison — modifiable (même si confirmée) */}
         <div className="mx-5 mb-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1">Date / heure de retrait-livraison</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1">
+            {estLivree ? 'Livraison — début du créneau' : 'Date / heure de retrait-livraison'}
+          </div>
           <div className="flex items-center gap-1.5">
             <input type="date" value={dDate} onChange={e => setDDate(e.target.value)}
               className="flex-1 px-2 py-1.5 border border-line rounded-lg text-[13px] bg-white focus:outline-none focus:border-bordeaux" />
@@ -314,6 +321,11 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
             <button onClick={saveDate} disabled={busy || !dDate}
               className="px-3 py-1.5 bg-bordeaux text-cream rounded-lg text-[12px] font-medium disabled:opacity-50">OK</button>
           </div>
+          {estLivree && dTime && (
+            <div className="mt-1 text-[11px] text-ink-mute">
+              Client : livraison <b>entre {heureLisible(dTime)} et {heureLisible(finCreneau(dTime))}</b> · prête pour <b>{heurePreparation(dTime)}</b>
+            </div>
+          )}
           {/* Planning cake design du jour (guide la répartition) — si la commande a un CD-. */}
           {dDate && Array.isArray(lines) && lines.some(l => /^CD-/i.test(l.rawName ?? l.name ?? '')) && (
             <CakeDayPlanning date={dDate} selectedHour={parseInt(dTime, 10)}

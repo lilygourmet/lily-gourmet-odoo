@@ -7,6 +7,7 @@ import NewConversationModal from './Conversations/NewConversationModal'
 import ClientEditModal from './ClientEditModal'
 import { loadLivreurs, assignDelivery, setLivraisonLocalisation } from '../lib/deliveries'
 import { confirmDialog } from '../lib/confirmDialog'
+import { estLigneLivraison, heurePreparation, finCreneau, heureLisible } from '../lib/creneau'
 import { toast } from '../lib/toast'
 import Skeleton from './Skeleton'
 
@@ -41,7 +42,12 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
 
   useEffect(() => { loadLivreurs().then(setLivreurs).catch(() => {}) }, [])
   useEffect(() => { loadWarehouses().then(setWarehouses).catch(() => {}) }, [])
-  const hasLivraison = cart.some(l => /^livraison$/i.test((l.name || '').trim()))
+  const hasLivraison = cart.some(l => estLigneLivraison(l.name))
+  // Livraison : l'heure saisie est le début du créneau de 2 h annoncé au client ;
+  // la commande est enregistrée 30 min avant (heure de préparation).
+  const creneauSaisi = hasLivraison && deliveryTime
+    ? { debut: deliveryTime, fin: finCreneau(deliveryTime), prep: heurePreparation(deliveryTime) }
+    : null
   // Date minimum = aujourd'hui (on n'autorise pas une commande pour un jour passé).
   const today = new Date()
   const minOrderDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
@@ -423,13 +429,22 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
 
         {/* Date de retrait/livraison + note */}
         <div className="mt-3">
-          <div className="text-[11px] font-semibold text-ink-soft mb-1">Retrait / livraison <span className="text-bordeaux">*</span> (obligatoire)</div>
+          <div className="text-[11px] font-semibold text-ink-soft mb-1">
+            {hasLivraison ? <>Livraison — <span className="font-normal">heure de début du créneau</span></> : <>Retrait / livraison</>} <span className="text-bordeaux">*</span> (obligatoire)
+          </div>
           <div className="flex gap-1.5">
             <input type="date" value={deliveryDate} min={minOrderDate} onChange={e => setDeliveryDate(e.target.value)}
               className="flex-1 px-2 py-1.5 border border-line rounded-lg text-[13px] bg-white" />
             <input type="time" value={deliveryTime} onChange={e => setDeliveryTime(e.target.value)}
               className="px-2 py-1.5 border border-line rounded-lg text-[13px] bg-white" />
           </div>
+          {/* Livraison : le client reçoit un créneau de 2 h, la cuisine prépare 30 min avant. */}
+          {hasLivraison && creneauSaisi && (
+            <div className="mt-1.5 px-2.5 py-2 rounded-lg bg-cream-warm/60 border border-line text-[11px] leading-relaxed">
+              <div>Le client verra : livraison <b>entre {heureLisible(creneauSaisi.debut)} et {heureLisible(creneauSaisi.fin)}</b></div>
+              <div className="text-ink-mute">Commande affichée prête pour <b>{creneauSaisi.prep}</b> (le client ne le voit pas)</div>
+            </div>
+          )}
           {/* Planning cake design du jour : guide le commercial à répartir (pas tout à 16h). */}
           {deliveryDate && cart.some(c => /^CD-/i.test((c.name || '').trim())) && (
             <CakeDayPlanning date={deliveryDate} selectedHour={parseInt(deliveryTime, 10)}

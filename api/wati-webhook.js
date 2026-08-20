@@ -19,6 +19,7 @@
 // Si Wati renvoie d'autres noms de champs, on ajuste les fallbacks ci-dessous.
 
 import { createClient } from '@supabase/supabase-js'
+import { estLigneLivraison, heurePreparation, creneauClient, heureLisible, texteCreneau } from '../src/lib/creneau.js'
 import { sendPushToTargets } from './push.js'
 import { generateText } from 'ai'
 import crypto from 'crypto'
@@ -1441,10 +1442,21 @@ async function handleOrderLine(req, res) {
       const deliveryTime = String(req.body?.deliveryTime || '').trim()
       if (!deliveryDate) return res.status(400).json({ error: 'date requise' })
       const time = deliveryTime || '00:00'
-      const vals = { commitment_date: moroccoLocalToUtc(deliveryDate, time) }
+      // Commande livrée : l'heure reçue est le DÉBUT du créneau client (l'écran de
+      // modification l'affiche ainsi), Odoo garde l'heure de préparation.
+      const oLines = await odooSearchRead(uid, 'sale.order.line', [['order_id', '=', orderId]], ['name'])
+      const estLivraison = (oLines || []).some(l => estLigneLivraison(String(l.name || '').split('\n')[0]))
+      const prep = estLivraison ? heurePreparation(time) : time
+      const vals = { commitment_date: moroccoLocalToUtc(deliveryDate, prep) }
       const [y, m, d] = deliveryDate.split('-')
-      const hh = parseInt(time.split(':')[0], 10)
-      if (Number.isFinite(hh)) vals.livraison_hour = `${d}-${m}-${y.slice(2)} ${hh}h-${hh + 1}h`
+      const jour = `${d}-${m}-${y.slice(2)}`
+      if (estLivraison) {
+        const c = creneauClient(prep)
+        if (c) vals.livraison_hour = `${jour} ${heureLisible(c.debut)}-${heureLisible(c.fin)}`
+      } else {
+        const hh = parseInt(time.split(':')[0], 10)
+        if (Number.isFinite(hh)) vals.livraison_hour = `${jour} ${hh}h-${hh + 1}h`
+      }
       await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'sale.order', 'write', [[orderId], vals]])
       return res.status(200).json({ ok: true })
     }
@@ -2218,10 +2230,20 @@ async function handleOrderCreateDevis(req, res) {
     // Date + heure de livraison (créneau d'1h, format Odoo "DD-MM-YY HHh-HHh")
     if (deliveryDate) {
       const time = deliveryTime || '00:00'
-      vals.commitment_date = moroccoLocalToUtc(deliveryDate, time)
+      // Ligne « Livraison » : l'heure saisie est le DÉBUT du créneau de 2 h annoncé
+      // au client ; Odoo enregistre l'heure de préparation (30 min avant).
+      const estLivraison = lines.some(l => estLigneLivraison(l.name))
+      const prep = estLivraison ? heurePreparation(time) : time
+      vals.commitment_date = moroccoLocalToUtc(deliveryDate, prep)
       const [y, m, d] = deliveryDate.split('-')
-      const hh = parseInt(time.split(':')[0], 10)
-      if (Number.isFinite(hh)) vals.livraison_hour = `${d}-${m}-${y.slice(2)} ${hh}h-${hh + 1}h`
+      const jour = `${d}-${m}-${y.slice(2)}`
+      if (estLivraison) {
+        const c = creneauClient(prep)
+        if (c) vals.livraison_hour = `${jour} ${heureLisible(c.debut)}-${heureLisible(c.fin)}`
+      } else {
+        const hh = parseInt(time.split(':')[0], 10)
+        if (Number.isFinite(hh)) vals.livraison_hour = `${jour} ${hh}h-${hh + 1}h`
+      }
     }
 
     // Note = logistique (param note) + commentaires libres du client (par article).
@@ -2354,7 +2376,11 @@ async function handleOrderCreateDevis(req, res) {
         const sentAt = new Date().toISOString()
         if (firm) {
           // Devis DÉTAILLÉ, sans émoticônes (un article par ligne, comme l'onglet Devis).
-          const retrait = note ? String(note).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : `${deliveryDate || ''} ${deliveryTime || ''}`.trim()
+          // Livraison : on annonce le créneau de 2 h (l'heure saisie en est le début),
+          // jamais l'heure de préparation.
+          const creneauNote = lines.some(l => estLigneLivraison(l.name)) && deliveryTime
+            ? `${deliveryDate || ''} ${texteCreneau(heurePreparation(deliveryTime))}`.trim() : ''
+          const retrait = creneauNote || (note ? String(note).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : `${deliveryDate || ''} ${deliveryTime || ''}`.trim())
           // En cas de fusion, on recalcule total + détail sur la commande COMPLÈTE (tous les articles).
           // Message client : on retire les consignes de prod (déco) — le client voit nom + thème + message.
           const stripDeco = (txt) => String(txt || '').split('\n')
@@ -2479,7 +2505,7 @@ async function handleDevisList(req, res) {
         ...Array(ors.length - 1).fill('|'), ...ors]
     }
     const orders = await odooSearchRead(uid, 'sale.order', domain,
-      ['name', 'partner_id', 'commitment_date', 'date_order', 'amount_total', 'order_line', 'state', 'note', 'user_id'],
+      ['name', 'partner_id', 'commitment_date', 'livraison_hour', 'date_order', 'amount_total', 'order_line', 'state', 'note', 'user_id'],
       { order: 'commitment_date asc', limit: 300 })
     if (!orders.length) return res.status(200).json({ orders: [] })
 
@@ -2532,6 +2558,7 @@ async function handleDevisList(req, res) {
         clientPhone: pid ? (phoneById.get(pid) || '') : '',
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
+        slotText: slotTextOf(o),
         dateOrder: o.date_order || '',
         deliveryAt: o.commitment_date || '',
         note: (o.note && typeof o.note === 'string') ? o.note.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '',
@@ -2565,7 +2592,7 @@ async function handleOrdersConfirmed(req, res) {
         ...Array(ors.length - 1).fill('|'), ...ors]
     }
     const orders = await odooSearchRead(uid, 'sale.order', domain,
-      ['name', 'partner_id', 'commitment_date', 'date_order', 'amount_total', 'order_line', 'state', 'note', 'user_id'],
+      ['name', 'partner_id', 'commitment_date', 'livraison_hour', 'date_order', 'amount_total', 'order_line', 'state', 'note', 'user_id'],
       { order: 'commitment_date desc', limit: 80 })
     if (!orders.length) return res.status(200).json({ orders: [] })
 
@@ -2621,6 +2648,7 @@ async function handleOrdersConfirmed(req, res) {
         clientPhone: pid ? (phoneById.get(pid) || '') : '',
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
+        slotText: slotTextOf(o),
         dateOrder: o.date_order || '',
         deliveryAt: o.commitment_date || '',
         productLines: linesByOrder.get(o.id) || [],
@@ -2932,6 +2960,11 @@ function moroccoLocalToUtc(dateStr, timeStr) {
   return dt.toISOString().slice(0, 19).replace('T', ' ')
 }
 
+// Créneau annoncé au client (« 22/08/2026 entre 13h et 15h ») pour une commande
+// livrée ; vide pour un retrait ou une commande prise avant la règle du créneau.
+function slotTextOf(o) {
+  return texteCreneauClient(fmtPickup(o.commitment_date).slice(0, 10), o.livraison_hour)
+}
 function fmtPickup(s) {
   if (!s) return ''
   const d = new Date(String(s).replace(' ', 'T') + 'Z')
@@ -3493,7 +3526,7 @@ async function handleSearchOrders(req, res) {
     }
 
     const orders = await odooSearchRead(uid, 'sale.order', domain,
-      ['name', 'partner_id', 'commitment_date', 'amount_total', 'order_line', 'state', 'invoice_status'],
+      ['name', 'partner_id', 'commitment_date', 'livraison_hour', 'amount_total', 'order_line', 'state', 'invoice_status'],
       { order: 'date_order desc', limit: 15 })
     if (!orders.length) return res.status(200).json({ orders: [] })
 
@@ -3532,6 +3565,7 @@ async function handleSearchOrders(req, res) {
         clientPhone: pid ? (phoneById.get(pid) || '') : '',
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
+        slotText: slotTextOf(o),
         deliveryAt: o.commitment_date || '',
         productLines: linesByOrder.get(o.id) || [],
       }

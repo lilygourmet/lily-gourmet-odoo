@@ -32,15 +32,21 @@ function lignesVisibles(order) {
   return (order.productLines || []).filter(l => !isLigneAnnulee(l))
 }
 
+// Commande livrée : le client reçoit un CRÉNEAU de 2 h (« entre 13h et 15h »),
+// jamais l'heure de préparation. Retrait en boutique : heure exacte, comme avant.
+const phraseHoraire = (order, devis) => order.slotText
+  ? (devis ? `Livraison prévue le ${order.slotText}` : `La livraison est prévue le ${order.slotText}`)
+  : (devis ? `Date et heure de retrait souhaitées : ${order.pickupText}` : `La date et l'heure de retrait sont ${order.pickupText}`)
+
 function composeDetails(order, tmplName) {
   // articleLine() gère les 2 formats (objet devis OU chaîne commande confirmée) :
   // évite le « Produit : undefined » et donne « Gâteau ×1 — 2500 DH ».
   const prods = lignesVisibles(order).map(l => articleLine(l)).join(' ; ')
   if (tmplName === 'devis_validation') {
-    return `Montant Total : ${order.amountText}. ${prods}. Date et heure de retrait souhaitées : ${order.pickupText}`
+    return `Montant Total : ${order.amountText}. ${prods}. ${phraseHoraire(order, true)}`
   }
   // message_de_confirmation
-  return `Montant Total : ${order.amountText}. La date et l'heure de retrait sont ${order.pickupText}. Détails : ${prods}`
+  return `Montant Total : ${order.amountText}. ${phraseHoraire(order, false)}. Détails : ${prods}`
 }
 
 // Une ligne d'article lisible : « Gâteau 20 pers ×1 — 2500 DH ».
@@ -59,9 +65,9 @@ function articleLine(l) {
 function composeDetailsMultiline(order, tmplName) {
   const prods = lignesVisibles(order).map(l => `• ${articleLine(l)}`).join('\n')
   if (tmplName === 'devis_validation') {
-    return `Montant Total : ${order.amountText}\n${prods}\nDate et heure de retrait souhaitées : ${order.pickupText}`
+    return `Montant Total : ${order.amountText}\n${prods}\n${phraseHoraire(order, true)}`
   }
-  return `Montant Total : ${order.amountText}\nLa date et l'heure de retrait sont ${order.pickupText}\nDétails :\n${prods}`
+  return `Montant Total : ${order.amountText}\n${phraseHoraire(order, false)}\nDétails :\n${prods}`
 }
 const AUTOFILL_TEMPLATES = new Set(['devis_validation', 'message_de_confirmation'])
 
