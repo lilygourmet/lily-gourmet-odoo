@@ -2,7 +2,7 @@
 // Crée dans Odoo un transfert interne EN BROUILLON à partir d'une demande
 // d'économat. Rien n'est confirmé : le brouillon attend une validation humaine.
 //
-// POST { badge, badgeLabel, demandeur, lignes: [{ odooProductId, nom, qty }] }
+// POST { badge, badgeLabel, demandeur, lignes: [{ odooProductId, nom, qty, unite }] }
 //   → { ok, name, id }   (name = référence Odoo, ex. E-ACP/INTAPDX/02275)
 
 async function odooJsonRpc(service, method, args) {
@@ -66,17 +66,26 @@ export default async function handler(req, res) {
 
     const uid = await auth()
 
-    // Unité de chaque produit. On prend l'unité d'ACHAT (uom_po_id), pas celle
-    // de stock : c'est elle qui est affichée dans l'économat. « 1 » sur
-    // « MP- Chocolat Callebaut Couverture Noir » veut dire 1 pack de 2,5 kg,
-    // pas 1 kg — Odoo fait la conversion en kg tout seul.
+    // Unité de chaque produit. Par défaut l'unité d'ACHAT (uom_po_id), celle
+    // qu'affiche l'économat : « 1 » sur « Chocolat Callebaut Couverture Noir »
+    // veut dire 1 pack de 2,5 kg, pas 1 kg — Odoo convertit seul.
+    // MAIS si l'article économat affiche l'unité de STOCK (Glucose Atomisé
+    // demandé au kg alors qu'il s'achète par pack de 25 kg), on suit ce que
+    // voit l'employé. C'est donc l'unité de l'article qui décide, pas une
+    // liste d'exceptions : changer l'unité dans l'économat suffit.
     const ids = [...new Set(lignes.map(l => Number(l.odooProductId)).filter(Boolean))]
     ids.push(AUTRE_ACHAT)
     const prods = await exec(uid, 'product.product', 'read', [ids, ['id', 'uom_id', 'uom_po_id']])
-    const uomOf = new Map(prods.map(p => [
-      p.id,
-      (Array.isArray(p.uom_po_id) ? p.uom_po_id[0] : null) || (Array.isArray(p.uom_id) ? p.uom_id[0] : null),
-    ]))
+    const infoOf = new Map(prods.map(p => [p.id, p]))
+    const meme = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
+    const choisirUom = (pid, uniteAffichee) => {
+      const p = infoOf.get(pid)
+      if (!p) return null
+      const stock = Array.isArray(p.uom_id) ? p.uom_id : null
+      const achat = Array.isArray(p.uom_po_id) ? p.uom_po_id : null
+      if (stock && meme(uniteAffichee, stock[1])) return stock[0]
+      return (achat || stock || [null])[0]
+    }
 
     const moves = lignes.map(l => {
       const pid = Number(l.odooProductId) || AUTRE_ACHAT
@@ -88,7 +97,7 @@ export default async function handler(req, res) {
         description_picking: texte,
         product_id: pid,
         product_uom_qty: Number(l.qty) || 1,
-        product_uom: uomOf.get(pid),
+        product_uom: choisirUom(pid, l.unite),
         location_id: dest.src,
         location_dest_id: dest.dest,
       }]

@@ -144,8 +144,8 @@ async function creerTransfertOdoo({ user, lines }) {
   const parId = new Map()
   if (ids.length) {
     const { data } = await supabase.from('economat_articles')
-      .select('id, odoo_product_id').in('id', ids)
-    for (const a of (data || [])) parId.set(a.id, a.odoo_product_id)
+      .select('id, odoo_product_id, unit').in('id', ids)
+    for (const a of (data || [])) parId.set(a.id, a)
   }
   // Le badge de l'employé décide de la destination du stock (son lieu de
   // travail), pas la catégorie d'articles où il commande.
@@ -159,11 +159,16 @@ async function creerTransfertOdoo({ user, lines }) {
     badge: user.economat_profil || null,
     badgeLabel,
     demandeur: user.full_name || user.username || 'Employé',
-    lignes: lines.map(l => ({
-      odooProductId: l.articleId ? parId.get(l.articleId) : null,
-      nom: l.name,
-      qty: l.qty,
-    })),
+    lignes: lines.map(l => {
+      const a = l.articleId ? parId.get(l.articleId) : null
+      return {
+        odooProductId: a?.odoo_product_id || null,
+        // l'unité affichée décide si la quantité est en unité d'achat ou de stock
+        unite: a?.unit || l.unit || null,
+        nom: l.name,
+        qty: l.qty,
+      }
+    }),
   }
   const res = await fetch('/api/economat-transfert', {
     method: 'POST',
