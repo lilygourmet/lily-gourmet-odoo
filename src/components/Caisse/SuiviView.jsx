@@ -550,8 +550,14 @@ function NonLieSection() {
             </div>
             <div style={{ fontSize: 13, color: '#1a0f0a' }}>{l.label || '—'}</div>
             {l.doublon_probable && (
-              <div style={{ fontSize: 11, color: '#8a5a2a', marginTop: 2 }}>
-                ⚠ doublon probable — même montant le {l.doublon_probable.date} : « {l.doublon_probable.label} »
+              <div style={{ fontSize: 11, color: '#8a5a2a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span>⚠ doublon probable — même montant le {l.doublon_probable.date} : « {l.doublon_probable.label} »</span>
+                {view === 'free' && (
+                  <button onClick={() => handleIgnore(l.key, true, `Doublon de la ligne du ${l.doublon_probable.date}`)}
+                    style={{ ...btnNormal, fontSize: 10.5, padding: '2px 8px', color: '#8a5a2a', border: '1px solid #e5cfae' }}>
+                    Ignorer ce doublon
+                  </button>
+                )}
               </div>
             )}
             {view === 'linked' && l.env && (
