@@ -1,7 +1,7 @@
 import AuditLogPanel from './AuditLogPanel'
 import { useState, useEffect } from 'react'
 import { User, Pencil, Check, Trash2 } from 'lucide-react'
-import { loadSalairesYear, loadSalaireMonth, createSalaire, markSalairePaye, loadSalairesDefaut, deleteSalaire, loadSalaireEnveloppes, loadReliquatHistory } from '../../lib/caisse'
+import { loadSalairesYear, loadSalaireMonth, createSalaire, markSalairePaye, loadSalairesDefaut, deleteSalaire, loadSalaireEnveloppes, loadReliquatHistory, loadCaissePrisesBySalaire } from '../../lib/caisse'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { currentYear, currentMonth, fmtMoney, fmtMois, SALAIRE_STATUS_LABELS, SALAIRE_COLORS, reliquatDestLabel } from './_helpers'
 import CompositionSalaireModal from './modals/CompositionSalaireModal'
@@ -13,6 +13,7 @@ export default function SalairesView({ user }) {
   const [defaults, setDefaults] = useState({})
   const [composing, setComposing] = useState(null) // salaire object
   const [reliquatHist, setReliquatHist] = useState([])
+  const [prisesBySal, setPrisesBySal] = useState({})   // argent pris dans la caisse Layla LG, par salaire
 
   useEffect(() => { (async () => { setDefaults(await loadSalairesDefaut()) })() }, [])
   useEffect(() => { reload() }, [year])
@@ -20,6 +21,7 @@ export default function SalairesView({ user }) {
   async function reload() {
     setSalaires(await loadSalairesYear(year))
     loadReliquatHistory().then(setReliquatHist).catch(() => setReliquatHist([]))
+    loadCaissePrisesBySalaire().then(setPrisesBySal).catch(() => setPrisesBySal({}))
   }
 
   async function ensureSalaireMonth(beneficiaire) {
@@ -43,7 +45,9 @@ export default function SalairesView({ user }) {
   }
 
   const currentMonthSalaires = salaires.filter(s => s.month === month)
-  const history = salaires.filter(s => !(s.month === month && s.year === year))
+  // Le mois en cours est dans les cartes du haut, sauf s'il est PAYÉ : on le garde
+  // aussi dans l'historique pour ne pas le perdre de vue jusqu'au mois suivant.
+  const history = salaires.filter(s => !(s.month === month && s.year === year) || s.status === 'paye')
 
   return (
     <div>
@@ -105,7 +109,7 @@ export default function SalairesView({ user }) {
         const c = SALAIRE_COLORS[sal.beneficiaire]
         return (
           <div key={sal.id} style={{
-            display: 'grid', gridTemplateColumns: '90px 100px 1fr 110px 90px auto', gap: 12, alignItems: 'center',
+            display: 'grid', gridTemplateColumns: '90px 100px 1fr 110px 150px auto', gap: 12, alignItems: 'center',
             padding: '13px 16px', borderRadius: 14, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3',
             boxShadow: '0 2px 8px rgba(122,42,68,0.05)',
           }}>
@@ -125,7 +129,12 @@ export default function SalairesView({ user }) {
               })()}
             </div>
             <div><span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, background: statusObj.bg, color: statusObj.text, fontWeight: 500 }}>{statusObj.label}</span></div>
-            <div style={{ fontWeight: 500, textAlign: 'right' }}>{fmtMoney(sal.target_amount)}</div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 500 }}>{fmtMoney(sal.target_amount)}</div>
+              {prisesBySal[sal.id] > 0 && (
+                <div style={{ fontSize: 10.5, color: '#085041' }}>dont {fmtMoney(prisesBySal[sal.id])} de la caisse Layla LG</div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               {sal.status === 'brouillon' && <button onClick={() => setComposing(sal)} style={{ ...btnSlim, display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Composer / modifier"><Pencil size={13} /></button>}
               {sal.status === 'pret' && <button onClick={() => setComposing(sal)} style={{ ...btnSlim, display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Modifier la composition"><Pencil size={13} /></button>}

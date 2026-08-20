@@ -1831,6 +1831,18 @@ export async function addSalaireCaissePrise({ salaire, amount, userId }) {
   return data
 }
 
+// Total pris dans la caisse Layla LG par salaire ({ salaireId: montant }) — pour l'historique.
+export async function loadCaissePrisesBySalaire() {
+  const { data, error } = await supabase
+    .from('caisse_mouvements')
+    .select('source_ref, amount')
+    .eq('source_type', 'salaire')
+  if (error) throw error
+  const out = {}
+  for (const m of (data || [])) out[m.source_ref] = (out[m.source_ref] || 0) + Number(m.amount)
+  return out
+}
+
 export async function markSalairePret(salaireId, reliquatAmount, reliquatDestination) {
   const { error } = await supabase
     .from('caisse_salaires')
