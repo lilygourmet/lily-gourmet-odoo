@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from '../AppHeader'
-import { loadCategoriesForUser, loadCategoryContent, createDemande, loadMyDemandes } from '../../lib/economat'
+import { loadCategoriesForUser, loadCategoryContent, createDemande, loadMyDemandes, loadMesHabitudes } from '../../lib/economat'
 import EconomatManageModal from './EconomatManageModal'
 import { toast } from '../../lib/toast'
 
@@ -28,14 +28,22 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const [showHistory, setShowHistory] = useState(false)
   const [myDemandes, setMyDemandes] = useState(null)  // null = pas encore chargé
   const [showManage, setShowManage] = useState(false)
+  // Familles repliées par défaut : une catégorie de 147 articles tenait sur
+  // un écran de téléphone interminable. On ouvre celle dont on a besoin.
+  const [ouverts, setOuverts] = useState(() => new Set(['__habitudes__']))
+  const [habitudes, setHabitudes] = useState({})   // { [articleId]: nb de demandes }
   const canManage = user?.role === 'admin' || !!user?.perm_econome
 
   useEffect(() => {
     (async () => {
       setLoading(true)
       try {
-        const cats = await loadCategoriesForUser(user)
+        const [cats, habs] = await Promise.all([
+          loadCategoriesForUser(user),
+          loadMesHabitudes(user?.id).catch(() => ({})),
+        ])
         setCategories(cats)
+        setHabitudes(habs || {})
         if (cats.length > 0) setActiveCat(cats[0].id)
       } catch (e) {
         console.error('[Économat] catégories', e)
@@ -45,6 +53,8 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       }
     })()
   }, [])
+
+  useEffect(() => { setOuverts(new Set(['__habitudes__'])) }, [activeCat])
 
   useEffect(() => {
     if (!activeCat) return
@@ -236,39 +246,99 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
           // Filtre par mot tapé, insensible aux accents et à la casse.
           const q = recherche.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
           const garde = a => !q || String(a.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)
-          const groups = content.groups.map(g => ({ ...g, articles: g.articles.filter(garde) })).filter(g => g.articles.length)
-          const ungrouped = content.ungrouped.filter(garde)
-          const rien = groups.length === 0 && ungrouped.length === 0
-          return rien ? (
-            <div className="text-center text-ink-mute italic py-10">
-              {q ? `Aucun article ne contient « ${recherche.trim()} » dans cette catégorie.` : 'Aucun article.'}
-            </div>
-          ) : (
-          <div className="space-y-5">
-            {groups.map(group => (
-              <div key={group.id}>
-                <div className="lg-mono mb-2">{group.name}</div>
-                <div className="space-y-1.5">
-                  {group.articles.map(a => (
-                    <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)}
-                      precision={precision[a.id] || ''}
-                      onPrecision={v => setPrecision(p => ({ ...p, [a.id]: v }))} />
-                  ))}
-                </div>
+
+          // Familles de la catégorie, « Autres » compris.
+          const familles = [
+            ...content.groups.map(g => ({ id: String(g.id), name: g.name, articles: g.articles })),
+            ...(content.ungrouped.length ? [{ id: '__autres__', name: 'Autres', articles: content.ungrouped }] : []),
+          ]
+          const tous = familles.flatMap(f => f.articles)
+
+          // Ce que CET employé reprend le plus souvent. Rien tant qu'il n'a
+          // pas d'historique : mieux vaut pas de raccourci qu'un faux.
+          const habituels = tous
+            .filter(a => (habitudes[a.id] || 0) > 0)
+            .sort((a, b) => (habitudes[b.id] || 0) - (habitudes[a.id] || 0))
+            .slice(0, 8)
+
+          const ligne = a => (
+            <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)}
+              precision={precision[a.id] || ''}
+              onPrecision={v => setPrecision(p => ({ ...p, [a.id]: v }))} />
+          )
+
+          // Recherche en cours : liste à plat, on ignore les familles.
+          if (q) {
+            const res = tous.filter(garde)
+            return res.length ? (
+              <div className="space-y-1.5">
+                <div className="lg-mono mb-1">{res.length} résultat{res.length > 1 ? 's' : ''}</div>
+                {res.map(ligne)}
               </div>
-            ))}
-            {ungrouped.length > 0 && (
-              <div>
-                <div className="lg-mono mb-2" style={{ color: '#8a7a70' }}>Autres</div>
-                <div className="space-y-1.5">
-                  {ungrouped.map(a => (
-                    <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)}
-                      precision={precision[a.id] || ''}
-                      onPrecision={v => setPrecision(p => ({ ...p, [a.id]: v }))} />
-                  ))}
-                </div>
+            ) : (
+              <div className="text-center text-ink-mute italic py-10">
+                Aucun article ne contient « {recherche.trim()} » dans cette catégorie.
+              </div>
+            )
+          }
+
+          if (!tous.length) {
+            return <div className="text-center text-ink-mute italic py-10">Aucun article.</div>
+          }
+
+          const blocs = [
+            ...(habituels.length ? [{ id: '__habitudes__', name: '★ Souvent demandé', articles: habituels }] : []),
+            ...familles,
+          ]
+          const basculer = (id) => setOuverts(prev => {
+            const n = new Set(prev)
+            if (n.has(id)) n.delete(id); else n.add(id)
+            return n
+          })
+
+          return (
+          <div className="space-y-4">
+            {/* Puces : sauter à une famille sans faire défiler 147 articles. */}
+            {blocs.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto -mx-4 px-4 pb-1">
+                {blocs.map(b => (
+                  <button key={b.id}
+                    onClick={() => {
+                      basculer(b.id)
+                      setTimeout(() => document.getElementById('fam-' + b.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+                    }}
+                    className={`lg-tab flex-shrink-0 ${ouverts.has(b.id) ? 'is-active' : ''}`}
+                  >{b.name} <span className="opacity-60">{b.articles.length}</span></button>
+                ))}
               </div>
             )}
+
+            <div className="space-y-2">
+              {blocs.map(b => {
+                const ouvert = ouverts.has(b.id)
+                const pris = b.articles.filter(a => (qty[a.id] || 0) > 0).length
+                return (
+                  <section key={b.id} id={'fam-' + b.id}>
+                    <button
+                      onClick={() => basculer(b.id)}
+                      aria-expanded={ouvert}
+                      className="w-full flex items-center gap-2.5 bg-white rounded-xl border border-line/70 px-3.5 py-3 shadow-sm text-left"
+                    >
+                      <span className="text-ink-mute text-[12px] w-3">{ouvert ? '▾' : '▸'}</span>
+                      <span className="text-[13.5px] text-ink flex-1">{b.name}</span>
+                      {pris > 0 ? (
+                        <span className="bg-bordeaux text-cream rounded-full px-2 py-0.5 text-[11px] font-bold">{pris}</span>
+                      ) : (
+                        <span className="text-[11px] text-ink-mute">{b.articles.length}</span>
+                      )}
+                    </button>
+                    {ouvert && (
+                      <div className="space-y-1.5 mt-1.5">{b.articles.map(ligne)}</div>
+                    )}
+                  </section>
+                )
+              })}
+            </div>
 
             {/* Ajouter un article qui n'est pas dans la liste (usage unique) */}
             <div>
@@ -427,7 +497,12 @@ function ArticleRow({ article, qty, onChange, precision = '', onPrecision }) {
 
       <div className="flex-1 min-w-0">
         <div className="text-[13px] text-ink leading-tight">{article.name}</div>
-        {article.unit && <div className="text-[11px] text-ink-mute mt-0.5">{article.unit}</div>}
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {article.odoo_source === 'lgt' && (
+            <span className="text-[10px] px-1.5 rounded border border-amber-500/60 text-amber-700">LG traiteur</span>
+          )}
+          {article.unit && <span className="text-[11px] text-ink-mute">{article.unit}</span>}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">

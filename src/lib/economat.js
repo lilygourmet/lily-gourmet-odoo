@@ -49,6 +49,32 @@ export async function loadCategoriesForUser(user) {
 }
 
 /**
+ * Ce que CET employé demande le plus souvent, pour le mettre en tête de liste.
+ * Renvoie { [articleId]: nombre de demandes }. Vide tant qu'il n'a rien demandé :
+ * on préfère ne rien afficher plutôt qu'inventer des habitudes.
+ */
+export async function loadMesHabitudes(userId) {
+  if (!userId) return {}
+  const { data: dem } = await supabase
+    .from('economat_demandes')
+    .select('id')
+    .eq('requester_user_id', userId)
+    .order('id', { ascending: false })
+    .limit(200)
+  const ids = (dem || []).map(d => d.id)
+  if (!ids.length) return {}
+  const { data: lignes } = await supabase
+    .from('economat_demande_lignes')
+    .select('article_id, demande_id')
+    .in('demande_id', ids)
+    .not('article_id', 'is', null)
+    .limit(5000)
+  const n = {}
+  for (const l of (lignes || [])) n[l.article_id] = (n[l.article_id] || 0) + 1
+  return n
+}
+
+/**
  * Contenu d'une catégorie : groupes (triés) avec leurs articles, + articles sans groupe.
  * Renvoie { groups: [{ id, name, articles: [...] }], ungrouped: [...] }
  */
@@ -61,7 +87,7 @@ export async function loadCategoryContent(categoryId) {
       .order('display_order'),
     supabase
       .from('economat_articles')
-      .select('id, name, unit, photo_url, group_id, display_order')
+      .select('id, name, unit, photo_url, group_id, display_order, odoo_source')
       .eq('category_id', categoryId)
       .eq('active', true)
       .order('display_order'),
