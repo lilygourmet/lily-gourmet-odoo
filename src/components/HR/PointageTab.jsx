@@ -16,6 +16,7 @@ import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { groupLabel } from '../../lib/presence'
 import { creerRecupOubliee, traiterAbsence } from '../../lib/aTraiter'
+import { loadChangementsSalaire } from '../../lib/hr'
 
 // Congés annuels : le jour off "fixe" (jour complet de repos chaque semaine)
 // ne compte PAS dans le décompte des jours de congé pris.
@@ -444,6 +445,18 @@ export default function PointageTab({ user, isAdmin }) {
   // Générer PDF + Excel récap mensuel
   async function genererRecapMensuel() {
     const monthName = MOIS_FR[mois - 1] + '_' + annee
+    // Changements de salaire du mois : affichés juste après le nom.
+    // Vide pour un non-admin (la table est admin-only, comme le salaire).
+    const changements = await loadChangementsSalaire(mois, annee)
+    const fmtDh = v => (v == null ? '—' : Number(v).toLocaleString('fr-FR'))
+    const changementParEmp = {}
+    for (const c of changements) {
+      const d = String(c.date_changement || '')
+      const txt = `${fmtDh(c.ancien_salaire)} → ${fmtDh(c.nouveau_salaire)} dh (${d.slice(8, 10)}/${d.slice(5, 7)})`
+      changementParEmp[c.employe_id] = changementParEmp[c.employe_id]
+        ? changementParEmp[c.employe_id] + ' ; ' + txt
+        : txt
+    }
     // Données récap : heures sup + congés
     const rows = []
     for (const emp of data.employes) {
@@ -476,6 +489,7 @@ export default function PointageTab({ user, isAdmin }) {
       }
       rows.push({
         nom: emp.nom,
+        changement: changementParEmp[emp.id] || '',
         societe: emp.societe_id,
         sup: sup.toFixed(2),
         manquantes: manquantes.toFixed(2),
@@ -490,10 +504,10 @@ export default function PointageTab({ user, isAdmin }) {
 
     // 1) Excel xlsx natif via SheetJS (chargé dynamiquement depuis CDN)
     const zn = v => (Number(v) === 0 ? '' : Number(v))   // case vide au lieu de 0
-    const headers = ['Employé', 'Heures sup', 'Heures manquantes', 'Jours récup', 'Jours congé', 'Événement', 'Jours maladie (4+)', 'Solde mois (h)']
+    const headers = ['Employé', 'Changement salaire', 'Heures sup', 'Heures manquantes', 'Jours récup', 'Jours congé', 'Événement', 'Jours maladie (4+)', 'Solde mois (h)']
     const xlsxRows = [headers]
     for (const r of rows) {
-      xlsxRows.push([r.nom, zn(r.sup), zn(r.manquantes), zn(r.recup), zn(r.conge), zn(r.evenement), zn(r.maladie), zn(r.solde_mois)])
+      xlsxRows.push([r.nom, r.changement, zn(r.sup), zn(r.manquantes), zn(r.recup), zn(r.conge), zn(r.evenement), zn(r.maladie), zn(r.solde_mois)])
     }
     await downloadXLSX('recap_pointage_' + monthName + '.xlsx', xlsxRows, 'Récap ' + monthName)
 
@@ -524,6 +538,7 @@ export default function PointageTab({ user, isAdmin }) {
   <table>
     <thead><tr>
       <th>Employé</th>
+      <th>Changement salaire</th>
       <th class="right">Heures sup</th>
       <th class="right">Manquantes</th>
       <th class="right">Récup</th>
@@ -535,6 +550,7 @@ export default function PointageTab({ user, isAdmin }) {
     <tbody>
       ${rows.map(r => `<tr>
         <td><strong>${r.nom}</strong></td>
+        <td>${r.changement}</td>
         <td class="right green">${zt(r.sup, 'h')}</td>
         <td class="right red">${zt(r.manquantes, 'h')}</td>
         <td class="right purple">${zt(r.recup, 'j')}</td>

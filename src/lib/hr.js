@@ -139,12 +139,44 @@ export async function updateEmploye(id, updates, userId) {
     .single()
   if (error) throw error
   if (salaire_net !== undefined) {
+    // L'upsert écrase l'ancien montant : on le lit AVANT pour journaliser le
+    // changement (colonne « Changement salaire » de la récap mensuelle).
+    const { data: avant } = await supabase
+      .from('employes_remuneration')
+      .select('salaire_net')
+      .eq('employe_id', id)
+      .maybeSingle()
+    const ancien = avant?.salaire_net ?? null
     const { error: e2 } = await supabase
       .from('employes_remuneration')
       .upsert({ employe_id: id, salaire_net })
     if (e2) throw e2
+    if (Number(ancien ?? 0) !== Number(salaire_net ?? 0)) {
+      await supabase.from('employes_salaire_historique').insert({
+        employe_id: id,
+        ancien_salaire: ancien,
+        nouveau_salaire: salaire_net,
+        created_by: userId,
+      })
+    }
   }
   return data
+}
+
+/**
+ * Changements de salaire d'un mois (récap mensuelle du pointage).
+ * Renvoie [] pour un non-admin : la table est admin-only comme employes_remuneration.
+ */
+export async function loadChangementsSalaire(mois, annee) {
+  const debut = `${annee}-${String(mois).padStart(2, '0')}-01`
+  const fin = mois === 12 ? `${annee + 1}-01-01` : `${annee}-${String(mois + 1).padStart(2, '0')}-01`
+  const { data } = await supabase
+    .from('employes_salaire_historique')
+    .select('employe_id, ancien_salaire, nouveau_salaire, date_changement')
+    .gte('date_changement', debut)
+    .lt('date_changement', fin)
+    .order('date_changement')
+  return data || []
 }
 
 /**
