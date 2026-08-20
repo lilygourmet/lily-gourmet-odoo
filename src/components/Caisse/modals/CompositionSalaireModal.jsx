@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Zap } from 'lucide-react'
-import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement, loadPendingReports, markReportsApplied, recordReliquatHistory } from '../../../lib/caisse'
+import { Zap, Wallet, Trash2 } from 'lucide-react'
+import { loadAvailableEnveloppesForSalaire, loadSalaireEnveloppes, setSalaireEnveloppes, markSalairePret, updateMouvement, loadPendingReports, markReportsApplied, recordReliquatHistory, loadCaisseLaylaEnveloppes, loadSalaireCaissePrises, addSalaireCaissePrise, deleteMouvement, unassignEnveloppe, loadCaisseBalance } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte, currentYear, SALAIRE_COLORS, fmtMois } from '../_helpers'
 import { supabase } from '../../../lib/supabase'
 import { toast } from '../../../lib/toast'
@@ -14,6 +14,13 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
   const [pendingReports, setPendingReports] = useState([])
   const [appliedIds, setAppliedIds] = useState([])
   const [busy, setBusy] = useState(false)
+  // Argent pris dans le solde de la caisse Layla LG (chaque prise = une sortie de caisse)
+  const [prises, setPrises] = useState([])
+  const [soldeLayla, setSoldeLayla] = useState(0)
+  const [priseAmount, setPriseAmount] = useState('')
+  // Les enveloppes rangées dans la caisse Layla LG sont nombreuses : masquées par défaut
+  // pour ne pas noyer les enveloppes libres (et ne pas vider la caisse par mégarde).
+  const [showCaisse, setShowCaisse] = useState(false)
 
   useEffect(() => { reload() }, [])
 
@@ -24,17 +31,28 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
       const list = await loadAvailableEnveloppesForSalaire(salaire.year, m)
       allMonths.push(...list)
     }
+    // + les enveloppes rangées dans la caisse Layla LG (on peut y piocher aussi)
+    const caisseEnvs = await loadCaisseLaylaEnveloppes(salaire.year)
     const attachedList = await loadSalaireEnveloppes(salaire.id)
     // available = non attachées + attachées (pour avoir toutes les options visibles)
     const ids = new Set(attachedList.map(e => e.id))
-    const av = allMonths.filter(e => !ids.has(e.id))
+    const av = [...allMonths, ...caisseEnvs].filter(e => !ids.has(e.id))
     setAvailable([...attachedList, ...av])
     setAttached(attachedList)
     setPendingReports(await loadPendingReports(salaire.beneficiaire, salaire.year, salaire.month))
+    setPrises(await loadSalaireCaissePrises(salaire.id))
+    setSoldeLayla(await loadCaisseBalance('layla_lg'))
   }
 
   const selected = useMemo(() => available.filter(e => attached.some(a => a.id === e.id)), [available, attached])
-  const cumule = useMemo(() => selected.reduce((s, e) => s + Number(e.amount_cash), 0), [selected])
+  const nbCaisse = useMemo(() => available.filter(e => e.from_caisse).length, [available])
+  const shown = useMemo(
+    () => available.filter(e => !e.from_caisse || showCaisse || attached.some(a => a.id === e.id)),
+    [available, showCaisse, attached])
+  const totalPrises = useMemo(() => prises.reduce((s, p) => s + Number(p.amount), 0), [prises])
+  const cumule = useMemo(
+    () => selected.reduce((s, e) => s + Number(e.amount_cash), 0) + totalPrises,
+    [selected, totalPrises])
   // Cible nette = cible pleine moins les reports cochés.
   const appliedTotal = useMemo(
     () => pendingReports.filter(r => appliedIds.includes(r.id)).reduce((s, r) => s + Number(r.reliquat_amount), 0),
@@ -57,7 +75,8 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
 
   function autoFill() {
     // Algo glouton : on prend les plus récentes jusqu'à atteindre la cible
-    const sorted = [...available].sort((a, b) => b.session_date.localeCompare(a.session_date))
+    // On ne pioche pas tout seul dans la caisse Layla LG (ça la viderait sans le vouloir).
+    const sorted = available.filter(e => !e.from_caisse).sort((a, b) => b.session_date.localeCompare(a.session_date))
     const picked = []
     let sum = 0
     for (const env of sorted) {
@@ -67,9 +86,39 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
     setAttached(picked)
   }
 
+  async function addPrise() {
+    const amount = Number(priseAmount)
+    if (!amount || amount <= 0) return
+    setBusy(true)
+    try {
+      await addSalaireCaissePrise({ salaire, amount, userId })
+      setPriseAmount('')
+      await reload()
+    } catch (e) { toast.error(e.message) }
+    setBusy(false)
+  }
+
+  async function removePrise(id) {
+    setBusy(true)
+    try {
+      await deleteMouvement(id, userId, 'Retiré de la composition du salaire')
+      await reload()
+    } catch (e) { toast.error(e.message) }
+    setBusy(false)
+  }
+
+  // Enveloppes cochées qui viennent de la caisse Layla LG : elles doivent en SORTIR
+  // (on supprime l'entrée de caisse correspondante) avant d'être attachées au salaire.
+  async function detachFromCaisse() {
+    for (const env of attached.filter(e => e.from_caisse)) {
+      await unassignEnveloppe(env.id, userId)
+    }
+  }
+
   async function saveDraft() {
     setBusy(true)
     try {
+      await detachFromCaisse()
       await setSalaireEnveloppes(salaire.id, attached.map(a => a.id))
       onClose()
     } catch (e) { toast.error(e.message) }
@@ -83,6 +132,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
     }
     setBusy(true)
     try {
+      await detachFromCaisse()
       await setSalaireEnveloppes(salaire.id, attached.map(a => a.id))
       // Reports cochés : on enregistre la cible réduite et on les marque « déduits ».
       const appliedReports = pendingReports.filter(r => appliedIds.includes(r.id))
@@ -131,7 +181,7 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
             <div style={{ height: '100%', background: colorBen.border, width: `${progress}%`, transition: 'width 0.3s' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#4a3a30' }}>
-            <span>{selected.length} enveloppes sélectionnées</span>
+            <span>{selected.length} enveloppes sélectionnées{totalPrises > 0 ? ` + ${fmtMoney(totalPrises)} de la caisse Layla LG` : ''}</span>
             <span style={{ color: reliquat >= 0 ? '#1D7A5C' : '#99201E', fontWeight: 500 }}>
               {reliquat >= 0 ? `+${fmtMoney(reliquat)} de reliquat` : `manque ${fmtMoney(Math.abs(reliquat))}`}
             </span>
@@ -162,15 +212,46 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
           </div>
         )}
 
+        <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 8, background: '#F9F6F1', border: '0.5px solid #e5d8c3' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Wallet size={14} color="#4a3a30" />
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Prendre dans la caisse Layla LG</div>
+            <div style={{ fontSize: 11, color: '#4a3a30', marginLeft: 'auto' }}>solde {fmtMoney(soldeLayla)}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="number" value={priseAmount} onChange={(e) => setPriseAmount(e.target.value)} placeholder="Montant"
+              style={{ fontSize: 14, padding: '7px 10px', border: '0.5px solid #C4BFB6', borderRadius: 6, width: 120 }} />
+            <button onClick={addPrise} disabled={busy || !Number(priseAmount)} style={{
+              fontSize: 12, padding: '7px 14px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white',
+              cursor: 'pointer', opacity: (busy || !Number(priseAmount)) ? 0.5 : 1,
+            }}>+ Ajouter au salaire</button>
+            <div style={{ fontSize: 11, color: '#6b5f57' }}>Crée une sortie dans la caisse Layla LG.</div>
+          </div>
+          {prises.map(p => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: 13 }}>
+              <span style={{ color: '#1D7A5C', fontWeight: 500 }}>+ {fmtMoney(p.amount)}</span>
+              <span style={{ fontSize: 11, color: '#4a3a30' }}>pris le {fmtDateCourte(p.mvt_date)}</span>
+              <button onClick={() => removePrise(p.id)} disabled={busy} title="Annuler (l'argent retourne dans la caisse)"
+                style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', color: '#99201E' }}><Trash2 size={14} /></button>
+            </div>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>Enveloppes disponibles</div>
+          {nbCaisse > 0 && (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#4a3a30', marginLeft: 12, marginRight: 'auto', cursor: 'pointer' }}>
+              <input type="checkbox" checked={showCaisse} onChange={() => setShowCaisse(!showCaisse)} style={{ accentColor: '#993556' }} />
+              Montrer aussi celles de la caisse Layla LG ({nbCaisse})
+            </label>
+          )}
           <button onClick={autoFill} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5d8c3', background: 'white', cursor: 'pointer' }}><Zap size={14} /> Auto-remplir</button>
         </div>
 
-        {available.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>Aucune enveloppe disponible (toutes affectées).</div>}
+        {shown.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#4a3a30', background: '#F9F6F1', borderRadius: 8 }}>Aucune enveloppe disponible (toutes affectées).</div>}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
-          {available.map(env => {
+          {shown.map(env => {
             const isSel = attached.some(a => a.id === env.id)
             return (
               <label key={env.id} style={{
@@ -180,13 +261,22 @@ export default function CompositionSalaireModal({ salaire, onClose, userId }) {
               }}>
                 <input type="checkbox" checked={isSel} onChange={() => toggle(env)} style={{ accentColor: '#993556' }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, color: isSel ? colorBen.text : '#4a3a30' }}>{fmtDateCourte(env.session_date)} · {env.source}</div>
+                  <div style={{ fontSize: 11, color: isSel ? colorBen.text : '#4a3a30' }}>
+                    {fmtDateCourte(env.session_date)} · {env.source}
+                    {env.from_caisse && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 999, background: '#E1F5EE', color: '#085041', fontSize: 10 }}>caisse Layla LG</span>}
+                  </div>
                   <div style={{ fontSize: 14, fontWeight: 500, color: isSel ? colorBen.text : '#1a0f0a' }}>{fmtMoney(env.amount_cash)}</div>
                 </div>
               </label>
             )
           })}
         </div>
+
+        {attached.some(e => e.from_caisse) && (
+          <div style={{ marginTop: 10, fontSize: 11.5, color: '#8a5a2a' }}>
+            Une enveloppe « caisse Layla LG » est cochée : à l'enregistrement elle <b>sortira de la caisse</b> (son entrée y sera annulée).
+          </div>
+        )}
 
         {reliquat > 0 && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: '0.5px solid #e5d8c3', fontSize: 13, color: '#4a3a30' }}>
