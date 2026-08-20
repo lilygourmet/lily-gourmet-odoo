@@ -19,7 +19,7 @@
 // Si Wati renvoie d'autres noms de champs, on ajuste les fallbacks ci-dessous.
 
 import { createClient } from '@supabase/supabase-js'
-import { estLigneLivraison, heurePreparation, creneauClient, heureLisible, texteCreneau } from '../src/lib/creneau.js'
+import { estLigneLivraison, heurePreparation, creneauClient, heureLisible, texteCreneau, texteCreneauClient } from '../src/lib/creneau.js'
 import { sendPushToTargets } from './push.js'
 import { generateText } from 'ai'
 import crypto from 'crypto'
