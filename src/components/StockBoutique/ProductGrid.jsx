@@ -230,7 +230,7 @@ export default function ProductGrid({
     })
 
   return (
-    <div className={`grid grid-cols-1 ${compact ? 'md:grid-cols-[240px_1fr]' : 'md:grid-cols-[280px_1fr]'} gap-3 pb-16 md:pb-0`}>
+    <div className={`grid grid-cols-1 ${compact ? 'md:grid-cols-[240px_1fr]' : 'md:grid-cols-[280px_1fr]'} gap-3 pb-32 sm:pb-16 md:pb-0`}>
       {/* ============= PANIER (mobile: visible si tab=panier, desktop: toujours visible à gauche) ============= */}
       <div className={`${mobileTab === 'panier' ? 'block' : 'hidden'} md:block border border-line rounded-lg overflow-hidden flex flex-col bg-white`}>
 
@@ -427,7 +427,7 @@ export default function ProductGrid({
       </div>
 
       {/* ============= BOTTOM BAR MOBILE : onglets Articles / Panier ============= */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-line flex md:hidden shadow-lg">
+      <div className="lg-bottom-bar z-40 bg-white border-t border-line flex md:hidden shadow-lg">
         <button
           type="button"
           onClick={() => setMobileTab('articles')}

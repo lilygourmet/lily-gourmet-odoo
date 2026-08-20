@@ -109,6 +109,20 @@ html, body {
 .lg-btn--ghost { background: #fff; color: #993556; }
 .lg-btn--ghost:hover { background: #faf7f2; }
 
+/* Barre d'action collée en bas de l'écran (récap, validation…).
+   Sur téléphone elle se pose AU-DESSUS de la barre de navigation
+   (MobileBottomNav, ~56px + encoche), sinon celle-ci la recouvre
+   et le bouton devient inatteignable. */
+.lg-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  .lg-bottom-bar { bottom: 0; }
+}
+
 /* Onglets / chips */
 .lg-tab {
   font-size: 13px;

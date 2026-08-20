@@ -42,7 +42,7 @@ export default function ActivityLog({ loadFn, formatEntry, refreshKey, storageKe
   }, [open, storageKey])
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-cream/95 backdrop-blur-sm border-t border-line shadow-[0_-4px_12px_rgba(0,0,0,0.04)] z-20">
+    <div className="lg-bottom-bar bg-cream/95 backdrop-blur-sm border-t border-line shadow-[0_-4px_12px_rgba(0,0,0,0.04)] z-20">
       <div className="max-w-3xl mx-auto px-4 py-2">
         {/* En-tete cliquable : toggle ouvert/ferme */}
         <button

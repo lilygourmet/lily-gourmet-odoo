@@ -365,7 +365,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
             )}
 
             {/* GRILLE PRINCIPALE */}
-            <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-3 pb-16 md:pb-0">
+            <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-3 pb-32 sm:pb-16 md:pb-0">
 
               {/* ============= PANNEAU GAUCHE : CALCULETTE + LISTE (mobile: visible si tab=panier) ============= */}
               <div className={`${mobileTab === 'panier' ? 'block' : 'hidden'} md:block border border-line rounded-2xl overflow-hidden shadow-sm flex flex-col bg-white`}>
@@ -553,7 +553,7 @@ export default function StockEvening({ user, activeView, onNavigate, onLogout })
       </div>
       {/* ============= BOTTOM BAR MOBILE : onglets Articles / Comptés ============= */}
       {!showHistory && (
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-line flex md:hidden shadow-lg">
+      <div className="lg-bottom-bar z-40 bg-white border-t border-line flex md:hidden shadow-lg">
         <button
           type="button"
           onClick={() => setMobileTab('articles')}

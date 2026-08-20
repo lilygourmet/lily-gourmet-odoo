@@ -166,7 +166,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   }
 
   return (
-    <div className="min-h-screen lg-vibrant pb-28">
+    <div className="min-h-screen lg-vibrant pb-40 sm:pb-28">
       <AppHeader
         user={user}
         activeView={activeView || 'economat'}
@@ -328,7 +328,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
 
       {/* Barre récap fixe en bas */}
       {selectedCount > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-40 bg-cream/95 backdrop-blur-sm border-t border-line px-4 py-3">
+        <div className="lg-bottom-bar z-40 bg-cream/95 backdrop-blur-sm border-t border-line px-4 py-3">
           <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
             <div className="text-[13px] text-ink">
               <span className="font-semibold text-bordeaux">{selectedCount}</span> article{selectedCount > 1 ? 's' : ''}
