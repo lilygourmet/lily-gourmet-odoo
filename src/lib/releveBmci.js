@@ -21,6 +21,15 @@ const isoDate = (j, m, a) => `${a}-${m.padStart(2, '0')}-${j.padStart(2, '0')}`
 export const daysBetween = (isoA, isoB) => Math.abs((new Date(isoA) - new Date(isoB)) / 86400000)
 const signedDays = (isoA, isoB) => (new Date(isoA) - new Date(isoB)) / 86400000
 
+// Certains PDF ont le texte écrit en DOUBLE (deux couches superposées) : les mots du
+// libellé ressortent répétés (« VIRT RECU MME VIRT RECU MME X X »). On garde le 1er
+// passage de chaque mot — sinon le même virement réimporté crée un doublon « à lier ».
+function flatLabel(s) {
+  const out = []
+  for (const w of (s || '').split(/\s+/)) if (w && !out.includes(w)) out.push(w)
+  return out.join(' ')
+}
+
 // Type d'une opération d'après son libellé
 function classify(label) {
   const L = (label || '').toUpperCase()
@@ -305,6 +314,7 @@ export async function parseStatement(file) {
   // ce sont des encaissements carte/TPE, pas des enveloppes (espèces/chèque/virement)
   // → on ne les rapproche pas.
   transactions = transactions.filter(t => !/lanacash|\bLNC\.\d/i.test(t.label || ''))
+  transactions = transactions.map(t => ({ ...t, label: flatLabel(t.label) }))
   return { format, bankLabel, transactions }
 }
 
