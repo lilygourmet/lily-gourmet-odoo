@@ -144,7 +144,7 @@ async function creerTransfertOdoo({ user, lines }) {
   const parId = new Map()
   if (ids.length) {
     const { data } = await supabase.from('economat_articles')
-      .select('id, odoo_product_id, unit').in('id', ids)
+      .select('id, odoo_product_id, unit, odoo_source, fournisseur_odoo_id, fournisseur_nom').in('id', ids)
     for (const a of (data || [])) parId.set(a.id, a)
   }
   // Le badge de l'employé décide de la destination du stock (son lieu de
@@ -167,6 +167,11 @@ async function creerTransfertOdoo({ user, lines }) {
         unite: a?.unit || l.unit || null,
         nom: l.name,
         qty: l.qty,
+        // 'lgt' = l'article vit dans l'Odoo LG traiteur : sa demande y part en
+        // réception, chez son fournisseur.
+        source: a?.odoo_source === 'lgt' ? 'lgt' : 'principal',
+        fournisseurId: a?.fournisseur_odoo_id || null,
+        fournisseurNom: a?.fournisseur_nom || null,
       }
     }),
   }
@@ -215,8 +220,15 @@ export async function createDemande({ user, categoryId, lines }) {
   // 3) Tâche à chaque économe
   const who = user.full_name || user.username || 'Employé'
   const title = `🧾 Demande d'articles — ${who}`
+  const refs = Array.isArray(transfert?.transferts) && transfert.transferts.length
+    ? transfert.transferts
+    : (transfert?.name ? [{ source: 'principal', name: transfert.name }] : [])
   const description = buildDemandeText(lines)
-    + (transfert?.name ? `\n\nTransfert Odoo : ${transfert.name} (brouillon)` : '')
+    + (refs.length
+      ? '\n\n' + refs.map(t => t.source === 'lgt'
+          ? `LG traiteur — réception ${t.name}${t.fournisseur ? ` chez ${t.fournisseur}` : ' (fournisseur à compléter)'} (brouillon)`
+          : `Transfert Odoo : ${t.name} (brouillon)`).join('\n')
+      : '')
   let firstTaskId = null
   for (const eco of economes) {
     const task = await createTask({ title, description, fromUserId: user.id, toUserId: eco.id })
@@ -379,6 +391,7 @@ export async function addArticleFromOdoo({ categoryId, groupId, odoo }) {
     photo_url: odoo.image_url || null,
     odoo_product_id: odoo.odoo_id,
     odoo_name: odoo.odoo_name || odoo.name,
+    odoo_source: 'principal',
     display_order: (max?.display_order || 0) + 10,
   }).select().single()
   if (error) throw error
@@ -409,9 +422,11 @@ export async function deleteArticle(id) {
 // ---- Synchronisation Odoo : rattache par nom (articles non liés) puis maj nom/unité/photo ----
 export async function syncWithOdoo() {
   // 1) Rattachement automatique par nom des articles sans lien Odoo
-  const { data: arts, error } = await supabase.from('economat_articles').select('id, name, odoo_product_id')
+  const { data: arts, error } = await supabase.from('economat_articles').select('id, name, odoo_product_id, odoo_source')
   if (error) throw error
-  const unlinked = (arts || []).filter(a => !a.odoo_product_id)
+  // Les articles LG traiteur vivent dans l'AUTRE Odoo : leur odoo_product_id
+  // désigne un produit sans rapport ici. Les synchroniser les corromprait.
+  const unlinked = (arts || []).filter(a => !a.odoo_product_id && a.odoo_source !== 'lgt')
   let linked = 0, ambiguous = 0
   if (unlinked.length) {
     const all = await loadOdooProducts({})
@@ -432,15 +447,16 @@ export async function syncWithOdoo() {
   }
 
   // 2) Rafraîchit nom/unité/photo de tous les articles liés
-  const { data: now } = await supabase.from('economat_articles').select('id, odoo_product_id').not('odoo_product_id', 'is', null)
-  const ids = [...new Set((now || []).map(a => a.odoo_product_id))]
+  const { data: tous } = await supabase.from('economat_articles').select('id, odoo_product_id, odoo_source').not('odoo_product_id', 'is', null)
+  const now = (tous || []).filter(a => a.odoo_source !== 'lgt')
+  const ids = [...new Set(now.map(a => a.odoo_product_id))]
   const byId = new Map()
   for (let i = 0; i < ids.length; i += 100) {
     const prods = await loadOdooProducts({ ids: ids.slice(i, i + 100) })
     for (const p of prods) byId.set(p.odoo_id, p)
   }
   let updated = 0
-  for (const a of (now || [])) {
+  for (const a of now) {
     const p = byId.get(a.odoo_product_id)
     if (!p) continue
     const { error: e } = await supabase.from('economat_articles')

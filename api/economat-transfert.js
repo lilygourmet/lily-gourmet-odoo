@@ -45,6 +45,34 @@ const DESTINATIONS = {
 // n'affecte aucun stock). Le nom réel est porté par la description de la ligne.
 const AUTRE_ACHAT = 3159
 
+// ── Odoo LG traiteur (2e base, société « LG traiteur ») ────────────────
+// Les articles marqués odoo_source = 'lgt' n'existent QUE là-bas. Leur
+// demande n'est pas un transfert interne mais une RÉCEPTION dans LGT prod
+// (Vendors → PROD/Stock), une par fournisseur : c'est un achat.
+const LGT = { type: 86, src: 4, dest: 82 }
+
+async function odoo2JsonRpc(service, method, args) {
+  const res = await fetch(`${process.env.ODOO2_URL}/jsonrpc`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { service, method, args }, id: Date.now() }),
+  })
+  const data = await res.json()
+  if (data.error) throw new Error(data.error.data?.message || data.error.message || 'Erreur Odoo LG traiteur')
+  return data.result
+}
+
+let _uid2 = null
+async function auth2() {
+  if (_uid2) return _uid2
+  const uid = await odoo2JsonRpc('common', 'authenticate', [process.env.ODOO2_DB, process.env.ODOO2_USER, process.env.ODOO2_PASSWORD, {}])
+  if (!uid) throw new Error('Connexion Odoo LG traiteur refusée')
+  _uid2 = uid
+  return uid
+}
+const exec2 = (uid, model, method, args, kw = {}) =>
+  odoo2JsonRpc('object', 'execute_kw', [process.env.ODOO2_DB, uid, process.env.ODOO2_PASSWORD, model, method, args, kw])
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' })
   try {
@@ -55,8 +83,13 @@ export default async function handler(req, res) {
     if (!Array.isArray(lignes) || lignes.length === 0) {
       return res.status(400).json({ error: 'Aucune ligne à transférer' })
     }
+    // Les articles LG traiteur partent dans l'autre Odoo : ils ne dépendent
+    // pas du badge, mais de leur fournisseur.
+    const lignesLgt = lignes.filter(l => l.source === 'lgt')
+    const lignesLg = lignes.filter(l => l.source !== 'lgt')
+
     const dest = DESTINATIONS[badge]
-    if (!dest) {
+    if (lignesLg.length && !dest) {
       return res.status(400).json({
         error: badge
           ? `Le badge « ${badgeLabel || badge} » n'a pas de destination de stock définie.`
@@ -64,7 +97,10 @@ export default async function handler(req, res) {
       })
     }
 
-    const uid = await auth()
+    const origine = `ÉCONOMAT — ${demandeur || 'demande'}${badgeLabel ? ` (${badgeLabel})` : ''}`
+    const transferts = []
+
+    const uid = lignesLg.length ? await auth() : null
 
     // Unité de chaque produit. Par défaut l'unité d'ACHAT (uom_po_id), celle
     // qu'affiche l'économat : « 1 » sur « Chocolat Callebaut Couverture Noir »
@@ -73,22 +109,24 @@ export default async function handler(req, res) {
     // demandé au kg alors qu'il s'achète par pack de 25 kg), on suit ce que
     // voit l'employé. C'est donc l'unité de l'article qui décide, pas une
     // liste d'exceptions : changer l'unité dans l'économat suffit.
-    const ids = [...new Set(lignes.map(l => Number(l.odooProductId)).filter(Boolean))]
-    ids.push(AUTRE_ACHAT)
-    const prods = await exec(uid, 'product.product', 'read', [ids, ['id', 'uom_id', 'uom_po_id']])
-    const infoOf = new Map(prods.map(p => [p.id, p]))
-    const meme = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
-    const choisirUom = (pid, uniteAffichee) => {
-      const p = infoOf.get(pid)
-      if (!p) return null
-      const stock = Array.isArray(p.uom_id) ? p.uom_id : null
-      const achat = Array.isArray(p.uom_po_id) ? p.uom_po_id : null
-      if (stock && meme(uniteAffichee, stock[1])) return stock[0]
-      return (achat || stock || [null])[0]
+    async function uomChooser(execFn, u, lot, avecAutre) {
+      const ids = [...new Set(lot.map(l => Number(l.odooProductId)).filter(Boolean))]
+      if (avecAutre) ids.push(AUTRE_ACHAT)
+      const prods = ids.length ? await execFn(u, 'product.product', 'read', [ids, ['id', 'uom_id', 'uom_po_id']]) : []
+      const infoOf = new Map(prods.map(p => [p.id, p]))
+      const meme = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
+      return (pid, uniteAffichee) => {
+        const p = infoOf.get(pid)
+        if (!p) return null
+        const stock = Array.isArray(p.uom_id) ? p.uom_id : null
+        const achat = Array.isArray(p.uom_po_id) ? p.uom_po_id : null
+        if (stock && meme(uniteAffichee, stock[1])) return stock[0]
+        return (achat || stock || [null])[0]
+      }
     }
 
-    const moves = lignes.map(l => {
-      const pid = Number(l.odooProductId) || AUTRE_ACHAT
+    const enMove = (l, choisirUom, srcLoc, destLoc, pidDefaut) => {
+      const pid = Number(l.odooProductId) || pidDefaut
       const texte = String(l.nom || '').slice(0, 200)
       return [0, 0, {
         // description renseignée sur CHAQUE ligne : sans elle, Odoo fusionne les
@@ -98,21 +136,54 @@ export default async function handler(req, res) {
         product_id: pid,
         product_uom_qty: Number(l.qty) || 1,
         product_uom: choisirUom(pid, l.unite),
+        location_id: srcLoc,
+        location_dest_id: destLoc,
+      }]
+    }
+
+    // 1) Odoo Lily Gourmet : le transfert interne habituel, vers le lieu du badge
+    if (lignesLg.length) {
+      const choisirUom = await uomChooser(exec, uid, lignesLg, true)
+      const id = await exec(uid, 'stock.picking', 'create', [{
+        picking_type_id: dest.type,
         location_id: dest.src,
         location_dest_id: dest.dest,
-      }]
-    })
+        origin: origine,
+        move_ids_without_package: lignesLg.map(l => enMove(l, choisirUom, dest.src, dest.dest, AUTRE_ACHAT)),
+      }])
+      const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
+      transferts.push({ source: 'principal', id, name: pick?.name, state: pick?.state, fournisseur: null })
+    }
 
-    const id = await exec(uid, 'stock.picking', 'create', [{
-      picking_type_id: dest.type,
-      location_id: dest.src,
-      location_dest_id: dest.dest,
-      origin: `ÉCONOMAT — ${demandeur || 'demande'}${badgeLabel ? ` (${badgeLabel})` : ''}`,
-      move_ids_without_package: moves,
-    }])
+    // 2) Odoo LG traiteur : une RÉCEPTION par fournisseur (c'est un achat, pas
+    //    un transfert : la marchandise arrive de l'extérieur dans LGT prod).
+    if (lignesLgt.length) {
+      const uid2 = await auth2()
+      const choisirUom2 = await uomChooser(exec2, uid2, lignesLgt, false)
+      const parFournisseur = new Map()
+      for (const l of lignesLgt) {
+        const k = Number(l.fournisseurId) || 0   // 0 = fournisseur inconnu -> brouillon sans contact
+        if (!parFournisseur.has(k)) parFournisseur.set(k, [])
+        parFournisseur.get(k).push(l)
+      }
+      for (const [fid, lot] of parFournisseur) {
+        const moves2 = lot.map(l => enMove(l, choisirUom2, LGT.src, LGT.dest, null)).filter(m => m[2].product_id)
+        if (!moves2.length) continue
+        const id = await exec2(uid2, 'stock.picking', 'create', [{
+          picking_type_id: LGT.type,
+          location_id: LGT.src,
+          location_dest_id: LGT.dest,
+          partner_id: fid || false,
+          origin: origine,
+          move_ids_without_package: moves2,
+        }])
+        const [pick] = await exec2(uid2, 'stock.picking', 'read', [[id], ['name', 'state']])
+        transferts.push({ source: 'lgt', id, name: pick?.name, state: pick?.state, fournisseur: lot[0]?.fournisseurNom || null })
+      }
+    }
 
-    const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
-    return res.status(200).json({ ok: true, id, name: pick?.name, state: pick?.state })
+    // name/id gardés pour ne rien casser chez les appelants existants
+    return res.status(200).json({ ok: true, transferts, id: transferts[0]?.id, name: transferts[0]?.name })
   } catch (e) {
     console.error('[economat-transfert]', e)
     return res.status(500).json({ error: e.message || 'Erreur serveur' })
