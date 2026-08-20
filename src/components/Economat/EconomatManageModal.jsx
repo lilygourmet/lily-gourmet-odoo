@@ -11,8 +11,10 @@ import { confirmDialog } from '../../lib/confirmDialog'
 import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff, Link2, X, Pencil } from 'lucide-react'
 import SearchSelect from '../SearchSelect'
 
-// Gestion de l'économat (admin + économe) : catégories, groupes, articles (depuis Odoo).
-export default function EconomatManageModal({ onClose, onChanged }) {
+// Gestion de l'économat : catégories, groupes, articles (depuis Odoo).
+// L'économe gère le contenu ; qui a le droit de voir quoi (badges, visibilité
+// des catégories) reste à l'admin.
+export default function EconomatManageModal({ isAdmin = false, onClose, onChanged }) {
   const [categories, setCategories] = useState([])
   const [catId, setCatId] = useState(null)
   const [profils, setProfils] = useState([])
@@ -38,13 +40,13 @@ export default function EconomatManageModal({ onClose, onChanged }) {
   }
   async function reloadManage(id = catId) {
     if (!id) { setManage({ groups: [], articles: [] }); setProfils([]); return }
-    const [m, pr] = await Promise.all([loadCategoryManage(id), loadCategoryProfils(id)])
+    const [m, pr] = await Promise.all([loadCategoryManage(id), isAdmin ? loadCategoryProfils(id) : []])
     setManage(m); setProfils(pr)
   }
 
   async function reloadProfils() { setAllProfils(await loadProfils()) }
 
-  useEffect(() => { (async () => { setLoading(true); try { await Promise.all([reloadCats(), reloadProfils()]) } finally { setLoading(false) } })() }, [])
+  useEffect(() => { (async () => { setLoading(true); try { await Promise.all([reloadCats(), isAdmin ? reloadProfils() : null]) } finally { setLoading(false) } })() }, [])
   useEffect(() => { if (catId) reloadManage(catId) }, [catId])
 
   function notifyChanged() { onChanged && onChanged() }
@@ -183,7 +185,8 @@ export default function EconomatManageModal({ onClose, onChanged }) {
           <div className="text-center text-ink-mute italic py-12">Chargement...</div>
         ) : (
           <div className="px-5 py-4 space-y-4">
-            {/* Badges (profils) : qui a le droit de voir quoi. Global, pas par catégorie. */}
+            {/* Badges (profils) : qui a le droit de voir quoi. Réservé à l'admin. */}
+            {isAdmin && (
             <div className="border border-line rounded-lg p-3 bg-cream-warm/30">
               <button onClick={() => setShowBadges(v => !v)} className="flex items-center gap-1.5 text-[13px] font-medium text-bordeaux">
                 {showBadges ? <ChevronDown size={15} strokeWidth={1.8} /> : <ChevronRight size={15} strokeWidth={1.8} />}
@@ -215,6 +218,7 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                 </div>
               )}
             </div>
+            )}
 
             {/* Catégorie : sélecteur + créer/supprimer */}
             <div>
@@ -232,7 +236,8 @@ export default function EconomatManageModal({ onClose, onChanged }) {
 
             {catId && (
               <>
-                {/* Profils qui voient cette catégorie */}
+                {/* Profils qui voient cette catégorie — réservé à l'admin */}
+                {isAdmin && (
                 <div>
                   <div className="font-mono text-[10px] uppercase tracking-wider text-ink-mute mb-1.5">Visible par les profils</div>
                   <div className="flex flex-wrap gap-1.5">
@@ -244,6 +249,7 @@ export default function EconomatManageModal({ onClose, onChanged }) {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Ajouter un article depuis Odoo */}
                 <div className="border border-line rounded-lg p-3 bg-cream-warm/30">

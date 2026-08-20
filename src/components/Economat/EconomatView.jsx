@@ -362,7 +362,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       )}
 
       {showManage && (
-        <EconomatManageModal onClose={() => setShowManage(false)} onChanged={reloadStructure} />
+        <EconomatManageModal isAdmin={user?.role === 'admin'} onClose={() => setShowManage(false)} onChanged={reloadStructure} />
       )}
     </div>
   )
