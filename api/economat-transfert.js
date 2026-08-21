@@ -46,10 +46,12 @@ const DESTINATIONS = {
 const AUTRE_ACHAT = 3159
 
 // ── Odoo LG traiteur (2e base, société « LG traiteur ») ────────────────
-// Les articles marqués odoo_source = 'lgt' n'existent QUE là-bas. Leur
-// demande n'est pas un transfert interne mais une RÉCEPTION dans LGT prod
-// (Vendors → PROD/Stock), une par fournisseur : c'est un achat.
-const LGT = { type: 86, src: 4, dest: 82 }
+// Les articles marqués odoo_source = 'lgt' n'existent QUE là-bas. Ce ne sont
+// pas des transferts internes mais des ACHATS : on crée une DEMANDE DE PRIX
+// (bon de commande fournisseur en brouillon), une par fournisseur. C'est
+// l'économe qui la confirme, et Odoo génère alors la réception tout seul.
+// picking_type 86 = « LGT prod: Réceptions », comme sur les achats existants.
+const LGT_PICKING_TYPE = 86
 
 async function odoo2JsonRpc(service, method, args) {
   const res = await fetch(`${process.env.ODOO2_URL}/jsonrpc`, {
@@ -155,30 +157,48 @@ export default async function handler(req, res) {
       transferts.push({ source: 'principal', id, name: pick?.name, state: pick?.state, fournisseur: null })
     }
 
-    // 2) Odoo LG traiteur : une RÉCEPTION par fournisseur (c'est un achat, pas
-    //    un transfert : la marchandise arrive de l'extérieur dans LGT prod).
+    // 2) Odoo LG traiteur : une DEMANDE DE PRIX par fournisseur.
+    //    Prix laissé à 0 : c'est justement ce qu'on demande au fournisseur.
     if (lignesLgt.length) {
       const uid2 = await auth2()
       const choisirUom2 = await uomChooser(exec2, uid2, lignesLgt, false)
       const parFournisseur = new Map()
       for (const l of lignesLgt) {
-        const k = Number(l.fournisseurId) || 0   // 0 = fournisseur inconnu -> brouillon sans contact
+        const k = Number(l.fournisseurId) || 0   // 0 = fournisseur inconnu
         if (!parFournisseur.has(k)) parFournisseur.set(k, [])
         parFournisseur.get(k).push(l)
       }
+      const demain = new Date(Date.now() + 86400000).toISOString().slice(0, 19).replace('T', ' ')
       for (const [fid, lot] of parFournisseur) {
-        const moves2 = lot.map(l => enMove(l, choisirUom2, LGT.src, LGT.dest, null)).filter(m => m[2].product_id)
-        if (!moves2.length) continue
-        const id = await exec2(uid2, 'stock.picking', 'create', [{
-          picking_type_id: LGT.type,
-          location_id: LGT.src,
-          location_dest_id: LGT.dest,
-          partner_id: fid || false,
+        // Sans fournisseur connu, Odoo refuse la demande de prix (le contact
+        // est obligatoire) : on le signale plutôt que d'échouer en silence.
+        if (!fid) {
+          transferts.push({ source: 'lgt', erreur: 'sans fournisseur',
+            articles: lot.map(l => l.nom), fournisseur: null })
+          continue
+        }
+        const lignesPo = lot.map(l => {
+          const pid = Number(l.odooProductId)
+          if (!pid) return null
+          return [0, 0, {
+            product_id: pid,
+            name: String(l.nom || '').slice(0, 200),
+            product_qty: Number(l.qty) || 1,
+            product_uom: choisirUom2(pid, l.unite),
+            price_unit: 0,
+            date_planned: demain,
+          }]
+        }).filter(Boolean)
+        if (!lignesPo.length) continue
+        const id = await exec2(uid2, 'purchase.order', 'create', [{
+          partner_id: fid,
+          picking_type_id: LGT_PICKING_TYPE,
           origin: origine,
-          move_ids_without_package: moves2,
+          date_planned: demain,
+          order_line: lignesPo,
         }])
-        const [pick] = await exec2(uid2, 'stock.picking', 'read', [[id], ['name', 'state']])
-        transferts.push({ source: 'lgt', id, name: pick?.name, state: pick?.state, fournisseur: lot[0]?.fournisseurNom || null })
+        const [po] = await exec2(uid2, 'purchase.order', 'read', [[id], ['name', 'state']])
+        transferts.push({ source: 'lgt', id, name: po?.name, state: po?.state, fournisseur: lot[0]?.fournisseurNom || null })
       }
     }
 

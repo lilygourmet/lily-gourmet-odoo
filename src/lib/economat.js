@@ -251,9 +251,11 @@ export async function createDemande({ user, categoryId, lines }) {
     : (transfert?.name ? [{ source: 'principal', name: transfert.name }] : [])
   const description = buildDemandeText(lines)
     + (refs.length
-      ? '\n\n' + refs.map(t => t.source === 'lgt'
-          ? `LG traiteur — réception ${t.name}${t.fournisseur ? ` chez ${t.fournisseur}` : ' (fournisseur à compléter)'} (brouillon)`
-          : `Transfert Odoo : ${t.name} (brouillon)`).join('\n')
+      ? '\n\n' + refs.map(t => {
+          if (t.source !== 'lgt') return `Transfert Odoo : ${t.name} (brouillon)`
+          if (t.erreur) return `LG traiteur — À COMMANDER À LA MAIN (aucun fournisseur connu) : ${(t.articles || []).join(', ')}`
+          return `LG traiteur — demande de prix ${t.name} chez ${t.fournisseur} (brouillon)`
+        }).join('\n')
       : '')
   let firstTaskId = null
   for (const eco of economes) {
