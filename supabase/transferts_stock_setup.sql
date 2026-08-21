@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS transferts_articles (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE transferts_articles ENABLE ROW LEVEL SECURITY;
-DO 30486 BEGIN
+DO $$ BEGIN
   CREATE POLICY "all transferts_articles" ON transferts_articles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END 30486;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- 3) Les 127 articles transférés entre les deux prods (Odoo, 5 derniers mois).
 INSERT INTO transferts_articles (odoo_product_id, nom, unite, famille, nb_transferts) VALUES
