@@ -352,7 +352,7 @@ export default function AdminUsers({ currentUser, onClose }) {
           )}
 
           {tab === 'perms' && !loading && !showNewForm && !editingUser && (
-            <PermsMatrix users={users} currentUser={currentUser} onToggle={handleTogglePerm} />
+            <PermsMatrix users={users} teams={teams} currentUser={currentUser} onToggle={handleTogglePerm} />
           )}
 
           {/* Boutons ajouter user + gerer equipes */}
@@ -1161,7 +1161,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
 // Onglet « Par permission » : l'inverse de la fiche utilisateur.
 // On choisit une permission à gauche, on coche à droite qui l'a.
 // ============================================================
-function PermsMatrix({ users, currentUser, onToggle }) {
+function PermsMatrix({ users, teams = [], currentUser, onToggle }) {
   const [sel, setSel] = useState(PERMS[0].key)
   const [q, setQ] = useState('')
 
@@ -1176,6 +1176,13 @@ function PermsMatrix({ users, currentUser, onToggle }) {
   const groupes = PERM_GROUPES
     .map(g => ({ ...g, perms: g.perms.filter(p => !ql || p.label.toLowerCase().includes(ql) || p.desc.toLowerCase().includes(ql)) }))
     .filter(g => g.perms.length)
+
+  // rangés par équipe, comme la liste des utilisateurs
+  const parEquipe = useMemo(() => {
+    const par = [...teams.map(t => ({ titre: t.name, membres: visibles.filter(u => u.team_id === t.id) })),
+      { titre: 'Sans équipe', membres: visibles.filter(u => !u.team_id || !teams.some(t => t.id === u.team_id)) }]
+    return par.filter(g => g.membres.length)
+  }, [visibles, teams])
 
   const perm = PERMS.find(p => p.key === sel)
   const compte = key => visibles.filter(u => u.role !== 'admin' && u[key] === true).length
@@ -1207,6 +1214,8 @@ function PermsMatrix({ users, currentUser, onToggle }) {
                       className={'w-full flex items-center gap-2 px-3 py-2 text-left text-[12.5px] border-l-[3px] ' +
                         (on ? 'bg-[#fbeef2] border-bordeaux font-semibold' : 'border-transparent hover:bg-[#fbeef2]')}>
                       <span className="min-w-0 truncate">{p.label}</span>
+                      <span title={p.desc}
+                        className="flex-shrink-0 w-[15px] h-[15px] rounded-full border border-bordeaux/40 text-bordeaux text-[10px] font-bold leading-[13px] text-center cursor-help">i</span>
                       <span className={'ml-auto text-[11px] font-bold px-2 rounded-full ' +
                         (on ? 'bg-bordeaux text-cream' : n ? 'bg-cream-warm text-ink-soft' : 'bg-cream-warm text-ink-mute opacity-60')}>{n}</span>
                     </button>
@@ -1230,19 +1239,26 @@ function PermsMatrix({ users, currentUser, onToggle }) {
             <button onClick={() => tous(false)} className="text-bordeaux underline">Tout décocher</button>
           </div>
           <div className="max-h-[360px] overflow-auto py-1">
-            {visibles.map(u => {
-              const admin = u.role === 'admin'
-              return (
-                <label key={u.id} className={'flex items-center gap-2.5 px-3.5 py-2 text-[13px] hover:bg-cream cursor-pointer ' + (admin ? 'opacity-60' : '')}>
-                  <input type="checkbox" className="w-[17px] h-[17px] accent-[#993556]"
-                    checked={admin || u[perm.key] === true} disabled={admin}
-                    onChange={e => onToggle(u, perm.key, e.target.checked)} />
-                  <span>{u.full_name || u.username}</span>
-                  {admin && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EAF3DE] text-ok font-semibold">admin — tout</span>}
-                  <span className="ml-auto text-[10.5px] text-ink-mute">{ROLE_LABELS[u.role] || u.role}</span>
-                </label>
-              )
-            })}
+            {parEquipe.map(({ titre, membres }) => (
+              <div key={titre}>
+                <div className="px-3.5 pt-2 pb-1 text-[10.5px] font-semibold text-ink-mute bg-cream/60">
+                  {titre} <span className="font-normal">· {membres.filter(u => u.role === 'admin' || u[perm.key] === true).length}/{membres.length}</span>
+                </div>
+                {membres.map(u => {
+                  const admin = u.role === 'admin'
+                  return (
+                    <label key={u.id} className={'flex items-center gap-2.5 px-3.5 py-2 text-[13px] hover:bg-cream cursor-pointer ' + (admin ? 'opacity-60' : '')}>
+                      <input type="checkbox" className="w-[17px] h-[17px] accent-[#993556]"
+                        checked={admin || u[perm.key] === true} disabled={admin}
+                        onChange={e => onToggle(u, perm.key, e.target.checked)} />
+                      <span>{u.full_name || u.username}</span>
+                      {admin && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EAF3DE] text-ok font-semibold">admin — tout</span>}
+                      <span className="ml-auto text-[10.5px] text-ink-mute">{ROLE_LABELS[u.role] || u.role}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            ))}
             {!visibles.length && <div className="px-3 py-6 text-center text-[12px] text-ink-mute italic">Aucun utilisateur actif</div>}
           </div>
         </div>
