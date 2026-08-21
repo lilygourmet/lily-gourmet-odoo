@@ -29,10 +29,11 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
   const [showHistory, setShowHistory] = useState(false)
   const [myDemandes, setMyDemandes] = useState(null)  // null = pas encore chargé
   const [showManage, setShowManage] = useState(false)
-  // Familles repliées par défaut : une catégorie de 147 articles tenait sur
-  // un écran de téléphone interminable. On ouvre celle dont on a besoin.
-  const [ouverts, setOuverts] = useState(() => new Set(['__habitudes__']))
+  // Une seule famille à l'écran, choisie dans la bande du haut : une catégorie
+  // de 147 articles tenait sur un écran de téléphone interminable.
+  const [familleOuverte, setFamilleOuverte] = useState(null)
   const [habitudes, setHabitudes] = useState({})   // { [articleId]: nb de demandes }
+  const [pave, setPave] = useState(null)           // article dont on saisit la quantité au clavier
   const canManage = user?.role === 'admin' || !!user?.perm_econome
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
     })()
   }, [])
 
-  useEffect(() => { setOuverts(new Set(['__habitudes__'])) }, [activeCat])
+  useEffect(() => { setFamilleOuverte(null) }, [activeCat])
 
   useEffect(() => {
     if (!activeCat) return
@@ -248,98 +249,82 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
           const q = recherche.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
           const garde = a => !q || String(a.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)
 
-          // Familles de la catégorie, « Autres » compris.
           const familles = [
             ...content.groups.map(g => ({ id: String(g.id), name: g.name, articles: g.articles })),
             ...(content.ungrouped.length ? [{ id: '__autres__', name: 'Autres', articles: content.ungrouped }] : []),
           ]
           const tous = familles.flatMap(f => f.articles)
 
-          // Ce que CET employé reprend le plus souvent. Rien tant qu'il n'a
-          // pas d'historique : mieux vaut pas de raccourci qu'un faux.
+          // Ce que CET employé reprend le plus. Rien tant qu'il n'a pas
+          // d'historique : mieux vaut pas de raccourci qu'un faux.
           const habituels = tous
             .filter(a => (habitudes[a.id] || 0) > 0)
             .sort((a, b) => (habitudes[b.id] || 0) - (habitudes[a.id] || 0))
-            .slice(0, 8)
+            .slice(0, 12)
 
-          const ligne = a => (
-            <ArticleRow key={a.id} article={a} qty={qty[a.id] || 0} onChange={n => setArticleQty(a.id, n)}
-              precision={precision[a.id] || ''}
-              onPrecision={v => setPrecision(p => ({ ...p, [a.id]: v }))} />
-          )
-
-          // Recherche en cours : liste à plat, on ignore les familles.
-          if (q) {
-            const res = tous.filter(garde)
-            return res.length ? (
-              <div className="space-y-1.5">
-                <div className="lg-mono mb-1">{res.length} résultat{res.length > 1 ? 's' : ''}</div>
-                {res.map(ligne)}
-              </div>
-            ) : (
-              <div className="text-center text-ink-mute italic py-10">
-                Aucun article ne contient « {recherche.trim()} » dans cette catégorie.
-              </div>
-            )
-          }
-
-          if (!tous.length) {
-            return <div className="text-center text-ink-mute italic py-10">Aucun article.</div>
-          }
-
-          const blocs = [
-            ...(habituels.length ? [{ id: '__habitudes__', name: '★ Souvent demandé', articles: habituels }] : []),
+          const bandes = [
+            ...(habituels.length ? [{ id: '__habitudes__', name: 'Souvent demandé', articles: habituels }] : []),
             ...familles,
           ]
-          const basculer = (id) => setOuverts(prev => {
-            const n = new Set(prev)
-            if (n.has(id)) n.delete(id); else n.add(id)
-            return n
-          })
+          if (!bandes.length) {
+            return <div className="text-center text-ink-mute italic py-10">Aucun article.</div>
+          }
+          const ouverte = bandes.find(b => b.id === familleOuverte) || bandes[0]
+          const aMontrer = q ? tous.filter(garde) : ouverte.articles
 
           return (
-          <div className="space-y-4">
-            {/* Puces : sauter à une famille sans faire défiler 147 articles. */}
-            {blocs.length > 1 && (
-              <div className="flex gap-1.5 overflow-x-auto -mx-4 px-4 pb-1">
-                {blocs.map(b => (
-                  <button key={b.id}
-                    onClick={() => {
-                      basculer(b.id)
-                      setTimeout(() => document.getElementById('fam-' + b.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
-                    }}
-                    className={`lg-tab flex-shrink-0 ${ouverts.has(b.id) ? 'is-active' : ''}`}
-                  >{b.name} <span className="opacity-60">{b.articles.length}</span></button>
-                ))}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {blocs.map(b => {
-                const ouvert = ouverts.has(b.id)
-                const pris = b.articles.filter(a => (qty[a.id] || 0) > 0).length
+          <div className="space-y-3">
+            {/* Bande des familles : la navigation principale, en photos.
+                Elle reste visible et défile latéralement. */}
+            <div className="flex gap-2.5 overflow-x-auto -mx-4 px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
+              {bandes.map((b, i) => {
+                const c = couleurFamille(b.name, i)
+                const actif = !q && b.id === ouverte.id
+                const n = b.articles.filter(a => (qty[a.id] || 0) > 0).length
+                const vign = b.articles.find(a => a.photo_url)
                 return (
-                  <section key={b.id} id={'fam-' + b.id}>
-                    <button
-                      onClick={() => basculer(b.id)}
-                      aria-expanded={ouvert}
-                      className="w-full flex items-center gap-2.5 bg-white rounded-xl border border-line/70 px-3.5 py-3 shadow-sm text-left"
-                    >
-                      <span className="text-ink-mute text-[12px] w-3">{ouvert ? '▾' : '▸'}</span>
-                      <span className="text-[13.5px] text-ink flex-1">{b.name}</span>
-                      {pris > 0 ? (
-                        <span className="bg-bordeaux text-cream rounded-full px-2 py-0.5 text-[11px] font-bold">{pris}</span>
+                  <button key={b.id} onClick={() => { setFamilleOuverte(b.id); setRecherche(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                    className="flex-shrink-0 w-[74px] flex flex-col items-center gap-1"
+                    style={{ color: c.trait }}>
+                    <span className="relative w-[60px] h-[60px] rounded-2xl overflow-hidden flex items-center justify-center"
+                      style={{ background: c.fond, border: `2.5px solid ${actif ? c.trait : 'transparent'}` }}>
+                      {vign ? (
+                        <img src={vign.photo_url} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-[11px] text-ink-mute">{b.articles.length}</span>
+                        <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.5"
+                          strokeLinecap="round" strokeLinejoin="round"
+                          dangerouslySetInnerHTML={{ __html: (ICONES[picto(b.articles[0]?.name || '')] || ICONES.defaut).svg }} />
                       )}
-                    </button>
-                    {ouvert && (
-                      <div className="space-y-1.5 mt-1.5">{b.articles.map(ligne)}</div>
-                    )}
-                  </section>
+                      {n > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1.5 rounded-full bg-bordeaux text-cream text-[11px] font-bold flex items-center justify-center border-2 border-cream">{n}</span>
+                      )}
+                    </span>
+                    <span className={`text-[10.5px] leading-tight text-center font-semibold ${actif ? '' : 'text-ink-mute'}`}
+                      style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {b.name.split(',')[0].split(' & ')[0]}
+                    </span>
+                  </button>
                 )
               })}
             </div>
+
+            {q && <div className="lg-mono">{aMontrer.length} résultat{aMontrer.length > 1 ? 's' : ''}</div>}
+
+            {aMontrer.length === 0 ? (
+              <div className="text-center text-ink-mute italic py-10">
+                Aucun article ne contient « {recherche.trim()} » dans cette catégorie.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                {aMontrer.map(a => (
+                  <ArticleTuile key={a.id} article={a} qty={qty[a.id] || 0}
+                    couleur={couleurFamille(ouverte.name, 0).trait}
+                    onPlus={() => setArticleQty(a.id, (qty[a.id] || 0) + 1)}
+                    onMoins={() => setArticleQty(a.id, (qty[a.id] || 0) - 1)}
+                    onPave={() => setPave(a)} />
+                ))}
+              </div>
+            )}
 
             {/* Ajouter un article qui n'est pas dans la liste (usage unique) */}
             <div>
@@ -414,6 +399,17 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
       )}
 
       {/* Modal récapitulatif */}
+      {pave && (
+        <PaveQuantite
+          article={pave}
+          qty={qty[pave.id] || 0}
+          precision={precision[pave.id] || ''}
+          onPrecision={v => setPrecision(p => ({ ...p, [pave.id]: v }))}
+          onValider={n => { setArticleQty(pave.id, n); setPave(null) }}
+          onClose={() => setPave(null)}
+        />
+      )}
+
       {showRecap && (
         <RecapModal
           qty={qty}
@@ -485,58 +481,121 @@ function HistoryModal({ demandes, onClose }) {
 }
 
 // Une ligne article : [photo réservée] [nom + unité] [− qté +]
-function ArticleRow({ article, qty, onChange, precision = '', onPrecision }) {
-  const active = qty > 0
+// Une couleur par famille : elle sert à se repérer d'un coup d'œil, pas à
+// décorer. Attribuée de façon stable d'après le nom, donc identique d'une
+// ouverture à l'autre et valable pour toutes les catégories.
+const PALETTE = [
+  { trait: '#4a7c2f', fond: '#eaf3e2' }, { trait: '#a8324b', fond: '#fae9ec' },
+  { trait: '#2f6d8c', fond: '#e4f0f5' }, { trait: '#b8862a', fond: '#faf1dd' },
+  { trait: '#b45a1e', fond: '#fbebe0' }, { trait: '#8a6a2f', fond: '#f6efe2' },
+  { trait: '#7a5a3f', fond: '#f3ece6' }, { trait: '#5c3a24', fond: '#efe6e0' },
+  { trait: '#6b6f3a', fond: '#f0f1e4' }, { trait: '#5a5a6e', fond: '#eceded' },
+  { trait: '#3f6b6b', fond: '#e6f0ef' }, { trait: '#993556', fond: '#f6e7ec' },
+]
+function couleurFamille(nom, secours = 0) {
+  const t = String(nom || '')
+  let h = 0
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 9973
+  return PALETTE[(t ? h : secours) % PALETTE.length]
+}
+
+// Tuile d'article : la photo EST le bouton « ajouter ». Toucher le chiffre
+// ouvre le pavé — sans lui, commander 100 kg demandait 100 appuis.
+function ArticleTuile({ article, qty, couleur, onPlus, onMoins, onPave }) {
+  const actif = qty > 0
   return (
-    <div className={`bg-white rounded-xl border border-line/70 p-2.5 shadow-sm transition-all ${active ? 'border-l-4 border-l-bordeaux' : ''}`}>
-    <div className="flex items-center gap-3">
-      {/* Photo : vignette plus grande et zoomée — les visuels produit ont
-          souvent beaucoup de blanc autour, l'article paraissait lointain. */}
-      <div className="w-14 h-14 rounded-lg bg-cream-deep border border-line/40 flex-shrink-0 overflow-hidden flex items-center justify-center">
+    <div
+      onClick={onPlus}
+      className={`relative bg-white rounded-2xl overflow-hidden cursor-pointer flex flex-col transition-all ${
+        actif ? 'border-[1.5px] border-bordeaux shadow-[inset_0_0_0_1.5px_#993556]' : 'border-[1.5px] border-line/70'
+      }`}
+    >
+      {actif && (
+        <button
+          onClick={e => { e.stopPropagation(); onMoins() }}
+          aria-label="Retirer"
+          className="absolute top-1.5 left-1.5 z-10 w-[34px] h-[34px] rounded-full bg-white border-[1.5px] border-line text-ink-soft text-[20px] leading-none flex items-center justify-center"
+        >−</button>
+      )}
+      <button
+        onClick={e => { e.stopPropagation(); onPave() }}
+        aria-label="Saisir la quantité"
+        className={`absolute top-1.5 right-1.5 z-10 min-w-[34px] h-[34px] px-2 rounded-full text-[15px] font-bold flex items-center justify-center tabular-nums ${
+          actif ? 'bg-bordeaux text-cream shadow-md' : 'bg-white border-[1.5px] border-line text-ink-mute'
+        }`}
+      >{qty}</button>
+
+      <div className="aspect-square bg-white flex items-center justify-center overflow-hidden">
         {article.photo_url ? (
-          <img src={article.photo_url} alt="" className="w-full h-full object-cover scale-[1.35]" />
+          <img src={article.photo_url} alt="" loading="lazy" className="w-full h-full object-contain" />
         ) : (
-          <svg viewBox="0 0 24 24" className="w-7 h-7 text-bordeaux/70" fill="none" stroke="currentColor"
-            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          <svg viewBox="0 0 24 24" className="w-[44%] h-[44%] opacity-85" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: couleur }}
             dangerouslySetInnerHTML={{ __html: (ICONES[picto(article.name)] || ICONES.defaut).svg }} />
         )}
       </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] text-ink leading-tight">{article.name}</div>
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {article.odoo_source === 'lgt' && (
-            <span className="text-[10px] px-1.5 rounded border border-amber-500/60 text-amber-700">LG traiteur</span>
-          )}
-          {article.unit && <span className="text-[11px] text-ink-mute">{article.unit}</span>}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <button
-          onClick={() => onChange(qty - 1)}
-          disabled={qty <= 0}
-          className="w-9 h-9 rounded-full border border-line flex items-center justify-center text-[18px] text-ink-soft disabled:opacity-30 hover:border-bordeaux active:bg-cream-warm"
-          aria-label="Retirer"
-        >−</button>
-        <span className={`min-w-[24px] text-center text-[15px] font-semibold ${active ? 'text-bordeaux' : 'text-ink-mute'}`}>{qty}</span>
-        <button
-          onClick={() => onChange(qty + 1)}
-          className="w-9 h-9 rounded-full bg-bordeaux text-cream flex items-center justify-center text-[18px] hover:bg-bordeaux-deep active:scale-95 transition-transform"
-          aria-label="Ajouter"
-        >+</button>
+      <div className="px-2.5 pt-2 pb-2.5 text-[14px] font-semibold leading-tight text-ink">
+        {article.name}
+        {article.unit && <span className="block text-[11.5px] font-normal text-ink-mute mt-0.5">{article.unit}</span>}
       </div>
     </div>
+  )
+}
 
-    {/* Précision libre — n'apparaît qu'une fois l'article choisi */}
-    {active && onPrecision && (
-      <input
-        value={precision}
-        onChange={e => onPrecision(e.target.value)}
-        placeholder={/colorant/i.test(article.name) ? 'Quelle couleur ?' : 'Précision (facultatif)'}
-        className="mt-2 w-full px-2.5 py-1.5 text-[12px] border border-line rounded-lg bg-cream-warm/40"
-      />
-    )}
+// Pavé numérique : raccourcis pour les cas courants, clavier pour le reste.
+// La précision (« quelle couleur ? ») est ici, faute de place sur la tuile.
+function PaveQuantite({ article, qty, precision, onPrecision, onValider, onClose }) {
+  const [val, setVal] = useState(qty ? String(qty) : '')
+  const RACCOURCIS = [1, 2, 5, 10, 20, 50, 100]
+  const touche = (t) => {
+    if (t === '⌫') return setVal(v => v.slice(0, -1))
+    setVal(v => (v.length >= 5 ? v : (v === '0' ? '' : v) + t))
+  }
+  return (
+    <div className="fixed inset-0 z-[90] bg-ink/45 flex items-end" onClick={onClose}>
+      <div className="w-full max-w-md mx-auto bg-cream rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-2.5">
+          <span className="flex-1 text-[16px] font-semibold text-ink truncate">
+            {article.name}{article.unit ? ` — ${article.unit}` : ''}
+          </span>
+          <button onClick={onClose} aria-label="Fermer" className="text-[26px] leading-none text-ink-mute px-1">×</button>
+        </div>
+
+        <div className="bg-cream-warm rounded-xl py-3.5 text-center text-[34px] font-bold tabular-nums text-ink mb-2.5">
+          {val === '' ? '0' : val}
+        </div>
+
+        <div className="flex gap-1.5 overflow-x-auto mb-2.5" style={{ scrollbarWidth: 'none' }}>
+          {RACCOURCIS.map(n => (
+            <button key={n} onClick={() => setVal(String(n))}
+              className="flex-shrink-0 px-4 py-2 rounded-full border-[1.5px] border-bordeaux text-bordeaux text-[15px] font-bold">{n}</button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5">
+          {['1','2','3','4','5','6','7','8','9','0','00','⌫'].map(t => (
+            <button key={t} onClick={() => touche(t)}
+              className="py-3.5 rounded-xl border border-line bg-cream-warm text-[21px] font-semibold text-ink">{t}</button>
+          ))}
+        </div>
+
+        {onPrecision && (
+          <input
+            value={precision}
+            onChange={e => onPrecision(e.target.value)}
+            placeholder={/colorant/i.test(article.name) ? 'Quelle couleur ?' : 'Précision (facultatif)'}
+            className="mt-2.5 w-full px-3 py-2.5 text-[13px] border border-line rounded-xl bg-white"
+          />
+        )}
+
+        <div className="flex gap-2 mt-3">
+          <button onClick={() => onValider(0)}
+            className="w-2/5 py-3.5 rounded-xl border-[1.5px] border-line text-ink-soft text-[16px] font-bold">Retirer</button>
+          <button onClick={() => onValider(parseInt(val || '0', 10))}
+            className="flex-1 py-3.5 rounded-xl bg-bordeaux text-cream text-[16px] font-bold">Valider</button>
+        </div>
+      </div>
     </div>
   )
 }
