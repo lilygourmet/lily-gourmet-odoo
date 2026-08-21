@@ -859,7 +859,7 @@ export default function PhotoshopView({ user, onNavigate }) {
   const splitEls = () => { if (sel && sel.type === 'photo') { setSplitUid(sel.uid); setSplitSrc(sel.src) } }   // ouvre le dialogue (réglages + aperçu)
   const applySplit = async (parts) => {
     const src0 = placed.find(x => x.uid === splitUid)
-    if (!src0 || !parts || parts.length < 2) return
+    if (!src0 || !parts || !parts.length) return
     setBusy('Découpe des éléments…')
     try {
       // chaque morceau reprend sa place exacte dans le cadre de l'original
