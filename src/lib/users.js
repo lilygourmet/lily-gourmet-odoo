@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { memoCache } from './memoCache'
+import { PERM_KEYS } from './permsList'
 
 // ============================================================
 // Lecture
@@ -21,6 +22,15 @@ export const loadUsers = memoCache(_loadUsers, 60 * 1000)
 
 // Alias compat
 export const loadAllProfiles = loadUsers
+
+// Coche/décoche UNE permission pour UN utilisateur (onglet « Par permission »).
+// Liste blanche : on n'écrit que des colonnes de permission connues.
+export async function setUserPerm(userId, key, on) {
+  if (!PERM_KEYS.includes(key)) throw new Error('Permission inconnue : ' + key)
+  const { error } = await supabase.from('profiles').update({ [key]: on }).eq('id', userId)
+  if (error) throw error
+  loadUsers.clear()   // sinon le cache 60 s réaffiche l'ancienne valeur
+}
 
 // Active/désactive la réception de la notif devis OCP pour un utilisateur (toggle direct).
 export async function setUserOcpNotif(userId, on) {
