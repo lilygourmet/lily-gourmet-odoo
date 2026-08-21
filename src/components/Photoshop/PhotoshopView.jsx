@@ -1420,6 +1420,15 @@ export default function PhotoshopView({ user, onNavigate }) {
                         const cd = items.find(it => it.type === 'CD') || items[0]
                         const others = items.filter(it => it !== cd)
                         const fmt = v => Array.isArray(v) ? v.filter(Boolean).join(', ') : v
+                        // Avertissements de la commande (note libre Odoo) : la consigne
+                        // la plus importante pour paramétrer le visuel.
+                        const warns = items.filter(it => (it.warnings?.text || '').trim())
+                        // Taille de poly déjà choisie (lecture seule ; le choix se fait au calendrier).
+                        const polys = cd && cd.polys && typeof cd.polys === 'object' ? cd.polys : {}
+                        const polyKeys = Object.keys(polys).filter(k => polys[k] && polys[k].value).sort()
+                        const polyTxt = !polyKeys.length ? 'pas encore choisi'
+                          : polyKeys.length === 1 ? String(polys[polyKeys[0]].value)
+                          : polyKeys.map(k => `Étage ${k.replace('etage', '')} : ${polys[k].value}`).join(' · ')
                         const Row = ({ k, v }) => v ? <div className="flex gap-2 py-0.5 border-b border-dashed border-[#f0e8db]"><span className="text-ink-mute w-20 flex-shrink-0">{k}</span><span>{fmt(v)}</span></div> : null
                         return (
                           <>
@@ -1429,10 +1438,21 @@ export default function PhotoshopView({ user, onNavigate }) {
                               <span className="bg-[#fbeef2] text-bordeaux rounded-full px-2 text-[11px] font-bold">📅 {psFmtDate(paramSel._date)}</span>
                               <button onClick={() => openParamCake(paramSel)} className="ml-auto bg-bordeaux text-white rounded-lg px-3 py-1.5 text-[12px] font-bold">📥 Charger dans le plan</button>
                             </div>
+                            {warns.length > 0 && (
+                              <div className="mb-2 rounded-lg border border-bordeaux bg-bordeaux/5 p-2.5">
+                                <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-bordeaux font-semibold mb-1">Avertissement</div>
+                                {warns.map((it, j) => (
+                                  <div key={j} className="text-[12.5px] text-ink leading-snug">
+                                    {warns.length > 1 && <b>{(it.title || '').replace(/^(CD-|GM-|GMD-)\s*/i, '')} : </b>}
+                                    {it.warnings.text}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div className="flex gap-3 flex-wrap">
                               {paramSel.photo && <img src={paramSel.photo} alt="" className="w-28 h-28 object-cover rounded-lg border border-line flex-shrink-0" />}
                               <div className="flex-1 min-w-[200px] text-[12.5px]">
-                                {cd ? <><Row k="Modèle" v={cd.title} /><Row k="Thème" v={cd.theme} /><Row k="Âge" v={cd.age} /><Row k="Message" v={cd.message} /><Row k="Pers." v={cd.pers} /><Row k="Parfums" v={cd.parfums} /><Row k="Impression" v={cd.impression} /><Row k="Décor" v={cd.decor} /></> : <p className="text-ink-mute text-[12px]">Détail indisponible (commande non synchronisée).</p>}
+                                {cd ? <><Row k="Modèle" v={cd.title} /><Row k="Thème" v={cd.theme} /><Row k="Âge" v={cd.age} /><Row k="Message" v={cd.message} /><Row k="Pers." v={cd.pers} /><Row k="Parfums" v={cd.parfums} /><Row k="Impression" v={cd.impression} /><Row k="Décor" v={cd.decor} /><Row k="Poly" v={polyTxt} /></> : <p className="text-ink-mute text-[12px]">Détail indisponible (commande non synchronisée).</p>}
                               </div>
                             </div>
                             <div className="mt-3">

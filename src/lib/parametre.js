@@ -36,7 +36,7 @@ export async function loadParametreHistory(days = 5) {
 export async function loadOrderDetail(orderRef) {
   if (!orderRef) return null
   const { data } = await supabase.from('orders')
-    .select('order_num, client_name, delivery_at, order_items(type, title, pers, parfums, theme, age, message, modele, impression, decor, fleurs, quantity, image_urls)')
+    .select('order_num, client_name, delivery_at, order_items(type, title, pers, parfums, theme, age, message, modele, impression, decor, fleurs, quantity, image_urls, warnings, polys)')
     .eq('order_num', orderRef).maybeSingle()
   return data || null
 }
