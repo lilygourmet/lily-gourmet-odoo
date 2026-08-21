@@ -6,7 +6,7 @@ import DummyModal from './DummyModal'
 import OrderModal from '../OrderModal'
 import { loadFullOrderByNum, loadAllProfiles } from '../../lib/orders'
 import { loadImg, trimToContent } from './imgutil'
-import { splitElements } from './splitElements'
+import SplitModal from './SplitModal'
 import { extractPsdLayers } from '../../lib/psdImport'
 import { loadCdDay } from '../../lib/commande'
 import { loadOrderPhotosByNum } from '../../lib/conversations'
@@ -198,6 +198,8 @@ export default function PhotoshopView({ user, onNavigate }) {
   const [regionUid, setRegionUid] = useState(null)
   const [removeBgSrc, setRemoveBgSrc] = useState(null)
   const [removeBgUid, setRemoveBgUid] = useState(null)
+  const [splitSrc, setSplitSrc] = useState(null)
+  const [splitUid, setSplitUid] = useState(null)
   const [showDummy, setShowDummy] = useState(false)   // générateur de dummies
   const [menu, setMenu] = useState(null)              // menu ouvert dans la barre : 'add' | 'tools' | 'page'
   const [guides, setGuides] = useState(null)          // magnétisme : { page, vx:[cm], hy:[cm] } pendant le glisser
@@ -854,17 +856,16 @@ export default function PhotoshopView({ user, onNavigate }) {
   // ---------- baguette magique : enlève le fond uni (flood-fill depuis les coins) ----------
   const removeBg = () => { if (sel && sel.type === 'photo') { setRemoveBgUid(sel.uid); setRemoveBgSrc(sel.src) } }   // ouvre le dialogue (tolérance + aperçu)
   // ---------- ciseaux : une planche de photos collées → un élément par photo ----------
-  const splitEls = async () => {
-    if (!sel || sel.type !== 'photo') return
+  const splitEls = () => { if (sel && sel.type === 'photo') { setSplitUid(sel.uid); setSplitSrc(sel.src) } }   // ouvre le dialogue (réglages + aperçu)
+  const applySplit = async (parts) => {
+    const src0 = placed.find(x => x.uid === splitUid)
+    if (!src0 || !parts || parts.length < 2) return
     setBusy('Découpe des éléments…')
     try {
-      const src0 = sel
-      const parts = await splitElements(src0.src)
-      if (parts.length < 2) { alert("Aucun élément séparé trouvé : les images se touchent, ou le fond n'est pas uni.") ; return }
       // chaque morceau reprend sa place exacte dans le cadre de l'original
       const items = parts.map((p, i) => ({
         ...src0, uid: uid.current++, grp: null, libId: null,
-        nom: (src0.nom || 'élément') + ' ' + (i + 1),
+        nom: (src0.nom || 'élément').replace(/\.[^.]+$/, '') + ' ' + (i + 1),
         src: p.dataURL, ratio: p.ratio, forme: 'none',
         x: Math.round((src0.x + p.rx * src0.w) * 10) / 10,
         y: Math.round((src0.y + p.ry * src0.h) * 10) / 10,
@@ -874,6 +875,13 @@ export default function PhotoshopView({ user, onNavigate }) {
       }))
       setPlaced(list => [...list.filter(x => x.uid !== src0.uid), ...items])
       setSelUids([])
+      // …et ils deviennent de vraies images de la bibliothèque (à renommer / réutiliser plus tard)
+      const files = await Promise.all(items.map(async it => {
+        const blob = await (await fetch(it.src)).blob()
+        return new File([blob], it.nom + '.png', { type: 'image/png' })
+      }))
+      const uids = {}; items.forEach(it => { uids[it.uid] = it.nom })
+      setBulk({ files, uids, split: true, theme: lastTheme.current === '__temp__' ? '' : lastTheme.current, newTheme: '' })
     } catch (e) { alert('Découpe impossible (image externe protégée) : ' + (e?.message || e)) } finally { setBusy('') }
   }
   // rogne en pixels (insets) + resserre le cadre au contenu
@@ -1252,7 +1260,14 @@ export default function PhotoshopView({ user, onNavigate }) {
       setBusy(`Import… ${ok + fail}/${total}`)
     }
     setBusy(''); setAllPhotos(p => [...added, ...p]); lastTheme.current = th
-    alert(`Import terminé : ${ok} ajoutée(s) dans « ${th} »${fail ? `, ${fail} échec(s).\n${lastErr}` : ' ✅'}`)
+    // éléments détachés : on relie ceux posés sur la page à leur image enregistrée
+    if (b.uids) setPlaced(list => list.map(it => {
+      const ph = b.uids[it.uid] && added.find(a => a.nom === b.uids[it.uid])
+      return ph ? { ...it, libId: ph.id } : it
+    }))
+    alert(b.split
+      ? `${ok} élément(s) enregistré(s) dans « ${th} »${fail ? `, ${fail} échec(s).\n${lastErr}` : ' ✅'}`
+      : `Import terminé : ${ok} ajoutée(s) dans « ${th} »${fail ? `, ${fail} échec(s).\n${lastErr}` : ' ✅'}`)
   }
   const onPickFolder = e => {
     const files = [...(e.target.files || [])].filter(f => /\.(png|jpe?g|webp)$/i.test(f.name) && !/(^|\/)_apercus\//.test(f.webkitRelativePath || ''))
@@ -1790,6 +1805,7 @@ export default function PhotoshopView({ user, onNavigate }) {
         </div>
       )}
 
+      {splitSrc && <SplitModal src={splitSrc} onClose={parts => { setSplitSrc(null); if (parts) applySplit(parts) }} />}
       {removeBgSrc && <RemoveBgModal src={removeBgSrc} onClose={res => {
         if (res) { const it = placed.find(p => p.uid === removeBgUid); const w = it ? it.w : 5; const nh = Math.max(0.5, Math.round(w / res.ratio * 10) / 10); patch(removeBgUid, { src: res.src, ratio: res.ratio, h: nh }); rememberSize(it?.libId, w, nh); persistEdit(it?.libId, res.src) }
         setRemoveBgSrc(null)
@@ -1805,8 +1821,8 @@ export default function PhotoshopView({ user, onNavigate }) {
       {bulk && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl p-4 w-[360px] max-w-full">
-            <div className="font-fraunces text-[15px] mb-1">{bulk.psd ? `🧩 Éclater ${bulk.files.length} PSD` : `📥 Importer ${bulk.files.length} photos`}</div>
-            <p className="text-[12px] text-ink-soft mb-2">{bulk.psd ? 'Chaque PSD sera éclaté en éléments (doublons/fonds/planches écartés). Choisis UNE catégorie.' : 'Choisis UNE catégorie pour tout le lot (les noms = noms des fichiers, modifiables ensuite).'}</p>
+            <div className="font-fraunces text-[15px] mb-1">{bulk.split ? `✂️ Enregistrer ${bulk.files.length} éléments détachés` : bulk.psd ? `🧩 Éclater ${bulk.files.length} PSD` : `📥 Importer ${bulk.files.length} photos`}</div>
+            <p className="text-[12px] text-ink-soft mb-2">{bulk.split ? 'Les éléments sont déjà posés sur la page. Choisis où les garder pour les réutiliser plus tard (tu pourras les renommer dans la bibliothèque).' : bulk.psd ? 'Chaque PSD sera éclaté en éléments (doublons/fonds/planches écartés). Choisis UNE catégorie.' : 'Choisis UNE catégorie pour tout le lot (les noms = noms des fichiers, modifiables ensuite).'}</p>
             <label className={lab}>Catégorie</label>
             <select value={bulk.theme} onChange={e => setBulk({ ...bulk, theme: e.target.value })} className={inp + ' mb-2'}>
               <option value="">🕒 Temporaire</option>
@@ -1815,7 +1831,7 @@ export default function PhotoshopView({ user, onNavigate }) {
             </select>
             {(bulk.theme === '__new__') && <input autoFocus value={bulk.newTheme} onChange={e => setBulk({ ...bulk, newTheme: e.target.value })} className={inp + ' mb-2'} placeholder="Nom de la nouvelle catégorie" />}
             <div className="flex gap-2 mt-2">
-              <button onClick={runBulk} className="flex-1 bg-bordeaux text-white rounded-lg py-2 text-[13px] font-bold">{bulk.psd ? 'Éclater les PSD' : 'Importer le lot'}</button>
+              <button onClick={runBulk} className="flex-1 bg-bordeaux text-white rounded-lg py-2 text-[13px] font-bold">{bulk.split ? 'Enregistrer' : bulk.psd ? 'Éclater les PSD' : 'Importer le lot'}</button>
               <button onClick={() => setBulk(null)} className="bg-white border border-line rounded-lg py-2 px-3 text-[13px]">Annuler</button>
             </div>
           </div>

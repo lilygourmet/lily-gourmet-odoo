@@ -3,12 +3,16 @@ import { loadImg } from './imgutil'
 // Découpe une planche (photos collées côte à côte sur un fond uni) en éléments
 // séparés. Le fond est détecté comme dans « Enlever le fond » (flood-fill depuis
 // les 4 coins, avec tolérance) ; ensuite tout ce qui se touche = un même morceau.
+// - tol     : dose la prise du blanc (bas = seul le blanc pur est du fond)
+// - gapPct  : recolle les morceaux distants de moins de X % de la largeur
+//             (une photo coupée en deux par une bande claire redevient entière)
+// - cap     : taille d'analyse (petit = aperçu rapide)
 // Renvoie [{ dataURL, ratio, rx, ry, rw, rh }] où rx/ry/rw/rh sont la position et
 // la taille RELATIVES (0→1) dans l'image d'origine : chaque morceau peut ainsi
 // être reposé exactement à sa place.
-export async function splitElements(src, { tol = 38, minRatio = 0.002 } = {}) {
+export async function splitElements(src, { tol = 38, minRatio = 0.002, gapPct = 0, cap = 1600 } = {}) {
   const img = await loadImg(src)
-  const cap = 1600, sc = Math.min(1, cap / Math.max(img.naturalWidth, img.naturalHeight))
+  const sc = Math.min(1, cap / Math.max(img.naturalWidth, img.naturalHeight))
   const W = Math.max(1, Math.round(img.naturalWidth * sc))
   const H = Math.max(1, Math.round(img.naturalHeight * sc))
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H
@@ -56,15 +60,71 @@ export async function splitElements(src, { tol = 38, minRatio = 0.002 } = {}) {
     parts.push({ id, n, x0, x1, y0, y1 })
   }
 
-  // 3) on jette les miettes (poussière du scan) et on fabrique une image par morceau
-  const min = W * H * minRatio
-  return parts.filter(p => p.n > min).sort((a, b) => b.n - a.n).map(p => {
+  // 3) on jette les miettes (poussière du scan)
+  const assez = parts.filter(p => p.n > W * H * minRatio)
+
+  // 4) on recolle les morceaux VOISINS (bouts d'une même photo séparés par une bande
+  // claire) : on épaissit le contenu de gap/2 px et ce qui se rejoint fait un groupe.
+  // (Comparer les rectangles ne marche pas : un grand morceau avalerait tous les autres.)
+  const gros = new Set(assez.map(p => p.id))
+  const gap = Math.round(W * gapPct / 100)
+  const groupe = new Map()   // id de morceau → clé de groupe
+  if (gap > 0) {
+    const INF = 1e9, dist = new Float32Array(W * H)
+    for (let i = 0; i < W * H; i++) dist[i] = gros.has(lab[i]) ? 0 : INF
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = y * W + x; let v = dist[p]
+      if (x > 0) v = Math.min(v, dist[p - 1] + 1)
+      if (y > 0) v = Math.min(v, dist[p - W] + 1)
+      if (x > 0 && y > 0) v = Math.min(v, dist[p - W - 1] + 1.41)
+      if (x < W - 1 && y > 0) v = Math.min(v, dist[p - W + 1] + 1.41)
+      dist[p] = v
+    }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+      const p = y * W + x; let v = dist[p]
+      if (x < W - 1) v = Math.min(v, dist[p + 1] + 1)
+      if (y < H - 1) v = Math.min(v, dist[p + W] + 1)
+      if (x < W - 1 && y < H - 1) v = Math.min(v, dist[p + W + 1] + 1.41)
+      if (x > 0 && y < H - 1) v = Math.min(v, dist[p + W - 1] + 1.41)
+      dist[p] = v
+    }
+    // composants du contenu épaissi → tous les morceaux qui s'y rejoignent = 1 groupe
+    const r = gap / 2, gl = new Int32Array(W * H).fill(-1)
+    let g = 0
+    for (let p0 = 0; p0 < W * H; p0++) {
+      if (dist[p0] > r || gl[p0] >= 0) continue
+      const id = g++, q = [p0]; gl[p0] = id
+      while (q.length) {
+        const p = q.pop(), x = p % W, y = (p / W) | 0
+        if (gros.has(lab[p])) groupe.set(lab[p], id)
+        const vois = [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, y > 0 ? p - W : -1, y < H - 1 ? p + W : -1]
+        for (const np of vois) if (np >= 0 && dist[np] <= r && gl[np] < 0) { gl[np] = id; q.push(np) }
+      }
+    }
+  }
+
+  // un groupe par morceau si on ne recolle rien
+  const grp = []
+  const parGroupe = new Map()
+  for (const p of assez) {
+    const k = groupe.has(p.id) ? 'g' + groupe.get(p.id) : 'p' + p.id
+    const ex = parGroupe.get(k)
+    if (!ex) { const o = { ids: new Set([p.id]), x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, n: p.n }; parGroupe.set(k, o); grp.push(o) }
+    else {
+      ex.ids.add(p.id); ex.n += p.n
+      ex.x0 = Math.min(ex.x0, p.x0); ex.x1 = Math.max(ex.x1, p.x1)
+      ex.y0 = Math.min(ex.y0, p.y0); ex.y1 = Math.max(ex.y1, p.y1)
+    }
+  }
+
+  // 5) une image par morceau (les autres morceaux restent transparents)
+  return grp.sort((a, b) => b.n - a.n).map(p => {
     const w = p.x1 - p.x0 + 1, h = p.y1 - p.y0 + 1
     const c = document.createElement('canvas'); c.width = w; c.height = h
     const cx = c.getContext('2d'), out = cx.createImageData(w, h)
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const s = (y + p.y0) * W + (x + p.x0)
-      if (lab[s] !== p.id) continue           // les autres morceaux restent transparents
+      if (!p.ids.has(lab[s])) continue
       const i = s * 4, o = (y * w + x) * 4
       out.data[o] = d[i]; out.data[o + 1] = d[i + 1]; out.data[o + 2] = d[i + 2]; out.data[o + 3] = 255
     }
