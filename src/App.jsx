@@ -41,7 +41,7 @@ const CakeVisionView = lazy(() => import('./components/CakeVision/CakeVisionView
 const StockPolyView = lazy(() => import('./components/StockPolyView'))
 const PolyDecoupeView = lazy(() => import('./components/PolyDecoupeView'))
 const SimulationGateauxView = lazy(() => import('./components/SimulationGateauxView'))
-const TransfertsMpView = lazy(() => import('./components/TransfertsMpView'))
+const TransfertsStockView = lazy(() => import('./components/TransfertsStockView'))
 const ReglementsLivraisonsView = lazy(() => import('./components/ReglementsLivraisonsView'))
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
@@ -418,7 +418,8 @@ function App() {
     if (activeView === 'stock-poly') return <StockPolyView {...navProps} />
     if (activeView === 'decoupe-poly') return <PolyDecoupeView {...navProps} />
     if (activeView === 'simu-gateaux') return <SimulationGateauxView {...navProps} />
-    if (activeView === 'transferts-mp') return <TransfertsMpView {...navProps} />
+    if (activeView === 'transferts-mp') return <TransfertsStockView {...navProps} famille="mp" />
+    if (activeView === 'transferts-sm') return <TransfertsStockView {...navProps} famille="sm" />
     if (activeView === 'reglements-livraisons') return <ReglementsLivraisonsView {...navProps} />
     if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.

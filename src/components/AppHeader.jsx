@@ -626,6 +626,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     { view: 'patissier',  emoji: '🧁', label: 'Accessoires', visible: !isLivreur(user) && (admin || isPatissierUser) },
     { view: 'stock-poly', emoji: '🧊', label: 'Stock poly',  visible: !isLivreur(user) && canSeeStockPoly(user) },
     { view: 'transferts-mp', emoji: '🔄', label: 'Transferts MP', visible: !isLivreur(user) && canSeeTransferts(user) },
+    { view: 'transferts-sm', emoji: '📦', label: 'Transferts Produits', visible: !isLivreur(user) && canSeeTransferts(user) },
   ].filter(i => i.visible)
 
   const menuVitrine = [

@@ -53,6 +53,7 @@ const TAB_DEFS = [
   { view: 'stock-poly',        emoji: '🧊', label: 'Stock poly',        can: u => !isLivreur(u) && canSeeStockPoly(u) },
   { view: 'simu-gateaux',      emoji: '🍰', label: 'Simulation gâteaux', can: u => !isLivreur(u) && canSeeSimuGateaux(u) },
   { view: 'transferts-mp',     emoji: '🔄', label: 'Transferts MP',      can: u => !isLivreur(u) && canSeeTransferts(u) },
+  { view: 'transferts-sm',     emoji: '📦', label: 'Transferts Produits', can: u => !isLivreur(u) && canSeeTransferts(u) },
   { view: 'decoupe-poly',      emoji: '✂️', label: 'Découpe poly',      can: u => canSeeStockPoly(u) },
   { view: 'ai-gemini',         emoji: '✨', label: 'Gemini',            can: u => !isLivreur(u) && canSeeAiTools(u) },
   { view: 'ai-chatgpt',        emoji: '🤖', label: 'ChatGPT',           can: u => !isLivreur(u) && canSeeAiTools(u) },

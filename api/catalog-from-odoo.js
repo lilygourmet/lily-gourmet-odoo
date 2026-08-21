@@ -87,6 +87,9 @@ export default async function handler(req, res) {
   // Mode économat : produits achetables MP-/P- (fusionné ici pour rester sous la
   // limite de fonctions Vercel). GET /api/catalog-from-odoo?economat=1[&q=][&ids=]
   if (req.query.economat) return handleEconomat(req, res)
+  // Recherche d'un produit à AJOUTER dans les onglets Transferts (MP / Produits SM).
+  // GET /api/catalog-from-odoo?transferts=1&q=...  (limite de 12 fonctions Vercel)
+  if (req.query.transferts) return handleTransferts(req, res)
 
   // Mode stock prod : articles SM- + stock à un lieu donné (vitrine/annexe).
   // GET /api/catalog-from-odoo?stockProd=vitrine|annexe
@@ -297,6 +300,37 @@ async function handleStockProd(req, res) {
     return res.status(200).json({ lieu, location: locationName, articles })
   } catch (e) {
     console.error('[catalog-from-odoo stockProd] Erreur:', e)
+    return res.status(500).json({ error: e.message || 'Erreur serveur' })
+  }
+}
+
+// Produits transférables entre les deux ateliers : on cherche dans TOUT le
+// catalogue stockable (les semi-finis SM ne sont pas achetables, ils seraient
+// invisibles avec le filtre de l'économat). Renvoie l'unité de STOCK, celle
+// dans laquelle Odoo compte les mouvements internes.
+async function handleTransferts(req, res) {
+  try {
+    if (!process.env.ODOO_URL || !process.env.ODOO_USERNAME) {
+      return res.status(500).json({ error: 'Server misconfigured (Odoo env vars manquantes)' })
+    }
+    const q = (req.query.q || '').trim()
+    if (q.length < 2) return res.status(200).json({ products: [] })
+    const uid = await odooAuthenticate()
+    const domain = [['active', '=', true], ['type', '=', 'product']]
+    // Recherche mot à mot (ET) : « flan vanille » trouve « SM- flan vanille 20 cm ».
+    const mots = q.split(/\s+/).map(w => w.trim()).filter(w => w.length >= 2).slice(0, 5)
+    for (const m of mots) domain.push(['name', 'ilike', m])
+    const rows = await odooSearchRead(uid, 'product.product', domain,
+      ['id', 'display_name', 'uom_id', 'image_128'], { limit: 40 })
+    const products = rows.map(r => ({
+      id: r.id,
+      nom: r.display_name,
+      unite: Array.isArray(r.uom_id) ? r.uom_id[1] : 'Units',
+      image: r.image_128 ? `data:image/png;base64,${r.image_128}` : null,
+    }))
+    return res.status(200).json({ products })
+  } catch (e) {
+    console.error('[catalog-from-odoo transferts]', e)
     return res.status(500).json({ error: e.message || 'Erreur serveur' })
   }
 }
