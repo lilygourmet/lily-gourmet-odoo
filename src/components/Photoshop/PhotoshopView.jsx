@@ -6,6 +6,7 @@ import DummyModal from './DummyModal'
 import OrderModal from '../OrderModal'
 import { loadFullOrderByNum, loadAllProfiles } from '../../lib/orders'
 import { loadImg, trimToContent } from './imgutil'
+import { splitElements } from './splitElements'
 import { extractPsdLayers } from '../../lib/psdImport'
 import { loadCdDay } from '../../lib/commande'
 import { loadOrderPhotosByNum } from '../../lib/conversations'
@@ -852,6 +853,29 @@ export default function PhotoshopView({ user, onNavigate }) {
 
   // ---------- baguette magique : enlève le fond uni (flood-fill depuis les coins) ----------
   const removeBg = () => { if (sel && sel.type === 'photo') { setRemoveBgUid(sel.uid); setRemoveBgSrc(sel.src) } }   // ouvre le dialogue (tolérance + aperçu)
+  // ---------- ciseaux : une planche de photos collées → un élément par photo ----------
+  const splitEls = async () => {
+    if (!sel || sel.type !== 'photo') return
+    setBusy('Découpe des éléments…')
+    try {
+      const src0 = sel
+      const parts = await splitElements(src0.src)
+      if (parts.length < 2) { alert("Aucun élément séparé trouvé : les images se touchent, ou le fond n'est pas uni.") ; return }
+      // chaque morceau reprend sa place exacte dans le cadre de l'original
+      const items = parts.map((p, i) => ({
+        ...src0, uid: uid.current++, grp: null, libId: null,
+        nom: (src0.nom || 'élément') + ' ' + (i + 1),
+        src: p.dataURL, ratio: p.ratio, forme: 'none',
+        x: Math.round((src0.x + p.rx * src0.w) * 10) / 10,
+        y: Math.round((src0.y + p.ry * src0.h) * 10) / 10,
+        w: Math.max(0.3, Math.round(p.rw * src0.w * 10) / 10),
+        h: Math.max(0.3, Math.round(p.rh * src0.h * 10) / 10),
+        ct: 0, cr: 0, cb: 0, cl: 0,
+      }))
+      setPlaced(list => [...list.filter(x => x.uid !== src0.uid), ...items])
+      setSelUids([])
+    } catch (e) { alert('Découpe impossible (image externe protégée) : ' + (e?.message || e)) } finally { setBusy('') }
+  }
   // rogne en pixels (insets) + resserre le cadre au contenu
   const bakeCrop = async () => {
     if (!sel || sel.type !== 'photo' || !(sel.ct || sel.cr || sel.cb || sel.cl)) return
@@ -1686,6 +1710,7 @@ export default function PhotoshopView({ user, onNavigate }) {
                     <button onClick={resetCrop} className="bg-white border border-line rounded-lg px-2 py-2 text-[12px]">↺ Annuler</button>
                   </div>
                   <button onClick={removeBg} className={btn + ' bg-white border border-line'}>🪄 Enlever le fond</button>
+                  <button onClick={splitEls} title="Sépare une planche de photos collées en éléments indépendants" className={btn + ' bg-white border border-line'}>✂️ Détacher les éléments</button>
                 </>}
               </>}
 
