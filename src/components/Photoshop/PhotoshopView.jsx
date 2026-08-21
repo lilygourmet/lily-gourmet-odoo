@@ -9,7 +9,7 @@ import { loadImg, trimToContent } from './imgutil'
 import { extractPsdLayers } from '../../lib/psdImport'
 import { loadCdDay } from '../../lib/commande'
 import { loadOrderPhotosByNum } from '../../lib/conversations'
-import { loadParametreDone, markParametre, loadOrderDetail, loadParametreHistory } from '../../lib/parametre'
+import { loadParametreDone, markParametre, unmarkParametre, loadOrderDetail, loadParametreHistory } from '../../lib/parametre'
 import { nestItems } from '../../lib/nesting'
 
 // ====== Studio photos : composer une planche A4 d'images imprimables pour gâteaux ======
@@ -288,6 +288,12 @@ export default function PhotoshopView({ user, onNavigate }) {
     const k = cakeKey(c)
     setParamDone(s => { const n = new Set(s); n.add(k); return n })
     try { await markParametre(k, c.orderRef, user?.id) } catch (e) { /* reste marqué côté écran */ }
+  }
+  // Historique : remettre un modèle dans la liste « à faire » (paramétrage à refaire).
+  const unmarkParam = async (h) => {
+    setParamDone(s => { const n = new Set(s); n.delete(h.cake_key); return n })
+    setParamHist(list => Array.isArray(list) ? list.filter(x => x.cake_key !== h.cake_key) : list)
+    try { await unmarkParametre(h.cake_key) } catch (e) { /* reste retiré côté écran */ }
   }
   // Historique J-5 : bascule entre la liste « à faire » et l'historique des commandes déjà paramétrées.
   const toggleParamHist = async () => {
@@ -1393,7 +1399,8 @@ export default function PhotoshopView({ user, onNavigate }) {
                         <div key={h.cake_key + i} className="bg-white border border-line rounded-lg px-3 py-2 flex items-center gap-3 text-[12.5px]">
                           <b className="text-bordeaux">{h.order_ref || '—'}</b>
                           <span className="text-ink-mute">{when}{who ? ' · ' + who : ''}</span>
-                          {h.order_ref && <button onClick={() => openOrderModal(h.order_ref)} className="ml-auto text-[12px] text-bordeaux underline">Ouvrir</button>}
+                          <button onClick={() => unmarkParam(h)} title="Remettre dans la liste à paramétrer" className="ml-auto bg-white border border-bordeaux text-bordeaux rounded-lg px-2.5 py-1 text-[11.5px] font-bold">↩ À refaire</button>
+                          {h.order_ref && <button onClick={() => openOrderModal(h.order_ref)} className="text-[12px] text-bordeaux underline">Ouvrir</button>}
                         </div>
                       )
                     })}
