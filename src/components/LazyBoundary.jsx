@@ -19,11 +19,13 @@ function DelayedFallback() {
 export default class LazyBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { failed: false }
+    this.state = { failed: false, message: '' }
   }
 
-  static getDerivedStateFromError() {
-    return { failed: true }
+  static getDerivedStateFromError(error) {
+    // On garde le message : sans lui, l'écran ne dit pas POURQUOI ça a échoué
+    // et il faut ouvrir la console du navigateur pour le savoir.
+    return { failed: true, message: String(error?.message || error || '') }
   }
 
   componentDidCatch(error) {
@@ -44,10 +46,21 @@ export default class LazyBoundary extends Component {
     if (this.state.failed) {
       return (
         <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>
-          Chargement impossible.{' '}
-          <button onClick={() => window.location.reload()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }}>
-            Recharger
-          </button>
+          <div style={{ marginBottom: 12 }}>
+            Chargement impossible.{' '}
+            <button onClick={() => window.location.reload()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }}>
+              Recharger
+            </button>
+          </div>
+          {this.state.message && (
+            <div style={{
+              maxWidth: 560, margin: '0 auto', padding: '10px 12px', borderRadius: 8, textAlign: 'left',
+              background: '#FBF3E8', border: '0.5px solid #e5d8c3', color: '#8a5a2a',
+              fontSize: 11.5, fontFamily: 'monospace', wordBreak: 'break-word',
+            }}>
+              {this.state.message}
+            </div>
+          )}
         </div>
       )
     }
