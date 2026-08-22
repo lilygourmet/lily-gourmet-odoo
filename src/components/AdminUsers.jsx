@@ -1023,6 +1023,10 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             </>}
             <PermCheckbox id="perm-sync" label="Synchroniser depuis Odoo" desc="Forcer la mise à jour des commandes depuis Odoo." checked={isAdmin || formData.permSync} onChange={v => update('permSync', v)} />
             <PermCheckbox id="perm-define-gm" label="Définir les détails GM" desc="Réglage avancé GM (à clarifier)." checked={isAdmin || formData.permDefineGM} onChange={v => update('permDefineGM', v)} />
+
+            <PermCheckbox id="perm-transfert-annexe" label="Transferts — atelier Prod annexe" desc="Travaille à l'annexe : envoie vers la boutique et confirme ce qui arrive à l'annexe." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
+            <PermCheckbox id="perm-transfert-boutique" label="Transferts — atelier Prod boutique" desc="Travaille à la boutique : envoie vers l'annexe et confirme ce qui arrive à la boutique." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
+            <PermCheckbox id="perm-transfert-produits" label="Transferts Produits (SM)" desc="Accès à l'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus." checked={isAdmin || formData.permTransfertProduits} onChange={v => update('permTransfertProduits', v)} />
           </PermGroup>
 
           <PermGroup emoji="🏬" title="Vitrine & Stock (boutique)">
@@ -1036,9 +1040,6 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-stock-minmax" label="Régler les seuils min/max" desc="Définir les alertes de réassort (GS- / Prod)." checked={isAdmin || formData.permStockMinMax} onChange={v => update('permStockMinMax', v)} />
             <PermCheckbox id="perm-stock-poly" label="Stock poly" desc="Gérer le stock de poly découpé (morceaux 5/2 cm) + alerte WhatsApp." checked={isAdmin || formData.permStockPoly} onChange={v => update('permStockPoly', v)} />
             <PermCheckbox id="perm-simu-gateaux" label="Simulation gâteaux" desc="Voir le simulateur visuel de gâteaux par nombre de personnes et d'étages." checked={isAdmin || formData.permSimuGateaux} onChange={v => update('permSimuGateaux', v)} />
-            <PermCheckbox id="perm-transfert-annexe" label="Transferts — atelier Prod annexe" desc="Travaille à l'annexe : envoie vers la boutique et confirme ce qui arrive à l'annexe." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
-            <PermCheckbox id="perm-transfert-boutique" label="Transferts — atelier Prod boutique" desc="Travaille à la boutique : envoie vers l'annexe et confirme ce qui arrive à la boutique." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
-            <PermCheckbox id="perm-transfert-produits" label="Transferts Produits (SM)" desc="Accès à l'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus." checked={isAdmin || formData.permTransfertProduits} onChange={v => update('permTransfertProduits', v)} />
             <PermCheckbox id="perm-facture-ocp" label="Facture OCP" desc="Générer la facture mensuelle OCP à partir des commandes non facturées." checked={isAdmin || formData.permFactureOcp} onChange={v => update('permFactureOcp', v)} />
             <PermCheckbox id="perm-freezer" label="Sortie congélateur" desc="Voir la liste des sorties de congélateur." checked={isAdmin || formData.permFreezer} onChange={v => update('permFreezer', v)} />
           </PermGroup>
