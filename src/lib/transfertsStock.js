@@ -200,23 +200,60 @@ export async function envoyerVersOdoo(t, qty, user) {
 }
 
 // ---- Alerte WhatsApp ----
+//
+// Matières premières : les mêmes destinataires que l'économat, c'est-à-dire les
+// économes (leur numéro vient de leur fiche).
+// Produits SM : un numéro dédié, saisi dans l'écran (⚙ en haut de l'onglet).
 
-// Comme l'économat : on prévient les personnes de l'atelier qui RÉCEPTIONNE, sur le
-// numéro de leur fiche. Pas de numéro à tenir à jour ailleurs — ça suit les permissions.
-// Pour les produits SM, seules celles qui ont accès à cet onglet sont prévenues.
+const CLE_WA_SM = 'wa_sm'
+
+export async function loadWaSm() {
+  const { data } = await supabase.from('transferts_config').select('value').eq('key', CLE_WA_SM).maybeSingle()
+  return data?.value || ''
+}
+
+export async function saveWaSm(numero) {
+  const { error } = await supabase.from('transferts_config')
+    .upsert({ key: CLE_WA_SM, value: String(numero || '').trim() }, { onConflict: 'key' })
+  if (error) throw error
+}
+
+const normalizePhone = raw => {
+  let n = String(raw || '').replace(/\D/g, '')
+  if (n.startsWith('0')) n = '212' + n.slice(1)
+  return n
+}
+
+// Envoi direct à un numéro : message de conversation si elle est ouverte, sinon
+// modèle « wati_info » (qui n'accepte pas de retour à la ligne dans sa variable).
+async function envoyerAuNumero(numero, message, user) {
+  const phone = normalizePhone(numero)
+  if (!phone) return false
+  const texte = String(message).replace(/\s*\n\s*/g, ' ')
+  const { data: conv } = await supabase.from('conversations').select('id').eq('client_phone', phone).maybeSingle()
+  if (conv?.id) {
+    const r = await fetch('/api/wati-webhook?action=send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: user?.id, text: `📦 ${texte}` }),
+    })
+    if (r.ok) return true
+  }
+  const r2 = await fetch('/api/wati-webhook?action=send-template', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientPhone: phone, templateName: 'wati_info', parameters: [{ name: '1', value: texte }], userId: user?.id }),
+  }).catch(() => null)
+  return !!(r2 && r2.ok)
+}
+
 async function notifier(sens, famille, texte, user) {
-  const col = SENS[sens]?.lieuRecu === 'annexe' ? 'perm_transfert_annexe' : 'perm_transfert_boutique'
-  let q = supabase.from('profiles').select('id').eq('active', true).eq(col, true)
-  if (famille === 'sm') q = q.eq('perm_transfert_produits', true)
-  const { data } = await q
-  // On ne se prévient pas soi-même (quelqu'un peut avoir les deux ateliers).
+  if (famille === 'sm') return envoyerAuNumero(await loadWaSm(), texte, user)
+  // Matières premières : les économes, comme pour l'économat.
+  const { data } = await supabase.from('profiles').select('id').eq('perm_econome', true).eq('active', true)
   const ids = (data || []).map(r => r.id).filter(id => id && id !== user?.id)
   if (!ids.length) return false
-  // Un modèle Wati n'accepte pas de retour à la ligne dans sa variable : message à plat.
-  const message = String(texte).replace(/\s*\n\s*/g, ' ')
   await sendWatiInfo({
-    message, recipientIds: ids, cible: 'transferts',
-    userId: user?.id, userName: user?.full_name,
+    message: String(texte).replace(/\s*\n\s*/g, ' '),
+    recipientIds: ids, cible: 'transferts', userId: user?.id, userName: user?.full_name,
   })
   return true
 }
