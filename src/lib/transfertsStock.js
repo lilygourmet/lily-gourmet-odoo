@@ -7,6 +7,8 @@ import { sendWatiInfo } from './watiInfo'
 //   • l'expéditeur enregistre l'envoi, le destinataire confirme la quantité reçue
 //   • à la confirmation seulement, un transfert Odoo est créé EN BROUILLON avec la
 //     quantité RÉELLEMENT reçue (le stock Odoo ne bouge qu'après validation dans Odoo)
+//   • le WhatsApp part à ce moment-là, une fois la ligne DANS Odoo — pas à l'envoi :
+//     on annonce ce qui est vraiment entré, pas ce qui est annoncé
 // ============================================================
 
 export const SENS = {
@@ -139,9 +141,6 @@ export async function addTransfert({ famille, sens, article, qty, date, user }) 
     envoye_par_id: user?.id || null,
   })
   if (error) throw error
-  // Le message ne doit pas faire échouer l'enregistrement du transfert.
-  notifier(sens, famille, `${SENS[sens].de} envoie ${qty} ${article.unite || 'kg'} de ${article.nom} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
-    .catch(() => {})
 }
 
 // Envoie une LISTE d'articles d'un coup (le panier) : une ligne par article,
@@ -160,9 +159,6 @@ export async function addTransfertsGroupes({ famille, sens, lignes, date, user }
   }))
   const { error } = await supabase.from('transferts_mp').insert(rows)
   if (error) throw error
-  const detail = lignes.map(l => `${l.nom} ${l.qty} ${l.unite || 'kg'}`).join(', ')
-  notifier(sens, famille, `${SENS[sens].de} envoie ${lignes.length} article(s) : ${detail} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
-    .catch(() => {})
 }
 
 /**
@@ -181,7 +177,16 @@ export async function confirmTransfert(t, qtyRecu, user) {
   }).eq('id', t.id)
   if (error) throw error
   if (!(qty > 0) || !t.odoo_product_id) return null      // rien à passer dans Odoo
-  return envoyerVersOdoo(t, qty, user)
+  const ref = await envoyerVersOdoo(t, qty, user)
+  // Le WhatsApp part une fois que c'est DANS Odoo : il annonce ce qui est
+  // réellement entré en stock, avec le numéro du bon. Il ne doit jamais faire
+  // échouer la confirmation elle-même.
+  notifier(
+    t.sens, t.famille,
+    `${SENS[t.sens]?.vers} a reçu ${qty} ${t.unite || ''} de ${t.matiere} (envoyé par ${t.envoye_par || '?'}) — bon Odoo ${ref || '—'}.`,
+    user,
+  ).catch(() => {})
+  return ref
 }
 
 // Crée le transfert Odoo (brouillon) d'une ligne déjà confirmée.

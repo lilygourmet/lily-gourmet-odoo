@@ -111,7 +111,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     setBusy(true)
     try {
       await addTransfertsGroupes({ famille, sens, lignes: panier, date, user })
-      toast.success(`${panier.length} article(s) envoyé(s) — ${SENS[sens].vers} prévenu.`)
+      toast.success(`${panier.length} article(s) envoyé(s) — en attente de confirmation par ${SENS[sens].vers}.`)
       setPanier([])
       await refresh()
     } catch (e) { toast.error('Erreur : ' + e.message) }
