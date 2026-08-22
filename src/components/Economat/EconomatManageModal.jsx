@@ -165,8 +165,8 @@ export default function EconomatManageModal({ isAdmin = false, onClose, onChange
   const articlesByGroup = (gid) => manage.articles.filter(a => (a.group_id ?? null) === gid)
 
   return (
-    <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-line" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 h-[100dvh] z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto overscroll-contain shadow-2xl border border-line" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-5 py-3 flex items-center justify-between gap-2 z-10">
           <h3 className="font-fraunces italic text-[18px] text-ink">Gérer l'économat</h3>
@@ -335,8 +335,8 @@ export default function EconomatManageModal({ isAdmin = false, onClose, onChange
 function LierPanel({ article, q, setQ, results, busy, onSearch, onPick, onUnlink, onClose }) {
   if (!article) return null
   return (
-    <div className="fixed inset-0 z-[1100] bg-black/45 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 h-[100dvh] z-[1100] bg-black/45 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[88dvh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-line flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <div className="text-[14px] font-semibold text-ink truncate">{article.name}</div>

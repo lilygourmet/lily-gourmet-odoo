@@ -443,9 +443,9 @@ function HistoryModal({ demandes, onClose }) {
       d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   }
   return (
-    <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+    <div className="fixed inset-0 h-[100dvh] z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
          onClick={onClose}>
-      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl border border-line"
+      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88dvh] overflow-y-auto overscroll-contain shadow-2xl border border-line"
            onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-5 py-3 flex items-center justify-between">
           <h3 className="font-fraunces italic text-[18px] text-ink">Mes demandes</h3>
@@ -552,8 +552,8 @@ function PaveQuantite({ article, qty, precision, onPrecision, onValider, onClose
     setVal(v => (v.length >= 5 ? v : (v === '0' ? '' : v) + t))
   }
   return (
-    <div className="fixed inset-0 z-[90] bg-ink/45 flex items-end" onClick={onClose}>
-      <div className="w-full max-w-md mx-auto bg-cream rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+    <div className="fixed inset-0 h-[100dvh] z-[90] bg-ink/45 flex items-end" onClick={onClose}>
+      <div className="w-full max-w-md mx-auto bg-cream rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] max-h-[94dvh] overflow-y-auto overscroll-contain"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-2.5">
           <span className="flex-1 text-[16px] font-semibold text-ink truncate">
@@ -618,17 +618,17 @@ function RecapModal({ qty, precision = {}, articleInfo, customLines = [], onChan
   const isEmpty = lines.length === 0 && customLines.length === 0
 
   return (
-    <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+    <div className="fixed inset-0 h-[100dvh] z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
          onClick={onClose}>
-      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl border border-line"
+      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden shadow-2xl border border-line"
            onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-5 py-3 flex items-center justify-between">
+        <div className="bg-cream border-b border-line px-5 py-3 flex items-center justify-between flex-shrink-0">
           <h3 className="font-fraunces italic text-[18px] text-ink">Récapitulatif</h3>
           <button onClick={onClose}
                   className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center">×</button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-5 py-4 space-y-4 flex-1 overflow-y-auto overscroll-contain">
           {isEmpty ? (
             <div className="text-center text-ink-mute italic py-6">Aucun article sélectionné</div>
           ) : (
@@ -669,7 +669,8 @@ function RecapModal({ qty, precision = {}, articleInfo, customLines = [], onChan
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-cream/95 backdrop-blur-sm border-t border-line px-5 py-3">
+        <div className="bg-cream border-t border-line px-5 py-3 flex-shrink-0"
+             style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
           <button
             onClick={onSend}
             disabled={sending || isEmpty}
