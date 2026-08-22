@@ -15,6 +15,9 @@ export const PERMS = [
   { key: 'perm_delete', group: 'Production & Calendrier', label: 'Supprimer une commande', desc: 'Action sensible.' },
   { key: 'perm_sync', group: 'Production & Calendrier', label: 'Synchroniser depuis Odoo', desc: 'Forcer la mise à jour des commandes depuis Odoo.' },
   { key: 'perm_define_gm', group: 'Production & Calendrier', label: 'Définir les détails GM', desc: 'Réglage avancé GM (à clarifier).' },
+  { key: 'perm_transfert_annexe', group: 'Production & Calendrier', label: 'Transferts — atelier Prod annexe', desc: 'Travaille à l\'annexe : ENVOIE vers la boutique et RÉCEPTIONNE ce qui vient de la boutique.' },
+  { key: 'perm_transfert_boutique', group: 'Production & Calendrier', label: 'Transferts — atelier Prod boutique', desc: 'Travaille à la boutique : ENVOIE vers l\'annexe et RÉCEPTIONNE ce qui vient de l\'annexe.' },
+  { key: 'perm_transfert_produits', group: 'Production & Calendrier', label: 'Transferts Produits (SM)', desc: 'Accès à l\'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus.' },
 
   // Vitrine & Stock (boutique)
   { key: 'perm_stock_patissier', group: 'Vitrine & Stock (boutique)', label: 'Vitrine — saisie pâtissier', desc: 'Saisir la vitrine sucrée du matin.' },
@@ -27,8 +30,6 @@ export const PERMS = [
   { key: 'perm_stock_minmax', group: 'Vitrine & Stock (boutique)', label: 'Régler les seuils min/max', desc: 'Définir les alertes de réassort (GS- / Prod).' },
   { key: 'perm_stock_poly', group: 'Vitrine & Stock (boutique)', label: 'Stock poly', desc: 'Gérer le stock de poly découpé (morceaux 5/2 cm) + alerte WhatsApp.' },
   { key: 'perm_simu_gateaux', group: 'Vitrine & Stock (boutique)', label: 'Simulation gâteaux', desc: 'Voir le simulateur visuel de gâteaux par nombre de personnes et d\'étages.' },
-  { key: 'perm_transfert_annexe', group: 'Vitrine & Stock (boutique)', label: 'Transferts MP — Annexe (envoyer)', desc: 'Enregistrer les envois de matières premières de l\'annexe vers la boutique.' },
-  { key: 'perm_transfert_boutique', group: 'Vitrine & Stock (boutique)', label: 'Transferts MP — Boutique (confirmer)', desc: 'Confirmer la réception des matières premières envoyées par l\'annexe.' },
   { key: 'perm_facture_ocp', group: 'Vitrine & Stock (boutique)', label: 'Facture OCP', desc: 'Générer la facture mensuelle OCP à partir des commandes non facturées.' },
   { key: 'perm_freezer', group: 'Vitrine & Stock (boutique)', label: 'Sortie congélateur', desc: 'Voir la liste des sorties de congélateur.' },
 
