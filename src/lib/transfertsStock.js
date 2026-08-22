@@ -13,17 +13,19 @@ export const SENS = {
   boutique_annexe: { label: 'Boutique → Annexe', de: 'Prod boutique', vers: 'Prod annexe', lieuEnvoi: 'boutique', lieuRecu: 'annexe' },
 }
 
-// Familles de produits, dans l'ordre d'affichage des filtres.
+// Catégories d'articles, dans l'ordre voulu par Layla (rangement du 2026-08-22).
+// Les clés sont figées : elles sont stockées dans transferts_articles.groupe.
 export const GROUPES = [
-  { key: 'creme',        label: 'Crèmes' },
-  { key: 'glacage',      label: 'Glaçages' },
-  { key: 'viennoiserie', label: 'Viennoiseries' },
-  { key: 'biscuit',      label: 'Biscuits & pâtes' },
-  { key: 'entremet',     label: 'Entremets & tartes' },
-  { key: 'chocolat',     label: 'Chocolat & caramel' },
-  { key: 'fruit',        label: 'Fruits' },
+  { key: 'creme',        label: 'Crème/amande/Caramel' },
+  { key: 'glacage',      label: 'Glaçages/Ganache et Confit' },
+  { key: 'viennoiserie', label: 'Viennoiseries & Donuts' },
+  { key: 'cake',         label: 'Cakes/Cookies' },
+  { key: 'entremet',     label: 'Entremets' },
+  { key: 'tarte',        label: 'Tartes' },
+  { key: 'genoise',      label: 'Genoises/Crunchy' },
   { key: 'matiere',      label: 'Matières premières' },
-  { key: 'autre',        label: 'Autres' },
+  { key: 'mignardise',   label: 'Mignardises/Choux' },
+  { key: 'chocolat',     label: 'Chocolat' },
 ]
 
 export const FAMILLES = {
@@ -31,8 +33,10 @@ export const FAMILLES = {
   sm: { label: 'Produits', titre: 'Transferts Produits SM' },
 }
 
-// Le lieu de travail de la personne (permission) décide de ce qu'elle peut faire :
-// elle envoie DEPUIS son lieu et confirme ce qui y ARRIVE.
+// Deux droits distincts, à croiser :
+//   • l'ATELIER (annexe / boutique) : d'où la personne envoie, et ce qui lui arrive ;
+//   • le RÔLE : a-t-elle le droit d'ENVOYER, de RÉCEPTIONNER, ou les deux ?
+// Ainsi une même personne peut préparer les envois sans pouvoir valider les réceptions.
 export function lieuxDe(user) {
   if (!user) return []
   if (user.role === 'admin') return ['annexe', 'boutique']
@@ -41,8 +45,11 @@ export function lieuxDe(user) {
   if (user.perm_transfert_boutique === true) l.push('boutique')
   return l
 }
-export const peutEnvoyer = (user, sens) => lieuxDe(user).includes(SENS[sens]?.lieuEnvoi)
-export const peutConfirmer = (user, sens) => lieuxDe(user).includes(SENS[sens]?.lieuRecu)
+const estAdmin = user => user?.role === 'admin'
+export const peutEnvoyer = (user, sens) =>
+  lieuxDe(user).includes(SENS[sens]?.lieuEnvoi) && (estAdmin(user) || user?.perm_transfert_envoi === true)
+export const peutConfirmer = (user, sens) =>
+  lieuxDe(user).includes(SENS[sens]?.lieuRecu) && (estAdmin(user) || user?.perm_transfert_reception === true)
 
 // ---- Articles proposés (vignettes) ----
 
