@@ -200,17 +200,19 @@ export async function envoyerVersOdoo(t, qty, user) {
 
 // ---- Numéros WhatsApp prévenus (un par sens) ----
 
-const CLE_WA = { annexe_boutique: 'transfert_wa_boutique', boutique_annexe: 'transfert_wa_annexe' }
+// Table à part : app_config garde le code d'accès Caisse/RH et reste fermée en
+// écriture — on n'y touche pas pour deux numéros de téléphone.
+const CLE_WA = { annexe_boutique: 'wa_boutique', boutique_annexe: 'wa_annexe' }
 
 export async function loadWaNumbers() {
-  const { data } = await supabase.from('app_config').select('key, value').in('key', Object.values(CLE_WA))
+  const { data } = await supabase.from('transferts_config').select('key, value').in('key', Object.values(CLE_WA))
   const m = Object.fromEntries((data || []).map(r => [r.key, r.value]))
   return { annexe_boutique: m[CLE_WA.annexe_boutique] || '', boutique_annexe: m[CLE_WA.boutique_annexe] || '' }
 }
 
 export async function saveWaNumbers(nums) {
   const rows = Object.entries(CLE_WA).map(([sens, key]) => ({ key, value: String(nums[sens] || '').trim() }))
-  const { error } = await supabase.from('app_config').upsert(rows, { onConflict: 'key' })
+  const { error } = await supabase.from('transferts_config').upsert(rows, { onConflict: 'key' })
   if (error) throw error
 }
 
