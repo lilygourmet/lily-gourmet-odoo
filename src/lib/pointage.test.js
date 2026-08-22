@@ -92,7 +92,8 @@ describe('journée à laquelle il manque un badge : reconstitution premier → d
   })
 
   it('ne reconstitue PAS une journée en cours (la personne travaille encore)', () => {
-    const auj = new Date().toISOString().slice(0, 10)
+    const d = new Date()
+    const auj = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const r = calculerHeuresPointees([
       { arrivee: `${auj}T07:19:00Z`, depart: `${auj}T13:12:00Z` },
       { arrivee: `${auj}T14:00:00Z`, depart: null },        // encore au travail

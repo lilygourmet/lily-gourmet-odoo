@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, Children, isValidElement } from 'react'
+import { useState, useEffect, useMemo, createContext, useContext, Children, isValidElement } from 'react'
 
 // Recherche de permission : chaque groupe se filtre selon ce texte.
 const PermSearchCtx = createContext('')
@@ -17,7 +17,9 @@ import {
   ROLE_LABELS,
   ROLE_COLORS,
   saveNavbarConfig,
+  setUserPerm,
 } from '../lib/users'
+import { PERMS, PERM_GROUPES } from '../lib/permsList'
 import { loadProfils } from '../lib/economat'
 import { loadEmployes } from '../lib/hr'
 import { navTabsForUser } from '../lib/navTabs'
@@ -25,6 +27,7 @@ import NavbarConfigModal from './NavbarConfigModal'
 import SearchSelect from './SearchSelect'
 
 export default function AdminUsers({ currentUser, onClose }) {
+  const [tab, setTab] = useState('users')      // 'users' = fiche par personne · 'perms' = une permission → qui l'a
   const [users, setUsers] = useState([])
   const [teams, setTeams] = useState([])
   const [employes, setEmployes] = useState([])
@@ -157,6 +160,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_simu_gateaux: formData.permSimuGateaux,
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
+        perm_transfert_produits: formData.permTransfertProduits,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -232,6 +236,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_simu_gateaux: formData.permSimuGateaux,
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
+        perm_transfert_produits: formData.permTransfertProduits,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -253,6 +258,16 @@ export default function AdminUsers({ currentUser, onClose }) {
       await refresh()
     } catch (e) {
       toast.error(`Erreur modification : ${e.message}`)
+    }
+  }
+
+  // Onglet « Par permission » : coche/décoche tout de suite (affichage optimiste).
+  async function handleTogglePerm(u, key, on) {
+    setUsers(list => list.map(x => x.id === u.id ? { ...x, [key]: on } : x))
+    try { await setUserPerm(u.id, key, on) }
+    catch (e) {
+      setUsers(list => list.map(x => x.id === u.id ? { ...x, [key]: !on } : x))
+      toast.error(`Erreur : ${e.message}`)
     }
   }
 
@@ -325,8 +340,25 @@ export default function AdminUsers({ currentUser, onClose }) {
             </div>
           )}
 
-          {/* Boutons ajouter user + gerer equipes */}
+          {/* Deux façons de régler les droits : par personne, ou par permission */}
           {!loading && !showNewForm && !editingUser && (
+            <div className="flex gap-1.5">
+              {[{ v: 'users', l: 'Utilisateurs' }, { v: 'perms', l: 'Par permission' }].map(t => (
+                <button key={t.v} onClick={() => setTab(t.v)}
+                  className={'px-4 py-2 text-[12px] font-medium rounded-lg border transition-all ' +
+                    (tab === t.v ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-cream-warm text-ink-soft border-line hover:border-bordeaux')}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tab === 'perms' && !loading && !showNewForm && !editingUser && (
+            <PermsMatrix users={users} teams={teams} currentUser={currentUser} onToggle={handleTogglePerm} />
+          )}
+
+          {/* Boutons ajouter user + gerer equipes */}
+          {tab === 'users' && !loading && !showNewForm && !editingUser && (
             <div className="flex gap-2">
               <button
                 onClick={() => setShowNewForm(true)}
@@ -345,7 +377,7 @@ export default function AdminUsers({ currentUser, onClose }) {
           )}
 
           {/* Form création */}
-          {showNewForm && (
+          {tab === 'users' && showNewForm && (
             <UserForm
               initialData={duplicateFromUser ? {
                 // Copier toutes les permissions sauf username/password/full_name
@@ -364,7 +396,7 @@ export default function AdminUsers({ currentUser, onClose }) {
           )}
 
           {/* Liste users groupes par equipe */}
-          {!loading && !showNewForm && (
+          {tab === 'users' && !loading && !showNewForm && (
             <div className="space-y-4">
               {/* Recherche d'utilisateur (par nom ou identifiant) */}
               <input
@@ -790,6 +822,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permSimuGateaux: initialData?.perm_simu_gateaux !== undefined ? initialData.perm_simu_gateaux : false,
     permTransfertAnnexe: initialData?.perm_transfert_annexe !== undefined ? initialData.perm_transfert_annexe : false,
     permTransfertBoutique: initialData?.perm_transfert_boutique !== undefined ? initialData.perm_transfert_boutique : false,
+    permTransfertProduits: initialData?.perm_transfert_produits !== undefined ? initialData.perm_transfert_produits : false,
     permFactureOcp: initialData?.perm_facture_ocp !== undefined ? initialData.perm_facture_ocp : false,
     permAiTools: initialData?.perm_ai_tools !== undefined ? initialData.perm_ai_tools : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
@@ -990,6 +1023,10 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             </>}
             <PermCheckbox id="perm-sync" label="Synchroniser depuis Odoo" desc="Forcer la mise à jour des commandes depuis Odoo." checked={isAdmin || formData.permSync} onChange={v => update('permSync', v)} />
             <PermCheckbox id="perm-define-gm" label="Définir les détails GM" desc="Réglage avancé GM (à clarifier)." checked={isAdmin || formData.permDefineGM} onChange={v => update('permDefineGM', v)} />
+
+            <PermCheckbox id="perm-transfert-annexe" label="Transferts — atelier Prod annexe" desc="Travaille à l'annexe : envoie vers la boutique et confirme ce qui arrive à l'annexe." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
+            <PermCheckbox id="perm-transfert-boutique" label="Transferts — atelier Prod boutique" desc="Travaille à la boutique : envoie vers l'annexe et confirme ce qui arrive à la boutique." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
+            <PermCheckbox id="perm-transfert-produits" label="Transferts Produits (SM)" desc="Accès à l'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus." checked={isAdmin || formData.permTransfertProduits} onChange={v => update('permTransfertProduits', v)} />
           </PermGroup>
 
           <PermGroup emoji="🏬" title="Vitrine & Stock (boutique)">
@@ -1003,8 +1040,6 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-stock-minmax" label="Régler les seuils min/max" desc="Définir les alertes de réassort (GS- / Prod)." checked={isAdmin || formData.permStockMinMax} onChange={v => update('permStockMinMax', v)} />
             <PermCheckbox id="perm-stock-poly" label="Stock poly" desc="Gérer le stock de poly découpé (morceaux 5/2 cm) + alerte WhatsApp." checked={isAdmin || formData.permStockPoly} onChange={v => update('permStockPoly', v)} />
             <PermCheckbox id="perm-simu-gateaux" label="Simulation gâteaux" desc="Voir le simulateur visuel de gâteaux par nombre de personnes et d'étages." checked={isAdmin || formData.permSimuGateaux} onChange={v => update('permSimuGateaux', v)} />
-            <PermCheckbox id="perm-transfert-annexe" label="Transferts MP — Annexe (envoyer)" desc="Enregistrer les envois de matières premières de l'annexe vers la boutique." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
-            <PermCheckbox id="perm-transfert-boutique" label="Transferts MP — Boutique (confirmer)" desc="Confirmer la réception des matières premières envoyées par l'annexe." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
             <PermCheckbox id="perm-facture-ocp" label="Facture OCP" desc="Générer la facture mensuelle OCP à partir des commandes non facturées." checked={isAdmin || formData.permFactureOcp} onChange={v => update('permFactureOcp', v)} />
             <PermCheckbox id="perm-freezer" label="Sortie congélateur" desc="Voir la liste des sorties de congélateur." checked={isAdmin || formData.permFreezer} onChange={v => update('permFreezer', v)} />
           </PermGroup>
@@ -1122,6 +1157,116 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
         >
           {isNew ? 'Créer' : 'Enregistrer'}
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Onglet « Par permission » : l'inverse de la fiche utilisateur.
+// On choisit une permission à gauche, on coche à droite qui l'a.
+// ============================================================
+function PermsMatrix({ users, teams = [], currentUser, onToggle }) {
+  const [sel, setSel] = useState(PERMS[0].key)
+  const [q, setQ] = useState('')
+
+  const isSuperAdmin = currentUser?.role === 'admin'
+  const visibles = useMemo(() => (isSuperAdmin ? users : users.filter(u => u.role !== 'admin'))
+    .filter(u => u.active !== false)
+    .slice()
+    .sort((a, b) => (a.full_name || a.username || '').localeCompare(b.full_name || b.username || '')),
+    [users, isSuperAdmin])
+
+  const ql = q.trim().toLowerCase()
+  const groupes = PERM_GROUPES
+    .map(g => ({ ...g, perms: g.perms.filter(p => !ql || p.label.toLowerCase().includes(ql) || p.desc.toLowerCase().includes(ql)) }))
+    .filter(g => g.perms.length)
+
+  // rangés par équipe, comme la liste des utilisateurs
+  const parEquipe = useMemo(() => {
+    const par = [...teams.map(t => ({ titre: t.name, membres: visibles.filter(u => u.team_id === t.id) })),
+      { titre: 'Sans équipe', membres: visibles.filter(u => !u.team_id || !teams.some(t => t.id === u.team_id)) }]
+    return par.filter(g => g.membres.length)
+  }, [visibles, teams])
+
+  const perm = PERMS.find(p => p.key === sel)
+  const compte = key => visibles.filter(u => u.role !== 'admin' && u[key] === true).length
+  const nb = perm ? compte(perm.key) : 0
+  const cibles = visibles.filter(u => u.role !== 'admin')
+  const tous = async on => { for (const u of cibles) if ((u[perm.key] === true) !== on) await onToggle(u, perm.key, on) }
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder="🔍 Chercher une permission (ex. caisse, étiquettes, stock…)"
+        className="w-full px-3 py-2 text-[13px] bg-cream-warm border border-line rounded-lg focus:outline-none focus:border-bordeaux mb-3"
+      />
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0,240px) minmax(0,1fr)' }}>
+        {/* les permissions */}
+        <div className="border border-line rounded-xl bg-white overflow-hidden">
+          <div className="px-3 py-2 bg-cream-warm font-mono text-[10px] uppercase tracking-[0.14em] text-ink-soft">Permissions</div>
+          <div className="max-h-[420px] overflow-auto">
+            {groupes.map(g => (
+              <div key={g.title}>
+                <div className="px-3 pt-2 pb-1 text-[10.5px] font-semibold text-ink-mute">{g.title}</div>
+                {g.perms.map(p => {
+                  const n = compte(p.key), on = p.key === sel
+                  return (
+                    <button key={p.key} onClick={() => setSel(p.key)}
+                      className={'w-full flex items-center gap-2 px-3 py-2 text-left text-[12.5px] border-l-[3px] ' +
+                        (on ? 'bg-[#fbeef2] border-bordeaux font-semibold' : 'border-transparent hover:bg-[#fbeef2]')}>
+                      <span className="min-w-0 truncate">{p.label}</span>
+                      <span title={p.desc}
+                        className="flex-shrink-0 w-[15px] h-[15px] rounded-full border border-bordeaux/40 text-bordeaux text-[10px] font-bold leading-[13px] text-center cursor-help">i</span>
+                      <span className={'ml-auto text-[11px] font-bold px-2 rounded-full ' +
+                        (on ? 'bg-bordeaux text-cream' : n ? 'bg-cream-warm text-ink-soft' : 'bg-cream-warm text-ink-mute opacity-60')}>{n}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+            {!groupes.length && <div className="px-3 py-6 text-center text-[12px] text-ink-mute italic">Aucune permission trouvée</div>}
+          </div>
+        </div>
+
+        {/* qui l'a */}
+        <div className="border border-line rounded-xl bg-white overflow-hidden">
+          <div className="px-3.5 py-2.5 border-b border-line">
+            <div className="font-fraunces italic text-[15px]">{perm?.label}</div>
+            <div className="text-[11.5px] text-ink-mute mt-0.5">{perm?.desc}</div>
+          </div>
+          <div className="flex items-center gap-3 px-3.5 py-2 border-b border-line text-[12px]">
+            <span className="text-ink-soft"><b>{nb}</b> personne(s)</span>
+            <button onClick={() => tous(true)} className="ml-auto text-bordeaux underline">Tout cocher</button>
+            <button onClick={() => tous(false)} className="text-bordeaux underline">Tout décocher</button>
+          </div>
+          <div className="max-h-[360px] overflow-auto py-1">
+            {parEquipe.map(({ titre, membres }) => (
+              <div key={titre}>
+                <div className="px-3.5 pt-2 pb-1 text-[10.5px] font-semibold text-ink-mute bg-cream/60">
+                  {titre} <span className="font-normal">· {membres.filter(u => u.role === 'admin' || u[perm.key] === true).length}/{membres.length}</span>
+                </div>
+                {membres.map(u => {
+                  const admin = u.role === 'admin'
+                  return (
+                    <label key={u.id} className={'flex items-center gap-2.5 px-3.5 py-2 text-[13px] hover:bg-cream cursor-pointer ' + (admin ? 'opacity-60' : '')}>
+                      <input type="checkbox" className="w-[17px] h-[17px] accent-[#993556]"
+                        checked={admin || u[perm.key] === true} disabled={admin}
+                        onChange={e => onToggle(u, perm.key, e.target.checked)} />
+                      <span>{u.full_name || u.username}</span>
+                      {admin && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EAF3DE] text-ok font-semibold">admin — tout</span>}
+                      <span className="ml-auto text-[10.5px] text-ink-mute">{ROLE_LABELS[u.role] || u.role}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            ))}
+            {!visibles.length && <div className="px-3 py-6 text-center text-[12px] text-ink-mute italic">Aucun utilisateur actif</div>}
+          </div>
+        </div>
       </div>
     </div>
   )

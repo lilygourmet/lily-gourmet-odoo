@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gérer utilisateurs — onglet « Par permission »</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;1,400;1,500&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bordeaux:#993556; --bordeaux-deep:#7a2a44; --cream:#fcfbf8; --cream-warm:#F4F0EA; --line:#e5d8c3; --ink:#1a0f0a; --ink-soft:#4a3a30; --ink-mute:#8a7a70; --ok:#27500A; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:#efe9e0; font-family:Geist, -apple-system, sans-serif; color:var(--ink); }
+  .modal { max-width:760px; margin:0 auto; background:var(--cream); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 20px 50px rgba(122,42,68,.15); }
+  .head { padding:16px 22px; border-bottom:1px solid var(--line); display:flex; align-items:flex-start; justify-content:space-between; }
+  .kicker { font-family:ui-monospace,monospace; font-size:11px; letter-spacing:.2em; color:var(--bordeaux); font-weight:600; }
+  h1 { font-family:Fraunces; font-style:italic; font-size:22px; font-weight:500; margin:4px 0 0; }
+  .x { width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:none; color:var(--ink-mute); cursor:pointer; }
+  .tabs { display:flex; gap:6px; padding:12px 22px 0; }
+  .tab { padding:9px 16px; font-size:12.5px; font-weight:500; border:1px solid var(--line); border-bottom:none; border-radius:10px 10px 0 0; background:var(--cream-warm); color:var(--ink-soft); cursor:pointer; }
+  .tab.on { background:var(--bordeaux); border-color:var(--bordeaux); color:#fff; }
+  .body { padding:18px 22px 22px; border-top:1px solid var(--line); margin-top:-1px; }
+  .search { width:100%; padding:9px 12px; font-size:13px; background:var(--cream-warm); border:1px solid var(--line); border-radius:9px; margin-bottom:14px; }
+  .cols { display:grid; grid-template-columns:300px 1fr; gap:16px; }
+  @media (max-width:720px) { .cols { grid-template-columns:1fr; } }
+  .panel { border:1px solid var(--line); border-radius:12px; background:#fff; overflow:hidden; }
+  .panel-h { padding:9px 12px; background:var(--cream-warm); font-size:11px; font-family:ui-monospace,monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft); }
+  .plist { max-height:420px; overflow:auto; }
+  .grp { padding:8px 12px 3px; font-size:11px; font-weight:600; color:var(--ink-mute); }
+  .perm { width:100%; display:flex; align-items:center; gap:8px; padding:8px 12px; border:none; background:none; text-align:left; font-size:12.5px; cursor:pointer; border-left:3px solid transparent; font-family:inherit; color:var(--ink); }
+  .perm:hover { background:#fbeef2; }
+  .perm.on { background:#fbeef2; border-left-color:var(--bordeaux); font-weight:600; }
+  .count { margin-left:auto; min-width:22px; text-align:center; font-size:11px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--cream-warm); color:var(--ink-soft); }
+  .count.zero { background:#f6f0f0; color:#b9a9a0; }
+  .count.on { background:var(--bordeaux); color:#fff; }
+  .who-h { padding:12px 14px; border-bottom:1px solid var(--line); }
+  .who-h .t { font-family:Fraunces; font-style:italic; font-size:16px; }
+  .who-h .d { font-size:12px; color:var(--ink-mute); margin-top:2px; }
+  .acts { display:flex; gap:10px; padding:8px 14px; border-bottom:1px solid var(--line); font-size:12px; }
+  .acts button { background:none; border:none; color:var(--bordeaux); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
+  .ulist { max-height:360px; overflow:auto; padding:4px 0; }
+  .u { display:flex; align-items:center; gap:10px; padding:8px 14px; font-size:13px; cursor:pointer; }
+  .u:hover { background:var(--cream); }
+  .u input { width:17px; height:17px; accent-color:var(--bordeaux); }
+  .u .role { margin-left:auto; font-size:10.5px; color:var(--ink-mute); }
+  .u.admin { opacity:.55; }
+  .tag { font-size:10px; padding:1px 6px; border-radius:5px; background:#EAF3DE; color:var(--ok); font-weight:600; }
+  .foot { margin-top:12px; font-size:11.5px; color:var(--ink-mute); }
+</style>
+</head>
+<body>
+<div class="modal">
+  <div class="head">
+    <div><div class="kicker">ADMIN</div><h1>Gestion des utilisateurs</h1></div>
+    <button class="x">✕</button>
+  </div>
+  <div class="tabs">
+    <div class="tab">Utilisateurs</div>
+    <div class="tab on">Par permission</div>
+  </div>
+  <div class="body">
+    <input class="search" placeholder="🔍 Chercher une permission (ex. caisse, étiquettes, stock…)">
+    <div class="cols">
+      <div class="panel">
+        <div class="panel-h">Permissions</div>
+        <div class="plist" id="plist"></div>
+      </div>
+      <div class="panel">
+        <div class="who-h">
+          <div class="t" id="ptitle">Studio photos</div>
+          <div class="d" id="pdesc">Composer/éditer des photos imprimables pour gâteaux.</div>
+        </div>
+        <div class="acts">
+          <span id="ucount" style="color:var(--ink-soft)"><b>3</b> personne(s)</span>
+          <button style="margin-left:auto" onclick="all(true)">Tout cocher</button>
+          <button onclick="all(false)">Tout décocher</button>
+        </div>
+        <div class="ulist" id="ulist"></div>
+      </div>
+    </div>
+    <p class="foot">Chaque clic est enregistré tout de suite. Les admins ont tout par défaut (cases grisées).</p>
+  </div>
+</div>
+
+<script>
+const GROUPES = [
+  ['Production & Calendrier', [['Calendrier des commandes',4],['Production sucrée',3],['Cocher les étapes',6],['Taille des polys',2],['Supprimer une commande',0]]],
+  ['Vitrine & Stock', [['Vitrine — saisie pâtissier',2],['Stock poly',1],['Transferts MP — Annexe',2],['Facture OCP',1]]],
+  ['Étiquettes & visuels', [['Étiquettes gâteaux (Zebra)',3],['Étiquettes boîtes',2],['Studio photos',3],['Outils IA',0]]],
+  ['Clients & Ventes', [['Conversations WhatsApp',5],['Devis (relance clients)',2],['Nouvelle commande',4]]],
+  ['Administration (sensible)', [['Caisse — vue limitée',1],['RH',2],['Gérer les utilisateurs',1]]],
+];
+const USERS = [
+  ['Layla', 'admin', 1], ['Meriem', 'caisse', 1], ['Hamid', 'livreur', 0], ['Nezha', 'production', 1],
+  ['Sanaa', 'production', 0], ['Youssef', 'café', 0], ['Fatima', 'pâtisserie', 0], ['Karim', 'annexe', 0],
+];
+let sel = 'Studio photos';
+function drawPerms() {
+  document.getElementById('plist').innerHTML = GROUPES.map(([g, ps]) =>
+    `<div class="grp">${g}</div>` + ps.map(([p, n]) =>
+      `<button class="perm ${p === sel ? 'on' : ''}" onclick="pick('${p}')">${p}
+        <span class="count ${p === sel ? 'on' : (n ? '' : 'zero')}">${n}</span></button>`).join('')).join('');
+}
+function drawUsers() {
+  document.getElementById('ulist').innerHTML = USERS.map(([n, r, has], i) =>
+    `<label class="u ${r === 'admin' ? 'admin' : ''}">
+      <input type="checkbox" ${has ? 'checked' : ''} ${r === 'admin' ? 'disabled' : ''} onchange="cnt()">
+      <span>${n}</span> ${r === 'admin' ? '<span class="tag">admin — tout</span>' : ''}
+      <span class="role">${r}</span></label>`).join('');
+  cnt();
+}
+function pick(p) { sel = p; document.getElementById('ptitle').textContent = p; drawPerms(); }
+function all(v) { document.querySelectorAll('.ulist input:not([disabled])').forEach(c => c.checked = v); cnt(); }
+function cnt() {
+  const n = [...document.querySelectorAll('.ulist input')].filter(c => c.checked).length;
+  document.getElementById('ucount').innerHTML = '<b>' + n + '</b> personne(s)';
+}
+drawPerms(); drawUsers();
+</script>
+</body>
+</html>

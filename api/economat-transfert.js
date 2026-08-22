@@ -75,9 +75,74 @@ async function auth2() {
 const exec2 = (uid, model, method, args, kw = {}) =>
   odoo2JsonRpc('object', 'execute_kw', [process.env.ODOO2_DB, uid, process.env.ODOO2_PASSWORD, model, method, args, kw])
 
+// ── Transferts entre les deux ateliers (onglets Transferts MP / Produits SM) ──
+// Emplacements Odoo et type de transfert interne « prod annexe -> prod » (n° 75).
+// Le sens inverse réutilise le même type avec les lieux échangés : Odoo n'a pas
+// de type « prod -> prod annexe » et on ne touche pas à sa configuration.
+const PROD_ANNEXE = 62, PROD_BOUTIQUE = 52, TYPE_INTERNE_PRODS = 75
+
+async function handleTransfertStock(req, res) {
+  const { sens, lignes, origine } = req.body || {}
+  if (!Array.isArray(lignes) || !lignes.length) {
+    return res.status(400).json({ error: 'Aucune ligne à transférer' })
+  }
+  const [src, dest] = sens === 'boutique_annexe'
+    ? [PROD_BOUTIQUE, PROD_ANNEXE]
+    : [PROD_ANNEXE, PROD_BOUTIQUE]
+  const uid = await auth()
+  // Unité de STOCK du produit (un transfert interne ne se compte pas en unité d'achat).
+  const ids = [...new Set(lignes.map(l => Number(l.odooProductId)).filter(Boolean))]
+  if (!ids.length) return res.status(400).json({ error: 'Lignes sans produit Odoo' })
+  const prods = await exec(uid, 'product.product', 'read', [ids, ['id', 'uom_id']])
+  const uomOf = new Map(prods.map(p => [p.id, Array.isArray(p.uom_id) ? p.uom_id[0] : null]))
+
+  const moves = lignes.map(l => {
+    const pid = Number(l.odooProductId)
+    const texte = String(l.nom || '').slice(0, 200)
+    return [0, 0, {
+      name: texte,
+      description_picking: texte,
+      product_id: pid,
+      product_uom_qty: Number(l.qty) || 0,
+      product_uom: uomOf.get(pid),
+      location_id: src,
+      location_dest_id: dest,
+    }]
+  })
+  // On regroupe tout dans le MÊME transfert Odoo tant qu'il est en BROUILLON :
+  // une seule référence à valider au lieu d'une par article. Dès qu'il est validé
+  // (ou seulement mis en « prêt »), la confirmation suivante ouvre un nouveau numéro.
+  // Le filtre sur `origin` évite de se greffer sur un brouillon saisi à la main.
+  const [ouvert] = await exec(uid, 'stock.picking', 'search_read', [[
+    ['picking_type_id', '=', TYPE_INTERNE_PRODS],
+    ['state', '=', 'draft'],
+    ['location_id', '=', src],
+    ['location_dest_id', '=', dest],
+    ['origin', 'like', 'TRANSFERT%'],
+  ]], { fields: ['id', 'name', 'state'], order: 'id desc', limit: 1 })
+
+  if (ouvert) {
+    await exec(uid, 'stock.move', 'create', [moves.map(m => ({ ...m[2], picking_id: ouvert.id }))])
+    return res.status(200).json({ ok: true, id: ouvert.id, name: ouvert.name, state: ouvert.state, groupe: true })
+  }
+
+  const id = await exec(uid, 'stock.picking', 'create', [{
+    picking_type_id: TYPE_INTERNE_PRODS,
+    location_id: src,
+    location_dest_id: dest,
+    origin: String(origine || 'TRANSFERT app').slice(0, 200),
+    move_ids_without_package: moves,
+  }])
+  const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
+  return res.status(200).json({ ok: true, id, name: pick?.name, state: pick?.state, groupe: false })
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' })
   try {
+    // Transfert entre ateliers (≠ demande d'économat) — même fonction pour rester
+    // sous la limite de 12 fonctions Vercel.
+    if (req.body?.mode === 'stock') return await handleTransfertStock(req, res)
     if (!process.env.ODOO_URL || !process.env.ODOO_USERNAME) {
       return res.status(500).json({ error: 'Odoo non configuré côté serveur' })
     }
