@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { todayISO } from '../lib/dates'
-import { Plus, Check, Printer, Search, Settings, X, Trash2, Eye, EyeOff, Send, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Check, Printer, Search, X, Trash2, Eye, EyeOff, Send, ChevronUp, ChevronDown } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { canSeeTransfertsProduits } from '../lib/auth'
@@ -8,7 +8,6 @@ import {
   SENS, FAMILLES, GROUPES, lieuxDe, peutEnvoyer, peutConfirmer,
   loadArticles, searchOdooProducts, addArticle, setArticleActif,
   loadTransferts, addTransfertsGroupes, confirmTransfert, envoyerVersOdoo,
-  loadWaNumbers, saveWaNumbers,
 } from '../lib/transfertsStock'
 
 // 3,8 plutôt que 3.8 ; masque les décimales inutiles (5 kg, pas 5,0).
@@ -37,7 +36,6 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   const [filterDate, setFilterDate] = useState('')
   const [rechercheOdoo, setRechercheOdoo] = useState('')
   const [resultats, setResultats] = useState(null)
-  const [reglages, setReglages] = useState(null)
 
   async function refresh() {
     setLoading(true)
@@ -146,14 +144,6 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
-  async function ouvrirReglages() {
-    try { setReglages(await loadWaNumbers()) } catch (e) { toast.error('Erreur : ' + e.message) }
-  }
-  async function enregistrerReglages() {
-    try { await saveWaNumbers(reglages); setReglages(null); toast.success('Numéros enregistrés.') }
-    catch (e) { toast.error('Erreur : ' + e.message) }
-  }
-
   const aConfirmer = rows.filter(r => r.statut === 'en_attente' && peutConfirmer(user, r.sens))
   const journal = filterDate ? rows.filter(r => (r.transfer_date || '').slice(0, 10) === filterDate) : rows
   const nbMasques = articles.filter(a => !a.actif).length
@@ -200,14 +190,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
       <div className="max-w-3xl mx-auto p-4 pb-44 sm:pb-28">
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="font-fraunces italic text-[26px] text-ink">{fam.titre}</h1>
-          {isAdmin && (
-            <button onClick={ouvrirReglages} className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 border border-line rounded-lg bg-white hover:bg-cream-warm">
-              <Settings size={13} /> Numéros WhatsApp
-            </button>
-          )}
-        </div>
+        <h1 className="font-fraunces italic text-[26px] text-ink">{fam.titre}</h1>
         <p className="text-[13px] text-ink-mute mb-4">{fam.label} — entre la <b>prod annexe</b> et la <b>prod boutique</b>.</p>
 
         <div className="flex gap-2 mb-5">
@@ -474,26 +457,6 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
         </div>
       )}
 
-      {/* ---- RÉGLAGES ---- */}
-      {reglages && (
-        <div onClick={() => setReglages(null)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 w-full max-w-md border border-line">
-            <h3 className="text-[15px] font-medium mb-1">Qui est prévenu par WhatsApp ?</h3>
-            <p className="text-[12px] text-ink-mute mb-4">Le numéro reçoit un message dès qu'un transfert attend sa confirmation.</p>
-            {Object.entries(SENS).map(([k, s]) => (
-              <div key={k} className="mb-3">
-                <label className="block text-[11.5px] font-semibold text-ink-soft mb-1">{s.label} — prévenir {s.vers}</label>
-                <input value={reglages[k] || ''} onChange={e => setReglages({ ...reglages, [k]: e.target.value })}
-                  placeholder="06 12 34 56 78" className="w-full px-3 py-2 border border-line rounded-lg text-[13px]" />
-              </div>
-            ))}
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setReglages(null)} className="flex-1 px-3 py-2 text-[13px] border border-line rounded-lg bg-white">Annuler</button>
-              <button onClick={enregistrerReglages} className="flex-1 px-3 py-2 text-[13px] bg-bordeaux text-cream rounded-lg">Enregistrer</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

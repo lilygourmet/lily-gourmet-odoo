@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { sendWatiInfo } from './watiInfo'
 
 // ============================================================
 // TRANSFERTS DE STOCK entre PROD ANNEXE et PROD BOUTIQUE
@@ -123,7 +124,7 @@ export async function addTransfert({ famille, sens, article, qty, date, user }) 
   })
   if (error) throw error
   // Le message ne doit pas faire échouer l'enregistrement du transfert.
-  notifier(sens, `${SENS[sens].de} envoie ${qty} ${article.unite || 'kg'} de ${article.nom} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
+  notifier(sens, famille, `${SENS[sens].de} envoie ${qty} ${article.unite || 'kg'} de ${article.nom} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
     .catch(() => {})
 }
 
@@ -144,7 +145,7 @@ export async function addTransfertsGroupes({ famille, sens, lignes, date, user }
   const { error } = await supabase.from('transferts_mp').insert(rows)
   if (error) throw error
   const detail = lignes.map(l => `${l.nom} ${l.qty} ${l.unite || 'kg'}`).join(', ')
-  notifier(sens, `${SENS[sens].de} envoie ${lignes.length} article(s) : ${detail} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
+  notifier(sens, famille, `${SENS[sens].de} envoie ${lignes.length} article(s) : ${detail} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
     .catch(() => {})
 }
 
@@ -198,49 +199,24 @@ export async function envoyerVersOdoo(t, qty, user) {
   }
 }
 
-// ---- Numéros WhatsApp prévenus (un par sens) ----
+// ---- Alerte WhatsApp ----
 
-// Table à part : app_config garde le code d'accès Caisse/RH et reste fermée en
-// écriture — on n'y touche pas pour deux numéros de téléphone.
-const CLE_WA = { annexe_boutique: 'wa_boutique', boutique_annexe: 'wa_annexe' }
-
-export async function loadWaNumbers() {
-  const { data } = await supabase.from('transferts_config').select('key, value').in('key', Object.values(CLE_WA))
-  const m = Object.fromEntries((data || []).map(r => [r.key, r.value]))
-  return { annexe_boutique: m[CLE_WA.annexe_boutique] || '', boutique_annexe: m[CLE_WA.boutique_annexe] || '' }
-}
-
-export async function saveWaNumbers(nums) {
-  const rows = Object.entries(CLE_WA).map(([sens, key]) => ({ key, value: String(nums[sens] || '').trim() }))
-  const { error } = await supabase.from('transferts_config').upsert(rows, { onConflict: 'key' })
-  if (error) throw error
-}
-
-const normalizePhone = raw => {
-  let n = String(raw || '').replace(/\D/g, '')
-  if (n.startsWith('0')) n = '212' + n.slice(1)
-  return n
-}
-
-// Prévient le numéro configuré pour ce sens : message de conversation si elle est
-// ouverte, sinon modèle « wati_info » (une seule ligne : un modèle Wati n'accepte
-// pas de retour à la ligne dans sa variable).
-async function notifier(sens, texte, user) {
-  const nums = await loadWaNumbers()
-  const phone = normalizePhone(nums[sens])
-  if (!phone) return false
+// Comme l'économat : on prévient les personnes de l'atelier qui RÉCEPTIONNE, sur le
+// numéro de leur fiche. Pas de numéro à tenir à jour ailleurs — ça suit les permissions.
+// Pour les produits SM, seules celles qui ont accès à cet onglet sont prévenues.
+async function notifier(sens, famille, texte, user) {
+  const col = SENS[sens]?.lieuRecu === 'annexe' ? 'perm_transfert_annexe' : 'perm_transfert_boutique'
+  let q = supabase.from('profiles').select('id').eq('active', true).eq(col, true)
+  if (famille === 'sm') q = q.eq('perm_transfert_produits', true)
+  const { data } = await q
+  // On ne se prévient pas soi-même (quelqu'un peut avoir les deux ateliers).
+  const ids = (data || []).map(r => r.id).filter(id => id && id !== user?.id)
+  if (!ids.length) return false
+  // Un modèle Wati n'accepte pas de retour à la ligne dans sa variable : message à plat.
   const message = String(texte).replace(/\s*\n\s*/g, ' ')
-  const { data: conv } = await supabase.from('conversations').select('id').eq('client_phone', phone).maybeSingle()
-  if (conv?.id) {
-    const r = await fetch('/api/wati-webhook?action=send', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversationId: conv.id, clientPhone: phone, userId: user?.id, text: `📦 ${message}` }),
-    })
-    if (r.ok) return true
-  }
-  const r2 = await fetch('/api/wati-webhook?action=send-template', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientPhone: phone, templateName: 'wati_info', parameters: [{ name: '1', value: message }], userId: user?.id }),
-  }).catch(() => null)
-  return !!(r2 && r2.ok)
+  await sendWatiInfo({
+    message, recipientIds: ids, cible: 'transferts',
+    userId: user?.id, userName: user?.full_name,
+  })
+  return true
 }
