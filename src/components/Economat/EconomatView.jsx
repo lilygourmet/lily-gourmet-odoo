@@ -284,9 +284,9 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                 const vign = b.articles.find(a => a.photo_url)
                 return (
                   <button key={b.id} onClick={() => { setFamilleOuverte(b.id); setRecherche(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-                    className="flex-shrink-0 w-[74px] flex flex-col items-center gap-1"
+                    className="flex-shrink-0 w-[86px] flex flex-col items-center gap-1"
                     style={{ color: c.trait }}>
-                    <span className="relative w-[60px] h-[60px] rounded-2xl overflow-hidden flex items-center justify-center"
+                    <span className="relative w-[70px] h-[70px] rounded-2xl overflow-hidden flex items-center justify-center"
                       style={{ background: c.fond, border: `2.5px solid ${actif ? c.trait : 'transparent'}` }}>
                       {vign ? (
                         <img src={vign.photo_url} alt="" className="w-full h-full object-cover scale-[1.15]" />
@@ -299,7 +299,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                         <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1.5 rounded-full bg-bordeaux text-cream text-[11px] font-bold flex items-center justify-center border-2 border-cream">{n}</span>
                       )}
                     </span>
-                    <span className={`text-[10.5px] leading-tight text-center font-semibold ${actif ? '' : 'text-ink-mute'}`}
+                    <span className={`text-[11px] leading-tight text-center font-semibold ${actif ? '' : 'text-ink-mute'}`}
                       style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {b.name.split(',')[0].split(' & ')[0]}
                     </span>
@@ -315,7 +315,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                 Aucun article ne contient « {recherche.trim()} » dans cette catégorie.
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {aMontrer.map(a => (
                   <ArticleTuile key={a.id} article={a} qty={qty[a.id] || 0}
                     couleur={couleurFamille(ouverte.name, 0).trait}
@@ -506,7 +506,7 @@ function ArticleTuile({ article, qty, couleur, onPlus, onMoins, onPave }) {
   return (
     <div
       onClick={onPlus}
-      className={`relative bg-white rounded-2xl overflow-hidden cursor-pointer flex flex-col transition-all ${
+      className={`relative bg-white rounded-xl overflow-hidden cursor-pointer flex flex-col transition-all ${
         actif ? 'border-[1.5px] border-bordeaux shadow-[inset_0_0_0_1.5px_#993556]' : 'border-[1.5px] border-line/70'
       }`}
     >
@@ -514,14 +514,14 @@ function ArticleTuile({ article, qty, couleur, onPlus, onMoins, onPave }) {
         <button
           onClick={e => { e.stopPropagation(); onMoins() }}
           aria-label="Retirer"
-          className="absolute top-1.5 left-1.5 z-10 w-[34px] h-[34px] rounded-full bg-white border-[1.5px] border-line text-ink-soft text-[20px] leading-none flex items-center justify-center"
+          className="absolute top-1 left-1 z-10 w-7 h-7 rounded-full bg-white border-[1.5px] border-line text-ink-soft text-[17px] leading-none flex items-center justify-center"
         >−</button>
       )}
       <button
         onClick={e => { e.stopPropagation(); onPave() }}
         aria-label="Saisir la quantité"
-        className={`absolute top-1.5 right-1.5 z-10 min-w-[34px] h-[34px] px-2 rounded-full text-[15px] font-bold flex items-center justify-center tabular-nums ${
-          actif ? 'bg-bordeaux text-cream shadow-md' : 'bg-white border-[1.5px] border-line text-ink-mute'
+        className={`absolute top-1 right-1 z-10 min-w-[28px] h-7 px-1.5 rounded-full text-[13px] font-bold flex items-center justify-center tabular-nums ${
+          actif ? 'bg-bordeaux text-cream shadow-md' : 'bg-white/85 border border-line text-ink-mute'
         }`}
       >{qty}</button>
 
@@ -534,9 +534,9 @@ function ArticleTuile({ article, qty, couleur, onPlus, onMoins, onPave }) {
             dangerouslySetInnerHTML={{ __html: (ICONES[picto(article.name)] || ICONES.defaut).svg }} />
         )}
       </div>
-      <div className="px-2.5 pt-2 pb-2.5 text-[14px] font-semibold leading-tight text-ink">
+      <div className="px-1.5 pt-1.5 pb-2 text-[11.5px] font-semibold leading-tight text-ink">
         {article.name}
-        {article.unit && <span className="block text-[11.5px] font-normal text-ink-mute mt-0.5">{article.unit}</span>}
+        {article.unit && <span className="block text-[10px] font-normal text-ink-mute mt-0.5">{article.unit}</span>}
       </div>
     </div>
   )
