@@ -109,15 +109,32 @@ async function handleTransfertStock(req, res) {
       location_dest_id: dest,
     }]
   })
+  // On regroupe tout dans le MÊME transfert Odoo tant qu'il est en BROUILLON :
+  // une seule référence à valider au lieu d'une par article. Dès qu'il est validé
+  // (ou seulement mis en « prêt »), la confirmation suivante ouvre un nouveau numéro.
+  // Le filtre sur `origin` évite de se greffer sur un brouillon saisi à la main.
+  const [ouvert] = await exec(uid, 'stock.picking', 'search_read', [[
+    ['picking_type_id', '=', TYPE_INTERNE_PRODS],
+    ['state', '=', 'draft'],
+    ['location_id', '=', src],
+    ['location_dest_id', '=', dest],
+    ['origin', 'like', 'TRANSFERT%'],
+  ]], { fields: ['id', 'name', 'state'], order: 'id desc', limit: 1 })
+
+  if (ouvert) {
+    await exec(uid, 'stock.move', 'create', [moves.map(m => ({ ...m[2], picking_id: ouvert.id }))])
+    return res.status(200).json({ ok: true, id: ouvert.id, name: ouvert.name, state: ouvert.state, groupe: true })
+  }
+
   const id = await exec(uid, 'stock.picking', 'create', [{
     picking_type_id: TYPE_INTERNE_PRODS,
     location_id: src,
     location_dest_id: dest,
-    origin: String(origine || 'Transfert app').slice(0, 200),
+    origin: String(origine || 'TRANSFERT app').slice(0, 200),
     move_ids_without_package: moves,
   }])
   const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
-  return res.status(200).json({ ok: true, id, name: pick?.name, state: pick?.state })
+  return res.status(200).json({ ok: true, id, name: pick?.name, state: pick?.state, groupe: false })
 }
 
 export default async function handler(req, res) {
