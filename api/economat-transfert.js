@@ -98,7 +98,12 @@ async function handleTransfertStock(req, res) {
 
   const moves = lignes.map(l => {
     const pid = Number(l.odooProductId)
-    const texte = String(l.nom || '').slice(0, 200)
+    // Qui a envoyé et qui a reçu, sur CHAQUE ligne : un même bon regroupe parfois
+    // plusieurs envois, faits et confirmés par des personnes différentes.
+    const qui = (l.envoyePar || l.recuPar)
+      ? ` — envoyé par ${l.envoyePar || '?'}, reçu par ${l.recuPar || '?'}`
+      : ''
+    const texte = (String(l.nom || '') + qui).slice(0, 200)
     return [0, 0, {
       name: texte,
       description_picking: texte,

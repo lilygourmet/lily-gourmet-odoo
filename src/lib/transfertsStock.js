@@ -176,8 +176,14 @@ export async function envoyerVersOdoo(t, qty, user) {
       body: JSON.stringify({
         mode: 'stock',
         sens: t.sens,
-        origine: `TRANSFERT ${SENS[t.sens]?.label || ''} — ${user?.full_name || ''}`.trim(),
-        lignes: [{ odooProductId: t.odoo_product_id, nom: t.matiere, qty }],
+        origine: `TRANSFERT ${SENS[t.sens]?.label || ''} — envoyé par ${t.envoye_par || '?'}, reçu par ${user?.full_name || '?'}`.trim(),
+        lignes: [{
+          odooProductId: t.odoo_product_id,
+          nom: t.matiere,
+          qty,
+          envoyePar: t.envoye_par || null,
+          recuPar: user?.full_name || null,
+        }],
       }),
     })
     const data = await res.json().catch(() => ({}))
