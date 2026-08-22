@@ -198,7 +198,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      <div className="max-w-3xl mx-auto p-4 pb-32">
+      <div className="max-w-3xl mx-auto p-4 pb-56">
         <div className="flex items-center justify-between mb-1">
           <h1 className="font-fraunces italic text-[26px] text-ink">{fam.titre}</h1>
           {isAdmin && (
@@ -313,6 +313,12 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                 )}
               </div>
 
+              {panier.length === 0 && (
+                <p className="mt-3 text-[12px] text-ink-mute">
+                  Touche un article ci-dessus pour saisir la quantité : le bouton <b>Envoyer la liste</b> apparaîtra en bas de l'écran.
+                </p>
+              )}
+
               {/* ajouter un article absent */}
               <div className="mt-4 pt-4 border-t border-line">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-2">Ajouter un article</div>
@@ -389,7 +395,8 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
 
       {/* ---- LA LISTE À ENVOYER (barre du bas) ---- */}
       {panier.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 bg-white border-t border-line shadow-[0_-4px_14px_rgba(122,42,68,0.08)] z-40">
+        <div className="fixed bottom-0 inset-x-0 bg-white border-t border-line shadow-[0_-4px_14px_rgba(122,42,68,0.08)] z-40"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="max-w-3xl mx-auto p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute">
@@ -419,8 +426,10 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
 
       {/* ---- CALCULATRICE ---- */}
       {calc && (
-        <div onClick={() => setCalc(null)} className="fixed inset-0 bg-black/45 z-50 flex items-end sm:items-center justify-center p-3">
-          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs border border-line">
+        <div onClick={() => setCalc(null)} className="fixed inset-0 bg-black/45 z-50 flex items-end sm:items-center justify-center p-3 overflow-y-auto">
+          <div onClick={e => e.stopPropagation()}
+            className="bg-white rounded-2xl p-4 w-full max-w-xs border border-line max-h-[92dvh] overflow-y-auto"
+            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
             <div className="flex items-start gap-2 mb-3">
               {calc.article.image_url && <img src={calc.article.image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
               <div className="flex-1">
@@ -444,10 +453,10 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
               ))}
             </div>
 
-            <div className="flex gap-2 mt-3">
-              <button onClick={() => tape('C')} className="px-4 py-2.5 text-[13px] border border-line rounded-lg bg-white">Effacer</button>
-              <button onClick={validerCalc} className="flex-1 inline-flex items-center justify-center gap-1 px-4 py-2.5 text-[13px] font-medium bg-bordeaux text-cream rounded-lg">
-                <Plus size={14} /> Ajouter à la liste
+            <div className="flex gap-2 mt-3 sticky bottom-0 bg-white pt-1">
+              <button onClick={() => tape('C')} className="px-4 py-3 text-[13px] border border-line rounded-lg bg-white">Effacer</button>
+              <button onClick={validerCalc} className="flex-1 inline-flex items-center justify-center gap-1 px-4 py-3 text-[14px] font-medium bg-bordeaux text-cream rounded-lg">
+                <Plus size={15} /> Ajouter à la liste
               </button>
             </div>
           </div>
