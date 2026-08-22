@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { todayISO } from '../lib/dates'
-import { Plus, Check, Printer, Search, Settings, X, Trash2, Eye, EyeOff, Send } from 'lucide-react'
+import { Plus, Check, Printer, Search, Settings, X, Trash2, Eye, EyeOff, Send, ChevronUp, ChevronDown } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { canSeeTransfertsProduits } from '../lib/auth'
@@ -32,6 +32,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   const [voirMasques, setVoirMasques] = useState(false)
   const [calc, setCalc] = useState(null)              // { article, saisie } quand la calculatrice est ouverte
   const [panier, setPanier] = useState([])            // la liste préparée avant envoi
+  const [panierOuvert, setPanierOuvert] = useState(false)   // détail replié : sinon il cache les articles
   const [date, setDate] = useState(todayISO())
   const [filterDate, setFilterDate] = useState('')
   const [rechercheOdoo, setRechercheOdoo] = useState('')
@@ -198,7 +199,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      <div className="max-w-3xl mx-auto p-4 pb-56">
+      <div className="max-w-3xl mx-auto p-4 pb-28">
         <div className="flex items-center justify-between mb-1">
           <h1 className="font-fraunces italic text-[26px] text-ink">{fam.titre}</h1>
           {isAdmin && (
@@ -393,33 +394,43 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
         </>)}
       </div>
 
-      {/* ---- LA LISTE À ENVOYER (barre du bas) ---- */}
+      {/* ---- LA LISTE À ENVOYER (barre du bas, repliée par défaut) ---- */}
       {panier.length > 0 && (
         <div className="fixed bottom-0 inset-x-0 bg-white border-t border-line shadow-[0_-4px_14px_rgba(122,42,68,0.08)] z-40"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div className="max-w-3xl mx-auto p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute">
-                Liste à envoyer ({panier.length})
-              </div>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="px-2 py-1 border border-line rounded-lg text-[12px]" />
-            </div>
-            <div className="max-h-32 overflow-y-auto mb-2">
-              {panier.map(p => (
-                <div key={p.odoo_product_id} className="flex items-center gap-2 py-1 text-[12.5px]">
-                  <div className="flex-1 truncate">{p.nom}</div>
-                  <button onClick={() => setCalc({ article: p, saisie: String(p.qty).replace('.', ',') })}
-                    className="px-2 py-0.5 border border-line rounded-md">{fmt(p.qty)} {p.unite}</button>
-                  <button onClick={() => setPanier(panier.filter(x => x.odoo_product_id !== p.odoo_product_id))}
-                    className="p-1 text-ink-mute hover:text-red-700"><Trash2 size={13} /></button>
+          <div className="max-w-3xl mx-auto p-2.5">
+            {/* Le détail est masqué par défaut : déplié, il cachait les articles à choisir. */}
+            {panierOuvert && (
+              <>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute">Liste à envoyer</div>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                    className="px-2 py-1 border border-line rounded-lg text-[12px]" />
                 </div>
-              ))}
+                <div className="max-h-[28vh] overflow-y-auto mb-2">
+                  {panier.map(p => (
+                    <div key={p.odoo_product_id} className="flex items-center gap-2 py-1 text-[12.5px]">
+                      <div className="flex-1 truncate">{p.nom}</div>
+                      <button onClick={() => setCalc({ article: p, saisie: String(p.qty).replace('.', ',') })}
+                        className="px-2 py-0.5 border border-line rounded-md">{fmt(p.qty)} {p.unite}</button>
+                      <button onClick={() => setPanier(panier.filter(x => x.odoo_product_id !== p.odoo_product_id))}
+                        className="p-1 text-ink-mute hover:text-red-700"><Trash2 size={13} /></button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPanierOuvert(!panierOuvert)}
+                className="inline-flex items-center gap-1.5 px-3 py-2.5 text-[12.5px] border border-line rounded-lg bg-white whitespace-nowrap">
+                {panierOuvert ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                <b>{panier.length}</b> article{panier.length > 1 ? 's' : ''}
+              </button>
+              <button onClick={envoyerListe} disabled={busy}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 text-[13.5px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">
+                <Send size={15} /> Envoyer — {SENS[sens].vers}
+              </button>
             </div>
-            <button onClick={envoyerListe} disabled={busy}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-[13.5px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">
-              <Send size={15} /> Envoyer la liste — {SENS[sens].vers}
-            </button>
           </div>
         </div>
       )}
