@@ -69,6 +69,16 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     return () => mq.removeEventListener?.('change', h)
   }, [])
   const hideHeaderNav = isWide && !isLivreur(user)
+  // Sous 640px, la barre du bas (MobileBottomNav) est là et contient TOUS les
+  // onglets dans son bouton « Plus » : les répéter en haut en icônes muettes
+  // ne sert qu'à repousser le contenu de trois rangées.
+  const [isPhone, setIsPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const h = e => setIsPhone(e.matches)
+    mq.addEventListener?.('change', h)
+    return () => mq.removeEventListener?.('change', h)
+  }, [])
   // Sur téléphone (<768px), les employés reçoivent les mêmes dossiers déroulants que
   // l'admin : une file d'icônes sans nom est illisible sur petit écran (Économat introuvable).
   const useDropdowns = admin || !isWide
@@ -691,6 +701,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const allTabs = [...fixedTabs, ...adminGallery, ...menuProduction, ...menuVitrine, ...menuOutils, ...extraClassables]
     .filter((t, i, arr) => arr.findIndex(x => x.view === t.view) === i)
 
+  // La barre du bas disparaît si l'utilisateur n'a qu'un onglet : dans ce cas
+  // seulement, on garde le menu du haut, sinon il n'aurait plus de navigation.
+  const masquerNav = hideHeaderNav || (isPhone && allTabs.length >= 2)
+
   // Construit les entrees a afficher (onglets seuls + dossiers), dans l'ordre choisi.
   const allTabsMap = Object.fromEntries(allTabs.map(t => [t.view, t]))
   const customActive = !!navCfg && (Array.isArray(navCfg.items) || Array.isArray(navCfg.order) || Array.isArray(navCfg.hidden))
@@ -844,7 +858,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
         </button>
 
         {/* Navigation : 3 boutons fixes + 3 menus deroulants */}
-        <div className="flex items-center gap-1.5 flex-wrap" style={{ display: hideHeaderNav ? 'none' : undefined }}>
+        <div className="flex items-center gap-1.5 flex-wrap" style={{ display: masquerNav ? 'none' : undefined }}>
           {customActive ? (
             <>
               {/* Mode perso : onglets seuls + dossiers, dans l'ordre choisi */}
