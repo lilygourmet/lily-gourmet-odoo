@@ -83,16 +83,20 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
         )}
       </nav>
 
+      {/* Hauteur en dvh et non vh : sur téléphone, vh compte la barre d'adresse
+          du navigateur, donc le bas du tiroir tombait hors de l'écran et les
+          derniers onglets étaient inatteignables. Le défilement porte sur la
+          grille elle-même, pas sur le tiroir entier. */}
       {moreOpen && (
-        <div className="sm:hidden fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setMoreOpen(false)}>
-          <div className="w-full bg-cream rounded-t-2xl max-h-[75vh] overflow-y-auto"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        <div className="sm:hidden fixed inset-0 h-[100dvh] z-50 bg-black/40 flex items-end" onClick={() => setMoreOpen(false)}>
+          <div className="w-full bg-cream rounded-t-2xl max-h-[85dvh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-line sticky top-0 bg-cream">
-              <span className="text-[14px] font-medium text-ink">Tous les onglets</span>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-cream flex-shrink-0">
+              <span className="text-[14px] font-medium text-ink">Tous les onglets <span className="text-ink-mute">({allTabs.length})</span></span>
               <button onClick={() => setMoreOpen(false)} className="text-[13px] text-ink-mute px-2 py-1">Fermer</button>
             </div>
-            <div className="grid grid-cols-3 gap-2 p-3">
+            <div className="grid grid-cols-3 gap-2 p-3 flex-1 overflow-y-auto overscroll-contain"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
               {allTabs.map(t => {
                 const active = activeView === t.view
                 return (
