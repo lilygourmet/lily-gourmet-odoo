@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { todayISO } from '../lib/dates'
-import { Plus, Check, Printer, Search, Settings, X } from 'lucide-react'
+import { Plus, Check, Printer, Search, Settings, X, Trash2, Eye, EyeOff, Send } from 'lucide-react'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import {
-  SENS, FAMILLES, lieuxDe, peutEnvoyer, peutConfirmer,
-  loadArticles, searchOdooProducts, addArticle, removeArticle,
-  loadTransferts, addTransfert, confirmTransfert, envoyerVersOdoo,
+  SENS, FAMILLES, GROUPES, lieuxDe, peutEnvoyer, peutConfirmer,
+  loadArticles, searchOdooProducts, addArticle, setArticleActif,
+  loadTransferts, addTransfertsGroupes, confirmTransfert, envoyerVersOdoo,
   loadWaNumbers, saveWaNumbers,
 } from '../lib/transfertsStock'
 
@@ -19,7 +19,6 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   const mesLieux = lieuxDe(user)
   const isAdmin = user?.role === 'admin'
 
-  // Sens affiché : celui d'où je peux envoyer, sinon celui que je dois confirmer.
   const sensPossibles = Object.keys(SENS).filter(s => peutEnvoyer(user, s) || peutConfirmer(user, s))
   const [sens, setSens] = useState(sensPossibles.find(s => peutEnvoyer(user, s)) || sensPossibles[0] || 'annexe_boutique')
 
@@ -27,46 +26,81 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [choisi, setChoisi] = useState(null)          // article sélectionné (vignette)
-  const [qty, setQty] = useState('')
-  const [date, setDate] = useState(todayISO())
+  const [groupe, setGroupe] = useState('')            // '' = tous les types
   const [filtreArticle, setFiltreArticle] = useState('')
+  const [voirMasques, setVoirMasques] = useState(false)
+  const [calc, setCalc] = useState(null)              // { article, saisie } quand la calculatrice est ouverte
+  const [panier, setPanier] = useState([])            // la liste préparée avant envoi
+  const [date, setDate] = useState(todayISO())
   const [filterDate, setFilterDate] = useState('')
   const [rechercheOdoo, setRechercheOdoo] = useState('')
-  const [resultats, setResultats] = useState(null)     // null = pas de recherche en cours
-  const [reglages, setReglages] = useState(null)       // { annexe_boutique, boutique_annexe } quand ouvert
+  const [resultats, setResultats] = useState(null)
+  const [reglages, setReglages] = useState(null)
 
   async function refresh() {
     setLoading(true)
     try {
-      const [a, t] = await Promise.all([loadArticles(famille), loadTransferts(famille)])
+      const [a, t] = await Promise.all([loadArticles(famille, true), loadTransferts(famille)])
       setArticles(a); setRows(t)
     } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setLoading(false) }
   }
-  useEffect(() => { refresh(); setChoisi(null) }, [famille])
+  useEffect(() => { refresh(); setPanier([]); setGroupe('') }, [famille])
+
+  // Types présents dans cette famille (on n'affiche pas un filtre vide).
+  const groupesPresents = useMemo(() => {
+    const vus = new Set(articles.filter(a => a.actif).map(a => a.groupe || 'autre'))
+    return GROUPES.filter(g => vus.has(g.key))
+  }, [articles])
 
   const listeArticles = useMemo(() => {
     const q = filtreArticle.trim().toLowerCase()
-    return q ? articles.filter(a => a.nom.toLowerCase().includes(q)) : articles
-  }, [articles, filtreArticle])
+    return articles.filter(a => {
+      if (!a.actif && !voirMasques) return false
+      if (groupe && (a.groupe || 'autre') !== groupe) return false
+      if (q && !a.nom.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [articles, filtreArticle, groupe, voirMasques])
 
-  async function send() {
-    if (!choisi) { toast.error('Choisis un article.'); return }
-    if (!(Number(qty) > 0)) { toast.error('Quantité invalide.'); return }
+  // ---- calculatrice ----
+  function tape(touche) {
+    setCalc(c => {
+      if (!c) return c
+      let v = c.saisie
+      if (touche === 'C') v = ''
+      else if (touche === '←') v = v.slice(0, -1)
+      else if (touche === ',') v = v.includes(',') ? v : (v || '0') + ','
+      else v = (v === '0' ? '' : v) + touche
+      return { ...c, saisie: v }
+    })
+  }
+  function validerCalc() {
+    const n = Number((calc.saisie || '').replace(',', '.'))
+    if (!(n > 0)) { toast.error('Quantité invalide.'); return }
+    const a = calc.article
+    setPanier(p => {
+      const i = p.findIndex(x => x.odoo_product_id === a.odoo_product_id)
+      if (i >= 0) { const c = [...p]; c[i] = { ...c[i], qty: n }; return c }
+      return [...p, { odoo_product_id: a.odoo_product_id, nom: a.nom, unite: a.unite, image_url: a.image_url, qty: n }]
+    })
+    setCalc(null)
+  }
+
+  async function envoyerListe() {
+    if (!panier.length) return
     setBusy(true)
     try {
-      await addTransfert({ famille, sens, article: choisi, qty, date, user })
-      setChoisi(null); setQty('')
-      toast.success(`Transfert enregistré — ${SENS[sens].vers} prévenu.`)
+      await addTransfertsGroupes({ famille, sens, lignes: panier, date, user })
+      toast.success(`${panier.length} article(s) envoyé(s) — ${SENS[sens].vers} prévenu.`)
+      setPanier([])
       await refresh()
     } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusy(false) }
   }
 
   async function confirmerRecu(t) {
-    const envoye = fmt(t.qty_envoye)
-    const val = prompt(`Quantité reçue de « ${t.matiere} » ? (envoyé : ${envoye} ${t.unite || 'kg'})`, String(t.qty_envoye))
+    const val = prompt(`Quantité reçue de « ${t.matiere} » ? (envoyé : ${fmt(t.qty_envoye)} ${t.unite || 'kg'})`, String(t.qty_envoye))
     if (val === null) return
     const n = Number(String(val).replace(',', '.'))
     if (!(n >= 0)) { toast.error('Quantité invalide.'); return }
@@ -83,19 +117,15 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
 
   async function reessayerOdoo(t) {
     setBusy(true)
-    try {
-      const ref = await envoyerVersOdoo(t, Number(t.qty_recu), user)
-      toast.success(`Transfert Odoo ${ref} créé.`)
-      await refresh()
-    } catch (e) { toast.error('Odoo : ' + e.message) }
+    try { toast.success(`Transfert Odoo ${await envoyerVersOdoo(t, Number(t.qty_recu), user)} créé.`); await refresh() }
+    catch (e) { toast.error('Odoo : ' + e.message) }
     finally { setBusy(false) }
   }
 
   async function chercher() {
-    const q = rechercheOdoo.trim()
-    if (q.length < 2) return
+    if (rechercheOdoo.trim().length < 2) return
     setBusy(true)
-    try { setResultats(await searchOdooProducts(q)) }
+    try { setResultats(await searchOdooProducts(rechercheOdoo.trim())) }
     catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusy(false) }
   }
@@ -109,24 +139,22 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
-  async function retirer(a) {
-    if (!window.confirm(`Retirer « ${a.nom} » de la liste ? (l'historique reste)`)) return
-    try { await removeArticle(a.odoo_product_id); await refresh() }
+  async function basculerArticle(a) {
+    try { await setArticleActif(a.odoo_product_id, !a.actif); await refresh() }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
   async function ouvrirReglages() {
-    try { setReglages(await loadWaNumbers()) }
-    catch (e) { toast.error('Erreur : ' + e.message) }
+    try { setReglages(await loadWaNumbers()) } catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function enregistrerReglages() {
     try { await saveWaNumbers(reglages); setReglages(null); toast.success('Numéros enregistrés.') }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
-  // À confirmer = ce qui arrive DANS mon atelier (peu importe le sens affiché).
   const aConfirmer = rows.filter(r => r.statut === 'en_attente' && peutConfirmer(user, r.sens))
   const journal = filterDate ? rows.filter(r => (r.transfer_date || '').slice(0, 10) === filterDate) : rows
+  const nbMasques = articles.filter(a => !a.actif).length
 
   function printTransferts() {
     const w = window.open('', '_blank')
@@ -162,7 +190,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      <div className="max-w-3xl mx-auto p-4">
+      <div className="max-w-3xl mx-auto p-4 pb-32">
         <div className="flex items-center justify-between mb-1">
           <h1 className="font-fraunces italic text-[26px] text-ink">{fam.titre}</h1>
           {isAdmin && (
@@ -173,10 +201,9 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
         </div>
         <p className="text-[13px] text-ink-mute mb-4">{fam.label} — entre la <b>prod annexe</b> et la <b>prod boutique</b>.</p>
 
-        {/* ---- SENS ---- */}
         <div className="flex gap-2 mb-5">
           {Object.entries(SENS).map(([k, s]) => (
-            <button key={k} onClick={() => { setSens(k); setChoisi(null) }}
+            <button key={k} onClick={() => setSens(k)}
               className={`px-3 py-2 rounded-lg text-[12.5px] border transition-all ${sens === k ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line text-ink-soft hover:bg-cream-warm'}`}>
               {s.label}
             </button>
@@ -188,16 +215,12 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
           {/* ---- À CONFIRMER ---- */}
           {aConfirmer.length > 0 && (
             <div className="bg-white border border-line rounded-2xl p-4 mb-6">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-3">
-                À confirmer ({aConfirmer.length})
-              </h2>
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-3">À confirmer ({aConfirmer.length})</h2>
               {aConfirmer.map(t => (
                 <div key={t.id} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
                   <div className="flex-1">
                     <div className="text-[13px] text-ink">{t.matiere}</div>
-                    <div className="text-[11px] text-ink-mute">
-                      {frDate(t.transfer_date)} · {SENS[t.sens]?.label} · envoyé par {t.envoye_par || '—'}
-                    </div>
+                    <div className="text-[11px] text-ink-mute">{frDate(t.transfer_date)} · {SENS[t.sens]?.label} · envoyé par {t.envoye_par || '—'}</div>
                   </div>
                   <div className="text-[14px] font-medium">{fmt(t.qty_envoye)} {t.unite || 'kg'}</div>
                   <button onClick={() => confirmerRecu(t)} disabled={busy}
@@ -209,30 +232,67 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
             </div>
           )}
 
-          {/* ---- ENVOYER ---- */}
+          {/* ---- CHOISIR LES ARTICLES ---- */}
           {peutEnvoyer(user, sens) && (
             <div className="bg-cream-warm border border-line rounded-2xl p-4 mb-6">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-3">
                 Envoyer — {SENS[sens].de} → {SENS[sens].vers}
               </h2>
 
-              <input value={filtreArticle} onChange={e => setFiltreArticle(e.target.value)}
-                placeholder="🔍 filtrer les articles…"
-                className="w-full px-3 py-2 mb-3 border border-line rounded-lg text-[13px] bg-white" />
+              {/* filtres par type */}
+              {groupesPresents.length > 1 && (
+                <div className="flex gap-1.5 flex-wrap mb-3">
+                  <button onClick={() => setGroupe('')}
+                    className={`px-2.5 py-1 rounded-full text-[11.5px] border ${!groupe ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line text-ink-soft'}`}>
+                    Tout
+                  </button>
+                  {groupesPresents.map(g => (
+                    <button key={g.key} onClick={() => setGroupe(groupe === g.key ? '' : g.key)}
+                      className={`px-2.5 py-1 rounded-full text-[11.5px] border ${groupe === g.key ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line text-ink-soft'}`}>
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-              {/* vignettes carrées */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 max-h-[320px] overflow-y-auto">
+              <div className="flex gap-2 mb-3">
+                <input value={filtreArticle} onChange={e => setFiltreArticle(e.target.value)}
+                  placeholder="🔍 filtrer les articles…"
+                  className="flex-1 px-3 py-2 border border-line rounded-lg text-[13px] bg-white" />
+                {nbMasques > 0 && (
+                  <button onClick={() => setVoirMasques(!voirMasques)} title="Articles masqués"
+                    className="inline-flex items-center gap-1 px-2.5 py-2 text-[11.5px] border border-line rounded-lg bg-white hover:bg-cream">
+                    {voirMasques ? <EyeOff size={13} /> : <Eye size={13} />} {nbMasques}
+                  </button>
+                )}
+              </div>
+
+              {/* vignettes : photo + nom ; un clic ouvre la calculatrice */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[380px] overflow-y-auto">
                 {listeArticles.map(a => {
-                  const sel = choisi?.odoo_product_id === a.odoo_product_id
+                  const dansPanier = panier.find(p => p.odoo_product_id === a.odoo_product_id)
                   return (
-                    <button key={a.odoo_product_id} onClick={() => setChoisi(a)}
-                      className={`relative aspect-square p-2 rounded-xl border text-left transition-all ${sel ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line hover:border-bordeaux/40'}`}>
-                      <div className={`text-[11.5px] leading-tight line-clamp-4 ${sel ? '' : 'text-ink'}`}>{a.nom}</div>
-                      <div className={`absolute bottom-2 left-2 text-[10px] ${sel ? 'opacity-80' : 'text-ink-mute'}`}>{a.unite}</div>
+                    <button key={a.odoo_product_id} onClick={() => setCalc({ article: a, saisie: dansPanier ? String(dansPanier.qty).replace('.', ',') : '' })}
+                      className={`relative rounded-xl border overflow-hidden text-left transition-all ${dansPanier ? 'border-bordeaux ring-2 ring-bordeaux/25' : 'border-line hover:border-bordeaux/40'} ${a.actif ? 'bg-white' : 'bg-cream opacity-60'}`}>
+                      <div className="aspect-square bg-cream flex items-center justify-center overflow-hidden">
+                        {a.image_url
+                          ? <img src={a.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          : <span className="text-[10px] text-ink-mute px-2 text-center">pas de photo</span>}
+                      </div>
+                      <div className="p-1.5">
+                        <div className="text-[10.5px] leading-tight text-ink line-clamp-2">{a.nom}</div>
+                        <div className="text-[9.5px] text-ink-mute mt-0.5">{a.unite}</div>
+                      </div>
+                      {dansPanier && (
+                        <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-bordeaux text-cream text-[10px] font-medium">
+                          {fmt(dansPanier.qty)}
+                        </span>
+                      )}
                       {isAdmin && (
-                        <span onClick={(e) => { e.stopPropagation(); retirer(a) }}
-                          className={`absolute top-1 right-1 p-1 rounded ${sel ? 'hover:bg-white/20' : 'text-ink-mute hover:bg-cream'}`} title="Retirer de la liste">
-                          <X size={11} />
+                        <span onClick={(e) => { e.stopPropagation(); basculerArticle(a) }}
+                          className="absolute top-1 right-1 p-1 rounded bg-white/85 text-ink-mute hover:text-bordeaux"
+                          title={a.actif ? 'Masquer cet article' : 'Remettre dans la liste'}>
+                          {a.actif ? <X size={11} /> : <Eye size={11} />}
                         </span>
                       )}
                     </button>
@@ -240,38 +300,17 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                 })}
                 {listeArticles.length === 0 && (
                   <div className="col-span-full text-center text-[12px] text-ink-mute py-6">
-                    Aucun article. Cherche-le ci-dessous pour l'ajouter.
+                    Aucun article ici. Cherche-le ci-dessous pour l'ajouter.
                   </div>
                 )}
               </div>
 
-              <div className="grid sm:grid-cols-[1fr_auto_auto] gap-3 items-end">
-                <div className="text-[12px] text-ink-soft">
-                  {choisi ? <>Article choisi : <b>{choisi.nom}</b></> : <span className="text-ink-mute italic">Choisis un article ci-dessus</span>}
-                </div>
-                <div className="w-32">
-                  <label className="block text-[11px] font-semibold text-ink-soft mb-1">Quantité ({choisi?.unite || '—'})</label>
-                  <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="5"
-                    className="w-full px-3 py-2 border border-line rounded-lg text-[13px] bg-white" />
-                </div>
-                <div className="w-36">
-                  <label className="block text-[11px] font-semibold text-ink-soft mb-1">Date</label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-line rounded-lg text-[13px] bg-white" />
-                </div>
-              </div>
-              <button onClick={send} disabled={busy || !choisi}
-                className="mt-3 inline-flex items-center justify-center gap-1 px-4 py-2 text-[13px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">
-                <Plus size={14} /> Envoyer
-              </button>
-
-              {/* ajouter un article absent de la liste */}
+              {/* ajouter un article absent */}
               <div className="mt-4 pt-4 border-t border-line">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-2">Ajouter un article</div>
                 <div className="flex gap-2">
                   <input value={rechercheOdoo} onChange={e => setRechercheOdoo(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && chercher()}
-                    placeholder="nom du produit dans Odoo…"
+                    onKeyDown={e => e.key === 'Enter' && chercher()} placeholder="nom du produit dans Odoo…"
                     className="flex-1 px-3 py-2 border border-line rounded-lg text-[13px] bg-white" />
                   <button onClick={chercher} disabled={busy}
                     className="inline-flex items-center gap-1 px-3 py-2 text-[12px] border border-line rounded-lg bg-white hover:bg-cream">
@@ -283,6 +322,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                     {resultats.length === 0 && <div className="text-[12px] text-ink-mute py-2">Aucun produit trouvé.</div>}
                     {resultats.map(p => (
                       <div key={p.id} className="flex items-center gap-2 py-1.5 border-b border-line last:border-0">
+                        {p.image && <img src={p.image} alt="" className="w-8 h-8 rounded object-cover" />}
                         <div className="flex-1 text-[12.5px]">{p.nom} <span className="text-ink-mute">({p.unite})</span></div>
                         <button onClick={() => ajouter(p)} className="px-2.5 py-1 text-[11.5px] border border-line rounded-lg bg-white hover:bg-cream">
                           + Ajouter
@@ -339,7 +379,74 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
         </>)}
       </div>
 
-      {/* ---- RÉGLAGES : numéros prévenus ---- */}
+      {/* ---- LA LISTE À ENVOYER (barre du bas) ---- */}
+      {panier.length > 0 && (
+        <div className="fixed bottom-0 inset-x-0 bg-white border-t border-line shadow-[0_-4px_14px_rgba(122,42,68,0.08)] z-40">
+          <div className="max-w-3xl mx-auto p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute">
+                Liste à envoyer ({panier.length})
+              </div>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="px-2 py-1 border border-line rounded-lg text-[12px]" />
+            </div>
+            <div className="max-h-32 overflow-y-auto mb-2">
+              {panier.map(p => (
+                <div key={p.odoo_product_id} className="flex items-center gap-2 py-1 text-[12.5px]">
+                  <div className="flex-1 truncate">{p.nom}</div>
+                  <button onClick={() => setCalc({ article: p, saisie: String(p.qty).replace('.', ',') })}
+                    className="px-2 py-0.5 border border-line rounded-md">{fmt(p.qty)} {p.unite}</button>
+                  <button onClick={() => setPanier(panier.filter(x => x.odoo_product_id !== p.odoo_product_id))}
+                    className="p-1 text-ink-mute hover:text-red-700"><Trash2 size={13} /></button>
+                </div>
+              ))}
+            </div>
+            <button onClick={envoyerListe} disabled={busy}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-[13.5px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">
+              <Send size={15} /> Envoyer la liste — {SENS[sens].vers}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---- CALCULATRICE ---- */}
+      {calc && (
+        <div onClick={() => setCalc(null)} className="fixed inset-0 bg-black/45 z-50 flex items-end sm:items-center justify-center p-3">
+          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-4 w-full max-w-xs border border-line">
+            <div className="flex items-start gap-2 mb-3">
+              {calc.article.image_url && <img src={calc.article.image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
+              <div className="flex-1">
+                <div className="text-[13px] text-ink leading-tight">{calc.article.nom}</div>
+                <div className="text-[11px] text-ink-mute">en {calc.article.unite}</div>
+              </div>
+              <button onClick={() => setCalc(null)} className="p-1 text-ink-mute"><X size={16} /></button>
+            </div>
+
+            <div className="bg-cream-warm border border-line rounded-xl px-4 py-3 mb-3 text-right">
+              <span className="text-[28px] font-medium text-ink">{calc.saisie || '0'}</span>
+              <span className="text-[13px] text-ink-mute ml-1">{calc.article.unite}</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {['7', '8', '9', '4', '5', '6', '1', '2', '3', ',', '0', '←'].map(t => (
+                <button key={t} onClick={() => tape(t)}
+                  className="py-3 rounded-xl border border-line bg-white text-[18px] font-medium hover:bg-cream active:bg-cream-warm">
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => tape('C')} className="px-4 py-2.5 text-[13px] border border-line rounded-lg bg-white">Effacer</button>
+              <button onClick={validerCalc} className="flex-1 inline-flex items-center justify-center gap-1 px-4 py-2.5 text-[13px] font-medium bg-bordeaux text-cream rounded-lg">
+                <Plus size={14} /> Ajouter à la liste
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- RÉGLAGES ---- */}
       {reglages && (
         <div onClick={() => setReglages(null)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 w-full max-w-md border border-line">

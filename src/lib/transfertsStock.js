@@ -13,6 +13,19 @@ export const SENS = {
   boutique_annexe: { label: 'Boutique → Annexe', de: 'Prod boutique', vers: 'Prod annexe', lieuEnvoi: 'boutique', lieuRecu: 'annexe' },
 }
 
+// Familles de produits, dans l'ordre d'affichage des filtres.
+export const GROUPES = [
+  { key: 'creme',        label: 'Crèmes' },
+  { key: 'glacage',      label: 'Glaçages' },
+  { key: 'viennoiserie', label: 'Viennoiseries' },
+  { key: 'biscuit',      label: 'Biscuits & pâtes' },
+  { key: 'entremet',     label: 'Entremets & tartes' },
+  { key: 'chocolat',     label: 'Chocolat & caramel' },
+  { key: 'fruit',        label: 'Fruits' },
+  { key: 'matiere',      label: 'Matières premières' },
+  { key: 'autre',        label: 'Autres' },
+]
+
 export const FAMILLES = {
   mp: { label: 'Matières premières', titre: 'Transferts MP' },
   sm: { label: 'Produits', titre: 'Transferts Produits SM' },
@@ -34,14 +47,22 @@ export const peutConfirmer = (user, sens) => lieuxDe(user).includes(SENS[sens]?.
 // ---- Articles proposés (vignettes) ----
 
 // Liste d'une famille, les plus transférés d'abord (fréquence Odoo sur 5 mois).
-export async function loadArticles(famille) {
-  const { data, error } = await supabase
-    .from('transferts_articles').select('*')
-    .eq('famille', famille).eq('actif', true)
+// `tout` inclut les articles masqués, pour pouvoir les remettre.
+export async function loadArticles(famille, tout = false) {
+  let q = supabase.from('transferts_articles').select('*').eq('famille', famille)
+  if (!tout) q = q.eq('actif', true)
+  const { data, error } = await q
     .order('nb_transferts', { ascending: false })
     .order('nom')
   if (error) throw error
   return data || []
+}
+
+// Masquer / réafficher un article (l'historique n'est jamais touché).
+export async function setArticleActif(odooProductId, actif) {
+  const { error } = await supabase.from('transferts_articles')
+    .update({ actif: !!actif }).eq('odoo_product_id', odooProductId)
+  if (error) throw error
 }
 
 // Recherche dans le catalogue Odoo pour ajouter un article absent de la liste.
@@ -100,6 +121,27 @@ export async function addTransfert({ famille, sens, article, qty, date, user }) 
   if (error) throw error
   // Le message ne doit pas faire échouer l'enregistrement du transfert.
   notifier(sens, `${SENS[sens].de} envoie ${qty} ${article.unite || 'kg'} de ${article.nom} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
+    .catch(() => {})
+}
+
+// Envoie une LISTE d'articles d'un coup (le panier) : une ligne par article,
+// et un seul message WhatsApp qui récapitule.
+export async function addTransfertsGroupes({ famille, sens, lignes, date, user }) {
+  const rows = lignes.map(l => ({
+    famille,
+    sens,
+    matiere: l.nom,
+    odoo_product_id: l.odoo_product_id || l.id || null,
+    unite: l.unite || 'kg',
+    qty_envoye: Number(l.qty),
+    transfer_date: date,
+    envoye_par: user?.full_name || null,
+    envoye_par_id: user?.id || null,
+  }))
+  const { error } = await supabase.from('transferts_mp').insert(rows)
+  if (error) throw error
+  const detail = lignes.map(l => `${l.nom} ${l.qty} ${l.unite || 'kg'}`).join(', ')
+  notifier(sens, `${SENS[sens].de} envoie ${lignes.length} article(s) : ${detail} — à confirmer dans l'app (${SENS[sens].vers}).`, user)
     .catch(() => {})
 }
 
