@@ -289,7 +289,7 @@ export default function EconomatView({ user, onLogout, onNavigate, activeView })
                     <span className="relative w-[60px] h-[60px] rounded-2xl overflow-hidden flex items-center justify-center"
                       style={{ background: c.fond, border: `2.5px solid ${actif ? c.trait : 'transparent'}` }}>
                       {vign ? (
-                        <img src={vign.photo_url} alt="" className="w-full h-full object-cover" />
+                        <img src={vign.photo_url} alt="" className="w-full h-full object-cover scale-[1.15]" />
                       ) : (
                         <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.5"
                           strokeLinecap="round" strokeLinejoin="round"
@@ -527,7 +527,7 @@ function ArticleTuile({ article, qty, couleur, onPlus, onMoins, onPave }) {
 
       <div className="aspect-square bg-white flex items-center justify-center overflow-hidden">
         {article.photo_url ? (
-          <img src={article.photo_url} alt="" loading="lazy" className="w-full h-full object-contain" />
+          <img src={article.photo_url} alt="" loading="lazy" className="w-full h-full object-cover scale-[1.18]" />
         ) : (
           <svg viewBox="0 0 24 24" className="w-[44%] h-[44%] opacity-85" fill="none" stroke="currentColor"
             strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: couleur }}
