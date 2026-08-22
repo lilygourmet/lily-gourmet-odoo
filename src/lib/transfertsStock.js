@@ -33,10 +33,9 @@ export const FAMILLES = {
   sm: { label: 'Produits', titre: 'Transferts Produits SM' },
 }
 
-// Deux droits distincts, à croiser :
-//   • l'ATELIER (annexe / boutique) : d'où la personne envoie, et ce qui lui arrive ;
-//   • le RÔLE : a-t-elle le droit d'ENVOYER, de RÉCEPTIONNER, ou les deux ?
-// Ainsi une même personne peut préparer les envois sans pouvoir valider les réceptions.
+// La permission d'un employé désigne son ATELIER : il envoie DEPUIS son atelier
+// et confirme ce qui y ARRIVE. Pas de droit séparé « envoyer » / « réceptionner » :
+// dans les faits, les mêmes personnes font les deux.
 export function lieuxDe(user) {
   if (!user) return []
   if (user.role === 'admin') return ['annexe', 'boutique']
@@ -45,11 +44,8 @@ export function lieuxDe(user) {
   if (user.perm_transfert_boutique === true) l.push('boutique')
   return l
 }
-const estAdmin = user => user?.role === 'admin'
-export const peutEnvoyer = (user, sens) =>
-  lieuxDe(user).includes(SENS[sens]?.lieuEnvoi) && (estAdmin(user) || user?.perm_transfert_envoi === true)
-export const peutConfirmer = (user, sens) =>
-  lieuxDe(user).includes(SENS[sens]?.lieuRecu) && (estAdmin(user) || user?.perm_transfert_reception === true)
+export const peutEnvoyer = (user, sens) => lieuxDe(user).includes(SENS[sens]?.lieuEnvoi)
+export const peutConfirmer = (user, sens) => lieuxDe(user).includes(SENS[sens]?.lieuRecu)
 
 // ---- Articles proposés (vignettes) ----
 

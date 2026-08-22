@@ -18,8 +18,6 @@ export const PERMS = [
   { key: 'perm_transfert_annexe', group: 'Production & Calendrier', label: 'Transferts — atelier Prod annexe', desc: 'Travaille à l\'annexe : ENVOIE vers la boutique et RÉCEPTIONNE ce qui vient de la boutique.' },
   { key: 'perm_transfert_boutique', group: 'Production & Calendrier', label: 'Transferts — atelier Prod boutique', desc: 'Travaille à la boutique : ENVOIE vers l\'annexe et RÉCEPTIONNE ce qui vient de l\'annexe.' },
   { key: 'perm_transfert_produits', group: 'Production & Calendrier', label: 'Transferts Produits (SM)', desc: 'Accès à l\'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus.' },
-  { key: 'perm_transfert_envoi', group: 'Production & Calendrier', label: 'Transferts — envoyer', desc: 'Prépare et enregistre les envois depuis son atelier.' },
-  { key: 'perm_transfert_reception', group: 'Production & Calendrier', label: 'Transferts — réceptionner', desc: 'Confirme les quantités reçues dans son atelier (c\'est ce qui crée le transfert dans Odoo).' },
 
   // Vitrine & Stock (boutique)
   { key: 'perm_stock_patissier', group: 'Vitrine & Stock (boutique)', label: 'Vitrine — saisie pâtissier', desc: 'Saisir la vitrine sucrée du matin.' },
