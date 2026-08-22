@@ -8,7 +8,7 @@ import {
   SENS, FAMILLES, GROUPES, lieuxDe, peutEnvoyer, peutConfirmer,
   loadArticles, searchOdooProducts, addArticle, setArticleActif,
   loadTransferts, addTransfertsGroupes, confirmTransfert, envoyerVersOdoo,
-  loadWaSm, saveWaSm,
+  loadWaSm, saveWaSm, unitesPour, versUniteOdoo,
 } from '../lib/transfertsStock'
 
 // 3,8 plutôt que 3.8 ; masque les décimales inutiles (5 kg, pas 5,0).
@@ -66,6 +66,16 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   }, [articles, filtreArticle, groupe, voirMasques])
 
   // ---- calculatrice ----
+  // L'unité doit être choisie avant de valider ; s'il n'y en a qu'une, on la prend.
+  function ouvrirCalc(article, dejaDansPanier) {
+    const choix = unitesPour(article.unite)
+    setCalc({
+      article,
+      saisie: dejaDansPanier ? String(dejaDansPanier.saisieQty ?? dejaDansPanier.qty).replace('.', ',') : '',
+      unite: dejaDansPanier?.saisieUnite || (choix.length === 1 ? choix[0] : null),
+    })
+  }
+
   function tape(touche) {
     setCalc(c => {
       if (!c) return c
@@ -79,12 +89,19 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   }
   function validerCalc() {
     const n = Number((calc.saisie || '').replace(',', '.'))
+    if (!calc.unite) { toast.error("Choisis d'abord l'unité."); return }
     if (!(n > 0)) { toast.error('Quantité invalide.'); return }
     const a = calc.article
+    // On enregistre dans l'unité d'Odoo, en gardant ce qui a été tapé pour l'affichage.
+    const qty = versUniteOdoo(n, calc.unite, a.unite)
     setPanier(p => {
+      const ligne = {
+        odoo_product_id: a.odoo_product_id, nom: a.nom, unite: a.unite, image_url: a.image_url,
+        qty, saisieQty: n, saisieUnite: calc.unite,
+      }
       const i = p.findIndex(x => x.odoo_product_id === a.odoo_product_id)
-      if (i >= 0) { const c = [...p]; c[i] = { ...c[i], qty: n }; return c }
-      return [...p, { odoo_product_id: a.odoo_product_id, nom: a.nom, unite: a.unite, image_url: a.image_url, qty: n }]
+      if (i >= 0) { const c = [...p]; c[i] = { ...c[i], ...ligne }; return c }
+      return [...p, ligne]
     })
     setCalc(null)
   }
@@ -281,7 +298,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                 {listeArticles.map(a => {
                   const dansPanier = panier.find(p => p.odoo_product_id === a.odoo_product_id)
                   return (
-                    <button key={a.odoo_product_id} onClick={() => setCalc({ article: a, saisie: dansPanier ? String(dansPanier.qty).replace('.', ',') : '' })}
+                    <button key={a.odoo_product_id} onClick={() => ouvrirCalc(a, dansPanier)}
                       className={`relative rounded-xl border overflow-hidden text-left transition-all ${dansPanier ? 'border-bordeaux ring-2 ring-bordeaux/25' : 'border-line hover:border-bordeaux/40'} ${a.actif ? 'bg-white' : 'bg-cream opacity-60'}`}>
                       <div className="aspect-square bg-cream flex items-center justify-center overflow-hidden">
                         {a.image_url
@@ -411,8 +428,13 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                   {panier.map(p => (
                     <div key={p.odoo_product_id} className="flex items-center gap-2 py-1 text-[12.5px]">
                       <div className="flex-1 truncate">{p.nom}</div>
-                      <button onClick={() => setCalc({ article: p, saisie: String(p.qty).replace('.', ',') })}
-                        className="px-2 py-0.5 border border-line rounded-md">{fmt(p.qty)} {p.unite}</button>
+                      <button onClick={() => ouvrirCalc(p, p)}
+                        className="px-2 py-0.5 border border-line rounded-md">
+                        {fmt(p.saisieQty ?? p.qty)} {p.saisieUnite || p.unite}
+                        {p.saisieUnite && p.saisieUnite !== p.unite && (
+                          <span className="text-emerald-700"> → {fmt(p.qty)} {p.unite}</span>
+                        )}
+                      </button>
                       <button onClick={() => setPanier(panier.filter(x => x.odoo_product_id !== p.odoo_product_id))}
                         className="p-1 text-ink-mute hover:text-red-700"><Trash2 size={13} /></button>
                     </div>
@@ -452,8 +474,29 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
 
             <div className="bg-cream-warm border border-line rounded-xl px-4 py-3 mb-3 text-right">
               <span className="text-[28px] font-medium text-ink">{calc.saisie || '0'}</span>
-              <span className="text-[13px] text-ink-mute ml-1">{calc.article.unite}</span>
+              <span className="text-[13px] text-ink-mute ml-1">{calc.unite || '—'}</span>
+              {/* Ce qui partira dans Odoo, quand l'unité tapée n'est pas la sienne. */}
+              <div className="text-[11.5px] text-emerald-700 min-h-[17px]">
+                {calc.unite && calc.unite !== calc.article.unite && Number((calc.saisie || '').replace(',', '.')) > 0
+                  ? `soit ${fmt(versUniteOdoo(Number(calc.saisie.replace(',', '.')), calc.unite, calc.article.unite))} ${calc.article.unite} pour Odoo`
+                  : ''}
+              </div>
             </div>
+
+            {/* L'unité se choisit avant de valider. */}
+            {unitesPour(calc.article.unite).length > 1 && (
+              <>
+                <div className="flex gap-2 mb-2">
+                  {unitesPour(calc.article.unite).map(u => (
+                    <button key={u} onClick={() => setCalc({ ...calc, unite: u })} aria-pressed={calc.unite === u}
+                      className={`flex-1 py-2.5 rounded-xl border text-[14px] font-medium ${calc.unite === u ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white border-line text-ink-soft'}`}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+                {!calc.unite && <div className="text-[12px] text-bordeaux mb-2">Choisis d'abord l'unité.</div>}
+              </>
+            )}
 
             <div className="grid grid-cols-3 gap-2">
               {['7', '8', '9', '4', '5', '6', '1', '2', '3', ',', '0', '←'].map(t => (
@@ -466,7 +509,8 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
 
             <div className="flex gap-2 mt-3 sticky bottom-0 bg-white pt-1">
               <button onClick={() => tape('C')} className="px-4 py-3 text-[13px] border border-line rounded-lg bg-white">Effacer</button>
-              <button onClick={validerCalc} className="flex-1 inline-flex items-center justify-center gap-1 px-4 py-3 text-[14px] font-medium bg-bordeaux text-cream rounded-lg">
+              <button onClick={validerCalc} disabled={!calc.unite || !(Number((calc.saisie || '').replace(',', '.')) > 0)}
+                className="flex-1 inline-flex items-center justify-center gap-1 px-4 py-3 text-[14px] font-medium bg-bordeaux text-cream rounded-lg disabled:opacity-40">
                 <Plus size={15} /> Ajouter à la liste
               </button>
             </div>

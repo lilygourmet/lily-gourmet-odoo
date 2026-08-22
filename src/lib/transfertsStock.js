@@ -48,6 +48,22 @@ export function lieuxDe(user) {
 export const peutEnvoyer = (user, sens) => lieuxDe(user).includes(SENS[sens]?.lieuEnvoi)
 export const peutConfirmer = (user, sens) => lieuxDe(user).includes(SENS[sens]?.lieuRecu)
 
+
+// ---- Unités de saisie ----
+// L'unité proposée dépend de celle dans laquelle Odoo compte l'article : on peut
+// saisir en grammes un produit compté en kilos, la conversion est faite ensuite.
+// Un article compté à la pièce n'a qu'un seul choix : il est pris d'office.
+export const UNITES_SAISIE = { kg: ['g', 'kg'], g: ['g', 'kg'], l: ['cl', 'l'], cl: ['cl', 'l'] }
+const FACTEUR = { 'g→kg': 0.001, 'kg→g': 1000, 'cl→l': 0.01, 'l→cl': 100 }
+
+export const unitesPour = uniteOdoo => UNITES_SAISIE[uniteOdoo] || ['u.']
+
+// Quantité à enregistrer, dans l'unité d'Odoo. 500 g d'un produit compté en kg → 0,5.
+export function versUniteOdoo(qty, uniteSaisie, uniteOdoo) {
+  const f = FACTEUR[`${uniteSaisie}→${uniteOdoo}`]
+  return f ? Math.round(Number(qty) * f * 10000) / 10000 : Number(qty)
+}
+
 // ---- Articles proposés (vignettes) ----
 
 // Liste d'une famille, les plus transférés d'abord (fréquence Odoo sur 5 mois).
