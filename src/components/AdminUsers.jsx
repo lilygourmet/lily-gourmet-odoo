@@ -160,6 +160,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_simu_gateaux: formData.permSimuGateaux,
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
+        perm_transfert_produits: formData.permTransfertProduits,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -235,6 +236,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_simu_gateaux: formData.permSimuGateaux,
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
+        perm_transfert_produits: formData.permTransfertProduits,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -820,6 +822,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permSimuGateaux: initialData?.perm_simu_gateaux !== undefined ? initialData.perm_simu_gateaux : false,
     permTransfertAnnexe: initialData?.perm_transfert_annexe !== undefined ? initialData.perm_transfert_annexe : false,
     permTransfertBoutique: initialData?.perm_transfert_boutique !== undefined ? initialData.perm_transfert_boutique : false,
+    permTransfertProduits: initialData?.perm_transfert_produits !== undefined ? initialData.perm_transfert_produits : false,
     permFactureOcp: initialData?.perm_facture_ocp !== undefined ? initialData.perm_facture_ocp : false,
     permAiTools: initialData?.perm_ai_tools !== undefined ? initialData.perm_ai_tools : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
@@ -1033,8 +1036,9 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-stock-minmax" label="Régler les seuils min/max" desc="Définir les alertes de réassort (GS- / Prod)." checked={isAdmin || formData.permStockMinMax} onChange={v => update('permStockMinMax', v)} />
             <PermCheckbox id="perm-stock-poly" label="Stock poly" desc="Gérer le stock de poly découpé (morceaux 5/2 cm) + alerte WhatsApp." checked={isAdmin || formData.permStockPoly} onChange={v => update('permStockPoly', v)} />
             <PermCheckbox id="perm-simu-gateaux" label="Simulation gâteaux" desc="Voir le simulateur visuel de gâteaux par nombre de personnes et d'étages." checked={isAdmin || formData.permSimuGateaux} onChange={v => update('permSimuGateaux', v)} />
-            <PermCheckbox id="perm-transfert-annexe" label="Transferts MP — Annexe (envoyer)" desc="Enregistrer les envois de matières premières de l'annexe vers la boutique." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
-            <PermCheckbox id="perm-transfert-boutique" label="Transferts MP — Boutique (confirmer)" desc="Confirmer la réception des matières premières envoyées par l'annexe." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
+            <PermCheckbox id="perm-transfert-annexe" label="Transferts — atelier Prod annexe" desc="Travaille à l'annexe : envoie vers la boutique et confirme ce qui arrive à l'annexe." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
+            <PermCheckbox id="perm-transfert-boutique" label="Transferts — atelier Prod boutique" desc="Travaille à la boutique : envoie vers l'annexe et confirme ce qui arrive à la boutique." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
+            <PermCheckbox id="perm-transfert-produits" label="Transferts Produits (SM)" desc="Accès à l'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus." checked={isAdmin || formData.permTransfertProduits} onChange={v => update('permTransfertProduits', v)} />
             <PermCheckbox id="perm-facture-ocp" label="Facture OCP" desc="Générer la facture mensuelle OCP à partir des commandes non facturées." checked={isAdmin || formData.permFactureOcp} onChange={v => update('permFactureOcp', v)} />
             <PermCheckbox id="perm-freezer" label="Sortie congélateur" desc="Voir la liste des sorties de congélateur." checked={isAdmin || formData.permFreezer} onChange={v => update('permFreezer', v)} />
           </PermGroup>
