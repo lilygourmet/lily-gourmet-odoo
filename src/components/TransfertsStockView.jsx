@@ -199,7 +199,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
 
-      <div className="max-w-3xl mx-auto p-4 pb-28">
+      <div className="max-w-3xl mx-auto p-4 pb-44 sm:pb-28">
         <div className="flex items-center justify-between mb-1">
           <h1 className="font-fraunces italic text-[26px] text-ink">{fam.titre}</h1>
           {isAdmin && (
@@ -396,7 +396,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
 
       {/* ---- LA LISTE À ENVOYER (barre du bas, repliée par défaut) ---- */}
       {panier.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 bg-white border-t border-line shadow-[0_-4px_14px_rgba(122,42,68,0.08)] z-40"
+        <div className="lg-bottom-bar bg-white border-t border-line shadow-[0_-4px_14px_rgba(122,42,68,0.08)] z-40"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="max-w-3xl mx-auto p-2.5">
             {/* Le détail est masqué par défaut : déplié, il cachait les articles à choisir. */}
