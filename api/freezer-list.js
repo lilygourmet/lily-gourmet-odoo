@@ -240,18 +240,21 @@ async function validerOrdre(uid, name, forcer) {
 // ============================================================
 async function manquesDesOrdres(uid, names) {
   const mos = await odooSearchRead(uid, 'mrp.production', [['name', 'in', names]],
-    ['id', 'name', 'product_id', 'product_qty', 'product_uom_id', 'origin', 'state', 'components_availability'])
+    ['id', 'name', 'product_id', 'product_qty', 'product_uom_id', 'origin', 'state', 'components_availability', 'location_src_id'])
   if (!mos.length) return []
   const moves = await odooSearchRead(uid, 'stock.move',
     [['raw_material_production_id', 'in', mos.map(m => m.id)]],
     ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom'], { limit: 500 })
-  const prods = await odooSearchRead(uid, 'product.product',
-    [['id', 'in', [...new Set(moves.map(m => m.product_id[0]))]]], ['id', 'display_name', 'free_qty', 'uom_id'])
-  const stock = {}
-  for (const p of prods) {
-    stock[p.id] = {
-      qty: Math.max(0, p.free_qty || 0),
-      unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
+  const idsProd = [...new Set(moves.map(m => m.product_id[0]))]
+  const stockParLieu = {}          // "lieu:produit" → { qty, unite }
+  const lieux = [...new Set(mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean))]
+  for (const lieu of lieux) {
+    const lus = await odooCall(uid, 'product.product', 'read', [idsProd, ['free_qty', 'uom_id']], { context: { location: lieu } })
+    for (const p of lus) {
+      stockParLieu[lieu + ':' + p.id] = {
+        qty: Math.max(0, p.free_qty || 0),
+        unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
+      }
     }
   }
   // ramène une quantité dans l'unité demandée (g ↔ kg uniquement ; sinon null)
@@ -267,7 +270,8 @@ async function manquesDesOrdres(uid, names) {
       const nomP = Array.isArray(x.product_id) ? x.product_id[1] : ''
       const ignore = /genoise/i.test(nomP)
       const uniteLigne = (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u').replace(/^units?$/i, 'u')
-      const st = stock[x.product_id[0]]
+      const lieu = Array.isArray(m.location_src_id) ? m.location_src_id[0] : null
+      const st = stockParLieu[lieu + ':' + x.product_id[0]]
       const dispo = st ? convertir(st.qty, st.unite, uniteLigne) : 0
       const comparable = dispo !== null                       // unités incompatibles → on n'affirme rien
       return {
@@ -280,6 +284,7 @@ async function manquesDesOrdres(uid, names) {
       name: m.name, produit: (Array.isArray(m.product_id) ? m.product_id[1] : ''),
       qty: m.product_qty, unite: (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : 'u'),
       etat: m.state, pour: m.origin || '', dispo: m.components_availability || '',
+      lieu: Array.isArray(m.location_src_id) ? m.location_src_id[1] : '',
       manques: lignes.filter(l => l.manque > 0.0001),
     }
   })
@@ -307,7 +312,7 @@ async function fetchFabrication(uid, jours) {
     ['date_planned_start', '>=', iso(jRetard)],
     ['date_planned_start', '<=', iso(j1)],
   ], ['id', 'name', 'origin', 'state', 'product_id', 'product_qty', 'product_uom_id',
-      'date_planned_start', 'components_availability'],
+      'date_planned_start', 'components_availability', 'location_src_id'],
   { limit: 500, order: 'date_planned_start asc' })
 
   const nom = m => (Array.isArray(m.product_id) ? m.product_id[1] : '') || ''
@@ -450,8 +455,13 @@ async function fetchFabrication(uid, jours) {
     ...moves.map(mv => (Array.isArray(mv.product_id) ? mv.product_id[0] : null)),
     ...bomLignesIds,
   ].filter(Boolean))]
-  const prods = idsProduits.length ? await odooSearchRead(uid, 'product.product',
-    [['id', 'in', idsProduits]], ['display_name', 'free_qty', 'uom_id'], { limit: 1000 }) : []
+  // Stocks lus À L'EMPLACEMENT DE PRODUCTION (celui d'où les ordres puisent),
+  // sinon on compterait le stock du magasin et de l'annexe.
+  const lieuProd = mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean)[0] || null
+  const prods = idsProduits.length
+    ? await odooCall(uid, 'product.product', 'read', [idsProduits, ['display_name', 'free_qty', 'uom_id']],
+      lieuProd ? { context: { location: lieuProd } } : {})
+    : []
   const stockDe = {}
   for (const pr of prods) {
     stockDe[pr.display_name] = {
