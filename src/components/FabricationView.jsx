@@ -57,7 +57,7 @@ function tailleTournee(recettes, n) {
 
 // La recette d'une préparation, calculée pour la quantité demandée.
 // Récursive : la crème pâtissière dans la crème au beurre vanille s'ouvre aussi.
-function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}, setOuvertes = null, faits = {}, onFait = null, bloquants = null }) {
+function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}, setOuvertes = null, faits = {}, onFait = null, bloquants = null, stock = 0 }) {
   const r = recettes[produit]
   if (!r) return null
   const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -68,6 +68,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
     <div className="ml-8 mb-2 bg-cream-warm rounded-xl px-3 py-2.5">
       <div className="text-[11px] font-bold uppercase tracking-wider text-ink-soft mb-1">
         {propre(produit)} — {meme ? `pour ${qteLisible(qty, unite)}` : `pour ${qteLisible(r.qty, r.unite)}`}
+        {stock > 0.001 && <span className="normal-case font-normal"> ({qteLisible(stock, unite)} déjà en stock)</span>}
       </div>
       {trierRecette(r.lignes).map((l, i) => {
         const q = l.qty * f, u = l.unite
