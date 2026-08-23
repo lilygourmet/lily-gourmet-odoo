@@ -94,7 +94,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 }
 
 // « Ma recette » : les besoins cumulés des gâteaux cochés.
-function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait }) {
+function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bases = [] }) {
   const cle = p => 'sc:' + p
   return (
     <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl p-4 sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-auto'}>
@@ -120,7 +120,11 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
             ) : (
               <span className="flex-1">
                 {propre(l.produit)}
-                {estBase(l.produit) && <span className="text-[11.5px] text-ink-mute"> · voir « bases » en haut</span>}
+                {estBase(l.produit) && (() => {
+                  const b = bases.find(x => sansStk(x.produit) === sansStk(l.produit))
+                  if (!b || b.manque <= 0.001) return <span className="text-[11.5px] text-ink-mute"> · déjà prêt</span>
+                  return <span className="text-[11.5px] text-[#854F0B]"> · à préparer en haut : {nb(b.qty)} {b.unite}</span>
+                })()}
               </span>
             )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
@@ -334,7 +338,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="max-w-[620px] mx-auto px-4 py-5">
           <PanneauRecette recettes={recettes} choisis={choisis} recette={recette} ouvertes={ouvertes}
             setOuvertes={setOuvertes} onEffacer={effacer} onRetour={() => setPageRecette(false)}
-            faits={faits} onFait={marquer} />
+            faits={faits} onFait={marquer} bases={bases} />
         </div>
       </div>
     )
@@ -403,7 +407,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="hidden lg:block self-start sticky top-4">
           {deuxColonnes ? (
             <PanneauRecette recettes={recettes} choisis={choisis} recette={recette} ouvertes={ouvertes}
-              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} />
+              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bases={bases} />
           ) : (
             <div className="bg-white border border-dashed border-line rounded-2xl p-6 text-center text-ink-mute text-[13.5px]">
               Coche des gâteaux à gauche :<br />leur recette s'affichera ici, additionnée.
