@@ -18,6 +18,8 @@ const CASA = { timeZone: 'Africa/Casablanca' }   // Odoo renvoie de l'UTC
 const dt = q => new Date(String(q || '').replace(' ', 'T') + 'Z')
 const jourCourt = q => dt(q).toLocaleDateString('fr-FR', { ...CASA, day: '2-digit', month: '2-digit' })
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+// petite quantité : on l'écrit en grammes, plus parlant qu'un « 0,4 kg »
+const qteLisible = (q, u) => (norm(u) === 'kg' && q < 1 ? `${nb(q * 1000)} g` : `${nb(q)} ${u}`)
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const enKg = (q, u) => (norm(u) === 'g' ? { q: q / 1000, u: 'kg' } : { q, u: norm(u) })
 const estPrepa = n => /^SM\b/i.test(String(n || ''))
@@ -141,7 +143,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           {((l.stock > 0.001 && !l.enStock) || (l.usages && l.usages.length > 1)) && (
             <div className="text-[11.5px] text-ink-mute pl-[96px] -mt-1 mb-1">
               {l.stock > 0.001 && !l.enStock && <>à préparer : {nb(l.aFaire)} {l.unite} ({nb(l.stock)} déjà en stock)<br /></>}
-              {l.usages && l.usages.length > 1 && l.usages.map(([qui, q]) => `${nb(q)} ${l.unite} pour ${qui}`).join(' · ')}
+              {l.usages && l.usages.length > 1 && l.usages.map(([qui, q]) => `${qteLisible(q, l.unite)} pour ${qui}`).join(' · ')}
             </div>
           )}
           {ouvertes[cle(l.produit)] && (
@@ -308,7 +310,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         e.qty += qty
         e.usages[source] = (e.usages[source] || 0) + qty
       }
-      for (const o of lot) for (const r of (o.recette || [])) ajoute(r.produit, enKg(r.qty, r.unite).q, 'les gâteaux')
+      // on note quel gâteau demande quoi, pour pouvoir dire « 400 g pour le 20 cm »
+      for (const o of lot) for (const r of (o.recette || [])) {
+        ajoute(r.produit, enKg(r.qty, r.unite).q, `le ${o.taille}`)
+        const c = sansStk(r.produit)
+        besoins[c].direct = true
+      }
       const file = Object.keys(besoins).filter(estPrepa), vus = new Set()
       while (file.length) {
         const pr = file.shift()
@@ -328,7 +335,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         }
       }
       const lignes = trierRecette(Object.entries(besoins)
-        .filter(([, e]) => e.usages['les gâteaux'] > 0.001)     // pas les composants des crèmes
+        .filter(([, e]) => e.direct)                            // pas les composants des crèmes
         .map(([produit, e]) => {
           const stock = estPrepa(produit) ? stockDe(produit) : 0
           return {
