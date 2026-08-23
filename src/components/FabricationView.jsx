@@ -577,7 +577,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
       {/* mise en page fixe : à faire à gauche, recettes à droite (elle ne bouge plus) */}
       <div className="mx-auto px-4 py-5 max-w-[1100px] grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-        <div className={deuxColonnes ? 'pb-24 lg:pb-0' : ''}>
+        <div className={deuxColonnes ? 'pb-40 sm:pb-24 lg:pb-0' : ''}>
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             <h1 className="font-fraunces italic text-[27px] font-medium">Fabrication CD</h1>
             {canValiderOf(user) && ordresAValider.length > 0 && (
@@ -706,7 +706,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       {/* téléphone : barre fixe qui ouvre la recette en page entière */}
       {deuxColonnes && (
         <button onClick={() => setPageRecette(true)}
-          className="lg:hidden fixed left-0 right-0 bottom-0 bg-bordeaux text-cream py-4 text-[16px] font-bold shadow-lg">
+          className="lg:hidden lg-bottom-bar z-40 bg-bordeaux text-cream py-4 text-[16px] font-bold shadow-lg">
           Voir ma recette ({choisis.length} gâteau{choisis.length > 1 ? 'x' : ''})
         </button>
       )}
