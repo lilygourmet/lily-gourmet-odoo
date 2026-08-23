@@ -110,7 +110,7 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
             <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
-              {nb(l.enStock ? l.qty : (l.aFaire || l.qty))} {l.unite}
+              {nb(estBase(l.produit) || l.enStock ? l.qty : (l.aFaire || l.qty))} {l.unite}
             </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
@@ -123,7 +123,7 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
                 {estBase(l.produit) && (() => {
                   const b = bases.find(x => sansStk(x.produit) === sansStk(l.produit))
                   if (!b || b.manque <= 0.001) return <span className="text-[11.5px] text-ink-mute"> · déjà prêt</span>
-                  return <span className="text-[11.5px] text-[#854F0B]"> · à préparer en haut : {nb(b.qty)} {b.unite}</span>
+                  return <span className="text-[11.5px] text-[#854F0B]"> · à préparer en haut : {nb(b.qty)} {b.unite}{b.n > 1 ? ` (${b.n} tournées)` : ' (1 tournée)'}</span>
                 })()}
               </span>
             )}
@@ -378,8 +378,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">
                           il en reste<br /><b>{nb(b.stock)} {b.unite}</b>
                         </span>
-                        <span className={'text-[19px] font-extrabold text-bordeaux ' + (faits[clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
-                          {nb(b.qty)} {b.unite}
+                        <span className={'text-right ' + (faits[clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
+                          <span className="text-[19px] font-extrabold text-bordeaux">{nb(b.qty)} {b.unite}</span>
+                          {b.n > 0 && <span className="block text-[10.5px] text-ink-mute leading-tight">{b.n} tournée{b.n > 1 ? 's' : ''}</span>}
                         </span>
                         <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
                           className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
