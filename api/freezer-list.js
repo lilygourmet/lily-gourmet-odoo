@@ -265,7 +265,8 @@ async function fetchFabrication(uid, jours) {
   // « Crème au beurre Chocolat » directement dans la recette du gâteau.
   // Deux niveaux : les composants du gâteau, puis les composants de ces préparations.
   const estPrepaNom = n => /^SM\b/i.test(String(n || ''))
-  const catalogue = await fetchCatalogue(uid)
+  const bomLignesIds = []                     // ids produits vus dans les nomenclatures
+  const catalogue = await fetchCatalogue(uid, bomLignesIds)
   const recettesPrepa = {}
   // on part des préparations vues dans les OF ET de toutes celles du catalogue
   // (sinon ouvrir une recette ne montre rien les jours sans ordre de fabrication)
@@ -288,6 +289,7 @@ async function fetchFabrication(uid, jours) {
         unite: (Array.isArray(b.product_uom_id) ? b.product_uom_id[1] : 'u').replace(/^units?$/i, 'u'),
         lignes: lignes.filter(l => l.bom_id[0] === b.id).map(l => {
           const p = (Array.isArray(l.product_id) ? l.product_id[1] : '') || ''
+          if (Array.isArray(l.product_id)) bomLignesIds.push(l.product_id[0])
           if (estPrepaNom(p)) suivant.push(p)
           let q = l.product_qty || 0
           let u = (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u')
@@ -321,17 +323,19 @@ async function fetchFabrication(uid, jours) {
 
   // Stock réel : ce qui est déjà au frigo n'est pas à refaire.
   // (free_qty = disponible non réservé, dans l'unité de référence du produit.)
-  const nomsProduits = [...new Set([
-    ...mos.map(nom),
-    ...moves.map(mv => (Array.isArray(mv.product_id) ? mv.product_id[1] : '')),
-    ...Object.values(recettesPrepa).flatMap(r => r.lignes.map(l => l.produit)),
-    ...catalogue.flatMap(c => c.lignes.map(l => l.produit)),
+  // On cherche par ID produit : le champ `name` d'une variante ne contient pas le
+  // parfum (« 20 cm CD* »), alors qu'Odoo renvoie partout ailleurs le display_name
+  // (« 20 cm CD* (Chocolat) ») — sans ça les gâteaux n'avaient jamais de stock.
+  const idsProduits = [...new Set([
+    ...mos.map(m => (Array.isArray(m.product_id) ? m.product_id[0] : null)),
+    ...moves.map(mv => (Array.isArray(mv.product_id) ? mv.product_id[0] : null)),
+    ...bomLignesIds,
   ].filter(Boolean))]
-  const prods = nomsProduits.length ? await odooSearchRead(uid, 'product.product',
-    [['name', 'in', nomsProduits]], ['name', 'free_qty', 'uom_id'], { limit: 500 }) : []
+  const prods = idsProduits.length ? await odooSearchRead(uid, 'product.product',
+    [['id', 'in', idsProduits]], ['display_name', 'free_qty', 'uom_id'], { limit: 1000 }) : []
   const stockDe = {}
   for (const pr of prods) {
-    stockDe[pr.name] = {
+    stockDe[pr.display_name] = {
       qty: pr.free_qty || 0,
       unite: ((Array.isArray(pr.uom_id) ? pr.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
     }
@@ -384,7 +388,7 @@ async function fetchFabrication(uid, jours) {
 // parfum (« SI parfum = Chocolat ») : on la traduit en liste de parfums.
 // Sert à composer une fabrication libre (« je fais 20 cm et 30 cm en chocolat »).
 // ============================================================
-async function fetchCatalogue(uid) {
+async function fetchCatalogue(uid, collecteIds = []) {
   const boms = await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id.name', 'ilike', 'CD*']],
     ['id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 400 })
   const enCm = boms.filter(b => /\d+\s*(cm|x\s*\d)/i.test(Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[1] : ''))
@@ -403,6 +407,7 @@ async function fetchCatalogue(uid) {
       let q = l.product_qty || 0
       let u = (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u')
       if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
+      if (Array.isArray(l.product_id)) collecteIds.push(l.product_id[0])
       const parfums = (l.bom_product_template_attribute_value_ids || []).map(id => nomVal[id]).filter(Boolean)
       return {
         produit: (Array.isArray(l.product_id) ? l.product_id[1] : '') || '',

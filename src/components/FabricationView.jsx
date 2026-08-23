@@ -97,17 +97,25 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
 }
 
 function Gateau({ o, on, onToggle }) {
+  const stock = o.stock ? o.stock.dispo : null
   return (
-    <label onClick={onToggle}
+    <div role="button" tabIndex={0} onClick={onToggle}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
       className={'flex items-center gap-3 bg-white border rounded-xl px-3.5 py-3 mb-1.5 cursor-pointer ' +
         (on ? 'border-bordeaux bg-[#fdf4f7] ring-1 ring-bordeaux' : 'border-line')}>
-      <input type="checkbox" checked={on} readOnly className="w-6 h-6 accent-[#993556] pointer-events-none flex-shrink-0" />
-      <span className="flex-1 text-[18px] font-extrabold">
-        {o.taille} <span className="text-[13px] font-medium text-ink-soft">{o.parfum}</span>
-      </span>
+      <input type="checkbox" checked={on} readOnly tabIndex={-1} className="w-6 h-6 accent-[#993556] pointer-events-none flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-[18px] font-extrabold">
+          {o.taille} <span className="text-[13px] font-medium text-ink-soft">{o.parfum}</span>
+        </div>
+        <div className="text-[11.5px] text-ink-mute">
+          {stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${nb(stock)} en stock` : 'plus rien en stock'}
+          {o.scode ? ` · ${o.scode}` : ''}
+        </div>
+      </div>
       {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
       <span className="text-[18px] font-extrabold text-bordeaux">×{nb(o.qty)}</span>
-    </label>
+    </div>
   )
 }
 
@@ -252,6 +260,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       <span className="text-[13px] font-bold text-ok">en stock ({nb(b.stock)} {b.unite})</span>
                     ) : (
                       <>
+                        <span className="text-[11.5px] text-ink-mute text-right leading-tight">
+                          il en reste<br /><b>{nb(b.stock)} {b.unite}</b>
+                        </span>
                         <span className="text-[19px] font-extrabold text-bordeaux">{nb(b.qty)} {b.unite}</span>
                         <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
                           className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
