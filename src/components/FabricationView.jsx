@@ -128,7 +128,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
               {qteLisible(l.qty, l.unite)}
             </b>
-            {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) ? (
+            {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) && !l.enStock ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
                 className="flex-1 text-left text-bordeaux font-bold underline underline-offset-4">
                 {propre(l.produit)} ▾
@@ -164,7 +164,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
               à faire d'abord : {bloquants(l.produit, l.aFaire || l.qty).map(propre).join(', ')}
             </div>
           )}
-          {ouvertes[cle(l.produit)] && (
+          {!l.enStock && ouvertes[cle(l.produit)] && (
             <SousRecette recettes={recettes} produit={l.produit} qty={l.aFaire || l.qty} unite={l.unite}
               chemin={cle(l.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
               faits={faits} onFait={onFait} bloquants={bloquants} />
