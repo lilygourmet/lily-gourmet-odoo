@@ -140,10 +140,9 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
                 onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
           </div>
-          {((l.stock > 0.001 && !l.enStock) || (l.usages && l.usages.length > 1)) && (
+          {l.usages && l.usages.length > 1 && (
             <div className="text-[11.5px] text-ink-mute pl-[96px] -mt-1 mb-1">
-              {l.stock > 0.001 && !l.enStock && <>à préparer : {nb(l.aFaire)} {l.unite} ({nb(l.stock)} déjà en stock)<br /></>}
-              {l.usages && l.usages.length > 1 && l.usages.map(([qui, q]) => `${qteLisible(q, l.unite)} pour ${qui}`).join(' · ')}
+              {l.usages.map(([qui, q]) => `${qteLisible(q, l.unite)} pour ${qui}`).join(' · ')}
             </div>
           )}
           {ouvertes[cle(l.produit)] && (
