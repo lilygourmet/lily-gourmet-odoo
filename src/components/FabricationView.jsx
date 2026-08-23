@@ -35,7 +35,8 @@ const trierRecette = arr => arr.slice().sort((a, b) => rang(a.produit) - rang(b.
 const estBase = n => BASES.some(r => r.test(String(n || '')))
 // On n'ouvre jamais la recette de ces produits-là : les bases se préparent dans
 // le bloc du haut, et la génoise ne se détaille pas ici (demande de Layla).
-const jamaisDeplier = n => estBase(n) || /genoise/i.test(String(n || ''))
+const estIngredient = n => /^SM\.\s*/i.test(String(n || ''))
+const jamaisDeplier = n => estBase(n) || estIngredient(n) || /genoise/i.test(String(n || ''))
 // nom lisible par l'équipe : on enlève les codes internes
 const propre = n => String(n || '')
   .replace(/^SM\s+CD\*\s*/i, '').replace(/^SM\s+/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
@@ -128,7 +129,7 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
               </span>
             )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
-            {estPrepa(l.produit) && !l.enStock && (
+            {estPrepa(l.produit) && !estIngredient(l.produit) && !l.enStock && (
               <BoutonFait fait={!!faits[clePrepa(l.produit)]} onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
           </div>
@@ -305,7 +306,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       if (!base) continue
       const f = manque / base
       for (const l of r.lignes) {
-        if (!estPrepa(l.produit)) continue
+        if (!estPrepa(l.produit) || estIngredient(l.produit)) continue
         ajoute(l.produit, enKg(l.qty * f, l.unite).q, propre(p))
         if (!vus.has(sansStk(l.produit))) file.push(sansStk(l.produit))
       }
