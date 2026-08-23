@@ -12,7 +12,7 @@ import { loadFabrication } from '../lib/fabrication'
 //      ses sous-catégories (la recette de la préparation, à la bonne quantité)
 // La recette est à droite sur ordinateur, en page séparée sur téléphone.
 
-const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i]
+const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*caram/i]
 const CASA = { timeZone: 'Africa/Casablanca' }   // Odoo renvoie de l'UTC
 
 const dt = q => new Date(String(q || '').replace(' ', 'T') + 'Z')
@@ -81,12 +81,17 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
             <b className="min-w-[96px] text-[17px]">{nb(l.qty)} {l.unite}</b>
-            {estPrepa(l.produit) && recettes[l.produit] ? (
+            {estPrepa(l.produit) && recettes[l.produit] && !estBase(l.produit) ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
                 className="flex-1 text-left text-bordeaux font-bold underline underline-offset-4">
                 {propre(l.produit)} ▾
               </button>
-            ) : <span className="flex-1">{propre(l.produit)}</span>}
+            ) : (
+              <span className="flex-1">
+                {propre(l.produit)}
+                {estBase(l.produit) && <span className="text-[11.5px] text-ink-mute"> · voir « bases » en haut</span>}
+              </span>
+            )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
           </div>
           {ouvertes[cle(l.produit)] && <SousRecette recettes={recettes} produit={l.produit} qty={l.qty} unite={l.unite} />}

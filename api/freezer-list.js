@@ -236,8 +236,15 @@ async function fetchFabrication(uid, jours) {
 
   const fmt = m => ({
     id: m.id, name: m.name, produit: nom(m), qty: m.product_qty, unite: uom(m),
-    // « 20 cm CD* (Chocolat) » → taille « 20 cm » + parfum « Chocolat » (gros titres de l'écran)
-    ...(parseCakedesign(nom(m)) || { taille: '', parfum: '' }),
+    // « 20 cm CD* (Chocolat) » → taille « 20 cm » + parfum « Chocolat » (gros titres de l'écran).
+    // parseCakedesign ne rend le parfum que pour les ronds/carrés : pour « 18cm bombé »,
+    // « Cœur 5p »… on le reprend de la dernière parenthèse (en ignorant « (40 pers) »).
+    ...(() => {
+      const base = parseCakedesign(nom(m)) || { taille: '', parfum: '' }
+      if (base.parfum) return base
+      const parens = [...String(nom(m)).matchAll(/\(([^)]+)\)/g)].map(x => x[1].trim()).filter(x => !/pers/i.test(x))
+      return { ...base, parfum: parens.length ? parens[parens.length - 1] : '' }
+    })(),
     prepa: /^SM\s+CD\*/i.test(nom(m)),
     etat: m.state, quand: m.date_planned_start,
     dispo: m.components_availability || '',
