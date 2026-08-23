@@ -111,7 +111,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour }) {
   const cle = p => 'sc:' + p
   return (
-    <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 self-start max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden'}>
+    <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden'}>
       <div className={'flex items-center gap-2 ' + (onRetour ? 'mb-2' : 'px-4 pt-4 pb-2 flex-shrink-0 border-b border-line')}>
         {onRetour && <button onClick={onRetour} className="text-[14px] text-bordeaux font-semibold">← Retour</button>}
         <b className="text-[16px]">Ma recette</b>
@@ -692,12 +692,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         </div>
 
         {/* ordinateur : la recette occupe toujours la colonne de droite */}
-        <div className="hidden lg:block self-start sticky top-4 lg:mt-[70px]">
+        <div className="hidden lg:block lg:mt-[70px]">
           {deuxColonnes ? (
             <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
               setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} />
           ) : (
-            <div className="bg-white border border-dashed border-line rounded-2xl p-6 text-center text-ink-mute text-[13.5px]">
+            <div className="bg-white border border-dashed border-line rounded-2xl p-6 text-center text-ink-mute text-[13.5px] sticky top-4">
               Coche des gâteaux à gauche :<br />leur recette s'affichera ici, additionnée.
             </div>
           )}
