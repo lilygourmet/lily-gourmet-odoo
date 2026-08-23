@@ -18,8 +18,8 @@ const CASA = { timeZone: 'Africa/Casablanca' }   // Odoo renvoie de l'UTC
 const dt = q => new Date(String(q || '').replace(' ', 'T') + 'Z')
 const jourCourt = q => dt(q).toLocaleDateString('fr-FR', { ...CASA, day: '2-digit', month: '2-digit' })
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
-// petite quantité : on l'écrit en grammes, plus parlant qu'un « 0,4 kg »
-const qteLisible = (q, u) => (norm(u) === 'kg' && q < 1 ? `${nb(q * 1000)} g` : `${nb(q)} ${u}`)
+// Layla veut tout en grammes, jamais en kilos (sauf les pièces : ×8 gâteaux).
+const qteLisible = (q, u) => (norm(u) === 'kg' ? `${nb(q * 1000)} g` : `${nb(q)} ${u}`)
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const enKg = (q, u) => (norm(u) === 'g' ? { q: q / 1000, u: 'kg' } : { q, u: norm(u) })
 const estPrepa = n => /^SM\b/i.test(String(n || ''))
@@ -67,17 +67,16 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
   return (
     <div className="ml-8 mb-2 bg-cream-warm rounded-xl px-3 py-2.5">
       <div className="text-[11px] font-bold uppercase tracking-wider text-ink-soft mb-1">
-        {propre(produit)} — {meme ? `pour ${nb(qty)} ${unite}` : `pour ${nb(r.qty)} ${r.unite}`}
+        {propre(produit)} — {meme ? `pour ${qteLisible(qty, unite)}` : `pour ${qteLisible(r.qty, r.unite)}`}
       </div>
       {trierRecette(r.lignes).map((l, i) => {
-        let q = l.qty * f, u = l.unite
-        if (norm(u) === 'g' && q >= 1000) { q = q / 1000; u = 'kg' }
+        const q = l.qty * f, u = l.unite
         const sousCle = chemin + '>' + l.produit
         const ouvrable = setOuvertes && estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit)
         return (
           <div key={i}>
             <div className="flex items-center gap-2.5 py-1.5 text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
-              <b className={'min-w-[86px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{nb(q)} {u}</b>
+              <b className={'min-w-[86px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{qteLisible(q, u)}</b>
               {ouvrable ? (
                 <button onClick={() => setOuvertes(o => ({ ...o, [sousCle]: !o[sousCle] }))}
                   className={'text-left text-bordeaux font-semibold underline underline-offset-2 flex-1 ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
@@ -121,7 +120,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
             <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
-              {nb(l.qty)} {l.unite}
+              {qteLisible(l.qty, l.unite)}
             </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
@@ -141,8 +140,10 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             )}
           </div>
           {l.usages && l.usages.length > 1 && (
-            <div className="text-[11.5px] text-ink-mute pl-[96px] -mt-1 mb-1">
-              {l.usages.map(([qui, q]) => `${qteLisible(q, l.unite)} pour ${qui}`).join(' · ')}
+            <div className="text-[12px] text-ink-mute pl-[96px] -mt-1 mb-1.5">
+              {l.usages.map(([qui, q]) => (
+                <div key={qui}>{qteLisible(q, l.unite)} pour {qui}</div>
+              ))}
             </div>
           )}
           {ouvertes[cle(l.produit)] && (
@@ -426,14 +427,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       {propre(b.produit)}
                     </span>
                     {b.manque <= 0.001 ? (
-                      <span className="text-[13px] font-bold text-ok">en stock ({nb(b.stock)} {b.unite})</span>
+                      <span className="text-[13px] font-bold text-ok">en stock ({qteLisible(b.stock, b.unite)})</span>
                     ) : (
                       <>
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">
-                          il en reste<br /><b>{nb(b.stock)} {b.unite}</b>
+                          il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b>
                         </span>
                         <span className={'text-right ' + (faits[clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
-                          <span className="text-[19px] font-extrabold text-bordeaux">{nb(b.qty)} {b.unite}</span>
+                          <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
                           {b.n > 0 && <span className="block text-[10.5px] text-ink-mute leading-tight">{b.n} tournée{b.n > 1 ? 's' : ''}</span>}
                         </span>
                         <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
