@@ -620,8 +620,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                           <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
                           {b.n > 0 && <span className="block text-[10.5px] text-ink-mute leading-tight">{b.n} tournée{b.n > 1 ? 's' : ''}</span>}
                         </span>
-                        <button onClick={e => { e.stopPropagation(); setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) }}
-                          className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
+                        {recettes[b.produit] && (
+                          <span className="text-ink-mute text-[13px] px-1" aria-hidden="true">
+                            {ouvertes[cleBase(b.produit)] ? '▾' : '▸'}
+                          </span>
+                        )}
                         <BoutonFait fait={!!faits[b.ordre || clePrepa(b.produit)]} bloque={bloquants(b.produit, b.qty)}
                           onClick={() => marquer(b.ordre || clePrepa(b.produit), b.produit, b.qty)} />
                       </>
@@ -656,8 +659,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b></span>
                         <span className={'text-[19px] font-extrabold text-bordeaux ' + (faits[b.ordre] ? 'line-through opacity-60' : '')}>{qteLisible(b.qty, b.unite)}</span>
                         {recettes[b.produit] && (
-                          <button onClick={e => { e.stopPropagation(); setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) }}
-                            className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
+                          <span className="text-ink-mute text-[13px] px-1" aria-hidden="true">
+                            {ouvertes[cleBase(b.produit)] ? '▾' : '▸'}
+                          </span>
                         )}
                         <BoutonFait fait={!!faits[b.ordre]} bloque={bloquants(b.produit, b.qty)}
                           onClick={() => marquer(b.ordre, b.produit, b.qty)} />
