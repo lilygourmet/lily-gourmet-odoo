@@ -50,7 +50,8 @@ function tailleTournee(recettes, n) {
 }
 
 // La recette d'une préparation, calculée pour la quantité demandée.
-function SousRecette({ recettes, produit, qty, unite }) {
+// Récursive : la crème pâtissière dans la crème au beurre vanille s'ouvre aussi.
+function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}, setOuvertes = null }) {
   const r = recettes[produit]
   if (!r) return null
   const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -65,9 +66,23 @@ function SousRecette({ recettes, produit, qty, unite }) {
       {trierRecette(r.lignes).map((l, i) => {
         let q = l.qty * f, u = l.unite
         if (norm(u) === 'g' && q >= 1000) { q = q / 1000; u = 'kg' }
+        const sousCle = chemin + '>' + l.produit
+        const ouvrable = setOuvertes && estPrepa(l.produit) && recettes[l.produit]
         return (
-          <div key={i} className="flex gap-2.5 py-1.5 text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
-            <b className="min-w-[86px]">{nb(q)} {u}</b><span>{propre(l.produit)}</span>
+          <div key={i}>
+            <div className="flex gap-2.5 py-1.5 text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
+              <b className="min-w-[86px]">{nb(q)} {u}</b>
+              {ouvrable ? (
+                <button onClick={() => setOuvertes(o => ({ ...o, [sousCle]: !o[sousCle] }))}
+                  className="text-left text-bordeaux font-semibold underline underline-offset-2">
+                  {propre(l.produit)} ▾
+                </button>
+              ) : <span>{propre(l.produit)}</span>}
+            </div>
+            {ouvrable && ouvertes[sousCle] && (
+              <SousRecette recettes={recettes} produit={l.produit} qty={q} unite={u}
+                chemin={sousCle} ouvertes={ouvertes} setOuvertes={setOuvertes} />
+            )}
           </div>
         )
       })}
@@ -108,7 +123,15 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
               <BoutonFait fait={!!faits[clePrepa(l.produit)]} onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
           </div>
-          {ouvertes[cle(l.produit)] && <SousRecette recettes={recettes} produit={l.produit} qty={l.qty} unite={l.unite} />}
+          {l.usages && l.usages.length > 1 && (
+            <div className="text-[11.5px] text-ink-mute pl-[96px] -mt-1 mb-1">
+              {l.usages.map(([qui, q]) => `${nb(q)} ${l.unite} pour ${qui}`).join(' · ')}
+            </div>
+          )}
+          {ouvertes[cle(l.produit)] && (
+            <SousRecette recettes={recettes} produit={l.produit} qty={l.qty} unite={l.unite}
+              chemin={cle(l.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes} />
+          )}
         </div>
       ))}
     </div>
@@ -206,7 +229,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       for (const [nomP, s] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(s.qty, s.unite).q)
       return t
     }
-    const src = choisis.length ? choisis : aFaire
+    const src = aFaire        // les bases restent les mêmes, quoi qu'on coche
     const besoins = {}
     for (const o of src) for (const r of (o.recette || [])) {
       const k = enKg(r.qty, r.unite)
@@ -235,9 +258,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const n = t && t.q ? Math.ceil(manque / t.q) : 0
       return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     }).sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
-  }, [choisis, aFaire, recettes, stocks])
+  }, [aFaire, recettes, stocks])
 
-  // la recette cumulée des gâteaux cochés
+  // La recette cumulée des gâteaux cochés, en cascade : ce que demandent les
+  // crèmes s'ajoute (ex. la crème citron sert au gâteau ET à la crème au beurre
+  // citron) — on garde le détail de chaque usage pour savoir quoi mettre où.
   const recette = useMemo(() => {
     if (!choisis.length) return []
     const stockDe = n => {
@@ -246,15 +271,41 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       for (const [nomP, s] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(s.qty, s.unite).q)
       return t
     }
-    const besoins = {}
-    for (const o of choisis) for (const r of (o.recette || [])) {
-      const k = enKg(r.qty, r.unite)
-      const cle = sansStk(r.produit)
-      besoins[cle] = (besoins[cle] || 0) + k.q
+    const besoins = {}          // produit → { qty, usages: { source: qty } }
+    const ajoute = (produit, qty, source) => {
+      const cle = sansStk(produit)
+      const e = besoins[cle] || (besoins[cle] = { qty: 0, usages: {} })
+      e.qty += qty
+      e.usages[source] = (e.usages[source] || 0) + qty
     }
-    return trierRecette(Object.entries(besoins)
-      .map(([produit, qty]) => ({ produit, qty, unite: 'kg', enStock: estPrepa(produit) && stockDe(produit) >= qty })))
-  }, [choisis, stocks])
+    for (const o of choisis) for (const r of (o.recette || [])) {
+      ajoute(r.produit, enKg(r.qty, r.unite).q, 'les gâteaux')
+    }
+    // ce que réclament les préparations qu'il faut faire
+    const file = Object.keys(besoins).filter(estPrepa), vus = new Set()
+    while (file.length) {
+      const p = file.shift()
+      if (vus.has(p)) continue
+      vus.add(p)
+      const r = recettes[p]
+      if (!r) continue
+      const manque = besoins[p].qty - stockDe(p)
+      if (manque <= 0.001) continue
+      const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
+      if (!base) continue
+      const f = manque / base
+      for (const l of r.lignes) {
+        if (!estPrepa(l.produit)) continue
+        ajoute(l.produit, enKg(l.qty * f, l.unite).q, propre(p))
+        if (!vus.has(sansStk(l.produit))) file.push(sansStk(l.produit))
+      }
+    }
+    return trierRecette(Object.entries(besoins).map(([produit, e]) => ({
+      produit, qty: e.qty, unite: 'kg',
+      enStock: estPrepa(produit) && stockDe(produit) >= e.qty,
+      usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
+    })))
+  }, [choisis, recettes, stocks])
 
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
   const marquer = (cle, produit, qty) => {
@@ -297,11 +348,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
             <>
               <Titre n="1">Bases à préparer</Titre>
               {/* d'où vient le calcul : sinon on se demande pourquoi le craquant est là */}
-              <p className="text-[12px] text-ink-mute -mt-1 mb-2">
-                {choisis.length
-                  ? `pour les ${choisis.length} gâteau${choisis.length > 1 ? 'x' : ''} coché${choisis.length > 1 ? 's' : ''}`
-                  : 'pour tous les gâteaux en attente — coche des gâteaux pour n\'avoir que les tiens'}
-              </p>
+              <p className="text-[12px] text-ink-mute -mt-1 mb-2">pour tous les gâteaux en attente</p>
               {bases.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Rien à préparer en base.</p>}
               {bases.map(b => (
                 <div key={b.produit}>
@@ -328,7 +375,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                     )}
                   </div>
                   {ouvertes[cleBase(b.produit)] && (
-                    <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite} />
+                    <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
+                      chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes} />
                   )}
                 </div>
               ))}
