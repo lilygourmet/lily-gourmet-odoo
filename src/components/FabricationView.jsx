@@ -111,12 +111,13 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour }) {
   const cle = p => 'sc:' + p
   return (
-    <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl p-4 sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-auto'}>
-      <div className="flex items-center gap-2 mb-2">
+    <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 self-start max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden'}>
+      <div className={'flex items-center gap-2 ' + (onRetour ? 'mb-2' : 'px-4 pt-4 pb-2 flex-shrink-0 border-b border-line')}>
         {onRetour && <button onClick={onRetour} className="text-[14px] text-bordeaux font-semibold">← Retour</button>}
         <b className="text-[16px]">Ma recette</b>
         <button onClick={onEffacer} className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">effacer</button>
       </div>
+      <div className={onRetour ? '' : 'px-4 pb-4 pt-3 flex-1 overflow-y-auto overscroll-contain'}>
       {recette.map(g => (
         <div key={g.cleGroupe} className="mb-4">
           <div className="text-[12.5px] text-ink-mute mb-1.5 pb-1 border-b border-line">
@@ -173,6 +174,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           ))}
         </div>
       ))}
+      </div>
     </div>
   )
 }
