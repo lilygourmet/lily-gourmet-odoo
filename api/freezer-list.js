@@ -198,9 +198,242 @@ async function fetchListForDate(date, uid, includeDone = false) {
   return items
 }
 
+// ============================================================
+// Mode « fabrication » (?mode=fabrication&jours=7) : tous les OF CD* encore à
+// faire sur la période, avec leurs OF enfants (les préparations SM CD*).
+// Deux familles selon l'origine : OP/… = prévision de stock (règle de réassort),
+// S… = pour la commande d'un client.
+// ============================================================
+async function fetchFabrication(uid, jours) {
+  const j0 = new Date(); j0.setHours(0, 0, 0, 0)
+  const j1 = new Date(j0); j1.setDate(j1.getDate() + jours)
+  // Un ordre confirmé dont la date est passée reste À FAIRE (il est en retard) :
+  // on remonte 30 jours en arrière. Au-delà, ce sont des ordres oubliés (2022…).
+  // Dans Odoo, un ordre non terminé RESTE à faire : on garde les retards.
+  // Mais pas les fossiles (42 ordres de 2022 jamais terminés) → 12 mois glissants.
+  const jRetard = new Date(j0); jRetard.setFullYear(jRetard.getFullYear() - 1)
+  const iso = d => d.toISOString().slice(0, 19).replace('T', ' ')
+
+  const mos = await odooSearchRead(uid, 'mrp.production', [
+    ['state', 'in', ['confirmed', 'progress', 'to_close']],   // pas les brouillons
+    ['product_id.name', 'ilike', 'CD*'],
+    ['date_planned_start', '>=', iso(jRetard)],
+    ['date_planned_start', '<=', iso(j1)],
+  ], ['id', 'name', 'origin', 'state', 'product_id', 'product_qty', 'product_uom_id',
+      'date_planned_start', 'components_availability'],
+  { limit: 500, order: 'date_planned_start asc' })
+
+  const nom = m => (Array.isArray(m.product_id) ? m.product_id[1] : '') || ''
+  const uom = m => {
+    const u = (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : '') || 'u'
+    return /unit/i.test(u) ? 'u' : u
+  }
+  const origines = m => String(m.origin || '').split(',').map(x => x.trim()).filter(Boolean)
+  const parNom = new Map(mos.map(m => [m.name, m]))
+  // un OF est « enfant » si l'une de ses origines est un autre OF de la liste
+  const estEnfant = m => origines(m).some(o => o !== m.name && parNom.has(o))
+  const enfantsDe = p => mos.filter(m => m !== p && origines(m).includes(p.name))
+
+  const fmt = m => ({
+    id: m.id, name: m.name, produit: nom(m), qty: m.product_qty, unite: uom(m),
+    // « 20 cm CD* (Chocolat) » → taille « 20 cm » + parfum « Chocolat » (gros titres de l'écran)
+    ...(parseCakedesign(nom(m)) || { taille: '', parfum: '' }),
+    prepa: /^SM\s+CD\*/i.test(nom(m)),
+    etat: m.state, quand: m.date_planned_start,
+    dispo: m.components_availability || '',
+    origine: origines(m).filter(o => !parNom.has(o)).join(', '),
+  })
+
+  // Recette de chaque OF = ses composants (ce qu'il faut sortir/préparer).
+  // Une seule requête pour tous les OF ; les grammes > 1 kg sont convertis en kg.
+  const moves = mos.length ? await odooSearchRead(uid, 'stock.move',
+    [['raw_material_production_id', 'in', mos.map(m => m.id)]],
+    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom'], { limit: 1000 }) : []
+  const aFabriquer = new Set(mos.map(m => nom(m)))
+  const recettes = {}
+  for (const mv of moves) {
+    const moId = Array.isArray(mv.raw_material_production_id) ? mv.raw_material_production_id[0] : mv.raw_material_production_id
+    let q = mv.product_uom_qty || 0
+    let u = (Array.isArray(mv.product_uom) ? mv.product_uom[1] : '') || 'u'
+    if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
+    if (/unit/i.test(u)) u = 'u'
+    const p = (Array.isArray(mv.product_id) ? mv.product_id[1] : '') || ''
+    ;(recettes[moId] ||= []).push({ produit: p, qty: Math.round(q * 100) / 100, unite: u, aFaire: aFabriquer.has(p) })
+  }
+
+  // Recettes des préparations maison (nomenclature Odoo), pour pouvoir déplier
+  // « Crème au beurre Chocolat » directement dans la recette du gâteau.
+  // Deux niveaux : les composants du gâteau, puis les composants de ces préparations.
+  const estPrepaNom = n => /^SM\b/i.test(String(n || ''))
+  const catalogue = await fetchCatalogue(uid)
+  const recettesPrepa = {}
+  // on part des préparations vues dans les OF ET de toutes celles du catalogue
+  // (sinon ouvrir une recette ne montre rien les jours sans ordre de fabrication)
+  let aChercher = [...new Set([
+    ...moves.map(mv => (Array.isArray(mv.product_id) ? mv.product_id[1] : '')),
+    ...catalogue.flatMap(c => c.lignes.map(l => l.produit)),
+  ].filter(estPrepaNom))]
+  for (let niveau = 0; niveau < 2 && aChercher.length; niveau++) {
+    const boms = await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id.name', 'in', aChercher]],
+      ['id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 200 })
+    if (!boms.length) break
+    const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', 'in', boms.map(b => b.id)]],
+      ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 1000 })
+    const suivant = []
+    for (const b of boms) {
+      const nomProd = Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[1] : ''
+      if (!nomProd || recettesPrepa[nomProd]) continue
+      recettesPrepa[nomProd] = {
+        qty: b.product_qty,
+        unite: (Array.isArray(b.product_uom_id) ? b.product_uom_id[1] : 'u').replace(/^units?$/i, 'u'),
+        lignes: lignes.filter(l => l.bom_id[0] === b.id).map(l => {
+          const p = (Array.isArray(l.product_id) ? l.product_id[1] : '') || ''
+          if (estPrepaNom(p)) suivant.push(p)
+          let q = l.product_qty || 0
+          let u = (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u')
+          if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
+          return { produit: p, qty: Math.round(q * 1000) / 1000, unite: u.replace(/^units?$/i, 'u'), prepa: estPrepaNom(p) }
+        }),
+      }
+    }
+    aChercher = [...new Set(suivant.filter(n => !recettesPrepa[n]))]
+  }
+
+  const racines = mos.filter(m => !estEnfant(m)).map(p => ({
+    ...fmt(p),
+    recette: (recettes[p.id] || []).map(l => ({ ...l, aFaire: estPrepaNom(l.produit) && !!recettesPrepa[l.produit] })),
+  }))
+
+  // Une préparation lancée pour un gâteau a pour origine l'OF du gâteau (hors de
+  // cette liste car ce n'est pas un CD*) : on remonte d'un cran pour retrouver la
+  // commande client (S…) et le gâteau concerné.
+  const aRemonter = [...new Set(racines.map(r => r.origine).filter(o => /^WH.*\/MO\//i.test(o)))]
+  const parents = aRemonter.length
+    ? await odooSearchRead(uid, 'mrp.production', [['name', 'in', aRemonter]], ['name', 'origin', 'product_id'])
+    : []
+  const infoParent = {}
+  for (const par of parents) {
+    infoParent[par.name] = {
+      origine: par.origin || '',
+      produit: (Array.isArray(par.product_id) ? par.product_id[1] : '') || '',
+    }
+  }
+
+  // Stock réel : ce qui est déjà au frigo n'est pas à refaire.
+  // (free_qty = disponible non réservé, dans l'unité de référence du produit.)
+  const nomsProduits = [...new Set([
+    ...mos.map(nom),
+    ...moves.map(mv => (Array.isArray(mv.product_id) ? mv.product_id[1] : '')),
+    ...Object.values(recettesPrepa).flatMap(r => r.lignes.map(l => l.produit)),
+    ...catalogue.flatMap(c => c.lignes.map(l => l.produit)),
+  ].filter(Boolean))]
+  const prods = nomsProduits.length ? await odooSearchRead(uid, 'product.product',
+    [['name', 'in', nomsProduits]], ['name', 'free_qty', 'uom_id'], { limit: 500 }) : []
+  const stockDe = {}
+  for (const pr of prods) {
+    stockDe[pr.name] = {
+      qty: pr.free_qty || 0,
+      unite: ((Array.isArray(pr.uom_id) ? pr.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
+    }
+  }
+  // Compare un besoin au stock. Ne convertit que g ↔ kg (le reste doit correspondre),
+  // sinon renvoie null : mieux vaut ne rien affirmer que se tromper de quantité.
+  const enStock = (produit, besoin, unite) => {
+    const st = stockDe[produit]
+    if (!st || !besoin) return null
+    const k = u => String(u || '').toLowerCase()
+    let dispo = st.qty
+    if (k(st.unite) !== k(unite)) {
+      if (k(st.unite) === 'g' && k(unite) === 'kg') dispo = st.qty / 1000
+      else if (k(st.unite) === 'kg' && k(unite) === 'g') dispo = st.qty * 1000
+      else return null
+    }
+    // Un stock négatif (écart de saisie fréquent dans Odoo) compte comme zéro :
+    // sinon on afficherait « manque 10 675 kg » pour un besoin de 1,24 kg.
+    const utile = Math.max(0, dispo)
+    return {
+      dispo: Math.round(dispo * 100) / 100,
+      assez: utile >= besoin,
+      manque: Math.round(Math.min(besoin, besoin - utile) * 100) / 100,
+    }
+  }
+  const avecStock = l => ({ ...l, stock: enStock(l.produit, l.qty, l.unite) })
+  for (const r of racines) r.recette = r.recette.map(avecStock)
+  for (const r of Object.values(recettesPrepa)) r.lignes = r.lignes.map(avecStock)
+
+  const limiteJour = iso(j0).slice(0, 10)
+  const ofs = racines.map(r => {
+    const up = infoParent[r.origine]
+    const src = up ? up.origine : r.origine
+    return {
+      ...r,
+      enRetard: String(r.quand || '').slice(0, 10) < limiteJour,
+      stock: enStock(r.produit, r.qty, r.unite),
+      pour: up ? up.produit : '',
+      origine: src || r.origine,
+      type: /^OP\//i.test(src) ? 'prevision' : 'commande',
+      scode: (String(src).match(/S\d{3,}/i) || [''])[0].toUpperCase(),
+    }
+  })
+  return { ofs, recettes: recettesPrepa, stocks: stockDe, catalogue }
+}
+
+// ============================================================
+// Catalogue des fonds cakedesign : pour chaque taille (nomenclature Odoo) et
+// chaque parfum, la recette. Les lignes de nomenclature portent la condition de
+// parfum (« SI parfum = Chocolat ») : on la traduit en liste de parfums.
+// Sert à composer une fabrication libre (« je fais 20 cm et 30 cm en chocolat »).
+// ============================================================
+async function fetchCatalogue(uid) {
+  const boms = await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id.name', 'ilike', 'CD*']],
+    ['id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 400 })
+  const enCm = boms.filter(b => /\d+\s*(cm|x\s*\d)/i.test(Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[1] : ''))
+  if (!enCm.length) return []
+  const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', 'in', enCm.map(b => b.id)]],
+    ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'], { limit: 3000 })
+  const valIds = [...new Set(lignes.flatMap(l => l.bom_product_template_attribute_value_ids || []))]
+  const vals = valIds.length ? await odooSearchRead(uid, 'product.template.attribute.value',
+    [['id', 'in', valIds]], ['id', 'name'], { limit: 500 }) : []
+  const nomVal = {}
+  for (const v of vals) nomVal[v.id] = v.name
+
+  return enCm.map(b => {
+    const tmpl = Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[1] : ''
+    const mesLignes = lignes.filter(l => l.bom_id[0] === b.id).map(l => {
+      let q = l.product_qty || 0
+      let u = (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u')
+      if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
+      const parfums = (l.bom_product_template_attribute_value_ids || []).map(id => nomVal[id]).filter(Boolean)
+      return {
+        produit: (Array.isArray(l.product_id) ? l.product_id[1] : '') || '',
+        qty: Math.round(q * 1000) / 1000,
+        unite: u.replace(/^units?$/i, 'u'),
+        parfums,                                  // vide = pour tous les parfums
+      }
+    })
+    const tous = [...new Set(mesLignes.flatMap(l => l.parfums))].sort()
+    return {
+      template: tmpl,
+      taille: (parseCakedesign(tmpl + ' (x)') || {}).taille || tmpl.replace(/\s*CD\*.*$/i, '').trim(),
+      qtyBase: b.product_qty || 1,
+      parfums: tous,
+      lignes: mesLignes,
+    }
+  }).filter(c => c.parfums.length)
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+
+    // Deuxième usage de cette fonction (limite Vercel Hobby = 12 fonctions) :
+    // la liste de fabrication CD*, cf. fetchFabrication.
+    if (req.query.mode === 'fabrication') {
+      const jours = Math.min(60, Math.max(1, parseInt(req.query.jours) || 7))
+      const uid = await odooAuth()
+      return res.status(200).json(await fetchFabrication(uid, jours))
+    }
+
     const datesParam = req.query.dates || req.query.date
     if (!datesParam) return res.status(400).json({ error: 'dates param required' })
     const dates = String(datesParam).split(',').map(s => s.trim()).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s))

@@ -21,6 +21,7 @@ const TAB_DEFS = [
   { view: 'cake-vision-link',  emoji: '📸', label: 'Galerie CD',        can: u => !isLivreur(u) && canSeeCakeVision(u) },
   { view: 'cake-vision-edit',  emoji: '🎂', label: 'Cake Vision',       can: u => !isLivreur(u) && canEditCakeVision(u) },
   { view: 'prod',              emoji: '🥐', label: 'Prod',              can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_prod) },
+  { view: 'fabrication',       emoji: '🏭', label: 'Fabrication',        can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_prod) },
   { view: 'sales',             emoji: '🥪', label: 'Salés',             can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_sales) },
   { view: 'stock-gs',          emoji: '🥪', label: 'Stock GS-',         can: u => !isLivreur(u) && canStockGS(u) },
   { view: 'patissier',         emoji: '🧁', label: 'Accessoires',       can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_patissier) },

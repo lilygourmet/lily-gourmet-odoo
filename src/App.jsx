@@ -5,6 +5,7 @@ const Calendar = lazy(() => import('./components/Calendar'))
 const RecapVentes = lazy(() => import('./components/RecapVentes'))
 const PatissierView = lazy(() => import('./components/PatissierView'))
 const ProdView = lazy(() => import('./components/ProdView'))
+const FabricationView = lazy(() => import('./components/FabricationView'))
 const FreezerView = lazy(() => import('./components/FreezerView'))
 const MessagesView = lazy(() => import('./components/MessagesView'))
 const EtiquettesView = lazy(() => import('./components/EtiquettesView'))
@@ -376,6 +377,7 @@ function App() {
     if (activeView === 'recap') return <RecapVentes {...navProps} fullscreen />
     if (activeView === 'patissier') return <PatissierView {...navProps} />
     if (activeView === 'prod') return <ProdView {...navProps} forcedCategory="prod" />
+    if (activeView === 'fabrication') return <FabricationView {...navProps} />
     if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
     if (activeView === 'freezer') return <FreezerView {...navProps} />
     if (activeView === 'messages') return <MessagesView {...navProps} />

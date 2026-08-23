@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prod → Fabrication CD* (maquette, vraies données du 21→24 août)</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;1,400;1,500&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bordeaux:#993556; --cream:#fcfbf8; --cream-warm:#F4F0EA; --line:#e5d8c3; --ink:#1a0f0a; --ink-soft:#4a3a30; --ink-mute:#8a7a70; --ok:#27500A; --ok-bg:#EAF3DE; --danger:#A32D2D; --danger-bg:#FCEEE8; --warn:#854F0B; --warn-bg:#FFF7E0; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:22px; background:var(--cream); font-family:Geist,-apple-system,sans-serif; color:var(--ink); }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { font-family:Fraunces; font-style:italic; font-weight:500; font-size:24px; margin:0 0 2px; }
+  .sub { color:var(--ink-mute); font-size:12.5px; margin:0 0 16px; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .seg { display:flex; gap:3px; padding:3px; background:var(--cream-warm); border-radius:9px; }
+  .seg button { border:none; background:none; padding:7px 13px; font-size:12px; border-radius:7px; cursor:pointer; font-family:inherit; color:var(--ink-soft); }
+  .seg button.on { background:var(--bordeaux); color:#fff; font-weight:600; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:11px 13px; }
+  .card .l { font-size:11px; color:var(--ink-soft); }
+  .card .v { font-size:20px; font-weight:600; margin-top:2px; }
+  .day { font-family:ui-monospace,monospace; font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--bordeaux); font-weight:700; margin:18px 0 8px; display:flex; align-items:center; gap:8px; }
+  .day::after { content:''; flex:1; height:1px; background:var(--line); }
+  .of { background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; overflow:hidden; }
+  .of-h { display:flex; align-items:center; gap:10px; padding:11px 13px; flex-wrap:wrap; }
+  .qty { font-size:19px; font-weight:700; color:var(--bordeaux); min-width:54px; }
+  .qty small { font-size:11px; font-weight:500; color:var(--ink-mute); }
+  .nom { font-size:14px; font-weight:600; }
+  .meta { font-size:11px; color:var(--ink-mute); font-family:ui-monospace,monospace; }
+  .b { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; }
+  .b.prev { background:#EEEDFE; color:#3C3489; }
+  .b.cmd { background:#E6F1FB; color:#0C447C; }
+  .b.ok { background:var(--ok-bg); color:var(--ok); }
+  .b.ko { background:var(--danger-bg); color:var(--danger); }
+  .b.wa { background:var(--warn-bg); color:var(--warn); }
+  .kids { border-top:1px dashed var(--line); background:#fdfcfa; }
+  .kid { display:flex; align-items:center; gap:10px; padding:8px 13px 8px 30px; font-size:12.5px; position:relative; }
+  .kid + .kid { border-top:1px dashed #f0e8db; }
+  .kid::before { content:'└'; position:absolute; left:14px; color:var(--ink-mute); }
+  .kid .kq { font-weight:700; color:var(--ink-soft); min-width:54px; }
+  .hint { font-size:11.5px; color:var(--ink-mute); margin-top:16px; padding:10px 12px; background:var(--cream-warm); border-radius:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Fabrication — à faire</h1>
+  <p class="sub">Tous les articles CD* et leurs préparations · vraies données Odoo du 21 au 24 août</p>
+
+  <div class="bar">
+    <div class="seg">
+      <button class="on" onclick="f(this,'all')">Tout</button>
+      <button onclick="f(this,'prev')">Prévisions (stock)</button>
+      <button onclick="f(this,'cmd')">Pour une commande</button>
+    </div>
+    <div class="seg">
+      <button class="on">7 jours</button><button>Aujourd'hui</button><button>15 jours</button>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="l">Gâteaux CD* à faire</div><div class="v">14</div></div>
+    <div class="card"><div class="l">Préparations (SM CD*)</div><div class="v">9</div></div>
+    <div class="card"><div class="l">Matières manquantes</div><div class="v" style="color:var(--danger)">8</div></div>
+    <div class="card"><div class="l">Prêt à lancer</div><div class="v" style="color:var(--ok)">3</div></div>
+  </div>
+
+  <div id="list"></div>
+
+  <p class="hint">Rouge « matières manquantes » = Odoo dit que les composants ne sont pas en stock. Un OF « prévision » vient d'une règle de réassort (OP/…), un OF « commande » vient du gâteau d'un client (S…).</p>
+</div>
+
+<script>
+const DATA = [
+ { jour:'Jeudi 21 août', ofs:[
+  { h:'23:00', name:'WHLVP/MO/199695', prod:'20 cm CD* (Chocolat)', qty:'8', u:'u', type:'prev', src:'OP/00401', dispo:'ko',
+    kids:[{ h:'22:00', name:'WHLVP/MO/199700', prod:'SM CD* Crème au beurre Chocolat', qty:'2 560', u:'g' }] },
+  { h:'23:00', name:'WHLVP/MO/199558', prod:'30 cm CD* (Vanille)', qty:'3', u:'u', type:'prev', src:'OP/00428', dispo:'ko', kids:[] },
+  { h:'23:00', name:'WHLVP/MO/199696', prod:'SM CD* Base grand cupcake Chocolat', qty:'99', u:'u', type:'prev', src:'OP/00448', dispo:'ok', kids:[] },
+  { h:'23:00', name:'WHLVP/MO/199697', prod:'SM CD* Magnum CBS', qty:'39', u:'u', type:'prev', src:'OP/00450', dispo:'ko', kids:[] },
+  { h:'23:00', name:'WHLVP/MO/199701', prod:'SM CD* Sirop imbibage', qty:'7', u:'kg', type:'prev', src:'OP/00413', dispo:'ko', kids:[] },
+  { h:'23:00', name:'WHLVP/MO/199395', prod:'SM CD* Crème au beurre Vanille STK', qty:'3', u:'u', type:'prev', src:'OP/00582', dispo:'wa',
+    kids:[{ h:'00:00', name:'WHLVP/MO/199396', prod:'SM CD* Crème au beurre Vanille', qty:'3', u:'u' },
+          { h:'03:00', name:'WHLVP/MO/199397', prod:'SM CD* Crème pâtissière', qty:'0,88', u:'kg' }] },
+ ]},
+ { jour:'Vendredi 22 août', ofs:[
+  { h:'15:00', name:'WHLVP/MO/199683', prod:'Coeur 10p Cakedesign CD* (Praliné Amandes caramélisées)', qty:'1', u:'u', type:'cmd', src:'S02587', dispo:'ko',
+    kids:[{ h:'14:00', name:'WHLVP/MO/199684', prod:'SM CD* Crème au beurre Praliné', qty:'0,32', u:'kg' }] },
+  { h:'15:00', name:'WHLVP/MO/199686', prod:'Coeur 5p Cakedesign CD* (Chocolat)', qty:'1', u:'u', type:'cmd', src:'S02589', dispo:'ko', kids:[] },
+ ]},
+ { jour:'Samedi 23 août', ofs:[
+  { h:'23:00', name:'WHLVP/MO/199581', prod:'SM CD* Base grand cupcake Chocolat', qty:'99', u:'u', type:'prev', src:'OP/00448', dispo:'ok', kids:[] },
+  { h:'23:00', name:'WHLVP/MO/199582', prod:'SM CD* Magnum CBS', qty:'39', u:'u', type:'prev', src:'OP/00450', dispo:'ko', kids:[] },
+ ]},
+ { jour:'Dimanche 24 août', ofs:[
+  { h:'09:00', name:'WHLVP/MO/199721', prod:'16x21 Cakedesign CD* (Praliné Chocolaté)', qty:'1', u:'u', type:'cmd', src:'S02601', dispo:'ko',
+    kids:[{ h:'08:00', name:'WHLVP/MO/199722', prod:'SM CD* Crème au beurre Praliné', qty:'0,32', u:'kg' }] },
+  { h:'12:00', name:'WHLVP/MO/199604', prod:'18cm bombé Cakedesign CD* (Chocolat)', qty:'1', u:'u', type:'cmd', src:'S02594', dispo:'ok', kids:[] },
+ ]},
+];
+const DISPO = { ok:['ok','matières OK'], ko:['ko','matières manquantes'], wa:['wa','dispo le 22/08'] };
+let filtre = 'all';
+function draw() {
+  document.getElementById('list').innerHTML = DATA.map(d => {
+    const ofs = d.ofs.filter(o => filtre === 'all' || o.type === filtre);
+    if (!ofs.length) return '';
+    return `<div class="day">${d.jour}</div>` + ofs.map(o => `
+      <div class="of">
+        <div class="of-h">
+          <div class="qty">${o.qty} <small>${o.u}</small></div>
+          <div style="min-width:0;flex:1">
+            <div class="nom">${o.prod}</div>
+            <div class="meta">${o.h} · ${o.name} · ${o.src}</div>
+          </div>
+          <span class="b ${o.type}">${o.type === 'prev' ? 'prévision' : 'commande'}</span>
+          <span class="b ${DISPO[o.dispo][0]}">${DISPO[o.dispo][1]}</span>
+        </div>
+        ${o.kids.length ? `<div class="kids">${o.kids.map(k => `
+          <div class="kid"><span class="kq">${k.qty} ${k.u}</span>
+            <span style="flex:1">${k.prod}</span>
+            <span class="meta">${k.h} · ${k.name}</span></div>`).join('')}</div>` : ''}
+      </div>`).join('');
+  }).join('');
+}
+function f(btn, v) { filtre = v; [...btn.parentNode.children].forEach(b => b.classList.remove('on')); btn.classList.add('on'); draw(); }
+draw();
+</script>
+</body>
+</html>
