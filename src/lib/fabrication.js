@@ -42,3 +42,27 @@ export async function setFait(of, on, userId) {
   }, { onConflict: 'mo_name' })
   if (error) throw error
 }
+
+/** Ce qui manque pour fabriquer ces ordres Odoo (lecture seule, génoise ignorée). */
+export async function loadManques(ordres) {
+  if (!ordres.length) return []
+  const r = await fetch(`/api/freezer-list?mode=manques&ordres=${encodeURIComponent(ordres.join(','))}`)
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return (await r.json()).ordres || []
+}
+
+/**
+ * Valide des ordres de fabrication DANS ODOO (irréversible).
+ * `forcer` = passer outre les confirmations d'Odoo (stock insuffisant).
+ * Renvoie [{ name, ok, message }].
+ */
+export async function validerDansOdoo(ordres, forcer, actorId) {
+  const r = await fetch('/api/freezer-list?mode=valider', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ordres, forcer: !!forcer, actorId }),
+  })
+  const data = await r.json()
+  if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
+  return data.resultats || []
+}

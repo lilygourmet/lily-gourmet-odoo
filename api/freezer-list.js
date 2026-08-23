@@ -198,6 +198,76 @@ async function fetchListForDate(date, uid, includeDone = false) {
   return items
 }
 
+async function odooCall(uid, model, method, args, kwargs = {}) {
+  return await odooJsonRpc('object', 'execute_kw', [
+    process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, method, args, kwargs,
+  ])
+}
+
+// ============================================================
+// Valide un ordre de fabrication dans Odoo (irréversible).
+// Sans « forcer », on s'arrête dès qu'Odoo demande une confirmation
+// (composants manquants, quantités différentes) et on renvoie son message.
+// ============================================================
+async function validerOrdre(uid, name, forcer) {
+  const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', name]],
+    ['id', 'name', 'state', 'product_qty', 'qty_producing']))[0]
+  if (!mo) return { name, ok: false, message: 'ordre introuvable' }
+  if (mo.state === 'done') return { name, ok: true, message: 'déjà terminé' }
+  if (mo.state === 'cancel') return { name, ok: false, message: 'ordre annulé' }
+  try {
+    if (!mo.qty_producing || mo.qty_producing !== mo.product_qty) {
+      await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: mo.product_qty }])
+    }
+    const r = await odooCall(uid, 'mrp.production', 'button_mark_done', [[mo.id]])
+    // Odoo renvoie une fenêtre de confirmation quand quelque chose cloche
+    if (r && typeof r === 'object' && r.res_model) {
+      if (!forcer) return { name, ok: false, message: 'Odoo demande une confirmation (stock insuffisant ?)' }
+      const ctx = r.context || {}
+      const wiz = await odooCall(uid, r.res_model, 'create', [{}], { context: ctx })
+      await odooCall(uid, r.res_model, 'process', [[wiz]], { context: ctx })
+    }
+    const apres = (await odooSearchRead(uid, 'mrp.production', [['id', '=', mo.id]], ['state']))[0]
+    return { name, ok: apres && apres.state === 'done', message: apres ? apres.state : '' }
+  } catch (e) {
+    return { name, ok: false, message: (e.message || String(e)).slice(0, 300) }
+  }
+}
+
+// ============================================================
+// Ce qui manque pour fabriquer ces ordres (lecture seule).
+// La génoise est ignorée : son stock restera négatif un moment (Layla).
+// ============================================================
+async function manquesDesOrdres(uid, names) {
+  const mos = await odooSearchRead(uid, 'mrp.production', [['name', 'in', names]],
+    ['id', 'name', 'product_id', 'product_qty', 'product_uom_id', 'origin', 'state', 'components_availability'])
+  if (!mos.length) return []
+  const moves = await odooSearchRead(uid, 'stock.move',
+    [['raw_material_production_id', 'in', mos.map(m => m.id)]],
+    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom'], { limit: 500 })
+  const prods = await odooSearchRead(uid, 'product.product',
+    [['id', 'in', [...new Set(moves.map(m => m.product_id[0]))]]], ['id', 'display_name', 'free_qty'])
+  const stock = {}
+  for (const p of prods) stock[p.id] = Math.max(0, p.free_qty || 0)
+  return mos.map(m => {
+    const lignes = moves.filter(x => x.raw_material_production_id[0] === m.id).map(x => {
+      const nomP = Array.isArray(x.product_id) ? x.product_id[1] : ''
+      const ignore = /genoise/i.test(nomP)
+      const dispo = stock[x.product_id[0]] || 0
+      return {
+        produit: nomP, besoin: x.product_uom_qty, unite: (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u'),
+        dispo, ignore, manque: ignore ? 0 : Math.max(0, x.product_uom_qty - dispo),
+      }
+    })
+    return {
+      name: m.name, produit: (Array.isArray(m.product_id) ? m.product_id[1] : ''),
+      qty: m.product_qty, unite: (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : 'u'),
+      etat: m.state, pour: m.origin || '', dispo: m.components_availability || '',
+      manques: lignes.filter(l => l.manque > 0.0001),
+    }
+  })
+}
+
 // ============================================================
 // Mode « fabrication » (?mode=fabrication&jours=7) : tous les OF CD* encore à
 // faire sur la période, avec leurs OF enfants (les préparations SM CD*).
@@ -411,7 +481,12 @@ async function fetchFabrication(uid, jours) {
       scode: (String(src).match(/S\d{3,}/i) || [''])[0].toUpperCase(),
     }
   })
-  return { ofs, recettes: recettesPrepa, stocks: stockDe, catalogue }
+  const ordres = mos.map(m => ({
+    name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
+    etat: m.state, dispo: m.components_availability || '',
+    pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
+  }))
+  return { ofs, ordres, recettes: recettesPrepa, stocks: stockDe, catalogue }
 }
 
 // ============================================================
@@ -461,10 +536,30 @@ async function fetchCatalogue(uid, collecteIds = []) {
 
 export default async function handler(req, res) {
   try {
+    // validation dans Odoo (POST) : action irréversible, réservée à perm_valider_of côté app
+    if (req.method === 'POST' && req.query.mode === 'valider') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const names = (body.ordres || []).filter(Boolean)
+      if (!names.length) return res.status(400).json({ error: 'aucun ordre' })
+      const uid = await odooAuth()
+      const out = []
+      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true))
+      console.log(`[fabrication:valider] par ${body.actorId || '?'} · forcer=${body.forcer === true} · ${out.map(o => o.name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
+      return res.status(200).json({ resultats: out })
+    }
+
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
     // Deuxième usage de cette fonction (limite Vercel Hobby = 12 fonctions) :
     // la liste de fabrication CD*, cf. fetchFabrication.
+    // ce qui manque pour une liste d'ordres (lecture seule)
+    if (req.query.mode === 'manques') {
+      const names = String(req.query.ordres || '').split(',').map(x => x.trim()).filter(Boolean)
+      if (!names.length) return res.status(200).json({ ordres: [] })
+      const uid = await odooAuth()
+      return res.status(200).json({ ordres: await manquesDesOrdres(uid, names) })
+    }
+
     if (req.query.mode === 'fabrication') {
       const jours = Math.min(60, Math.max(1, parseInt(req.query.jours) || 7))
       const uid = await odooAuth()

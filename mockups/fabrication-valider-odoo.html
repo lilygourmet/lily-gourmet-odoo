@@ -1,0 +1,150 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Valider dans Odoo</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bordeaux:#993556;--cream:#fcfbf8;--warm:#F4F0EA;--line:#e5d8c3;--ink:#1a0f0a;--soft:#4a3a30;--mute:#8a7a70;--ok:#27500A;--okbg:#EAF3DE;--dg:#A32D2D;--dgbg:#FCEEE8;--or:#854F0B;--orbg:#FFF7E0}
+*{box-sizing:border-box}body{margin:0;padding:16px;background:var(--cream);font-family:Geist,-apple-system,sans-serif;color:var(--ink)}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-family:Fraunces;font-style:italic;font-weight:500;font-size:25px;margin:0 0 3px}
+.sub{font-size:12.5px;color:var(--mute);margin:0 0 18px}
+.etape{font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--bordeaux);margin:22px 0 8px;display:flex;gap:9px;align-items:center}
+.etape::after{content:'';flex:1;height:2px;background:var(--line)}
+.of{border:1px solid var(--line);border-radius:14px;margin-bottom:8px;overflow:hidden;background:#fff}
+.of.ok{border-left:5px solid #7ba05b}.of.ko{border-left:5px solid #d9a441}
+.of-h{display:flex;align-items:center;gap:11px;padding:12px 13px}
+.ic{font-size:17px}
+.of .n{flex:1;min-width:0}.of .t{font-size:15.5px;font-weight:700}
+.of .s{font-size:11px;color:var(--mute);font-family:ui-monospace,monospace;margin-top:2px}
+.tg{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.tg.o{background:var(--okbg);color:var(--ok)}.tg.k{background:var(--orbg);color:var(--or)}
+.mq{border-top:1px dashed var(--line);background:#fffdf7;padding:9px 13px;font-size:13px}
+.mq i{font-style:normal;color:var(--mute);font-size:11.5px}
+.act{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.act .p{flex:1;min-width:200px;background:var(--bordeaux);color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+.act .f{background:#fff;border:1px solid var(--dg);color:var(--dg);border-radius:12px;padding:14px 16px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.note{background:var(--warm);border-radius:12px;padding:11px 13px;font-size:12.5px;color:var(--soft);margin-top:12px}
+.res{border-radius:13px;padding:12px 14px;margin-bottom:7px;font-size:14px}
+.res.o{background:var(--okbg);border:1px solid #cfe0b8}.res.k{background:var(--dgbg);border:1px solid #f0c9c9}
+.res b{display:block}.res span{font-size:12.5px;color:var(--soft)}
+dialog{border:none;border-radius:16px;padding:18px;max-width:420px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+dialog h3{margin:0 0 8px;font-size:17px}dialog .l{font-size:13.5px;margin-bottom:5px}
+</style></head><body><div class="wrap">
+<h1>Valider dans Odoo</h1>
+<p class="sub">Ce que l'équipe a marqué « fait » · la génoise est ignorée pour l'instant</p>
+
+<div id="avant">
+<div class="etape">1 · Les crèmes d'abord</div>
+
+  <div class="of ko" data-name="WHLVP/MO/199700">
+    <div class="of-h">
+      <input type="checkbox" class="cb" onchange="maj()">
+      <span class="ic">⚠</span>
+      <div class="n"><div class="t">Crème au beurre Chocolat — 2560 g</div>
+        <div class="s">WHLVP/MO/199700 · pour WHLVP/MO/199695</div></div>
+      <span class="tg k">il manque 4 chose(s)</span>
+    </div>
+    <div class="mq"><div>• <b>620 g</b> de Crème au beurre Nature <i>(besoin 1800 g, stock 1180 g)</i></div><div>• <b>18.9 g</b> de Cacao Extra rouge <i>(besoin 44.8 g, stock 25.9 g)</i></div><div>• <b>314.8 g</b> de Chocolat Callebaut Couverture Noir <i>(besoin 537.6 g, stock 222.8 g)</i></div><div>• <b>125.8 g</b> de Praliné Noisette 50% <i>(besoin 179.2 g, stock 53.4 g)</i></div></div>
+  </div>
+  <div class="of ko" data-name="WHLVP/MO/199684">
+    <div class="of-h">
+      <input type="checkbox" class="cb" onchange="maj()">
+      <span class="ic">⚠</span>
+      <div class="n"><div class="t">Crème au beurre Praliné — 320 g</div>
+        <div class="s">WHLVP/MO/199684 · pour WHLVP/MO/199683</div></div>
+      <span class="tg k">il manque 1 chose(s)</span>
+    </div>
+    <div class="mq"><div>• <b>19.7 g</b> de Praliné Noisette 50% <i>(besoin 73.2 g, stock 53.4 g)</i></div></div>
+  </div>
+  <div class="of ko" data-name="WHLVP/MO/199821">
+    <div class="of-h">
+      <input type="checkbox" class="cb" onchange="maj()">
+      <span class="ic">⚠</span>
+      <div class="n"><div class="t">Crème au beurre Praliné — 2400 g</div>
+        <div class="s">WHLVP/MO/199821 · pour WHLVP/MO/199820</div></div>
+      <span class="tg k">il manque 2 chose(s)</span>
+    </div>
+    <div class="mq"><div>• <b>680 g</b> de Crème au beurre Nature <i>(besoin 1860 g, stock 1180 g)</i></div><div>• <b>495.1 g</b> de Praliné Noisette 50% <i>(besoin 548.6 g, stock 53.4 g)</i></div></div>
+  </div>
+  <div class="of ko" data-name="WHLVP/MO/199722">
+    <div class="of-h">
+      <input type="checkbox" class="cb" onchange="maj()">
+      <span class="ic">⚠</span>
+      <div class="n"><div class="t">Crème au beurre Praliné — 320 g</div>
+        <div class="s">WHLVP/MO/199722 · pour WHLVP/MO/199721</div></div>
+      <span class="tg k">il manque 1 chose(s)</span>
+    </div>
+    <div class="mq"><div>• <b>19.7 g</b> de Praliné Noisette 50% <i>(besoin 73.2 g, stock 53.4 g)</i></div></div>
+  </div>
+  <div class="of ko" data-name="WHLVP/MO/198509">
+    <div class="of-h">
+      <input type="checkbox" class="cb" onchange="maj()">
+      <span class="ic">⚠</span>
+      <div class="n"><div class="t">Crème au beurre Praliné — 3680 g</div>
+        <div class="s">WHLVP/MO/198509 · pour WHLVP/MO/198508</div></div>
+      <span class="tg k">il manque 2 chose(s)</span>
+    </div>
+    <div class="mq"><div>• <b>1660 g</b> de Crème au beurre Nature <i>(besoin 2840 g, stock 1180 g)</i></div><div>• <b>787.7 g</b> de Praliné Noisette 50% <i>(besoin 841.2 g, stock 53.4 g)</i></div></div>
+  </div>
+<div class="etape">2 · Les gâteaux ensuite</div>
+
+  <div class="of ko" data-name="WHLVP/MO/199695">
+    <div class="of-h">
+      <input type="checkbox" class="cb" onchange="maj()">
+      <span class="ic">⚠</span>
+      <div class="n"><div class="t">20 cm CD* (Chocolat) — 8 Units</div>
+        <div class="s">WHLVP/MO/199695 · pour OP/00401</div></div>
+      <span class="tg k">il manque 2 chose(s)</span>
+    </div>
+    <div class="mq"><div>• <b>1200 g</b> de Craquant <i>(besoin 1280 g, stock 80 g)</i></div><div>• <b>2559.4 g</b> de Crème au beurre Chocolat <i>(besoin 2560 g, stock 0.6 g)</i></div></div>
+  </div>
+<div class="act">
+  <button class="p" id="bv" onclick="valider(false)" disabled>Valider la sélection</button>
+  <button class="f" id="bf" onclick="ouvrirForce()" disabled>Forcer la sélection</button>
+</div>
+<div style="display:flex;gap:12px;font-size:12.5px;margin-top:8px">
+  <button onclick="tout(true)" style="border:none;background:none;color:var(--bordeaux);text-decoration:underline;cursor:pointer;font:inherit">tout cocher</button>
+  <button onclick="tout(false)" style="border:none;background:none;color:var(--bordeaux);text-decoration:underline;cursor:pointer;font:inherit">tout décocher</button>
+  <span id="info" style="color:var(--mute);margin-left:auto"></span>
+</div>
+<div class="note">Un ordre n'est jamais forcé sans que tu le demandes. Les gâteaux passeront d'eux-mêmes en « prêt » une fois leurs crèmes validées : le stock aura monté.</div>
+</div>
+
+<div id="apres" style="display:none">
+  <div class="etape">Résultat</div>
+  <div class="res o"><b>✓ Crème au beurre Praliné 320 g — validée</b><span>WHLVP/MO/199684 · composants consommés · stock mis à jour</span></div>
+  <div class="res k"><b>✗ Crème au beurre Praliné 2 400 g — refusée</b><span>WHLVP/MO/199821 · il manquait 680 g de crème nature et 495 g de praliné · rien n'a été modifié</span></div>
+  <div class="note">Les ordres validés disparaissent de l'écran Fabrication. Les autres y restent, toujours marqués faits.</div>
+</div>
+
+<dialog id="dlg">
+  <h3>Forcer la validation ?</h3>
+  <p style="font-size:13.5px;color:#4a3a30;margin:0 0 10px">Odoo enregistrera la fabrication même si le stock ne suit pas. Il manque :</p>
+  <div id="dlgListe"></div>
+  <p style="font-size:12.5px;color:#8a7a70;margin:10px 0 0">Le stock de ces articles deviendra négatif dans Odoo.</p>
+  <div class="act"><button class="p" onclick="this.closest('dialog').close();valider(true)">Forcer</button>
+  <button class="f" style="border-color:#e5d8c3;color:#4a3a30" onclick="this.closest('dialog').close()">Annuler</button></div>
+</dialog>
+</div>
+<script>
+const DATA = [{"name":"WHLVP/MO/199700","produit":"SM CD* Crème au beurre Chocolat","qty":2560,"unite":"g","pour":"WHLVP/MO/199695","dispo":"Not Available","manques":[{"nom":"SM CD* Crème au beurre Nature","besoin":1.8,"unite":"kg","dispo":1.18,"ignore":false,"manque":0.6200000000000001},{"nom":"MP- Cacao Extra rouge","besoin":44.8,"unite":"g","dispo":25.91,"ignore":false,"manque":18.889999999999997},{"nom":"MP- Chocolat Callebaut Couverture Noir","besoin":537.6,"unite":"g","dispo":222.83,"ignore":false,"manque":314.77},{"nom":"MP- Praliné Noisette 50%","besoin":179.2,"unite":"g","dispo":53.44,"ignore":false,"manque":125.75999999999999}],"lignes":[{"nom":"SM CD* Crème au beurre Nature","besoin":1.8,"unite":"kg","dispo":1.18,"ignore":false,"manque":0.6200000000000001},{"nom":"MP- Cacao Extra rouge","besoin":44.8,"unite":"g","dispo":25.91,"ignore":false,"manque":18.889999999999997},{"nom":"MP- Chocolat Callebaut Couverture Noir","besoin":537.6,"unite":"g","dispo":222.83,"ignore":false,"manque":314.77},{"nom":"MP- Praliné Noisette 50%","besoin":179.2,"unite":"g","dispo":53.44,"ignore":false,"manque":125.75999999999999}]},{"name":"WHLVP/MO/199695","produit":"20 cm CD* (Chocolat)","qty":8,"unite":"Units","pour":"OP/00401","dispo":"Not Available","manques":[{"nom":"SM CD* Craquant","besoin":1.28,"unite":"kg","dispo":0.08,"ignore":false,"manque":1.2},{"nom":"SM CD* Crème au beurre Chocolat","besoin":2560,"unite":"g","dispo":0.64,"ignore":false,"manque":2559.36}],"lignes":[{"nom":"SM Genoise Chocolat KG CD","besoin":3400,"unite":"g","dispo":0,"ignore":true,"manque":0},{"nom":"SM CD* Craquant","besoin":1.28,"unite":"kg","dispo":0.08,"ignore":false,"manque":1.2},{"nom":"SM CD* Crème au beurre Chocolat","besoin":2560,"unite":"g","dispo":0.64,"ignore":false,"manque":2559.36},{"nom":"SM CD* Sirop imbibage kg","besoin":1.6,"unite":"kg","dispo":8.92,"ignore":false,"manque":0}]},{"name":"WHLVP/MO/199684","produit":"SM CD* Crème au beurre Praliné","qty":0.32,"unite":"kg","pour":"WHLVP/MO/199683","dispo":"Not Available","manques":[{"nom":"MP- Praliné Noisette 50%","besoin":73.15,"unite":"g","dispo":53.44,"ignore":false,"manque":19.710000000000008}],"lignes":[{"nom":"SM CD* Crème au beurre Nature","besoin":0.25,"unite":"kg","dispo":1.18,"ignore":false,"manque":0},{"nom":"MP- Praliné Noisette 50%","besoin":73.15,"unite":"g","dispo":53.44,"ignore":false,"manque":19.710000000000008}]},{"name":"WHLVP/MO/199821","produit":"SM CD* Crème au beurre Praliné","qty":2.4,"unite":"kg","pour":"WHLVP/MO/199820","dispo":"Not Available","manques":[{"nom":"SM CD* Crème au beurre Nature","besoin":1.86,"unite":"kg","dispo":1.18,"ignore":false,"manque":0.6800000000000002},{"nom":"MP- Praliné Noisette 50%","besoin":548.58,"unite":"g","dispo":53.44,"ignore":false,"manque":495.14000000000004}],"lignes":[{"nom":"SM CD* Crème au beurre Nature","besoin":1.86,"unite":"kg","dispo":1.18,"ignore":false,"manque":0.6800000000000002},{"nom":"MP- Praliné Noisette 50%","besoin":548.58,"unite":"g","dispo":53.44,"ignore":false,"manque":495.14000000000004}]},{"name":"WHLVP/MO/199722","produit":"SM CD* Crème au beurre Praliné","qty":0.32,"unite":"kg","pour":"WHLVP/MO/199721","dispo":"Not Available","manques":[{"nom":"MP- Praliné Noisette 50%","besoin":73.15,"unite":"g","dispo":53.44,"ignore":false,"manque":19.710000000000008}],"lignes":[{"nom":"SM CD* Crème au beurre Nature","besoin":0.25,"unite":"kg","dispo":1.18,"ignore":false,"manque":0},{"nom":"MP- Praliné Noisette 50%","besoin":73.15,"unite":"g","dispo":53.44,"ignore":false,"manque":19.710000000000008}]},{"name":"WHLVP/MO/198509","produit":"SM CD* Crème au beurre Praliné","qty":3.68,"unite":"kg","pour":"WHLVP/MO/198508","dispo":"Not Available","manques":[{"nom":"SM CD* Crème au beurre Nature","besoin":2.84,"unite":"kg","dispo":1.18,"ignore":false,"manque":1.66},{"nom":"MP- Praliné Noisette 50%","besoin":841.15,"unite":"g","dispo":53.44,"ignore":false,"manque":787.71}],"lignes":[{"nom":"SM CD* Crème au beurre Nature","besoin":2.84,"unite":"kg","dispo":1.18,"ignore":false,"manque":1.66},{"nom":"MP- Praliné Noisette 50%","besoin":841.15,"unite":"g","dispo":53.44,"ignore":false,"manque":787.71}]}];
+const gr2=(q,u)=>/^kg$/i.test(u)?Math.round(q*1000)+' g':Math.round(q*10)/10+' '+u
+const choisis=()=>[...document.querySelectorAll('.of')].filter(o=>o.querySelector('.cb').checked).map(o=>o.dataset.name)
+function maj(){
+  const sel=choisis(), objets=DATA.filter(d=>sel.includes(d.name))
+  const prets=objets.filter(d=>!d.manques.length), bloq=objets.filter(d=>d.manques.length)
+  const bv=document.getElementById('bv'), bf=document.getElementById('bf')
+  bv.disabled=!prets.length; bv.textContent='Valider la sélection'+(prets.length?' ('+prets.length+')':'')
+  bf.disabled=!bloq.length;  bf.textContent='Forcer la sélection'+(bloq.length?' ('+bloq.length+')':'')
+  document.getElementById('info').textContent = sel.length ? sel.length+' sélectionné(s) · '+prets.length+' prêt(s), '+bloq.length+' à forcer' : 'coche ce que tu veux valider'
+}
+function tout(v){ document.querySelectorAll('.cb').forEach(c=>c.checked=v); maj() }
+function ouvrirForce(){
+  const sel=choisis(), objets=DATA.filter(d=>sel.includes(d.name)&&d.manques.length)
+  const m=[...new Map(objets.flatMap(d=>d.manques).map(x=>[x.nom,x])).values()]
+  document.getElementById('dlgListe').innerHTML = m.map(x=>'<div class="l">• <b>'+gr2(x.manque,x.unite)+'</b> de '+x.nom.replace(/^(SM CD\*|MP-|SM)\s*/,'')+'</div>').join('')
+  document.getElementById('dlg').showModal()
+}
+function valider(){document.getElementById('avant').style.display='none';document.getElementById('apres').style.display='block'}
+maj()
+</script>
+</body></html>
