@@ -599,7 +599,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
               {bases.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Rien à préparer en base.</p>}
               {bases.map(b => (
                 <div key={b.produit}>
-                  <div className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
+                  {/* Toute la carte ouvre la recette : viser le petit bouton « recette »
+                      au doigt était pénible. Le bouton reste, comme repère visuel. */}
+                  <div onClick={recettes[b.produit] ? () => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) : undefined}
+                    className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
+                    (recettes[b.produit] ? 'cursor-pointer ' : '') +
                     (b.manque <= 0.001 || faits[clePrepa(b.produit)] ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
                     <span className={'flex-1 min-w-0 ' + (faits[b.ordre || clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
                       <span className="text-[17px] font-bold">{propre(b.produit)}</span>
@@ -616,7 +620,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                           <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
                           {b.n > 0 && <span className="block text-[10.5px] text-ink-mute leading-tight">{b.n} tournée{b.n > 1 ? 's' : ''}</span>}
                         </span>
-                        <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
+                        <button onClick={e => { e.stopPropagation(); setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) }}
                           className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
                         <BoutonFait fait={!!faits[b.ordre || clePrepa(b.produit)]} bloque={bloquants(b.produit, b.qty)}
                           onClick={() => marquer(b.ordre || clePrepa(b.produit), b.produit, b.qty)} />
@@ -642,7 +646,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   <p className="text-[12px] text-ink-mute -mt-1 mb-2">stock mini atteint</p>
                   {demandeOdoo.map(b => (
                     <div key={b.ordre}>
-                      <div className="flex items-center gap-3 bg-white border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 border-l-bordeaux">
+                      <div onClick={recettes[b.produit] ? () => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) : undefined}
+                        className={'flex items-center gap-3 bg-white border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 border-l-bordeaux' +
+                          (recettes[b.produit] ? ' cursor-pointer' : '')}>
                         <span className={'flex-1 min-w-0 ' + (faits[b.ordre] ? 'line-through opacity-60' : '')}>
                           <span className="text-[17px] font-bold">{propre(b.produit)}</span>
                           <span className="block text-[11px] text-ink-mute font-mono">{b.ordre}</span>
@@ -650,7 +656,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b></span>
                         <span className={'text-[19px] font-extrabold text-bordeaux ' + (faits[b.ordre] ? 'line-through opacity-60' : '')}>{qteLisible(b.qty, b.unite)}</span>
                         {recettes[b.produit] && (
-                          <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
+                          <button onClick={e => { e.stopPropagation(); setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) }}
                             className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
                         )}
                         <BoutonFait fait={!!faits[b.ordre]} bloque={bloquants(b.produit, b.qty)}
