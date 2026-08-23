@@ -268,7 +268,7 @@ async function manquesDesOrdres(uid, names) {
   return mos.map(m => {
     const lignes = moves.filter(x => x.raw_material_production_id[0] === m.id).map(x => {
       const nomP = Array.isArray(x.product_id) ? x.product_id[1] : ''
-      const ignore = /genoise/i.test(nomP)
+      const ignore = /genoise|eau\s*robinet|^\s*MP-\s*Eau/i.test(nomP)
       const uniteLigne = (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u').replace(/^units?$/i, 'u')
       const lieu = Array.isArray(m.location_src_id) ? m.location_src_id[0] : null
       const st = stockParLieu[lieu + ':' + x.product_id[0]]

@@ -417,21 +417,19 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const n = t && t.q ? Math.ceil(manque / t.q) : 0
       return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     })
-    // Les préparations qu'ODOO demande lui-même (stock mini atteint : crèmes STK,
-    // sirop…). Sans ça, ce travail n'apparaissait nulle part dans l'écran.
-    for (const o of aFaire.filter(x => !x.taille)) {
-      const k = enKg(o.qty, o.unite)
-      const dejaLa = liste.find(x => x.produit === o.produit)
-      const stock = stockDe(o.produit)
-      const ligne = {
-        produit: o.produit, besoin: k.q, stock, manque: Math.max(0, k.q - stock),
-        n: 1, qty: k.q, unite: k.u, ordre: o.name,
-      }
-      if (dejaLa) Object.assign(dejaLa, ligne)
-      else liste.push(ligne)
-    }
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
   }, [aFaire, recettes, stocks])
+
+  // Ce qu'Odoo demande de préparer parce que le stock mini est atteint : crèmes
+  // STK, base cupcake, magnum… (tous les articles CD* qui ne sont pas un format).
+  const demandeOdoo = useMemo(() => {
+    const stockDe = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
+    return aFaire.filter(o => !o.taille).map(o => {
+      const k = enKg(o.qty, o.unite)
+      const stock = stockDe(o.produit)
+      return { produit: o.produit, qty: k.q, unite: k.u, besoin: k.q, stock, manque: Math.max(0, k.q - stock), ordre: o.name, n: 1 }
+    })
+  }, [aFaire, stocks])
 
   // La recette des gâteaux cochés, calculée SÉPARÉMENT PAR PARFUM : deux parfums
   // différents ne se mélangent jamais (règle de Layla). À l'intérieur d'un parfum
@@ -503,7 +501,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
     const f = base ? (qty || base) / base : 1
     return r.lignes
-      .filter(l => estPrepa(l.produit) && !estIngredient(l.produit))
+      .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !/genoise|eau\s*robinet/i.test(l.produit))
       .filter(l => stockDe(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
       .filter(l => !faits[clePrepa(l.produit)])
       .map(l => l.produit)
@@ -539,7 +537,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const f = qty / base
     const out = []
     for (const l of r.lignes) {
-      if (/genoise/i.test(l.produit)) continue
+      if (/genoise|eau\s*robinet|^\s*MP-\s*Eau/i.test(l.produit)) continue
       const besoin = enKg(l.qty * f, l.unite)
       const st = stocks[l.produit]
       const dispo = st ? Math.max(0, enKg(st.qty, st.unite).q) : 0
@@ -637,7 +635,36 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                 </div>
               ))}
 
-              <Titre n="2">Gâteaux à faire</Titre>
+              {demandeOdoo.length > 0 && (
+                <>
+                  <Titre n="2">Demandé par Odoo</Titre>
+                  <p className="text-[12px] text-ink-mute -mt-1 mb-2">stock mini atteint</p>
+                  {demandeOdoo.map(b => (
+                    <div key={b.ordre}>
+                      <div className="flex items-center gap-3 bg-white border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 border-l-bordeaux">
+                        <span className={'flex-1 min-w-0 ' + (faits[b.ordre] ? 'line-through opacity-60' : '')}>
+                          <span className="text-[17px] font-bold">{propre(b.produit)}</span>
+                          <span className="block text-[11px] text-ink-mute font-mono">{b.ordre}</span>
+                        </span>
+                        <span className="text-[11.5px] text-ink-mute text-right leading-tight">il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b></span>
+                        <span className={'text-[19px] font-extrabold text-bordeaux ' + (faits[b.ordre] ? 'line-through opacity-60' : '')}>{qteLisible(b.qty, b.unite)}</span>
+                        {recettes[b.produit] && (
+                          <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
+                            className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
+                        )}
+                        <BoutonFait fait={!!faits[b.ordre]} bloque={bloquants(b.produit, b.qty)}
+                          onClick={() => marquer(b.ordre, b.produit, b.qty)} />
+                      </div>
+                      {ouvertes[cleBase(b.produit)] && (
+                        <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
+                          chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes} />
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+
+              <Titre n={demandeOdoo.length ? 3 : 2}>Gâteaux à faire</Titre>
               {gateaux.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Aucun gâteau à faire.</p>}
               <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau} />
               <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau} />
