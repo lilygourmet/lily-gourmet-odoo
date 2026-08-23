@@ -29,6 +29,9 @@ const aujourdhui = () => new Date().toLocaleDateString('sv-SE', CASA)
 const clePrepa = produit => `PREP:${produit}:${aujourdhui()}`
 // « Crème au beurre Chocolat STK » et « Crème au beurre Chocolat » sont la MÊME
 // crème (deux articles Odoo) : on les rassemble, stocks compris.
+// Sert UNIQUEMENT à regrouper les gâteaux (« Crème au beurre Chocolat » et
+// « … Chocolat STK » = même famille) ; les quantités et les stocks des deux
+// articles ne sont jamais melangés.
 const sansStk = n => String(n || '').replace(/\s*\bSTK\b/i, '').trim()
 // Les recettes sont toujours affichées dans cet ordre, quel que soit le gâteau.
 const ORDRE = [/genoise/i, /sirop/i, /cr[eè]me/i, /craquant/i, /amandes/i]
@@ -43,7 +46,7 @@ const jamaisDeplier = n => estBase(n) || estIngredient(n) || /genoise/i.test(Str
 const propre = n => String(n || '')
   .replace(/^SM\s+CD\*\s*/i, '').replace(/^SM\s+/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
   .replace(/\s*\bKG\b\s*CD\b/i, '').replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\bkg\b\s*$/i, '')
-  .replace(/\s*\baccs\b/i, '').replace(/\s*\bSTK\b/i, '').trim()
+  .replace(/\s*\baccs\b/i, '').trim()
 
 // ce que produit une tournée de cette préparation (« Tournée (3 kg) » → 3 kg)
 function tailleTournee(recettes, n) {
@@ -247,18 +250,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // les bases nécessaires : demandées directement, ou par les crèmes qu'il faut faire
   const bases = useMemo(() => {
-    const stockDe = n => {
-      const cible = sansStk(n)
-      let t = 0
-      for (const [nomP, s] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(s.qty, s.unite).q)
-      return t
-    }
+    const stockDe = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
     const src = aFaire        // les bases restent les mêmes, quoi qu'on coche
     const besoins = {}
     for (const o of src) for (const r of (o.recette || [])) {
       const k = enKg(r.qty, r.unite)
-      const cle = sansStk(r.produit)
-      besoins[cle] = (besoins[cle] || 0) + k.q
+      besoins[r.produit] = (besoins[r.produit] || 0) + k.q
     }
     const out = {}
     for (const [p, q] of Object.entries(besoins)) {
@@ -290,12 +287,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // cascade (la crème citron sert au gâteau ET à la crème au beurre citron).
   const recetteParParfum = useMemo(() => {
     if (!choisis.length) return []
-    const stockDe = n => {
-      const cible = sansStk(n)
-      let t = 0
-      for (const [nomP, st] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(st.qty, st.unite).q)
-      return t
-    }
+    const stockDe = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
     const cremeDe = o => {
       const c = (o.recette || []).find(r => /cr[eè]me au beurre/i.test(r.produit) && !/nature/i.test(r.produit))
       return c ? sansStk(c.produit) : (o.parfum || '—')
@@ -306,7 +298,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const parfum = [...new Set(lot.map(o => o.parfum).filter(Boolean))].join(' + ') || '—'
       const besoins = {}
       const ajoute = (produit, qty, source) => {
-        const c = sansStk(produit)
+        const c = produit                       // STK reste distinct du produit normal
         const e = besoins[c] || (besoins[c] = { qty: 0, usages: {} })
         e.qty += qty
         e.usages[source] = (e.usages[source] || 0) + qty
@@ -314,8 +306,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       // on note quel gâteau demande quoi, pour pouvoir dire « 400 g pour le 20 cm »
       for (const o of lot) for (const r of (o.recette || [])) {
         ajoute(r.produit, enKg(r.qty, r.unite).q, `le ${o.taille}`)
-        const c = sansStk(r.produit)
-        besoins[c].direct = true
+        besoins[r.produit].direct = true
       }
       const file = Object.keys(besoins).filter(estPrepa), vus = new Set()
       while (file.length) {
@@ -332,7 +323,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         for (const l of r.lignes) {
           if (!estPrepa(l.produit) || estIngredient(l.produit)) continue
           ajoute(l.produit, enKg(l.qty * f, l.unite).q, propre(pr))
-          if (!vus.has(sansStk(l.produit))) file.push(sansStk(l.produit))
+          if (!vus.has(l.produit)) file.push(l.produit)
         }
       }
       const lignes = trierRecette(Object.entries(besoins)
@@ -354,12 +345,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // produit consomme et qui ne sont pas en stock (crème pâtissière avant la crème
   // au beurre vanille, crèmes avant le gâteau…).
   const bloquants = (produit, qty) => {
-    const stockDe = n => {
-      const cible = sansStk(n)
-      let t = 0
-      for (const [nomP, st] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(st.qty, st.unite).q)
-      return t
-    }
+    const stockDe = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
     const r = recettes[produit]
     if (!r) return []
     const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
