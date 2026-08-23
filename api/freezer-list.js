@@ -246,17 +246,34 @@ async function manquesDesOrdres(uid, names) {
     [['raw_material_production_id', 'in', mos.map(m => m.id)]],
     ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom'], { limit: 500 })
   const prods = await odooSearchRead(uid, 'product.product',
-    [['id', 'in', [...new Set(moves.map(m => m.product_id[0]))]]], ['id', 'display_name', 'free_qty'])
+    [['id', 'in', [...new Set(moves.map(m => m.product_id[0]))]]], ['id', 'display_name', 'free_qty', 'uom_id'])
   const stock = {}
-  for (const p of prods) stock[p.id] = Math.max(0, p.free_qty || 0)
+  for (const p of prods) {
+    stock[p.id] = {
+      qty: Math.max(0, p.free_qty || 0),
+      unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
+    }
+  }
+  // ramène une quantité dans l'unité demandée (g ↔ kg uniquement ; sinon null)
+  const convertir = (q, de, vers) => {
+    const a = String(de || '').toLowerCase(), b = String(vers || '').toLowerCase()
+    if (a === b) return q
+    if (a === 'g' && b === 'kg') return q / 1000
+    if (a === 'kg' && b === 'g') return q * 1000
+    return null
+  }
   return mos.map(m => {
     const lignes = moves.filter(x => x.raw_material_production_id[0] === m.id).map(x => {
       const nomP = Array.isArray(x.product_id) ? x.product_id[1] : ''
       const ignore = /genoise/i.test(nomP)
-      const dispo = stock[x.product_id[0]] || 0
+      const uniteLigne = (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u').replace(/^units?$/i, 'u')
+      const st = stock[x.product_id[0]]
+      const dispo = st ? convertir(st.qty, st.unite, uniteLigne) : 0
+      const comparable = dispo !== null                       // unités incompatibles → on n'affirme rien
       return {
-        produit: nomP, besoin: x.product_uom_qty, unite: (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u'),
-        dispo, ignore, manque: ignore ? 0 : Math.max(0, x.product_uom_qty - dispo),
+        produit: nomP, besoin: x.product_uom_qty, unite: uniteLigne,
+        dispo: comparable ? Math.round(dispo * 100) / 100 : null, ignore,
+        manque: (ignore || !comparable) ? 0 : Math.max(0, x.product_uom_qty - dispo),
       }
     })
     return {
