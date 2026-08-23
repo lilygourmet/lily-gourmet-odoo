@@ -178,6 +178,11 @@ export function nomJour(date) {
  * Retourne : { statut, heures_prevues, label }
  *   statut : 'normal' | 'demi' | 'off' | 'ferie' | 'conge'
  */
+// Férié travaillé : la récup suit ce qui était PRÉVU ce jour-là. Applicable à
+// partir de juillet 2026 seulement — avril, mai et juin sont validés et ne
+// doivent pas changer rétroactivement.
+const REGLE_RECUP_PRORATA_DEPUIS = '2026-07-01'
+
 export function statutPrevu(date, employe, feriesMap, congesByEmp) {
   const ymd = formatYMD(date)
   // Portés par `prevu` : calculerJour en a besoin (jours OFF/fériés/congés TRAVAILLÉS
@@ -203,7 +208,10 @@ export function statutPrevu(date, employe, feriesMap, congesByEmp) {
     }
   }
   const hdemi = Number(employe.heures_demi_journee || 4)
-  const commun = { heures_jour_complet: hjc, regime_cafe: cafe, demi_prevue: estDemi, heures_demi_journee: hdemi }
+  const commun = {
+    heures_jour_complet: hjc, regime_cafe: cafe, heures_demi_journee: hdemi,
+    recup_prorata: estDemi && ymd >= REGLE_RECUP_PRORATA_DEPUIS,
+  }
 
   // 1) Férié ?
   if (feriesMap.has(ymd)) {
@@ -457,11 +465,18 @@ export function calculerJour(prevu, pointe, employe) {
   else if (prevu.statut === 'ferie' && heures_travaillees > 0) {
     statut = 'ferie_travaille'
     label = label + ' (travaillé)'
-    const demiPrevue = !!prevu.demi_prevue
-    jours_recup = demiPrevue ? 0.5 : 1
-    heures_prevues = demiPrevue
-      ? Number(prevu.heures_demi_journee || employe.heures_demi_journee || 4)
-      : Number(prevu.heures_jour_complet || employe.heures_jour_complet || 8.50)
+    const complet = Number(prevu.heures_jour_complet || employe.heures_jour_complet || 8.50)
+    const demiH = Number(prevu.heures_demi_journee || employe.heures_demi_journee || 4)
+    // Une demi-journée prévue donne une demi-journée de récup — sauf si la
+    // personne a fait une journée entière malgré tout : elle gagne alors 1 jour,
+    // comme ses collègues. La référence en heures suit la récup accordée, sinon
+    // le total ne correspondrait plus à ce qui a été travaillé.
+    // Même tolérance que partout ailleurs dans le fichier : à deux minutes près,
+    // une journée est une journée. Sans elle, 36 secondes de moins faisaient
+    // perdre une demi-journée de récup.
+    const journeeEntiere = !prevu.recup_prorata || heures_travaillees >= complet - TOLERANCE_MIN / 60
+    jours_recup = journeeEntiere ? 1 : 0.5
+    heures_prevues = journeeEntiere ? complet : demiH
     if (heures_travaillees >= heures_prevues) {
       heures_sup = round2(heures_travaillees - heures_prevues)
     } else {

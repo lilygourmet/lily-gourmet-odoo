@@ -200,3 +200,54 @@ describe('conversion des heures en jours : c\'est le SOLDE du mois qui tombe à 
     expect(synthese.heures_sup).toBe(2)
   })
 })
+
+describe('férié qui tombe sur une demi-journée, et la personne vient travailler', () => {
+  // Khadija : demi-journée le vendredi (4 h), journée complète 8 h.
+  const khadija = {
+    id: 42, heures_jour_complet: 8, heures_demi_journee: 4,
+    planning_type: 'fixe', planning_jour_off: 'Dimanche', planning_demi_off: 'Vendredi',
+  }
+  const feries = new Map([['2026-08-14', 'Allégeance Oued Eddahab'], ['2026-05-01', 'Fête du Travail']])
+  const conges = new Map()
+  const jour = (ymd, heures) => calculerJour(
+    statutPrevu(new Date(`${ymd}T12:00:00`), khadija, feries, conges),
+    { heures, anomalie: null, nb_punchs: 2, nb_sessions: 1 },
+    khadija,
+  )
+
+  it('fait sa demi-journée : une demi-journée de récup, aucune heure manquante', () => {
+    const r = jour('2026-08-14', 4.09)   // un vendredi férié
+    expect(r.statut).toBe('ferie_travaille')
+    expect(r.jours_recup).toBe(0.5)
+    expect(r.heures_manquantes).toBe(0)
+    expect(r.heures_sup).toBeCloseTo(0.09, 2)
+  })
+
+  it('fait moins que sa demi-journée : les heures manquantes comptent quand même', () => {
+    const r = jour('2026-08-14', 3.32)
+    expect(r.jours_recup).toBe(0.5)
+    expect(r.heures_manquantes).toBeCloseTo(0.68, 2)   // et non 4,68 h
+  })
+
+  it('fait une journée entière malgré tout : un jour entier de récup', () => {
+    const r = jour('2026-08-14', 8.43)
+    expect(r.jours_recup).toBe(1)
+    expect(r.heures_sup).toBeCloseTo(0.43, 2)          // et non 4,43 h
+  })
+
+  it('avant juillet 2026, rien ne change : les mois validés restent intacts', () => {
+    const r = jour('2026-05-01', 4.32)                 // un vendredi férié, avant la bascule
+    expect(r.jours_recup).toBe(1)
+    // 8,5 h et non 8 : avant le 31/07/2026 la journée complète était plus longue
+    expect(r.heures_manquantes).toBeCloseTo(4.18, 2)
+  })
+
+  it('un férié un jour normal donne toujours un jour entier', () => {
+    const lundi = calculerJour(
+      statutPrevu(new Date('2026-08-17T12:00:00'), khadija, new Map([['2026-08-17', 'Test']]), conges),
+      { heures: 8, anomalie: null, nb_punchs: 2, nb_sessions: 1 }, khadija,
+    )
+    expect(lundi.jours_recup).toBe(1)
+    expect(lundi.heures_manquantes).toBe(0)
+  })
+})
