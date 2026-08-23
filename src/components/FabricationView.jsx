@@ -109,7 +109,9 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
       {recette.map(l => (
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
-            <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{nb(l.qty)} {l.unite}</b>
+            <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
+              {nb(l.enStock ? l.qty : (l.aFaire || l.qty))} {l.unite}
+            </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
                 className="flex-1 text-left text-bordeaux font-bold underline underline-offset-4">
@@ -126,13 +128,14 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
               <BoutonFait fait={!!faits[clePrepa(l.produit)]} onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
           </div>
-          {l.usages && l.usages.length > 1 && (
+          {(l.stock > 0.001 || (l.usages && l.usages.length > 1)) && (
             <div className="text-[11.5px] text-ink-mute pl-[96px] -mt-1 mb-1">
-              {l.usages.map(([qui, q]) => `${nb(q)} ${l.unite} pour ${qui}`).join(' · ')}
+              {l.stock > 0.001 && !l.enStock && <>il en faut {nb(l.qty)} · {nb(l.stock)} déjà en stock<br /></>}
+              {l.usages && l.usages.length > 1 && l.usages.map(([qui, q]) => `${nb(q)} ${l.unite} pour ${qui}`).join(' · ')}
             </div>
           )}
           {ouvertes[cle(l.produit)] && (
-            <SousRecette recettes={recettes} produit={l.produit} qty={l.qty} unite={l.unite}
+            <SousRecette recettes={recettes} produit={l.produit} qty={l.aFaire || l.qty} unite={l.unite}
               chemin={cle(l.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes} />
           )}
         </div>
@@ -303,11 +306,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         if (!vus.has(sansStk(l.produit))) file.push(sansStk(l.produit))
       }
     }
-    return trierRecette(Object.entries(besoins).map(([produit, e]) => ({
-      produit, qty: e.qty, unite: 'kg',
-      enStock: estPrepa(produit) && stockDe(produit) >= e.qty,
-      usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
-    })))
+    return trierRecette(Object.entries(besoins).map(([produit, e]) => {
+      const stock = estPrepa(produit) ? stockDe(produit) : 0
+      return {
+        produit, qty: e.qty, unite: 'kg', stock,
+        aFaire: Math.max(0, e.qty - stock),          // ce qu'il reste vraiment à préparer
+        enStock: estPrepa(produit) && stock >= e.qty,
+        usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
+      }
+    }))
   }, [choisis, recettes, stocks])
 
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
