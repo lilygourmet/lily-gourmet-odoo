@@ -630,7 +630,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   )}
                   {ouvertes[cleBase(b.produit)] && (
                     <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
-                      chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes} />
+                      chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
+                      faits={faits} onFait={marquer} bloquants={bloquants} />
                   )}
                 </div>
               ))}
@@ -657,7 +658,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       </div>
                       {ouvertes[cleBase(b.produit)] && (
                         <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
-                          chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes} />
+                          chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
+                          faits={faits} onFait={marquer} bloquants={bloquants} />
                       )}
                     </div>
                   ))}
