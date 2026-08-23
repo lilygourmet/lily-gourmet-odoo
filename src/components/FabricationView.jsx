@@ -118,6 +118,7 @@ function Gateau({ o, on, onToggle }) {
           {o.scode ? ` · ${o.scode}` : ''}
         </div>
       </div>
+      {o.recetteVide && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
       {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
       <span className="text-[18px] font-extrabold text-bordeaux">×{nb(o.qty)}</span>
     </div>

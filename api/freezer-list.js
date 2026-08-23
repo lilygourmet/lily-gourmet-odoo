@@ -308,10 +308,35 @@ async function fetchFabrication(uid, jours) {
     aChercher = [...new Set(suivant.filter(n => !recettesPrepa[n]))]
   }
 
-  const racines = mos.filter(m => !estEnfant(m)).map(p => ({
-    ...fmt(p),
-    recette: (recettes[p.id] || []).map(l => ({ ...l, aFaire: estPrepaNom(l.produit) && !!recettesPrepa[l.produit] })),
-  }))
+  // Recette d'un ordre : ses composants réels. Si Odoo n'en a mis aucun (cas vécu :
+  // le 18 cm bombé n'a de nomenclature que pour « Praliné Chocolaté », pas pour
+  // « Chocolat »), on retombe sur la nomenclature du produit filtrée par parfum ;
+  // si elle ne couvre pas ce parfum non plus, la recette reste vide et l'écran le dit.
+  const recetteDeSecours = (m) => {
+    const nomComplet = nom(m)
+    const tmpl = nomComplet.replace(/\s*\([^)]*\)\s*$/, '').trim()
+    const parfum = (String(nomComplet).match(/\(([^)]+)\)\s*$/) || [])[1] || ''
+    const c = catalogue.find(x => x.template === tmpl)
+    if (!c) return []
+    const f = (m.product_qty || 1) / (c.qtyBase || 1)
+    return c.lignes
+      .filter(l => !l.parfums.length || l.parfums.includes(parfum.trim()))
+      .map(l => {
+        let q = l.qty * f, u = l.unite
+        if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
+        return { produit: l.produit, qty: Math.round(q * 100) / 100, unite: u }
+      })
+  }
+
+  const racines = mos.filter(m => !estEnfant(m)).map(p => {
+    const brute = recettes[p.id] || []
+    const lignes = brute.length ? brute : recetteDeSecours(p)
+    return {
+      ...fmt(p),
+      recetteVide: lignes.length === 0,
+      recette: lignes.map(l => ({ ...l, aFaire: estPrepaNom(l.produit) && !!recettesPrepa[l.produit] })),
+    }
+  })
 
   // Une préparation lancée pour un gâteau a pour origine l'OF du gâteau (hors de
   // cette liste car ce n'est pas un CD*) : on remonte d'un cran pour retrouver la
