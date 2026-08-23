@@ -138,7 +138,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
               </span>
             )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
-            {estPrepa(l.produit) && !estIngredient(l.produit) && !l.enStock && (
+            {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock && (
               <BoutonFait fait={!!faits[clePrepa(l.produit)]} bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty) : null}
                 onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
