@@ -22,7 +22,8 @@ const TAB_DEFS = [
   { view: 'cake-vision-link',  emoji: '📸', label: 'Galerie CD',        can: u => !isLivreur(u) && canSeeCakeVision(u) },
   { view: 'cake-vision-edit',  emoji: '🎂', label: 'Cake Vision',       can: u => !isLivreur(u) && canEditCakeVision(u) },
   { view: 'prod',              emoji: '🥐', label: 'Prod',              can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_prod) },
-  { view: 'fabrication',       emoji: '🏭', label: 'Fabrication',        can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_prod) },
+  { view: 'fabrication',       emoji: '🏭', label: 'Fabrication CD',     can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_cd) },
+  { view: 'fabrication-glacage', emoji: '🍥', label: 'Fabrication Glaçage', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_glacage) },
   { view: 'sales',             emoji: '🥪', label: 'Salés',             can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_sales) },
   { view: 'stock-gs',          emoji: '🥪', label: 'Stock GS-',         can: u => !isLivreur(u) && canStockGS(u) },
   // Ces deux-là n'existaient que dans le menu du haut : invisibles dans la barre

@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Fabrication Glaçage</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bordeaux:#993556;--cream:#fcfbf8;--warm:#F4F0EA;--line:#e5d8c3;--ink:#1a0f0a;--soft:#4a3a30;--mute:#8a7a70;--ok:#27500A;--okbg:#EAF3DE;--or:#854F0B;--orbg:#FFF7E0;--dg:#A32D2D;--dgbg:#FCEEE8}
+*{box-sizing:border-box}body{margin:0;padding:16px;background:var(--cream);font-family:Geist,-apple-system,sans-serif;color:var(--ink)}
+.wrap{max-width:600px;margin:0 auto}
+h1{font-family:Fraunces;font-style:italic;font-weight:500;font-size:26px;margin:0 0 2px}
+.sub{font-size:13px;color:var(--mute);margin:0 0 18px}
+.bloc{font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--bordeaux);margin:22px 0 10px;display:flex;gap:9px;align-items:center}
+.bloc::after{content:'';flex:1;height:2px;background:var(--line)}
+.stock{background:#fff;border:1px solid var(--line);border-left:5px solid var(--bordeaux);border-radius:14px;padding:14px;display:flex;align-items:center;gap:12px}
+.stock .n{flex:1;font-size:17px;font-weight:700}
+.stock .q{font-size:22px;font-weight:800;color:var(--bordeaux)}
+.choix{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:10px}
+.choix button{width:52px;height:52px;border-radius:14px;border:1px solid var(--line);background:var(--warm);font-size:26px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--ink)}
+.choix .v{flex:1;text-align:center}
+.choix .v b{display:block;font-size:30px;font-weight:800;line-height:1.1}
+.choix .v span{font-size:13px;color:var(--mute)}
+.ing{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:12px 14px;margin-bottom:6px}
+.ing b{font-size:18px;min-width:100px}
+.ing .n{flex:1;font-size:15px}
+.tg{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.ok{background:var(--okbg);color:var(--ok)}.ko{background:var(--dgbg);color:var(--dg)}
+.go{width:100%;background:var(--bordeaux);color:#fff;border:none;border-radius:16px;padding:18px;font-size:17px;font-weight:800;cursor:pointer;font-family:inherit;margin-top:14px}
+.go:disabled{background:var(--warm);color:var(--mute)}
+.fini{background:var(--okbg);border:1px solid #cfe0b8;border-radius:13px;padding:12px 14px;margin-bottom:7px;display:flex;align-items:center;gap:10px}
+.fini .n{flex:1;font-size:15px;font-weight:700}
+.fini .s{font-size:11.5px;color:var(--soft);font-weight:500}
+.note{background:var(--warm);border-radius:12px;padding:11px 13px;font-size:12.5px;color:var(--soft);margin-top:14px}
+</style></head><body><div class="wrap">
+<h1>Fabrication Glaçage</h1>
+<p class="sub">Glaçage cake design · 1 tournée = 2,29 kg</p>
+
+<div class="stock"><span class="n">En stock aujourd'hui</span><span class="q" id="stk">41,74 kg</span></div>
+
+<div class="bloc">1 · Combien j'en fais</div>
+<div class="choix">
+  <button onclick="moins()">−</button>
+  <div class="v"><b id="nb">1</b><span id="lib">tournée · 2,29 kg</span></div>
+  <button onclick="plus()">+</button>
+</div>
+
+<div class="bloc">2 · Il te faut</div>
+<div id="rec"></div>
+
+<button class="go" id="btn" onclick="faire()">C'est fait</button>
+<div class="note">Quand tu appuies sur « C'est fait », l'ordre de fabrication est créé dans Odoo et rejoint la liste de <b>Fabrication CD</b> pour être validé par la personne qui en a le droit. Le stock de glaçage ne montera qu'à ce moment-là.</div>
+
+<div id="dejafait"></div>
+</div>
+<script>
+const D = {"produit":"SM. glacage cake design","stock":41.74,"unite":"kg","tournee":2.29,"recette":[{"nom":"Sucre Glace","qty":2,"unite":"kg","stock":53.42,"su":"kg"},{"nom":"Oeufs blanc","qty":0.25,"unite":"kg","stock":3.54,"su":"kg"},{"nom":"Arôme vanille artificielle","qty":0.01,"unite":"kg","stock":0.18,"su":"kg"},{"nom":"Vinaigre","qty":0.035,"unite":"kg","stock":1.69,"su":"kg"}]};
+let n = 1
+const nb=v=>Number(v).toLocaleString('fr-FR',{maximumFractionDigits:2})
+const gr=(q)=> q<1 ? nb(q*1000)+' g' : nb(q)+' kg'
+const faits = []
+function draw(){
+  document.getElementById('nb').textContent = n
+  document.getElementById('lib').textContent = (n>1?'tournées':'tournée') + ' · ' + nb(n*D.tournee) + ' kg'
+  document.getElementById('rec').innerHTML = D.recette.map(r=>{
+    const besoin=r.qty*n, ok=r.stock>=besoin
+    return '<div class="ing"><b>'+gr(besoin)+'</b><span class="n">'+r.nom+'</span>'
+      +'<span class="tg '+(ok?'ok':'ko')+'">'+(ok?'stock '+gr(r.stock):'il manque '+gr(besoin-r.stock))+'</span></div>'
+  }).join('')
+  const manque = D.recette.some(r=>r.stock < r.qty*n)
+  const b=document.getElementById('btn'); b.disabled=manque
+  b.textContent = manque ? 'Ingrédients insuffisants' : "C'est fait — " + nb(n*D.tournee) + ' kg'
+  document.getElementById('dejafait').innerHTML = faits.length
+    ? '<div class="bloc">Déjà fait aujourd\'hui</div>' + faits.map(f=>'<div class="fini"><span class="n">'+nb(f.q)+' kg de glaçage<span class="s"> · '+f.h+' · '+f.ordre+'</span></span><span class="tg" style="background:#FFF7E0;color:#854F0B">en attente de validation</span></div>').join('')
+    : ''
+}
+function plus(){ n++; draw() } 
+function moins(){ if(n>1) n--; draw() }
+function faire(){ const d=new Date()
+  faits.unshift({ q:n*D.tournee, h:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'), ordre:'WHLVP/MO/'+(199900+faits.length) })
+  n=1; draw(); window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}) }
+draw()
+</script></body></html>

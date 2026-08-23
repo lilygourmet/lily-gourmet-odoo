@@ -235,6 +235,82 @@ async function validerOrdre(uid, name, forcer) {
 }
 
 // ============================================================
+// Glaçage cake design : la recette (nomenclature) + le stock des ingrédients,
+// et la création de l'ordre de fabrication quand l'équipe a fait sa tournée.
+// Ce produit n'a ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
+// décide combien elle en fait.
+// ============================================================
+const GLACAGE = 'SM. glacage cake design'
+
+async function fetchGlacage(uid) {
+  const prod = (await odooSearchRead(uid, 'product.product', [['name', '=', GLACAGE]],
+    ['id', 'display_name', 'uom_id']))[0]
+  if (!prod) return { erreur: 'produit introuvable dans Odoo' }
+  const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id.name', '=', GLACAGE]],
+    ['id', 'product_qty', 'product_uom_id']))[0]
+  if (!bom) return { erreur: 'recette introuvable dans Odoo' }
+  const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+    ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
+
+  // on se cale sur un ordre existant de la production pour l'emplacement
+  const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
+    ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
+  const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
+
+  const ids = [prod.id, ...lignes.map(l => l.product_id[0])]
+  const stocks = await odooCall(uid, 'product.product', 'read', [ids, ['display_name', 'free_qty', 'uom_id']],
+    lieu ? { context: { location: lieu } } : {})
+  const stockDe = {}
+  for (const p of stocks) {
+    stockDe[p.id] = {
+      qty: Math.max(0, p.free_qty || 0),
+      unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
+    }
+  }
+  const enKg = (q, u) => (/^g$/i.test(u) ? { q: q / 1000, u: 'kg' } : { q, u: (u || 'u').replace(/^units?$/i, 'u') })
+  return {
+    produit: prod.display_name,
+    tournee: bom.product_qty,                                   // ce que produit une tournée
+    unite: (Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'kg'),
+    recette: lignes.map(l => {
+      const k = enKg(l.product_qty, (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u'))
+      const st = stockDe[l.product_id[0]]
+      const s = st ? enKg(st.qty, st.unite) : null
+      return {
+        produit: (Array.isArray(l.product_id) ? l.product_id[1] : ''),
+        qty: k.q, unite: k.u,
+        stock: s && s.u === k.u ? Math.round(s.q * 1000) / 1000 : null,
+      }
+    }),
+  }
+}
+
+// Crée l'ordre de fabrication du glaçage et le confirme (il part ensuite en
+// validation avec les autres, dans Fabrication CD).
+async function creerOrdreGlacage(uid, tournees) {
+  const prod = (await odooSearchRead(uid, 'product.product', [['name', '=', GLACAGE]], ['id', 'uom_id']))[0]
+  const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id.name', '=', GLACAGE]], ['id', 'product_qty']))[0]
+  if (!prod || !bom) throw new Error('produit ou recette introuvable')
+  const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
+    ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
+  if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
+  const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
+  const id = await odooCall(uid, 'mrp.production', 'create', [{
+    product_id: prod.id,
+    product_qty: qty,
+    product_uom_id: Array.isArray(prod.uom_id) ? prod.uom_id[0] : undefined,
+    bom_id: bom.id,
+    picking_type_id: modele.picking_type_id[0],
+    location_src_id: modele.location_src_id[0],
+    location_dest_id: modele.location_dest_id[0],
+    company_id: modele.company_id[0],
+  }])
+  await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
+  const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
+  return { id, name: cree.name, qty: cree.product_qty, etat: cree.state }
+}
+
+// ============================================================
 // Ce qui manque pour fabriquer ces ordres (lecture seule).
 // La génoise est ignorée : son stock restera négatif un moment (Layla).
 // ============================================================
@@ -563,6 +639,17 @@ async function fetchCatalogue(uid, collecteIds = []) {
 
 export default async function handler(req, res) {
   try {
+    // création de l'ordre de glaçage (POST), quand l'équipe a fait sa tournée
+    if (req.method === 'POST' && req.query.mode === 'glacage') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const t = Math.max(1, Math.min(50, parseInt(body.tournees) || 0))
+      if (!t) return res.status(400).json({ error: 'nombre de tournées invalide' })
+      const uid = await odooAuth()
+      const of = await creerOrdreGlacage(uid, t)
+      console.log(`[glacage] ${t} tournée(s) par ${body.actorId || '?'} → ${of.name} (${of.qty})`)
+      return res.status(200).json(of)
+    }
+
     // validation dans Odoo (POST) : action irréversible, réservée à perm_valider_of côté app
     if (req.method === 'POST' && req.query.mode === 'valider') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
@@ -579,6 +666,12 @@ export default async function handler(req, res) {
 
     // Deuxième usage de cette fonction (limite Vercel Hobby = 12 fonctions) :
     // la liste de fabrication CD*, cf. fetchFabrication.
+    // recette du glaçage + stock des ingrédients
+    if (req.query.mode === 'glacage') {
+      const uid = await odooAuth()
+      return res.status(200).json(await fetchGlacage(uid))
+    }
+
     // ce qui manque pour une liste d'ordres (lecture seule)
     if (req.query.mode === 'manques') {
       const names = String(req.query.ordres || '').split(',').map(x => x.trim()).filter(Boolean)

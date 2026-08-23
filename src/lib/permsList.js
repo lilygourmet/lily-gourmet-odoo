@@ -11,6 +11,8 @@ export const PERMS = [
   { key: 'perm_check', group: 'Production & Calendrier', label: 'Cocher les étapes', desc: 'Marquer Couvert / Fini / Rangé sur une commande.' },
   { key: 'perm_print_batch', group: 'Production & Calendrier', label: 'Imprimer les commandes (lot)', desc: 'Imprimer toutes les commandes d\'un coup.' },
   { key: 'perm_print_single', group: 'Production & Calendrier', label: 'Imprimer une commande', desc: 'Imprimer une seule commande.' },
+  { key: 'perm_fabrication_cd', group: 'Production & Calendrier', label: 'Fabrication CD', desc: 'Onglet « Fabrication CD » : voir ce qu\'il y a à fabriquer et cocher « fait ».' },
+  { key: 'perm_fabrication_glacage', group: 'Production & Calendrier', label: 'Fabrication Glaçage', desc: 'Onglet « Fabrication Glaçage » : lancer des tournées de glaçage cake design.' },
   { key: 'perm_valider_of', group: 'Production & Calendrier', label: 'Valider la fabrication dans Odoo', desc: 'Peut valider les ordres de fabrication : consomme les composants et entre le produit fini en stock. Action irréversible.' },
   { key: 'perm_polys', group: 'Production & Calendrier', label: 'Taille des polys', desc: 'Choisir la taille des boîtes/polys à l\'impression.' },
   { key: 'perm_delete', group: 'Production & Calendrier', label: 'Supprimer une commande', desc: 'Action sensible.' },

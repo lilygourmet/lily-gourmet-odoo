@@ -66,3 +66,22 @@ export async function validerDansOdoo(ordres, forcer, actorId) {
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
   return data.resultats || []
 }
+
+/** Recette du glaçage cake design + stock des ingrédients (en production). */
+export async function loadGlacage() {
+  const r = await fetch('/api/freezer-list?mode=glacage')
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return await r.json()
+}
+
+/** Crée et confirme l'ordre de fabrication du glaçage dans Odoo. */
+export async function lancerGlacage(tournees, actorId) {
+  const r = await fetch('/api/freezer-list?mode=glacage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tournees, actorId }),
+  })
+  const data = await r.json()
+  if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
+  return data
+}
