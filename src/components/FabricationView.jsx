@@ -150,6 +150,12 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
               ))}
             </div>
           )}
+          {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
+            && !faits[clePrepa(l.produit)] && bloquants && bloquants(l.produit, l.aFaire || l.qty).length > 0 && (
+            <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
+              à faire d'abord : {bloquants(l.produit, l.aFaire || l.qty).map(propre).join(', ')}
+            </div>
+          )}
           {ouvertes[cle(l.produit)] && (
             <SousRecette recettes={recettes} produit={l.produit} qty={l.aFaire || l.qty} unite={l.unite}
               chemin={cle(l.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
