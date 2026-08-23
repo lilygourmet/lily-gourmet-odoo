@@ -119,7 +119,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
             <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
-              {nb(estBase(l.produit) || l.enStock ? l.qty : (l.aFaire || l.qty))} {l.unite}
+              {nb(l.qty)} {l.unite}
             </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
@@ -138,9 +138,10 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
                 onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
           </div>
-          {l.usages && l.usages.length > 1 && (
+          {((l.stock > 0.001 && !l.enStock) || (l.usages && l.usages.length > 1)) && (
             <div className="text-[11.5px] text-ink-mute pl-[96px] -mt-1 mb-1">
-              {l.usages.map(([qui, q]) => `${nb(q)} ${l.unite} pour ${qui}`).join(' · ')}
+              {l.stock > 0.001 && !l.enStock && <>à préparer : {nb(l.aFaire)} {l.unite} ({nb(l.stock)} déjà en stock)<br /></>}
+              {l.usages && l.usages.length > 1 && l.usages.map(([qui, q]) => `${nb(q)} ${l.unite} pour ${qui}`).join(' · ')}
             </div>
           )}
           {ouvertes[cle(l.produit)] && (
