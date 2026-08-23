@@ -185,29 +185,9 @@ export function statutPrevu(date, employe, feriesMap, congesByEmp) {
   const hjc = heuresJourComplet(employe, date)
   const cafe = suitRegimeCafe(employe, date)
 
-  // Ce que le planning prévoyait ce jour-là. Calculé AVANT le férié et le congé :
-  // sans lui, on ne saurait pas qu'un férié tombe sur une demi-journée, et on
-  // compterait cette journée comme une journée complète.
-  const jour = nomJour(date)
-  let estOff = false
-  let estDemi = false
-  if (employe.planning_type === 'fixe') {
-    if (employe.planning_jour_off === jour) estOff = true
-    else if (employe.planning_demi_off === jour) estDemi = true
-  } else if (employe.planning_type === 'alt') {
-    const semaine = paireOuImpaire(date)
-    if (semaine === 'Paire') {
-      if (employe.planning_paire_off_1 === jour || employe.planning_paire_off_2 === jour) estOff = true
-    } else {
-      if (employe.planning_impaire_off_1 === jour || employe.planning_impaire_off_2 === jour) estOff = true
-    }
-  }
-  const hdemi = Number(employe.heures_demi_journee || 4)
-  const commun = { heures_jour_complet: hjc, regime_cafe: cafe, demi_prevue: estDemi, heures_demi_journee: hdemi }
-
   // 1) Férié ?
   if (feriesMap.has(ymd)) {
-    return { statut: 'ferie', heures_prevues: 0, label: feriesMap.get(ymd), ...commun }
+    return { statut: 'ferie', heures_prevues: 0, label: feriesMap.get(ymd), heures_jour_complet: hjc, regime_cafe: cafe }
   }
 
   // 2) Congé ?
@@ -221,15 +201,31 @@ export function statutPrevu(date, employe, feriesMap, congesByEmp) {
         heures_prevues: 0,
         label: c.type_conge || 'Congé',
         isMaladie,
-        ...commun,
+        heures_jour_complet: hjc, regime_cafe: cafe,
       }
     }
   }
 
-  // 3) Selon le planning (déjà calculé plus haut)
-  if (estOff)  return { statut: 'off',    heures_prevues: 0,     label: 'OFF',          ...commun }
-  if (estDemi) return { statut: 'demi',   heures_prevues: hdemi, label: 'Demi-journée', ...commun }
-  return         { statut: 'normal', heures_prevues: hjc,   label: 'Journée',      ...commun }
+  // 3) Selon le planning
+  const jour = nomJour(date)
+  let estOff = false
+  let estDemi = false
+
+  if (employe.planning_type === 'fixe') {
+    if (employe.planning_jour_off === jour) estOff = true
+    else if (employe.planning_demi_off === jour) estDemi = true
+  } else if (employe.planning_type === 'alt') {
+    const semaine = paireOuImpaire(date)
+    if (semaine === 'Paire') {
+      if (employe.planning_paire_off_1 === jour || employe.planning_paire_off_2 === jour) estOff = true
+    } else {
+      if (employe.planning_impaire_off_1 === jour || employe.planning_impaire_off_2 === jour) estOff = true
+    }
+  }
+
+  if (estOff)  return { statut: 'off',    heures_prevues: 0,                                        label: 'OFF',          heures_jour_complet: hjc, regime_cafe: cafe }
+  if (estDemi) return { statut: 'demi',   heures_prevues: Number(employe.heures_demi_journee || 4), label: 'Demi-journée', heures_jour_complet: hjc, regime_cafe: cafe }
+  return         { statut: 'normal', heures_prevues: hjc,                                           label: 'Journée',      heures_jour_complet: hjc, regime_cafe: cafe }
 }
 
 // ============================================================
@@ -448,20 +444,12 @@ export function calculerJour(prevu, pointe, employe) {
     }
   }
 
-  // ─── CAS 3 : Férié travaillé
-  // La récup suit CE QUI ÉTAIT PRÉVU ce jour-là : un férié qui tombe sur une
-  // demi-journée donne une demi-journée de récup, et les heures se comparent à
-  // cette demi-journée. Avant, la référence était toujours la journée complète :
-  // la personne recevait 1 jour de récup mais ~4 h manquantes, ce qui revenait
-  // à une demi-journée sans que ce soit dit.
+  // ─── CAS 3 : Férié travaillé (même logique que OFF)
   else if (prevu.statut === 'ferie' && heures_travaillees > 0) {
     statut = 'ferie_travaille'
     label = label + ' (travaillé)'
-    const demiPrevue = !!prevu.demi_prevue
-    jours_recup = demiPrevue ? 0.5 : 1
-    heures_prevues = demiPrevue
-      ? Number(prevu.heures_demi_journee || employe.heures_demi_journee || 4)
-      : Number(prevu.heures_jour_complet || employe.heures_jour_complet || 8.50)
+    jours_recup = 1
+    heures_prevues = Number(prevu.heures_jour_complet || employe.heures_jour_complet || 8.50)
     if (heures_travaillees >= heures_prevues) {
       heures_sup = round2(heures_travaillees - heures_prevues)
     } else {
