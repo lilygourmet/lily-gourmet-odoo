@@ -33,6 +33,9 @@ const ORDRE = [/genoise/i, /sirop/i, /cr[eè]me/i, /craquant/i, /amandes/i]
 const rang = n => { const i = ORDRE.findIndex(r => r.test(String(n || ''))); return i < 0 ? ORDRE.length : i }
 const trierRecette = arr => arr.slice().sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
 const estBase = n => BASES.some(r => r.test(String(n || '')))
+// On n'ouvre jamais la recette de ces produits-là : les bases se préparent dans
+// le bloc du haut, et la génoise ne se détaille pas ici (demande de Layla).
+const jamaisDeplier = n => estBase(n) || /genoise/i.test(String(n || ''))
 // nom lisible par l'équipe : on enlève les codes internes
 const propre = n => String(n || '')
   .replace(/^SM\s+CD\*\s*/i, '').replace(/^SM\s+/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
@@ -67,7 +70,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
         let q = l.qty * f, u = l.unite
         if (norm(u) === 'g' && q >= 1000) { q = q / 1000; u = 'kg' }
         const sousCle = chemin + '>' + l.produit
-        const ouvrable = setOuvertes && estPrepa(l.produit) && recettes[l.produit]
+        const ouvrable = setOuvertes && estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit)
         return (
           <div key={i}>
             <div className="flex gap-2.5 py-1.5 text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
@@ -107,7 +110,7 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
             <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{nb(l.qty)} {l.unite}</b>
-            {estPrepa(l.produit) && recettes[l.produit] && !estBase(l.produit) ? (
+            {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
                 className="flex-1 text-left text-bordeaux font-bold underline underline-offset-4">
                 {propre(l.produit)} ▾
