@@ -383,8 +383,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
               <Titre n="2">Gâteaux à faire</Titre>
               {gateaux.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Aucun gâteau à faire.</p>}
-              <Groupe titre="POUR LE STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} />
-              <Groupe titre="POUR UNE COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} />
+              <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} />
+              <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} />
             </>
           )}
         </div>
