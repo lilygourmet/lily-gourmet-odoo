@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication } from '../lib/fabrication'
+import { loadFabrication, loadFaits, setFait } from '../lib/fabrication'
 
 // ====== « Ce matin » : ce qu'il y a à fabriquer en cakedesign ======
 // Déroulé pensé pour la personne qui arrive le matin (validé avec Layla) :
@@ -21,6 +21,10 @@ const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const enKg = (q, u) => (norm(u) === 'g' ? { q: q / 1000, u: 'kg' } : { q, u: norm(u) })
 const estPrepa = n => /^SM\b/i.test(String(n || ''))
+// Suivi « fait » : un gâteau se suit par son ordre Odoo, une préparation par son
+// nom + le jour (elle se refait chaque jour).
+const aujourdhui = () => new Date().toLocaleDateString('sv-SE', CASA)
+const clePrepa = produit => `PREP:${produit}:${aujourdhui()}`
 // « Crème au beurre Chocolat STK » et « Crème au beurre Chocolat » sont la MÊME
 // crème (deux articles Odoo) : on les rassemble, stocks compris.
 const sansStk = n => String(n || '').replace(/\s*\bSTK\b/i, '').trim()
@@ -72,7 +76,7 @@ function SousRecette({ recettes, produit, qty, unite }) {
 }
 
 // « Ma recette » : les besoins cumulés des gâteaux cochés.
-function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onEffacer, onRetour }) {
+function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait }) {
   const cle = p => 'sc:' + p
   return (
     <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl p-4 sticky top-4'}>
@@ -87,7 +91,7 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
       {recette.map(l => (
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
-            <b className="min-w-[96px] text-[17px]">{nb(l.qty)} {l.unite}</b>
+            <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{nb(l.qty)} {l.unite}</b>
             {estPrepa(l.produit) && recettes[l.produit] && !estBase(l.produit) ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
                 className="flex-1 text-left text-bordeaux font-bold underline underline-offset-4">
@@ -100,6 +104,9 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
               </span>
             )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
+            {estPrepa(l.produit) && !l.enStock && (
+              <BoutonFait fait={!!faits[clePrepa(l.produit)]} onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
+            )}
           </div>
           {ouvertes[cle(l.produit)] && <SousRecette recettes={recettes} produit={l.produit} qty={l.qty} unite={l.unite} />}
         </div>
@@ -108,16 +115,26 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
   )
 }
 
-function Gateau({ o, on, onToggle }) {
+function BoutonFait({ fait, onClick }) {
+  return (
+    <button onClick={e => { e.stopPropagation(); onClick() }} title={fait ? 'Annuler' : 'Marquer comme fait'}
+      className={'flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold border ' +
+        (fait ? 'bg-ok text-cream border-ok' : 'bg-white text-ink-mute border-line')}>
+      {fait ? '✓ fait' : 'fait'}
+    </button>
+  )
+}
+
+function Gateau({ o, on, onToggle, fait, onFait }) {
   const stock = o.stock ? o.stock.dispo : null
   return (
     <div role="button" tabIndex={0} onClick={onToggle}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
-      className={'flex items-center gap-3 bg-white border rounded-xl px-3.5 py-3 mb-1.5 cursor-pointer ' +
-        (on ? 'border-bordeaux bg-[#fdf4f7] ring-1 ring-bordeaux' : 'border-line')}>
+      className={'flex items-center gap-3 border rounded-xl px-3.5 py-3 mb-1.5 cursor-pointer ' +
+        (fait ? 'bg-[#EAF3DE] border-[#cfe0b8]' : on ? 'bg-[#fdf4f7] border-bordeaux ring-1 ring-bordeaux' : 'bg-white border-line')}>
       <input type="checkbox" checked={on} readOnly tabIndex={-1} className="w-6 h-6 accent-[#993556] pointer-events-none flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="text-[18px] font-extrabold">
+        <div className={'text-[18px] font-extrabold ' + (fait ? 'line-through opacity-60' : '')}>
           {o.taille} <span className="text-[13px] font-medium text-ink-soft">{o.parfum}</span>
         </div>
         <div className="text-[11.5px] text-ink-mute">
@@ -128,19 +145,21 @@ function Gateau({ o, on, onToggle }) {
       </div>
       {o.recetteVide && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
       {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
-      <span className="text-[18px] font-extrabold text-bordeaux">×{nb(o.qty)}</span>
+      <span className={'text-[18px] font-extrabold text-bordeaux ' + (fait ? 'line-through opacity-60' : '')}>×{nb(o.qty)}</span>
+      <BoutonFait fait={fait} onClick={onFait} />
     </div>
   )
 }
 
-function Groupe({ titre, list, sel, onToggle }) {
+function Groupe({ titre, list, sel, onToggle, faits, onFait }) {
   if (!list.length) return null
   const parfums = [...new Set(list.map(o => o.parfum || '—'))].sort()
   return (
     <>
       <div className="text-[12.5px] font-bold text-ink-mute mt-4 mb-1.5">{titre}</div>
       {parfums.map(p => list.filter(o => (o.parfum || '—') === p).map(o => (
-        <Gateau key={o.name} o={o} on={sel.includes(o.name)} onToggle={() => onToggle(o.name)} />
+        <Gateau key={o.name} o={o} on={sel.includes(o.name)} onToggle={() => onToggle(o.name)}
+          fait={!!faits[o.name]} onFait={() => onFait(o.name, o.produit, o.qty)} />
       )))}
     </>
   )
@@ -161,9 +180,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [sel, setSel] = useState([])                      // noms d'OF cochés
   const [ouvertes, setOuvertes] = useState({})            // sous-recettes dépliées
   const [pageRecette, setPageRecette] = useState(false)   // téléphone : recette en page à part
+  const [faits, setFaits] = useState({})                  // ce qui est déjà fait (app, pas Odoo)
 
   useEffect(() => {
     let vivant = true
+    loadFaits().then(f => { if (vivant) setFaits(f) }).catch(() => { })
     loadFabrication(60)
       .then(d => { if (vivant) setData(d) })
       .catch(e => { if (!vivant) return; setErreur(e.message || String(e)); setData({ ofs: [], recettes: {}, stocks: {} }) })
@@ -236,6 +257,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   }, [choisis, stocks])
 
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
+  const marquer = (cle, produit, qty) => {
+    const on = !faits[cle]
+    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString() }; else delete n[cle]; return n })
+    setFait({ name: cle, produit, qty, quand: new Date().toISOString() }, on, user?.id)
+      .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
+  }
   const effacer = () => { setSel([]); setPageRecette(false) }
 
   // téléphone : la recette occupe tout l'écran
@@ -245,7 +272,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
         <div className="max-w-[620px] mx-auto px-4 py-5">
           <PanneauRecette recettes={recettes} choisis={choisis} recette={recette} ouvertes={ouvertes}
-            setOuvertes={setOuvertes} onEffacer={effacer} onRetour={() => setPageRecette(false)} />
+            setOuvertes={setOuvertes} onEffacer={effacer} onRetour={() => setPageRecette(false)}
+            faits={faits} onFait={marquer} />
         </div>
       </div>
     )
@@ -271,9 +299,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
               {bases.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Rien à préparer en base.</p>}
               {bases.map(b => (
                 <div key={b.produit}>
-                  <div className={'flex items-center gap-3 bg-white border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
-                    (b.manque <= 0.001 ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux')}>
-                    <span className="flex-1 text-[17px] font-bold">{propre(b.produit)}</span>
+                  <div className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
+                    (b.manque <= 0.001 || faits[clePrepa(b.produit)] ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
+                    <span className={'flex-1 text-[17px] font-bold ' + (faits[clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
+                      {propre(b.produit)}
+                    </span>
                     {b.manque <= 0.001 ? (
                       <span className="text-[13px] font-bold text-ok">en stock ({nb(b.stock)} {b.unite})</span>
                     ) : (
@@ -281,9 +311,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">
                           il en reste<br /><b>{nb(b.stock)} {b.unite}</b>
                         </span>
-                        <span className="text-[19px] font-extrabold text-bordeaux">{nb(b.qty)} {b.unite}</span>
+                        <span className={'text-[19px] font-extrabold text-bordeaux ' + (faits[clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
+                          {nb(b.qty)} {b.unite}
+                        </span>
                         <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
                           className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
+                        <BoutonFait fait={!!faits[clePrepa(b.produit)]}
+                          onClick={() => marquer(clePrepa(b.produit), b.produit, b.qty)} />
                       </>
                     )}
                   </div>
@@ -295,8 +329,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
               <Titre n="2">Gâteaux à faire</Titre>
               {gateaux.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Aucun gâteau à faire.</p>}
-              <Groupe titre="POUR LE STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} />
-              <Groupe titre="POUR UNE COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} />
+              <Groupe titre="POUR LE STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} />
+              <Groupe titre="POUR UNE COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} />
             </>
           )}
         </div>
@@ -305,7 +339,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="hidden lg:block">
           {deuxColonnes ? (
             <PanneauRecette recettes={recettes} choisis={choisis} recette={recette} ouvertes={ouvertes}
-              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} />
+              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} />
           ) : (
             <div className="bg-white border border-dashed border-line rounded-2xl p-6 sticky top-4 text-center text-ink-mute text-[13.5px]">
               Coche des gâteaux à gauche :<br />leur recette s'affichera ici, additionnée.
