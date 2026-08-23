@@ -296,6 +296,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           {data && (
             <>
               <Titre n="1">Bases à préparer</Titre>
+              {/* d'où vient le calcul : sinon on se demande pourquoi le craquant est là */}
+              <p className="text-[12px] text-ink-mute -mt-1 mb-2">
+                {choisis.length
+                  ? `pour les ${choisis.length} gâteau${choisis.length > 1 ? 'x' : ''} coché${choisis.length > 1 ? 's' : ''}`
+                  : 'pour tous les gâteaux en attente — coche des gâteaux pour n\'avoir que les tiens'}
+              </p>
               {bases.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Rien à préparer en base.</p>}
               {bases.map(b => (
                 <div key={b.produit}>
