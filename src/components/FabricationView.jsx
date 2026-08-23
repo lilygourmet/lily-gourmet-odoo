@@ -101,7 +101,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 }
 
 // « Ma recette » : les besoins cumulés des gâteaux cochés.
-function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants }) {
+function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants }) {
   const cle = p => 'sc:' + p
   return (
     <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl p-4 sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-auto'}>
@@ -110,10 +110,12 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
         <b className="text-[16px]">Ma recette</b>
         <button onClick={onEffacer} className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">effacer</button>
       </div>
-      <div className="text-[12.5px] text-ink-mute mb-3">
-        pour {choisis.map(o => `${o.taille} ${o.parfum || ''} ×${nb(o.qty)}`).join(' + ')}
-      </div>
-      {recette.map(l => (
+      {recette.map(g => (
+        <div key={g.parfum} className="mb-4">
+          <div className="text-[12.5px] text-ink-mute mb-1.5 pb-1 border-b border-line">
+            <b className="text-ink text-[13.5px]">{g.parfum}</b> · {g.lot.map(o => `${o.taille} ×${nb(o.qty)}`).join(' + ')}
+          </div>
+          {g.lignes.map(l => (
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
             <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
@@ -146,6 +148,8 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
               chemin={cle(l.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
               faits={faits} onFait={onFait} bloquants={bloquants} />
           )}
+        </div>
+          ))}
         </div>
       ))}
     </div>
@@ -276,57 +280,60 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     }).sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
   }, [aFaire, recettes, stocks])
 
-  // La recette cumulée des gâteaux cochés, en cascade : ce que demandent les
-  // crèmes s'ajoute (ex. la crème citron sert au gâteau ET à la crème au beurre
-  // citron) — on garde le détail de chaque usage pour savoir quoi mettre où.
-  const recette = useMemo(() => {
+  // La recette des gâteaux cochés, calculée SÉPARÉMENT PAR PARFUM : deux parfums
+  // différents ne se mélangent jamais (règle de Layla). À l'intérieur d'un parfum
+  // les quantités s'additionnent, et ce que réclament les crèmes s'ajoute en
+  // cascade (la crème citron sert au gâteau ET à la crème au beurre citron).
+  const recetteParParfum = useMemo(() => {
     if (!choisis.length) return []
     const stockDe = n => {
       const cible = sansStk(n)
       let t = 0
-      for (const [nomP, s] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(s.qty, s.unite).q)
+      for (const [nomP, st] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(st.qty, st.unite).q)
       return t
     }
-    const besoins = {}          // produit → { qty, usages: { source: qty } }
-    const ajoute = (produit, qty, source) => {
-      const cle = sansStk(produit)
-      const e = besoins[cle] || (besoins[cle] = { qty: 0, usages: {} })
-      e.qty += qty
-      e.usages[source] = (e.usages[source] || 0) + qty
-    }
-    for (const o of choisis) for (const r of (o.recette || [])) {
-      ajoute(r.produit, enKg(r.qty, r.unite).q, 'les gâteaux')
-    }
-    // ce que réclament les préparations qu'il faut faire
-    const file = Object.keys(besoins).filter(estPrepa), vus = new Set()
-    while (file.length) {
-      const p = file.shift()
-      if (vus.has(p)) continue
-      vus.add(p)
-      const r = recettes[p]
-      if (!r) continue
-      const manque = besoins[p].qty - stockDe(p)
-      if (manque <= 0.001) continue
-      const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
-      if (!base) continue
-      const f = manque / base
-      for (const l of r.lignes) {
-        if (!estPrepa(l.produit) || estIngredient(l.produit)) continue
-        ajoute(l.produit, enKg(l.qty * f, l.unite).q, propre(p))
-        if (!vus.has(sansStk(l.produit))) file.push(sansStk(l.produit))
+    const parfums = [...new Set(choisis.map(o => o.parfum || '—'))]
+    return parfums.map(parfum => {
+      const lot = choisis.filter(o => (o.parfum || '—') === parfum)
+      const besoins = {}
+      const ajoute = (produit, qty, source) => {
+        const c = sansStk(produit)
+        const e = besoins[c] || (besoins[c] = { qty: 0, usages: {} })
+        e.qty += qty
+        e.usages[source] = (e.usages[source] || 0) + qty
       }
-    }
-    return trierRecette(Object.entries(besoins)
-      .filter(([, e]) => e.usages['les gâteaux'] > 0.001)
-      .map(([produit, e]) => {
-      const stock = estPrepa(produit) ? stockDe(produit) : 0
-      return {
-        produit, qty: e.qty, unite: 'kg', stock,
-        aFaire: Math.max(0, e.qty - stock),          // ce qu'il reste vraiment à préparer
-        enStock: estPrepa(produit) && stock >= e.qty,
-        usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
+      for (const o of lot) for (const r of (o.recette || [])) ajoute(r.produit, enKg(r.qty, r.unite).q, 'les gâteaux')
+      const file = Object.keys(besoins).filter(estPrepa), vus = new Set()
+      while (file.length) {
+        const pr = file.shift()
+        if (vus.has(pr)) continue
+        vus.add(pr)
+        const r = recettes[pr]
+        if (!r) continue
+        const manque = besoins[pr].qty - stockDe(pr)
+        if (manque <= 0.001) continue
+        const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
+        if (!base) continue
+        const f = manque / base
+        for (const l of r.lignes) {
+          if (!estPrepa(l.produit) || estIngredient(l.produit)) continue
+          ajoute(l.produit, enKg(l.qty * f, l.unite).q, propre(pr))
+          if (!vus.has(sansStk(l.produit))) file.push(sansStk(l.produit))
         }
-      }))
+      }
+      const lignes = trierRecette(Object.entries(besoins)
+        .filter(([, e]) => e.usages['les gâteaux'] > 0.001)     // pas les composants des crèmes
+        .map(([produit, e]) => {
+          const stock = estPrepa(produit) ? stockDe(produit) : 0
+          return {
+            produit, qty: e.qty, unite: 'kg', stock,
+            aFaire: Math.max(0, e.qty - stock),
+            enStock: estPrepa(produit) && stock >= e.qty,
+            usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
+          }
+        }))
+      return { parfum, lot, lignes }
+    })
   }, [choisis, recettes, stocks])
 
   // Ce qu'il faut avoir fait AVANT de pouvoir cocher : les préparations que ce
@@ -371,7 +378,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       <div className="min-h-screen bg-cream">
         <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
         <div className="max-w-[620px] mx-auto px-4 py-5">
-          <PanneauRecette recettes={recettes} choisis={choisis} recette={recette} ouvertes={ouvertes}
+          <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
             setOuvertes={setOuvertes} onEffacer={effacer} onRetour={() => setPageRecette(false)}
             faits={faits} onFait={marquer} bloquants={bloquants} />
         </div>
@@ -442,7 +449,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         {/* ordinateur : la recette occupe toujours la colonne de droite */}
         <div className="hidden lg:block self-start sticky top-4">
           {deuxColonnes ? (
-            <PanneauRecette recettes={recettes} choisis={choisis} recette={recette} ouvertes={ouvertes}
+            <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
               setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} />
           ) : (
             <div className="bg-white border border-dashed border-line rounded-2xl p-6 text-center text-ink-mute text-[13.5px]">
