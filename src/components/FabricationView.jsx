@@ -261,9 +261,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
-      <div className={'mx-auto px-4 py-5 ' + (deuxColonnes
-        ? 'max-w-[1100px] grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]'
-        : 'max-w-[620px]')}>
+      {/* mise en page fixe : à faire à gauche, recettes à droite (elle ne bouge plus) */}
+      <div className="mx-auto px-4 py-5 max-w-[1100px] grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
         <div className={deuxColonnes ? 'pb-24 lg:pb-0' : ''}>
           <h1 className="font-fraunces italic text-[27px] font-medium">Ce matin</h1>
           <p className="text-[13px] text-ink-mute mb-2">{jourFr(new Date().toISOString())}</p>
@@ -307,13 +306,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           )}
         </div>
 
-        {/* ordinateur : la recette dans la colonne de droite */}
-        {deuxColonnes && (
-          <div className="hidden lg:block">
+        {/* ordinateur : la recette occupe toujours la colonne de droite */}
+        <div className="hidden lg:block">
+          {deuxColonnes ? (
             <PanneauRecette recettes={recettes} choisis={choisis} recette={recette} ouvertes={ouvertes}
               setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} />
-          </div>
-        )}
+          ) : (
+            <div className="bg-white border border-dashed border-line rounded-2xl p-6 sticky top-4 text-center text-ink-mute text-[13.5px]">
+              Coche des gâteaux à gauche :<br />leur recette s'affichera ici, additionnée.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* téléphone : barre fixe qui ouvre la recette en page entière */}
