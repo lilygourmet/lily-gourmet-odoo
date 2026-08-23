@@ -121,7 +121,7 @@ function PanneauRecette({ recettes, choisis, recette, ouvertes, setOuvertes, onE
             ) : (
               <span className="flex-1">
                 {propre(l.produit)}
-                {estBase(l.produit) && (() => {
+                {estBase(l.produit) && !l.enStock && (() => {
                   const b = bases.find(x => sansStk(x.produit) === sansStk(l.produit))
                   if (!b || b.manque <= 0.001) return <span className="text-[11.5px] text-ink-mute"> · déjà prêt</span>
                   return <span className="text-[11.5px] text-[#854F0B]"> · à préparer en haut : {nb(b.qty)} {b.unite}{b.n > 1 ? ` (${b.n} tournées)` : ' (1 tournée)'}</span>
