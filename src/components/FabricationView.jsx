@@ -597,13 +597,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
               {/* d'où vient le calcul : sinon on se demande pourquoi le craquant est là */}
               <p className="text-[12px] text-ink-mute -mt-1 mb-2">pour tous les gâteaux en attente</p>
               {bases.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Rien à préparer en base.</p>}
-              {bases.map(b => (
+              {bases.map(b => {
+                // Rien à préparer quand il en reste assez : on n'ouvre pas la
+                // recette d'un article déjà en stock (demande de Layla).
+                const ouvrable = !!recettes[b.produit] && b.manque > 0.001
+                return (
                 <div key={b.produit}>
                   {/* Toute la carte ouvre la recette : viser le petit bouton « recette »
                       au doigt était pénible. Le bouton reste, comme repère visuel. */}
-                  <div onClick={recettes[b.produit] ? () => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) : undefined}
+                  <div onClick={ouvrable ? () => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) : undefined}
                     className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
-                    (recettes[b.produit] ? 'cursor-pointer ' : '') +
+                    (ouvrable ? 'cursor-pointer ' : '') +
                     (b.manque <= 0.001 || faits[clePrepa(b.produit)] ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
                     <span className={'flex-1 min-w-0 ' + (faits[b.ordre || clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
                       <span className="text-[17px] font-bold">{propre(b.produit)}</span>
@@ -635,13 +639,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       il manque : {manquePour(b.produit, b.qty).map(m => `${qteLisible(m.manque, m.unite)} de ${propre(m.produit)}`).join(' · ')}
                     </div>
                   )}
-                  {ouvertes[cleBase(b.produit)] && (
+                  {ouvrable && ouvertes[cleBase(b.produit)] && (
                     <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
                       chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
                       faits={faits} onFait={marquer} bloquants={bloquants} />
                   )}
                 </div>
-              ))}
+                )
+              })}
 
               {demandeOdoo.length > 0 && (
                 <>
