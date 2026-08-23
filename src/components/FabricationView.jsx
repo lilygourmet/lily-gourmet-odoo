@@ -690,7 +690,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         </div>
 
         {/* ordinateur : la recette occupe toujours la colonne de droite */}
-        <div className="hidden lg:block self-start sticky top-4">
+        <div className="hidden lg:block self-start sticky top-4 lg:mt-[70px]">
           {deuxColonnes ? (
             <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
               setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} />
