@@ -16,7 +16,7 @@ const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*
 const CASA = { timeZone: 'Africa/Casablanca' }   // Odoo renvoie de l'UTC
 
 const dt = q => new Date(String(q || '').replace(' ', 'T') + 'Z')
-const jourFr = q => dt(q).toLocaleDateString('fr-FR', { ...CASA, weekday: 'long', day: 'numeric', month: 'long' })
+const jourCourt = q => dt(q).toLocaleDateString('fr-FR', { ...CASA, day: '2-digit', month: '2-digit' })
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const enKg = (q, u) => (norm(u) === 'g' ? { q: q / 1000, u: 'kg' } : { q, u: norm(u) })
@@ -121,8 +121,9 @@ function Gateau({ o, on, onToggle }) {
           {o.taille} <span className="text-[13px] font-medium text-ink-soft">{o.parfum}</span>
         </div>
         <div className="text-[11.5px] text-ink-mute">
-          {stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${nb(stock)} en stock` : 'plus rien en stock'}
-          {o.scode ? ` · ${o.scode}` : ''}
+          {o.scode
+            ? <>pour le <b>{jourCourt(o.quand)}</b> · {o.scode}</>
+            : (stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${nb(stock)} en stock` : 'plus rien en stock')}
         </div>
       </div>
       {o.recetteVide && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
@@ -138,14 +139,9 @@ function Groupe({ titre, list, sel, onToggle }) {
   return (
     <>
       <div className="text-[12.5px] font-bold text-ink-mute mt-4 mb-1.5">{titre}</div>
-      {parfums.map(p => (
-        <div key={p}>
-          <div className="text-[15px] font-extrabold text-ink-soft mt-2.5 mb-1.5">{p}</div>
-          {list.filter(o => (o.parfum || '—') === p).map(o => (
-            <Gateau key={o.name} o={o} on={sel.includes(o.name)} onToggle={() => onToggle(o.name)} />
-          ))}
-        </div>
-      ))}
+      {parfums.map(p => list.filter(o => (o.parfum || '—') === p).map(o => (
+        <Gateau key={o.name} o={o} on={sel.includes(o.name)} onToggle={() => onToggle(o.name)} />
+      )))}
     </>
   )
 }
@@ -264,8 +260,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       {/* mise en page fixe : à faire à gauche, recettes à droite (elle ne bouge plus) */}
       <div className="mx-auto px-4 py-5 max-w-[1100px] grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
         <div className={deuxColonnes ? 'pb-24 lg:pb-0' : ''}>
-          <h1 className="font-fraunces italic text-[27px] font-medium">Ce matin</h1>
-          <p className="text-[13px] text-ink-mute mb-2">{jourFr(new Date().toISOString())}</p>
+          <h1 className="font-fraunces italic text-[27px] font-medium mb-2">Fabrication CD</h1>
 
           {erreur && <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] my-3">Impossible de lire Odoo : {erreur}</div>}
           {!data && !erreur && <Skeleton rows={5} />}
