@@ -111,7 +111,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
         <button onClick={onEffacer} className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">effacer</button>
       </div>
       {recette.map(g => (
-        <div key={g.parfum} className="mb-4">
+        <div key={g.cleGroupe} className="mb-4">
           <div className="text-[12.5px] text-ink-mute mb-1.5 pb-1 border-b border-line">
             <b className="text-ink text-[13.5px]">{g.parfum}</b> · {g.lot.map(o => `${o.taille} ×${nb(o.qty)}`).join(' + ')}
           </div>
@@ -293,9 +293,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       for (const [nomP, st] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(st.qty, st.unite).q)
       return t
     }
-    const parfums = [...new Set(choisis.map(o => o.parfum || '—'))]
-    return parfums.map(parfum => {
-      const lot = choisis.filter(o => (o.parfum || '—') === parfum)
+    const cremeDe = o => {
+      const c = (o.recette || []).find(r => /cr[eè]me au beurre/i.test(r.produit) && !/nature/i.test(r.produit))
+      return c ? sansStk(c.produit) : (o.parfum || '—')
+    }
+    const groupes = [...new Set(choisis.map(cremeDe))]
+    return groupes.map(cleGroupe => {
+      const lot = choisis.filter(o => cremeDe(o) === cleGroupe)
+      const parfum = [...new Set(lot.map(o => o.parfum).filter(Boolean))].join(' + ') || '—'
       const besoins = {}
       const ajoute = (produit, qty, source) => {
         const c = sansStk(produit)
@@ -333,7 +338,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
             usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
           }
         }))
-      return { parfum, lot, lignes }
+      return { parfum, cleGroupe, lot, lignes }
     })
   }, [choisis, recettes, stocks])
 
