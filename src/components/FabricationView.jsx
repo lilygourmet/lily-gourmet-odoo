@@ -21,6 +21,13 @@ const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const enKg = (q, u) => (norm(u) === 'g' ? { q: q / 1000, u: 'kg' } : { q, u: norm(u) })
 const estPrepa = n => /^SM\b/i.test(String(n || ''))
+// « Crème au beurre Chocolat STK » et « Crème au beurre Chocolat » sont la MÊME
+// crème (deux articles Odoo) : on les rassemble, stocks compris.
+const sansStk = n => String(n || '').replace(/\s*\bSTK\b/i, '').trim()
+// Les recettes sont toujours affichées dans cet ordre, quel que soit le gâteau.
+const ORDRE = [/genoise/i, /sirop/i, /cr[eè]me/i, /craquant/i, /amandes/i]
+const rang = n => { const i = ORDRE.findIndex(r => r.test(String(n || ''))); return i < 0 ? ORDRE.length : i }
+const trierRecette = arr => arr.slice().sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
 const estBase = n => BASES.some(r => r.test(String(n || '')))
 // nom lisible par l'équipe : on enlève les codes internes
 const propre = n => String(n || '')
@@ -51,7 +58,7 @@ function SousRecette({ recettes, produit, qty, unite }) {
       <div className="text-[11px] font-bold uppercase tracking-wider text-ink-soft mb-1">
         {propre(produit)} — {meme ? `pour ${nb(qty)} ${unite}` : `pour ${nb(r.qty)} ${r.unite}`}
       </div>
-      {r.lignes.map((l, i) => {
+      {trierRecette(r.lignes).map((l, i) => {
         let q = l.qty * f, u = l.unite
         if (norm(u) === 'g' && q >= 1000) { q = q / 1000; u = 'kg' }
         return (
@@ -176,12 +183,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // les bases nécessaires : demandées directement, ou par les crèmes qu'il faut faire
   const bases = useMemo(() => {
-    const stockDe = n => { const s = stocks[n]; return s ? Math.max(0, enKg(s.qty, s.unite).q) : 0 }
+    const stockDe = n => {
+      const cible = sansStk(n)
+      let t = 0
+      for (const [nomP, s] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(s.qty, s.unite).q)
+      return t
+    }
     const src = choisis.length ? choisis : aFaire
     const besoins = {}
     for (const o of src) for (const r of (o.recette || [])) {
       const k = enKg(r.qty, r.unite)
-      besoins[r.produit] = (besoins[r.produit] || 0) + k.q
+      const cle = sansStk(r.produit)
+      besoins[cle] = (besoins[cle] || 0) + k.q
     }
     const out = {}
     for (const [p, q] of Object.entries(besoins)) {
@@ -204,21 +217,26 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const manque = Math.max(0, q - stock)
       const n = t && t.q ? Math.ceil(manque / t.q) : 0
       return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
-    }).sort((a, b) => b.manque - a.manque)
+    }).sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
   }, [choisis, aFaire, recettes, stocks])
 
   // la recette cumulée des gâteaux cochés
   const recette = useMemo(() => {
     if (!choisis.length) return []
-    const stockDe = n => { const s = stocks[n]; return s ? Math.max(0, enKg(s.qty, s.unite).q) : 0 }
+    const stockDe = n => {
+      const cible = sansStk(n)
+      let t = 0
+      for (const [nomP, s] of Object.entries(stocks)) if (sansStk(nomP) === cible) t += Math.max(0, enKg(s.qty, s.unite).q)
+      return t
+    }
     const besoins = {}
     for (const o of choisis) for (const r of (o.recette || [])) {
       const k = enKg(r.qty, r.unite)
-      besoins[r.produit] = (besoins[r.produit] || 0) + k.q
+      const cle = sansStk(r.produit)
+      besoins[cle] = (besoins[cle] || 0) + k.q
     }
-    return Object.entries(besoins)
-      .map(([produit, qty]) => ({ produit, qty, unite: 'kg', enStock: estPrepa(produit) && stockDe(produit) >= qty }))
-      .sort((a, b) => b.qty - a.qty)
+    return trierRecette(Object.entries(besoins)
+      .map(([produit, qty]) => ({ produit, qty, unite: 'kg', enStock: estPrepa(produit) && stockDe(produit) >= qty })))
   }, [choisis, stocks])
 
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
