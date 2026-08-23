@@ -411,12 +411,26 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         out[l.produit] = (out[l.produit] || 0) + k.q
       }
     }
-    return Object.entries(out).map(([p, q]) => {
+    const liste = Object.entries(out).map(([p, q]) => {
       const stock = stockDe(p), t = tailleTournee(recettes, p)
       const manque = Math.max(0, q - stock)
       const n = t && t.q ? Math.ceil(manque / t.q) : 0
       return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
-    }).sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
+    })
+    // Les préparations qu'ODOO demande lui-même (stock mini atteint : crèmes STK,
+    // sirop…). Sans ça, ce travail n'apparaissait nulle part dans l'écran.
+    for (const o of aFaire.filter(x => !x.taille)) {
+      const k = enKg(o.qty, o.unite)
+      const dejaLa = liste.find(x => x.produit === o.produit)
+      const stock = stockDe(o.produit)
+      const ligne = {
+        produit: o.produit, besoin: k.q, stock, manque: Math.max(0, k.q - stock),
+        n: 1, qty: k.q, unite: k.u, ordre: o.name,
+      }
+      if (dejaLa) Object.assign(dejaLa, ligne)
+      else liste.push(ligne)
+    }
+    return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
   }, [aFaire, recettes, stocks])
 
   // La recette des gâteaux cochés, calculée SÉPARÉMENT PAR PARFUM : deux parfums
@@ -589,8 +603,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                 <div key={b.produit}>
                   <div className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
                     (b.manque <= 0.001 || faits[clePrepa(b.produit)] ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
-                    <span className={'flex-1 text-[17px] font-bold ' + (faits[clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
-                      {propre(b.produit)}
+                    <span className={'flex-1 min-w-0 ' + (faits[b.ordre || clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
+                      <span className="text-[17px] font-bold">{propre(b.produit)}</span>
+                      {b.ordre && <span className="block text-[11px] text-ink-mute font-mono">demandé par Odoo · {b.ordre}</span>}
                     </span>
                     {b.manque <= 0.001 ? (
                       <span className="text-[13px] font-bold text-ok">en stock ({qteLisible(b.stock, b.unite)})</span>
@@ -605,8 +620,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         </span>
                         <button onClick={() => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] }))}
                           className="bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px] font-semibold">recette</button>
-                        <BoutonFait fait={!!faits[clePrepa(b.produit)]} bloque={bloquants(b.produit, b.qty)}
-                          onClick={() => marquer(clePrepa(b.produit), b.produit, b.qty)} />
+                        <BoutonFait fait={!!faits[b.ordre || clePrepa(b.produit)]} bloque={bloquants(b.produit, b.qty)}
+                          onClick={() => marquer(b.ordre || clePrepa(b.produit), b.produit, b.qty)} />
                       </>
                     )}
                   </div>
