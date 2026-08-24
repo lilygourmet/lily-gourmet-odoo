@@ -98,14 +98,16 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
             <Titre num={2}>Il te faut</Titre>
             {base.map(r => {
               const besoin = r.qty * n
-              const ok = r.stock === null || r.stock >= besoin - 0.001
+              const ok = r.dispo || r.stock === null || r.stock >= besoin - 0.001
               return (
                 <div key={r.produit} className="flex items-center gap-3 bg-white border border-line rounded-xl px-3.5 py-3 mb-1.5">
                   <b className="text-[18px] min-w-[92px]">{nb(besoin)} g</b>
                   <span className="flex-1 text-[15px]">{propre(r.produit)}</span>
                   <span className={'text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ' +
                     (ok ? 'bg-[#EAF3DE] text-ok' : 'bg-[#FCEEE8] text-danger')}>
-                    {r.stock === null ? 'stock inconnu' : ok ? `stock ${nb(r.stock)} g` : `il manque ${nb(besoin - r.stock)} g`}
+                    {r.dispo ? 'toujours dispo'
+                      : r.stock === null ? 'stock inconnu'
+                        : ok ? `stock ${nb(r.stock)} g` : `il manque ${nb(besoin - r.stock)} g`}
                   </span>
                 </div>
               )

@@ -214,6 +214,11 @@ async function odooCall(uid, model, method, args, kwargs = {}) {
 const lieuProduction = uid => memo('lieuprod', async () =>
   (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0])
 
+// Jamais compté comme manquant : l'eau du robinet (elle ne se gère pas en
+// stock, elle est toujours là) et la génoise (son stock restera négatif un
+// moment — décision de Layla).
+const toujoursDispo = n => /eau\s*robinet|^\s*MP-\s*Eau|genoise/i.test(String(n || ''))
+
 const estMontageCD = n => /CD\*/i.test(String(n)) && !/^SM[\s.]/i.test(String(n))
 
 /**
@@ -385,6 +390,7 @@ async function fetchPrepa(uid, cle) {
         produit: nomL,
         colorant: estColorant(nomL),
         qty: enG(l.product_qty, u),
+        dispo: toujoursDispo(nomL),
         stock: memeUnite ? Math.round(enG(st.qty, st.unite) * 1000) / 1000 : null,
       }
     }),
@@ -480,7 +486,7 @@ async function manquesDesOrdres(uid, names) {
   return mos.map(m => {
     const lignes = moves.filter(x => x.raw_material_production_id[0] === m.id).map(x => {
       const nomP = Array.isArray(x.product_id) ? x.product_id[1] : ''
-      const ignore = /genoise|eau\s*robinet|^\s*MP-\s*Eau/i.test(nomP)
+      const ignore = toujoursDispo(nomP)
       const uniteLigne = (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u').replace(/^units?$/i, 'u')
       const lieu = Array.isArray(m.location_src_id) ? m.location_src_id[0] : null
       const st = stockParLieu[lieu + ':' + x.product_id[0]]
@@ -685,6 +691,7 @@ async function fetchFabrication(uid, jours) {
   // sinon renvoie null : mieux vaut ne rien affirmer que se tromper de quantité.
   const enStock = (produit, besoin, unite) => {
     const st = stockDe[produit]
+    if (toujoursDispo(produit)) return { dispo: st ? st.qty : 0, assez: true, manque: 0 }
     if (!st || !besoin) return null
     const k = u => String(u || '').toLowerCase()
     let dispo = st.qty
