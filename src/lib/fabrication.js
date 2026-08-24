@@ -34,7 +34,7 @@ export async function loadOrdres() {
 
 /** Les OF déjà cochés « fait » (clé = nom de l'OF). */
 export async function loadFaits() {
-  const { data, error } = await supabase.from('prod_of_faits').select('mo_name, fait_par, fait_le')
+  const { data, error } = await supabase.from('prod_of_faits').select('mo_name, produit, qty, fait_par, fait_le')
   if (error) throw error
   const map = {}
   for (const f of data || []) map[f.mo_name] = f

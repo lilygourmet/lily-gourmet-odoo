@@ -197,7 +197,7 @@ function BoutonFait({ fait, onClick, bloque = null }) {
 }
 
 function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
-  const stock = o.stock ? o.stock.dispo : null
+  const stock = o.stockApp != null ? o.stockApp : (o.stock ? o.stock.dispo : null)
   return (
     <div role="button" tabIndex={0} onClick={onToggle}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
@@ -214,7 +214,7 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
             : (stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${nb(stock)} en stock` : 'plus rien en stock')}
         </div>
       </div>
-      {o.stock && o.stock.assez && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">déjà en stock</span>}
+      {(o.stockAssez ?? (o.stock && o.stock.assez)) && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">déjà en stock</span>}
       {o.recetteVide && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
       {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
       <span className={'text-[18px] font-extrabold text-bordeaux ' + (fait ? 'line-through opacity-60' : '')}>×{nb(o.qty)}</span>
@@ -397,14 +397,72 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const relire = () => { setData(null); setErreur(null); setRechargement(v => v + 1) }
 
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
-  const stocks = useMemo(() => (data && data.stocks) || {}, [data])
+  // ====== Le stock tel que l'app le voit ======
+  // Odoo ne bouge qu'à la validation. Entre le moment où l'équipe coche « fait »
+  // et celui où on valide, l'app tient son propre compte : + ce qui vient d'être
+  // fabriqué, − ce que ces fabrications ont consommé. Sans ça l'écran redemande
+  // une crème qu'on vient de faire, et un gâteau coché ne consomme rien.
+  const stocks = useMemo(() => {
+    const s = {}
+    for (const [k, v] of Object.entries((data && data.stocks) || {})) s[k] = { ...v }
+    const bouge = (produit, dKg) => {
+      const st = s[produit]
+      if (!st) { s[produit] = { qty: dKg, unite: 'kg' }; return }
+      st.qty += norm(st.unite) === 'g' ? dKg * 1000 : dKg
+    }
+    // ce qu'une préparation consomme, d'après sa recette, pour cette quantité
+    const consomme = (produit, qtyKg) => {
+      const r = recettes[produit]
+      if (!r) return
+      const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
+      const f = base ? qtyKg / base : 1
+      for (const l of r.lignes) bouge(l.produit, -enKg(l.qty * f, l.unite).q)
+    }
+    const ofs = (data && data.ofs) || []
+    const parOf = new Map(ofs.map(o => [o.name, o]))
+    const parOrdre = new Map(((data && data.ordres) || []).map(o => [o.name, o]))
+    // 1) ce qui est coché par son ordre Odoo
+    const comptes = new Set()
+    for (const cle of Object.keys(faits)) {
+      if (cle.startsWith('PREP:')) continue
+      // un article de l'écran : il produit, et il a consommé ses composants
+      const o = parOf.get(cle)
+      if (o) {
+        bouge(o.produit, enKg(o.qty, o.unite).q)
+        comptes.add(o.produit)
+        for (const l of o.recette || []) bouge(l.produit, -enKg(l.qty, l.unite).q)
+        continue
+      }
+      // une tournée lancée ailleurs (glaçage, pâte à sucre) encore ouverte
+      const ord = parOrdre.get(cle)
+      if (ord) { bouge(ord.produit, enKg(ord.qty, ord.unite).q); comptes.add(ord.produit) }
+    }
+    // 2) les préparations cochées par leur nom, sauf celles déjà comptées
+    // ci-dessus : le même article peut se cocher depuis une recette ET depuis
+    // « Demandé par Odoo », il ne doit pas compter deux fois.
+    for (const [cle, info] of Object.entries(faits)) {
+      if (!cle.startsWith('PREP:')) continue
+      const produit = cle.slice(5, cle.lastIndexOf(':'))
+      if (comptes.has(produit)) continue
+      const q = Number(info && info.qty) || 0
+      if (q > 0) { bouge(produit, q); consomme(produit, q) }
+    }
+    return s
+  }, [data, faits, recettes])
+
+  // le stock d'un article, jamais négatif (en kg, ou en unités pour les gâteaux)
+  const stockDeProduit = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
 
   // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
   // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
   // Seul ce qui est marqué « fait » quitte l'écran (il attend dans « À valider »).
   const aFaire = useMemo(
-    () => ((data && data.ofs) || []).filter(o => !faits[o.name]),
-    [data, faits])
+    () => ((data && data.ofs) || []).filter(o => !faits[o.name]).map(o => {
+      const dispo = stockDeProduit(o.produit)
+      return { ...o, stockApp: dispo, stockAssez: dispo >= enKg(o.qty, o.unite).q - 0.001 }
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, faits, stocks])
   const gateaux = useMemo(() => aFaire.filter(o => o.taille), [aFaire])
   const choisis = useMemo(() => gateaux.filter(o => sel.includes(o.name)), [gateaux, sel])
 
@@ -517,21 +575,20 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // produit consomme et qui ne sont pas en stock (crème pâtissière avant la crème
   // au beurre vanille, crèmes avant le gâteau…).
   const bloquants = (produit, qty) => {
-    const stockDe = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
     const r = recettes[produit]
     if (!r) return []
     const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
     const f = base ? (qty || base) / base : 1
     return r.lignes
       .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !/genoise|eau\s*robinet/i.test(l.produit))
-      .filter(l => stockDe(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
+      .filter(l => stockDeProduit(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
       .filter(l => !faits[clePrepa(l.produit)])
       .map(l => l.produit)
   }
   // pour un gâteau : ses préparations non faites (celles qui ne sont pas en stock)
   const bloquantsGateau = o => (o.recette || [])
     .filter(r => estPrepa(r.produit) && !estIngredient(r.produit))
-    .filter(r => !(r.stock && r.stock.assez))
+    .filter(r => stockDeProduit(r.produit) < enKg(r.qty, r.unite).q - 0.001)
     .filter(r => !faits[clePrepa(r.produit)])
     .map(r => r.produit)
 
@@ -574,7 +631,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
   const marquer = (cle, produit, qty) => {
     const on = !faits[cle]
-    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString() }; else delete n[cle]; return n })
+    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty }; else delete n[cle]; return n })
     setFait({ name: cle, produit, qty, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }
