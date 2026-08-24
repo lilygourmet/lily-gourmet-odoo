@@ -687,6 +687,18 @@ export async function loadOrderNote(orderNum) {
   } catch { return '' }
 }
 
+// Corrige (ou efface) le commentaire d'une commande directement dans Odoo.
+// Renvoie la note telle qu'Odoo l'a enregistrée.
+export async function saveOrderNote(orderNum, note) {
+  const r = await fetch('/api/wati-webhook?action=order-note', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderNum, note: String(note ?? '') }),
+  })
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(d.error || 'Enregistrement impossible')
+  return d?.note || ''
+}
+
 // Notes de PLUSIEURS commandes en UN seul appel (impression en lot) → map { S123: "…" }.
 export async function loadOrdersNotes(orderNums) {
   const nums = (orderNums || []).filter(Boolean)

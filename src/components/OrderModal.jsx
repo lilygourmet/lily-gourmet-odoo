@@ -13,7 +13,7 @@ import { computeSizesForCake } from '../lib/cakeSizes'
 import { isBurnAway } from '../lib/burnAway'
 import { confirmDialog } from '../lib/confirmDialog'
 import { loadCakeDesignPrice, loadSalesLinesForOrders, stripOdooPrefix } from '../lib/salesLines'
-import { loadOrderHandler, loadOrderNote, loadOrderPhotosByNum } from '../lib/conversations'
+import { loadOrderHandler, loadOrderNote, saveOrderNote, loadOrderPhotosByNum } from '../lib/conversations'
 import {
   markWarningAsRead,
   loadItemSteps,
@@ -27,6 +27,8 @@ import {
 import {
   canEditPolys,
   canUncheckSteps,
+  canSeeCommande,
+  canSeeDevis,
   formatRelativeTime,
 } from '../lib/auth'
 import { toast } from '../lib/toast'
@@ -156,6 +158,22 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
   // + note Odoo de la commande (commentaire « ⚠️ … ») pour l'impression.
   const [appSeller, setAppSeller] = useState(null)
   const [orderNote, setOrderNote] = useState('')
+  const [noteEdit, setNoteEdit] = useState(null)      // texte en cours de correction (null = pas d'édition)
+  const [noteBusy, setNoteBusy] = useState(false)
+  // Les commerciaux (prise de commande ou devis) corrigent le commentaire du client.
+  const peutEditerNote = canSeeCommande(user) || canSeeDevis(user)
+
+  async function enregistrerNote() {
+    setNoteBusy(true)
+    try {
+      const nouvelle = await saveOrderNote(order.order_num, noteEdit)
+      setOrderNote(nouvelle)
+      setNoteEdit(null)
+      toast.success('Commentaire enregistré dans Odoo.')
+    } catch (e) { toast.error('Erreur : ' + e.message) }
+    finally { setNoteBusy(false) }
+  }
+
   // Entremets / salés de la commande (hors cake design) pour les ajouter à l'impression.
   const [extraItems, setExtraItems] = useState([])
   useEffect(() => {
@@ -596,10 +614,38 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
           </div>
 
           <div className="px-6 py-5 space-y-6">
-            {cleanOrderComment(orderNote) && (
+            {(cleanOrderComment(orderNote) || peutEditerNote) && (
               <div className="rounded-lg border-l-4 border-bordeaux bg-bordeaux/5 px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-bordeaux mb-1">Commentaire</div>
-                <div className="text-[13px] text-ink whitespace-pre-wrap leading-snug">{cleanOrderComment(orderNote)}</div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-bordeaux">Commentaire</div>
+                  {peutEditerNote && noteEdit === null && (
+                    <button onClick={() => setNoteEdit(orderNote)} className="text-[11px] text-bordeaux underline">
+                      {cleanOrderComment(orderNote) ? 'Modifier' : 'Ajouter'}
+                    </button>
+                  )}
+                </div>
+                {noteEdit === null ? (
+                  <div className="text-[13px] text-ink whitespace-pre-wrap leading-snug">
+                    {cleanOrderComment(orderNote) || <span className="text-ink-mute italic">Aucun commentaire.</span>}
+                  </div>
+                ) : (
+                  <>
+                    {/* On modifie la note ENTIÈRE d'Odoo : la 1re ligne est la livraison
+                        ou le retrait, à garder si on ne veut pas la perdre. */}
+                    <textarea value={noteEdit} onChange={e => setNoteEdit(e.target.value)} rows={5}
+                      className="w-full text-[13px] px-2 py-1.5 border border-line rounded-lg bg-white leading-snug" />
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button onClick={enregistrerNote} disabled={noteBusy}
+                        className="px-3 py-1.5 text-[12px] bg-bordeaux text-cream rounded-lg disabled:opacity-50">
+                        {noteBusy ? 'Enregistrement…' : 'Enregistrer dans Odoo'}
+                      </button>
+                      <button onClick={() => setNoteEdit(null)} disabled={noteBusy}
+                        className="px-3 py-1.5 text-[12px] border border-line rounded-lg bg-white">Annuler</button>
+                      <button onClick={() => setNoteEdit('')} disabled={noteBusy}
+                        className="ml-auto text-[11.5px] text-red-700 underline">Tout effacer</button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             {(order.order_items || []).some(i => i.type === 'CD') && canEditBesoinsAchat(user) && (

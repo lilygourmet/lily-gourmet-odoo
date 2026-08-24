@@ -3017,9 +3017,24 @@ async function handleOrderNote(req, res) {
   try {
     const uid = await odooAuthenticate()
     const orders = await odooSearchRead(uid, 'sale.order', [['name', '=', orderNum]], ['note'], { limit: 1 })
+    // Avec un champ « note », on ENREGISTRE (commentaire corrigé depuis l'app).
+    // Odoo stocke du HTML : on échappe le texte et on rend les retours à la ligne.
+    if (typeof req.body?.note === 'string' && orders[0]?.id) {
+      const texte = req.body.note.trim()
+      const html = texte
+        ? escapeHtml(texte).replace(/\r?\n/g, '<br/>')
+        : false
+      await odooJsonRpc('object', 'execute_kw', [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD,
+        'sale.order', 'write', [[orders[0].id], { note: html }]])
+      return res.status(200).json({ note: cleanOdooNote(html || '') })
+    }
     return res.status(200).json({ note: cleanOdooNote(orders[0]?.note) })
   } catch (e) {
     console.error('[order-note]', e?.message || e)
+    // En lecture, une note vide ne gêne personne ; en écriture, il faut le dire.
+    if (typeof req.body?.note === 'string') {
+      return res.status(500).json({ error: e?.message || 'Enregistrement impossible' })
+    }
     return res.status(200).json({ note: '' })
   }
 }
