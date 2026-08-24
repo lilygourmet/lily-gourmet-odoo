@@ -731,10 +731,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const cree = (on && cle.startsWith('PREP:') && !trouves.length)
       ? await creerOfPrepa(produit, quantite, user?.id)
       : null
-    const ordres = cree && cree.name && !cree.error ? [cree.name] : trouves
-    if (cree && cree.name && !cree.error) {
+    // en mode test aucun ordre n'existe : on n'enregistre pas de faux numéro
+    const ordres = cree && cree.name && !cree.error && !cree.test ? [cree.name] : trouves
+    if (cree && cree.name && !cree.error && !cree.test) {
       setFaits(f => (f[cle] ? { ...f, [cle]: { ...f[cle], ordres } } : f))
-      if (!cree.test) toast.success(`Ordre ${cree.name} créé dans Odoo`)
+      toast.success(`Ordre ${cree.name} créé dans Odoo`)
+    } else if (cree && cree.test) {
+      toast.success('Mode test : aucun ordre créé dans Odoo')
     } else if (cree && cree.error) {
       toast.error('Odoo : ' + cree.error)
     }
