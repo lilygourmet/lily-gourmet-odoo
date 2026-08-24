@@ -808,6 +808,14 @@ export default async function handler(req, res) {
       if (!t) return res.status(400).json({ error: 'nombre de tournées invalide' })
       const quoi = String(req.query.quoi || 'glacage')
       const uid = await odooAuth()
+      if (body.test) {
+        const { prod, bom } = await produitPrepa(uid, quoi)
+        const u = bom && Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'g'
+        return res.status(200).json({
+          id: 0, name: 'TEST (rien créé dans Odoo)', produit: prod ? prod.display_name : quoi,
+          qty: bom ? enG(bom.product_qty * t, u) : 0, etat: 'test', test: true,
+        })
+      }
       const of = await creerOrdrePrepa(uid, quoi, t, body.colorants)
       console.log(`[${quoi}] ${t} tournée(s) par ${body.actorId || '?'} → ${of.name} (${of.qty} g)`)
       return res.status(200).json(of)
