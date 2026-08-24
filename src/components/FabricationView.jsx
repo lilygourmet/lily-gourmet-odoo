@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo } from '../lib/fabrication'
+import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran } from '../lib/fabrication'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
 
@@ -368,7 +368,7 @@ function ValiderModal({ ordres, user, onClose, onFini }) {
 }
 
 export default function FabricationView({ user, onLogout, onNavigate, activeView }) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState(() => dernierEcran('fabrication'))
   const [erreur, setErreur] = useState(null)
   const [sel, setSel] = useState([])                      // noms d'OF cochés
   const [ouvertes, setOuvertes] = useState({})            // sous-recettes dépliées
@@ -381,7 +381,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     let vivant = true
     loadFaits().then(f => { if (vivant) setFaits(f) }).catch(() => { })
     loadFabrication(60)
-      .then(d => { if (vivant) setData(d) })
+      .then(d => { if (vivant) { setData(d); garderEcran('fabrication', d) } })
       .catch(e => { if (!vivant) return; setErreur(e.message || String(e)); setData({ ofs: [], recettes: {}, stocks: {} }) })
     return () => { vivant = false }
   }, [rechargement])

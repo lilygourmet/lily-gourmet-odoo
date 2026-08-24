@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadPrepa, lancerPrepa, setFait } from '../lib/fabrication'
+import { loadPrepa, lancerPrepa, setFait, dernierEcran, garderEcran } from '../lib/fabrication'
 
 // ====== Fabrication d'une préparation (glaçage royal, pâte à sucre) ======
 // Ces articles n'ont ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
@@ -24,17 +24,9 @@ function Titre({ num, children }) {
   )
 }
 
-// Ce qui restait au moment de la remise à zéro. La toute première fois, ce n'est
-// pas de la consommation mesurée : c'est du stock accumulé depuis toujours.
-function motRemise(r) {
-  if (r.premiere) return `${nb(r.consomme)} g d'ancien stock nettoyé — on repart de zéro`
-  return r.jours
-    ? `${nb(r.consomme)} g consommés en ${r.jours} jour${r.jours > 1 ? 's' : ''} — stock remis à zéro`
-    : `${nb(r.consomme)} g consommés — stock remis à zéro`
-}
-
 export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView }) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState(() => dernierEcran('prepa:' + quoi))
+  const [frais, setFrais] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [n, setN] = useState(1)
   const [envoi, setEnvoi] = useState(false)
@@ -48,7 +40,11 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
   useEffect(() => {
     let vivant = true
     loadPrepa(quoi)
-      .then(d => { if (!vivant) return; if (d.erreur) setErreur(d.erreur); else setData(d) })
+      .then(d => {
+        if (!vivant) return
+        if (d.erreur) { setErreur(d.erreur); return }
+        setData(d); setFrais(true); garderEcran('prepa:' + quoi, d)
+      })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     return () => { vivant = false }
   }, [quoi])
@@ -67,7 +63,6 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
       await setFait({ name: of.name, produit: of.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
       setFaits(f => [{ ...of, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }, ...f])
       setN(1); setCouleurs({}); setBlanche(false)
-      if (of.remise) toast.success(motRemise(of.remise))
       toast.success(`Ordre ${of.name} créé — en attente de validation`)
     } catch (e) { toast.error('Impossible de créer l\'ordre : ' + (e.message || e)) }
     setEnvoi(false)
@@ -80,6 +75,7 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
         <h1 className="font-fraunces italic text-[26px] font-medium">Fabrication {data ? data.titre : ''}</h1>
         <p className="text-[13px] text-ink-mute mb-2">
           {data ? data.produit : ''}{tournee ? ` · 1 tournée = ${nb(tournee)} g` : ''}
+          {data && !frais && <span> · mise à jour des stocks…</span>}
         </p>
 
         {erreur && <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] my-3">{erreur}</div>}
@@ -185,7 +181,6 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
                     <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">
                       en attente de validation
                     </span>
-                    {f.remise && <span className="basis-full text-[12px] text-ink-soft">avant : {motRemise(f.remise)}</span>}
                   </div>
                 ))}
               </>

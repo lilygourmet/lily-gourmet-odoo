@@ -211,6 +211,9 @@ async function odooCall(uid, model, method, args, kwargs = {}) {
 // ============================================================
 // Un montage cake design (un gâteau : « 20 cm CD* (Chocolat) », « 40x40
 // Cakedesign CD* »…), par opposition aux préparations « SM… ».
+const lieuProduction = uid => memo('lieuprod', async () =>
+  (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0])
+
 const estMontageCD = n => /CD\*/i.test(String(n)) && !/^SM[\s.]/i.test(String(n))
 
 /**
@@ -237,7 +240,7 @@ async function integrerGlacage(uid, mo) {
   const reste = Math.round(quants.reduce((s, q) => s + (q.quantity || 0), 0) * 1000) / 1000
   if (reste <= 0.001) return null                               // plus de glaçage : rien à intégrer
 
-  const lieuProd = (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0]
+  const lieuProd = await lieuProduction(uid)
   await odooCall(uid, 'mrp.production', 'write', [[mo.id], {
     move_raw_ids: [[0, 0, {
       name: prod.display_name,
@@ -295,12 +298,23 @@ async function validerOrdre(uid, name, forcer) {
 // en fait. Tout ce qui sort d'ici est en GRAMMES (règle de Layla).
 // ============================================================
 const PREPAS = {
-  // Le glaçage ne se remet PAS à zéro : il part maintenant dans le premier
-  // montage cake design validé (voir integrerGlacage).
-  glacage: { id: 6966, noms: ['SM. Glacage Royal CD*', 'SM. glacage cake design'], titre: 'Glaçage royal', remiseAZero: false },
-  'pate-sucre': { id: 2940, noms: ['SM Pate a sucre Melange CD'], titre: 'Pâte à sucre', remiseAZero: true },
+  // Le glaçage part dans le premier montage cake design validé (integrerGlacage).
+  glacage: { id: 6966, noms: ['SM. Glacage Royal CD*', 'SM. glacage cake design'], titre: 'Glaçage royal' },
+  'pate-sucre': { id: 2940, noms: ['SM Pate a sucre Melange CD'], titre: 'Pâte à sucre' },
 }
 const prepaDe = cle => PREPAS[cle] || PREPAS.glacage
+
+// Chaque aller-retour vers Odoo coûte ~120 ms : on garde 10 minutes en mémoire
+// ce qui ne bouge pas (la recette, l'emplacement de production). Les stocks,
+// eux, sont relus à chaque ouverture.
+const _memo = {}
+async function memo(cle, calcul) {
+  const vu = _memo[cle]
+  if (vu && Date.now() - vu.t < 600000) return vu.v
+  const v = await calcul()
+  _memo[cle] = { t: Date.now(), v }
+  return v
+}
 
 // Les recettes mélangent les kg et les grammes d'une ligne à l'autre (le CMC
 // est en kg, le sucre glace en g) : on ramène tout en grammes.
@@ -313,6 +327,9 @@ const enG = (q, u) => (/^kg$/i.test(String(u)) ? Math.round(q * 1000000) / 1000 
 // Retrouve l'article (par son numéro, puis par son nom en secours) et sa recette,
 // quel que soit son nom du moment.
 async function produitPrepa(uid, cle) {
+  return await memo('prepa:' + cle, () => _produitPrepa(uid, cle))
+}
+async function _produitPrepa(uid, cle) {
   const conf = prepaDe(cle)
   let prod = (await odooSearchRead(uid, 'product.product', [['id', '=', conf.id]],
     ['id', 'display_name', 'uom_id', 'product_tmpl_id']))[0]
@@ -326,16 +343,20 @@ async function produitPrepa(uid, cle) {
   return { prod, bom, conf }
 }
 
+// L'ordre WHLVP le plus récent sert de gabarit (emplacements, société).
+const modeleWhlvp = uid => memo('modele', async () =>
+  (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
+    ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0])
+
 async function fetchPrepa(uid, cle) {
   const { prod, bom, conf } = await produitPrepa(uid, cle)
   if (!prod) return { erreur: `article « ${conf.titre} » introuvable dans Odoo` }
   if (!bom) return { erreur: 'recette introuvable dans Odoo pour ' + prod.display_name }
-  const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
-    ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
-
-  // on se cale sur un ordre existant de la production pour l'emplacement
-  const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
-    ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
+  const [lignes, modele] = await Promise.all([
+    memo('bomlines:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+      ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })),
+    modeleWhlvp(uid),
+  ])
   const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
 
   const ids = [prod.id, ...lignes.map(l => l.product_id[0])]
@@ -370,51 +391,13 @@ async function fetchPrepa(uid, cle) {
   }
 }
 
-// Ces préparations se consomment sans être déclarées : le stock Odoo gonfle
-// pour rien. Règle de Layla : à la PREMIÈRE tournée d'une journée, on repart de
-// zéro (ce qui restait a été consommé), en disant combien et sur combien de
-// jours. Les tournées suivantes du même jour ne remettent rien à zéro.
-async function remiseAZeroPrepa(uid, prod, lieu) {
-  const dernier = (await odooSearchRead(uid, 'stock.move',
-    [['product_id', '=', prod.id], ['state', '=', 'done'], ['is_inventory', '=', true]],
-    ['date'], { limit: 1, order: 'date desc' }))[0]
-  const jourDe = d => String(d || '').slice(0, 10)
-  const aujourdhui = new Date().toISOString().slice(0, 10)
-  if (dernier && jourDe(dernier.date) === aujourdhui) return null      // déjà remis à zéro aujourd'hui
-
-  const quants = await odooSearchRead(uid, 'stock.quant',
-    [['product_id', '=', prod.id], ['location_id', 'child_of', lieu]], ['id', 'quantity'])
-  const reste = quants.reduce((s, q) => s + (q.quantity || 0), 0)
-  if (reste <= 0.001) return null
-
-  for (const q of quants) {
-    await odooCall(uid, 'stock.quant', 'write', [[q.id], { inventory_quantity: 0, inventory_quantity_set: true }])
-  }
-  await odooCall(uid, 'stock.quant', 'action_apply_inventory', [quants.map(q => q.id)])
-
-  const jours = dernier
-    ? Math.max(1, Math.round((new Date(aujourdhui) - new Date(jourDe(dernier.date))) / 86400000))
-    : null
-  const unite = Array.isArray(prod.uom_id) ? prod.uom_id[1] : 'g'
-  return {
-    consomme: Math.round(enG(reste, unite)),
-    jours,
-    depuis: dernier ? jourDe(dernier.date) : null,
-    // Sans remise à zéro précédente, ce qui traînait n'est pas de la
-    // consommation mesurée : c'est du stock accumulé depuis toujours.
-    premiere: !dernier,
-  }
-}
-
 // Crée l'ordre de fabrication et le confirme. Il part ensuite dans « À valider »
 // avec tout le reste.
 async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   const { prod, bom, conf } = await produitPrepa(uid, cle)
   if (!prod || !bom) throw new Error(`article ou recette de « ${conf.titre} » introuvable dans Odoo`)
-  const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
-    ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
+  const modele = await modeleWhlvp(uid)
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
-  const remise = conf.remiseAZero ? await remiseAZeroPrepa(uid, prod, modele.location_src_id[0]) : null
   const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,
@@ -430,9 +413,11 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   // Créé par programme, Odoo ne déroule PAS la nomenclature (les composants ne
   // sont ajoutés que par l'interface) : on crée nous-mêmes les lignes, sinon
   // l'ordre arrive vide — cas vécu avec WHLVP/MO/199870.
-  const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
-    ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
-  const lieuProd = (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0]
+  const [lignes, lieuProd] = await Promise.all([
+    memo('bomlines:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+      ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })),
+    lieuProduction(uid),
+  ])
   const facteur = bom.product_qty ? qty / bom.product_qty : 1
   const choix = colorants || {}
   for (const l of lignes) {
@@ -458,7 +443,7 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
   const uniteBom = Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'g'
-  return { id, name: cree.name, qty: enG(cree.product_qty, uniteBom), produit: prod.display_name, etat: cree.state, remise }
+  return { id, name: cree.name, qty: enG(cree.product_qty, uniteBom), produit: prod.display_name, etat: cree.state }
 }
 
 // ============================================================

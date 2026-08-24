@@ -1,5 +1,15 @@
 import { supabase } from './supabase'
 
+// Odoo répond en 1 à 2 secondes : on réaffiche d'abord ce qu'on avait la
+// dernière fois, puis on remplace dès que la vraie réponse arrive. L'écran
+// s'ouvre instantanément au lieu de rester vide.
+export function dernierEcran(cle) {
+  try { const v = sessionStorage.getItem('ecran:' + cle); return v ? JSON.parse(v) : null } catch { return null }
+}
+export function garderEcran(cle, data) {
+  try { sessionStorage.setItem('ecran:' + cle, JSON.stringify(data)) } catch { /* quota plein : tant pis */ }
+}
+
 // Liste de fabrication CD* : lue dans Odoo (ordres de fabrication encore à faire),
 // la coche « fait » vit dans l'app (table prod_of_faits).
 
