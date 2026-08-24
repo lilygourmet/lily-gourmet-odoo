@@ -634,12 +634,16 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const f = base ? (qty || base) / base : 1
     return r.lignes
       .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !toujoursLa(l.produit))
+      .filter(l => recettes[l.produit])                                        // sans recette, rien à faire ici
       .filter(l => stockDeProduit(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
       .map(l => l.produit)
   }
   // pour un gâteau : ses préparations non faites (celles qui ne sont pas en stock)
   const bloquantsGateau = o => (o.recette || [])
     .filter(r => estPrepa(r.produit) && !estIngredient(r.produit) && !toujoursLa(r.produit))
+    // Sans recette dans Odoo, l'app ne sait ni la montrer ni créer l'ordre :
+    // bloquer là-dessus condamnerait l'article pour toujours.
+    .filter(r => recettes[r.produit])
     .filter(r => stockDeProduit(r.produit) < enKg(r.qty, r.unite).q - 0.001)
     .map(r => r.produit)
 
