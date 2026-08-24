@@ -372,6 +372,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [faits, setFaits] = useState({})                  // ce qui est déjà fait (app, pas Odoo)
   const [validerOuvert, setValiderOuvert] = useState(false)
 
+  const [rechargement, setRechargement] = useState(0)
   useEffect(() => {
     let vivant = true
     loadFaits().then(f => { if (vivant) setFaits(f) }).catch(() => { })
@@ -379,7 +380,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       .then(d => { if (vivant) setData(d) })
       .catch(e => { if (!vivant) return; setErreur(e.message || String(e)); setData({ ofs: [], recettes: {}, stocks: {} }) })
     return () => { vivant = false }
-  }, [])
+  }, [rechargement])
+
+  // Odoo fait foi : après une annulation, une modification ou une validation
+  // faite là-bas, ce bouton remet l'écran à jour sans changer de page.
+  const relire = () => { setData(null); setErreur(null); setRechargement(v => v + 1) }
 
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
   const stocks = useMemo(() => (data && data.stocks) || {}, [data])
@@ -585,9 +590,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className={deuxColonnes ? 'pb-40 sm:pb-24 lg:pb-0' : ''}>
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             <h1 className="font-fraunces italic text-[27px] font-medium">Fabrication CD</h1>
+            <button onClick={relire} title="Relire Odoo (après une annulation ou une validation faite là-bas)"
+              className="ml-auto bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">↻ Actualiser</button>
             {canValiderOf(user) && ordresAValider.length > 0 && (
               <button onClick={() => setValiderOuvert(true)}
-                className="ml-auto bg-bordeaux text-cream rounded-xl px-4 py-2.5 text-[13.5px] font-bold">
+                className="bg-bordeaux text-cream rounded-xl px-4 py-2.5 text-[13.5px] font-bold">
                 Valider dans Odoo ({ordresAValider.length})
               </button>
             )}
@@ -710,7 +717,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       {validerOuvert && (
         <ValiderModal ordres={ordresAValider} user={user}
           onClose={() => setValiderOuvert(false)}
-          onFini={() => { setValiderOuvert(false); window.location.reload() }} />
+          onFini={() => { setValiderOuvert(false); relire() }} />
       )}
 
       {/* téléphone : barre fixe qui ouvre la recette en page entière */}
