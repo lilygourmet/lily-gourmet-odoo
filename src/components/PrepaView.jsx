@@ -57,13 +57,6 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
   const recette = (data && data.recette) || []
   const colorants = recette.filter(r => r.colorant)
   const base = recette.filter(r => !r.colorant)
-  // ce qu'il faut vraiment : la base au prorata des tournées, et seulement les
-  // couleurs retenues, à la quantité saisie
-  const besoins = [
-    ...base.map(r => ({ ...r, besoin: r.qty * n })),
-    ...colorants.filter(r => couleurs[r.id] > 0).map(r => ({ ...r, besoin: couleurs[r.id] })),
-  ]
-  const manque = besoins.filter(r => r.stock !== null && r.stock < r.besoin - 0.001)
   // rien ne part tant que la couleur n'est pas choisie (ou « Rien » cochée)
   const choixFait = colorants.length === 0 || blanche || Object.values(couleurs).some(v => v > 0)
 
@@ -169,12 +162,6 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
               </>
             )}
 
-            {manque.length > 0 && (
-              <p className="text-[12.5px] text-[#854F0B] bg-[#FFF7E0] border border-[#e6d3a3] rounded-xl px-3.5 py-2.5 mt-4">
-                D'après Odoo il manque {manque.map(r => propre(r.produit)).join(', ')}. Ça ne t'empêche pas de
-                déclarer ta tournée : c'est à la validation qu'on décidera.
-              </p>
-            )}
             <button onClick={faire} disabled={envoi || !choixFait}
               className={'w-full rounded-2xl py-4 text-[17px] font-extrabold mt-4 ' +
                 (envoi || !choixFait ? 'bg-cream-warm text-ink-mute' : 'bg-bordeaux text-cream')}>
