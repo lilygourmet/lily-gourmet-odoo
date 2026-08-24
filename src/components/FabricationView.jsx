@@ -393,8 +393,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
   const stocks = useMemo(() => (data && data.stocks) || {}, [data])
 
+  // Ce qui est marqué « fait » quitte cet écran : il attend dans « À valider ».
   const aFaire = useMemo(
-    () => ((data && data.ofs) || []).filter(o => faits[o.name] || !(o.stock && o.stock.assez)),
+    () => ((data && data.ofs) || []).filter(o => !faits[o.name] && !(o.stock && o.stock.assez)),
     [data, faits])
   const gateaux = useMemo(() => aFaire.filter(o => o.taille), [aFaire])
   const choisis = useMemo(() => gateaux.filter(o => sel.includes(o.name)), [gateaux, sel])
@@ -599,9 +600,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
             <button onClick={relire} title="Relire Odoo (après une annulation ou une validation faite là-bas)"
               className="ml-auto bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">↻ Actualiser</button>
             {canValiderOf(user) && ordresAValider.length > 0 && (
-              <button onClick={() => setValiderOuvert(true)}
+              <button onClick={() => onNavigate && onNavigate('fabrication-valider')}
                 className="bg-bordeaux text-cream rounded-xl px-4 py-2.5 text-[13.5px] font-bold">
-                Valider dans Odoo ({ordresAValider.length})
+                À valider ({ordresAValider.length})
               </button>
             )}
           </div>
@@ -678,7 +679,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       <Gateau key={b.ordre} o={o} on={sel.includes(o.name)} onToggle={() => toggle(o.name)}
                         fait={!!faits[b.ordre]} onFait={() => marquer(b.ordre, b.produit, b.qty)}
                         bloque={bloquants(b.produit, b.qty)}
-                        onValider={canValiderOf(user) ? () => setValiderOuvert(true) : null} />
+ />
                     )
                   })}
                 </>
@@ -687,9 +688,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
               <Titre n={demandeOdoo.length ? 3 : 2}>Gâteaux à faire</Titre>
               {gateaux.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Aucun gâteau à faire.</p>}
               <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
-                onValider={canValiderOf(user) ? () => setValiderOuvert(true) : null} />
+ />
               <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
-                onValider={canValiderOf(user) ? () => setValiderOuvert(true) : null} />
+ />
             </>
           )}
         </div>
