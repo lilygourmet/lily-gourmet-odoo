@@ -30,14 +30,16 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     Promise.all([loadFabrication(60), loadFaits()])
       .then(async ([d, f]) => {
         if (!vivant) return
-        // Tout ce qui est marqué fait et existe encore dans Odoo : les ordres
-        // nommés directement (montages, tournées de glaçage, et tout ce qu'on
-        // ajoutera plus tard) et les préparations, cochées par produit.
+        // Tout ce qui est marqué fait : les ordres nommés directement (montages,
+        // tournées de glaçage ou de pâte à sucre, et tout ce qu'on ajoutera) et
+        // les préparations, cochées par produit. On ne filtre PAS sur la liste
+        // de Fabrication CD : elle ne contient que les articles « CD* », et la
+        // pâte à sucre n'en fait pas partie. C'est Odoo qui dira, plus bas, ce
+        // qui est encore ouvert.
         const tous = (d && d.ordres) || []
-        const ouverts = new Set(tous.map(o => o.name))
         const noms = new Set()
         for (const c of Object.keys(f)) {
-          if (/^WH.*\/MO\//i.test(c)) { if (ouverts.has(c)) noms.add(c); continue }
+          if (/^WH.*\/MO\//i.test(c)) { noms.add(c); continue }
           if (!c.startsWith('PREP:')) continue
           const produit = c.slice(5, c.lastIndexOf(':'))
           for (const o of tous) if (o.produit === produit && o.etat !== 'done') noms.add(o.name)
@@ -45,8 +47,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         if (!noms.size) { setLignes([]); return }
         const m = await loadManques([...noms])
         if (!vivant) return
-        setLignes(m)
-        setSel(m.map(x => x.name))
+        // validé ou annulé dans Odoo entre-temps : ça n'attend plus rien
+        const ouverts = m.filter(x => x.etat !== 'done' && x.etat !== 'cancel')
+        setLignes(ouverts)
+        setSel(ouverts.map(x => x.name))
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     return () => { vivant = false }
