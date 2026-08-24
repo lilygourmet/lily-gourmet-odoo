@@ -60,10 +60,11 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
     setEnvoi(true)
     try {
       const of = await lancerPrepa(quoi, n, couleurs, user?.id)
-      await setFait({ name: of.name, produit: of.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
+      // en mode test, aucun ordre n'existe dans Odoo : on ne l'enregistre pas
+      if (!of.test) await setFait({ name: of.name, produit: of.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
       setFaits(f => [{ ...of, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }, ...f])
       setN(1); setCouleurs({}); setBlanche(false)
-      toast.success(`Ordre ${of.name} créé — en attente de validation`)
+      toast.success(of.test ? 'Mode test : rien n\'a été créé dans Odoo' : `Ordre ${of.name} créé — en attente de validation`)
     } catch (e) { toast.error('Impossible de créer l\'ordre : ' + (e.message || e)) }
     setEnvoi(false)
   }

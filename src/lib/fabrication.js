@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { estModeTest } from './modeTest'
 
 // Odoo répond en 1 à 2 secondes : on réaffiche d'abord ce qu'on avait la
 // dernière fois, puis on remplace dès que la vraie réponse arrive. L'écran
@@ -72,7 +73,7 @@ export async function reserverOrdres(ordres, on) {
     await fetch('/api/freezer-list?mode=reserver', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordres, on: !!on }),
+      body: JSON.stringify({ ordres, on: !!on, test: estModeTest() }),
     })
   } catch { /* la réservation est un confort, pas une condition */ }
 }
@@ -94,7 +95,7 @@ export async function validerDansOdoo(ordres, forcer, actorId) {
   const r = await fetch('/api/freezer-list?mode=valider', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ordres, forcer: !!forcer, actorId }),
+    body: JSON.stringify({ ordres, forcer: !!forcer, actorId, test: estModeTest() }),
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
@@ -117,7 +118,7 @@ export async function lancerPrepa(quoi, tournees, colorants, actorId) {
   const r = await fetch(`/api/freezer-list?mode=prepa&quoi=${encodeURIComponent(quoi)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tournees, colorants, actorId }),
+    body: JSON.stringify({ tournees, colorants, actorId, test: estModeTest() }),
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)

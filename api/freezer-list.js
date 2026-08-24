@@ -821,6 +821,7 @@ export default async function handler(req, res) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const names = (body.ordres || []).filter(Boolean)
       if (!names.length) return res.status(200).json({ ordres: 0 })
+      if (body.test) return res.status(200).json({ ordres: names.length, test: true })
       const uid = await odooAuth()
       const mos = await odooSearchRead(uid, 'mrp.production',
         [['name', 'in', names], ['state', 'in', ['confirmed', 'progress', 'to_close']]], ['id'], { limit: 100 })
@@ -839,6 +840,11 @@ export default async function handler(req, res) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const names = (body.ordres || []).filter(Boolean)
       if (!names.length) return res.status(400).json({ error: 'aucun ordre' })
+      if (body.test) {
+        return res.status(200).json({
+          resultats: names.map(name => ({ name, ok: true, message: 'simulé — rien envoyé à Odoo', test: true })),
+        })
+      }
       const uid = await odooAuth()
       const out = []
       for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true))

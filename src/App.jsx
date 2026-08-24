@@ -57,6 +57,7 @@ import MobileBottomNav from './components/MobileBottomNav'
 import SideNav from './components/SideNav'
 import TabLockGate from './components/TabLockGate'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, isLivreurDefaut, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, canSeeLivraisons, canSeeModifications, canSeeDevis, hasValidJwt } from './lib/auth'
+import { estModeTest } from './lib/modeTest'
 import { refreshOnReturn } from './lib/autoRefresh'
 
 function App() {
@@ -440,6 +441,7 @@ function App() {
   return (
     <>
       <UpdateBanner />
+      <BandeauModeTest />
       <ToastHost />
       <ConfirmHost />
       {canSeeConversations(user) && (
@@ -596,6 +598,20 @@ function LivraisonsWrapper(props) {
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
       <LivraisonsView user={user} />
+    </div>
+  )
+}
+
+// Quand l'app tourne en mode test (?test=1), rien ne part vers Odoo : on le dit
+// en permanence, sinon on croit avoir validé pour de vrai.
+function BandeauModeTest() {
+  if (!estModeTest()) return null
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 60,
+      background: '#854F0B', color: '#FFF7E0', textAlign: 'center',
+      padding: '4px 10px', fontSize: 12.5, fontWeight: 700 }}>
+      MODE TEST — rien n'est envoyé à Odoo ·{' '}
+      <a href="?test=0" style={{ textDecoration: 'underline', color: '#FFF7E0' }}>revenir au mode normal</a>
     </div>
   )
 }
