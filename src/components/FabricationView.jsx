@@ -520,9 +520,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const ordresAValider = useMemo(() => {
     const tous = (data && data.ordres) || []
     const out = new Set()
+    const ouverts = new Set(tous.map(o => o.name))
     for (const o of gateaux) if (faits[o.name]) out.add(o.name)
     // les ordres créés ailleurs (tournées de glaçage) : la clé EST le nom d'ordre
-    for (const c of Object.keys(faits)) if (/^WH.*\/MO\//i.test(c)) out.add(c)
+    for (const c of Object.keys(faits)) if (/^WH.*\/MO\//i.test(c) && ouverts.has(c)) out.add(c)
     for (const c of Object.keys(faits)) {
       if (!c.startsWith('PREP:')) continue
       const produit = c.slice(5, c.lastIndexOf(':'))
