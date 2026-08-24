@@ -9,11 +9,14 @@
 
 const CLE = 'mode-test-odoo'
 
-export function estModeTest() {
-  try {
-    const p = new URLSearchParams(window.location.search).get('test')
-    if (p === '1') sessionStorage.setItem(CLE, '1')
-    if (p === '0') sessionStorage.removeItem(CLE)
-    return sessionStorage.getItem(CLE) === '1'
-  } catch { return false }
-}
+// Lu DÈS LE CHARGEMENT : l'app efface l'adresse au démarrage
+// (history.replaceState), le paramètre n'existerait déjà plus au premier rendu.
+let actif = false
+try {
+  actif = sessionStorage.getItem(CLE) === '1'
+  const p = new URLSearchParams(window.location.search).get('test')
+  if (p === '1') { sessionStorage.setItem(CLE, '1'); actif = true }
+  if (p === '0') { sessionStorage.removeItem(CLE); actif = false }
+} catch { actif = false }
+
+export function estModeTest() { return actif }
