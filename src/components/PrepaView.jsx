@@ -8,6 +8,8 @@ import { loadPrepa, lancerPrepa, setFait } from '../lib/fabrication'
 // Ces articles n'ont ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
 // décide combien de tournées elle fait. « C'est fait » crée l'ordre de
 // fabrication dans Odoo ; il part ensuite dans la page « À valider ».
+// Le stock affiché est indicatif : il ne bloque PAS la déclaration (celui qui
+// fabrique constate un fait), c'est la validation qui tranche.
 // Tout est affiché en grammes.
 
 const nb = v => Math.round(Number(v || 0)).toLocaleString('fr-FR')
@@ -167,12 +169,17 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
               </>
             )}
 
-            <button onClick={faire} disabled={envoi || manque.length > 0 || !choixFait}
+            {manque.length > 0 && (
+              <p className="text-[12.5px] text-[#854F0B] bg-[#FFF7E0] border border-[#e6d3a3] rounded-xl px-3.5 py-2.5 mt-4">
+                D'après Odoo il manque {manque.map(r => propre(r.produit)).join(', ')}. Ça ne t'empêche pas de
+                déclarer ta tournée : c'est à la validation qu'on décidera.
+              </p>
+            )}
+            <button onClick={faire} disabled={envoi || !choixFait}
               className={'w-full rounded-2xl py-4 text-[17px] font-extrabold mt-4 ' +
-                (envoi || manque.length || !choixFait ? 'bg-cream-warm text-ink-mute' : 'bg-bordeaux text-cream')}>
+                (envoi || !choixFait ? 'bg-cream-warm text-ink-mute' : 'bg-bordeaux text-cream')}>
               {envoi ? 'Création de l\'ordre…'
-                : manque.length ? 'Ingrédients insuffisants'
-                  : !choixFait ? 'Choisis la couleur' : `C'est fait — ${nb(n * tournee)} g`}
+                : !choixFait ? 'Choisis la couleur' : `C'est fait — ${nb(n * tournee)} g`}
             </button>
             <p className="text-[12.5px] text-ink-soft bg-cream-warm rounded-xl px-3.5 py-3 mt-3">
               L'ordre de fabrication est créé dans Odoo et rejoint la page <b>À valider</b>.
