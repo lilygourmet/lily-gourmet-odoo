@@ -209,13 +209,66 @@ async function odooCall(uid, model, method, args, kwargs = {}) {
 // Sans « forcer », on s'arrête dès qu'Odoo demande une confirmation
 // (composants manquants, quantités différentes) et on renvoie son message.
 // ============================================================
+// Un montage cake design (un gâteau : « 20 cm CD* (Chocolat) », « 40x40
+// Cakedesign CD* »…), par opposition aux préparations « SM… ».
+const estMontageCD = n => /CD\*/i.test(String(n)) && !/^SM[\s.]/i.test(String(n))
+
+/**
+ * Le glaçage royal n'est dans aucune recette : son stock ne descendait jamais.
+ * Règle de Layla : au PREMIER montage cake design validé, tout ce qui reste en
+ * stock part dans cet ordre-là — peu importe le parfum. Le stock retombe à zéro
+ * pour une vraie raison, rattachée à un gâteau, sans toucher à l'inventaire.
+ * Les montages suivants ne trouvent plus rien : ils ne consomment rien.
+ */
+async function integrerGlacage(uid, mo) {
+  const nom = Array.isArray(mo.product_id) ? mo.product_id[1] : ''
+  if (!estMontageCD(nom)) return null
+  const { prod } = await produitPrepa(uid, 'glacage')
+  if (!prod || prod.id === mo.product_id[0]) return null
+  const lieu = Array.isArray(mo.location_src_id) ? mo.location_src_id[0] : null
+  if (!lieu) return null
+
+  const deja = await odooSearchRead(uid, 'stock.move',
+    [['raw_material_production_id', '=', mo.id], ['product_id', '=', prod.id]], ['id'], { limit: 1 })
+  if (deja.length) return null                                  // déjà dedans
+
+  const quants = await odooSearchRead(uid, 'stock.quant',
+    [['product_id', '=', prod.id], ['location_id', 'child_of', lieu]], ['quantity'])
+  const reste = Math.round(quants.reduce((s, q) => s + (q.quantity || 0), 0) * 1000) / 1000
+  if (reste <= 0.001) return null                               // plus de glaçage : rien à intégrer
+
+  const lieuProd = (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0]
+  await odooCall(uid, 'mrp.production', 'write', [[mo.id], {
+    move_raw_ids: [[0, 0, {
+      name: prod.display_name,
+      product_id: prod.id,
+      product_uom_qty: reste,
+      product_uom: Array.isArray(prod.uom_id) ? prod.uom_id[0] : undefined,
+      location_id: lieu,
+      location_dest_id: lieuProd ? lieuProd.id : undefined,
+      company_id: Array.isArray(mo.company_id) ? mo.company_id[0] : undefined,
+    }]],
+  }])
+  // Ajoutée à un ordre déjà confirmé, la ligne naît en brouillon : il faut la
+  // confirmer et la réserver pour qu'Odoo la consomme à la validation.
+  const cree = (await odooSearchRead(uid, 'stock.move',
+    [['raw_material_production_id', '=', mo.id], ['product_id', '=', prod.id]], ['id', 'state'], { limit: 1 }))[0]
+  if (cree && cree.state === 'draft') {
+    await odooCall(uid, 'stock.move', '_action_confirm', [[cree.id]]).catch(() => {})
+    await odooCall(uid, 'stock.move', '_action_assign', [[cree.id]]).catch(() => {})
+  }
+  const unite = Array.isArray(prod.uom_id) ? prod.uom_id[1] : 'kg'
+  return Math.round(enG(reste, unite))
+}
+
 async function validerOrdre(uid, name, forcer) {
   const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', name]],
-    ['id', 'name', 'state', 'product_qty', 'qty_producing']))[0]
+    ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_id', 'location_src_id', 'company_id']))[0]
   if (!mo) return { name, ok: false, message: 'ordre introuvable' }
   if (mo.state === 'done') return { name, ok: true, message: 'déjà terminé' }
   if (mo.state === 'cancel') return { name, ok: false, message: 'ordre annulé' }
   try {
+    const glacage = await integrerGlacage(uid, mo)
     if (!mo.qty_producing || mo.qty_producing !== mo.product_qty) {
       await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: mo.product_qty }])
     }
@@ -228,7 +281,7 @@ async function validerOrdre(uid, name, forcer) {
       await odooCall(uid, r.res_model, 'process', [[wiz]], { context: ctx })
     }
     const apres = (await odooSearchRead(uid, 'mrp.production', [['id', '=', mo.id]], ['state']))[0]
-    return { name, ok: apres && apres.state === 'done', message: apres ? apres.state : '' }
+    return { name, ok: apres && apres.state === 'done', message: apres ? apres.state : '', glacage }
   } catch (e) {
     return { name, ok: false, message: (e.message || String(e)).slice(0, 300) }
   }
@@ -242,8 +295,10 @@ async function validerOrdre(uid, name, forcer) {
 // en fait. Tout ce qui sort d'ici est en GRAMMES (règle de Layla).
 // ============================================================
 const PREPAS = {
-  glacage: { id: 6966, noms: ['SM. Glacage Royal CD*', 'SM. glacage cake design'], titre: 'Glaçage royal' },
-  'pate-sucre': { id: 2940, noms: ['SM Pate a sucre Melange CD'], titre: 'Pâte à sucre' },
+  // Le glaçage ne se remet PAS à zéro : il part maintenant dans le premier
+  // montage cake design validé (voir integrerGlacage).
+  glacage: { id: 6966, noms: ['SM. Glacage Royal CD*', 'SM. glacage cake design'], titre: 'Glaçage royal', remiseAZero: false },
+  'pate-sucre': { id: 2940, noms: ['SM Pate a sucre Melange CD'], titre: 'Pâte à sucre', remiseAZero: true },
 }
 const prepaDe = cle => PREPAS[cle] || PREPAS.glacage
 
@@ -359,7 +414,7 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
     ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
-  const remise = await remiseAZeroPrepa(uid, prod, modele.location_src_id[0])
+  const remise = conf.remiseAZero ? await remiseAZeroPrepa(uid, prod, modele.location_src_id[0]) : null
   const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,

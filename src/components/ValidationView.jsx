@@ -89,7 +89,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
               <div key={r.name} className={'rounded-xl px-3.5 py-3 mb-2 ' +
                 (r.ok ? 'bg-[#EAF3DE] border border-[#cfe0b8]' : 'bg-[#FCEEE8] border border-[#f0c9c9]')}>
                 <b className="text-[14.5px]">{r.ok ? '✓' : '✗'} {r.name}</b>
-                <div className="text-[12.5px] text-ink-soft">{r.ok ? 'validé dans Odoo' : r.message}</div>
+                <div className="text-[12.5px] text-ink-soft">
+                  {r.ok ? 'validé dans Odoo' : r.message}
+                  {r.glacage > 0 && ` · ${nb(r.glacage)} g de glaçage royal consommés dedans`}
+                </div>
               </div>
             ))}
             <button onClick={() => { setLignes(null); setResultats(null); setTour(v => v + 1) }}
