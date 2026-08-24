@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadFabrication, loadFaits, loadManques, validerDansOdoo } from '../lib/fabrication'
+import { loadOrdres, loadFaits, loadManques, validerDansOdoo, dernierEcran, garderEcran } from '../lib/fabrication'
 
 // ====== « À valider » : la page dédiée ======
 // Tout ce que l'équipe a marqué « fait » (montages, préparations, tournées de
@@ -17,8 +17,8 @@ const propre = n => String(n || '')
   .replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\baccs\b/i, '').trim()
 
 export default function ValidationView({ user, onLogout, onNavigate, activeView }) {
-  const [lignes, setLignes] = useState(null)
-  const [sel, setSel] = useState([])
+  const [lignes, setLignes] = useState(() => dernierEcran('valider'))
+  const [sel, setSel] = useState(() => (dernierEcran('valider') || []).map(x => x.name))
   const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
   const [resultats, setResultats] = useState(null)
@@ -27,8 +27,8 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
 
   useEffect(() => {
     let vivant = true
-    Promise.all([loadFabrication(60), loadFaits()])
-      .then(async ([d, f]) => {
+    Promise.all([loadOrdres(), loadFaits()])
+      .then(async ([tous, f]) => {
         if (!vivant) return
         // Tout ce qui est marqué fait : les ordres nommés directement (montages,
         // tournées de glaçage ou de pâte à sucre, et tout ce qu'on ajoutera) et
@@ -36,7 +36,6 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         // de Fabrication CD : elle ne contient que les articles « CD* », et la
         // pâte à sucre n'en fait pas partie. C'est Odoo qui dira, plus bas, ce
         // qui est encore ouvert.
-        const tous = (d && d.ordres) || []
         const noms = new Set()
         for (const c of Object.keys(f)) {
           if (/^WH.*\/MO\//i.test(c)) { noms.add(c); continue }
@@ -44,13 +43,12 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
           const produit = c.slice(5, c.lastIndexOf(':'))
           for (const o of tous) if (o.produit === produit && o.etat !== 'done') noms.add(o.name)
         }
-        if (!noms.size) { setLignes([]); return }
+        if (!noms.size) { setLignes([]); garderEcran('valider', []); return }
         const m = await loadManques([...noms])
         if (!vivant) return
         // validé ou annulé dans Odoo entre-temps : ça n'attend plus rien
         const ouverts = m.filter(x => x.etat !== 'done' && x.etat !== 'cancel')
-        setLignes(ouverts)
-        setSel(ouverts.map(x => x.name))
+        setLignes(ouverts); setSel(ouverts.map(x => x.name)); garderEcran('valider', ouverts)
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     return () => { vivant = false }

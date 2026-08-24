@@ -811,6 +811,16 @@ export default async function handler(req, res) {
     // Deuxième usage de cette fonction (limite Vercel Hobby = 12 fonctions) :
     // la liste de fabrication CD*, cf. fetchFabrication.
     // recette du glaçage + stock des ingrédients
+    if (req.query.mode === 'ordres') {
+      const uid = await odooAuth()
+      const mos = await odooSearchRead(uid, 'mrp.production',
+        [['name', 'like', 'WHLVP/MO/'], ['state', 'in', ['confirmed', 'progress', 'to_close']]],
+        ['name', 'product_id', 'state'], { limit: 500, order: 'id desc' })
+      return res.status(200).json({
+        ordres: mos.map(m => ({ name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', etat: m.state })),
+      })
+    }
+
     if (req.query.mode === 'prepa' || req.query.mode === 'glacage') {
       const uid = await odooAuth()
       return res.status(200).json(await fetchPrepa(uid, String(req.query.quoi || 'glacage')))

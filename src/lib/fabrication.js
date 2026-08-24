@@ -25,6 +25,13 @@ export async function loadFabrication(jours = 60) {
   return { ofs: data.ofs || [], ordres: data.ordres || [], recettes: data.recettes || {}, stocks: data.stocks || {}, catalogue: data.catalogue || [] }
 }
 
+/** Juste les ordres Odoo encore ouverts (rapide : une seule question à Odoo). */
+export async function loadOrdres() {
+  const r = await fetch('/api/freezer-list?mode=ordres')
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return (await r.json()).ordres || []
+}
+
 /** Les OF déjà cochés « fait » (clé = nom de l'OF). */
 export async function loadFaits() {
   const { data, error } = await supabase.from('prod_of_faits').select('mo_name, fait_par, fait_le')
