@@ -440,8 +440,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // 2) les préparations cochées par leur nom, sauf celles déjà comptées
     // ci-dessus : le même article peut se cocher depuis une recette ET depuis
     // « Demandé par Odoo », il ne doit pas compter deux fois.
+    const jour = aujourdhui()
     for (const [cle, info] of Object.entries(faits)) {
       if (!cle.startsWith('PREP:')) continue
+      // seulement les coches du jour : une préparation se refait chaque matin,
+      // celle d'hier est réputée consommée (l'écran la redemande d'ailleurs)
+      if (cle.slice(cle.lastIndexOf(':') + 1) !== jour) continue
       const produit = cle.slice(5, cle.lastIndexOf(':'))
       if (comptes.has(produit)) continue
       const q = Number(info && info.qty) || 0
