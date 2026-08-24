@@ -397,6 +397,78 @@ async function fetchPrepa(uid, cle) {
   }
 }
 
+// Marque les ordres que l'app a créés elle-même : eux seuls pourront être
+// annulés quand on décoche. On ne touche jamais à un ordre venu d'Odoo.
+const ORIGINE_APP = 'LG-APP'
+
+/**
+ * Crée dans Odoo l'ordre de fabrication d'une préparation que l'équipe vient de
+ * faire alors qu'Odoo n'en demandait pas (une crème au beurre nature, par
+ * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
+ */
+async function creerOfPreparation(uid, nomProduit, qtyKg) {
+  const prod = (await odooSearchRead(uid, 'product.product',
+    [['name', '=', nomProduit]], ['id', 'display_name', 'uom_id', 'product_tmpl_id'], { limit: 1 }))[0]
+  if (!prod) throw new Error('article introuvable dans Odoo : ' + nomProduit)
+  const bom = (await odooSearchRead(uid, 'mrp.bom',
+    [['product_tmpl_id', '=', prod.product_tmpl_id[0]]], ['id', 'product_qty', 'product_uom_id'], { limit: 1 }))[0]
+  if (!bom) throw new Error('recette introuvable dans Odoo pour ' + prod.display_name)
+
+  const uniteBom = Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'kg'
+  const qty = Math.round((/^kg$/i.test(uniteBom) ? qtyKg : qtyKg * 1000) * 1000) / 1000
+  if (!(qty > 0)) throw new Error('quantité invalide')
+
+  const modele = await modeleWhlvp(uid)
+  if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
+  const id = await odooCall(uid, 'mrp.production', 'create', [{
+    product_id: prod.id,
+    product_qty: qty,
+    product_uom_id: Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined,
+    bom_id: bom.id,
+    origin: ORIGINE_APP,
+    picking_type_id: modele.picking_type_id[0],
+    location_src_id: modele.location_src_id[0],
+    location_dest_id: modele.location_dest_id[0],
+    company_id: modele.company_id[0],
+  }])
+  // Odoo ne déroule pas la nomenclature quand l'ordre est créé par programme
+  const [lignes, lieuProd] = await Promise.all([
+    memo('bomlines:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+      ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })),
+    lieuProduction(uid),
+  ])
+  const facteur = bom.product_qty ? qty / bom.product_qty : 1
+  for (const l of lignes) {
+    await odooCall(uid, 'stock.move', 'create', [{
+      name: prod.display_name,
+      product_id: l.product_id[0],
+      product_uom_qty: Math.round(l.product_qty * facteur * 1000) / 1000,
+      product_uom: l.product_uom_id[0],
+      location_id: modele.location_src_id[0],
+      location_dest_id: lieuProd ? lieuProd.id : modele.location_dest_id[0],
+      raw_material_production_id: id,
+      company_id: modele.company_id[0],
+    }])
+  }
+  await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
+  await odooCall(uid, 'mrp.production', 'action_assign', [[id]]).catch(() => { })
+  const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
+  return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state }
+}
+
+/** Annule les ordres que l'app avait créés (jamais ceux venus d'Odoo). */
+async function annulerOfApp(uid, names) {
+  const mos = await odooSearchRead(uid, 'mrp.production',
+    [['name', 'in', names], ['origin', '=', ORIGINE_APP], ['state', 'in', ['draft', 'confirmed', 'progress']]],
+    ['id', 'name'], { limit: 50 })
+  if (!mos.length) return 0
+  const ids = mos.map(m => m.id)
+  await odooCall(uid, 'mrp.production', 'action_cancel', [ids]).catch(() => { })
+  await odooCall(uid, 'mrp.production', 'write', [ids, { state: 'cancel' }]).catch(() => { })
+  await odooCall(uid, 'mrp.production', 'unlink', [ids]).catch(() => { })
+  return ids.length
+}
+
 // Crée l'ordre de fabrication et le confirme. Il part ensuite dans « À valider »
 // avec tout le reste.
 async function creerOrdrePrepa(uid, cle, tournees, colorants) {
@@ -819,6 +891,33 @@ export default async function handler(req, res) {
       const of = await creerOrdrePrepa(uid, quoi, t, body.colorants)
       console.log(`[${quoi}] ${t} tournée(s) par ${body.actorId || '?'} → ${of.name} (${of.qty} g)`)
       return res.status(200).json(of)
+    }
+
+    // L'équipe a fait une préparation qu'Odoo ne demandait pas : on crée l'ordre
+    // correspondant, il partira dans « À valider ». (POST)
+    if (req.method === 'POST' && req.query.mode === 'creer-of') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const produit = String(body.produit || '')
+      const qtyKg = Number(body.qty) || 0
+      if (!produit || !(qtyKg > 0)) return res.status(400).json({ error: 'article ou quantité manquante' })
+      if (body.test) return res.status(200).json({ name: 'TEST (rien créé dans Odoo)', test: true })
+      const uid = await odooAuth()
+      try {
+        const of = await creerOfPreparation(uid, produit, qtyKg)
+        console.log(`[creer-of] ${produit} ${qtyKg} kg par ${body.actorId || '?'} → ${of.name}`)
+        return res.status(200).json(of)
+      } catch (e) {
+        return res.status(200).json({ error: (e.message || String(e)).slice(0, 300) })
+      }
+    }
+
+    // On décoche : l'ordre que l'app avait créé n'a plus lieu d'être. (POST)
+    if (req.method === 'POST' && req.query.mode === 'annuler-of') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const names = (body.ordres || []).filter(Boolean)
+      if (!names.length || body.test) return res.status(200).json({ annules: 0 })
+      const uid = await odooAuth()
+      return res.status(200).json({ annules: await annulerOfApp(uid, names) })
     }
 
     // Réservation des composants dans Odoo (POST). Quand l'équipe coche « fait »,

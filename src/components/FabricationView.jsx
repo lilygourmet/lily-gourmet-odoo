@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres } from '../lib/fabrication'
+import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa } from '../lib/fabrication'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
@@ -680,13 +680,31 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return siens.filter(o => ici.has(o.origine)).map(o => o.name)
   }
 
-  const marquer = (cle, produit, qty) => {
+  const marquer = async (cle, produit, qty) => {
     const on = !faits[cle]
-    const ordres = ordresDe(cle, produit)
+    const avant = faits[cle]
+    const trouves = ordresDe(cle, produit)
+    // la coche s'affiche tout de suite, le reste se fait derrière
+    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty, ordres: trouves }; else delete n[cle]; return n })
+
+    // Une préparation qu'Odoo ne demandait pas (ni ordre, ni règle mini/maxi) :
+    // l'app crée l'ordre à la quantité faite, sinon rien n'entrerait jamais en
+    // stock. Si on décoche, cet ordre-là est annulé.
+    const cree = (on && cle.startsWith('PREP:') && !trouves.length)
+      ? await creerOfPrepa(produit, qty, user?.id)
+      : null
+    const ordres = cree && cree.name && !cree.error ? [cree.name] : trouves
+    if (cree && cree.name && !cree.error) {
+      setFaits(f => (f[cle] ? { ...f, [cle]: { ...f[cle], ordres } } : f))
+      if (!cree.test) toast.success(`Ordre ${cree.name} créé dans Odoo`)
+    } else if (cree && cree.error) {
+      toast.error('Odoo : ' + cree.error)
+    }
+    if (!on) annulerOfPrepa((avant && avant.ordres) || [])
+
     // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
     // ordres ne comptent plus sur le même stock.
     reserverOrdres(ordres, on)
-    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty }; else delete n[cle]; return n })
     setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }

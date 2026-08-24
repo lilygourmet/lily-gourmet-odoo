@@ -78,6 +78,31 @@ export async function reserverOrdres(ordres, on) {
   } catch { /* la réservation est un confort, pas une condition */ }
 }
 
+/**
+ * Crée dans Odoo l'ordre de fabrication d'une préparation qu'Odoo ne demandait
+ * pas (crème au beurre nature…). Renvoie { name } ou { error }.
+ */
+export async function creerOfPrepa(produit, qty, actorId) {
+  const r = await fetch('/api/freezer-list?mode=creer-of', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ produit, qty, actorId, test: estModeTest() }),
+  })
+  return await r.json()
+}
+
+/** Annule les ordres que l'app avait créés (quand on décoche). Silencieux. */
+export async function annulerOfPrepa(ordres) {
+  if (!ordres || !ordres.length) return
+  try {
+    await fetch('/api/freezer-list?mode=annuler-of', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordres, test: estModeTest() }),
+    })
+  } catch { /* sans conséquence : l'ordre restera dans Odoo */ }
+}
+
 /** Ce qui manque pour fabriquer ces ordres Odoo (lecture seule, génoise ignorée). */
 export async function loadManques(ordres) {
   if (!ordres.length) return []
