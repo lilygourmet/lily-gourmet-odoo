@@ -45,6 +45,9 @@ const estBase = n => BASES.some(r => r.test(String(n || '')))
 // le bloc du haut, et la génoise ne se détaille pas ici (demande de Layla).
 const estIngredient = n => /^SM\.\s*/i.test(String(n || ''))
 const estGenoise = n => /genoise/i.test(String(n || ''))
+// Jamais bloquant : la génoise (stock négatif pour un moment encore) et l'eau
+// du robinet, qui ne se gère pas en stock.
+const toujoursLa = n => estGenoise(n) || /eau\s*robinet|^\s*MP-\s*Eau/i.test(String(n || ''))
 const jamaisDeplier = n => estBase(n) || estIngredient(n) || estGenoise(n)
 
 // Ce qui peut être coché « fait » dans une recette : ni un ingrédient, ni une
@@ -630,13 +633,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
     const f = base ? (qty || base) / base : 1
     return r.lignes
-      .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !/genoise|eau\s*robinet/i.test(l.produit))
+      .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !toujoursLa(l.produit))
       .filter(l => stockDeProduit(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
       .map(l => l.produit)
   }
   // pour un gâteau : ses préparations non faites (celles qui ne sont pas en stock)
   const bloquantsGateau = o => (o.recette || [])
-    .filter(r => estPrepa(r.produit) && !estIngredient(r.produit))
+    .filter(r => estPrepa(r.produit) && !estIngredient(r.produit) && !toujoursLa(r.produit))
     .filter(r => stockDeProduit(r.produit) < enKg(r.qty, r.unite).q - 0.001)
     .map(r => r.produit)
 
