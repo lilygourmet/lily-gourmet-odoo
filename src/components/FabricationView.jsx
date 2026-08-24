@@ -199,6 +199,11 @@ function BoutonFait({ fait, onClick, bloque = null }) {
 
 function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
   const stock = o.stockApp != null ? o.stockApp : (o.stock ? o.stock.dispo : null)
+  // Une préparation se pèse (8 kg de sirop), un gâteau se compte (×3) : « ×8 »
+  // pour 8 kg de sirop se lit comme 8 pièces.
+  const pese = /^(g|kg)$/i.test(norm(o.unite))
+  const combien = pese ? qteLisible(enKg(o.qty, o.unite).q, 'kg') : `×${nb(o.qty)}`
+  const resteTexte = stock === null ? null : (pese ? qteLisible(stock, 'kg') : nb(stock))
   return (
     <div role="button" tabIndex={0} onClick={onToggle}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
@@ -212,13 +217,13 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
         <div className="text-[11.5px] text-ink-mute">
           {o.scode
             ? <>pour le <b>{jourCourt(o.quand)}</b> · {o.scode}</>
-            : (stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${nb(stock)} en stock` : 'plus rien en stock')}
+            : (stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${resteTexte} en stock` : 'plus rien en stock')}
         </div>
       </div>
       {(o.stockAssez ?? (o.stock && o.stock.assez)) && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">déjà en stock</span>}
       {o.recetteVide && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
       {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
-      <span className={'text-[18px] font-extrabold text-bordeaux ' + (fait ? 'line-through opacity-60' : '')}>×{nb(o.qty)}</span>
+      <span className={'text-[18px] font-extrabold text-bordeaux whitespace-nowrap ' + (fait ? 'line-through opacity-60' : '')}>{combien}</span>
       <BoutonFait fait={fait} onClick={onFait} bloque={bloque} />
       {fait && onValider && (
         <button onClick={e => { e.stopPropagation(); onValider() }}
