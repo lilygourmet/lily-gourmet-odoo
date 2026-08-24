@@ -249,6 +249,10 @@ const prepaDe = cle => PREPAS[cle] || PREPAS.glacage
 
 // Les recettes mélangent les kg et les grammes d'une ligne à l'autre (le CMC
 // est en kg, le sucre glace en g) : on ramène tout en grammes.
+// Une tournée n'utilise qu'une couleur ou deux : l'équipe choisit lesquelles,
+// les autres ne sont pas mises dans l'ordre de fabrication.
+const estColorant = n => /colorant/i.test(String(n))
+
 const enG = (q, u) => (/^kg$/i.test(String(u)) ? Math.round(q * 1000000) / 1000 : q)
 
 // Retrouve l'article (par son numéro, puis par son nom en secours) et sa recette,
@@ -299,8 +303,11 @@ async function fetchPrepa(uid, cle) {
       const u = Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u'
       const st = stockDe[l.product_id[0]]
       const memeUnite = st && /^(g|kg)$/i.test(st.unite) && /^(g|kg)$/i.test(u)
+      const nomL = Array.isArray(l.product_id) ? l.product_id[1] : ''
       return {
-        produit: (Array.isArray(l.product_id) ? l.product_id[1] : ''),
+        id: l.product_id[0],
+        produit: nomL,
+        colorant: estColorant(nomL),
         qty: enG(l.product_qty, u),
         stock: memeUnite ? Math.round(enG(st.qty, st.unite) * 1000) / 1000 : null,
       }
@@ -346,7 +353,7 @@ async function remiseAZeroPrepa(uid, prod, lieu) {
 
 // Crée l'ordre de fabrication et le confirme. Il part ensuite dans « À valider »
 // avec tout le reste.
-async function creerOrdrePrepa(uid, cle, tournees) {
+async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   const { prod, bom, conf } = await produitPrepa(uid, cle)
   if (!prod || !bom) throw new Error(`article ou recette de « ${conf.titre} » introuvable dans Odoo`)
   const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
@@ -372,11 +379,20 @@ async function creerOrdrePrepa(uid, cle, tournees) {
     ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
   const lieuProd = (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0]
   const facteur = bom.product_qty ? qty / bom.product_qty : 1
+  const choix = colorants || {}
   for (const l of lignes) {
+    const nomL = Array.isArray(l.product_id) ? l.product_id[1] : ''
+    const uL = Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'g'
+    let quantite = Math.round(l.product_qty * facteur * 1000) / 1000
+    if (estColorant(nomL)) {
+      const g = choix[l.product_id[0]]
+      if (!(g > 0)) continue                                   // couleur non retenue : pas dans l'ordre
+      quantite = /^kg$/i.test(uL) ? Math.round(g) / 1000 : Math.round(g)
+    }
     await odooCall(uid, 'stock.move', 'create', [{
       name: prod.display_name,
       product_id: l.product_id[0],
-      product_uom_qty: Math.round(l.product_qty * facteur * 1000) / 1000,
+      product_uom_qty: quantite,
       product_uom: l.product_uom_id[0],
       location_id: modele.location_src_id[0],
       location_dest_id: lieuProd ? lieuProd.id : modele.location_dest_id[0],
@@ -726,7 +742,7 @@ export default async function handler(req, res) {
       if (!t) return res.status(400).json({ error: 'nombre de tournées invalide' })
       const quoi = String(req.query.quoi || 'glacage')
       const uid = await odooAuth()
-      const of = await creerOrdrePrepa(uid, quoi, t)
+      const of = await creerOrdrePrepa(uid, quoi, t, body.colorants)
       console.log(`[${quoi}] ${t} tournée(s) par ${body.actorId || '?'} → ${of.name} (${of.qty} g)`)
       return res.status(200).json(of)
     }

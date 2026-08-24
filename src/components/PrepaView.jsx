@@ -37,6 +37,8 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
   const [n, setN] = useState(1)
   const [envoi, setEnvoi] = useState(false)
   const [faits, setFaits] = useState([])
+  // couleurs retenues pour cette tournée : { id de l'article : grammes }
+  const [couleurs, setCouleurs] = useState({})
 
   useEffect(() => {
     let vivant = true
@@ -48,15 +50,23 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
 
   const tournee = (data && data.tournee) || 0
   const recette = (data && data.recette) || []
-  const manque = recette.filter(r => r.stock !== null && r.stock < r.qty * n - 0.001)
+  const colorants = recette.filter(r => r.colorant)
+  const base = recette.filter(r => !r.colorant)
+  // ce qu'il faut vraiment : la base au prorata des tournées, et seulement les
+  // couleurs retenues, à la quantité saisie
+  const besoins = [
+    ...base.map(r => ({ ...r, besoin: r.qty * n })),
+    ...colorants.filter(r => couleurs[r.id] > 0).map(r => ({ ...r, besoin: couleurs[r.id] })),
+  ]
+  const manque = besoins.filter(r => r.stock !== null && r.stock < r.besoin - 0.001)
 
   async function faire() {
     setEnvoi(true)
     try {
-      const of = await lancerPrepa(quoi, n, user?.id)
+      const of = await lancerPrepa(quoi, n, couleurs, user?.id)
       await setFait({ name: of.name, produit: of.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
       setFaits(f => [{ ...of, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }, ...f])
-      setN(1)
+      setN(1); setCouleurs({})
       if (of.remise) toast.success(motRemise(of.remise))
       toast.success(`Ordre ${of.name} créé — en attente de validation`)
     } catch (e) { toast.error('Impossible de créer l\'ordre : ' + (e.message || e)) }
@@ -90,7 +100,7 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
             </div>
 
             <Titre num={2}>Il te faut</Titre>
-            {recette.map(r => {
+            {base.map(r => {
               const besoin = r.qty * n
               const ok = r.stock === null || r.stock >= besoin - 0.001
               return (
@@ -105,6 +115,44 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
               )
             })}
 
+            {colorants.length > 0 && (
+              <>
+                <Titre num={3}>Quelles couleurs</Titre>
+                <p className="text-[12.5px] text-ink-mute -mt-1 mb-2">
+                  Coche seulement les colorants de cette tournée : les autres ne seront pas mis dans l'ordre de fabrication.
+                  La quantité proposée est celle de la recette, tu peux la corriger.
+                </p>
+                {colorants.map(r => {
+                  const on = couleurs[r.id] > 0
+                  const val = couleurs[r.id] ?? ''
+                  const trop = on && r.stock !== null && r.stock < couleurs[r.id] - 0.001
+                  return (
+                    <div key={r.id} className={'flex items-center gap-3 border rounded-xl px-3.5 py-2.5 mb-1.5 ' +
+                      (on ? 'bg-[#FFF7E0] border-[#e6d3a3]' : 'bg-white border-line')}>
+                      <input type="checkbox" checked={on} className="w-6 h-6 accent-[#993556] flex-shrink-0"
+                        onChange={e => setCouleurs(c => {
+                          const suite = { ...c }
+                          if (e.target.checked) suite[r.id] = Math.round(r.qty * n)
+                          else delete suite[r.id]
+                          return suite
+                        })} />
+                      <span className="flex-1 text-[15px]">{propre(r.produit)}</span>
+                      {on && (
+                        <>
+                          <input type="number" min="0" inputMode="numeric" value={val}
+                            onChange={e => setCouleurs(c => ({ ...c, [r.id]: Math.max(0, Number(e.target.value) || 0) }))}
+                            className={'w-[86px] text-right text-[16px] font-bold border rounded-lg px-2 py-1.5 ' +
+                              (trop ? 'border-danger text-danger' : 'border-line')} />
+                          <span className="text-[13px] text-ink-mute">g</span>
+                        </>
+                      )}
+                      {!on && <span className="text-[12px] text-ink-mute">{nb(r.qty * n)} g dans la recette</span>}
+                    </div>
+                  )
+                })}
+              </>
+            )}
+
             <button onClick={faire} disabled={envoi || manque.length > 0}
               className={'w-full rounded-2xl py-4 text-[17px] font-extrabold mt-4 ' +
                 (envoi || manque.length ? 'bg-cream-warm text-ink-mute' : 'bg-bordeaux text-cream')}>
@@ -117,7 +165,7 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
 
             {faits.length > 0 && (
               <>
-                <Titre num={3}>Fait aujourd'hui</Titre>
+                <Titre num={4}>Fait aujourd'hui</Titre>
                 {faits.map(f => (
                   <div key={f.name} className="flex items-center gap-3 flex-wrap bg-[#EAF3DE] border border-[#cfe0b8] rounded-xl px-3.5 py-3 mb-1.5">
                     <span className="flex-1 text-[15px] font-bold">

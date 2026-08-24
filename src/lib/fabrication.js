@@ -74,12 +74,16 @@ export async function loadPrepa(quoi) {
   return await r.json()
 }
 
-/** Crée et confirme l'ordre de fabrication de la préparation dans Odoo. */
-export async function lancerPrepa(quoi, tournees, actorId) {
+/**
+ * Crée et confirme l'ordre de fabrication de la préparation dans Odoo.
+ * `colorants` = { identifiant de l'article : grammes } — seuls ceux-là entrent
+ * dans l'ordre, les autres couleurs n'y figurent pas du tout.
+ */
+export async function lancerPrepa(quoi, tournees, colorants, actorId) {
   const r = await fetch(`/api/freezer-list?mode=prepa&quoi=${encodeURIComponent(quoi)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tournees, actorId }),
+    body: JSON.stringify({ tournees, colorants, actorId }),
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
