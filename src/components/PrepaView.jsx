@@ -39,6 +39,9 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
   const [faits, setFaits] = useState([])
   // couleurs retenues pour cette tournée : { id de l'article : grammes }
   const [couleurs, setCouleurs] = useState({})
+  // « Rien » = pâte blanche : un choix explicite, pour qu'on ne lance pas une
+  // tournée en ayant simplement oublié de cocher une couleur
+  const [blanche, setBlanche] = useState(false)
 
   useEffect(() => {
     let vivant = true
@@ -59,6 +62,8 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
     ...colorants.filter(r => couleurs[r.id] > 0).map(r => ({ ...r, besoin: couleurs[r.id] })),
   ]
   const manque = besoins.filter(r => r.stock !== null && r.stock < r.besoin - 0.001)
+  // rien ne part tant que la couleur n'est pas choisie (ou « Rien » cochée)
+  const choixFait = colorants.length === 0 || blanche || Object.values(couleurs).some(v => v > 0)
 
   async function faire() {
     setEnvoi(true)
@@ -66,7 +71,7 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
       const of = await lancerPrepa(quoi, n, couleurs, user?.id)
       await setFait({ name: of.name, produit: of.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
       setFaits(f => [{ ...of, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }, ...f])
-      setN(1); setCouleurs({})
+      setN(1); setCouleurs({}); setBlanche(false)
       if (of.remise) toast.success(motRemise(of.remise))
       toast.success(`Ordre ${of.name} créé — en attente de validation`)
     } catch (e) { toast.error('Impossible de créer l\'ordre : ' + (e.message || e)) }
@@ -122,6 +127,12 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
                   Coche seulement les colorants de cette tournée : les autres ne seront pas mis dans l'ordre de fabrication.
                   La quantité proposée est celle de la recette, tu peux la corriger.
                 </p>
+                <div className={'flex items-center gap-3 border rounded-xl px-3.5 py-2.5 mb-1.5 ' +
+                  (blanche ? 'bg-[#EAF3DE] border-[#cfe0b8]' : 'bg-white border-line')}>
+                  <input type="checkbox" checked={blanche} className="w-6 h-6 accent-[#993556] flex-shrink-0"
+                    onChange={e => { setBlanche(e.target.checked); if (e.target.checked) setCouleurs({}) }} />
+                  <span className="flex-1 text-[15px] font-bold">Rien — pâte blanche</span>
+                </div>
                 {colorants.map(r => {
                   const on = couleurs[r.id] > 0
                   const val = couleurs[r.id] ?? ''
@@ -130,12 +141,15 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
                     <div key={r.id} className={'flex items-center gap-3 border rounded-xl px-3.5 py-2.5 mb-1.5 ' +
                       (on ? 'bg-[#FFF7E0] border-[#e6d3a3]' : 'bg-white border-line')}>
                       <input type="checkbox" checked={on} className="w-6 h-6 accent-[#993556] flex-shrink-0"
-                        onChange={e => setCouleurs(c => {
-                          const suite = { ...c }
-                          if (e.target.checked) suite[r.id] = Math.round(r.qty * n)
-                          else delete suite[r.id]
-                          return suite
-                        })} />
+                        onChange={e => {
+                          if (e.target.checked) setBlanche(false)
+                          setCouleurs(c => {
+                            const suite = { ...c }
+                            if (e.target.checked) suite[r.id] = Math.round(r.qty * n)
+                            else delete suite[r.id]
+                            return suite
+                          })
+                        }} />
                       <span className="flex-1 text-[15px]">{propre(r.produit)}</span>
                       {on && (
                         <>
@@ -153,10 +167,12 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
               </>
             )}
 
-            <button onClick={faire} disabled={envoi || manque.length > 0}
+            <button onClick={faire} disabled={envoi || manque.length > 0 || !choixFait}
               className={'w-full rounded-2xl py-4 text-[17px] font-extrabold mt-4 ' +
-                (envoi || manque.length ? 'bg-cream-warm text-ink-mute' : 'bg-bordeaux text-cream')}>
-              {envoi ? 'Création de l\'ordre…' : manque.length ? 'Ingrédients insuffisants' : `C'est fait — ${nb(n * tournee)} g`}
+                (envoi || manque.length || !choixFait ? 'bg-cream-warm text-ink-mute' : 'bg-bordeaux text-cream')}>
+              {envoi ? 'Création de l\'ordre…'
+                : manque.length ? 'Ingrédients insuffisants'
+                  : !choixFait ? 'Choisis la couleur' : `C'est fait — ${nb(n * tournee)} g`}
             </button>
             <p className="text-[12.5px] text-ink-soft bg-cream-warm rounded-xl px-3.5 py-3 mt-3">
               L'ordre de fabrication est créé dans Odoo et rejoint la page <b>À valider</b>.
