@@ -135,7 +135,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           {g.lignes.map(l => (
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
-            <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
+            <b className={'min-w-[96px] text-[17px] ' + ((couvert ? couvert(l.produit, l.qty) : faits[clePrepa(l.produit)]) ? 'line-through opacity-60' : '')}>
               {qteLisible(l.qty, l.unite)}
             </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) && !l.enStock ? (
@@ -170,7 +170,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             </div>
           )}
           {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
-            && !faits[clePrepa(l.produit)] && bloquants && bloquants(l.produit, l.aFaire || l.qty).length > 0 && (
+            && !(couvert ? couvert(l.produit, l.qty) : faits[clePrepa(l.produit)]) && bloquants && bloquants(l.produit, l.aFaire || l.qty).length > 0 && (
             <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
               à faire d'abord : {bloquants(l.produit, l.aFaire || l.qty).map(propre).join(', ')}
             </div>
@@ -493,6 +493,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // « la quantité voulue est là ». Une crème faite pour un gâteau ne rend pas
   // le gâteau suivant servi : chacun a la sienne.
   const couvert = (produit, besoin) => stockDeProduit(produit) >= (Number(besoin) || 0) - 0.001
+  // une base suivie par un ordre Odoo garde la coche de cet ordre ; sinon, même
+  // règle que le reste : c'est fait quand la quantité est là
+  const faitBase = b => (b.ordre ? !!faits[b.ordre] : couvert(b.produit, b.qty))
 
   // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
   // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
@@ -796,8 +799,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   <div onClick={ouvrable ? () => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) : undefined}
                     className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
                     (ouvrable ? 'cursor-pointer ' : '') +
-                    (b.manque <= 0.001 || faits[clePrepa(b.produit)] ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
-                    <span className={'flex-1 min-w-0 ' + (faits[b.ordre || clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
+                    (b.manque <= 0.001 || faitBase(b) ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
+                    <span className={'flex-1 min-w-0 ' + (faitBase(b) ? 'line-through opacity-60' : '')}>
                       <span className="text-[17px] font-bold">{propre(b.produit)}</span>
                       {b.ordre && <span className="block text-[11px] text-ink-mute font-mono">demandé par Odoo · {b.ordre}</span>}
                     </span>
@@ -808,7 +811,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">
                           il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b>
                         </span>
-                        <span className={'text-right ' + (faits[clePrepa(b.produit)] ? 'line-through opacity-60' : '')}>
+                        <span className={'text-right ' + (faitBase(b) ? 'line-through opacity-60' : '')}>
                           <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
                           {b.n > 0 && <span className="block text-[10.5px] text-ink-mute leading-tight">{b.n} tournée{b.n > 1 ? 's' : ''}</span>}
                         </span>
@@ -817,7 +820,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                             {ouvertes[cleBase(b.produit)] ? '▾' : '▸'}
                           </span>
                         )}
-                        <BoutonFait fait={!!faits[b.ordre || clePrepa(b.produit)]} bloque={bloquants(b.produit, b.qty)}
+                        <BoutonFait fait={faitBase(b)} bloque={bloquants(b.produit, b.qty)}
                           onClick={() => marquer(b.ordre || clePrepa(b.produit), b.produit, b.qty)} />
                       </>
                     )}
