@@ -156,7 +156,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             {peutEtreFait(l.produit) && !l.enStock && (
               <BoutonFait fait={couvert ? couvert(l.produit, l.qty) : !!faits[clePrepa(l.produit)]}
                 bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty) : null}
-                onClick={() => onFait(clePrepa(l.produit), l.produit, l.aFaire ?? l.qty)} />
+                onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
           </div>
           {l.usages && l.usages.length > 1 && (
@@ -716,9 +716,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const annule = prepa ? (dejaLa.length > 0 && couvert(produit, qty)) : !!faits[cleDemandee]
     const cle = prepa ? (annule ? dejaLa[dejaLa.length - 1] : cleLibre(produit)) : cleDemandee
     const on = !annule
-    // une base se fait toujours par tournée entière ; une crème, on ne refait
-    // que ce qui manque
-    const quantite = (!prepa || estBase(produit)) ? qty : Math.max(0, qty - stockDeProduit(produit)) || qty
+    // Une base se fait toujours par tournée entière. Pour une crème, on ne refait
+    // que ce qui manque : le besoin total moins ce qu'il y a déjà. `qty` est
+    // TOUJOURS le besoin total — le stock n'est déduit qu'ici, une seule fois.
+    const quantite = (!prepa || estBase(produit)) ? qty : (Math.max(0, qty - stockDeProduit(produit)) || qty)
     const avant = faits[cle]
     const trouves = ordresDe(cle, produit)
     // la coche s'affiche tout de suite, le reste se fait derrière
