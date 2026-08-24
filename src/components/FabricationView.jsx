@@ -389,7 +389,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
   const stocks = useMemo(() => (data && data.stocks) || {}, [data])
 
-  const aFaire = useMemo(() => ((data && data.ofs) || []).filter(o => !(o.stock && o.stock.assez)), [data])
+  const aFaire = useMemo(
+    () => ((data && data.ofs) || []).filter(o => faits[o.name] || !(o.stock && o.stock.assez)),
+    [data, faits])
   const gateaux = useMemo(() => aFaire.filter(o => o.taille), [aFaire])
   const choisis = useMemo(() => gateaux.filter(o => sel.includes(o.name)), [gateaux, sel])
 
