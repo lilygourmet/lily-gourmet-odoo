@@ -53,6 +53,9 @@ const jamaisDeplier = n => estBase(n) || estIngredient(n) || estGenoise(n)
 // Ce qui peut être coché « fait » dans une recette : ni un ingrédient, ni une
 // base (elle se coche dans « à préparer »), ni la génoise (on ne la suit pas).
 const peutEtreFait = n => estPrepa(n) && !estIngredient(n) && !estBase(n) && !estGenoise(n)
+// Une préparation qu'on devrait pouvoir dérouler mais dont la nomenclature est
+// absente d'Odoo : on le signale au lieu de laisser la ligne muette.
+const sansRecette = (n, recettes) => estPrepa(n) && !estIngredient(n) && !estGenoise(n) && !recettes[n]
 // nom lisible par l'équipe : on enlève les codes internes
 const propre = n => String(n || '')
   .replace(/^SM\s+CD\*\s*/i, '').replace(/^SM\s+/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
@@ -101,6 +104,9 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
                   {propre(l.produit)} ▾
                 </button>
               ) : <span className={'flex-1 ' + (ok ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
+              {sansRecette(l.produit, recettes) && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette</span>
+              )}
               {onFait && peutEtreFait(l.produit) && (
                 <BoutonFait fait={ok}
                   bloque={bloquants ? bloquants(l.produit, q) : null}
@@ -149,8 +155,10 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             ) : (
               <span className="flex-1">
                 {propre(l.produit)}
-
               </span>
+            )}
+            {sansRecette(l.produit, recettes) && (
+              <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette dans Odoo</span>
             )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
             {peutEtreFait(l.produit) && !l.enStock && (
