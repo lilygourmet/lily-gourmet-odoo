@@ -68,7 +68,7 @@ function tailleTournee(recettes, n) {
 
 // La recette d'une préparation, calculée pour la quantité demandée.
 // Récursive : la crème pâtissière dans la crème au beurre vanille s'ouvre aussi.
-function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}, setOuvertes = null, faits = {}, onFait = null, bloquants = null, stock = 0 }) {
+function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}, setOuvertes = null, faits = {}, onFait = null, bloquants = null, stock = 0, couvert = null }) {
   const r = recettes[produit]
   if (!r) return null
   const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -85,18 +85,21 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
         const q = l.qty * f, u = l.unite
         const sousCle = chemin + '>' + l.produit
         const ouvrable = setOuvertes && estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit)
+        // « fait » veut dire : la quantité voulue est là. Cocher une crème pour
+        // un gâteau ne la rend pas faite pour le suivant — chacun a la sienne.
+        const ok = couvert ? couvert(l.produit, q) : !!faits[clePrepa(l.produit)]
         return (
           <div key={i}>
             <div className="flex items-center gap-2.5 py-1.5 text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
-              <b className={'min-w-[86px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{qteLisible(q, u)}</b>
+              <b className={'min-w-[86px] ' + (ok ? 'line-through opacity-60' : '')}>{qteLisible(q, u)}</b>
               {ouvrable ? (
                 <button onClick={() => setOuvertes(o => ({ ...o, [sousCle]: !o[sousCle] }))}
-                  className={'text-left text-bordeaux font-semibold underline underline-offset-2 flex-1 ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
+                  className={'text-left text-bordeaux font-semibold underline underline-offset-2 flex-1 ' + (ok ? 'line-through opacity-60' : '')}>
                   {propre(l.produit)} ▾
                 </button>
-              ) : <span className={'flex-1 ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
+              ) : <span className={'flex-1 ' + (ok ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
               {onFait && peutEtreFait(l.produit) && (
-                <BoutonFait fait={!!faits[clePrepa(l.produit)]}
+                <BoutonFait fait={ok}
                   bloque={bloquants ? bloquants(l.produit, q) : null}
                   onClick={() => onFait(clePrepa(l.produit), l.produit, q)} />
               )}
@@ -104,7 +107,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
             {ouvrable && ouvertes[sousCle] && (
               <SousRecette recettes={recettes} produit={l.produit} qty={q} unite={u}
                 chemin={sousCle} ouvertes={ouvertes} setOuvertes={setOuvertes}
-                faits={faits} onFait={onFait} bloquants={bloquants} />
+                faits={faits} onFait={onFait} bloquants={bloquants} couvert={couvert} />
             )}
           </div>
         )
@@ -114,7 +117,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 }
 
 // « Ma recette » : les besoins cumulés des gâteaux cochés.
-function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour }) {
+function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour, couvert }) {
   const cle = p => 'sc:' + p
   return (
     <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden'}>
@@ -148,7 +151,8 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
             {peutEtreFait(l.produit) && !l.enStock && (
-              <BoutonFait fait={!!faits[clePrepa(l.produit)]} bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty) : null}
+              <BoutonFait fait={couvert ? couvert(l.produit, l.qty) : !!faits[clePrepa(l.produit)]}
+                bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty) : null}
                 onClick={() => onFait(clePrepa(l.produit), l.produit, l.aFaire ?? l.qty)} />
             )}
           </div>
@@ -174,7 +178,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           {!l.enStock && ouvertes[cle(l.produit)] && (
             <SousRecette recettes={recettes} produit={l.produit} qty={l.aFaire || l.qty} unite={l.unite}
               chemin={cle(l.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
-              faits={faits} onFait={onFait} bloquants={bloquants} />
+              faits={faits} onFait={onFait} bloquants={bloquants} couvert={couvert} />
           )}
         </div>
           ))}
@@ -471,8 +475,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     for (const [cle, info] of Object.entries(faits)) {
       if (!cle.startsWith('PREP:')) continue
       // seulement les coches du jour : une préparation se refait chaque matin,
-      // celle d'hier est réputée consommée (l'écran la redemande d'ailleurs)
-      if (cle.slice(cle.lastIndexOf(':') + 1) !== jour) continue
+      // celle d'hier est réputée consommée (l'écran la redemande d'ailleurs).
+      // La date peut porter un numéro de fournée : « …:2026-08-25#2 ».
+      if (!cle.slice(cle.lastIndexOf(':') + 1).startsWith(jour)) continue
       const produit = cle.slice(5, cle.lastIndexOf(':'))
       if (comptes.has(produit)) continue
       const q = Number(info && info.qty) || 0
@@ -483,6 +488,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // le stock d'un article, jamais négatif (en kg, ou en unités pour les gâteaux)
   const stockDeProduit = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
+
+  // « Fait » ne veut pas dire « quelqu'un a coché ce produit aujourd'hui » mais
+  // « la quantité voulue est là ». Une crème faite pour un gâteau ne rend pas
+  // le gâteau suivant servi : chacun a la sienne.
+  const couvert = (produit, besoin) => stockDeProduit(produit) >= (Number(besoin) || 0) - 0.001
 
   // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
   // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
@@ -619,14 +629,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return r.lignes
       .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !/genoise|eau\s*robinet/i.test(l.produit))
       .filter(l => stockDeProduit(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
-      .filter(l => !faits[clePrepa(l.produit)])
       .map(l => l.produit)
   }
   // pour un gâteau : ses préparations non faites (celles qui ne sont pas en stock)
   const bloquantsGateau = o => (o.recette || [])
     .filter(r => estPrepa(r.produit) && !estIngredient(r.produit))
     .filter(r => stockDeProduit(r.produit) < enKg(r.qty, r.unite).q - 0.001)
-    .filter(r => !faits[clePrepa(r.produit)])
     .map(r => r.produit)
 
   // Les ordres Odoo correspondant à ce qui est marqué fait : l'ordre lui-même
@@ -680,18 +688,41 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return siens.filter(o => ici.has(o.origine)).map(o => o.name)
   }
 
-  const marquer = async (cle, produit, qty) => {
-    const on = !faits[cle]
+  // Les coches d'une préparation pour aujourd'hui. Il peut y en avoir plusieurs :
+  // on refait de la crème quand la première fournée est partie ailleurs.
+  const clesDuJour = produit => {
+    const base = clePrepa(produit)
+    return Object.keys(faits).filter(c => c === base || c.startsWith(base + '#')).sort()
+  }
+  const cleLibre = produit => {
+    const base = clePrepa(produit)
+    if (!faits[base]) return base
+    let i = 2
+    while (faits[base + '#' + i]) i += 1
+    return base + '#' + i
+  }
+
+  const marquer = async (cleDemandee, produit, qty) => {
+    const prepa = cleDemandee.startsWith('PREP:')
+    const dejaLa = prepa ? clesDuJour(produit) : []
+    // Sur une préparation, le bouton dit « ✓ fait » quand la quantité voulue est
+    // là : cliquer annule alors la dernière coche. Sinon on ajoute une fournée.
+    const annule = prepa ? (dejaLa.length > 0 && couvert(produit, qty)) : !!faits[cleDemandee]
+    const cle = prepa ? (annule ? dejaLa[dejaLa.length - 1] : cleLibre(produit)) : cleDemandee
+    const on = !annule
+    // une base se fait toujours par tournée entière ; une crème, on ne refait
+    // que ce qui manque
+    const quantite = (!prepa || estBase(produit)) ? qty : Math.max(0, qty - stockDeProduit(produit)) || qty
     const avant = faits[cle]
     const trouves = ordresDe(cle, produit)
     // la coche s'affiche tout de suite, le reste se fait derrière
-    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty, ordres: trouves }; else delete n[cle]; return n })
+    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty: quantite, ordres: trouves }; else delete n[cle]; return n })
 
     // Une préparation qu'Odoo ne demandait pas (ni ordre, ni règle mini/maxi) :
     // l'app crée l'ordre à la quantité faite, sinon rien n'entrerait jamais en
     // stock. Si on décoche, cet ordre-là est annulé.
     const cree = (on && cle.startsWith('PREP:') && !trouves.length)
-      ? await creerOfPrepa(produit, qty, user?.id)
+      ? await creerOfPrepa(produit, quantite, user?.id)
       : null
     const ordres = cree && cree.name && !cree.error ? [cree.name] : trouves
     if (cree && cree.name && !cree.error) {
@@ -705,7 +736,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
     // ordres ne comptent plus sur le même stock.
     reserverOrdres(ordres, on)
-    setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
+    setFait({ name: cle, produit, qty: quantite, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }
   const effacer = () => { setSel([]); setPageRecette(false) }
@@ -718,7 +749,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="max-w-[620px] mx-auto px-4 py-5">
           <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
             setOuvertes={setOuvertes} onEffacer={effacer} onRetour={() => setPageRecette(false)}
-            faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} />
+            faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} />
         </div>
       </div>
     )
@@ -799,7 +830,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   {ouvrable && ouvertes[cleBase(b.produit)] && (
                     <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
                       chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
-                      faits={faits} onFait={marquer} bloquants={bloquants} />
+                      faits={faits} onFait={marquer} bloquants={bloquants} couvert={couvert} />
                   )}
                 </div>
                 )
@@ -839,7 +870,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="hidden lg:block lg:mt-[70px]">
           {deuxColonnes ? (
             <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
-              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} />
+              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} />
           ) : (
             <div className="bg-white border border-dashed border-line rounded-2xl p-6 text-center text-ink-mute text-[13.5px] sticky top-4">
               Coche des gâteaux à gauche :<br />leur recette s'affichera ici, additionnée.
