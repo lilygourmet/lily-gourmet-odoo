@@ -458,7 +458,7 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
 // ============================================================
 async function manquesDesOrdres(uid, names) {
   const mos = await odooSearchRead(uid, 'mrp.production', [['name', 'in', names]],
-    ['id', 'name', 'product_id', 'product_qty', 'product_uom_id', 'origin', 'state', 'components_availability', 'location_src_id'])
+    ['id', 'name', 'product_id', 'product_qty', 'product_uom_id', 'origin', 'state', 'components_availability', 'location_src_id', 'date_planned_start'])
   if (!mos.length) return []
   const moves = await odooSearchRead(uid, 'stock.move',
     [['raw_material_production_id', 'in', mos.map(m => m.id)]],
@@ -502,6 +502,7 @@ async function manquesDesOrdres(uid, names) {
       name: m.name, produit: (Array.isArray(m.product_id) ? m.product_id[1] : ''),
       qty: m.product_qty, unite: (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : 'u'),
       etat: m.state, pour: m.origin || '', dispo: m.components_availability || '',
+      quand: m.date_planned_start || '',
       lieu: Array.isArray(m.location_src_id) ? m.location_src_id[1] : '',
       manques: lignes.filter(l => l.manque > 0.0001),
     }

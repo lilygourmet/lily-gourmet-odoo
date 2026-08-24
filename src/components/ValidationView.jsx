@@ -48,7 +48,12 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         if (!vivant) return
         // validé ou annulé dans Odoo entre-temps : ça n'attend plus rien
         const ouverts = m.filter(x => x.etat !== 'done' && x.etat !== 'cancel')
-        setLignes(ouverts); setSel(ouverts.map(x => x.name)); garderEcran('valider', ouverts)
+        setLignes(ouverts)
+        // Cocher d'avance seulement ce qui est dû : un ordre prévu dans quinze
+        // jours ne correspond pas à la tournée qu'on vient de faire.
+        const jour = new Date().toISOString().slice(0, 10)
+        setSel(ouverts.filter(x => !x.quand || String(x.quand).slice(0, 10) <= jour).map(x => x.name))
+        garderEcran('valider', ouverts)
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     return () => { vivant = false }
@@ -120,6 +125,9 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                 <div className="flex-1 min-w-0">
                   <div className="text-[16px] font-bold">{propre(l.produit)} — {qte(l.qty, l.unite)}</div>
                   <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
+                  {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > new Date().toISOString().slice(0, 10) ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
+                    prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+                  </div>}
                 </div>
                 <span className={'text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ' +
                   (l.manques.length ? 'bg-[#FFF7E0] text-[#854F0B]' : 'bg-[#EAF3DE] text-ok')}>
