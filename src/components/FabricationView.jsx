@@ -201,7 +201,7 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
       <input type="checkbox" checked={on} readOnly tabIndex={-1} className="w-6 h-6 accent-[#993556] pointer-events-none flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className={'text-[18px] font-extrabold ' + (fait ? 'line-through opacity-60' : '')}>
-          {o.taille} <span className="text-[13px] font-medium text-ink-soft">{o.parfum}</span>
+          {o.taille || propre(o.produit)} <span className="text-[13px] font-medium text-ink-soft">{o.parfum}</span>
         </div>
         <div className="text-[11.5px] text-ink-mute">
           {o.scode
@@ -670,36 +670,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                 <>
                   <Titre n="2">Demandé par Odoo</Titre>
                   <p className="text-[12px] text-ink-mute -mt-1 mb-2">stock mini atteint</p>
-                  {demandeOdoo.map(b => (
-                    <div key={b.ordre}>
-                      <div onClick={recettes[b.produit] ? () => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) : undefined}
-                        className={'flex items-center gap-3 bg-white border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 border-l-bordeaux' +
-                          (recettes[b.produit] ? ' cursor-pointer' : '')}>
-                        <span className={'flex-1 min-w-0 ' + (faits[b.ordre] ? 'line-through opacity-60' : '')}>
-                          <span className="text-[17px] font-bold">{propre(b.produit)}</span>
-                          <span className="block text-[11px] text-ink-mute font-mono">{b.ordre}</span>
-                        </span>
-                        <span className="text-[11.5px] text-ink-mute text-right leading-tight">il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b></span>
-                        <span className={'text-[19px] font-extrabold text-bordeaux ' + (faits[b.ordre] ? 'line-through opacity-60' : '')}>{qteLisible(b.qty, b.unite)}</span>
-                        {recettes[b.produit] && (
-                          <span className="text-ink-mute text-[13px] px-1" aria-hidden="true">
-                            {ouvertes[cleBase(b.produit)] ? '▾' : '▸'}
-                          </span>
-                        )}
-                        <BoutonFait fait={!!faits[b.ordre]} bloque={bloquants(b.produit, b.qty)}
-                          onClick={() => marquer(b.ordre, b.produit, b.qty)} />
-                        {faits[b.ordre] && canValiderOf(user) && (
-                          <button onClick={() => setValiderOuvert(true)}
-                            className="flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold bg-bordeaux text-cream">valider</button>
-                        )}
-                      </div>
-                      {ouvertes[cleBase(b.produit)] && (
-                        <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
-                          chemin={cleBase(b.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
-                          faits={faits} onFait={marquer} bloquants={bloquants} />
-                      )}
-                    </div>
-                  ))}
+                  {demandeOdoo.map(b => {
+                    const o = (data.ofs || []).find(x => x.name === b.ordre) || {
+                      name: b.ordre, produit: b.produit, qty: b.qty, unite: b.unite, recette: [],
+                    }
+                    return (
+                      <Gateau key={b.ordre} o={o} on={sel.includes(o.name)} onToggle={() => toggle(o.name)}
+                        fait={!!faits[b.ordre]} onFait={() => marquer(b.ordre, b.produit, b.qty)}
+                        bloque={bloquants(b.produit, b.qty)}
+                        onValider={canValiderOf(user) ? () => setValiderOuvert(true) : null} />
+                    )
+                  })}
                 </>
               )}
 
