@@ -300,12 +300,42 @@ async function fetchGlacage(uid) {
 
 // Crée l'ordre de fabrication du glaçage et le confirme (il part ensuite en
 // validation avec les autres, dans Fabrication CD).
+// Le glaçage se consomme sans être déclaré : le stock Odoo gonfle pour rien.
+// Règle de Layla : à la PREMIÈRE tournée d'une journée, on repart de zéro (ce
+// qui restait a été consommé), en disant combien et sur combien de jours.
+// Les tournées suivantes du même jour ne remettent rien à zéro.
+async function remiseAZeroGlacage(uid, prod, lieu) {
+  const dernier = (await odooSearchRead(uid, 'stock.move',
+    [['product_id', '=', prod.id], ['state', '=', 'done'], '|',
+      ['location_id.usage', '=', 'inventory'], ['location_dest_id.usage', '=', 'inventory']],
+    ['date'], { limit: 1, order: 'date desc' }))[0]
+  const jourDe = d => String(d || '').slice(0, 10)
+  const aujourdhui = new Date().toISOString().slice(0, 10)
+  if (dernier && jourDe(dernier.date) === aujourdhui) return null      // déjà remis à zéro aujourd'hui
+
+  const quants = await odooSearchRead(uid, 'stock.quant',
+    [['product_id', '=', prod.id], ['location_id', 'child_of', lieu]], ['id', 'quantity'])
+  const reste = quants.reduce((s, q) => s + (q.quantity || 0), 0)
+  if (reste <= 0.001) return null
+
+  for (const q of quants) {
+    await odooCall(uid, 'stock.quant', 'write', [[q.id], { inventory_quantity: 0, inventory_quantity_set: true }])
+  }
+  await odooCall(uid, 'stock.quant', 'action_apply_inventory', [quants.map(q => q.id)])
+
+  const jours = dernier
+    ? Math.max(1, Math.round((new Date(aujourdhui) - new Date(jourDe(dernier.date))) / 86400000))
+    : null
+  return { consomme: Math.round(reste * 100) / 100, jours, depuis: dernier ? jourDe(dernier.date) : null }
+}
+
 async function creerOrdreGlacage(uid, tournees) {
   const { prod, bom } = await produitGlacage(uid)
   if (!prod || !bom) throw new Error('article ou recette du glaçage introuvable dans Odoo')
   const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
     ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
+  const remise = await remiseAZeroGlacage(uid, prod, modele.location_src_id[0])
   const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,
@@ -339,7 +369,7 @@ async function creerOrdreGlacage(uid, tournees) {
   }
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
-  return { id, name: cree.name, qty: cree.product_qty, etat: cree.state }
+  return { id, name: cree.name, qty: cree.product_qty, etat: cree.state, remise }
 }
 
 // ============================================================

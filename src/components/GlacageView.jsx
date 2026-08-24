@@ -49,6 +49,11 @@ export default function GlacageView({ user, onLogout, onNavigate, activeView }) 
       await setFait({ name: of.name, produit: data.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
       setFaits(f => [{ ...of, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }, ...f])
       setN(1)
+      if (of.remise) {
+        toast.success(of.remise.jours
+          ? `${nb(of.remise.consomme)} kg consommés en ${of.remise.jours} jour${of.remise.jours > 1 ? 's' : ''} — stock remis à zéro`
+          : `${nb(of.remise.consomme)} kg consommés — stock remis à zéro`)
+      }
       toast.success(`Ordre ${of.name} créé — en attente de validation`)
     } catch (e) { toast.error('Impossible de créer l\'ordre : ' + (e.message || e)) }
     setEnvoi(false)
@@ -110,7 +115,7 @@ export default function GlacageView({ user, onLogout, onNavigate, activeView }) 
               <>
                 <Titre num={3}>Fait aujourd'hui</Titre>
                 {faits.map(f => (
-                  <div key={f.name} className="flex items-center gap-3 bg-[#EAF3DE] border border-[#cfe0b8] rounded-xl px-3.5 py-3 mb-1.5">
+                  <div key={f.name} className="flex items-center gap-3 flex-wrap bg-[#EAF3DE] border border-[#cfe0b8] rounded-xl px-3.5 py-3 mb-1.5">
                     <span className="flex-1 text-[15px] font-bold">
                       {nb(f.qty)} kg de glaçage
                       <span className="block text-[11.5px] font-medium text-ink-soft font-mono">{f.heure} · {f.name}</span>
@@ -118,6 +123,12 @@ export default function GlacageView({ user, onLogout, onNavigate, activeView }) 
                     <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">
                       en attente de validation
                     </span>
+                    {f.remise && (
+                      <span className="basis-full text-[12px] text-ink-soft">
+                        avant : {nb(f.remise.consomme)} kg consommés
+                        {f.remise.jours ? ` en ${f.remise.jours} jour${f.remise.jours > 1 ? 's' : ''}` : ''} — stock remis à zéro
+                      </span>
+                    )}
                   </div>
                 ))}
               </>

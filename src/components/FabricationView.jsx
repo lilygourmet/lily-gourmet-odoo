@@ -191,7 +191,7 @@ function BoutonFait({ fait, onClick, bloque = null }) {
   )
 }
 
-function Gateau({ o, on, onToggle, fait, onFait, bloque }) {
+function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
   const stock = o.stock ? o.stock.dispo : null
   return (
     <div role="button" tabIndex={0} onClick={onToggle}
@@ -213,11 +213,15 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque }) {
       {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
       <span className={'text-[18px] font-extrabold text-bordeaux ' + (fait ? 'line-through opacity-60' : '')}>×{nb(o.qty)}</span>
       <BoutonFait fait={fait} onClick={onFait} bloque={bloque} />
+      {fait && onValider && (
+        <button onClick={e => { e.stopPropagation(); onValider() }}
+          className="flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold bg-bordeaux text-cream">valider</button>
+      )}
     </div>
   )
 }
 
-function Groupe({ titre, list, sel, onToggle, faits, onFait, bloqueGateau }) {
+function Groupe({ titre, list, sel, onToggle, faits, onFait, bloqueGateau, onValider }) {
   if (!list.length) return null
   const parfums = [...new Set(list.map(o => o.parfum || '—'))].sort()
   return (
@@ -225,7 +229,7 @@ function Groupe({ titre, list, sel, onToggle, faits, onFait, bloqueGateau }) {
       <div className="text-[12.5px] font-bold text-ink-mute mt-4 mb-1.5">{titre}</div>
       {parfums.map(p => list.filter(o => (o.parfum || '—') === p).map(o => (
         <Gateau key={o.name} o={o} on={sel.includes(o.name)} onToggle={() => onToggle(o.name)}
-          fait={!!faits[o.name]} onFait={() => onFait(o.name, o.produit, o.qty)} bloque={bloqueGateau(o)} />
+          fait={!!faits[o.name]} onFait={() => onFait(o.name, o.produit, o.qty)} bloque={bloqueGateau(o)} onValider={onValider} />
       )))}
     </>
   )
@@ -684,6 +688,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         )}
                         <BoutonFait fait={!!faits[b.ordre]} bloque={bloquants(b.produit, b.qty)}
                           onClick={() => marquer(b.ordre, b.produit, b.qty)} />
+                        {faits[b.ordre] && canValiderOf(user) && (
+                          <button onClick={() => setValiderOuvert(true)}
+                            className="flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold bg-bordeaux text-cream">valider</button>
+                        )}
                       </div>
                       {ouvertes[cleBase(b.produit)] && (
                         <SousRecette recettes={recettes} produit={b.produit} qty={b.qty} unite={b.unite}
@@ -697,8 +705,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
               <Titre n={demandeOdoo.length ? 3 : 2}>Gâteaux à faire</Titre>
               {gateaux.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Aucun gâteau à faire.</p>}
-              <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau} />
-              <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau} />
+              <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
+                onValider={canValiderOf(user) ? () => setValiderOuvert(true) : null} />
+              <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
+                onValider={canValiderOf(user) ? () => setValiderOuvert(true) : null} />
             </>
           )}
         </div>
