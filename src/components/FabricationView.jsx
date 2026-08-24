@@ -148,7 +148,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
             {peutEtreFait(l.produit) && !l.enStock && (
               <BoutonFait fait={!!faits[clePrepa(l.produit)]} bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty) : null}
-                onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
+                onClick={() => onFait(clePrepa(l.produit), l.produit, l.aFaire ?? l.qty)} />
             )}
           </div>
           {l.usages && l.usages.length > 1 && (
@@ -468,7 +468,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // les bases nécessaires : demandées directement, ou par les crèmes qu'il faut faire
   const bases = useMemo(() => {
-    const stockDe = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
+    // Sur le stock d'Odoo, pas sur le stock virtuel : une base à préparer reste
+    // intacte quoi qu'on coche — sinon elle passerait en « en stock » et son
+    // bouton disparaîtrait dès qu'on la marque faite.
+    const brut = (data && data.stocks) || {}
+    const stockDe = n => { const st = brut[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
     const src = aFaire        // les bases restent les mêmes, quoi qu'on coche
     const besoins = {}
     for (const o of src) for (const r of (o.recette || [])) {
@@ -498,7 +502,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     })
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
-  }, [aFaire, recettes, stocks])
+  }, [aFaire, recettes, data])
 
   // Ce qu'Odoo demande de préparer parce que le stock mini est atteint : crèmes
   // STK, base cupcake, magnum… (tous les articles CD* qui ne sont pas un format).
