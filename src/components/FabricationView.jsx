@@ -506,7 +506,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const couvert = (produit, besoin) => stockDeProduit(produit) >= (Number(besoin) || 0) - 0.001
   // une base suivie par un ordre Odoo garde la coche de cet ordre ; sinon, même
   // règle que le reste : c'est fait quand la quantité est là
-  const faitBase = b => (b.ordre ? !!faits[b.ordre] : couvert(b.produit, b.qty))
+  // On compare au BESOIN, pas à la taille de la tournée : il reste 7 240 g de
+  // sirop et une tournée en fait 5 550, mais s'il en faut 7 580 ce n'est pas fait.
+  const faitBase = b => (b.ordre ? !!faits[b.ordre] : couvert(b.produit, b.besoin))
 
   // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
   // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
