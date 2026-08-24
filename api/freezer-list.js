@@ -240,15 +240,28 @@ async function validerOrdre(uid, name, forcer) {
 // Ce produit n'a ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
 // décide combien elle en fait.
 // ============================================================
-const GLACAGE = 'SM. glacage cake design'
+const GLACAGE_ID = 6966
+const GLACAGE_NOMS = ['SM. Glacage Royal CD*', 'SM. glacage cake design']
+
+// Retrouve l'article du glaçage (par son numéro, puis par son nom en secours)
+// ainsi que sa recette, quel que soit son nom du moment.
+async function produitGlacage(uid) {
+  let prod = (await odooSearchRead(uid, 'product.product', [['id', '=', GLACAGE_ID]],
+    ['id', 'display_name', 'uom_id', 'product_tmpl_id']))[0]
+  if (!prod) {
+    prod = (await odooSearchRead(uid, 'product.product', [['name', 'in', GLACAGE_NOMS]],
+      ['id', 'display_name', 'uom_id', 'product_tmpl_id']))[0]
+  }
+  if (!prod) return {}
+  const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id', '=', prod.product_tmpl_id[0]]],
+    ['id', 'product_qty', 'product_uom_id']))[0]
+  return { prod, bom }
+}
 
 async function fetchGlacage(uid) {
-  const prod = (await odooSearchRead(uid, 'product.product', [['name', '=', GLACAGE]],
-    ['id', 'display_name', 'uom_id']))[0]
-  if (!prod) return { erreur: 'produit introuvable dans Odoo' }
-  const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id.name', '=', GLACAGE]],
-    ['id', 'product_qty', 'product_uom_id']))[0]
-  if (!bom) return { erreur: 'recette introuvable dans Odoo' }
+  const { prod, bom } = await produitGlacage(uid)
+  if (!prod) return { erreur: 'article du glaçage introuvable dans Odoo' }
+  if (!bom) return { erreur: 'recette introuvable dans Odoo pour ' + prod.display_name }
   const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
     ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
 
@@ -288,9 +301,8 @@ async function fetchGlacage(uid) {
 // Crée l'ordre de fabrication du glaçage et le confirme (il part ensuite en
 // validation avec les autres, dans Fabrication CD).
 async function creerOrdreGlacage(uid, tournees) {
-  const prod = (await odooSearchRead(uid, 'product.product', [['name', '=', GLACAGE]], ['id', 'uom_id']))[0]
-  const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id.name', '=', GLACAGE]], ['id', 'product_qty']))[0]
-  if (!prod || !bom) throw new Error('produit ou recette introuvable')
+  const { prod, bom } = await produitGlacage(uid)
+  if (!prod || !bom) throw new Error('article ou recette du glaçage introuvable dans Odoo')
   const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
     ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
