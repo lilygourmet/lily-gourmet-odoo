@@ -107,7 +107,11 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
               {sansRecette(l.produit, recettes) && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette</span>
               )}
-              {onFait && peutEtreFait(l.produit) && (
+              {/* déjà en stock : rien à faire, et ce n'est pas « fait » par quelqu'un */}
+              {ok && !faits[clePrepa(l.produit)] && peutEtreFait(l.produit) && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
+              )}
+              {onFait && peutEtreFait(l.produit) && !(ok && !faits[clePrepa(l.produit)]) && (
                 <BoutonFait fait={ok}
                   bloque={bloquants ? bloquants(l.produit, q) : null}
                   onClick={() => onFait(clePrepa(l.produit), l.produit, q)} />
