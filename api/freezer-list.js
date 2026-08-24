@@ -317,6 +317,26 @@ async function creerOrdreGlacage(uid, tournees) {
     location_dest_id: modele.location_dest_id[0],
     company_id: modele.company_id[0],
   }])
+
+  // Créé par programme, Odoo ne déroule PAS la nomenclature (les composants ne
+  // sont ajoutés que par l'interface) : on crée nous-mêmes les lignes, sinon
+  // l'ordre arrive vide — cas vécu avec WHLVP/MO/199870.
+  const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+    ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
+  const lieuProd = (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0]
+  const facteur = bom.product_qty ? qty / bom.product_qty : 1
+  for (const l of lignes) {
+    await odooCall(uid, 'stock.move', 'create', [{
+      name: prod.display_name,
+      product_id: l.product_id[0],
+      product_uom_qty: Math.round(l.product_qty * facteur * 1000) / 1000,
+      product_uom: l.product_uom_id[0],
+      location_id: modele.location_src_id[0],
+      location_dest_id: lieuProd ? lieuProd.id : modele.location_dest_id[0],
+      raw_material_production_id: id,
+      company_id: modele.company_id[0],
+    }])
+  }
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
   return { id, name: cree.name, qty: cree.product_qty, etat: cree.state }
