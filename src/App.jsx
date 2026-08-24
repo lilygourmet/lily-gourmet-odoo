@@ -6,7 +6,7 @@ const RecapVentes = lazy(() => import('./components/RecapVentes'))
 const PatissierView = lazy(() => import('./components/PatissierView'))
 const ProdView = lazy(() => import('./components/ProdView'))
 const FabricationView = lazy(() => import('./components/FabricationView'))
-const GlacageView = lazy(() => import('./components/GlacageView'))
+const PrepaView = lazy(() => import('./components/PrepaView'))
 const ValidationView = lazy(() => import('./components/ValidationView'))
 const FreezerView = lazy(() => import('./components/FreezerView'))
 const MessagesView = lazy(() => import('./components/MessagesView'))
@@ -380,7 +380,8 @@ function App() {
     if (activeView === 'patissier') return <PatissierView {...navProps} />
     if (activeView === 'prod') return <ProdView {...navProps} forcedCategory="prod" />
     if (activeView === 'fabrication') return <FabricationView {...navProps} />
-    if (activeView === 'fabrication-glacage') return <GlacageView {...navProps} />
+    if (activeView === 'fabrication-glacage') return <PrepaView key="glacage" quoi="glacage" {...navProps} />
+    if (activeView === 'fabrication-pate-sucre') return <PrepaView key="pate-sucre" quoi="pate-sucre" {...navProps} />
     if (activeView === 'fabrication-valider') return <ValidationView {...navProps} />
     if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
     if (activeView === 'freezer') return <FreezerView {...navProps} />

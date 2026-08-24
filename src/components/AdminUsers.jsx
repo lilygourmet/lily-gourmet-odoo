@@ -123,6 +123,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_valider_of: formData.permValiderOf,
         perm_fabrication_cd: formData.permFabricationCd,
         perm_fabrication_glacage: formData.permFabricationGlacage,
+        perm_fabrication_pate_sucre: formData.permFabricationPateSucre,
         perm_delete: formData.permDelete,
         perm_patissier: formData.permPatissier,
         perm_print_batch: formData.permPrintBatch,
@@ -202,6 +203,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_valider_of: formData.permValiderOf,
         perm_fabrication_cd: formData.permFabricationCd,
         perm_fabrication_glacage: formData.permFabricationGlacage,
+        perm_fabrication_pate_sucre: formData.permFabricationPateSucre,
         perm_delete: formData.permDelete,
         perm_patissier: formData.permPatissier,
         perm_print_batch: formData.permPrintBatch,
@@ -678,6 +680,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHa
   if (user.perm_print_single) perms.push('Imprimer 1 cmd')
   if (user.perm_fabrication_cd) perms.push('Fabrication CD')
   if (user.perm_fabrication_glacage) perms.push('Fabrication Glaçage')
+  if (user.perm_fabrication_pate_sucre) perms.push('Fabrication Pâte à sucre')
   if (user.perm_valider_of) perms.push('Valider fabrication Odoo')
   if (user.perm_recaps) perms.push('Recaps ventes')
   if (user.perm_define_gm) perms.push('Définir GM')
@@ -794,6 +797,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permValiderOf: initialData?.perm_valider_of || false,
     permFabricationCd: initialData?.perm_fabrication_cd || false,
     permFabricationGlacage: initialData?.perm_fabrication_glacage || false,
+    permFabricationPateSucre: initialData?.perm_fabrication_pate_sucre || false,
     permDelete: initialData?.perm_delete || false,
     permPatissier: initialData?.perm_patissier || false,
     permPrintBatch: initialData?.perm_print_batch || false,
@@ -1032,6 +1036,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-print-single" label="Imprimer une commande" desc="Imprimer une seule commande." checked={isAdmin || formData.permPrintSingle} onChange={v => update('permPrintSingle', v)} />
             <PermCheckbox id="perm-fabrication-cd" label="Fabrication CD" desc="Onglet « Fabrication CD » : voir ce qu'il y a à fabriquer et cocher « fait »." checked={isAdmin || formData.permFabricationCd} onChange={v => update('permFabricationCd', v)} />
             <PermCheckbox id="perm-fabrication-glacage" label="Fabrication Glaçage" desc="Onglet « Fabrication Glaçage » : lancer des tournées de glaçage cake design." checked={isAdmin || formData.permFabricationGlacage} onChange={v => update('permFabricationGlacage', v)} />
+            <PermCheckbox id="perm-fabrication-pate-sucre" label="Fabrication Pâte à sucre" desc="Onglet « Fabrication Pâte à sucre » : lancer des tournées de pâte à sucre." checked={isAdmin || formData.permFabricationPateSucre} onChange={v => update('permFabricationPateSucre', v)} />
             <PermCheckbox id="perm-valider-of" label="Valider la fabrication dans Odoo" desc="Peut valider les ordres de fabrication : consomme les composants et entre le produit fini en stock. Action irréversible." checked={isAdmin || formData.permValiderOf} onChange={v => update('permValiderOf', v)} />
             <PermCheckbox id="perm-polys" label="Taille des polys" desc="Choisir la taille des boîtes/polys à l'impression." checked={isAdmin || formData.permPolys} onChange={v => update('permPolys', v)} />
             <PermCheckbox id="perm-delete" label="Supprimer une commande" desc="Action sensible." checked={isAdmin || formData.permDelete} onChange={v => update('permDelete', v)} />

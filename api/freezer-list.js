@@ -235,32 +235,41 @@ async function validerOrdre(uid, name, forcer) {
 }
 
 // ============================================================
-// Glaçage cake design : la recette (nomenclature) + le stock des ingrédients,
-// et la création de l'ordre de fabrication quand l'équipe a fait sa tournée.
-// Ce produit n'a ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
-// décide combien elle en fait.
+// Préparations que l'équipe lance elle-même (glaçage royal, pâte à sucre) :
+// la recette (nomenclature), le stock des ingrédients, et la création de
+// l'ordre de fabrication quand la tournée est faite. Ces articles n'ont ni
+// règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui décide combien elle
+// en fait. Tout ce qui sort d'ici est en GRAMMES (règle de Layla).
 // ============================================================
-const GLACAGE_ID = 6966
-const GLACAGE_NOMS = ['SM. Glacage Royal CD*', 'SM. glacage cake design']
+const PREPAS = {
+  glacage: { id: 6966, noms: ['SM. Glacage Royal CD*', 'SM. glacage cake design'], titre: 'Glaçage royal' },
+  'pate-sucre': { id: 2940, noms: ['SM Pate a sucre Melange CD'], titre: 'Pâte à sucre' },
+}
+const prepaDe = cle => PREPAS[cle] || PREPAS.glacage
 
-// Retrouve l'article du glaçage (par son numéro, puis par son nom en secours)
-// ainsi que sa recette, quel que soit son nom du moment.
-async function produitGlacage(uid) {
-  let prod = (await odooSearchRead(uid, 'product.product', [['id', '=', GLACAGE_ID]],
+// Les recettes mélangent les kg et les grammes d'une ligne à l'autre (le CMC
+// est en kg, le sucre glace en g) : on ramène tout en grammes.
+const enG = (q, u) => (/^kg$/i.test(String(u)) ? Math.round(q * 1000000) / 1000 : q)
+
+// Retrouve l'article (par son numéro, puis par son nom en secours) et sa recette,
+// quel que soit son nom du moment.
+async function produitPrepa(uid, cle) {
+  const conf = prepaDe(cle)
+  let prod = (await odooSearchRead(uid, 'product.product', [['id', '=', conf.id]],
     ['id', 'display_name', 'uom_id', 'product_tmpl_id']))[0]
   if (!prod) {
-    prod = (await odooSearchRead(uid, 'product.product', [['name', 'in', GLACAGE_NOMS]],
+    prod = (await odooSearchRead(uid, 'product.product', [['name', 'in', conf.noms]],
       ['id', 'display_name', 'uom_id', 'product_tmpl_id']))[0]
   }
-  if (!prod) return {}
+  if (!prod) return { conf }
   const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id', '=', prod.product_tmpl_id[0]]],
     ['id', 'product_qty', 'product_uom_id']))[0]
-  return { prod, bom }
+  return { prod, bom, conf }
 }
 
-async function fetchGlacage(uid) {
-  const { prod, bom } = await produitGlacage(uid)
-  if (!prod) return { erreur: 'article du glaçage introuvable dans Odoo' }
+async function fetchPrepa(uid, cle) {
+  const { prod, bom, conf } = await produitPrepa(uid, cle)
+  if (!prod) return { erreur: `article « ${conf.titre} » introuvable dans Odoo` }
   if (!bom) return { erreur: 'recette introuvable dans Odoo pour ' + prod.display_name }
   const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
     ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
@@ -280,34 +289,32 @@ async function fetchGlacage(uid) {
       unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
     }
   }
-  const enKg = (q, u) => (/^g$/i.test(u) ? { q: q / 1000, u: 'kg' } : { q, u: (u || 'u').replace(/^units?$/i, 'u') })
+  const uniteBom = Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'g'
   return {
+    quoi: cle,
+    titre: conf.titre,
     produit: prod.display_name,
-    tournee: bom.product_qty,                                   // ce que produit une tournée
-    unite: (Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'kg'),
+    tournee: enG(bom.product_qty, uniteBom),                    // ce que produit une tournée, en g
     recette: lignes.map(l => {
-      const k = enKg(l.product_qty, (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u'))
+      const u = Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u'
       const st = stockDe[l.product_id[0]]
-      const s = st ? enKg(st.qty, st.unite) : null
+      const memeUnite = st && /^(g|kg)$/i.test(st.unite) && /^(g|kg)$/i.test(u)
       return {
         produit: (Array.isArray(l.product_id) ? l.product_id[1] : ''),
-        qty: k.q, unite: k.u,
-        stock: s && s.u === k.u ? Math.round(s.q * 1000) / 1000 : null,
+        qty: enG(l.product_qty, u),
+        stock: memeUnite ? Math.round(enG(st.qty, st.unite) * 1000) / 1000 : null,
       }
     }),
   }
 }
 
-// Crée l'ordre de fabrication du glaçage et le confirme (il part ensuite en
-// validation avec les autres, dans Fabrication CD).
-// Le glaçage se consomme sans être déclaré : le stock Odoo gonfle pour rien.
-// Règle de Layla : à la PREMIÈRE tournée d'une journée, on repart de zéro (ce
-// qui restait a été consommé), en disant combien et sur combien de jours.
-// Les tournées suivantes du même jour ne remettent rien à zéro.
-async function remiseAZeroGlacage(uid, prod, lieu) {
+// Ces préparations se consomment sans être déclarées : le stock Odoo gonfle
+// pour rien. Règle de Layla : à la PREMIÈRE tournée d'une journée, on repart de
+// zéro (ce qui restait a été consommé), en disant combien et sur combien de
+// jours. Les tournées suivantes du même jour ne remettent rien à zéro.
+async function remiseAZeroPrepa(uid, prod, lieu) {
   const dernier = (await odooSearchRead(uid, 'stock.move',
-    [['product_id', '=', prod.id], ['state', '=', 'done'], '|',
-      ['location_id.usage', '=', 'inventory'], ['location_dest_id.usage', '=', 'inventory']],
+    [['product_id', '=', prod.id], ['state', '=', 'done'], ['is_inventory', '=', true]],
     ['date'], { limit: 1, order: 'date desc' }))[0]
   const jourDe = d => String(d || '').slice(0, 10)
   const aujourdhui = new Date().toISOString().slice(0, 10)
@@ -326,21 +333,31 @@ async function remiseAZeroGlacage(uid, prod, lieu) {
   const jours = dernier
     ? Math.max(1, Math.round((new Date(aujourdhui) - new Date(jourDe(dernier.date))) / 86400000))
     : null
-  return { consomme: Math.round(reste * 100) / 100, jours, depuis: dernier ? jourDe(dernier.date) : null }
+  const unite = Array.isArray(prod.uom_id) ? prod.uom_id[1] : 'g'
+  return {
+    consomme: Math.round(enG(reste, unite)),
+    jours,
+    depuis: dernier ? jourDe(dernier.date) : null,
+    // Sans remise à zéro précédente, ce qui traînait n'est pas de la
+    // consommation mesurée : c'est du stock accumulé depuis toujours.
+    premiere: !dernier,
+  }
 }
 
-async function creerOrdreGlacage(uid, tournees) {
-  const { prod, bom } = await produitGlacage(uid)
-  if (!prod || !bom) throw new Error('article ou recette du glaçage introuvable dans Odoo')
+// Crée l'ordre de fabrication et le confirme. Il part ensuite dans « À valider »
+// avec tout le reste.
+async function creerOrdrePrepa(uid, cle, tournees) {
+  const { prod, bom, conf } = await produitPrepa(uid, cle)
+  if (!prod || !bom) throw new Error(`article ou recette de « ${conf.titre} » introuvable dans Odoo`)
   const modele = (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
     ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0]
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
-  const remise = await remiseAZeroGlacage(uid, prod, modele.location_src_id[0])
+  const remise = await remiseAZeroPrepa(uid, prod, modele.location_src_id[0])
   const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,
     product_qty: qty,
-    product_uom_id: Array.isArray(prod.uom_id) ? prod.uom_id[0] : undefined,
+    product_uom_id: Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined,
     bom_id: bom.id,
     picking_type_id: modele.picking_type_id[0],
     location_src_id: modele.location_src_id[0],
@@ -369,7 +386,8 @@ async function creerOrdreGlacage(uid, tournees) {
   }
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
-  return { id, name: cree.name, qty: cree.product_qty, etat: cree.state, remise }
+  const uniteBom = Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'g'
+  return { id, name: cree.name, qty: enG(cree.product_qty, uniteBom), produit: prod.display_name, etat: cree.state, remise }
 }
 
 // ============================================================
@@ -702,13 +720,14 @@ async function fetchCatalogue(uid, collecteIds = []) {
 export default async function handler(req, res) {
   try {
     // création de l'ordre de glaçage (POST), quand l'équipe a fait sa tournée
-    if (req.method === 'POST' && req.query.mode === 'glacage') {
+    if (req.method === 'POST' && (req.query.mode === 'prepa' || req.query.mode === 'glacage')) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const t = Math.max(1, Math.min(50, parseInt(body.tournees) || 0))
       if (!t) return res.status(400).json({ error: 'nombre de tournées invalide' })
+      const quoi = String(req.query.quoi || 'glacage')
       const uid = await odooAuth()
-      const of = await creerOrdreGlacage(uid, t)
-      console.log(`[glacage] ${t} tournée(s) par ${body.actorId || '?'} → ${of.name} (${of.qty})`)
+      const of = await creerOrdrePrepa(uid, quoi, t)
+      console.log(`[${quoi}] ${t} tournée(s) par ${body.actorId || '?'} → ${of.name} (${of.qty} g)`)
       return res.status(200).json(of)
     }
 
@@ -729,9 +748,9 @@ export default async function handler(req, res) {
     // Deuxième usage de cette fonction (limite Vercel Hobby = 12 fonctions) :
     // la liste de fabrication CD*, cf. fetchFabrication.
     // recette du glaçage + stock des ingrédients
-    if (req.query.mode === 'glacage') {
+    if (req.query.mode === 'prepa' || req.query.mode === 'glacage') {
       const uid = await odooAuth()
-      return res.status(200).json(await fetchGlacage(uid))
+      return res.status(200).json(await fetchPrepa(uid, String(req.query.quoi || 'glacage')))
     }
 
     // ce qui manque pour une liste d'ordres (lecture seule)
