@@ -214,6 +214,7 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
             : (stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${nb(stock)} en stock` : 'plus rien en stock')}
         </div>
       </div>
+      {o.stock && o.stock.assez && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">déjà en stock</span>}
       {o.recetteVide && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
       {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
       <span className={'text-[18px] font-extrabold text-bordeaux ' + (fait ? 'line-through opacity-60' : '')}>×{nb(o.qty)}</span>
@@ -398,9 +399,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
   const stocks = useMemo(() => (data && data.stocks) || {}, [data])
 
-  // Ce qui est marqué « fait » quitte cet écran : il attend dans « À valider ».
+  // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
+  // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
+  // Seul ce qui est marqué « fait » quitte l'écran (il attend dans « À valider »).
   const aFaire = useMemo(
-    () => ((data && data.ofs) || []).filter(o => !faits[o.name] && !(o.stock && o.stock.assez)),
+    () => ((data && data.ofs) || []).filter(o => !faits[o.name]),
     [data, faits])
   const gateaux = useMemo(() => aFaire.filter(o => o.taille), [aFaire])
   const choisis = useMemo(() => gateaux.filter(o => sel.includes(o.name)), [gateaux, sel])
