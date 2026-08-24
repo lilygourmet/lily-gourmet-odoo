@@ -477,7 +477,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data, faits, stocks])
   const gateaux = useMemo(() => aFaire.filter(o => o.taille), [aFaire])
-  const choisis = useMemo(() => gateaux.filter(o => sel.includes(o.name)), [gateaux, sel])
+  // Tout ce qui est coché alimente la recette de droite — les gâteaux comme les
+  // préparations demandées par Odoo (sirop, crème STK), qui n'ont pas de taille.
+  const choisis = useMemo(() => aFaire.filter(o => sel.includes(o.name)), [aFaire, sel])
 
   // les bases nécessaires : demandées directement, ou par les crèmes qu'il faut faire
   const bases = useMemo(() => {
@@ -532,13 +534,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     if (!choisis.length) return []
     const stockDe = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
     const cremeDe = o => {
+      // une préparation ne se mélange avec rien : elle fait son propre groupe,
+      // et la version STK reste distincte de la version normale
+      if (!o.taille) return o.produit
       const c = (o.recette || []).find(r => /cr[eè]me au beurre/i.test(r.produit) && !/nature/i.test(r.produit))
       return c ? sansStk(c.produit) : (o.parfum || '—')
     }
     const groupes = [...new Set(choisis.map(cremeDe))]
     return groupes.map(cleGroupe => {
       const lot = choisis.filter(o => cremeDe(o) === cleGroupe)
-      const parfum = [...new Set(lot.map(o => o.parfum).filter(Boolean))].join(' + ') || '—'
+      const parfum = [...new Set(lot.map(o => o.parfum).filter(Boolean))].join(' + ')
+        || (lot[0] && !lot[0].taille ? propre(lot[0].produit) : '—')
       const besoins = {}
       const ajoute = (produit, qty, source) => {
         const c = produit                       // STK reste distinct du produit normal
@@ -768,7 +774,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   <Titre n="2">Demandé par Odoo</Titre>
                   <p className="text-[12px] text-ink-mute -mt-1 mb-2">stock mini atteint</p>
                   {demandeOdoo.map(b => {
-                    const o = (data.ofs || []).find(x => x.name === b.ordre) || {
+                    // dans aFaire, pas dans data.ofs : c'est là que le stock
+                    // de l'app (celui qui tient compte du « fait ») est calculé
+                    const o = aFaire.find(x => x.name === b.ordre) || {
                       name: b.ordre, produit: b.produit, qty: b.qty, unite: b.unite, recette: [],
                     }
                     return (
