@@ -60,6 +60,22 @@ export async function setFait(of, on, userId) {
   if (error) throw error
 }
 
+/**
+ * Demande à Odoo de réserver (ou de libérer) les composants de ces ordres.
+ * Ça ne valide rien : ça empêche seulement qu'un autre ordre compte sur le
+ * même stock. Silencieux : un échec ne doit pas gêner l'équipe.
+ */
+export async function reserverOrdres(ordres, on) {
+  if (!ordres.length) return
+  try {
+    await fetch('/api/freezer-list?mode=reserver', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordres, on: !!on }),
+    })
+  } catch { /* la réservation est un confort, pas une condition */ }
+}
+
 /** Ce qui manque pour fabriquer ces ordres Odoo (lecture seule, génoise ignorée). */
 export async function loadManques(ordres) {
   if (!ordres.length) return []

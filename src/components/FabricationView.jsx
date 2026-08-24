@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran } from '../lib/fabrication'
+import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres } from '../lib/fabrication'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
 
@@ -633,8 +633,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   }
 
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
+  // Les ordres Odoo derrière une coche : l'ordre lui-même, ou tous les ordres
+  // ouverts du produit quand la préparation est cochée par son nom.
+  const ordresDe = (cle, produit) => {
+    if (!cle.startsWith('PREP:')) return [cle]
+    return ((data && data.ordres) || []).filter(o => o.produit === produit && o.etat !== 'done').map(o => o.name)
+  }
+
   const marquer = (cle, produit, qty) => {
     const on = !faits[cle]
+    // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
+    // ordres ne comptent plus sur le même stock.
+    reserverOrdres(ordresDe(cle, produit), on)
     setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty }; else delete n[cle]; return n })
     setFait({ name: cle, produit, qty, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))

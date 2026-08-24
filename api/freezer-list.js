@@ -794,6 +794,27 @@ export default async function handler(req, res) {
       return res.status(200).json(of)
     }
 
+    // Réservation des composants dans Odoo (POST). Quand l'équipe coche « fait »,
+    // Odoo bloque pour cet ordre ce qu'il peut trouver en stock : personne
+    // d'autre ne le voit plus disponible. Réversible (on décoche → on libère),
+    // et ça ne valide rien.
+    if (req.method === 'POST' && req.query.mode === 'reserver') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const names = (body.ordres || []).filter(Boolean)
+      if (!names.length) return res.status(200).json({ ordres: 0 })
+      const uid = await odooAuth()
+      const mos = await odooSearchRead(uid, 'mrp.production',
+        [['name', 'in', names], ['state', 'in', ['confirmed', 'progress', 'to_close']]], ['id'], { limit: 100 })
+      if (!mos.length) return res.status(200).json({ ordres: 0 })
+      const ids = mos.map(m => m.id)
+      try {
+        await odooCall(uid, 'mrp.production', body.on ? 'action_assign' : 'do_unreserve', [ids])
+      } catch (e) {
+        return res.status(200).json({ ordres: 0, message: (e.message || String(e)).slice(0, 200) })
+      }
+      return res.status(200).json({ ordres: ids.length })
+    }
+
     // validation dans Odoo (POST) : action irréversible, réservée à perm_valider_of côté app
     if (req.method === 'POST' && req.query.mode === 'valider') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
