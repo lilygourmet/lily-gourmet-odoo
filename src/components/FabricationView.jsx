@@ -4,6 +4,7 @@ import Skeleton from './Skeleton'
 import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres } from '../lib/fabrication'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
+import { supabase } from '../lib/supabase'
 
 // ====== « Ce matin » : ce qu'il y a à fabriquer en cakedesign ======
 // Déroulé pensé pour la personne qui arrive le matin (validé avec Layla) :
@@ -383,6 +384,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [validerOuvert, setValiderOuvert] = useState(false)
 
   const [rechargement, setRechargement] = useState(0)
+
+  // Plusieurs personnes cochent en même temps sur des téléphones différents :
+  // chacun voit les coches des autres arriver en direct, plutôt que d'écraser
+  // le travail du voisin sans le savoir.
+  useEffect(() => {
+    const canal = supabase
+      .channel('fabrication-faits')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prod_of_faits' },
+        () => { loadFaits().then(setFaits).catch(() => { }) })
+      .subscribe()
+    return () => { supabase.removeChannel(canal) }
+  }, [])
   useEffect(() => {
     let vivant = true
     loadFaits().then(f => { if (vivant) setFaits(f) }).catch(() => { })
