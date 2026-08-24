@@ -402,13 +402,22 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // et celui où on valide, l'app tient son propre compte : + ce qui vient d'être
   // fabriqué, − ce que ces fabrications ont consommé. Sans ça l'écran redemande
   // une crème qu'on vient de faire, et un gâteau coché ne consomme rien.
-  const stocks = useMemo(() => {
-    const s = {}
-    for (const [k, v] of Object.entries((data && data.stocks) || {})) s[k] = { ...v }
-    const bouge = (produit, dKg) => {
-      const st = s[produit]
-      if (!st) { s[produit] = { qty: dKg, unite: 'kg' }; return }
+  const [stocks, stocksBases] = useMemo(() => {
+    const s = {}, sb = {}
+    for (const [k, v] of Object.entries((data && data.stocks) || {})) { s[k] = { ...v }; sb[k] = { ...v } }
+    const ajoute = (m, produit, dKg) => {
+      const st = m[produit]
+      if (!st) { m[produit] = { qty: dKg, unite: 'kg' }; return }
       st.qty += norm(st.unite) === 'g' ? dKg * 1000 : dKg
+    }
+    // Deux comptes : le stock complet pour tout l'écran, et un second où l'on
+    // n'ajoute PAS la production des bases. Une base doit voir ce que les crèmes
+    // parfumées lui prennent, mais pas se recharger elle-même : sinon, à peine
+    // cochée, elle passerait « en stock » et son bouton disparaîtrait.
+    const bouge = (produit, dKg) => {
+      ajoute(s, produit, dKg)
+      if (dKg > 0 && estBase(produit)) return
+      ajoute(sb, produit, dKg)
     }
     // ce qu'une préparation consomme, d'après sa recette, pour cette quantité
     const consomme = (produit, qtyKg) => {
@@ -451,7 +460,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const q = Number(info && info.qty) || 0
       if (q > 0) { bouge(produit, q); consomme(produit, q) }
     }
-    return s
+    return [s, sb]
   }, [data, faits, recettes])
 
   // le stock d'un article, jamais négatif (en kg, ou en unités pour les gâteaux)
@@ -472,11 +481,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // les bases nécessaires : demandées directement, ou par les crèmes qu'il faut faire
   const bases = useMemo(() => {
-    // Sur le stock d'Odoo, pas sur le stock virtuel : une base à préparer reste
-    // intacte quoi qu'on coche — sinon elle passerait en « en stock » et son
-    // bouton disparaîtrait dès qu'on la marque faite.
-    const brut = (data && data.stocks) || {}
-    const stockDe = n => { const st = brut[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
+    const stockDe = n => { const st = stocksBases[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
     const src = aFaire        // les bases restent les mêmes, quoi qu'on coche
     const besoins = {}
     for (const o of src) for (const r of (o.recette || [])) {
@@ -506,7 +511,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     })
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
-  }, [aFaire, recettes, data])
+  }, [aFaire, recettes, stocksBases])
 
   // Ce qu'Odoo demande de préparer parce que le stock mini est atteint : crèmes
   // STK, base cupcake, magnum… (tous les articles CD* qui ne sont pas un format).
