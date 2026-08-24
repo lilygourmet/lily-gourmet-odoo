@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadGlacage, lancerGlacage } from '../lib/fabrication'
+import { loadGlacage, lancerGlacage, setFait } from '../lib/fabrication'
 
 // ====== Fabrication Glaçage ======
 // Le glaçage cake design n'a ni règle mini/maxi ni ordre dans Odoo : c'est
@@ -46,6 +46,7 @@ export default function GlacageView({ user, onLogout, onNavigate, activeView }) 
     setEnvoi(true)
     try {
       const of = await lancerGlacage(n, user?.id)
+      await setFait({ name: of.name, produit: data.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
       setFaits(f => [{ ...of, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }, ...f])
       setN(1)
       toast.success(`Ordre ${of.name} créé — en attente de validation`)
