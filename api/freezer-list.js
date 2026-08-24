@@ -732,6 +732,23 @@ async function fetchFabrication(uid, jours) {
     etat: m.state, dispo: m.components_availability || '',
     pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
   }))
+  // Les autres ordres WHLVP ouverts (pâte à sucre…) : ils ne s'appellent pas
+  // « CD* » mais ce qu'ils produisent compte aussi dans le stock que l'app tient
+  // entre le « fait » et la validation.
+  const dejaLa = new Set(ordres.map(o => o.name))
+  const autres = await odooSearchRead(uid, 'mrp.production',
+    [['name', 'like', 'WHLVP/MO/'], ['state', 'in', ['confirmed', 'progress', 'to_close']]],
+    ['name', 'product_id', 'product_qty', 'product_uom_id', 'state'], { limit: 500, order: 'id desc' })
+  for (const m of autres) {
+    if (dejaLa.has(m.name)) continue
+    ordres.push({
+      name: m.name, id: m.id,
+      produit: Array.isArray(m.product_id) ? m.product_id[1] : '',
+      qty: m.product_qty,
+      unite: (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : 'u').replace(/^units?$/i, 'u'),
+      etat: m.state, dispo: '', pour: '',
+    })
+  }
   return { ofs, ordres, recettes: recettesPrepa, stocks: stockDe, catalogue }
 }
 
