@@ -43,7 +43,12 @@ const estBase = n => BASES.some(r => r.test(String(n || '')))
 // On n'ouvre jamais la recette de ces produits-là : les bases se préparent dans
 // le bloc du haut, et la génoise ne se détaille pas ici (demande de Layla).
 const estIngredient = n => /^SM\.\s*/i.test(String(n || ''))
-const jamaisDeplier = n => estBase(n) || estIngredient(n) || /genoise/i.test(String(n || ''))
+const estGenoise = n => /genoise/i.test(String(n || ''))
+const jamaisDeplier = n => estBase(n) || estIngredient(n) || estGenoise(n)
+
+// Ce qui peut être coché « fait » dans une recette : ni un ingrédient, ni une
+// base (elle se coche dans « à préparer »), ni la génoise (on ne la suit pas).
+const peutEtreFait = n => estPrepa(n) && !estIngredient(n) && !estBase(n) && !estGenoise(n)
 // nom lisible par l'équipe : on enlève les codes internes
 const propre = n => String(n || '')
   .replace(/^SM\s+CD\*\s*/i, '').replace(/^SM\s+/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
@@ -89,7 +94,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
                   {propre(l.produit)} ▾
                 </button>
               ) : <span className={'flex-1 ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
-              {onFait && estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && (
+              {onFait && peutEtreFait(l.produit) && (
                 <BoutonFait fait={!!faits[clePrepa(l.produit)]}
                   bloque={bloquants ? bloquants(l.produit, q) : null}
                   onClick={() => onFait(clePrepa(l.produit), l.produit, q)} />
@@ -141,7 +146,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
               </span>
             )}
             {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
-            {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock && (
+            {peutEtreFait(l.produit) && !l.enStock && (
               <BoutonFait fait={!!faits[clePrepa(l.produit)]} bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty) : null}
                 onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
             )}
