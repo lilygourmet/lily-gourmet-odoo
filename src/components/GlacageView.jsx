@@ -7,8 +7,8 @@ import { loadGlacage, lancerGlacage, setFait } from '../lib/fabrication'
 // ====== Fabrication Glaçage ======
 // Le glaçage cake design n'a ni règle mini/maxi ni ordre dans Odoo : c'est
 // l'équipe qui décide combien de tournées elle fait. « C'est fait » crée
-// l'ordre de fabrication dans Odoo ; il part ensuite en validation avec les
-// autres, dans Fabrication CD (permission perm_valider_of).
+// l'ordre de fabrication dans Odoo ; il part ensuite dans la page « À valider »
+// avec tout le reste (permission perm_valider_of).
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 const qte = q => (q < 1 ? `${nb(q * 1000)} g` : `${nb(q)} kg`)
@@ -107,7 +107,7 @@ export default function GlacageView({ user, onLogout, onNavigate, activeView }) 
               {envoi ? 'Création de l\'ordre…' : manque.length ? 'Ingrédients insuffisants' : `C'est fait — ${nb(n * tournee)} kg`}
             </button>
             <p className="text-[12.5px] text-ink-soft bg-cream-warm rounded-xl px-3.5 py-3 mt-3">
-              L'ordre de fabrication est créé dans Odoo et rejoint <b>Fabrication CD</b> pour être validé.
+              L'ordre de fabrication est créé dans Odoo et rejoint la page <b>À valider</b>.
               Le stock de glaçage ne montera qu'à ce moment-là.
             </p>
 

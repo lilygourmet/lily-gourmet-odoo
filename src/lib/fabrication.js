@@ -6,13 +6,13 @@ import { supabase } from './supabase'
 /**
  * Ce qu'il y a à fabriquer : les ordres CD* encore à faire (retards compris),
  * les recettes des préparations (nomenclatures Odoo) et les stocks disponibles.
- * → { ofs, recettes, stocks, catalogue }
+ * → { ofs, ordres, recettes, stocks, catalogue }
  */
 export async function loadFabrication(jours = 60) {
   const r = await fetch(`/api/freezer-list?mode=fabrication&jours=${jours}`)
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   const data = await r.json()
-  return { ofs: data.ofs || [], recettes: data.recettes || {}, stocks: data.stocks || {}, catalogue: data.catalogue || [] }
+  return { ofs: data.ofs || [], ordres: data.ordres || [], recettes: data.recettes || {}, stocks: data.stocks || {}, catalogue: data.catalogue || [] }
 }
 
 /** Les OF déjà cochés « fait » (clé = nom de l'OF). */

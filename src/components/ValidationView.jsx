@@ -30,13 +30,22 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     Promise.all([loadFabrication(60), loadFaits()])
       .then(async ([d, f]) => {
         if (!vivant) return
-        // les ordres marqués faits qui existent encore dans Odoo
-        const ouverts = new Map(((d && d.ordres) || []).map(o => [o.name, o]))
-        const noms = Object.keys(f).filter(c => /^WH.*\/MO\//i.test(c) && ouverts.has(c))
-        if (!noms.length) { setLignes([]); return }
-        const m = await loadManques(noms)
+        // Tout ce qui est marqué fait et existe encore dans Odoo : les ordres
+        // nommés directement (montages, tournées de glaçage, et tout ce qu'on
+        // ajoutera plus tard) et les préparations, cochées par produit.
+        const tous = (d && d.ordres) || []
+        const ouverts = new Set(tous.map(o => o.name))
+        const noms = new Set()
+        for (const c of Object.keys(f)) {
+          if (/^WH.*\/MO\//i.test(c)) { if (ouverts.has(c)) noms.add(c); continue }
+          if (!c.startsWith('PREP:')) continue
+          const produit = c.slice(5, c.lastIndexOf(':'))
+          for (const o of tous) if (o.produit === produit && o.etat !== 'done') noms.add(o.name)
+        }
+        if (!noms.size) { setLignes([]); return }
+        const m = await loadManques([...noms])
         if (!vivant) return
-        setLignes(m.map(x => ({ ...x, fait: f[x.name] })))
+        setLignes(m)
         setSel(m.map(x => x.name))
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
@@ -91,7 +100,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         {lignes && !resultats && !envoi && lignes.length === 0 && (
           <div className="py-14 text-center text-ink-mute text-[14px] bg-cream-warm rounded-xl">
             Rien à valider pour le moment.<br />
-            <span className="text-[12.5px]">Marque des fabrications comme « faites » dans Fabrication CD ou Glaçage.</span>
+            <span className="text-[12.5px]">Ce que l'équipe marque « fait » dans Fabrication CD ou Fabrication Glaçage arrive ici.</span>
           </div>
         )}
 
