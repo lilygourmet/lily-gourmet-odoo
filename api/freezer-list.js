@@ -731,6 +731,7 @@ async function fetchFabrication(uid, jours) {
   const ordres = mos.map(m => ({
     name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
     etat: m.state, dispo: m.components_availability || '',
+    origine: m.origin || '',
     pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
   }))
   // Les autres ordres WHLVP ouverts (pâte à sucre…) : ils ne s'appellent pas
@@ -739,7 +740,7 @@ async function fetchFabrication(uid, jours) {
   const dejaLa = new Set(ordres.map(o => o.name))
   const autres = await odooSearchRead(uid, 'mrp.production',
     [['name', 'like', 'WHLVP/MO/'], ['state', 'in', ['confirmed', 'progress', 'to_close']]],
-    ['name', 'product_id', 'product_qty', 'product_uom_id', 'state'], { limit: 500, order: 'id desc' })
+    ['name', 'product_id', 'product_qty', 'product_uom_id', 'state', 'origin'], { limit: 500, order: 'id desc' })
   for (const m of autres) {
     if (dejaLa.has(m.name)) continue
     ordres.push({
@@ -747,7 +748,7 @@ async function fetchFabrication(uid, jours) {
       produit: Array.isArray(m.product_id) ? m.product_id[1] : '',
       qty: m.product_qty,
       unite: (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : 'u').replace(/^units?$/i, 'u'),
-      etat: m.state, dispo: '', pour: '',
+      etat: m.state, dispo: '', pour: '', origine: m.origin || '',
     })
   }
   return { ofs, ordres, recettes: recettesPrepa, stocks: stockDe, catalogue }

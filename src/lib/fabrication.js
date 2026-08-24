@@ -34,7 +34,7 @@ export async function loadOrdres() {
 
 /** Les OF déjà cochés « fait » (clé = nom de l'OF). */
 export async function loadFaits() {
-  const { data, error } = await supabase.from('prod_of_faits').select('mo_name, produit, qty, fait_par, fait_le')
+  const { data, error } = await supabase.from('prod_of_faits').select('mo_name, produit, qty, ordres, fait_par, fait_le')
   if (error) throw error
   const map = {}
   for (const f of data || []) map[f.mo_name] = f
@@ -54,6 +54,7 @@ export async function setFait(of, on, userId) {
     produit: of.produit,
     qty: of.qty,
     jour: (of.quand || '').slice(0, 10) || null,
+    ordres: of.ordres || null,               // les ordres Odoo que cette coche couvre
     fait_par: userId || null,
     fait_le: new Date().toISOString(),
   }, { onConflict: 'mo_name' })

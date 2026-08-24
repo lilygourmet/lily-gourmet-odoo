@@ -37,11 +37,13 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         // pâte à sucre n'en fait pas partie. C'est Odoo qui dira, plus bas, ce
         // qui est encore ouvert.
         const noms = new Set()
-        for (const c of Object.keys(f)) {
+        const ouverts = new Set(tous.map(o => o.name))
+        for (const [c, info] of Object.entries(f)) {
           if (/^WH.*\/MO\//i.test(c)) { noms.add(c); continue }
           if (!c.startsWith('PREP:')) continue
-          const produit = c.slice(5, c.lastIndexOf(':'))
-          for (const o of tous) if (o.produit === produit && o.etat !== 'done') noms.add(o.name)
+          // exactement les ordres retenus au moment de la coche, pas tous ceux
+          // du même article
+          for (const n of (info && info.ordres) || []) if (ouverts.has(n)) noms.add(n)
         }
         if (!noms.size) { setLignes([]); garderEcran('valider', []); return }
         const m = await loadManques([...noms])

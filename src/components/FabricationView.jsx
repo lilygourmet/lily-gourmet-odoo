@@ -609,10 +609,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     for (const o of gateaux) if (faits[o.name]) out.add(o.name)
     // les ordres créés ailleurs (tournées de glaçage) : la clé EST le nom d'ordre
     for (const c of Object.keys(faits)) if (/^WH.*\/MO\//i.test(c) && ouverts.has(c)) out.add(c)
-    for (const c of Object.keys(faits)) {
+    for (const [c, info] of Object.entries(faits)) {
       if (!c.startsWith('PREP:')) continue
-      const produit = c.slice(5, c.lastIndexOf(':'))
-      for (const ord of tous) if (ord.produit === produit && ord.etat !== 'done') out.add(ord.name)
+      for (const n of (info && info.ordres) || []) if (ouverts.has(n)) out.add(n)
     }
     return [...out]
   }, [data, gateaux, faits])
@@ -637,20 +636,29 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   }
 
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
-  // Les ordres Odoo derrière une coche : l'ordre lui-même, ou tous les ordres
-  // ouverts du produit quand la préparation est cochée par son nom.
+  // Les ordres Odoo derrière une coche. Pour un ordre, c'est lui-même. Pour une
+  // préparation cochée par son nom, ce sont les ordres de cet article RATTACHÉS
+  // aux gâteaux de l'écran (leur origine est un de ces ordres) : sinon on
+  // tomberait sur n'importe quel ordre du même article, même prévu dans quinze
+  // jours — cas vécu avec la crème au beurre praliné.
   const ordresDe = (cle, produit) => {
     if (!cle.startsWith('PREP:')) return [cle]
-    return ((data && data.ordres) || []).filter(o => o.produit === produit && o.etat !== 'done').map(o => o.name)
+    const tous = (data && data.ordres) || []
+    const ici = new Set(((data && data.ofs) || []).map(o => o.name))
+    const siens = tous.filter(o => o.produit === produit && o.etat !== 'done')
+    // d'abord ceux qui viennent des gâteaux affichés, sinon rien : mieux vaut
+    // ne rien proposer que de valider l'ordre de quelqu'un d'autre
+    return siens.filter(o => ici.has(o.origine)).map(o => o.name)
   }
 
   const marquer = (cle, produit, qty) => {
     const on = !faits[cle]
+    const ordres = ordresDe(cle, produit)
     // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
     // ordres ne comptent plus sur le même stock.
-    reserverOrdres(ordresDe(cle, produit), on)
+    reserverOrdres(ordres, on)
     setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty }; else delete n[cle]; return n })
-    setFait({ name: cle, produit, qty, quand: new Date().toISOString() }, on, user?.id)
+    setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }
   const effacer = () => { setSel([]); setPageRecette(false) }
