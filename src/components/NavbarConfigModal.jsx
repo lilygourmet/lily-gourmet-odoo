@@ -213,6 +213,17 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
           </button>
 
           {/* Liste de premier niveau (onglets seuls + dossiers), triable */}
+          {/* Pas encore rangés — EN HAUT : c'est ici que tombent les onglets
+              récents, et on ne les voyait pas, tout en bas de la liste. */}
+          {unplaced.length > 0 && (
+            <div className="mb-4 rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-2">
+              <div className="text-[11px] font-semibold text-bordeaux uppercase tracking-wider mb-1.5 px-1">
+                Pas encore rangés ({unplaced.length}) · pour l'instant dans le menu « Plus »
+              </div>
+              {unplaced.map(t => <TabRow key={t.view} view={t.view} location="hidden" handleProps={null} />)}
+            </div>
+          )}
+
           <Sortable name="top" ids={topIds} onReorder={reorderTop}>
             {(id, handleProps) => {
               const it = items.find(x => topId(x) === id)
@@ -269,15 +280,6 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
             }}
           </Sortable>
 
-          {/* Onglets cachés (menu Plus) */}
-          {unplaced.length > 0 && (
-            <div className="mt-4">
-              <div className="text-[11px] font-semibold text-ink-mute uppercase tracking-wider mb-1.5 px-1">
-                Cachés · menu « Plus » ({unplaced.length})
-              </div>
-              {unplaced.map(t => <TabRow key={t.view} view={t.view} location="hidden" handleProps={null} />)}
-            </div>
-          )}
         </div>
 
         {/* Pied */}
