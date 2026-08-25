@@ -463,11 +463,12 @@ async function creerOfPreparation(uid, nomProduit, qtyKg) {
  * d'Odoo sont annulés (ils gardent une trace là-bas).
  */
 async function annulerOfApp(uid, names) {
-  // UNIQUEMENT les ordres que l'app a créés. Annuler ceux d'Odoo a detruit des
-  // ordres d'une vraie commande client (S52081, le 26/08) : un ordre venu
-  // d'Odoo ne doit jamais partir sur un simple décochage.
+  // Décocher annule aussi dans Odoo, y compris un ordre qu'Odoo avait créé —
+  // c'est la règle voulue par Layla. Un ordre DÉJÀ VALIDÉ n'est jamais touché :
+  // sa production est entrée en stock. Les ordres de l'app sont supprimés, ceux
+  // d'Odoo restent annulés avec leur trace.
   const mos = await odooSearchRead(uid, 'mrp.production',
-    [['name', 'in', names], ['origin', '=', ORIGINE_APP], ['state', 'in', ['draft', 'confirmed', 'progress']]],
+    [['name', 'in', names], ['state', 'in', ['draft', 'confirmed', 'progress']]],
     ['id', 'name', 'origin'], { limit: 50 })
   if (!mos.length) return { annules: 0, noms: [] }
   const ids = mos.map(m => m.id)
