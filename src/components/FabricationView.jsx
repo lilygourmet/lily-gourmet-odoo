@@ -732,7 +732,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // bloquer là-dessus condamnerait l'article pour toujours.
     .filter(r => recettes[r.produit])
     // déjà déclaré fait POUR CE GÂTEAU : il n'y a plus rien à attendre
-    .filter(r => !faits[clePrepa(r.produit, groupeDe(o))])
+    .filter(r => !declarePour(o, r.produit))
     .filter(r => stockDeProduit(r.produit) < enKg(r.qty, r.unite).q - 0.001)
     .map(r => r.produit)
 
@@ -778,6 +778,43 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // aux gâteaux de l'écran (leur origine est un de ces ordres) : sinon on
   // tomberait sur n'importe quel ordre du même article, même prévu dans quinze
   // jours — cas vécu avec la crème au beurre praliné.
+  // La descendance d'un ordre : ses enfants, petits-enfants, sans limite.
+  // Gardée en mémoire, la fonction étant appelée pour chaque composant affiché.
+  const memoDesc = useMemo(() => new Map(), [data])
+  const descendanceDe = racine => {
+    const vu = memoDesc.get(racine)
+    if (vu) return vu
+    const tous = (data && data.ordres) || []
+    const dedans = new Set([racine])
+    for (let tour = 0; tour <= tous.length; tour += 1) {
+      let ajout = false
+      for (const o of tous) {
+        if (dedans.has(o.name)) continue
+        const parents = String(o.origine || '').split(',').map(x => x.trim())
+        if (parents.some(x => x && dedans.has(x))) { dedans.add(o.name); ajout = true }
+      }
+      if (!ajout) break
+    }
+    memoDesc.set(racine, dedans)
+    return dedans
+  }
+
+  // Tous les ordres déjà déclarés, quelle que soit la coche.
+  const ordresDeclares = useMemo(() => {
+    const out = new Set()
+    for (const [cle, info] of Object.entries(faits)) {
+      if (!cle.startsWith('PREP:')) out.add(cle)
+      for (const n of (info && info.ordres) || []) out.add(n)
+    }
+    return out
+  }, [faits])
+
+  // Ce composant a-t-il été déclaré POUR CE GÂTEAU ? On regarde les ordres
+  // retenus au moment de la coche, pas le nom de la crème : deux gâteaux du même
+  // parfum partagent la même crème mais pas le même ordre.
+  const declarePour = (o, produit) => ((data && data.ordres) || [])
+    .some(x => x.produit === produit && ordresDeclares.has(x.name) && descendanceDe(o.name).has(x.name))
+
   // Toute la descendance des gâteaux sélectionnés : leurs ordres, ceux de leurs
   // crèmes, et ceux des composants de ces crèmes (la crème pâtissière est un
   // petit-enfant du gâteau). Un ordre peut avoir plusieurs origines séparées
