@@ -412,7 +412,39 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [sel, setSel] = useState([])                      // noms d'OF cochés
   const [ouvertes, setOuvertes] = useState({})            // sous-recettes dépliées
   const [pageRecette, setPageRecette] = useState(false)   // téléphone : recette en page à part
-  const [faits, setFaits] = useState({})                  // ce qui est déjà fait (app, pas Odoo)
+  const [faitsBruts, setFaits] = useState({})             // ce qui est coché dans l'app
+  const [charge, setCharge] = useState(0)                // instant du dernier chargement d'Odoo
+
+  // Odoo fait foi : un ordre annulé (ou validé) là-bas rend sa coche caduque,
+  // l'article redevient « à faire » au lieu de rester grisé. On ne juge que les
+  // coches antérieures au dernier chargement, sinon on effacerait celle qu'on
+  // vient de poser.
+  const caduques = useMemo(() => {
+    const tous = (data && data.ordres) || []
+    if (!tous.length || !charge) return []
+    const ouverts = new Set(tous.map(o => o.name))
+    return Object.entries(faitsBruts)
+      .filter(([, info]) => !info || !info.fait_le || new Date(info.fait_le).getTime() < charge)
+      .filter(([cle, info]) => {
+        const liste = (info && info.ordres) || []
+        if (liste.length) return !liste.some(n => ouverts.has(n))
+        return /^WH.*\/MO\//i.test(cle) && !ouverts.has(cle)
+      })
+      .map(([cle]) => cle)
+  }, [faitsBruts, data, charge])
+
+  const faits = useMemo(() => {
+    if (!caduques.length) return faitsBruts
+    const out = { ...faitsBruts }
+    for (const c of caduques) delete out[c]
+    return out
+  }, [faitsBruts, caduques])
+
+  // et on efface la trace, une fois, sans bloquer l'affichage
+  useEffect(() => {
+    for (const c of caduques) setFait({ name: c }, false, user?.id).catch(() => { })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caduques.join('|')])
   const [validerOuvert, setValiderOuvert] = useState(false)
 
   const [rechargement, setRechargement] = useState(0)
@@ -432,7 +464,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     let vivant = true
     loadFaits().then(f => { if (vivant) setFaits(f) }).catch(() => { })
     loadFabrication(60)
-      .then(d => { if (vivant) { setData(d); garderEcran('fabrication', d) } })
+      .then(d => { if (vivant) { setData(d); setCharge(Date.now()); garderEcran('fabrication', d) } })
       .catch(e => { if (!vivant) return; setErreur(e.message || String(e)); setData({ ofs: [], recettes: {}, stocks: {} }) })
     return () => { vivant = false }
   }, [rechargement])
@@ -771,7 +803,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     } else if (cree && cree.error) {
       toast.error('Odoo : ' + cree.error)
     }
-    if (!on) annulerOfPrepa((avant && avant.ordres) || [])
+    if (!on) {
+      const r = await annulerOfPrepa((avant && avant.ordres) || [])
+      if (r && r.annules > 0) toast.success(`Annulé dans Odoo : ${r.noms.join(', ')}`)
+    }
 
     // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
     // ordres ne comptent plus sur le même stock.

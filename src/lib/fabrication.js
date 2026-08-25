@@ -91,16 +91,20 @@ export async function creerOfPrepa(produit, qty, actorId) {
   return await r.json()
 }
 
-/** Annule les ordres que l'app avait créés (quand on décoche). Silencieux. */
+/**
+ * Annule dans Odoo les ordres d'une coche qu'on retire — y compris ceux venus
+ * d'Odoo, tant qu'ils ne sont pas validés. Renvoie les noms annulés.
+ */
 export async function annulerOfPrepa(ordres) {
-  if (!ordres || !ordres.length) return
+  if (!ordres || !ordres.length) return null
   try {
-    await fetch('/api/freezer-list?mode=annuler-of', {
+    const r = await fetch('/api/freezer-list?mode=annuler-of', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ordres, test: estModeTest() }),
     })
-  } catch { /* sans conséquence : l'ordre restera dans Odoo */ }
+    return await r.json()
+  } catch { return null }
 }
 
 /** Ce qui manque pour fabriquer ces ordres Odoo (lecture seule, génoise ignorée). */

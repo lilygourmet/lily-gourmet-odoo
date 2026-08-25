@@ -456,17 +456,24 @@ async function creerOfPreparation(uid, nomProduit, qtyKg) {
   return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state }
 }
 
-/** Annule les ordres que l'app avait créés (jamais ceux venus d'Odoo). */
+/**
+ * Annule dans Odoo les ordres d'une coche qu'on retire. Un ordre DÉJÀ VALIDÉ
+ * n'est jamais touché : sa production est entrée en stock, on ne peut pas la
+ * défaire d'un clic. Les ordres créés par l'app sont supprimés, ceux venus
+ * d'Odoo sont annulés (ils gardent une trace là-bas).
+ */
 async function annulerOfApp(uid, names) {
   const mos = await odooSearchRead(uid, 'mrp.production',
-    [['name', 'in', names], ['origin', '=', ORIGINE_APP], ['state', 'in', ['draft', 'confirmed', 'progress']]],
-    ['id', 'name'], { limit: 50 })
-  if (!mos.length) return 0
+    [['name', 'in', names], ['state', 'in', ['draft', 'confirmed', 'progress']]],
+    ['id', 'name', 'origin'], { limit: 50 })
+  if (!mos.length) return { annules: 0, noms: [] }
   const ids = mos.map(m => m.id)
   await odooCall(uid, 'mrp.production', 'action_cancel', [ids]).catch(() => { })
   await odooCall(uid, 'mrp.production', 'write', [ids, { state: 'cancel' }]).catch(() => { })
-  await odooCall(uid, 'mrp.production', 'unlink', [ids]).catch(() => { })
-  return ids.length
+  // ceux que l'app avait créés ne servent plus à rien : on les efface
+  const siens = mos.filter(m => m.origin === ORIGINE_APP).map(m => m.id)
+  if (siens.length) await odooCall(uid, 'mrp.production', 'unlink', [siens]).catch(() => { })
+  return { annules: ids.length, noms: mos.map(m => m.name) }
 }
 
 // Crée l'ordre de fabrication et le confirme. Il part ensuite dans « À valider »
@@ -917,7 +924,7 @@ export default async function handler(req, res) {
       const names = (body.ordres || []).filter(Boolean)
       if (!names.length || body.test) return res.status(200).json({ annules: 0 })
       const uid = await odooAuth()
-      return res.status(200).json({ annules: await annulerOfApp(uid, names) })
+      return res.status(200).json(await annulerOfApp(uid, names))
     }
 
     // Réservation des composants dans Odoo (POST). Quand l'équipe coche « fait »,
