@@ -721,6 +721,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // Sans recette dans Odoo, l'app ne sait ni la montrer ni créer l'ordre :
     // bloquer là-dessus condamnerait l'article pour toujours.
     .filter(r => recettes[r.produit])
+    // déjà déclaré fait POUR CE GÂTEAU : il n'y a plus rien à attendre
+    .filter(r => !faits[clePrepa(r.produit, groupeDe(o))])
     .filter(r => stockDeProduit(r.produit) < enKg(r.qty, r.unite).q - 0.001)
     .map(r => r.produit)
 
