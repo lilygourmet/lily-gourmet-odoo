@@ -774,11 +774,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const ordresDe = (cle, produit) => {
     if (!cle.startsWith('PREP:')) return [cle]
     const tous = (data && data.ordres) || []
-    const ici = new Set(((data && data.ofs) || []).map(o => o.name))
     const siens = tous.filter(o => o.produit === produit && o.etat !== 'done')
-    // d'abord ceux qui viennent des gâteaux affichés, sinon rien : mieux vaut
-    // ne rien proposer que de valider l'ordre de quelqu'un d'autre
-    return siens.filter(o => ici.has(o.origine)).map(o => o.name)
+    // Seulement les ordres des gâteaux SÉLECTIONNÉS : la crème qu'on vient de
+    // faire est celle de la recette affichée, pas celle de tous les gâteaux du
+    // même parfum qui traînent à l'écran (cas vécu : 320 g cochés pour le Cœur
+    // 10p rattachaient aussi trois autres ordres, jusqu'au 5 septembre).
+    const vises = new Set(choisis.map(o => o.name))
+    if (!vises.size) return []
+    return siens.filter(o => vises.has(o.origine)).map(o => o.name)
   }
 
   const marquer = async (cleDemandee, produit, qty) => {
