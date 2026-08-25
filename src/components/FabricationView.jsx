@@ -638,7 +638,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       return { produit: p, besoin: q, stock, reserve, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     })
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
-  }, [aFaire, recettes, stocksBases, faits])
+  }, [aFaire, recettes, stocksBases, faits, data])
 
   // Ce qu'Odoo demande de préparer parce que le stock mini est atteint : crèmes
   // STK, base cupcake, magnum… (tous les articles CD* qui ne sont pas un format).
