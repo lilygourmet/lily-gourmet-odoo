@@ -406,7 +406,7 @@ const ORIGINE_APP = 'LG-APP'
  * faire alors qu'Odoo n'en demandait pas (une crème au beurre nature, par
  * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
  */
-async function creerOfPreparation(uid, nomProduit, qtyKg) {
+async function creerOfPreparation(uid, nomProduit, qtyKg, parents = []) {
   const prod = (await odooSearchRead(uid, 'product.product',
     [['name', '=', nomProduit]], ['id', 'display_name', 'uom_id', 'product_tmpl_id'], { limit: 1 }))[0]
   if (!prod) throw new Error('article introuvable dans Odoo : ' + nomProduit)
@@ -425,7 +425,10 @@ async function creerOfPreparation(uid, nomProduit, qtyKg) {
     product_qty: qty,
     product_uom_id: Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined,
     bom_id: bom.id,
-    origin: ORIGINE_APP,
+    // Rattaché aux gâteaux pour lesquels on le fabrique — Odoo accepte
+    // plusieurs origines séparées par des virgules. Le repère LG-APP reste au
+    // bout pour savoir que l'app l'a créé.
+    origin: [...parents, ORIGINE_APP].join(','),
     picking_type_id: modele.picking_type_id[0],
     location_src_id: modele.location_src_id[0],
     location_dest_id: modele.location_dest_id[0],
@@ -475,7 +478,7 @@ async function annulerOfApp(uid, names) {
   await odooCall(uid, 'mrp.production', 'action_cancel', [ids]).catch(() => { })
   await odooCall(uid, 'mrp.production', 'write', [ids, { state: 'cancel' }]).catch(() => { })
   // ceux que l'app avait créés ne servent plus à rien : on les efface
-  const siens = mos.filter(m => m.origin === ORIGINE_APP).map(m => m.id)
+  const siens = mos.filter(m => String(m.origin || '').includes(ORIGINE_APP)).map(m => m.id)
   if (siens.length) await odooCall(uid, 'mrp.production', 'unlink', [siens]).catch(() => { })
   return { annules: ids.length, noms: mos.map(m => m.name) }
 }
@@ -917,7 +920,7 @@ export default async function handler(req, res) {
       if (body.test) return res.status(200).json({ name: 'TEST (rien créé dans Odoo)', test: true })
       const uid = await odooAuth()
       try {
-        const of = await creerOfPreparation(uid, produit, qtyKg)
+        const of = await creerOfPreparation(uid, produit, qtyKg, (body.parents || []).filter(Boolean))
         console.log(`[creer-of] ${produit} ${qtyKg} kg par ${body.actorId || '?'} → ${of.name}`)
         return res.status(200).json(of)
       } catch (e) {

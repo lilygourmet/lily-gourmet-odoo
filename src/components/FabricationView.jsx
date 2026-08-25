@@ -904,7 +904,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // l'app crée l'ordre à la quantité faite, sinon rien n'entrerait jamais en
     // stock. Si on décoche, cet ordre-là est annulé.
     const cree = (on && cle.startsWith('PREP:') && !trouves.length)
-      ? await creerOfPrepa(produit, quantite, user?.id)
+      ? await creerOfPrepa(produit, quantite, user?.id, choisis.map(o => o.name))
       : null
     // en mode test aucun ordre n'existe : on n'enregistre pas de faux numéro
     const ordres = cree && cree.name && !cree.error && !cree.test ? [cree.name] : trouves
