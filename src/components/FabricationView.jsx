@@ -771,6 +771,25 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // aux gâteaux de l'écran (leur origine est un de ces ordres) : sinon on
   // tomberait sur n'importe quel ordre du même article, même prévu dans quinze
   // jours — cas vécu avec la crème au beurre praliné.
+  // Toute la descendance des gâteaux sélectionnés : leurs ordres, ceux de leurs
+  // crèmes, et ceux des composants de ces crèmes (la crème pâtissière est un
+  // petit-enfant du gâteau). Un ordre peut avoir plusieurs origines séparées
+  // par des virgules — « OP/00412,WHLVP/MO/200023 ».
+  const descendance = useMemo(() => {
+    const tous = (data && data.ordres) || []
+    const dedans = new Set(choisis.map(o => o.name))
+    for (let tour = 0; tour < 6; tour += 1) {
+      let ajout = false
+      for (const o of tous) {
+        if (dedans.has(o.name)) continue
+        const parents = String(o.origine || '').split(',').map(x => x.trim())
+        if (parents.some(x => x && dedans.has(x))) { dedans.add(o.name); ajout = true }
+      }
+      if (!ajout) break
+    }
+    return dedans
+  }, [data, choisis])
+
   const ordresDe = (cle, produit) => {
     if (!cle.startsWith('PREP:')) return [cle]
     const tous = (data && data.ordres) || []
@@ -785,9 +804,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // ceux de tous les gâteaux du même parfum qui traînent à l'écran (cas vécu :
     // 320 g cochés pour le Cœur 10p rattachaient trois autres ordres, jusqu'au
     // 5 septembre).
-    const vises = new Set(choisis.map(o => o.name))
-    if (!vises.size) return []
-    return siens.filter(o => vises.has(o.origine)).map(o => o.name)
+    if (!choisis.length) return []
+    // Odoo a déjà lancé l'ordre quelque part dans la descendance : on le reprend
+    // au lieu d'en créer un deuxième (la crème pâtissière d'une crème vanille,
+    // par exemple).
+    return siens.filter(o => descendance.has(o.name)).map(o => o.name)
   }
 
   const marquer = async (cleDemandee, produit, qty) => {
