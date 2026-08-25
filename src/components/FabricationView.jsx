@@ -542,13 +542,24 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
   // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
   // Seul ce qui est marqué « fait » quitte l'écran (il attend dans « À valider »).
+  // Les ordres déjà couverts par une coche — y compris ceux que l'app a créés
+  // elle-même : ils attendent dans « À valider », ils ne sont plus à faire.
+  const dejaDeclares = useMemo(() => {
+    const out = new Set()
+    for (const [cle, info] of Object.entries(faits)) {
+      if (!cle.startsWith('PREP:')) out.add(cle)
+      for (const n of (info && info.ordres) || []) out.add(n)
+    }
+    return out
+  }, [faits])
+
   const aFaire = useMemo(
-    () => ((data && data.ofs) || []).filter(o => !faits[o.name]).map(o => {
+    () => ((data && data.ofs) || []).filter(o => !dejaDeclares.has(o.name)).map(o => {
       const dispo = stockDeProduit(o.produit)
       return { ...o, stockApp: dispo, stockAssez: dispo >= enKg(o.qty, o.unite).q - 0.001 }
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, faits, stocks])
+    [data, dejaDeclares, stocks])
   const gateaux = useMemo(() => aFaire.filter(o => o.taille), [aFaire])
   // Tout ce qui est coché alimente la recette de droite — les gâteaux comme les
   // préparations demandées par Odoo (sirop, crème STK), qui n'ont pas de taille.
