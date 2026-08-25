@@ -187,9 +187,9 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             </div>
           )}
           {manquePour && estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
-            && manquePour(l.produit, l.aFaire || l.qty).length > 0 && (
+            && manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe).length > 0 && (
             <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
-              il manque : {manquePour(l.produit, l.aFaire || l.qty).map(m => `${qteLisible(m.manque, m.unite)} de ${propre(m.produit)}`).join(' · ')}
+              il manque : {manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe).map(m => `${qteLisible(m.manque, m.unite)} de ${propre(m.produit)}`).join(' · ')}
             </div>
           )}
           {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
@@ -603,6 +603,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const src = aFaire        // les bases restent les mêmes, quoi qu'on coche
     const besoins = {}
     for (const o of src) for (const r of (o.recette || [])) {
+      // déjà déclarée faite pour ce gâteau : ni elle ni sa base ne sont à refaire
+      if (faits[clePrepa(r.produit, groupeDe(o))]) continue
       const k = enKg(r.qty, r.unite)
       besoins[r.produit] = (besoins[r.produit] || 0) + k.q
     }
@@ -629,7 +631,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     })
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
-  }, [aFaire, recettes, stocksBases])
+  }, [aFaire, recettes, stocksBases, faits])
 
   // Ce qu'Odoo demande de préparer parce que le stock mini est atteint : crèmes
   // STK, base cupcake, magnum… (tous les articles CD* qui ne sont pas un format).
@@ -674,6 +676,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         vus.add(pr)
         const r = recettes[pr]
         if (!r) continue
+        if (faits[clePrepa(pr, cleGroupe)]) continue           // déjà déclaré pour ce groupe
         const manque = besoins[pr].qty - stockDe(pr)
         if (manque <= 0.001) continue
         const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -698,7 +701,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         }))
       return { parfum, cleGroupe, lot, lignes }
     })
-  }, [choisis, recettes, stocks])
+  }, [choisis, recettes, stocks, faits])
 
   // Ce qu'il faut avoir fait AVANT de pouvoir cocher : les préparations que ce
   // produit consomme et qui ne sont pas en stock (crème pâtissière avant la crème
@@ -744,7 +747,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // Ce qui manque en stock pour fabriquer cette quantité : matières premières
   // comprises (la génoise est ignorée, son stock restera négatif un moment).
-  const manquePour = (produit, qty) => {
+  const manquePour = (produit, qty, usage = '') => {
     const r = recettes[produit]
     if (!r) return []
     const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -752,7 +755,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const f = qty / base
     const out = []
     for (const l of r.lignes) {
-      if (/genoise|eau\s*robinet|^\s*MP-\s*Eau/i.test(l.produit)) continue
+      if (toujoursLa(l.produit)) continue
+      if (faits[clePrepa(l.produit, usage)]) continue          // déjà déclaré pour cet usage
       const besoin = enKg(l.qty * f, l.unite)
       const st = stocks[l.produit]
       const dispo = st ? Math.max(0, enKg(st.qty, st.unite).q) : 0
