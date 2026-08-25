@@ -723,7 +723,11 @@ export default function RapprochementView({ user }) {
           )}
 
           <div className="flex gap-1 mb-4 p-1 bg-cream-deep rounded-lg w-fit">
-            {[['detail', '📋 Détail (CMI ↔ Odoo)'], ['jour', '📊 Résumé par jour'], ['alier', '🔗 À lier']].map(([v, l]) => (
+            {/* « Anomalies » manquait : la vue existait mais aucun bouton n'y menait,
+                on voyait les compteurs en haut sans jamais pouvoir ouvrir le détail. */}
+            {[['detail', '📋 Détail (CMI ↔ Odoo)'], ['jour', '📊 Résumé par jour'],
+              ['synthese', `🚨 Anomalies${suspF.length + introF.length ? ` (${suspF.length + introF.length})` : ''}`],
+              ['alier', '🔗 À lier']].map(([v, l]) => (
               <button key={v} onClick={() => setView(v)}
                 className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${view === v ? 'bg-bordeaux text-white' : 'text-ink-soft hover:text-bordeaux'}`}>{l}</button>
             ))}

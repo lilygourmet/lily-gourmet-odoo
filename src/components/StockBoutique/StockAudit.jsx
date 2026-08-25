@@ -410,6 +410,20 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               </div>
             )}
 
+            {/* Les écarts à trancher sont sous le tableau, qui fait souvent
+                plusieurs dizaines de lignes : on les annonce ici. */}
+            {hasPending && (
+              <button
+                onClick={() => document.getElementById('conflits-arbitrage')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="w-full flex items-center gap-2 bg-bordeaux text-cream rounded-2xl px-4 py-3 text-left hover:bg-bordeaux-deep transition-colors"
+              >
+                <span className="font-semibold text-[13px]">
+                  {pendingItems.length} écart{pendingItems.length > 1 ? 's' : ''} en attente de ton arbitrage
+                </span>
+                <span className="ml-auto text-[12px] opacity-90">Voir ↓</span>
+              </button>
+            )}
+
             {/* TABLEAU RAPPORT */}
             <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
               <div className="px-4 py-2.5 border-b border-line bg-cream-warm">
@@ -555,7 +569,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             {/* SECTION CONFLITS À ARBITRER */}
             {/* ============================================ */}
             {hasConflicts && (
-              <div className="bg-white border-2 border-bordeaux rounded-2xl overflow-hidden shadow-sm">
+              <div id="conflits-arbitrage" className="bg-white border-2 border-bordeaux rounded-2xl overflow-hidden shadow-sm scroll-mt-4">
                 <div className="bg-bordeaux text-cream px-4 py-2.5">
                   <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-90">
                     Conflits
