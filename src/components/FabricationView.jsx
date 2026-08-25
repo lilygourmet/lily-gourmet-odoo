@@ -530,6 +530,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // On compare au BESOIN, pas à la taille de la tournée : il reste 7 240 g de
   // sirop et une tournée en fait 5 550, mais s'il en faut 7 580 ce n'est pas fait.
   const faitBase = b => (b.ordre ? !!faits[b.ordre] : couvert(b.produit, b.besoin))
+  // Barré = quelqu'un l'a faite. Une base simplement couverte par le stock reste
+  // lisible : elle porte déjà son « en stock (x g) ».
+  const baseBarree = b => (b.ordre ? !!faits[b.ordre] : clesDuJour(b.produit).length > 0)
 
   // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
   // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
@@ -857,7 +860,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                     className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
                     (ouvrable ? 'cursor-pointer ' : '') +
                     (b.manque <= 0.001 || faitBase(b) ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
-                    <span className={'flex-1 min-w-0 ' + (faitBase(b) ? 'line-through opacity-60' : '')}>
+                    <span className={'flex-1 min-w-0 ' + (baseBarree(b) ? 'line-through opacity-60' : '')}>
                       <span className="text-[17px] font-bold">{propre(b.produit)}</span>
                       {b.ordre && <span className="block text-[11px] text-ink-mute font-mono">demandé par Odoo · {b.ordre}</span>}
                     </span>
@@ -868,7 +871,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">
                           il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b>
                         </span>
-                        <span className={'text-right ' + (faitBase(b) ? 'line-through opacity-60' : '')}>
+                        <span className={'text-right ' + (baseBarree(b) ? 'line-through opacity-60' : '')}>
                           <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
                           {b.n > 0 && <span className="block text-[10.5px] text-ink-mute leading-tight">{b.n} tournée{b.n > 1 ? 's' : ''}</span>}
                         </span>
