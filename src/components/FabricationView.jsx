@@ -778,7 +778,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const descendance = useMemo(() => {
     const tous = (data && data.ordres) || []
     const dedans = new Set(choisis.map(o => o.name))
-    for (let tour = 0; tour < 6; tour += 1) {
+    // Autant de niveaux qu'il en faut : gâteau → crème → crème pâtissière → …
+    // On s'arrête quand plus rien ne s'ajoute ; le nombre d'ordres borne la
+    // boucle, donc une chaîne circulaire ne peut pas la faire tourner sans fin.
+    for (let tour = 0; tour <= tous.length; tour += 1) {
       let ajout = false
       for (const o of tous) {
         if (dedans.has(o.name)) continue
