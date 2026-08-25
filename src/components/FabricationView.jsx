@@ -93,25 +93,29 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
         const ouvrable = setOuvertes && estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit)
         // « fait » veut dire : la quantité voulue est là. Cocher une crème pour
         // un gâteau ne la rend pas faite pour le suivant — chacun a la sienne.
-        const ok = couvert ? couvert(l.produit, q) : !!faits[clePrepa(l.produit)]
+        const coche = !!faits[clePrepa(l.produit)]
+        const ok = couvert ? couvert(l.produit, q) : coche
+        // barré = quelqu'un l'a faite ; vert « en stock » = il y en avait déjà
+        const barre = ok && coche
+        const dispo = ok && !coche
         return (
           <div key={i}>
             <div className="flex items-center gap-2.5 py-1.5 text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
-              <b className={'min-w-[86px] ' + (ok ? 'line-through opacity-60' : '')}>{qteLisible(q, u)}</b>
+              <b className={'min-w-[86px] ' + (barre ? 'line-through opacity-60' : '')}>{qteLisible(q, u)}</b>
               {ouvrable ? (
                 <button onClick={() => setOuvertes(o => ({ ...o, [sousCle]: !o[sousCle] }))}
-                  className={'text-left text-bordeaux font-semibold underline underline-offset-2 flex-1 ' + (ok ? 'line-through opacity-60' : '')}>
+                  className={'text-left text-bordeaux font-semibold underline underline-offset-2 flex-1 ' + (barre ? 'line-through opacity-60' : '')}>
                   {propre(l.produit)} ▾
                 </button>
-              ) : <span className={'flex-1 ' + (ok ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
+              ) : <span className={'flex-1 ' + (barre ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
               {sansRecette(l.produit, recettes) && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette</span>
               )}
               {/* déjà en stock : rien à faire, et ce n'est pas « fait » par quelqu'un */}
-              {ok && !faits[clePrepa(l.produit)] && peutEtreFait(l.produit) && (
+              {dispo && peutEtreFait(l.produit) && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
               )}
-              {onFait && peutEtreFait(l.produit) && !(ok && !faits[clePrepa(l.produit)]) && (
+              {onFait && peutEtreFait(l.produit) && !dispo && (
                 <BoutonFait fait={ok}
                   bloque={bloquants ? bloquants(l.produit, q) : null}
                   onClick={() => onFait(clePrepa(l.produit), l.produit, q)} />
@@ -148,7 +152,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           {g.lignes.map(l => (
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
-            <b className={'min-w-[96px] text-[17px] ' + ((couvert ? couvert(l.produit, l.qty) : faits[clePrepa(l.produit)]) ? 'line-through opacity-60' : '')}>
+            <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit)] ? 'line-through opacity-60' : '')}>
               {qteLisible(l.qty, l.unite)}
             </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) && !l.enStock ? (
@@ -164,8 +168,10 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             {sansRecette(l.produit, recettes) && (
               <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette dans Odoo</span>
             )}
-            {l.enStock && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok">en stock</span>}
-            {peutEtreFait(l.produit) && !l.enStock && (
+            {(l.enStock || (couvert && couvert(l.produit, l.qty) && !faits[clePrepa(l.produit)])) && (
+              <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
+            )}
+            {peutEtreFait(l.produit) && !l.enStock && !(couvert && couvert(l.produit, l.qty) && !faits[clePrepa(l.produit)]) && (
               <BoutonFait fait={couvert ? couvert(l.produit, l.qty) : !!faits[clePrepa(l.produit)]}
                 bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty) : null}
                 onClick={() => onFait(clePrepa(l.produit), l.produit, l.qty)} />
