@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa } from '../lib/fabrication'
@@ -780,9 +780,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // jours — cas vécu avec la crème au beurre praliné.
   // La descendance d'un ordre : ses enfants, petits-enfants, sans limite.
   // Gardée en mémoire, la fonction étant appelée pour chaque composant affiché.
-  const memoDesc = useMemo(() => new Map(), [data])
+  const memoDesc = useRef(new Map())
+  useEffect(() => { memoDesc.current = new Map() }, [data])
   const descendanceDe = racine => {
-    const vu = memoDesc.get(racine)
+    const vu = memoDesc.current.get(racine)
     if (vu) return vu
     const tous = (data && data.ordres) || []
     const dedans = new Set([racine])
@@ -795,7 +796,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       }
       if (!ajout) break
     }
-    memoDesc.set(racine, dedans)
+    memoDesc.current.set(racine, dedans)
     return dedans
   }
 
