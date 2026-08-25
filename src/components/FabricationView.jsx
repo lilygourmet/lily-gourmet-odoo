@@ -216,10 +216,10 @@ function BoutonFait({ fait, onClick, bloque = null }) {
   const empeche = !fait && bloque && bloque.length
   return (
     <button onClick={e => { e.stopPropagation(); if (!empeche) onClick() }}
-      title={empeche ? 'À faire d\'abord : ' + bloque.map(propre).join(', ') : fait ? 'Annuler' : 'Marquer comme fait'}
+      title={empeche ? 'À faire d\'abord : ' + bloque.map(propre).join(', ') : fait ? 'Annuler la déclaration' : 'Déclarer que c\'est fait'}
       className={'flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold border ' +
         (fait ? 'bg-ok text-cream border-ok' : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50 cursor-not-allowed' : 'bg-white text-ink-mute border-line')}>
-      {fait ? '✓ fait' : empeche ? 'à faire' : 'fait'}
+      {fait ? '✓ fait' : empeche ? 'en attente' : 'c\'est fait'}
     </button>
   )
 }
