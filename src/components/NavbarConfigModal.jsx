@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { X, RotateCcw, GripVertical, FolderPlus, Trash2 } from 'lucide-react'
+import { X, RotateCcw, GripVertical, FolderPlus, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
 import { toast } from '../lib/toast'
 
 // Emojis proposés pour les dossiers (clic pour choisir).
@@ -86,6 +86,12 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
   const [items, setItems] = useState(() => buildItems(config, tabs))
   const [saving, setSaving] = useState(false)
   const [pickerFor, setPickerFor] = useState(null)   // id du dossier dont le choix d'emoji est ouvert
+  // Dossiers repliés : avec une dizaine de dossiers pleins, il fallait défiler
+  // sur toute la hauteur pour déplacer un onglet. Tout est replié au départ.
+  const [replies, setReplies] = useState(() => new Set(
+    (Array.isArray(config?.items) ? config.items : []).filter(i => i.type === 'group').map(i => i.id)
+  ))
+  const basculer = id => setReplies(r => { const n = new Set(r); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   // Onglets rangés nulle part -> section "Caché (menu Plus)"
   const placed = new Set()
@@ -205,12 +211,22 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
 
         {/* Corps */}
         <div className="overflow-y-auto px-3 py-3 flex-1">
-          <button
-            onClick={addGroup}
-            className="flex items-center gap-1.5 px-3 py-1.5 mb-3 rounded-full border border-bordeaux/40 text-bordeaux text-[12px] hover:bg-bordeaux hover:text-cream transition-all"
-          >
-            <FolderPlus size={15} strokeWidth={1.8} /> Nouveau dossier
-          </button>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <button
+              onClick={addGroup}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-bordeaux/40 text-bordeaux text-[12px] hover:bg-bordeaux hover:text-cream transition-all"
+            >
+              <FolderPlus size={15} strokeWidth={1.8} /> Nouveau dossier
+            </button>
+            {items.some(i => i.type === 'group') && (
+              <button
+                onClick={() => setReplies(r => r.size ? new Set() : new Set(items.filter(i => i.type === 'group').map(i => i.id)))}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-line text-ink-soft text-[12px] hover:bg-cream-warm"
+              >
+                {replies.size ? <><ChevronDown size={14} /> Tout ouvrir</> : <><ChevronRight size={14} /> Tout replier</>}
+              </button>
+            )}
+          </div>
 
           {/* Liste de premier niveau (onglets seuls + dossiers), triable */}
           {/* Pas encore rangés — EN HAUT : c'est ici que tombent les onglets
@@ -236,6 +252,15 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
                 <div className="border border-line rounded-xl mb-2 bg-cream">
                   <div className="flex items-center gap-2 px-2 py-2 border-b border-line">
                     <span {...handleProps} className="text-ink-mute flex-shrink-0"><GripVertical size={16} /></span>
+                    <button
+                      onClick={() => basculer(it.id)}
+                      onPointerDown={e => e.stopPropagation()}
+                      className="w-7 h-7 rounded-md border border-line bg-cream-warm text-ink-soft flex items-center justify-center flex-shrink-0"
+                      title={replies.has(it.id) ? 'Voir les onglets' : 'Replier'}
+                      aria-expanded={!replies.has(it.id)}
+                    >
+                      {replies.has(it.id) ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                    </button>
                     <div className="relative flex-shrink-0" onPointerDown={e => e.stopPropagation()}>
                       <button
                         onClick={() => setPickerFor(pickerFor === it.id ? null : it.id)}
@@ -266,6 +291,12 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
                       <Trash2 size={15} strokeWidth={1.8} />
                     </button>
                   </div>
+                  {replies.has(it.id) ? (
+                    <button onClick={() => basculer(it.id)}
+                      className="w-full text-left px-3 py-1.5 text-[11.5px] text-ink-mute hover:bg-cream-warm">
+                      {it.tabs.length === 0 ? 'Vide' : `${it.tabs.length} onglet${it.tabs.length > 1 ? 's' : ''} — voir`}
+                    </button>
+                  ) : (
                   <div className="px-2 py-2">
                     {it.tabs.length === 0 ? (
                       <div className="text-[11px] text-ink-mute italic px-1 py-1">Vide — range des onglets ici avec « Ranger… »</div>
@@ -275,6 +306,7 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
                       </Sortable>
                     )}
                   </div>
+                  )}
                 </div>
               )
             }}
