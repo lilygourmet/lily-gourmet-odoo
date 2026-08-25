@@ -628,7 +628,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const stock = stockDe(p), t = tailleTournee(recettes, p)
       const manque = Math.max(0, q - stock)
       const n = t && t.q ? Math.ceil(manque / t.q) : 0
-      return { produit: p, besoin: q, stock, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
+      // ce qui est réservé par des ordres confirmés : Odoo l'affiche dans son
+      // stock, nous non — on le dit, sinon les deux chiffres semblent se
+      // contredire
+      const brut = (data && data.stocks && data.stocks[p]) || null
+      const reserve = brut && brut.physique != null
+        ? Math.max(0, enKg(brut.physique, brut.unite).q - Math.max(0, enKg(brut.qty, brut.unite).q))
+        : 0
+      return { produit: p, besoin: q, stock, reserve, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     })
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
   }, [aFaire, recettes, stocksBases, faits])
@@ -921,6 +928,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       <>
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">
                           il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b>
+                          {b.reserve > 0.001 && (
+                            <span className="block text-[10.5px]">{qteLisible(b.reserve, b.unite)} réservés</span>
+                          )}
                         </span>
                         <span className={'text-right ' + (baseBarree(b) ? 'line-through opacity-60' : '')}>
                           <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>

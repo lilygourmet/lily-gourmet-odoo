@@ -757,13 +757,16 @@ async function fetchFabrication(uid, jours) {
   // sinon on compterait le stock du magasin et de l'annexe.
   const lieuProd = mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean)[0] || null
   const prods = idsProduits.length
-    ? await odooCall(uid, 'product.product', 'read', [idsProduits, ['display_name', 'free_qty', 'uom_id']],
+    ? await odooCall(uid, 'product.product', 'read', [idsProduits, ['display_name', 'free_qty', 'qty_available', 'uom_id']],
       lieuProd ? { context: { location: lieuProd } } : {})
     : []
   const stockDe = {}
   for (const pr of prods) {
     stockDe[pr.display_name] = {
       qty: pr.free_qty || 0,
+      // ce qu'Odoo affiche : le stock physique. L'écart avec `qty`, c'est ce qui
+      // est déjà réservé par des ordres confirmés — sinon on croit à une erreur.
+      physique: pr.qty_available || 0,
       unite: ((Array.isArray(pr.uom_id) ? pr.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
     }
   }
