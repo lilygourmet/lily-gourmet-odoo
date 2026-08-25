@@ -14,6 +14,7 @@ import AdminUsers from './AdminUsers'
 import AdminGmConfig from './AdminGmConfig'
 import OrderJournalModal from './OrderJournalModal'
 import NavbarConfigModal from './NavbarConfigModal'
+import { navTabsForUser } from '../lib/navTabs'
 import { saveMyNavbarConfig } from '../lib/users'
 import LabelsButton from './LabelsButton'
 import NewConversationModal from './Conversations/NewConversationModal'
@@ -698,7 +699,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     isLivreurDefaut(user) && { view: 'caisse-livreur', emoji: '💰', label: 'Caisse livreur', badge: 0 },
     canSeeStockPoly(user) && { view: 'decoupe-poly', emoji: '✂️', label: 'Découpe poly', badge: 0 },
   ].filter(Boolean)
-  const allTabs = [...fixedTabs, ...adminGallery, ...menuProduction, ...menuVitrine, ...menuOutils, ...extraClassables]
+  // On complète avec la liste de référence (celle de la barre latérale) : sans ça,
+  // un onglet ajouté à l'app mais oublié ici restait introuvable — ni dans la barre,
+  // ni dans le réglage « ranger mes onglets » (cas vécu avec les onglets Fabrication).
+  const allTabs = [...fixedTabs, ...adminGallery, ...menuProduction, ...menuVitrine, ...menuOutils, ...extraClassables, ...navTabsForUser(user)]
     .filter((t, i, arr) => arr.findIndex(x => x.view === t.view) === i)
 
   // La barre du bas disparaît si l'utilisateur n'a qu'un onglet : dans ce cas
