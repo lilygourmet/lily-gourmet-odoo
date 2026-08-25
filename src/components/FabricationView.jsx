@@ -118,7 +118,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
               )}
               {onFait && peutEtreFait(l.produit) && !dispo && (
-                <BoutonFait fait={coche}
+                <BoutonFait fait={coche} sansNomenclature={sansRecette(l.produit, recettes)}
                   bloque={bloquants ? bloquants(l.produit, q, usage) : null}
                   onClick={() => onFait(clePrepa(l.produit, usage), l.produit, q)} />
               )}
@@ -177,7 +177,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
               <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
             )}
             {peutEtreFait(l.produit) && !l.enStock && !(!declare(l.produit) && couvert && couvert(l.produit, l.qty)) && (
-              <BoutonFait fait={!!declare(l.produit)}
+              <BoutonFait fait={!!declare(l.produit)} sansNomenclature={sansRecette(l.produit, recettes)}
                 bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot) : null}
                 onClick={() => onFait(clePrepa(l.produit, g.cleGroupe), l.produit, l.qty)} />
             )}
@@ -216,14 +216,16 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
   )
 }
 
-function BoutonFait({ fait, onClick, bloque = null }) {
-  const empeche = !fait && bloque && bloque.length
+function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) {
+  const empeche = !fait && (sansNomenclature || (bloque && bloque.length))
   return (
     <button onClick={e => { e.stopPropagation(); if (!empeche) onClick() }}
-      title={empeche ? 'À faire d\'abord : ' + bloque.map(propre).join(', ') : fait ? 'Annuler la déclaration' : 'Déclarer que c\'est fait'}
+      title={sansNomenclature ? 'Sa nomenclature manque dans Odoo : rien ne peut être enregistré'
+        : empeche ? 'À faire d\'abord : ' + (bloque || []).map(propre).join(', ')
+          : fait ? 'Annuler la déclaration' : 'Déclarer que c\'est fait'}
       className={'flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold border ' +
         (fait ? 'bg-ok text-cream border-ok' : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50 cursor-not-allowed' : 'bg-white text-ink-mute border-line')}>
-      {fait ? '✓ fait' : empeche ? 'en attente' : 'c\'est fait'}
+      {fait ? '✓ fait' : sansNomenclature ? 'pas de recette' : empeche ? 'en attente' : 'c\'est fait'}
     </button>
   )
 }
@@ -921,7 +923,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
     // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
     // ordres ne comptent plus sur le même stock.
-    reserverOrdres(ordres, on)
+    // Odoo ne réserve que les composants directs d'un ordre : pour bloquer aussi
+    // la crème au beurre nature qui entre dans la crème du gâteau, on réserve
+    // toute la descendance.
+    const aReserver = [...new Set(ordres.flatMap(n => [...descendanceDe(n)]))]
+    reserverOrdres(aReserver.length ? aReserver : ordres, on)
     setFait({ name: cle, produit, qty: quantite, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }
@@ -1006,7 +1012,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                             {ouvertes[cleBase(b.produit)] ? '▾' : '▸'}
                           </span>
                         )}
-                        <BoutonFait fait={faitBase(b)} bloque={bloquants(b.produit, b.qty)}
+                        <BoutonFait fait={faitBase(b)} sansNomenclature={sansRecette(b.produit, recettes)}
+                          bloque={bloquants(b.produit, b.qty)}
                           onClick={() => marquer(b.ordre || clePrepa(b.produit), b.produit, b.qty)} />
                       </>
                     )}
