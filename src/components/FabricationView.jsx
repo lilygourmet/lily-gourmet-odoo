@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa } from '../lib/fabrication'
@@ -77,7 +77,7 @@ function tailleTournee(recettes, n) {
 
 // La recette d'une préparation, calculée pour la quantité demandée.
 // Récursive : la crème pâtissière dans la crème au beurre vanille s'ouvre aussi.
-function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}, setOuvertes = null, faits = {}, onFait = null, bloquants = null, stock = 0, couvert = null, usage = '' }) {
+function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}, setOuvertes = null, faits = {}, onFait = null, bloquants = null, stock = 0, couvert = null, usage = '', declare = null }) {
   const r = recettes[produit]
   if (!r) return null
   const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -97,7 +97,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
         // « fait » veut dire : la quantité voulue est là. Cocher une crème pour
         // un gâteau ne la rend pas faite pour le suivant — chacun a la sienne.
         // fait = déclaré POUR CET USAGE ; en stock = il y en a déjà, pour tout le monde
-        const coche = !!faits[clePrepa(l.produit, usage)]
+        const coche = declare ? declare(l.produit) : !!faits[clePrepa(l.produit, usage)]
         const barre = coche
         const dispo = !coche && couvert && couvert(l.produit, q)
         return (
@@ -126,7 +126,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
             {ouvrable && ouvertes[sousCle] && (
               <SousRecette recettes={recettes} produit={l.produit} qty={q} unite={u}
                 chemin={sousCle} ouvertes={ouvertes} setOuvertes={setOuvertes}
-                faits={faits} onFait={onFait} bloquants={bloquants} couvert={couvert} usage={usage} />
+                faits={faits} onFait={onFait} bloquants={bloquants} couvert={couvert} usage={usage} declare={declare} />
             )}
           </div>
         )
@@ -136,7 +136,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 }
 
 // « Ma recette » : les besoins cumulés des gâteaux cochés.
-function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour, couvert }) {
+function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour, couvert, estDeclare }) {
   const cle = p => 'sc:' + p
   return (
     <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden'}>
@@ -146,7 +146,10 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
         <button onClick={onEffacer} className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">effacer</button>
       </div>
       <div className={onRetour ? '' : 'px-4 pb-4 pt-3 flex-1 overflow-y-auto overscroll-contain'}>
-      {recette.map(g => (
+      {recette.map(g => {
+        // « fait » pour ce lot précis, d'après les ordres retenus à la coche
+        const declare = p => (estDeclare ? estDeclare(g.lot, p, g.cleGroupe) : !!faits[clePrepa(p, g.cleGroupe)])
+        return (
         <div key={g.cleGroupe} className="mb-4">
           <div className="text-[12.5px] text-ink-mute mb-1.5 pb-1 border-b border-line">
             <b className="text-ink text-[13.5px]">{g.parfum}</b> · {g.lot.map(o => `${o.taille} ×${nb(o.qty)}`).join(' + ')}
@@ -154,7 +157,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           {g.lignes.map(l => (
         <div key={l.produit}>
           <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
-            <b className={'min-w-[96px] text-[17px] ' + (faits[clePrepa(l.produit, g.cleGroupe)] ? 'line-through opacity-60' : '')}>
+            <b className={'min-w-[96px] text-[17px] ' + (declare(l.produit) ? 'line-through opacity-60' : '')}>
               {qteLisible(l.qty, l.unite)}
             </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) && !l.enStock ? (
@@ -170,12 +173,12 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             {sansRecette(l.produit, recettes) && (
               <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette dans Odoo</span>
             )}
-            {!faits[clePrepa(l.produit, g.cleGroupe)] && (l.enStock || (couvert && couvert(l.produit, l.qty))) && (
+            {!declare(l.produit) && (l.enStock || (couvert && couvert(l.produit, l.qty))) && (
               <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
             )}
-            {peutEtreFait(l.produit) && !l.enStock && !(!faits[clePrepa(l.produit, g.cleGroupe)] && couvert && couvert(l.produit, l.qty)) && (
-              <BoutonFait fait={!!faits[clePrepa(l.produit, g.cleGroupe)]}
-                bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe) : null}
+            {peutEtreFait(l.produit) && !l.enStock && !(!declare(l.produit) && couvert && couvert(l.produit, l.qty)) && (
+              <BoutonFait fait={!!declare(l.produit)}
+                bloque={bloquants ? bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot) : null}
                 onClick={() => onFait(clePrepa(l.produit, g.cleGroupe), l.produit, l.qty)} />
             )}
           </div>
@@ -187,26 +190,27 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             </div>
           )}
           {manquePour && estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
-            && manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe).length > 0 && (
+            && manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).length > 0 && (
             <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
-              il manque : {manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe).map(m => `${qteLisible(m.manque, m.unite)} de ${propre(m.produit)}`).join(' · ')}
+              il manque : {manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).map(m => `${qteLisible(m.manque, m.unite)} de ${propre(m.produit)}`).join(' · ')}
             </div>
           )}
           {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
-            && !faits[clePrepa(l.produit, g.cleGroupe)] && bloquants && bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe).length > 0 && (
+            && !declare(l.produit) && bloquants && bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).length > 0 && (
             <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
-              à faire d'abord : {bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe).map(propre).join(', ')}
+              à faire d'abord : {bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).map(propre).join(', ')}
             </div>
           )}
           {!l.enStock && ouvertes[cle(l.produit)] && (
             <SousRecette recettes={recettes} produit={l.produit} qty={l.aFaire || l.qty} unite={l.unite}
               chemin={cle(l.produit)} ouvertes={ouvertes} setOuvertes={setOuvertes}
-              faits={faits} onFait={onFait} bloquants={bloquants} couvert={couvert} usage={g.cleGroupe} />
+              faits={faits} onFait={onFait} bloquants={bloquants} couvert={couvert} usage={g.cleGroupe} declare={declare} />
           )}
         </div>
           ))}
         </div>
-      ))}
+        )
+      })}
       </div>
     </div>
   )
@@ -585,6 +589,69 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return out
   }, [faits])
 
+  // La descendance de chaque ordre — enfants, petits-enfants, sans limite.
+  // Calculée une fois par chargement : la fonction est appelée pour chaque
+  // composant affiché. Un ordre peut avoir plusieurs origines, séparées par des
+  // virgules (« OP/00412,WHLVP/MO/200023 »).
+  const descendances = useMemo(() => {
+    const tous = (data && data.ordres) || []
+    const enfantsDe = new Map()
+    for (const o of tous) {
+      for (const p of String(o.origine || '').split(',').map(x => x.trim())) {
+        if (!p) continue
+        if (!enfantsDe.has(p)) enfantsDe.set(p, [])
+        enfantsDe.get(p).push(o.name)
+      }
+    }
+    const carte = new Map()
+    for (const o of tous) {
+      const dedans = new Set([o.name])
+      const file = [o.name]
+      while (file.length) {
+        for (const enfant of enfantsDe.get(file.shift()) || []) {
+          if (dedans.has(enfant)) continue
+          dedans.add(enfant); file.push(enfant)
+        }
+      }
+      carte.set(o.name, dedans)
+    }
+    return carte
+  }, [data])
+  const descendanceDe = racine => descendances.get(racine) || new Set([racine])
+
+  // Tous les ordres déjà déclarés, quelle que soit la coche.
+  const ordresDeclares = useMemo(() => {
+    const out = new Set()
+    for (const [cle, info] of Object.entries(faits)) {
+      if (!cle.startsWith('PREP:')) out.add(cle)
+      for (const n of (info && info.ordres) || []) out.add(n)
+    }
+    return out
+  }, [faits])
+
+  // Ce composant a-t-il été déclaré POUR CE GÂTEAU ? On regarde les ordres
+  // retenus au moment de la coche, pas le nom de la crème : deux gâteaux du même
+  // parfum partagent la même crème mais pas le même ordre.
+  const declarePour = (o, produit) => estDeclare([o], produit, groupeDe(o))
+
+  /**
+   * Ce composant est-il déclaré fait pour CE lot de gâteaux ? On regarde les
+   * ordres de ce composant qui descendent de ces gâteaux-là : ils doivent TOUS
+   * être déclarés. Deux gâteaux du même parfum partagent la crème, jamais
+   * l'ordre — déclarer celle du 23×23 ne fait pas celle du 45 cm.
+   * S'il n'existe aucun ordre (l'app en créera un), on retombe sur la coche.
+   */
+  const estDeclare = (lot, produit, cleGroupe) => {
+    const concernes = ((data && data.ordres) || [])
+      .filter(x => x.produit === produit && lot.some(o => descendanceDe(o.name).has(x.name)))
+    if (concernes.length) return concernes.every(x => ordresDeclares.has(x.name))
+    return !!faits[clePrepa(produit, cleGroupe)]
+  }
+
+  // Toute la descendance des gâteaux sélectionnés : leurs ordres, ceux de leurs
+  // crèmes, et ceux des composants de ces crèmes (la crème pâtissière est un
+  // petit-enfant du gâteau). Un ordre peut avoir plusieurs origines séparées
+  // par des virgules — « OP/00412,WHLVP/MO/200023 ».
   const aFaire = useMemo(
     () => ((data && data.ofs) || []).filter(o => !dejaDeclares.has(o.name)).map(o => {
       const dispo = stockDeProduit(o.produit)
@@ -604,7 +671,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const besoins = {}
     for (const o of src) for (const r of (o.recette || [])) {
       // déjà déclarée faite pour ce gâteau : ni elle ni sa base ne sont à refaire
-      if (faits[clePrepa(r.produit, groupeDe(o))]) continue
+      if (declarePour(o, r.produit)) continue
       const k = enKg(r.qty, r.unite)
       besoins[r.produit] = (besoins[r.produit] || 0) + k.q
     }
@@ -638,6 +705,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       return { produit: p, besoin: q, stock, reserve, manque, n, qty: n * ((t && t.q) || 0), unite: (t && t.u) || 'kg' }
     })
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aFaire, recettes, stocksBases, faits, data])
 
   // Ce qu'Odoo demande de préparer parce que le stock mini est atteint : crèmes
@@ -683,7 +751,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         vus.add(pr)
         const r = recettes[pr]
         if (!r) continue
-        if (faits[clePrepa(pr, cleGroupe)]) continue           // déjà déclaré pour ce groupe
+        if (estDeclare(lot, pr, cleGroupe)) continue           // déjà déclaré pour ce lot
         const manque = besoins[pr].qty - stockDe(pr)
         if (manque <= 0.001) continue
         const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -708,12 +776,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         }))
       return { parfum, cleGroupe, lot, lignes }
     })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [choisis, recettes, stocks, faits])
 
   // Ce qu'il faut avoir fait AVANT de pouvoir cocher : les préparations que ce
   // produit consomme et qui ne sont pas en stock (crème pâtissière avant la crème
   // au beurre vanille, crèmes avant le gâteau…).
-  const bloquants = (produit, qty, usage = '') => {
+  const bloquants = (produit, qty, usage = '', lot = null) => {
     const r = recettes[produit]
     if (!r) return []
     const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -721,7 +790,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return r.lignes
       .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !toujoursLa(l.produit))
       .filter(l => recettes[l.produit])                                        // sans recette, rien à faire ici
-      .filter(l => !faits[clePrepa(l.produit, usage)])                          // déjà déclaré pour cet usage
+      .filter(l => !(lot ? estDeclare(lot, l.produit, usage) : faits[clePrepa(l.produit, usage)]))
       .filter(l => stockDeProduit(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
       .map(l => l.produit)
   }
@@ -754,7 +823,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // Ce qui manque en stock pour fabriquer cette quantité : matières premières
   // comprises (la génoise est ignorée, son stock restera négatif un moment).
-  const manquePour = (produit, qty, usage = '') => {
+  const manquePour = (produit, qty, usage = '', lot = null) => {
     const r = recettes[produit]
     if (!r) return []
     const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
@@ -763,7 +832,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const out = []
     for (const l of r.lignes) {
       if (toujoursLa(l.produit)) continue
-      if (faits[clePrepa(l.produit, usage)]) continue          // déjà déclaré pour cet usage
+      if (lot ? estDeclare(lot, l.produit, usage) : faits[clePrepa(l.produit, usage)]) continue
       const besoin = enKg(l.qty * f, l.unite)
       const st = stocks[l.produit]
       const dispo = st ? Math.max(0, enKg(st.qty, st.unite).q) : 0
@@ -778,48 +847,6 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // aux gâteaux de l'écran (leur origine est un de ces ordres) : sinon on
   // tomberait sur n'importe quel ordre du même article, même prévu dans quinze
   // jours — cas vécu avec la crème au beurre praliné.
-  // La descendance d'un ordre : ses enfants, petits-enfants, sans limite.
-  // Gardée en mémoire, la fonction étant appelée pour chaque composant affiché.
-  const memoDesc = useRef(new Map())
-  useEffect(() => { memoDesc.current = new Map() }, [data])
-  const descendanceDe = racine => {
-    const vu = memoDesc.current.get(racine)
-    if (vu) return vu
-    const tous = (data && data.ordres) || []
-    const dedans = new Set([racine])
-    for (let tour = 0; tour <= tous.length; tour += 1) {
-      let ajout = false
-      for (const o of tous) {
-        if (dedans.has(o.name)) continue
-        const parents = String(o.origine || '').split(',').map(x => x.trim())
-        if (parents.some(x => x && dedans.has(x))) { dedans.add(o.name); ajout = true }
-      }
-      if (!ajout) break
-    }
-    memoDesc.current.set(racine, dedans)
-    return dedans
-  }
-
-  // Tous les ordres déjà déclarés, quelle que soit la coche.
-  const ordresDeclares = useMemo(() => {
-    const out = new Set()
-    for (const [cle, info] of Object.entries(faits)) {
-      if (!cle.startsWith('PREP:')) out.add(cle)
-      for (const n of (info && info.ordres) || []) out.add(n)
-    }
-    return out
-  }, [faits])
-
-  // Ce composant a-t-il été déclaré POUR CE GÂTEAU ? On regarde les ordres
-  // retenus au moment de la coche, pas le nom de la crème : deux gâteaux du même
-  // parfum partagent la même crème mais pas le même ordre.
-  const declarePour = (o, produit) => ((data && data.ordres) || [])
-    .some(x => x.produit === produit && ordresDeclares.has(x.name) && descendanceDe(o.name).has(x.name))
-
-  // Toute la descendance des gâteaux sélectionnés : leurs ordres, ceux de leurs
-  // crèmes, et ceux des composants de ces crèmes (la crème pâtissière est un
-  // petit-enfant du gâteau). Un ordre peut avoir plusieurs origines séparées
-  // par des virgules — « OP/00412,WHLVP/MO/200023 ».
   const descendance = useMemo(() => {
     const tous = (data && data.ordres) || []
     const dedans = new Set(choisis.map(o => o.name))
@@ -908,7 +935,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="max-w-[620px] mx-auto px-4 py-5">
           <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
             setOuvertes={setOuvertes} onEffacer={effacer} onRetour={() => setPageRecette(false)}
-            faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} />
+            faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} estDeclare={estDeclare} />
         </div>
       </div>
     )
@@ -1032,7 +1059,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="hidden lg:block lg:mt-[70px]">
           {deuxColonnes ? (
             <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
-              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} />
+              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} estDeclare={estDeclare} />
           ) : (
             <div className="bg-white border border-dashed border-line rounded-2xl p-6 text-center text-ink-mute text-[13.5px] sticky top-4">
               Coche des gâteaux à gauche :<br />leur recette s'affichera ici, additionnée.
