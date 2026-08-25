@@ -83,3 +83,30 @@ Avant chaque modification de fichier important :
 Le contexte complet est dans CONTEXT_WHATSAPP.md à la racine.
 Lily Gourmet = app React + Vite + Supabase + Vercel pour une PME marocaine (traiteur).
 Layla est l'admin / propriétaire de l'app.
+
+## Ajouter un nouvel onglet (règle Layla)
+
+Tout nouvel écran doit être **rangeable** par Layla : elle range ses onglets
+elle-même (barre du haut, dossiers), et un écran oublié devient introuvable —
+ni dans la barre, ni dans le réglage « Ranger mes onglets ».
+
+À faire pour chaque nouvel onglet :
+1. **Le déclarer dans `src/lib/navTabs.js`** (TAB_DEFS) : `view`, `emoji`,
+   `label`, `can(user)`. C'est la liste de référence — le reste en découle.
+2. **Router l'écran dans `src/App.jsx`** (`activeView === '<view>'`).
+3. **Le ranger dans un groupe de `src/components/SideNav.jsx`** (barre latérale).
+
+Il apparaîtra alors tout seul, en haut du réglage, dans le cadre
+**« Pas encore rangés »** — Layla le voit et le classe où elle veut.
+
+⚠️ Ne pas ajouter l'onglet uniquement dans `AppHeader.jsx` : cette liste-là se
+complète automatiquement depuis `navTabs.js`.
+
+`src/lib/navTabs.test.js` vérifie tout ça : si le test échoue, c'est qu'un écran
+n'est pas rangeable. Un écran qui n'est vraiment pas un onglet (ouvert par un
+lien, un bouton dédié) se déclare dans `HORS_BARRE` de ce test, avec sa raison.
+
+⚠️ **Une permission se déclare à 7 endroits** (voir `perm_transfert_produits`) :
+`auth.js` (SELECT + repli), `users.js` (×3), `AdminUsers.jsx` (formulaire,
+2 sauvegardes, case) et **`src/lib/permsList.js`** — le plus souvent oublié,
+c'est lui qui alimente l'onglet « Par permission ».
