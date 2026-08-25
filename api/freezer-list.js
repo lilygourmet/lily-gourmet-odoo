@@ -466,21 +466,22 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = []) {
  * d'Odoo sont annulés (ils gardent une trace là-bas).
  */
 async function annulerOfApp(uid, names) {
-  // Décocher annule aussi dans Odoo, y compris un ordre qu'Odoo avait créé —
-  // c'est la règle voulue par Layla. Un ordre DÉJÀ VALIDÉ n'est jamais touché :
-  // sa production est entrée en stock. Les ordres de l'app sont supprimés, ceux
-  // d'Odoo restent annulés avec leur trace.
+  // Choix de Layla : décocher ne touche PAS aux ordres d'Odoo. Ils sortent
+  // simplement de la liste et restent disponibles pour un re-cochage — sinon
+  // chaque hésitation détruisait un ordre qu'Odoo ne sait pas ressusciter, et
+  // l'app devait en recréer un (cas vécu : 200162 annulé, puis 200168 créé).
+  // Seuls les ordres créés par l'app disparaissent : eux n'ont plus de raison
+  // d'être, et l'app saura en refaire un au besoin.
   const mos = await odooSearchRead(uid, 'mrp.production',
     [['name', 'in', names], ['state', 'in', ['draft', 'confirmed', 'progress']]],
     ['id', 'name', 'origin'], { limit: 50 })
-  if (!mos.length) return { annules: 0, noms: [] }
-  const ids = mos.map(m => m.id)
+  const siens = mos.filter(m => String(m.origin || '').includes(ORIGINE_APP))
+  if (!siens.length) return { annules: 0, noms: [] }
+  const ids = siens.map(m => m.id)
   await odooCall(uid, 'mrp.production', 'action_cancel', [ids]).catch(() => { })
   await odooCall(uid, 'mrp.production', 'write', [ids, { state: 'cancel' }]).catch(() => { })
-  // ceux que l'app avait créés ne servent plus à rien : on les efface
-  const siens = mos.filter(m => String(m.origin || '').includes(ORIGINE_APP)).map(m => m.id)
-  if (siens.length) await odooCall(uid, 'mrp.production', 'unlink', [siens]).catch(() => { })
-  return { annules: ids.length, noms: mos.map(m => m.name) }
+  await odooCall(uid, 'mrp.production', 'unlink', [ids]).catch(() => { })
+  return { annules: ids.length, noms: siens.map(m => m.name) }
 }
 
 // Crée l'ordre de fabrication et le confirme. Il part ensuite dans « À valider »
