@@ -680,7 +680,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const concernes = ((data && data.ordres) || [])
       .filter(x => x.produit === produit && lot.some(o => descendanceDe(o.name).has(x.name)))
     if (concernes.length) return concernes.every(x => ordresDeclares.has(x.name))
-    return !!faits[clePrepa(produit, cleGroupe)]
+    // Pas d'ordre pour ce gâteau : on se rabat sur la coche du groupe. Mais si
+    // cette coche visait des ordres précis, ils doivent le concerner — sinon la
+    // crème praliné faite pour le 45 cm passerait pour faite au Cœur 10p, les
+    // deux partageant le même article.
+    const coche = faits[clePrepa(produit, cleGroupe)]
+    if (!coche) return false
+    const vises = coche.ordres || []
+    if (!vises.length) return true
+    return vises.some(n => lot.some(o => descendanceDe(o.name).has(n)))
   }
 
   // Toute la descendance des gâteaux sélectionnés : leurs ordres, ceux de leurs
