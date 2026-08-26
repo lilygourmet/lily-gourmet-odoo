@@ -296,6 +296,17 @@ async function validerOrdre(uid, name, forcer) {
     if (!mo.qty_producing || mo.qty_producing !== mo.product_qty) {
       await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: mo.product_qty }])
     }
+    // Validé par programme, Odoo ne remplit pas les quantités consommées des
+    // composants — il refuse alors la validation (« You must indicate a
+    // non-zero amount consumed for at least one of your components »). On les
+    // renseigne à ce qui était demandé, sans écraser ce qui est déjà saisi.
+    const raws = await odooSearchRead(uid, 'stock.move',
+      [['raw_material_production_id', '=', mo.id], ['state', 'not in', ['done', 'cancel']]],
+      ['product_uom_qty', 'quantity_done'], { limit: 50 })
+    for (const r of raws) {
+      if (r.quantity_done > 0 || !(r.product_uom_qty > 0)) continue
+      await odooCall(uid, 'stock.move', 'write', [[r.id], { quantity_done: r.product_uom_qty }]).catch(() => { })
+    }
     const r = await odooCall(uid, 'mrp.production', 'button_mark_done', [[mo.id]])
     // Odoo renvoie une fenêtre de confirmation quand quelque chose cloche
     if (r && typeof r === 'object' && r.res_model) {
