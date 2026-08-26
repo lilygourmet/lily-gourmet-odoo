@@ -892,13 +892,6 @@ async function fetchFabrication(uid, jours) {
       scode: (String(src).match(/S\d{3,}/i) || [''])[0].toUpperCase(),
     }
   })
-  const ordres = mos.map(m => ({
-    name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
-    etat: m.state, dispo: m.components_availability || '',
-    origine: m.origin || '',
-    reserves: reservesPar[m.name] || {},
-    pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
-  }))
   // Ce qui est réservé pour chaque ordre, composant par composant. L'app en a
   // besoin pour ne pas redemander une crème déjà mise de côté pour un gâteau.
   const idsOrdres = mos.map(m => m.id)
@@ -918,6 +911,13 @@ async function fetchFabrication(uid, jours) {
     }
   }
 
+  const ordres = mos.map(m => ({
+    name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
+    etat: m.state, dispo: m.components_availability || '',
+    origine: m.origin || '',
+    reserves: reservesPar[m.name] || {},
+    pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
+  }))
   // Les autres ordres WHLVP ouverts (pâte à sucre…) : ils ne s'appellent pas
   // « CD* » mais ce qu'ils produisent compte aussi dans le stock que l'app tient
   // entre le « fait » et la validation.
