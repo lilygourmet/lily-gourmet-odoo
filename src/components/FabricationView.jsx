@@ -220,12 +220,10 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
 }
 
 function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) {
-  // Un composant qui manque n'empêche plus de déclarer : celui qui fabrique
-  // constate un fait, c'est la validation qui tranche (et qui a son bouton
-  // « forcer »). Seule une nomenclature absente bloque vraiment — là, Odoo ne
-  // pourrait rien enregistrer.
-  const empeche = !fait && sansNomenclature
-  const attend = !fait && !sansNomenclature && bloque && bloque.length
+  // On bloque quand un composant n'existe PAS DU TOUT — la crème n'a pas encore
+  // été faite. S'il en manque seulement une partie, on laisse déclarer : le
+  // gâteau est monté, c'est un fait ; la validation tranchera sur le reste.
+  const empeche = !fait && (sansNomenclature || (bloque && bloque.length))
   return (
     <button onClick={e => { e.stopPropagation(); if (!empeche) onClick() }}
       title={sansNomenclature ? 'Sa nomenclature manque dans Odoo : rien ne peut être enregistré'
@@ -234,8 +232,8 @@ function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) 
       className={'flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold border ' +
         (fait ? 'bg-ok text-cream border-ok'
           : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50 cursor-not-allowed'
-            : attend ? 'bg-[#FFF7E0] text-[#854F0B] border-[#e6d3a3]' : 'bg-white text-ink-mute border-line')}>
-      {fait ? '✓ fait' : sansNomenclature ? 'pas de recette' : 'c\'est fait'}
+            : 'bg-white text-ink-mute border-line')}>
+      {fait ? '✓ fait' : sansNomenclature ? 'pas de recette' : empeche ? 'en attente' : 'c\'est fait'}
     </button>
   )
 }
@@ -926,7 +924,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !toujoursLa(l.produit))
       .filter(l => recettes[l.produit])                                        // sans recette, rien à faire ici
       .filter(l => !(lot ? estDeclare(lot, l.produit, usage) : faits[clePrepa(l.produit, usage)]))
-      .filter(l => stockDeProduit(l.produit) + reservePour(lot, l.produit) < enKg(l.qty * f, l.unite).q)
+      .filter(l => stockDeProduit(l.produit) + reservePour(lot, l.produit) <= 0.001)
       .map(l => l.produit)
   }
   // pour un gâteau : ses préparations non faites (celles qui ne sont pas en stock)
@@ -937,7 +935,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     .filter(r => recettes[r.produit])
     // déjà déclaré fait POUR CE GÂTEAU : il n'y a plus rien à attendre
     .filter(r => !declarePour(o, r.produit))
-    .filter(r => stockDeProduit(r.produit) + enKg(r.reserve || 0, r.unite).q < enKg(r.qty, r.unite).q - 0.001)
+    // rien du tout : ni en stock, ni réservé pour lui. Un manque partiel
+    // n'empêche pas de déclarer un gâteau qui est monté.
+    .filter(r => stockDeProduit(r.produit) + enKg(r.reserve || 0, r.unite).q <= 0.001)
     .map(r => r.produit)
 
   // Les ordres Odoo correspondant à ce qui est marqué fait : l'ordre lui-même
