@@ -438,7 +438,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [data, setData] = useState(() => dernierEcran('fabrication'))
   const [erreur, setErreur] = useState(null)
   const [sel, setSel] = useState([])                      // noms d'OF cochés
-  const [ouvertes, setOuvertes] = useState({})            // sous-recettes dépliées
+  const [ouvertes, setOuvertes] = useState({})
+  const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base            // sous-recettes dépliées
   const [pageRecette, setPageRecette] = useState(false)   // téléphone : recette en page à part
   const [faitsBruts, setFaits] = useState({})             // ce qui est coché dans l'app
   const [charge, setCharge] = useState(0)                // instant du dernier chargement d'Odoo
@@ -615,7 +616,37 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const faitBase = b => (b.ordre ? !!faits[b.ordre] : couvert(b.produit, b.besoin))
   // Barré = quelqu'un l'a faite. Une base simplement couverte par le stock reste
   // lisible : elle porte déjà son « en stock (x g) ».
-  const baseBarree = b => !!faits[b.ordre || clePrepa(b.produit)]
+  const baseBarree = b => tourneesFaites(b) > 0 || !!faits[b.ordre || clePrepa(b.produit)]
+
+  // Une base se fait par tournées, et pas forcément toutes d'un coup : on
+  // compte celles déjà déclarées aujourd'hui pour savoir ce qu'il reste.
+  const tourneesFaites = b => {
+    const t = tailleTournee(recettes, b.produit)
+    if (!t || !t.q) return 0
+    const total = Object.values(faits)
+      .filter(i => i && i.produit === b.produit)
+      .reduce((s2, i) => s2 + (Number(i.qty) || 0), 0)
+    return Math.round(total / t.q)
+  }
+
+  /** Déclarer N tournées d'une base : on reprend un ordre libre d'Odoo, sinon on en crée un. */
+  const declarerBase = async (b, n) => {
+    const t = tailleTournee(recettes, b.produit)
+    const qty = n * ((t && t.q) || 0)
+    if (!(qty > 0)) return
+    const desGateaux = new Set(((data && data.ofs) || []).map(o => o.name))
+    const libre = ((data && data.ordres) || []).find(o => o.produit === b.produit
+      && o.etat !== 'done' && !faits[o.name] && !desGateaux.has(o.origine))
+    if (libre) return marquerOrdre(libre.name, b.produit, qty)
+    const cree = await creerOfPrepa(b.produit, qty, user?.id, [])
+    if (cree && cree.name && !cree.error && !cree.test) {
+      toast.success(`Ordre ${cree.name} créé dans Odoo`)
+      setData(d => (d ? { ...d, ordres: [...(d.ordres || []), { name: cree.name, produit: b.produit, qty, unite: 'kg', etat: 'confirmed', origine: 'LG-APP' }] } : d))
+      return marquerOrdre(cree.name, b.produit, qty)
+    }
+    if (cree && cree.test) toast.success('Mode test : aucun ordre créé dans Odoo')
+    else if (cree && cree.error) toast.error('Odoo : ' + cree.error)
+  }
 
   // Tous les ordres de fabrication ouverts sont montrés, même si l'article est
   // déjà en stock : si Odoo a lancé l'ordre, c'est qu'il y a une raison.
@@ -1105,18 +1136,33 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                             <span className="block text-[10.5px]">{qteLisible(b.reserve, b.unite)} réservés</span>
                           )}
                         </span>
-                        <span className={'text-right ' + (baseBarree(b) ? 'line-through opacity-60' : '')}>
+                        <span className="text-right">
                           <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
-                          {b.n > 0 && <span className="block text-[10.5px] text-ink-mute leading-tight">{b.n} tournée{b.n > 1 ? 's' : ''}</span>}
+                          {b.n > 0 && (
+                            <span className="block text-[10.5px] text-ink-mute leading-tight">
+                              {b.n} tournée{b.n > 1 ? 's' : ''}
+                              {tourneesFaites(b) > 0 && <b className="text-ok"> · {tourneesFaites(b)} faite{tourneesFaites(b) > 1 ? 's' : ''}</b>}
+                            </span>
+                          )}
                         </span>
                         {recettes[b.produit] && (
                           <span className="text-ink-mute text-[13px] px-1" aria-hidden="true">
                             {ouvertes[cleBase(b.produit)] ? '▾' : '▸'}
                           </span>
                         )}
-                        <BoutonFait fait={faitBase(b)} sansNomenclature={sansRecette(b.produit, recettes)}
+                        {/* combien j'en fais maintenant : pas forcément tout d'un coup */}
+                        {b.n > 1 && (
+                          <span className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setLots(l => ({ ...l, [b.produit]: Math.max(1, (l[b.produit] ?? b.n) - 1) }))}
+                              className="w-7 h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">−</button>
+                            <b className="min-w-[16px] text-center text-[15px]">{lots[b.produit] ?? b.n}</b>
+                            <button onClick={() => setLots(l => ({ ...l, [b.produit]: Math.min(b.n, (l[b.produit] ?? b.n) + 1) }))}
+                              className="w-7 h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">+</button>
+                          </span>
+                        )}
+                        <BoutonFait fait={false} sansNomenclature={sansRecette(b.produit, recettes)}
                           bloque={bloquants(b.produit, b.qty)}
-                          onClick={() => marquer(b.ordre || clePrepa(b.produit), b.produit, b.qty)} />
+                          onClick={() => declarerBase(b, lots[b.produit] ?? b.n)} />
                       </>
                     )}
                   </div>
