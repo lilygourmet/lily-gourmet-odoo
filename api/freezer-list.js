@@ -269,9 +269,25 @@ async function integrerGlacage(uid, mo) {
   return Math.round(enG(reste, unite))
 }
 
+/**
+ * Après validation d'une préparation, réserve aussitôt sa part chez le ou les
+ * ordres qui l'attendent. Sans ça, la crème faite pour un gâteau reste libre et
+ * un autre ordre peut la consommer avant lui.
+ */
+async function reserverPourLeParent(uid, mo) {
+  const parents = String(mo.origin || '').split(',').map(x => x.trim())
+    .filter(x => /^WH.*\/MO\//i.test(x))
+  if (!parents.length) return null
+  const pm = await odooSearchRead(uid, 'mrp.production',
+    [['name', 'in', parents], ['state', 'in', ['confirmed', 'progress', 'to_close']]], ['id', 'name'], { limit: 10 })
+  if (!pm.length) return null
+  await odooCall(uid, 'mrp.production', 'action_assign', [pm.map(m => m.id)]).catch(() => { })
+  return pm.map(m => m.name).join(', ')
+}
+
 async function validerOrdre(uid, name, forcer) {
   const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', name]],
-    ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_id', 'location_src_id', 'company_id']))[0]
+    ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_id', 'location_src_id', 'company_id', 'origin']))[0]
   if (!mo) return { name, ok: false, message: 'ordre introuvable' }
   if (mo.state === 'done') return { name, ok: true, message: 'déjà terminé' }
   if (mo.state === 'cancel') return { name, ok: false, message: 'ordre annulé' }
@@ -289,7 +305,12 @@ async function validerOrdre(uid, name, forcer) {
       await odooCall(uid, r.res_model, 'process', [[wiz]], { context: ctx })
     }
     const apres = (await odooSearchRead(uid, 'mrp.production', [['id', '=', mo.id]], ['state']))[0]
-    return { name, ok: apres && apres.state === 'done', message: apres ? apres.state : '', glacage }
+    const fini = apres && apres.state === 'done'
+    // La production vient d'entrer en stock : tant que personne ne la réserve,
+    // n'importe quel autre ordre peut la prendre (le stock d'Odoo est commun).
+    // On la réserve tout de suite pour le gâteau qui l'attend.
+    const pour = fini ? await reserverPourLeParent(uid, mo) : null
+    return { name, ok: fini, message: apres ? apres.state : '', glacage, pour }
   } catch (e) {
     return { name, ok: false, message: (e.message || String(e)).slice(0, 300) }
   }

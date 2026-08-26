@@ -101,6 +101,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                 <div className="text-[12.5px] text-ink-soft">
                   {r.ok ? 'validé dans Odoo' : r.message}
                   {r.glacage > 0 && ` · ${nb(r.glacage)} g de glaçage royal consommés dedans`}
+                  {r.pour && ` · réservé aussitôt pour ${r.pour}`}
                 </div>
               </div>
             ))}
