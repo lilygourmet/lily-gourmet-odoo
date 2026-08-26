@@ -14,6 +14,24 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
   const [tasksCount, setTasksCount] = useState(0)
   const [livrCount, setLivrCount] = useState(0)
   const [moreOpen, setMoreOpen] = useState(false)
+  // La barre se retire quand on descend dans la page (elle mangeait le bas de
+  // l'ecran, signale plusieurs fois) et revient des qu'on remonte, ou en haut
+  // de page. Tiroir ouvert = elle reste, sinon il flotterait tout seul.
+  const [barreVisible, setBarreVisible] = useState(true)
+
+  useEffect(() => {
+    let dernier = window.scrollY
+    function onScroll() {
+      const y = window.scrollY
+      const delta = y - dernier
+      if (y < 60) setBarreVisible(true)
+      else if (delta > 8) setBarreVisible(false)
+      else if (delta < -8) setBarreVisible(true)
+      if (Math.abs(delta) > 8 || y < 60) dernier = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -54,7 +72,8 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
 
   return (
     <>
-      <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-cream border-t border-line flex shadow-[0_-2px_8px_rgba(0,0,0,0.06)]"
+      <nav className={`sm:hidden fixed bottom-0 inset-x-0 z-40 bg-cream border-t border-line flex shadow-[0_-2px_8px_rgba(0,0,0,0.06)] transition-transform duration-200 ${
+        (barreVisible || moreOpen) ? 'translate-y-0' : 'translate-y-full'}`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {items.map(it => {
           const active = activeView === it.view
