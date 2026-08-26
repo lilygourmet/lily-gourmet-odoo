@@ -220,15 +220,22 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
 }
 
 function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) {
-  const empeche = !fait && (sansNomenclature || (bloque && bloque.length))
+  // Un composant qui manque n'empêche plus de déclarer : celui qui fabrique
+  // constate un fait, c'est la validation qui tranche (et qui a son bouton
+  // « forcer »). Seule une nomenclature absente bloque vraiment — là, Odoo ne
+  // pourrait rien enregistrer.
+  const empeche = !fait && sansNomenclature
+  const attend = !fait && !sansNomenclature && bloque && bloque.length
   return (
     <button onClick={e => { e.stopPropagation(); if (!empeche) onClick() }}
       title={sansNomenclature ? 'Sa nomenclature manque dans Odoo : rien ne peut être enregistré'
         : empeche ? 'À faire d\'abord : ' + (bloque || []).map(propre).join(', ')
           : fait ? 'Annuler la déclaration' : 'Déclarer que c\'est fait'}
       className={'flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold border ' +
-        (fait ? 'bg-ok text-cream border-ok' : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50 cursor-not-allowed' : 'bg-white text-ink-mute border-line')}>
-      {fait ? '✓ fait' : sansNomenclature ? 'pas de recette' : empeche ? 'en attente' : 'c\'est fait'}
+        (fait ? 'bg-ok text-cream border-ok'
+          : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50 cursor-not-allowed'
+            : attend ? 'bg-[#FFF7E0] text-[#854F0B] border-[#e6d3a3]' : 'bg-white text-ink-mute border-line')}>
+      {fait ? '✓ fait' : sansNomenclature ? 'pas de recette' : 'c\'est fait'}
     </button>
   )
 }
