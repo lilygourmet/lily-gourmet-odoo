@@ -468,9 +468,16 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return out
   }, [faitsBruts, caduques])
 
-  // et on efface la trace, une fois, sans bloquer l'affichage
+  // et on efface la trace, une fois, sans bloquer l'affichage — en libérant
+  // aussi ce que ces coches réservaient, sinon du stock reste bloqué dans Odoo
+  // sans que rien ne le justifie.
   useEffect(() => {
-    for (const c of caduques) setFait({ name: c }, false, user?.id).catch(() => { })
+    for (const c of caduques) {
+      const info = faitsBruts[c] || {}
+      const ordres = /^WH.*\/MO\//i.test(c) ? [c, ...(info.ordres || [])] : (info.ordres || [])
+      if (ordres.length) reserverOrdres([...new Set(ordres)], false)
+      setFait({ name: c }, false, user?.id).catch(() => { })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caduques.join('|')])
   const [validerOuvert, setValiderOuvert] = useState(false)
