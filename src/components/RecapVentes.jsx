@@ -12,7 +12,7 @@ function CatIcon({ catId, size = 16, className = '' }) {
 }
 import { isLivreur } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
-import { printArticleBatch, pingPrinter, PRINTER_HELPER_URL } from '../lib/printTicket'
+import { printArticleBatch, pingPrinter } from '../lib/printTicket'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
@@ -1128,8 +1128,7 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           `${result.errors.length} erreur(s) :\n` +
           result.errors.slice(0, 3).map(e => `- ${e.article.productName} : ${e.error}`).join('\n') +
           (result.errors.length > 3 ? `\n... et ${result.errors.length - 3} autres.` : '') +
-          `\n\nVerifiez que le PC d'impression est allume (${PRINTER_HELPER_URL}) et que l'imprimante l'est aussi.` +
-          `\nSi le PC a change d'adresse sur le reseau, il faut la corriger dans l'app.`
+          `\n\nVerifiez que le PC de la boutique est allume et que l'imprimante l'est aussi.`
         )
       }
     } catch (e) {

@@ -1,40 +1,29 @@
 // ============================================================
-// Impression ticket Epson via helper local sur PC Windows
+// Impression ticket Epson : l'app depose, le PC de la boutique vient chercher
 // ============================================================
 //
 // Architecture :
-//   Navigateur (cette app)  ->  http://<IP du PC>:9999/print  ->  Imprimante TM-T88VII
+//   Navigateur  ->  table print_jobs (Supabase)  ->  PC de la boutique  ->  Imprimante
 //
-// Le helper Node tourne sur le PC Windows toujours allume de la boutique.
-// Il forward le texte vers l'imprimante via ESC/POS (port 9100).
+// Pourquoi pas en direct ? Le navigateur ne peut PAS appeler le PC : un site en
+// « https » n'a pas le droit d'appeler un « http » sur le reseau local. Chrome
+// laisse l'autoriser a la main, Safari et l'iPad non — et l'adresse du PC change
+// quand la box la redistribue (vecu deux fois : .241 -> .5, plus rien n'imprimait
+// depuis les autres appareils). Donc c'est le PC qui vient chercher le travail,
+// toutes les secondes, via /api/print-queue.
 //
-// Note "mixed content" :
-//   L'app Vercel tourne en HTTPS, le helper en HTTP. Les navigateurs bloquent
-//   par defaut. L'utilisateur doit autoriser le mixed content pour le site
-//   (clic sur le cadenas dans la barre d'URL -> "Parametres du site" ->
-//   "Contenu non securise : Autoriser") -- une fois par appareil.
+// Consequences : ca marche depuis n'importe quel appareil, meme hors du WiFi de
+// la boutique ; il faut juste que le PC soit allume, comme avant. Compter une
+// seconde ou deux entre le clic et la sortie du ticket.
 // ============================================================
 
-// Adresses possibles du helper, essayees DANS L'ORDRE jusqu'a ce qu'une reponde :
-//  1) http://localhost:9999  -> le PC qui pilote l'imprimante (jamais bloque par le navigateur)
-//  2) l'IP du PC sur le reseau, pour les TABLETTES / autres ordis
-//     (HTTP depuis un site HTTPS : il faut autoriser le "contenu non securise" 1x par appareil)
-// ATTENTION : cette IP est distribuee par la box, elle CHANGE quand le PC redemarre.
-// Le 2026-08-26 le PC est passe de .241 a .5 -> plus rien n'imprimait depuis les
-// autres ordinateurs (message trompeur "helper pas lance"). On garde donc une
-// LISTE d'adresses connues, essayees l'une apres l'autre.
-// Vraie solution : reserver une IP fixe pour ce PC dans la box.
-// Surchargeable au build via VITE_PRINTER_HELPER_URL (placee en tete si definie).
-const PC_LAN_URLS = ['http://192.168.1.5:9999', 'http://192.168.1.241:9999']
-function helperCandidates() {
-  const list = []
-  if (import.meta.env?.VITE_PRINTER_HELPER_URL) list.push(import.meta.env.VITE_PRINTER_HELPER_URL)
-  list.push('http://localhost:9999', ...PC_LAN_URLS)
-  return [...new Set(list.map(u => u.replace(/\/+$/, '')))]
-}
-// Memorise la base qui a marche pour ne pas re-sonder a chaque ticket.
-let _workingBase = null
-export const PRINTER_HELPER_URL = PC_LAN_URLS[0]   // compat (non utilise directement)
+import { supabase } from './supabase'
+
+// Au-dela, on considere que le ticket ne sortira pas (PC eteint, imprimante
+// coupee) et on rend la main a la personne devant l'ecran.
+const ATTENTE_MAX_MS = 40000
+// Le PC doit s'etre manifeste recemment pour etre considere allume.
+const SIGNE_DE_VIE_MS = 30000
 
 // ----- Helpers de formatage du texte ticket -----
 
@@ -193,48 +182,70 @@ export async function printGroupTicket({ deliveryAt, orderNum, clientName, items
   return sendTicket(buildTicketGroup({ deliveryAt, orderNum, clientName, items }))
 }
 
-// ----- Envoi au helper -----
+// ----- Envoi : on depose dans la file, le PC vient chercher -----
 
-// Envoie un ticket et resout en cas de succes. Throw sinon.
-// Essaie chaque base candidate (localhost, puis IP du PC) jusqu'a ce qu'une reponde.
-export async function sendTicket(ticketText) {
-  // L'imprimante ne gere pas l'UTF-8 : on retire les accents (é->e, è->e, à->a,
-  // ç->c...) pour eviter les caracteres bizarres sur le ticket.
-  const safeText = ticketText.normalize('NFD').replace(/[̀-ͯ]/g, '')
-  const cands = helperCandidates()
-  const bases = _workingBase ? [_workingBase, ...cands.filter(b => b !== _workingBase)] : cands
-  let lastErr = null
-  for (const base of bases) {
-    try {
-      const resp = await fetch(`${base}/print`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: safeText, cut: true }),
-      })
-      if (!resp.ok) { const txt = await resp.text().catch(() => ''); lastErr = new Error(`Helper a renvoye ${resp.status} - ${txt}`); continue }
-      const data = await resp.json().catch(() => ({ ok: true }))
-      // Le helper peut répondre HTTP 200 mais { ok:false } (ex. imprimante hors-ligne) → c'est un échec.
-      if (data && data.ok === false) { lastErr = new Error(data.error || 'Imprimante hors-ligne'); continue }
-      _workingBase = base
-      return data
-    } catch (e) { lastErr = e }
-  }
-  throw lastErr || new Error('Aucun helper joignable')
+// L'imprimante ne gere pas l'UTF-8 : on retire les accents (é->e, à->a, ç->c...)
+// pour eviter les caracteres bizarres sur le ticket.
+function sansAccents(texte) {
+  return String(texte).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
-// Healthcheck simple : verifie que le helper repond (sur n'importe quelle base candidate)
-export async function pingPrinter() {
-  const cands = helperCandidates()
-  const bases = _workingBase ? [_workingBase, ...cands.filter(b => b !== _workingBase)] : cands
-  for (const base of bases) {
-    try {
-      const resp = await fetch(`${base}/health`, { method: 'GET' })
-      if (!resp.ok) continue
-      const data = await resp.json().catch(() => null)
-      if (data && data.ok) { _workingBase = base; return true }
-    } catch (e) { /* essaie la suivante */ }
+// Depose N tickets d'un coup et attend qu'ils soient tous sortis.
+// Renvoie un tableau, dans l'ordre : { ok: true } ou { ok: false, error }.
+export async function sendTickets(textes) {
+  if (!textes.length) return []
+
+  const { data: jobs, error } = await supabase
+    .from('print_jobs')
+    .insert(textes.map(t => ({ text: sansAccents(t), cut: true })))
+    .select('id')
+  if (error) {
+    // La table n'accepte que les utilisateurs connectes : un jeton expire fait
+    // retomber en « anon » et l'envoi est refuse. Le dire simplement.
+    if (/row-level security|permission/i.test(error.message)) {
+      throw new Error('Ta session a expire — deconnecte-toi et reconnecte-toi, puis reessaie')
+    }
+    throw new Error(`Impossible d'envoyer a l'impression : ${error.message}`)
   }
-  return false
+
+  const ids = jobs.map(j => j.id)
+  const resultats = new Map()
+  const debut = Date.now()
+
+  while (resultats.size < ids.length && Date.now() - debut < ATTENTE_MAX_MS) {
+    await new Promise(r => setTimeout(r, 700))
+    const { data } = await supabase
+      .from('print_jobs')
+      .select('id, status, error')
+      .in('id', ids.filter(id => !resultats.has(id)))
+    for (const j of data || []) {
+      if (j.status === 'done') resultats.set(j.id, { ok: true })
+      else if (j.status === 'error') resultats.set(j.id, { ok: false, error: j.error || 'Impression ratee' })
+    }
+  }
+
+  return ids.map(id => resultats.get(id) || {
+    ok: false,
+    error: "Le PC d'impression n'a pas repondu — verifie qu'il est allume",
+  })
+}
+
+// Un seul ticket. Throw si il n'est pas sorti (comportement d'avant).
+export async function sendTicket(ticketText) {
+  const [r] = await sendTickets([ticketText])
+  if (!r.ok) throw new Error(r.error)
+  return r
+}
+
+// Le PC d'impression a-t-il donne signe de vie recemment ?
+export async function pingPrinter() {
+  const { data } = await supabase
+    .from('print_helper_status')
+    .select('last_seen, printer_found')
+    .eq('id', 1)
+    .maybeSingle()
+  if (!data?.last_seen) return false
+  return Date.now() - new Date(data.last_seen).getTime() < SIGNE_DE_VIE_MS
 }
 
 // Imprime un article complet en utilisant le format A.
@@ -246,28 +257,39 @@ export async function printArticleTicket({ deliveryAt, orderNum, clientName, pro
   return sendTicket(text)
 }
 
-// Imprime plusieurs articles en serie. Pour chaque article, si boxCount > 1,
-// imprime boxCount tickets avec numerotation "1/N", "2/N", etc.
-// Renvoie { ok: N, errors: [...] } pour gerer les erreurs partielles.
+// Imprime plusieurs articles. Pour chaque article, si boxCount > 1, imprime
+// boxCount tickets numerotes "1/N", "2/N"...
+// Tous les tickets sont deposes EN UNE FOIS (sinon on attendrait le PC autant
+// de fois qu'il y a de tickets), puis on rend compte de chacun.
+// Renvoie { ok: N, errors: [...] } pour gerer les echecs partiels.
 export async function printArticleBatch(articles) {
-  const errors = []
-  let ok = 0
+  const aImprimer = []
   for (const a of articles) {
     const boxCount = Math.max(1, parseInt(a.boxCount) || 1)
     for (let i = 1; i <= boxCount; i++) {
-      try {
-        // boxIndex/boxTotal seulement si plusieurs boites (sinon ticket simple sans num)
-        const ticketData = boxCount > 1
-          ? { ...a, boxIndex: i, boxTotal: boxCount }
-          : a
-        await printArticleTicket(ticketData)
-        ok++
-        // Petit delai entre 2 tickets pour ne pas saturer le helper
-        await new Promise(r => setTimeout(r, 200))
-      } catch (e) {
-        errors.push({ article: a, error: e.message, boxIndex: i })
-      }
+      // boxIndex/boxTotal seulement si plusieurs boites (sinon ticket simple sans num)
+      const data = boxCount > 1 ? { ...a, boxIndex: i, boxTotal: boxCount } : a
+      aImprimer.push({ article: a, boxIndex: i, text: buildTicketTextA(data) })
     }
   }
-  return { ok, errors, total: articles.reduce((s, a) => s + Math.max(1, parseInt(a.boxCount) || 1), 0) }
+
+  let resultats
+  try {
+    resultats = await sendTickets(aImprimer.map(t => t.text))
+  } catch (e) {
+    // Meme pas reussi a deposer (pas de reseau) : tout est en erreur.
+    return {
+      ok: 0,
+      errors: aImprimer.map(t => ({ article: t.article, error: e.message, boxIndex: t.boxIndex })),
+      total: aImprimer.length,
+    }
+  }
+
+  const errors = []
+  let ok = 0
+  resultats.forEach((r, i) => {
+    if (r.ok) ok++
+    else errors.push({ article: aImprimer[i].article, error: r.error, boxIndex: aImprimer[i].boxIndex })
+  })
+  return { ok, errors, total: aImprimer.length }
 }
