@@ -265,6 +265,8 @@ async function integrerGlacage(uid, mo) {
     await odooCall(uid, 'stock.move', '_action_confirm', [[cree.id]]).catch(() => {})
     await odooCall(uid, 'stock.move', '_action_assign', [[cree.id]]).catch(() => {})
   }
+  // la quantité consommée est renseignée juste après, avec celle des autres
+  // composants (voir validerOrdre) : Odoo ne la calcule pas pour nous
   const unite = Array.isArray(prod.uom_id) ? prod.uom_id[1] : 'kg'
   return Math.round(enG(reste, unite))
 }
@@ -566,6 +568,9 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
     }])
   }
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
+  // même règle que partout : créé par programme, l'ordre ne réserve rien tout
+  // seul — on le lui demande, sinon ses ingrédients restent libres pour d'autres
+  await odooCall(uid, 'mrp.production', 'action_assign', [[id]]).catch(() => { })
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
   const uniteBom = Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'g'
   return { id, name: cree.name, qty: enG(cree.product_qty, uniteBom), produit: prod.display_name, etat: cree.state }
