@@ -896,8 +896,28 @@ async function fetchFabrication(uid, jours) {
     name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
     etat: m.state, dispo: m.components_availability || '',
     origine: m.origin || '',
+    reserves: reservesPar[m.name] || {},
     pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
   }))
+  // Ce qui est réservé pour chaque ordre, composant par composant. L'app en a
+  // besoin pour ne pas redemander une crème déjà mise de côté pour un gâteau.
+  const idsOrdres = mos.map(m => m.id)
+  const reservesPar = {}
+  if (idsOrdres.length) {
+    const rm = await odooSearchRead(uid, 'stock.move',
+      [['raw_material_production_id', 'in', idsOrdres], ['reserved_availability', '>', 0]],
+      ['raw_material_production_id', 'product_id', 'reserved_availability', 'product_uom'], { limit: 800 })
+    for (const x of rm) {
+      const nomOrdre = Array.isArray(x.raw_material_production_id) ? x.raw_material_production_id[1] : ''
+      const nomProd = Array.isArray(x.product_id) ? x.product_id[1] : ''
+      let q = x.reserved_availability || 0
+      const u = (Array.isArray(x.product_uom) ? x.product_uom[1] : '') || ''
+      if (/^g$/i.test(u) && q >= 1000) q = q / 1000
+      if (!nomOrdre || !nomProd) continue
+      ;(reservesPar[nomOrdre] ||= {})[nomProd] = (reservesPar[nomOrdre][nomProd] || 0) + q
+    }
+  }
+
   // Les autres ordres WHLVP ouverts (pâte à sucre…) : ils ne s'appellent pas
   // « CD* » mais ce qu'ils produisent compte aussi dans le stock que l'app tient
   // entre le « fait » et la validation.

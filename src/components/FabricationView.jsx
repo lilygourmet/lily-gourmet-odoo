@@ -611,6 +611,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return c ? sansStk(c.produit) : (o.parfum || '—')
   }
 
+  // Ce qui est réservé pour un lot de gâteaux (leurs ordres et toute leur
+  // descendance) sur un composant donné : ça leur appartient déjà.
+  const reservePour = (lot, produit) => {
+    if (!lot || !lot.length) return 0
+    const dedans = new Set()
+    lot.forEach(o => descendanceDe(o.name).forEach(n => dedans.add(n)))
+    return ((data && data.ordres) || [])
+      .filter(o => dedans.has(o.name))
+      .reduce((s2, o) => s2 + ((o.reserves && o.reserves[produit]) || 0), 0)
+  }
+
   // le stock d'un article, jamais négatif (en kg, ou en unités pour les gâteaux)
   const stockDeProduit = n => { const st = stocks[n]; return st ? Math.max(0, enKg(st.qty, st.unite).q) : 0 }
 
@@ -908,7 +919,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !toujoursLa(l.produit))
       .filter(l => recettes[l.produit])                                        // sans recette, rien à faire ici
       .filter(l => !(lot ? estDeclare(lot, l.produit, usage) : faits[clePrepa(l.produit, usage)]))
-      .filter(l => stockDeProduit(l.produit) < enKg(l.qty * f, l.unite).q)      // il faut vraiment le faire
+      .filter(l => stockDeProduit(l.produit) + reservePour(lot, l.produit) < enKg(l.qty * f, l.unite).q)
       .map(l => l.produit)
   }
   // pour un gâteau : ses préparations non faites (celles qui ne sont pas en stock)
@@ -952,7 +963,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       if (lot ? estDeclare(lot, l.produit, usage) : faits[clePrepa(l.produit, usage)]) continue
       const besoin = enKg(l.qty * f, l.unite)
       const st = stocks[l.produit]
-      const dispo = st ? Math.max(0, enKg(st.qty, st.unite).q) : 0
+      const dispo = (st ? Math.max(0, enKg(st.qty, st.unite).q) : 0) + reservePour(lot, l.produit)
       if (dispo < besoin.q - 0.0001) out.push({ produit: l.produit, manque: besoin.q - dispo, unite: besoin.u })
     }
     return out
