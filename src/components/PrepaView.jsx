@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadPrepa, lancerPrepa, setFait, dernierEcran, garderEcran } from '../lib/fabrication'
+import { loadPrepa, lancerPrepa, setFait, loadFaits, reserverOrdres, annulerOfPrepa, dernierEcran, garderEcran } from '../lib/fabrication'
 
 // ====== Fabrication d'une préparation (glaçage royal, pâte à sucre) ======
 // Ces articles n'ont ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
@@ -31,6 +31,7 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
   const [n, setN] = useState(1)
   const [envoi, setEnvoi] = useState(false)
   const [faits, setFaits] = useState([])
+  const [tour, setTour] = useState(0)
   // couleurs retenues pour cette tournée : { id de l'article : grammes }
   const [couleurs, setCouleurs] = useState({})
   // « Rien » = pâte blanche : un choix explicite, pour qu'on ne lance pas une
@@ -39,6 +40,16 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
 
   useEffect(() => {
     let vivant = true
+    // Ce qui a déjà été déclaré aujourd'hui, relu depuis la base : la liste
+    // survit au rechargement, et chaque tournée peut être retirée tant qu'elle
+    // n'est pas validée.
+    loadFaits().then(f => {
+      if (!vivant) return
+      const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
+      setFaits(Object.entries(f)
+        .filter(([n, i]) => /^WH.*\/MO\//i.test(n) && String(i.fait_le || '').slice(0, 10) >= jour)
+        .map(([name, i]) => ({ name, produit: i.produit, qty: i.qty, heure: new Date(i.fait_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) })))
+    }).catch(() => { })
     loadPrepa(quoi)
       .then(d => {
         if (!vivant) return
@@ -47,7 +58,7 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     return () => { vivant = false }
-  }, [quoi])
+  }, [quoi, tour])
 
   const tournee = (data && data.tournee) || 0
   const recette = (data && data.recette) || []
@@ -62,11 +73,20 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
       const of = await lancerPrepa(quoi, n, couleurs, user?.id)
       // en mode test, aucun ordre n'existe dans Odoo : on ne l'enregistre pas
       if (!of.test) await setFait({ name: of.name, produit: of.produit, qty: of.qty, quand: new Date().toISOString() }, true, user?.id)
-      setFaits(f => [{ ...of, heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }, ...f])
+      setTour(v => v + 1)
       setN(1); setCouleurs({}); setBlanche(false)
       toast.success(of.test ? 'Mode test : rien n\'a été créé dans Odoo' : `Ordre ${of.name} créé — en attente de validation`)
     } catch (e) { toast.error('Impossible de créer l\'ordre : ' + (e.message || e)) }
     setEnvoi(false)
+  }
+
+  // Défaire tant que ce n'est pas validé, comme dans Fabrication CD.
+  async function retirer(f) {
+    reserverOrdres([f.name], false)
+    const r = await annulerOfPrepa([f.name])
+    await setFait({ name: f.name }, false, user?.id).catch(() => { })
+    if (r && r.annules > 0) toast.success(`${f.name} annulé dans Odoo`)
+    setTour(v => v + 1)
   }
 
   return (
@@ -184,6 +204,10 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
                     <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">
                       en attente de validation
                     </span>
+                    <button onClick={() => retirer(f)}
+                      className="flex-shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-bold border border-line bg-white text-ink-soft">
+                      ↩ retirer
+                    </button>
                   </div>
                 ))}
               </>
