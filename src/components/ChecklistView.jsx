@@ -177,6 +177,13 @@ function isItemRanged(item, steps) {
 export default function ChecklistView({ user, activeView, onNavigate, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = usePersistedState('lily.checklist.tab', 'todo') // 'todo' | 'done' | 'vitrine'
+  // Nombre de colonnes CHOISI par la personne, retenu sur cet appareil.
+  // Les seuils de largeur ne suffisaient pas : la tablette de la boutique se
+  // declare plus etroite qu'un telephone, impossible de deviner. 0 = automatique.
+  const [colonnes, setColonnes] = usePersistedState('lily.checklist.colonnes', 0)
+  const largeurEcran = typeof window !== 'undefined' ? window.innerWidth : 1024
+  const colonnesAuto = largeurEcran >= 600 ? 5 : largeurEcran >= 420 ? 3 : 1
+  const nbColonnes = colonnes || colonnesAuto
 
   // Colonne « Réservation Vitrine » (dans « À ranger ») : commandes vitrine du jour à
   // mettre de côté (depuis Odoo) + suivi de celles déjà rangées (table Supabase).
@@ -744,6 +751,23 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           </button>
 
 
+          {/* Nombre de colonnes : choisi a la main, retenu sur CET appareil.
+              Les largeurs annoncees par les tablettes ne sont pas fiables. */}
+          <div className="flex items-center gap-1 bg-white border border-line rounded-full px-1 py-1">
+            {[1, 3, 5].map(n => (
+              <button
+                key={n}
+                onClick={() => setColonnes(colonnes === n ? 0 : n)}
+                title={`${n} colonne${n > 1 ? 's' : ''} sur cet appareil`}
+                className={`w-7 h-7 rounded-full text-[12px] font-semibold transition-all ${
+                  nbColonnes === n ? 'bg-bordeaux text-cream' : 'text-ink-mute hover:bg-cream-warm'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+
           {/* Spacer + recherche + refresh */}
           <div className="flex-1 flex items-center gap-2 justify-end min-w-0">
             <div className="relative flex-1 max-w-xs">
@@ -780,6 +804,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           <Skeleton rows={6} />
         ) : tab === 'todo' ? (
           <TodoTab
+            nbColonnes={nbColonnes}
             allDone={allDone && !q}
             total={totalTodo}
             vitrineItems={filteredVitrineItems}
@@ -798,6 +823,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
           />
         ) : (
           <DoneTab
+            nbColonnes={nbColonnes}
             vitrineItems={filteredDoneVitrine}
             prodItems={filteredDoneProd}
             saleItems={filteredDoneSale}
@@ -851,7 +877,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 // ============================================================
 // Onglet "A ranger"
 // ============================================================
-function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeItems, vitrineResa, onVitrineDone, onProdDone, onProdGroupDone, groupBusy, onSaleDone, saleBusy, onCommandeDone, onResaDone }) {
+function TodoTab({ nbColonnes, allDone, total, vitrineItems, prodLines, saleLines, commandeItems, vitrineResa, onVitrineDone, onProdDone, onProdGroupDone, groupBusy, onSaleDone, saleBusy, onCommandeDone, onResaDone }) {
   const nbResa = Array.isArray(vitrineResa) ? vitrineResa.length : 0
   // Jus (B-) et GS- regroupés PAR COMMANDE → 1 carte = 1 ticket. Le reste (E-/V-/MI-) reste individuel.
   const { jusGroups, gsGroups, otherProd } = groupProdForPrint(prodLines)
@@ -873,7 +899,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeI
       </div>
 
       {/* Colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
-      <div className="grid grid-cols-1 min-[420px]:grid-cols-3 min-[600px]:grid-cols-5 gap-3">
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${nbColonnes}, minmax(0, 1fr))` }}>
         <ColumnSection title="RÉSERVATION VITRINE" count={nbResa} subtitle="à mettre de côté">
           {!vitrineResa ? (
             <EmptyHint>Chargement…</EmptyHint>
@@ -1006,7 +1032,7 @@ function EmptyHint({ children }) {
 // ============================================================
 // Onglet "Range"
 // ============================================================
-function DoneTab({ vitrineItems, prodItems, saleItems, commandeItems, vitrineResa, onResaUndo, onUndo }) {
+function DoneTab({ nbColonnes, vitrineItems, prodItems, saleItems, commandeItems, vitrineResa, onResaUndo, onUndo }) {
   const resaDone = Array.isArray(vitrineResa) ? vitrineResa : []
   const total = vitrineItems.length + prodItems.length + (saleItems?.length || 0) + commandeItems.length + resaDone.length
   if (total === 0) {
@@ -1019,7 +1045,7 @@ function DoneTab({ vitrineItems, prodItems, saleItems, commandeItems, vitrineRes
   }
 
   return (
-    <div className="grid grid-cols-1 min-[420px]:grid-cols-3 min-[600px]:grid-cols-5 gap-3">
+    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${nbColonnes}, minmax(0, 1fr))` }}>
       <ColumnSection title="RÉSERVATION VITRINE" count={resaDone.length} subtitle="rangées du jour">
         {resaDone.length === 0 ? (
           <EmptyHint>Rien rangé</EmptyHint>
