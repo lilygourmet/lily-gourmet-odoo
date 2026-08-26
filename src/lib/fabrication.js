@@ -33,6 +33,23 @@ export async function loadOrdres() {
   return (await r.json()).ordres || []
 }
 
+/**
+ * Les préparations que Layla considère comme des BASES : elles se font par
+ * tournée entière, servent plusieurs recettes, et leur ligne reste intacte.
+ * Rangées dans app_config pour qu'on puisse en ajouter sans toucher au code.
+ */
+export async function loadBasesChoisies() {
+  const { data } = await supabase.from('app_config').select('value').eq('key', 'fabrication_bases').maybeSingle()
+  try { return JSON.parse((data && data.value) || '[]') } catch { return [] }
+}
+
+export async function saveBasesChoisies(liste) {
+  const { error } = await supabase.from('app_config')
+    .upsert({ key: 'fabrication_bases', value: JSON.stringify(liste || []), updated_at: new Date().toISOString() },
+      { onConflict: 'key' })
+  if (error) throw error
+}
+
 /** Les OF déjà cochés « fait » (clé = nom de l'OF). */
 export async function loadFaits() {
   const { data, error } = await supabase.from('prod_of_faits').select('mo_name, produit, qty, ordres, fait_par, fait_le')

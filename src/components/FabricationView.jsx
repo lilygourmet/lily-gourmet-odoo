@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa } from '../lib/fabrication'
+import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, saveBasesChoisies } from '../lib/fabrication'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
@@ -16,6 +16,9 @@ import { supabase } from '../lib/supabase'
 // La recette est à droite sur ordinateur, en page séparée sur téléphone.
 
 const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*caram/i]
+// Bases ajoutées par Layla depuis l'écran, en plus de celles reconnues au nom.
+// Variable de module : les petits composants d'affichage s'en servent aussi.
+let basesEnPlus = []
 const CASA = { timeZone: 'Africa/Casablanca' }   // Odoo renvoie de l'UTC
 
 const dt = q => new Date(String(q || '').replace(' ', 'T') + 'Z')
@@ -43,7 +46,7 @@ const sansStk = n => String(n || '').replace(/\s*\bSTK\b/i, '').trim()
 const ORDRE = [/genoise/i, /sirop/i, /cr[eè]me/i, /craquant/i, /amandes/i]
 const rang = n => { const i = ORDRE.findIndex(r => r.test(String(n || ''))); return i < 0 ? ORDRE.length : i }
 const trierRecette = arr => arr.slice().sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
-const estBase = n => BASES.some(r => r.test(String(n || '')))
+const estBase = n => BASES.some(r => r.test(String(n || ''))) || basesEnPlus.includes(String(n || ''))
 // On n'ouvre jamais la recette de ces produits-là : les bases se préparent dans
 // le bloc du haut, et la génoise ne se détaille pas ici (demande de Layla).
 const estIngredient = n => /^SM\.\s*/i.test(String(n || ''))
@@ -439,10 +442,16 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [erreur, setErreur] = useState(null)
   const [sel, setSel] = useState([])                      // noms d'OF cochés
   const [ouvertes, setOuvertes] = useState({})
-  const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base            // sous-recettes dépliées
+  const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base
+  const [mesBases, setMesBases] = useState([])   // bases ajoutées à la main
+  const [reglerBases, setReglerBases] = useState(false)            // sous-recettes dépliées
   const [pageRecette, setPageRecette] = useState(false)   // téléphone : recette en page à part
   const [faitsBruts, setFaits] = useState({})             // ce qui est coché dans l'app
   const [charge, setCharge] = useState(0)                // instant du dernier chargement d'Odoo
+
+  useEffect(() => {
+    loadBasesChoisies().then(l => { basesEnPlus = l || []; setMesBases(l || []) }).catch(() => { })
+  }, [])
 
   // Odoo fait foi : un ordre annulé (ou validé) là-bas rend sa coche caduque,
   // l'article redevient « à faire » au lieu de rester grisé. On ne juge que les
@@ -1179,6 +1188,38 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                 </div>
                 )
               })}
+
+              {/* Ajouter une base : elle se fera par tournée entière, comme les autres */}
+              <button onClick={() => setReglerBases(v => !v)}
+                className="text-[12px] text-ink-mute underline underline-offset-2 mb-3">
+                {reglerBases ? 'fermer' : 'quelles préparations sont des bases ?'}
+              </button>
+              {reglerBases && (
+                <div className="bg-cream-warm border border-line rounded-xl p-3 mb-4">
+                  <p className="text-[12px] text-ink-soft mb-2">
+                    Une base se fait par <b>tournée entière</b>, sert plusieurs recettes, et sa ligne reste
+                    affichée telle quelle. Coche celles qui doivent se comporter ainsi.
+                  </p>
+                  {Object.keys(recettes).filter(n => estPrepa(n) && !estIngredient(n) && !estGenoise(n)).sort()
+                    .map(n => {
+                      const auto = BASES.some(r => r.test(n))
+                      const coche = auto || mesBases.includes(n)
+                      return (
+                        <label key={n} className="flex items-center gap-2.5 py-1 text-[13.5px]">
+                          <input type="checkbox" checked={coche} disabled={auto}
+                            className="w-5 h-5 accent-[#993556]"
+                            onChange={e => {
+                              const suite = e.target.checked ? [...mesBases, n] : mesBases.filter(x => x !== n)
+                              setMesBases(suite); basesEnPlus = suite
+                              saveBasesChoisies(suite).catch(() => toast.error('Enregistrement impossible'))
+                            }} />
+                          <span className={auto ? 'text-ink-mute' : ''}>{propre(n)}</span>
+                          {auto && <span className="text-[10.5px] text-ink-mute">(reconnue au nom)</span>}
+                        </label>
+                      )
+                    })}
+                </div>
+              )}
 
               {demandeOdoo.length > 0 && (
                 <>
