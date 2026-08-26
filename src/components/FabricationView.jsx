@@ -230,6 +230,28 @@ function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) 
   )
 }
 
+// Une ligne de « déjà déclaré » : le gâteau, ou une de ses crèmes en dessous.
+function LigneDeclaree({ o, onRetirer, petit = false }) {
+  const pese = /^(g|kg)$/i.test(norm(o.unite))
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className={(petit ? 'text-[13.5px] font-semibold' : 'text-[15px] font-bold') + ' line-through opacity-70'}>
+          {o.taille || propre(o.produit)} <span className="text-[12.5px] font-medium">{o.parfum}</span>
+        </div>
+        <div className="text-[11px] text-ink-mute font-mono">{o.name}</div>
+      </div>
+      <span className={(petit ? 'text-[13.5px]' : 'text-[15px]') + ' font-extrabold text-ink-mute whitespace-nowrap'}>
+        {pese ? qteLisible(enKg(o.qty, o.unite).q, 'kg') : `×${nb(o.qty)}`}
+      </span>
+      <button onClick={onRetirer}
+        className="flex-shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-bold border border-line bg-white text-ink-soft">
+        ↩ retirer
+      </button>
+    </div>
+  )
+}
+
 function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
   const stock = o.stockApp != null ? o.stockApp : (o.stock ? o.stock.dispo : null)
   // Une préparation se pèse (8 kg de sirop), un gâteau se compte (×3) : « ×8 »
@@ -656,10 +678,26 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // par des virgules — « OP/00412,WHLVP/MO/200023 ».
   // Ce que l'équipe a déclaré aujourd'hui : ça quitte la liste du travail à
   // faire, mais on doit pouvoir se corriger — un clic par erreur, un gâteau
-  // finalement pas monté.
-  const declaresAujourdhui = useMemo(
-    () => ((data && data.ofs) || []).filter(o => dejaDeclares.has(o.name)),
-    [data, dejaDeclares])
+  // finalement pas monté. Les crèmes sont rangées SOUS leur gâteau, pour qu'on
+  // voie tout de suite à qui appartient quoi.
+  const declaresAujourdhui = useMemo(() => {
+    const parNom = new Map(((data && data.ordres) || []).map(o => [o.name, o]))
+    const dedans = [...dejaDeclares].filter(n => parNom.has(n)).map(n => parNom.get(n))
+    const nomsDeclares = new Set(dedans.map(o => o.name))
+    const parentDeclare = o => String(o.origine || '').split(',').map(x => x.trim())
+      .find(x => nomsDeclares.has(x))
+    return dedans
+      .filter(o => !parentDeclare(o))
+      .map(o => ({ ...o, enfants: dedans.filter(x => parentDeclare(x) === o.name) }))
+  }, [data, dejaDeclares])
+
+  // Retirer un ordre de la liste : soit il a sa propre coche, soit il vient
+  // d'une préparation cochée par son nom.
+  const retirer = ordre => {
+    if (faits[ordre.name]) return marquer(ordre.name, ordre.produit, ordre.qty)
+    const cle = Object.keys(faits).find(c => ((faits[c] || {}).ordres || []).includes(ordre.name))
+    if (cle) marquer(cle, faits[cle].produit, faits[cle].qty)
+  }
 
   const aFaire = useMemo(
     () => ((data && data.ofs) || []).filter(o => !dejaDeclares.has(o.name)).map(o => {
@@ -1073,20 +1111,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                     en attente de validation — à retirer si c'est une erreur
                   </p>
                   {declaresAujourdhui.map(o => (
-                    <div key={o.name} className="flex items-center gap-3 border border-[#cfe0b8] bg-[#EAF3DE] rounded-xl px-3.5 py-2.5 mb-1.5">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[15px] font-bold line-through opacity-70">
-                          {o.taille || propre(o.produit)} <span className="text-[12.5px] font-medium">{o.parfum}</span>
+                    <div key={o.name} className="border border-[#cfe0b8] bg-[#EAF3DE] rounded-xl px-3.5 py-2.5 mb-1.5">
+                      <LigneDeclaree o={o} onRetirer={() => retirer(o)} />
+                      {o.enfants.map(e => (
+                        <div key={e.name} className="ml-4 pl-3 mt-1.5 border-l-2 border-[#cfe0b8]">
+                          <LigneDeclaree o={e} petit onRetirer={() => retirer(e)} />
                         </div>
-                        <div className="text-[11px] text-ink-mute font-mono">{o.name}</div>
-                      </div>
-                      <span className="text-[15px] font-extrabold text-ink-mute whitespace-nowrap">
-                        {/^(g|kg)$/i.test(norm(o.unite)) ? qteLisible(enKg(o.qty, o.unite).q, 'kg') : `×${nb(o.qty)}`}
-                      </span>
-                      <button onClick={() => marquer(o.name, o.produit, o.qty)}
-                        className="flex-shrink-0 rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
-                        ↩ retirer
-                      </button>
+                      ))}
                     </div>
                   ))}
                 </>
