@@ -967,12 +967,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     }
 
     // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
-    // ordres ne comptent plus sur le même stock.
-    // Odoo ne réserve que les composants directs d'un ordre : pour bloquer aussi
-    // la crème au beurre nature qui entre dans la crème du gâteau, on réserve
-    // toute la descendance.
-    const aReserver = [...new Set(ordres.flatMap(n => [...descendanceDe(n)]))]
-    reserverOrdres(aReserver.length ? aReserver : ordres, on)
+    // ordres ne comptent plus sur le même stock. On réserve toute la descendance
+    // — Odoo ne réserve que les composants directs, et la crème au beurre nature
+    // entre dans la crème, pas dans le gâteau.
+    // À la DÉCOCHE on libère ce qui avait été mémorisé dans la coche : recalculer
+    // ne donne rien quand plus aucun gâteau n'est sélectionné à l'écran.
+    const concernes = on ? ordres : ((avant && avant.ordres) || ordres)
+    const aReserver = [...new Set(concernes.flatMap(n => [...descendanceDe(n)]))]
+    reserverOrdres(aReserver.length ? aReserver : concernes, on)
     setFait({ name: cle, produit, qty: quantite, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }
