@@ -633,7 +633,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // « Fait » ne veut pas dire « quelqu'un a coché ce produit aujourd'hui » mais
   // « la quantité voulue est là ». Une crème faite pour un gâteau ne rend pas
   // le gâteau suivant servi : chacun a la sienne.
-  const couvert = (produit, besoin) => stockDeProduit(produit) >= (Number(besoin) || 0) - 0.001
+  const couvert = (produit, besoin) => toujoursLa(produit)
+    || stockDeProduit(produit) >= (Number(besoin) || 0) - 0.001
   // une base suivie par un ordre Odoo garde la coche de cet ordre ; sinon, même
   // règle que le reste : c'est fait quand la quantité est là
   // On compare au BESOIN, pas à la taille de la tournée : il reste 7 240 g de
@@ -811,7 +812,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const r = recettes[p]
       if (!r) continue
       const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
-      const manque = Math.max(0, q - stockDe(p))
+      const manque = toujoursLa(p) ? 0 : Math.max(0, q - stockDe(p))
       if (!base || !manque) continue
       const f = manque / base
       for (const l of r.lignes) {
@@ -900,10 +901,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         .map(([produit, e]) => {
           // ce qui est réservé pour ces gâteaux s'ajoute à ce dont ils disposent
           const stock = (estPrepa(produit) ? stockDe(produit) : 0) + (e.reserve || 0)
+          // la génoise et l'eau ne se gèrent pas en stock : jamais « à faire »
+          const libre = toujoursLa(produit)
           return {
             produit, qty: e.qty, unite: 'kg', stock,
-            aFaire: Math.max(0, e.qty - stock),
-            enStock: estPrepa(produit) && stock >= e.qty - 0.001,
+            aFaire: libre ? 0 : Math.max(0, e.qty - stock),
+            enStock: libre || (estPrepa(produit) && stock >= e.qty - 0.001),
             usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
           }
         }))
@@ -918,8 +921,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const bloquants = (produit, qty, usage = '', lot = null) => {
     const r = recettes[produit]
     if (!r) return []
-    const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
-    const f = base ? (qty || base) / base : 1
+    // le facteur ne sert plus : on ne bloque que sur ce dont il n'y a rien du tout
     return r.lignes
       .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !toujoursLa(l.produit))
       .filter(l => recettes[l.produit])                                        // sans recette, rien à faire ici
