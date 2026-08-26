@@ -487,6 +487,7 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = []) {
       company_id: modele.company_id[0],
     }])
   }
+  await moveDuFini(uid, id, prod, qty, Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined, modele)
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   await odooCall(uid, 'mrp.production', 'action_assign', [[id]]).catch(() => { })
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
@@ -517,6 +518,25 @@ async function annulerOfApp(uid, names) {
   await odooCall(uid, 'mrp.production', 'unlink', [ids]).catch(() => { })
   return { annules: ids.length, noms: siens.map(m => m.name) }
 }
+
+  // Le mouvement du PRODUIT FINI : sans lui, l'ordre ne fait rien entrer en
+  // stock et Odoo refuse même de le valider (« mrp_production_qty_positive »).
+  // Odoo le crée depuis son interface, pas par l'API. Il va de l'emplacement de
+  // production vers le stock, comme celui d'un ordre créé par Odoo.
+  async function moveDuFini(uid2, idOrdre, prod2, qte, uomId, modele2) {
+    const lp = await lieuProduction(uid2)
+    await odooCall(uid2, 'stock.move', 'create', [{
+      name: prod2.display_name,
+      product_id: prod2.id,
+      product_uom_qty: qte,
+      product_uom: uomId,
+      location_id: lp ? lp.id : modele2.location_dest_id[0],
+      location_dest_id: modele2.location_src_id[0],
+      production_id: idOrdre,
+      picking_type_id: modele2.picking_type_id[0],
+      company_id: modele2.company_id[0],
+    }])
+  }
 
 // Crée l'ordre de fabrication et le confirme. Il part ensuite dans « À valider »
 // avec tout le reste.
@@ -567,6 +587,7 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
       company_id: modele.company_id[0],
     }])
   }
+  await moveDuFini(uid, id, prod, qty, Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined, modele)
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   // même règle que partout : créé par programme, l'ordre ne réserve rien tout
   // seul — on le lui demande, sinon ses ingrédients restent libres pour d'autres
