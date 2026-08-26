@@ -190,6 +190,14 @@ function sansAccents(texte) {
   return String(texte).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
+// Le ticket contient les codes de l'imprimante (ESC/POS), dont le caractere
+// « zero » \x00 — que PostgreSQL REFUSE dans du texte (« unsupported Unicode
+// escape sequence »). On range donc le ticket en base64 ; le PC le rouvre.
+function enBase64(texte) {
+  const propre = sansAccents(texte).replace(/[^\x00-\xff]/g, '?')
+  return btoa(propre)
+}
+
 // Depose N tickets d'un coup et attend qu'ils soient tous sortis.
 // Renvoie un tableau, dans l'ordre : { ok: true } ou { ok: false, error }.
 export async function sendTickets(textes) {
@@ -197,7 +205,7 @@ export async function sendTickets(textes) {
 
   const { data: jobs, error } = await supabase
     .from('print_jobs')
-    .insert(textes.map(t => ({ text: sansAccents(t), cut: true })))
+    .insert(textes.map(t => ({ text: enBase64(t), cut: true })))
     .select('id')
   if (error) {
     // La table n'accepte que les utilisateurs connectes : un jeton expire fait

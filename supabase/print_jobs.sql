@@ -18,7 +18,8 @@
 -- Un ticket à imprimer. `text` contient déjà les codes de l'imprimante (ESC/POS).
 CREATE TABLE IF NOT EXISTS print_jobs (
   id          BIGSERIAL PRIMARY KEY,
-  text        TEXT NOT NULL,
+  text        TEXT NOT NULL,                   -- le ticket en base64 (les codes de
+                                               -- l'imprimante ne passent pas en clair)
   cut         BOOLEAN NOT NULL DEFAULT TRUE,   -- couper le papier après le ticket
   status      TEXT NOT NULL DEFAULT 'pending', -- pending → printing → done | error
   error       TEXT,
