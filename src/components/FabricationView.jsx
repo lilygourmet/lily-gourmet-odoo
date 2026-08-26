@@ -846,15 +846,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const parfum = [...new Set(lot.map(o => o.parfum).filter(Boolean))].join(' + ')
         || (lot[0] && !lot[0].taille ? propre(lot[0].produit) : '—')
       const besoins = {}
-      const ajoute = (produit, qty, source) => {
+      const ajoute = (produit, qty, source, reserve = 0) => {
         const c = produit                       // STK reste distinct du produit normal
-        const e = besoins[c] || (besoins[c] = { qty: 0, usages: {} })
+        const e = besoins[c] || (besoins[c] = { qty: 0, usages: {}, reserve: 0 })
         e.qty += qty
+        e.reserve += reserve
         e.usages[source] = (e.usages[source] || 0) + qty
       }
       // on note quel gâteau demande quoi, pour pouvoir dire « 400 g pour le 20 cm »
+      // et ce qui lui est déjà réservé dans Odoo — sinon on redemande de faire
+      // une crème qui est là, mise de côté pour lui.
       for (const o of lot) for (const r of (o.recette || [])) {
-        ajoute(r.produit, enKg(r.qty, r.unite).q, `le ${o.taille}`)
+        ajoute(r.produit, enKg(r.qty, r.unite).q, `le ${o.taille}`, enKg(r.reserve || 0, r.unite).q)
         besoins[r.produit].direct = true
       }
       const file = Object.keys(besoins).filter(estPrepa), vus = new Set()
@@ -865,7 +868,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         const r = recettes[pr]
         if (!r) continue
         if (estDeclare(lot, pr, cleGroupe)) continue           // déjà déclaré pour ce lot
-        const manque = besoins[pr].qty - stockDe(pr)
+        const manque = besoins[pr].qty - stockDe(pr) - (besoins[pr].reserve || 0)
         if (manque <= 0.001) continue
         const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
         if (!base) continue
@@ -879,11 +882,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const lignes = trierRecette(Object.entries(besoins)
         .filter(([, e]) => e.direct)                            // pas les composants des crèmes
         .map(([produit, e]) => {
-          const stock = estPrepa(produit) ? stockDe(produit) : 0
+          // ce qui est réservé pour ces gâteaux s'ajoute à ce dont ils disposent
+          const stock = (estPrepa(produit) ? stockDe(produit) : 0) + (e.reserve || 0)
           return {
             produit, qty: e.qty, unite: 'kg', stock,
             aFaire: Math.max(0, e.qty - stock),
-            enStock: estPrepa(produit) && stock >= e.qty,
+            enStock: estPrepa(produit) && stock >= e.qty - 0.001,
             usages: Object.entries(e.usages).filter(([, q]) => q > 0.001),
           }
         }))
@@ -915,7 +919,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     .filter(r => recettes[r.produit])
     // déjà déclaré fait POUR CE GÂTEAU : il n'y a plus rien à attendre
     .filter(r => !declarePour(o, r.produit))
-    .filter(r => stockDeProduit(r.produit) < enKg(r.qty, r.unite).q - 0.001)
+    .filter(r => stockDeProduit(r.produit) + enKg(r.reserve || 0, r.unite).q < enKg(r.qty, r.unite).q - 0.001)
     .map(r => r.produit)
 
   // Les ordres Odoo correspondant à ce qui est marqué fait : l'ordre lui-même
