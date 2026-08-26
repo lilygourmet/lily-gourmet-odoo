@@ -325,7 +325,19 @@ async function validerOrdre(uid, name, forcer) {
       }
       const ctx = r.context || {}
       const wiz = await odooCall(uid, r.res_model, 'create', [{}], { context: ctx })
-      await odooCall(uid, r.res_model, 'process', [[wiz]], { context: ctx })
+      // Chaque fenêtre d'Odoo a son propre bouton : « mrp.consumption.warning »
+      // (écart de consommation) se valide par action_confirm, le reliquat par
+      // action_close_mo. On essaie dans l'ordre le plus probable.
+      const boutons = {
+        'mrp.consumption.warning': ['action_confirm', 'action_set_qty'],
+        'mrp.production.backorder': ['action_close_mo', 'action_backorder'],
+      }[r.res_model] || ['process', 'action_confirm']
+      let passe = false
+      for (const bouton of boutons) {
+        try { await odooCall(uid, r.res_model, bouton, [[wiz]], { context: ctx }); passe = true; break }
+        catch { /* on tente le bouton suivant */ }
+      }
+      if (!passe) return { name, ok: false, message: `Odoo demande une confirmation (${r.res_model}) qu'on ne sait pas donner` }
     }
     const apres = (await odooSearchRead(uid, 'mrp.production', [['id', '=', mo.id]], ['state']))[0]
     const fini = apres && apres.state === 'done'
