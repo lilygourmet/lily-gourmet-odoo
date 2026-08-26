@@ -952,51 +952,65 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return siens.filter(o => descendance.has(o.name)).map(o => o.name)
   }
 
+  /**
+   * Marquer (ou démarquer) une fabrication.
+   *
+   * Règle de fond : UNE COCHE = UN ORDRE ODOO. Le nom de la crème ne peut pas
+   * servir de repère — « SM CD* Crème au beurre Praliné » est le même article
+   * pour le 45 cm et pour le Cœur 10p, si bien que cocher pour l'un décochait
+   * l'autre. On coche donc chaque ordre concerné, séparément.
+   * Faute d'ordre (Odoo n'en demandait pas), l'app en crée un et la coche porte
+   * son nom ; en tout dernier recours seulement, on garde la clé « PREP:… ».
+   */
   const marquer = async (cleDemandee, produit, qty) => {
     const prepa = cleDemandee.startsWith('PREP:')
-    const cle = cleDemandee
-    const on = !faits[cle]
-    // Une base se fait par tournée entière. Pour une crème dédiée à un usage, on
-    // fabrique ce qui manque au regard du stock commun. `qty` est le besoin total.
-    const quantite = (!prepa || estBase(produit)) ? qty : (Math.max(0, qty - stockDeProduit(produit)) || qty)
-    const avant = faits[cle]
-    const trouves = ordresDe(cle, produit)
-    // la coche s'affiche tout de suite, le reste se fait derrière
-    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty: quantite, ordres: trouves }; else delete n[cle]; return n })
+    if (!prepa) return marquerOrdre(cleDemandee, produit, qty)
 
-    // Une préparation qu'Odoo ne demandait pas (ni ordre, ni règle mini/maxi) :
-    // l'app crée l'ordre à la quantité faite, sinon rien n'entrerait jamais en
-    // stock. Si on décoche, cet ordre-là est annulé.
-    const cree = (on && cle.startsWith('PREP:') && !trouves.length)
-      ? await creerOfPrepa(produit, quantite, user?.id, choisis.map(o => o.name))
-      : null
-    // en mode test aucun ordre n'existe : on n'enregistre pas de faux numéro
-    const ordres = cree && cree.name && !cree.error && !cree.test ? [cree.name] : trouves
-    if (cree && cree.name && !cree.error && !cree.test) {
-      setFaits(f => (f[cle] ? { ...f, [cle]: { ...f[cle], ordres } } : f))
-      toast.success(`Ordre ${cree.name} créé dans Odoo`)
-    } else if (cree && cree.test) {
-      toast.success('Mode test : aucun ordre créé dans Odoo')
-    } else if (cree && cree.error) {
-      toast.error('Odoo : ' + cree.error)
+    const vises = ordresDe(cleDemandee, produit)
+    // déjà déclaré ? on retire ; sinon on pose
+    const dejaLa = vises.filter(n => faits[n])
+    if (dejaLa.length) { for (const n of dejaLa) await marquerOrdre(n, produit, qty); return }
+    if (vises.length) {
+      // une base se fait par tournée entière, une crème à la quantité manquante
+      const part = estBase(produit) ? qty : (Math.max(0, qty - stockDeProduit(produit)) || qty)
+      for (const n of vises) await marquerOrdre(n, produit, part)
+      return
     }
+
+    // aucun ordre : l'app en crée un, rattaché aux gâteaux de la recette
+    if (faits[cleDemandee]) return marquerOrdre(cleDemandee, produit, qty)
+    const part = estBase(produit) ? qty : (Math.max(0, qty - stockDeProduit(produit)) || qty)
+    const cree = await creerOfPrepa(produit, part, user?.id, choisis.map(o => o.name))
+    if (cree && cree.name && !cree.error && !cree.test) {
+      toast.success(`Ordre ${cree.name} créé dans Odoo`)
+      return marquerOrdre(cree.name, produit, part)
+    }
+    if (cree && cree.test) toast.success('Mode test : aucun ordre créé dans Odoo')
+    else if (cree && cree.error) toast.error('Odoo : ' + cree.error)
+    // rien créé : on garde tout de même la trace, par son nom
+    return marquerOrdre(cleDemandee, produit, part)
+  }
+
+  /** Pose ou retire la coche d'UN ordre (ou d'une clé, faute d'ordre). */
+  const marquerOrdre = async (cle, produit, qty) => {
+    const on = !faits[cle]
+    const avant = faits[cle]
+    const ordres = /^WH.*\/MO\//i.test(cle) ? [cle] : ((avant && avant.ordres) || [])
+    setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty, ordres }; else delete n[cle]; return n })
+
     if (!on) {
-      const r = await annulerOfPrepa((avant && avant.ordres) || [])
+      const r = await annulerOfPrepa(ordres)
       if (r && r.annules > 0) toast.success(`Annulé dans Odoo : ${r.noms.join(', ')}`)
     }
-
-    // Odoo bloque (ou libère) ce que cette fabrication consomme : les autres
-    // ordres ne comptent plus sur le même stock. On réserve toute la descendance
-    // — Odoo ne réserve que les composants directs, et la crème au beurre nature
-    // entre dans la crème, pas dans le gâteau.
-    // À la DÉCOCHE on libère ce qui avait été mémorisé dans la coche : recalculer
-    // ne donne rien quand plus aucun gâteau n'est sélectionné à l'écran.
-    const concernes = on ? ordres : ((avant && avant.ordres) || ordres)
-    const aReserver = [...new Set(concernes.flatMap(n => [...descendanceDe(n)]))]
-    reserverOrdres(aReserver.length ? aReserver : concernes, on)
-    setFait({ name: cle, produit, qty: quantite, ordres, quand: new Date().toISOString() }, on, user?.id)
+    // On réserve toute la descendance : Odoo ne réserve que les composants
+    // directs, et la crème au beurre nature entre dans la crème, pas dans le
+    // gâteau.
+    const aReserver = [...new Set(ordres.flatMap(n => [...descendanceDe(n)]))]
+    if (aReserver.length) reserverOrdres(aReserver, on)
+    setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }
+
   const effacer = () => { setSel([]); setPageRecette(false) }
 
   // téléphone : la recette occupe tout l'écran
