@@ -535,6 +535,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const ofs = (data && data.ofs) || []
     const parOf = new Map(ofs.map(o => [o.name, o]))
     const parOrdre = new Map(((data && data.ordres) || []).map(o => [o.name, o]))
+    // Une préparation fabriquée POUR UN GÂTEAU précis lui est réservée : elle ne
+    // rejoint pas le stock commun, sinon la crème praliné du 45 cm apparaîtrait
+    // disponible pour le Cœur 10p — c'est le même article pour les deux.
+    // Une base (crème nature, sirop…) et une tournée de réassort, elles, servent
+    // tout le monde.
+    const dedieeAUnGateau = ord => estPrepa(ord.produit) && !estBase(ord.produit)
+      && String(ord.origine || '').split(',').some(x => /^WH.*\/MO\//i.test(x.trim()))
+
     // 1) ce qui est coché par son ordre Odoo
     const comptes = new Set()
     for (const cle of Object.keys(faits)) {
@@ -542,14 +550,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       // un article de l'écran : il produit, et il a consommé ses composants
       const o = parOf.get(cle)
       if (o) {
-        bouge(o.produit, enKg(o.qty, o.unite).q)
+        if (!dedieeAUnGateau(o)) bouge(o.produit, enKg(o.qty, o.unite).q)
         comptes.add(o.produit)
         for (const l of o.recette || []) bouge(l.produit, -enKg(l.qty, l.unite).q)
         continue
       }
       // une tournée lancée ailleurs (glaçage, pâte à sucre) encore ouverte
       const ord = parOrdre.get(cle)
-      if (ord) { bouge(ord.produit, enKg(ord.qty, ord.unite).q); comptes.add(ord.produit) }
+      if (ord) {
+        if (!dedieeAUnGateau(ord)) bouge(ord.produit, enKg(ord.qty, ord.unite).q)
+        comptes.add(ord.produit)
+      }
     }
     // 2) les préparations cochées par leur nom, sauf celles déjà comptées
     // ci-dessus : le même article peut se cocher depuis une recette ET depuis
