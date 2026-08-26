@@ -310,9 +310,19 @@ async function validerOrdre(uid, name, forcer) {
       await odooCall(uid, 'stock.move', 'write', [[r.id], { quantity_done: r.product_uom_qty }]).catch(() => { })
     }
     const r = await odooCall(uid, 'mrp.production', 'button_mark_done', [[mo.id]])
-    // Odoo renvoie une fenêtre de confirmation quand quelque chose cloche
+    // Odoo renvoie une fenêtre de confirmation quand quelque chose cloche.
     if (r && typeof r === 'object' && r.res_model) {
-      if (!forcer) return { name, ok: false, message: 'Odoo demande une confirmation (stock insuffisant ?)' }
+      // Souvent, ce qui cloche n'est QUE la génoise ou l'eau du robinet, dont
+      // le stock reste négatif : on ne bloque pas pour ça. On regarde ce qui
+      // manque vraiment (ces deux-là exclus) et on passe outre si c'est vide.
+      let manqueVrai = true
+      try {
+        const ctrl = (await manquesDesOrdres(uid, [name]))[0]
+        manqueVrai = !ctrl || ctrl.manques.length > 0
+      } catch { manqueVrai = true }
+      if (!forcer && manqueVrai) {
+        return { name, ok: false, message: 'Odoo demande une confirmation (stock insuffisant ?)' }
+      }
       const ctx = r.context || {}
       const wiz = await odooCall(uid, r.res_model, 'create', [{}], { context: ctx })
       await odooCall(uid, r.res_model, 'process', [[wiz]], { context: ctx })
