@@ -967,13 +967,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     if (!prepa) return marquerOrdre(cleDemandee, produit, qty)
 
     const vises = ordresDe(cleDemandee, produit)
-    // déjà déclaré ? on retire ; sinon on pose
     const dejaLa = vises.filter(n => faits[n])
-    if (dejaLa.length) { for (const n of dejaLa) await marquerOrdre(n, produit, qty); return }
+    // On ne retire QUE si tout est déjà déclaré. S'il en reste à faire — le
+    // Cœur 10p alors que le 45 cm est fait — on pose les manquants au lieu de
+    // défaire le travail du voisin.
+    if (vises.length && dejaLa.length === vises.length) {
+      for (const n of dejaLa) await marquerOrdre(n, produit, qty)
+      return
+    }
     if (vises.length) {
       // une base se fait par tournée entière, une crème à la quantité manquante
       const part = estBase(produit) ? qty : (Math.max(0, qty - stockDeProduit(produit)) || qty)
-      for (const n of vises) await marquerOrdre(n, produit, part)
+      for (const n of vises.filter(n => !faits[n])) await marquerOrdre(n, produit, part)
       return
     }
 
@@ -983,6 +988,16 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const cree = await creerOfPrepa(produit, part, user?.id, choisis.map(o => o.name))
     if (cree && cree.name && !cree.error && !cree.test) {
       toast.success(`Ordre ${cree.name} créé dans Odoo`)
+      // L'ordre vient de naître : Odoo ne nous l'a pas encore renvoyé. On
+      // l'ajoute à ce qu'on connaît, sinon l'écran ne le rattache à rien et
+      // l'article ne passe pas en « fait ».
+      setData(d => (d ? {
+        ...d,
+        ordres: [...(d.ordres || []), {
+          name: cree.name, produit, qty: part, unite: 'kg', etat: 'confirmed',
+          origine: [...choisis.map(o => o.name), 'LG-APP'].join(','),
+        }],
+      } : d))
       return marquerOrdre(cree.name, produit, part)
     }
     if (cree && cree.test) toast.success('Mode test : aucun ordre créé dans Odoo')
