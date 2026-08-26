@@ -873,7 +873,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeI
       </div>
 
       {/* Colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
-      <div className="grid grid-cols-1 min-[500px]:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-3 min-[600px]:grid-cols-5 gap-3">
         <ColumnSection title="RÉSERVATION VITRINE" count={nbResa} subtitle="à mettre de côté">
           {!vitrineResa ? (
             <EmptyHint>Chargement…</EmptyHint>
@@ -1019,7 +1019,7 @@ function DoneTab({ vitrineItems, prodItems, saleItems, commandeItems, vitrineRes
   }
 
   return (
-    <div className="grid grid-cols-1 min-[500px]:grid-cols-3 xl:grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 min-[420px]:grid-cols-3 min-[600px]:grid-cols-5 gap-3">
       <ColumnSection title="RÉSERVATION VITRINE" count={resaDone.length} subtitle="rangées du jour">
         {resaDone.length === 0 ? (
           <EmptyHint>Rien rangé</EmptyHint>
