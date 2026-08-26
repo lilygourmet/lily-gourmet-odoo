@@ -996,8 +996,10 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   let matchCounter = 0
   const nextHl = () => matchCounter++
 
+  // On retire aussi la barre de navigation du bas (--lg-nav-bottom, telephone) :
+  // sinon la zone d'ecriture et le bouton « Envoyer » passent dessous.
   return (
-    <div className="flex mx-auto w-full max-w-5xl" style={{ height: `calc(100dvh - ${headerTop}px)` }}>
+    <div className="flex mx-auto w-full max-w-5xl" style={{ height: `calc(100dvh - ${headerTop}px - var(--lg-nav-bottom))` }}>
       <div className="flex flex-col flex-1 min-w-0 relative">
       {/* Tiroir « Réponses rapides » : poignée à droite, s'ouvre/se ferme au CLIC (ne mange pas la largeur). */}
       {quickReplies.length > 0 && (
@@ -1500,7 +1502,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
 
       {ordersOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => setOrdersOpen(false)}>
-          <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[85dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-fraunces italic text-[18px] text-ink">Commandes & devis</h3>
               <button onClick={() => setOrdersOpen(false)} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>

@@ -195,7 +195,7 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-[100] bg-black/40 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div
-        className="bg-cream w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[90vh] flex flex-col"
+        className="bg-cream w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[90dvh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* En-tête */}
@@ -315,7 +315,8 @@ export default function NavbarConfigModal({ tabs, config, onSave, onClose }) {
         </div>
 
         {/* Pied */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-line">
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-line"
+          style={{ paddingBottom: 'calc(0.75rem + var(--lg-safe-bottom))' }}>
           <button
             onClick={handleReset}
             disabled={saving}

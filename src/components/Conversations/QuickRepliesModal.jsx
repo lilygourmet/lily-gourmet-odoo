@@ -76,7 +76,7 @@ export default function QuickRepliesModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={onClose}>
-      <div ref={scrollRef} className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div ref={scrollRef} className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <h3 className="font-fraunces italic text-[20px] text-ink">Phrases types</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0">✕</button>

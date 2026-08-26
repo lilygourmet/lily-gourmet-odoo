@@ -134,7 +134,7 @@ export default function AbsencesView({ user }) {
       {/* Fenêtre d'ajout */}
       {showForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => !saving && setShowForm(false)}>
-          <div className="bg-cream rounded-2xl w-full max-w-sm shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-cream rounded-2xl w-full max-w-sm shadow-2xl border border-line p-5 max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="font-fraunces italic text-[18px] text-ink mb-3">Ajouter une absence</h3>
 
             <label className="block text-[11px] font-medium text-ink-soft mb-1">Personne</label>

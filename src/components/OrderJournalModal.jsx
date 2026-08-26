@@ -99,4 +99,4 @@ export default function OrderJournalModal({ onClose }) {
 }
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal = { background: '#FBF7F1', borderRadius: 14, padding: 18, maxWidth: 560, width: '100%', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
+const modal = { background: '#FBF7F1', borderRadius: 14, padding: 18, maxWidth: 560, width: '100%', maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }

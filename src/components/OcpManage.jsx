@@ -186,7 +186,7 @@ function AddModal({ cat, onClose, onDone }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 18, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 18, paddingBottom: 'calc(18px + var(--lg-safe-bottom))', width: '100%', maxWidth: 560, maxHeight: '85dvh', overflowY: 'auto' }}>
         <h3 style={{ margin: '0 0 12px', color: B }}>Ajouter dans « {cat.label} »</h3>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button onClick={() => setSrc('odoo')} style={tab(src === 'odoo')}>Produit Odoo</button>
@@ -253,7 +253,7 @@ function VariantModal({ item, catKey, ov, onClose, onChanged }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 18, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 18, paddingBottom: 'calc(18px + var(--lg-safe-bottom))', width: '100%', maxWidth: 560, maxHeight: '85dvh', overflowY: 'auto' }}>
         <h3 style={{ margin: '0 0 4px', color: B }}>Variantes — {item.name}</h3>
         <p style={{ fontSize: 12, color: SOFT, margin: '0 0 12px' }}>Tape <b style={{ color: '#b42424' }}>✕</b> pour masquer une variante dans le lien, <b style={{ color: '#1e7e4f' }}>＋</b> pour la remettre.</p>
         {variants === null ? <div style={{ color: SOFT, fontSize: 13 }}>Chargement…</div>
@@ -322,7 +322,7 @@ function PhotoModal({ item, catKey, current, onClose, onChanged }) {
   const shown = url.trim() || preview
   return (
     <div onClick={onClose} onPaste={onPaste} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} onPaste={onPaste} style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 18, width: '100%', maxWidth: 560 }}>
+      <div onClick={e => e.stopPropagation()} onPaste={onPaste} style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 18, paddingBottom: 'calc(18px + var(--lg-safe-bottom))', width: '100%', maxWidth: 560 }}>
         <h3 style={{ margin: '0 0 4px', color: B }}>Photo — {item.name}</h3>
         <p style={{ fontSize: 12, color: SOFT, margin: '0 0 12px' }}>Colle une image (Ctrl+V / coller), choisis un fichier, ou colle un lien d'image. Elle s'affichera dans le lien OCP.</p>
 

@@ -624,7 +624,7 @@ function SurpriseModal({ cart, onChange, onConfirm, onCancel }) {
   const total = Object.values(cart).reduce((s, v) => s + (v?.qty || 0), 0)
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg p-4 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg p-4 max-w-3xl w-full max-h-[90dvh] overflow-y-auto">
         <div className="flex justify-between items-center mb-3">
           <div className="text-[14px] font-semibold">+ Ajouter articles (non annoncés)</div>
           <button
@@ -677,7 +677,7 @@ function SurpriseModal({ cart, onChange, onConfirm, onCancel }) {
 function DiscrepancyModalCafe({ items, onAccept, onMaintain }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
         <div className="bg-red-700 text-white px-4 py-3 flex-shrink-0">
           <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">
             Vitrine a recompté

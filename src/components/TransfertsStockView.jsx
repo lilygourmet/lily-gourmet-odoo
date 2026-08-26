@@ -424,7 +424,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                   <input type="date" value={date} onChange={e => setDate(e.target.value)}
                     className="px-2 py-1 border border-line rounded-lg text-[12px]" />
                 </div>
-                <div className="max-h-[28vh] overflow-y-auto mb-2">
+                <div className="max-h-[28dvh] overflow-y-auto mb-2">
                   {panier.map(p => (
                     <div key={p.odoo_product_id} className="flex items-center gap-2 py-1 text-[12.5px]">
                       <div className="flex-1 truncate">{p.nom}</div>

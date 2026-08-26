@@ -100,7 +100,7 @@ export default function GlobalSearch({ onClose, onOpenOrder, onOpenDevis, onOpen
           <button onClick={onClose} className="text-[10px] border border-line rounded px-1.5 py-0.5 text-ink-mute">Échap</button>
         </div>
 
-        <div className="max-h-[55vh] overflow-auto">
+        <div className="max-h-[55dvh] overflow-auto">
           {q.length < 2 ? (
             <div className="text-center text-ink-mute text-[13px] py-8">Tape au moins 2 lettres…</div>
           ) : (results.length === 0 && !loadingOrders) ? (

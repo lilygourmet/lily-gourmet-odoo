@@ -83,7 +83,7 @@ export default function DummyModal({ onClose, onPlace }) {
   const lab = 'text-[11px] font-bold uppercase tracking-wider text-bordeaux mb-1.5'
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !adding && onClose()}>
-      <div className="bg-cream rounded-xl w-full max-w-2xl max-h-[88vh] overflow-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-cream rounded-xl w-full max-w-2xl max-h-[88dvh] overflow-auto" onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-line flex items-center justify-between">
           <div className="font-fraunces italic text-[18px] text-ink">🎂 Générer un dummy</div>
           <button onClick={() => !adding && onClose()} className="text-ink-mute text-[22px] leading-none">×</button>

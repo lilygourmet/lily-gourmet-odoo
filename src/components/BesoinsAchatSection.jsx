@@ -69,7 +69,7 @@ export default function BesoinsAchatSection({ order, user }) {
         <div onClick={() => setOpen(false)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ background: 'white', borderRadius: 16, maxWidth: 420, width: '100%', maxHeight: '85vh', overflowY: 'auto', padding: 16 }}>
+            style={{ background: 'white', borderRadius: 16, maxWidth: 420, width: '100%', maxHeight: '85dvh', overflowY: 'auto', padding: 16 }}>
             <div className="flex items-center justify-between mb-2">
               <div className="text-[14px] font-bold text-bordeaux">🛒 Besoins d'achat</div>
               <button onClick={() => setOpen(false)} className="text-ink-mute text-[18px] leading-none">×</button>

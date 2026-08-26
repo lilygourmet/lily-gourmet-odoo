@@ -32,7 +32,7 @@ export default function ConversationCleanup({ user, items, escapeAllowed, onExit
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-ink/70 backdrop-blur-sm">
-      <div className="bg-cream rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-cream rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92dvh]">
         <div className="bg-bordeaux text-cream px-5 py-4 flex-shrink-0">
           <h2 className="font-fraunces italic text-[22px] font-semibold">🧹 Nettoyage du jour</h2>
           <p className="text-[13px] opacity-90 mt-0.5">Avant d'utiliser les conversations, fais le point sur les tiennes.</p>

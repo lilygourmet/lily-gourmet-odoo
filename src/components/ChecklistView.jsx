@@ -811,7 +811,8 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 
       {printFlow && (
         <div className="fixed inset-0 z-50 bg-black/45 flex items-end sm:items-center justify-center" onClick={() => !printing && setPrintFlow(null)}>
-          <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 pb-7" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 pb-7"
+            style={{ paddingBottom: 'calc(1.75rem + var(--lg-safe-bottom))' }} onClick={e => e.stopPropagation()}>
             <div className="bg-cream border border-line rounded-xl px-3 py-2 mb-4">
               <div className="font-semibold text-[14px] text-ink leading-tight">{extractItemTitle(printFlow)}</div>
               <div className="text-[11.5px] text-ink-mute mt-0.5">{buildOrderItemSubtitle(printFlow)}</div>
@@ -872,7 +873,7 @@ function TodoTab({ allDone, total, vitrineItems, prodLines, saleLines, commandeI
       </div>
 
       {/* Colonnes c\u00f4te \u00e0 c\u00f4te (toujours, m\u00eame sur mobile) */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <ColumnSection title="RÉSERVATION VITRINE" count={nbResa} subtitle="à mettre de côté">
           {!vitrineResa ? (
             <EmptyHint>Chargement…</EmptyHint>
@@ -1018,7 +1019,7 @@ function DoneTab({ vitrineItems, prodItems, saleItems, commandeItems, vitrineRes
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <ColumnSection title="RÉSERVATION VITRINE" count={resaDone.length} subtitle="rangées du jour">
         {resaDone.length === 0 ? (
           <EmptyHint>Rien rangé</EmptyHint>

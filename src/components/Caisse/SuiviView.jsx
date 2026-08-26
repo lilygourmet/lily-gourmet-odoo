@@ -681,7 +681,7 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
   }, [envs, q, method, line.amount])
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>Lier ce reçu de {fmtMoney(line.amount)}</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 4 }}>{line.ligne_date} · {line.label}</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 8 }}>Choisis l'enveloppe <b>{methodLabel}</b> à qui appartient ce montant :</div>
@@ -735,7 +735,7 @@ function SuggestModal({ env, onClose, onAttach }) {
   }, [env.id])
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Lignes du relevé de {fmtMoney(env.amount_cash)} encore libres</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
           {env.virement_client ? `${env.virement_client} · ` : ''}{fmtDateCourte(env.session_date)} — choisis la ligne qui correspond :
@@ -773,7 +773,7 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
   })
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Quelle ligne du relevé ?</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
           {fmtMoney(env.amount_cash)}{env.virement_client ? ` · ${env.virement_client}` : ''} — choisis la ligne qui correspond :
@@ -803,7 +803,7 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
   const candidates = list.filter(e => e.id !== from.id && (e.payment_method || 'cash') === 'virement' && e.releve_status !== 'trouve')
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>🔗 Lier 2 virements = 1 ligne</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
           Virement 1 : <b>{fmtMoney(from.amount_cash)} dh</b>{from.virement_client ? ` · ${from.virement_client}` : ''}

@@ -284,7 +284,7 @@ export default function SupportsView({ user, onLogout, onNavigate, activeView })
       {/* ---- Modale règles de détection ---- */}
       {rulesOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={() => setRulesOpen(false)}>
-          <div className="bg-cream rounded-2xl w-full max-w-lg shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-cream rounded-2xl w-full max-w-lg shadow-2xl border border-line p-5 max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-2">
               <h3 className="font-fraunces italic text-[19px] text-ink">Règles de détection</h3>
               <button onClick={() => setRulesOpen(false)} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>

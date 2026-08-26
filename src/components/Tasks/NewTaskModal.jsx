@@ -257,7 +257,7 @@ const overlay = {
 }
 const modal = {
   background: 'white', borderRadius: 12, padding: 22, maxWidth: 440, width: '100%',
-  boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
+  boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto',
 }
 const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }
 const lblStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }

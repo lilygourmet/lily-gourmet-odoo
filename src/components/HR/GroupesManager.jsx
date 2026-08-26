@@ -87,5 +87,5 @@ function GroupeRow({ nom, onRename, onDelete }) {
 }
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 16 }
-const modal = { background: 'white', borderRadius: 12, padding: 20, maxWidth: 420, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }
+const modal = { background: 'white', borderRadius: 12, padding: 20, maxWidth: 420, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto' }
 const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }

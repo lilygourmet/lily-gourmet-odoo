@@ -623,7 +623,7 @@ export default function ClientOrderView() {
 
       {crossOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(36,26,22,.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 }} onClick={closeCross}>
-          <div style={{ background: CREAM, width: '100%', maxWidth: 430, borderRadius: '22px 22px 0 0', padding: '20px 18px 26px', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: CREAM, width: '100%', maxWidth: 430, borderRadius: '22px 22px 0 0', padding: '20px 18px 26px', maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', color: B, textAlign: 'center', margin: '4px 0 12px', fontSize: 19 }}>✨ Des accessoires ?</h3>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
               {acc.bougieVariants.length > 0 && <div style={{ ...accTile, ...((bougieOpen || bougieInCart > 0) ? { borderColor: bougieInCart > 0 ? '#B6E2C8' : B, background: bougieInCart > 0 ? '#DCF0E2' : '#FBF3E6' } : {}) }} onClick={() => setBougieOpen(o => !o)}><div style={{ fontSize: 28 }}>🕯️</div><div style={{ fontSize: 11.5, fontWeight: 600 }}>Bougies</div><div style={{ fontSize: 11, color: bougieInCart > 0 ? '#085041' : B, fontWeight: 700 }}>{bougieOpen ? 'ouvert ▾' : (bougieInCart > 0 ? '✓ ×' + bougieInCart : 'choisir →')}</div></div>}

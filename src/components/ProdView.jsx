@@ -486,7 +486,7 @@ export default function ProdView({ user, onLogout, onNavigate, activeView, force
             </div>
             <p className="text-[12px] text-ink-mute mb-3">Choisis le jour à imprimer ({printMode === 'done' ? 'commandes faites' : 'à faire uniquement'})</p>
 
-            <div className="space-y-1 max-h-[55vh] overflow-y-auto">
+            <div className="space-y-1 max-h-[55dvh] overflow-y-auto">
               {[...(printData?.byDate.keys() || [])].sort().map(d => {
                 const dt = new Date(d)
                 const lab = dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })

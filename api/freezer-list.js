@@ -607,7 +607,7 @@ async function manquesDesOrdres(uid, names) {
   if (!mos.length) return []
   const moves = await odooSearchRead(uid, 'stock.move',
     [['raw_material_production_id', 'in', mos.map(m => m.id)]],
-    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom'], { limit: 500 })
+    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'reserved_availability'], { limit: 500 })
   const idsProd = [...new Set(moves.map(m => m.product_id[0]))]
   const stockParLieu = {}          // "lieu:produit" → { qty, unite }
   const lieux = [...new Set(mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean))]
@@ -635,7 +635,9 @@ async function manquesDesOrdres(uid, names) {
       const uniteLigne = (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u').replace(/^units?$/i, 'u')
       const lieu = Array.isArray(m.location_src_id) ? m.location_src_id[0] : null
       const st = stockParLieu[lieu + ':' + x.product_id[0]]
-      const dispo = st ? convertir(st.qty, st.unite, uniteLigne) : 0
+      // ce qui est déjà réservé pour cet ordre s'ajoute à ce qu'il peut prendre
+      const brut = st ? convertir(st.qty, st.unite, uniteLigne) : 0
+      const dispo = brut === null ? null : brut + (x.reserved_availability || 0)
       const comparable = dispo !== null                       // unités incompatibles → on n'affirme rien
       return {
         produit: nomP, besoin: x.product_uom_qty, unite: uniteLigne,
@@ -711,7 +713,7 @@ async function fetchFabrication(uid, jours) {
   // Une seule requête pour tous les OF ; les grammes > 1 kg sont convertis en kg.
   const moves = mos.length ? await odooSearchRead(uid, 'stock.move',
     [['raw_material_production_id', 'in', mos.map(m => m.id)]],
-    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom'], { limit: 1000 }) : []
+    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'reserved_availability'], { limit: 1000 }) : []
   const aFabriquer = new Set(mos.map(m => nom(m)))
   const recettes = {}
   for (const mv of moves) {
@@ -721,7 +723,15 @@ async function fetchFabrication(uid, jours) {
     if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
     if (/unit/i.test(u)) u = 'u'
     const p = (Array.isArray(mv.product_id) ? mv.product_id[1] : '') || ''
-    ;(recettes[moId] ||= []).push({ produit: p, qty: Math.round(q * 100) / 100, unite: u, aFaire: aFabriquer.has(p) })
+    // Ce qui est réservé POUR CET ORDRE lui est disponible, même si le stock
+    // général ne le compte plus (free_qty l'exclut). Sans ça l'app redemande de
+    // refaire une crème déjà réservée au gâteau.
+    let res = mv.reserved_availability || 0
+    if (/^g$/i.test((Array.isArray(mv.product_uom) ? mv.product_uom[1] : '') || '') && res >= 1000) res = res / 1000
+    ;(recettes[moId] ||= []).push({
+      produit: p, qty: Math.round(q * 100) / 100, unite: u,
+      reserve: Math.round(res * 100) / 100, aFaire: aFabriquer.has(p),
+    })
   }
 
   // Recettes des préparations maison (nomenclature Odoo), pour pouvoir déplier
@@ -858,7 +868,13 @@ async function fetchFabrication(uid, jours) {
       manque: Math.round(Math.min(besoin, besoin - utile) * 100) / 100,
     }
   }
-  const avecStock = l => ({ ...l, stock: enStock(l.produit, l.qty, l.unite) })
+  const avecStock = l => {
+    const st = enStock(l.produit, l.qty, l.unite)
+    if (!st || !(l.reserve > 0)) return { ...l, stock: st }
+    // le réservé pour cet ordre s'ajoute à ce qu'il peut prendre
+    const dispo = (st.dispo || 0) + l.reserve
+    return { ...l, stock: { dispo, assez: dispo >= l.qty - 0.001, manque: Math.max(0, l.qty - dispo) } }
+  }
   for (const r of racines) r.recette = r.recette.map(avecStock)
   for (const r of Object.values(recettesPrepa)) r.lignes = r.lignes.map(avecStock)
 

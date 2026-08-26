@@ -51,7 +51,7 @@ export default function LabelsManager({ onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-[1000] p-4" onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[85dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-fraunces italic text-[18px] text-ink">⚙️ Gérer les étiquettes</h3>
           <button onClick={onClose} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>

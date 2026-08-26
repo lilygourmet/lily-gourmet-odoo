@@ -275,7 +275,7 @@ export default function CakeVisionView({ user, activeView, onNavigate, onLogout 
       {/* Sélecteur de conversation pour l'envoi */}
       {showSend && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !sending && setShowSend(false)}>
-          <div className="bg-cream rounded-xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="bg-cream rounded-xl w-full max-w-md max-h-[80dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-line flex items-center justify-between">
               <div className="font-fraunces italic text-[18px] text-ink">Envoyer à…</div>
               <button onClick={() => !sending && setShowSend(false)} className="text-ink-mute text-[20px] leading-none">×</button>

@@ -263,7 +263,7 @@ export default function PatissierView({ user, onLogout, onNavigate, activeView }
                onClick={e => e.stopPropagation()}>
             <h3 className="font-fraunces italic text-[18px] text-ink mb-3">Imprimer</h3>
             <p className="text-[12px] text-ink-mute mb-3">Choisis le jour à imprimer (non-faites uniquement)</p>
-            <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-1 max-h-[60dvh] overflow-y-auto">
               {datesWithLines.map(d => {
                 const dt = new Date(d)
                 const lab = dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })

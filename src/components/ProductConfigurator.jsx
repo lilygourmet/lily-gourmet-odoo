@@ -252,7 +252,7 @@ export function ConfiguratorModal({ cfg, onChange, onClose, onAdd, priceEditable
         ? 'fixed inset-y-0 right-0 z-[140] w-full md:w-[50%] md:max-w-[640px] flex items-center justify-center p-4 bg-ink/40'
         : 'fixed inset-0 z-[140] flex items-center justify-center p-4 bg-ink/50'}
       onClick={embedded ? undefined : onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-md max-h-[92vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-cream rounded-2xl w-full max-w-md max-h-[92dvh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="bg-bordeaux text-cream px-4 py-3 flex items-center justify-between">
           <h3 className="font-fraunces italic text-[18px]">{item.name}</h3>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-cream/20">✕</button>

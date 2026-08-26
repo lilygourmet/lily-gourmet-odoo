@@ -109,7 +109,7 @@ export default function GmFicheModal({ item, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-[60] bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
          onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl border border-line"
+      <div className="bg-cream rounded-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto shadow-2xl border border-line"
            onClick={e => e.stopPropagation()}>
 
         <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-6 py-4 flex items-center justify-between z-10">

@@ -232,6 +232,6 @@ const emptyBox = { padding: 20, textAlign: 'center', color: '#4a3a30', backgroun
 const rowCard = { display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
 const rowCardCol = { padding: '13px 16px', borderRadius: 12, marginBottom: 6, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 360, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }
+const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 360, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90dvh', overflowY: 'auto' }
 const lbl = { display: 'block', fontSize: 12, fontWeight: 500, color: '#1a0f0a', marginBottom: 12 }
 const inp = { display: 'block', width: '100%', padding: '9px 11px', marginTop: 5, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 6, boxSizing: 'border-box' }

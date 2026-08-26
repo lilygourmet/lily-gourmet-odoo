@@ -82,7 +82,7 @@ export default function PointeuseModal({ onClose }) {
   }
 
   const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-  const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 660, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
+  const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 660, width: '100%', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }
   const ipt = { padding: '8px 10px', border: '1px solid #E5D8C3', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }
   const secTitle = { fontSize: 13, fontWeight: 600, color: '#1a0f0a', margin: '18px 0 8px' }
 

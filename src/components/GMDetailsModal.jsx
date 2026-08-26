@@ -185,7 +185,7 @@ export default function GMDetailsModal({ item, onClose, onSaved }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-line">
+      <div className="bg-cream rounded-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto shadow-2xl border border-line">
         {/* Header */}
         <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-5 py-3 flex items-center justify-between gap-3 z-10">
           <div className="flex items-center gap-2">

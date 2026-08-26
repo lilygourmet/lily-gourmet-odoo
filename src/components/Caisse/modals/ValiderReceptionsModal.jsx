@@ -46,7 +46,7 @@ export default function ValiderReceptionsModal({ receptions, onValidate, onClose
           </div>
         </div>
 
-        <div style={{ padding: 18, maxHeight: '60vh', overflowY: 'auto' }}>
+        <div style={{ padding: 18, maxHeight: '60dvh', overflowY: 'auto' }}>
           {receptions.length === 0 && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: 20, textAlign: 'center', color: '#4a3a30' }}>
               <CheckCircle2 size={16} /> Toutes les réceptions sont validées !

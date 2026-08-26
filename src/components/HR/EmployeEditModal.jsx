@@ -646,7 +646,7 @@ function Field({ label, value, onChange, placeholder, type = 'text', required = 
 }
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16, overflow: 'auto' }
-const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 560, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }
+const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 560, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto' }
 const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70', marginLeft: 4 }
 const btnNav = { width: 36, height: 32, background: '#F4F0EA', border: '1px solid #e5d8c3', borderRadius: 8, cursor: 'pointer', fontSize: 14, color: '#1a0f0a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }
 const lblStyle = { display: 'block', fontSize: 11, fontWeight: 500, color: '#4a3a30', marginBottom: 4 }

@@ -3,7 +3,7 @@
 // ============================================================
 //
 // Architecture :
-//   Navigateur (cette app)  ->  http://192.168.1.241:9999/print  ->  Imprimante TM-T88VII
+//   Navigateur (cette app)  ->  http://<IP du PC>:9999/print  ->  Imprimante TM-T88VII
 //
 // Le helper Node tourne sur le PC Windows toujours allume de la boutique.
 // Il forward le texte vers l'imprimante via ESC/POS (port 9100).
@@ -17,19 +17,24 @@
 
 // Adresses possibles du helper, essayees DANS L'ORDRE jusqu'a ce qu'une reponde :
 //  1) http://localhost:9999  -> le PC qui pilote l'imprimante (jamais bloque par le navigateur)
-//  2) http://192.168.1.241:9999 -> l'IP du PC sur le reseau, pour les TABLETTES / autres ordis
+//  2) l'IP du PC sur le reseau, pour les TABLETTES / autres ordis
 //     (HTTP depuis un site HTTPS : il faut autoriser le "contenu non securise" 1x par appareil)
+// ATTENTION : cette IP est distribuee par la box, elle CHANGE quand le PC redemarre.
+// Le 2026-08-26 le PC est passe de .241 a .5 -> plus rien n'imprimait depuis les
+// autres ordinateurs (message trompeur "helper pas lance"). On garde donc une
+// LISTE d'adresses connues, essayees l'une apres l'autre.
+// Vraie solution : reserver une IP fixe pour ce PC dans la box.
 // Surchargeable au build via VITE_PRINTER_HELPER_URL (placee en tete si definie).
-const PC_LAN_URL = 'http://192.168.1.241:9999'
+const PC_LAN_URLS = ['http://192.168.1.5:9999', 'http://192.168.1.241:9999']
 function helperCandidates() {
   const list = []
   if (import.meta.env?.VITE_PRINTER_HELPER_URL) list.push(import.meta.env.VITE_PRINTER_HELPER_URL)
-  list.push('http://localhost:9999', PC_LAN_URL)
+  list.push('http://localhost:9999', ...PC_LAN_URLS)
   return [...new Set(list.map(u => u.replace(/\/+$/, '')))]
 }
 // Memorise la base qui a marche pour ne pas re-sonder a chaque ticket.
 let _workingBase = null
-export const PRINTER_HELPER_URL = PC_LAN_URL   // compat (non utilise directement)
+export const PRINTER_HELPER_URL = PC_LAN_URLS[0]   // compat (non utilise directement)
 
 // ----- Helpers de formatage du texte ticket -----
 

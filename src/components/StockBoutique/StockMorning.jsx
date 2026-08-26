@@ -610,7 +610,7 @@ function DiscrepancyModalPatissier({ items, resolvedItems, onAccept, onRequestRe
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-red-700 text-white px-4 py-3 flex-shrink-0">
           <div className="font-mono text-[10px] tracking-[0.15em] uppercase opacity-90">

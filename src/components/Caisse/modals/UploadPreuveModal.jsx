@@ -28,7 +28,7 @@ export default function UploadPreuveModal({ env, kind, onClose, onUpload }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 28, maxWidth: 440, width: '100%', border: '0.5px solid #e5d8c3', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 28, maxWidth: 440, width: '100%', border: '0.5px solid #e5d8c3', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 500 }}>Ajouter une preuve</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }}>✕</button>

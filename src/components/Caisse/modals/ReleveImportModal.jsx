@@ -257,7 +257,7 @@ function Stat({ icon, color, bg, n, label }) {
 }
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal = { background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto' }
+const modal = { background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '90dvh', overflowY: 'auto' }
 const header = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }
 const closeBtn = { background: 'none', border: 'none', cursor: 'pointer', color: '#8a7a70' }
 const errBox = { background: '#fde7e7', color: '#a11', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }

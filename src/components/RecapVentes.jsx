@@ -12,7 +12,7 @@ function CatIcon({ catId, size = 16, className = '' }) {
 }
 import { isLivreur } from '../lib/auth'
 import { buildMapsHref } from '../lib/maps'
-import { printArticleBatch, pingPrinter } from '../lib/printTicket'
+import { printArticleBatch, pingPrinter, PRINTER_HELPER_URL } from '../lib/printTicket'
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
@@ -427,7 +427,7 @@ function CategoryPopup({
   return (
     <div className="fixed inset-0 z-[60] bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
          onClick={onClose}>
-      <div className={`relative bg-cream rounded-2xl w-full ${isOdooTableMode ? 'max-w-3xl' : 'max-w-2xl'} max-h-[85vh] overflow-y-auto shadow-2xl border border-line`}
+      <div className={`relative bg-cream rounded-2xl w-full ${isOdooTableMode ? 'max-w-3xl' : 'max-w-2xl'} max-h-[85dvh] overflow-y-auto shadow-2xl border border-line`}
            onClick={e => e.stopPropagation()}>
 
         {/* Header popup */}
@@ -456,7 +456,7 @@ function CategoryPopup({
         </div>
 
         {/* Contenu */}
-        <div className={`px-6 py-4 ${cart.length > 0 ? 'pb-[50vh]' : ''}`}>
+        <div className={`px-6 py-4 ${cart.length > 0 ? 'pb-[50dvh]' : ''}`}>
           {lines.length === 0 ? (
             <div className="text-center text-ink-mute italic py-12">Aucune vente pour cette catégorie</div>
           ) : isOdooTableMode ? (
@@ -804,7 +804,7 @@ function FloatingCart({ cart, totalLabels, expanded, onToggle, onRemove, onClear
     >
       {expanded ? (
         /* Panneau etendu : liste des etiquettes + actions */
-        <div className="bg-cream border border-bordeaux/40 rounded-2xl shadow-2xl w-[320px] max-h-[60vh] flex flex-col">
+        <div className="bg-cream border border-bordeaux/40 rounded-2xl shadow-2xl w-[320px] max-h-[60dvh] flex flex-col">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
             <div className="font-fraunces italic text-[15px] text-ink leading-none">
               Panier
@@ -882,7 +882,7 @@ function FloatingCart({ cart, totalLabels, expanded, onToggle, onRemove, onClear
 function CartBar({ cart, totalLabels, downloading, onRemove, onClear, onDownload }) {
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 bg-cream border-t-2 border-bordeaux p-3 max-h-[40vh] overflow-y-auto z-[70] shadow-2xl"
+      className="lg-bottom-bar bg-cream border-t-2 border-bordeaux p-3 max-h-[40dvh] overflow-y-auto z-[70] shadow-2xl"
       onClick={e => e.stopPropagation()}
       onMouseDown={e => e.stopPropagation()}
     >
@@ -1128,7 +1128,8 @@ export default function RecapVentes({ onClose, user = null, onLogout = null, ful
           `${result.errors.length} erreur(s) :\n` +
           result.errors.slice(0, 3).map(e => `- ${e.article.productName} : ${e.error}`).join('\n') +
           (result.errors.length > 3 ? `\n... et ${result.errors.length - 3} autres.` : '') +
-          `\n\nVerifiez que le helper PC tourne (192.168.1.241:9999) et que l'imprimante est allumee.`
+          `\n\nVerifiez que le PC d'impression est allume (${PRINTER_HELPER_URL}) et que l'imprimante l'est aussi.` +
+          `\nSi le PC a change d'adresse sur le reseau, il faut la corriger dans l'app.`
         )
       }
     } catch (e) {
@@ -1729,7 +1730,7 @@ function FacturesModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-lg shadow-2xl border border-line p-5 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-cream rounded-2xl w-full max-w-lg shadow-2xl border border-line p-5 max-h-[85dvh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-fraunces italic text-[20px] text-ink">🧾 Factures</h3>
           <button onClick={onClose} className="text-ink-mute hover:text-bordeaux text-[18px]">✕</button>

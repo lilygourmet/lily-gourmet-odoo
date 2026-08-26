@@ -51,7 +51,7 @@ export default function SplitModal({ src, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onPointerDown={e => { if (e.target === e.currentTarget) onClose(null) }}>
-      <div className="bg-white rounded-xl p-4 max-w-[92vw] max-h-[92vh] overflow-auto">
+      <div className="bg-white rounded-xl p-4 max-w-[92vw] max-h-[92dvh] overflow-auto">
         <div className="font-fraunces text-[15px] mb-1">✂️ Détacher les éléments</div>
         <div className="flex items-center gap-2 mb-1 text-[12px] text-ink-soft">
           <span className="w-[130px]">Prise du blanc</span>

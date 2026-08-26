@@ -318,7 +318,7 @@ export default function AdminUsers({ currentUser, onClose }) {
       onClick={onClose}
     >
       <div
-        className="bg-cream rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-line"
+        className="bg-cream rounded-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto shadow-2xl border border-line"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -607,7 +607,7 @@ function TeamManagerModal({ teams, users, onClose, onCreate, onDelete }) {
         <h3 className="font-fraunces italic text-[20px] text-ink mb-3">Gestion des équipes</h3>
 
         {/* Liste équipes */}
-        <div className="space-y-1 mb-4 max-h-[40vh] overflow-y-auto">
+        <div className="space-y-1 mb-4 max-h-[40dvh] overflow-y-auto">
           {teams.length === 0 ? (
             <p className="text-[12px] text-ink-mute italic">Aucune équipe</p>
           ) : teams.map(t => {

@@ -75,7 +75,7 @@ export default function CakeChargeModal({ initialDate, onClose, onOpenOrder }) {
 
   return (
     <div className="fixed inset-0 z-[40] flex items-center justify-center p-4 bg-ink/40" onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-2xl h-[92vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-cream rounded-2xl w-full max-w-2xl h-[92dvh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="bg-bordeaux text-cream px-4 py-3 flex items-center justify-between sticky top-0 z-10">
           <h3 className="font-fraunces italic text-[17px]">🎂 Charge Cake Design</h3>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-cream/20">✕</button>

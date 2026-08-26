@@ -43,7 +43,7 @@ export default function RemoveBgModal({ src, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onPointerDown={e => { if (e.target === e.currentTarget) onClose(null) }}>
-      <div className="bg-white rounded-xl p-4 max-w-[92vw] max-h-[92vh] overflow-auto">
+      <div className="bg-white rounded-xl p-4 max-w-[92vw] max-h-[92dvh] overflow-auto">
         <div className="font-fraunces text-[15px] mb-1">🪄 Enlever le fond</div>
         <div className="flex items-center gap-2 mb-2 text-[12px] text-ink-soft"><span>Tolérance</span><input type="range" min="5" max="150" value={tol} onChange={e => onTol(+e.target.value)} className="flex-1" /><span>{tol}</span></div>
         <p className="text-[12px] text-ink-soft mb-2">Augmente la tolérance si du fond reste, baisse-la si ça mange le dessin.</p>

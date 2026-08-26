@@ -4,10 +4,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Réserve l'espace en bas sur téléphone pour la barre de navigation mobile (≈56px). */
-@media (max-width: 640px) {
-  body { padding-bottom: 56px; }
+/* Hauteur de ce qui mange le bas de l'écran :
+   - --lg-safe-bottom : la bande système du téléphone/tablette (encoche, barre
+     de gestes). Vaut 0 sur ordinateur.
+   - --lg-nav-bottom  : la barre de navigation de l'app (MobileBottomNav),
+     visible uniquement sous 640px. Elle mesure 56px + la bande système.
+   Tout ce qui se pose en bas doit se caler sur ces deux mesures, sinon la
+   bande du bas recouvre le contenu (piège vécu sur plusieurs écrans). */
+:root {
+  --lg-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --lg-nav-bottom: 0px;
 }
+@media (max-width: 639.98px) {
+  :root { --lg-nav-bottom: calc(56px + var(--lg-safe-bottom)); }
+}
+
+/* Réserve l'espace en bas pour la barre de navigation mobile + la bande système. */
+body { padding-bottom: max(var(--lg-nav-bottom), var(--lg-safe-bottom)); }
 
 body {
   font-family: 'Geist', -apple-system, sans-serif;
@@ -112,15 +125,13 @@ html, body {
 /* Barre d'action collée en bas de l'écran (récap, validation…).
    Sur téléphone elle se pose AU-DESSUS de la barre de navigation
    (MobileBottomNav, ~56px + encoche), sinon celle-ci la recouvre
-   et le bouton devient inatteignable. */
+   et le bouton devient inatteignable. Sur tablette/ordinateur, où ce menu
+   n'existe pas, elle reste quand même au-dessus de la bande système. */
 .lg-bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(56px + env(safe-area-inset-bottom));
-}
-@media (min-width: 640px) {
-  .lg-bottom-bar { bottom: 0; }
+  bottom: max(var(--lg-nav-bottom), var(--lg-safe-bottom));
 }
 
 /* Onglets / chips */

@@ -906,7 +906,7 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
 
       {burnView && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-ink/50" onClick={() => setBurnView(null)}>
-          <div className="bg-cream rounded-2xl w-full max-w-md max-h-[90vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-cream rounded-2xl w-full max-w-md max-h-[90dvh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="bg-bordeaux text-cream px-4 py-3 flex items-center justify-between">
               <h3 className="font-fraunces italic text-[18px]">🔥 Burn away — à imprimer</h3>
               <button onClick={() => setBurnView(null)} className="w-7 h-7 rounded-full bg-cream/20">✕</button>
@@ -1651,7 +1651,7 @@ function DiffPopup({ order, onClose, onViewDetails }) {
       onClick={onClose}
     >
       <div
-        className="bg-cream rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl border border-line"
+        className="bg-cream rounded-2xl w-full max-w-lg max-h-[85dvh] overflow-y-auto shadow-2xl border border-line"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

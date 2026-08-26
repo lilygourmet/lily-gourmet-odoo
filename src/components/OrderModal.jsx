@@ -495,7 +495,7 @@ export default function OrderModal({ order, focusItemId, dayOrders, onNavigate, 
         onClick={onClose}
       >
         <div
-          className="bg-cream rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl border border-line"
+          className="bg-cream rounded-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto shadow-2xl border border-line"
           onClick={e => e.stopPropagation()}
           onTouchStart={e => {
             // Track le debut du swipe (uniquement si 1 doigt et pas de scroll vertical actif)

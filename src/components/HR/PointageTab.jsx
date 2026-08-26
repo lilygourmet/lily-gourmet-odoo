@@ -846,7 +846,7 @@ export default function PointageTab({ user, isAdmin }) {
 
 
       {!loading && vue === 'single' && isAdmin && data && (
-        <div style={{ display: isMobile ? 'block' : 'flex', gap: 16, alignItems: isMobile ? 'flex-start' : 'stretch', height: isMobile ? undefined : 'calc(100vh - 175px)' }}>
+        <div style={{ display: isMobile ? 'block' : 'flex', gap: 16, alignItems: isMobile ? 'flex-start' : 'stretch', height: isMobile ? undefined : 'calc(100dvh - 175px)' }}>
           <div style={{ width: isMobile ? '100%' : 240, flexShrink: 0, display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: 4, overflowX: isMobile ? 'auto' : 'visible', overflowY: isMobile ? 'visible' : 'auto', marginBottom: isMobile ? 12 : 0, paddingRight: isMobile ? 0 : 4 }}>
             {(data.employes || []).map(e => (
               <button key={e.id} onClick={() => setSelectedEmpId(e.id)} title={e.nom} style={{

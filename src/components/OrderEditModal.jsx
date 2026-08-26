@@ -293,7 +293,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
 
   return (
     <div className={embedded ? '' : 'fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm'} onClick={embedded ? undefined : tryClose}>
-      <div className={embedded ? 'bg-cream' : 'bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line max-h-[90vh] overflow-y-auto'} onClick={embedded ? undefined : e => e.stopPropagation()}>
+      <div className={embedded ? 'bg-cream' : 'bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line max-h-[90dvh] overflow-y-auto'} onClick={embedded ? undefined : e => e.stopPropagation()}>
 
         {/* En-tête */}
         <div className="flex items-start justify-between gap-2 px-5 pt-5">

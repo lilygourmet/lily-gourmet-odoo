@@ -69,7 +69,7 @@ const btnPrimary = { flex: 2, fontSize: 13, padding: 10, borderRadius: 8, border
 export function ModalBox({ title, titleColor, titleIcon, onClose, children }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%', border: '0.5px solid #e5d8c3', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%', border: '0.5px solid #e5d8c3', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 14, color: titleColor || '#1a0f0a', fontSize: 15, fontWeight: 500 }}>
           {titleIcon && <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 18 }}>{titleIcon}</span>}
           {title}

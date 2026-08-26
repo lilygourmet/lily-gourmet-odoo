@@ -62,7 +62,7 @@ export default function TabLockGate({ label, children }) {
   }
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center p-6">
+    <div className="min-h-[70dvh] flex items-center justify-center p-6">
       <form onSubmit={submit} className="bg-cream-warm border border-line rounded-2xl p-6 w-full max-w-xs text-center shadow-sm">
         <div className="text-[15px] font-bold text-bordeaux mb-1">🔒 {label}</div>
 

@@ -50,7 +50,7 @@ export default function ForwardModal({ sourceMessage, currentConversationId, use
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-ink/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-cream rounded-2xl w-full max-w-md shadow-2xl border border-line p-5 max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <h3 className="font-fraunces italic text-[20px] text-ink">Transférer à…</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center transition-all flex-shrink-0">✕</button>
@@ -73,7 +73,7 @@ export default function ForwardModal({ sourceMessage, currentConversationId, use
             {loading ? (
               <div className="text-[12px] text-ink-mute italic py-2">Chargement…</div>
             ) : (
-              <div className="space-y-1 max-h-[50vh] overflow-y-auto">
+              <div className="space-y-1 max-h-[50dvh] overflow-y-auto">
                 {list.map(c => (
                   <button
                     key={c.id} onClick={() => handlePick(c)} disabled={busy}

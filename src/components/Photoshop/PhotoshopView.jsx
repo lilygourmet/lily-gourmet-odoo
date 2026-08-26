@@ -1418,7 +1418,7 @@ export default function PhotoshopView({ user, onNavigate }) {
       {/* Overlay « 🎯 À paramétrer » */}
       {paramOpen && (
         <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-14" onPointerDown={e => { if (e.target === e.currentTarget) setParamOpen(false) }}>
-          <div className="bg-cream rounded-2xl w-full max-w-[1000px] max-h-[calc(100vh-72px)] overflow-auto shadow-2xl">
+          <div className="bg-cream rounded-2xl w-full max-w-[1000px] max-h-[calc(100dvh-72px)] overflow-auto shadow-2xl">
             <div className="sticky top-0 bg-bordeaux text-white px-4 py-2.5 flex items-center gap-3 flex-wrap z-10">
               <span className="font-fraunces text-[15px]">{paramHist !== null ? 'Historique paramétrage (5 derniers jours)' : 'Modèles à paramétrer'}</span>
               {paramHist === null && <span className="bg-white text-bordeaux rounded-full px-2.5 font-bold text-[12px]">{paramTodo.length}</span>}

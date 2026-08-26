@@ -204,7 +204,7 @@ export default function RegionEditor({ src, onClose, onExtract }) {
   const sel = (m) => mode === m ? ' bg-bordeaux text-white' : ' bg-white border border-line'
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onPointerDown={e => { if (e.target === e.currentTarget) onClose(null) }}>
-      <div className="bg-white rounded-xl p-4 max-w-[92vw] max-h-[92vh] overflow-auto">
+      <div className="bg-white rounded-xl p-4 max-w-[92vw] max-h-[92dvh] overflow-auto">
         <div className="font-fraunces text-[15px] mb-2">🖌️ Modifier une zone</div>
         <div className="flex flex-wrap gap-1.5 mb-2">
           <button onClick={() => { setMode('gomme'); clearSel() }} className={TB + sel('gomme')}>🧽 Gomme</button>

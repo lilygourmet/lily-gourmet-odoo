@@ -134,7 +134,7 @@ export default function PolyExpressModal({ user, onClose, onPolysChanged }) {
   return (
     <>
     <div className="fixed inset-0 z-[150] flex flex-col bg-ink/50 px-2 sm:px-0" onClick={onClose}>
-      <div className="bg-cream w-full max-w-lg mx-auto mt-[3vh] mb-[3vh] rounded-2xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-cream w-full max-w-lg mx-auto mt-[3dvh] mb-[3dvh] rounded-2xl shadow-2xl flex flex-col max-h-[94dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="bg-bordeaux text-cream px-4 py-3 flex items-center justify-between flex-shrink-0">
           <h3 className="font-fraunces italic text-[18px]">🧊 Régler les polys{!loading && ` — ${remaining} à faire`}</h3>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-cream/20">✕</button>

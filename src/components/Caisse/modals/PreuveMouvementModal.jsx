@@ -159,6 +159,6 @@ export default function PreuveMouvementModal({ mvt, onClose, onUpload, onDeclare
 }
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 480, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }
+const modal = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 480, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90dvh', overflowY: 'auto' }
 const btnClose = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#8a7a70' }
 const btnPrimary = { fontSize: 13, padding: '10px 16px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer', fontWeight: 500 }

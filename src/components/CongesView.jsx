@@ -2182,7 +2182,7 @@ function NouvelleDemandeModal({ employes, soldes, user, onClose, onSaved, joursF
 // Styles
 // ============================================================
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }
-const modal   = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '92vh', overflowY: 'auto' }
+const modal   = { background: 'white', borderRadius: 16, padding: 22, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '92dvh', overflowY: 'auto' }
 const card    = { background: 'white', border: '0.5px solid #e5d8c3', borderRadius: 14, padding: '13px 16px', boxShadow: '0 2px 8px rgba(122,42,68,0.05)' }
 const soldeRow = { display: 'grid', gridTemplateColumns: '1fr 90px 90px 90px 90px 110px', gap: 8, padding: '12px 14px', borderRadius: 12, background: 'white', border: '0.5px solid #e5d8c3', boxShadow: '0 2px 8px rgba(122,42,68,0.05)', alignItems: 'center' }
 const cellNum = { fontSize: 12, color: '#4a3a30', textAlign: 'center', alignSelf: 'center' }

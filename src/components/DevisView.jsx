@@ -551,7 +551,7 @@ function PhotoLightbox({ orderId, onClose }) {
       ) : (
         <div className="flex flex-col items-center gap-3 my-auto">
           {photos.map((p, i) => (
-            <img key={i} src={p.dataUrl} alt={p.name || 'photo'} className="max-w-full max-h-[92vh] object-contain rounded-lg" />
+            <img key={i} src={p.dataUrl} alt={p.name || 'photo'} className="max-w-full max-h-[92dvh] object-contain rounded-lg" />
           ))}
         </div>
       )}

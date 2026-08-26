@@ -142,7 +142,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour, couvert, estDeclare }) {
   const cle = p => 'sc:' + p
   return (
-    <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden'}>
+    <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden'}>
       <div className={'flex items-center gap-2 ' + (onRetour ? 'mb-2' : 'px-4 pt-4 pb-2 flex-shrink-0 border-b border-line')}>
         {onRetour && <button onClick={onRetour} className="text-[14px] text-bordeaux font-semibold">← Retour</button>}
         <b className="text-[16px]">Ma recette</b>

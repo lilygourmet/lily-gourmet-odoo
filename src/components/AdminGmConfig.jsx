@@ -114,7 +114,7 @@ export default function AdminGmConfig({ onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
          onClick={onClose}>
-      <div className="bg-cream rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-line"
+      <div className="bg-cream rounded-2xl w-full max-w-3xl max-h-[90dvh] overflow-y-auto shadow-2xl border border-line"
            onClick={e => e.stopPropagation()}>
 
         {/* Header */}
