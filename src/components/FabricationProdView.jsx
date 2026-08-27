@@ -22,7 +22,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const [erreur, setErreur] = useState(null)
   const [ouvert, setOuvert] = useState(null)      // l'article en cours de saisie
   const [valeur, setValeur] = useState('')
-  const [unite, setUnite] = useState('g')
+  const [unite, setUnite] = useState(null)
   const [ajoutes, setAjoutes] = useState([])      // articles ajoutés à la main
   const [nouveau, setNouveau] = useState(null)    // { nom, unite, photo } en cours de création
   const [noms, setNoms] = useState({})
@@ -60,12 +60,13 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     if (ouvert === a.article) { setOuvert(null); return }
     setOuvert(a.article)
     setValeur('')
-    setUnite(a.unite)
+    setUnite(null)          // à choisir exprès : g, kg ou u
   }
 
   const noter = async a => {
     const q = Number(String(valeur).replace(',', '.'))
     if (!(q > 0)) { toast.error('Note une quantité'); return }
+    if (!unite) { toast.error('Choisis grammes, kilos ou unités'); return }
     try {
       const ligne = await addFabProd(jour, a.article, q, unite, user?.id)
       setJournal(l => [...(l || []), ligne])
@@ -191,8 +192,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
           </div>
         )}
 
-        {/* La feuille imprimée : la liste du jour, rien d'autre. */}
-        <div className="hidden print:block">
+        {/* La feuille imprimée. La classe `print-area` est indispensable :
+            index.css masque tout le reste de la page à l'impression. */}
+        <div className="hidden print:block print-area">
           <h2 className="font-serif italic text-[20px] mb-0.5">Fabrication Prod</h2>
           <p className="text-[12px] text-ink-soft mb-3">{jourLisible(jour)}</p>
           {(journal || []).length === 0 ? (
@@ -278,9 +280,18 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                               ))}
                             </div>
                           </div>
+                          {!unite && (
+                            <p className="text-[11.5px] text-[#854F0B] mt-2">
+                              Choisis l'unité : grammes, kilos ou unités.
+                            </p>
+                          )}
                           <div className="flex gap-2 mt-2.5">
                             <button onClick={() => noter(a)}
-                              className="flex-1 bg-bordeaux text-cream rounded-xl py-2.5 text-[13px] font-bold">
+                              disabled={!unite || !(Number(String(valeur).replace(',', '.')) > 0)}
+                              className={'flex-1 rounded-xl py-2.5 text-[13px] font-bold ' +
+                                (unite && Number(String(valeur).replace(',', '.')) > 0
+                                  ? 'bg-bordeaux text-cream'
+                                  : 'bg-white border border-line text-ink-mute')}>
                               Ajouter à la liste
                             </button>
                             {a.ajoute && fois === 0 && (
@@ -382,7 +393,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                       <span className="text-[11.5px] text-ink-mute hidden sm:block max-w-[110px] truncate">{noms[l.fait_par]}</span>
                     )}
                     <button onClick={() => retirerLigne(l.id)}
-                      className="text-ink-mute text-[15px] px-1 shrink-0" title="retirer cette ligne">✕</button>
+                      className="border border-line bg-white rounded-lg px-2.5 py-1.5 text-[12px] font-bold text-danger shrink-0">
+                      annuler
+                    </button>
                   </div>
                 ))}
               </div>
