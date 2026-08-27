@@ -1147,13 +1147,19 @@ export default async function handler(req, res) {
       // pas de filtre sur `type` : Odoo 19 en a changé les valeurs, on
       // écarterait tout le catalogue sans s'en apercevoir
       const arts = await odooSearchRead(uid, 'product.product',
-        [['name', 'ilike', q]], ['display_name', 'uom_id'], { limit: 20, order: 'name' })
+        [['name', 'ilike', q]], ['display_name', 'uom_id'], { limit: 80, order: 'name' })
+      // on cherche un ingrédient, pas un gâteau : les matières premières (MP-)
+      // et les préparations (SM) passent devant les produits finis
+      const rang = n => (/^\s*(\[[^\]]*\]\s*)?MP-/i.test(n) ? 0 : /^\s*(\[[^\]]*\]\s*)?SM/i.test(n) ? 1 : 2)
       return res.status(200).json({
-        articles: arts.map(a => ({
-          id: a.id, nom: a.display_name,
-          uom: Array.isArray(a.uom_id) ? a.uom_id[0] : null,
-          unite: Array.isArray(a.uom_id) ? a.uom_id[1] : '',
-        })),
+        articles: arts
+          .map(a => ({
+            id: a.id, nom: a.display_name,
+            uom: Array.isArray(a.uom_id) ? a.uom_id[0] : null,
+            unite: Array.isArray(a.uom_id) ? a.uom_id[1] : '',
+          }))
+          .sort((x, y) => rang(x.nom) - rang(y.nom) || x.nom.localeCompare(y.nom))
+          .slice(0, 20),
       })
     }
 
