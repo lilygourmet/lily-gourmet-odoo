@@ -16,6 +16,29 @@ const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit
 
 const FAMILLES = ['Finitions', 'Autres']
 
+/**
+ * La calculette qui s'ouvre sous l'article. Même allure que celle des
+ * transferts, avec une virgule en plus : ici on note 7,5 kg.
+ * La valeur est tenue en texte pour que « 7, » existe entre deux touches.
+ */
+function Pave({ setValeur }) {
+  const chiffre = d => setValeur(v => (v.replace(',', '').length >= 6 ? v : (v === '0' ? d : v + d)))
+  const virgule = () => setValeur(v => (v.includes(',') ? v : (v === '' ? '0,' : v + ',')))
+  const effacer = () => setValeur(v => v.slice(0, -1))
+
+  const touche = 'py-3 text-[17px] font-bold border border-line rounded-lg bg-white active:bg-cream-warm'
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+        <button key={n} type="button" onClick={() => chiffre(String(n))} className={touche}>{n}</button>
+      ))}
+      <button type="button" onClick={virgule} className={touche}>,</button>
+      <button type="button" onClick={() => chiffre('0')} className={touche}>0</button>
+      <button type="button" onClick={effacer} className={touche + ' text-[15px] text-ink-mute'}>&#9003;</button>
+    </div>
+  )
+}
+
 export default function FabricationProdView({ user, onLogout, onNavigate, activeView }) {
   const [jour, setJour] = useState(todayISO())
   const [journal, setJournal] = useState(null)    // les fournées notées ce jour-là
@@ -45,6 +68,21 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   }, [])
 
   const relireHisto = () => loadHistorique(60).then(setHisto).catch(() => setHisto([]))
+
+  // Sur ordinateur, taper au clavier fait la même chose que la calculette.
+  useEffect(() => {
+    if (!ouvert) return undefined
+    const touche = e => {
+      if (e.key >= '0' && e.key <= '9') setValeur(v => (v.replace(',', '').length >= 6 ? v : (v === '0' ? e.key : v + e.key)))
+      else if (e.key === ',' || e.key === '.') setValeur(v => (v.includes(',') ? v : (v === '' ? '0,' : v + ',')))
+      else if (e.key === 'Backspace') setValeur(v => v.slice(0, -1))
+      else if (e.key === 'Escape') setOuvert(null)
+      else return
+      e.preventDefault()
+    }
+    document.addEventListener('keydown', touche)
+    return () => document.removeEventListener('keydown', touche)
+  }, [ouvert])
 
   // La liste complète : celle du fichier, plus ce que l'équipe a ajouté.
   const tous = useMemo(() => [...ARTICLES, ...ajoutes], [ajoutes])
@@ -264,21 +302,21 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
                       {actif && (
                         <div className="px-3 pb-3 bg-cream-warm border-t border-line pt-3">
-                          <div className="flex gap-2 items-center flex-wrap">
-                            <input type="number" min="0" step="any" inputMode="decimal" autoFocus
-                              value={valeur} onChange={e => setValeur(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') noter(a) }}
-                              placeholder="0"
-                              className="w-[92px] border border-line rounded-xl px-2.5 py-2.5 text-[18px] font-extrabold text-right bg-white outline-none focus:border-bordeaux" />
-                            <div className="flex border border-line rounded-xl overflow-hidden bg-white">
-                              {['g', 'kg', 'u'].map(u => (
-                                <button key={u} onClick={() => setUnite(u)}
-                                  className={'px-3 py-2.5 text-[13.5px] font-extrabold border-r border-line last:border-r-0 ' +
-                                    (unite === u ? 'bg-bordeaux text-cream' : 'text-ink-mute')}>
-                                  {u}
-                                </button>
-                              ))}
-                            </div>
+                          <div className="bg-white border border-line rounded-xl px-3 py-2.5 mb-2 flex items-baseline justify-end gap-2">
+                            <span className="text-[26px] font-extrabold leading-none">{valeur || '0'}</span>
+                            <span className={'text-[14px] font-bold ' + (unite ? 'text-ink-soft' : 'text-ink-mute')}>
+                              {unite || '?'}
+                            </span>
+                          </div>
+                          <Pave setValeur={setValeur} />
+                          <div className="flex border border-line rounded-xl overflow-hidden bg-white mt-2">
+                            {['g', 'kg', 'u'].map(u => (
+                              <button key={u} onClick={() => setUnite(u)}
+                                className={'flex-1 py-2.5 text-[14px] font-extrabold border-r border-line last:border-r-0 ' +
+                                  (unite === u ? 'bg-bordeaux text-cream' : 'text-ink-mute')}>
+                                {u}
+                              </button>
+                            ))}
                           </div>
                           {!unite && (
                             <p className="text-[11.5px] text-[#854F0B] mt-2">
