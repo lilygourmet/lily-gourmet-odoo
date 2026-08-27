@@ -24,6 +24,8 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const [resultats, setResultats] = useState(null)
   const [confirmer, setConfirmer] = useState(false)
   const [tour, setTour] = useState(0)
+  const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
+  const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
 
   useEffect(() => {
     let vivant = true
@@ -70,7 +72,19 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     const cibles = (forcer ? bloques : prets).map(l => l.name)
     if (!cibles.length) return
     setEnvoi(true)
-    try { setResultats(await validerDansOdoo(cibles, forcer, user?.id)) }
+    const aEnvoyer = {}
+    for (const n of cibles) {
+      if (!notes[n]) continue
+      const ordre = (lignes || []).find(x => x.name === n)
+      const conv = {}
+      for (const [id, v] of Object.entries(notes[n])) {
+        const c = (ordre?.lignes || []).find(x => String(x.id) === String(id))
+        const fact = norm(c?.unite) === 'kg' ? 1000 : 1
+        if (v !== '' && Number(v) >= 0) conv[id] = Number(v) / fact
+      }
+      if (Object.keys(conv).length) aEnvoyer[n] = conv
+    }
+    try { setResultats(await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer)) }
     catch (e) { toast.error(e.message || String(e)) }
     setEnvoi(false)
   }
@@ -142,6 +156,55 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                   {l.manques.map((m, i) => (
                     <div key={i}>• <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}</div>
                   ))}
+                </div>
+              )}
+
+              {/* Noter ce qui a vraiment été consommé, avant de valider */}
+              {(l.lignes || []).length > 0 && (
+                <div className="border-t border-line">
+                  <button onClick={() => setOuvert(ouvert === l.name ? null : l.name)}
+                    className="w-full text-left px-3.5 py-2 text-[12.5px] text-bordeaux font-semibold">
+                    {ouvert === l.name ? '▾' : '▸'} noter ce qui a été consommé
+                  </button>
+                  {ouvert === l.name && (
+                    <div className="px-3.5 pb-3">
+                      <p className="text-[12px] text-ink-mute mb-2">
+                        Corrige les quantités si tu n'as pas utilisé exactement la recette.
+                        Ferme sans rien changer pour garder ce qui est prévu.
+                      </p>
+                      {l.lignes.map(c => {
+                        // Odoo compte parfois en kg, l'équipe pense en grammes :
+                        // on saisit en grammes et on reconvertit à l'envoi.
+                        const enG = norm(c.unite) === 'kg'
+                        const fact = enG ? 1000 : 1
+                        const val = (notes[l.name] || {})[c.id]
+                        const affiche = val !== undefined ? val : Math.round((c.consomme ?? c.besoin) * fact * 100) / 100
+                        return (
+                          <div key={c.id} className="flex items-center gap-2.5 py-1.5 border-b border-dashed border-[#f0e8db] last:border-0">
+                            <span className="flex-1 text-[13.5px] min-w-0">{propre(c.produit)}</span>
+                            <input type="number" min="0" step="any" inputMode="decimal" value={affiche}
+                              onChange={e => setNotes(n => ({
+                                ...n, [l.name]: { ...(n[l.name] || {}), [c.id]: e.target.value },
+                              }))}
+                              className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                            <span className="text-[12px] text-ink-mute w-[26px]">{enG ? 'g' : c.unite}</span>
+                          </div>
+                        )
+                      })}
+                      <div className="flex gap-2 mt-2.5">
+                        <button onClick={() => setOuvert(null)}
+                          className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
+                          fermer sans changer
+                        </button>
+                        {notes[l.name] && (
+                          <button onClick={() => setNotes(n => { const s2 = { ...n }; delete s2[l.name]; return s2 })}
+                            className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-mute">
+                            revenir à la recette
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

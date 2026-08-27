@@ -287,7 +287,7 @@ async function reserverPourLeParent(uid, mo) {
   return pm.map(m => m.name).join(', ')
 }
 
-async function validerOrdre(uid, name, forcer) {
+async function validerOrdre(uid, name, forcer, quantites = null) {
   const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', name]],
     ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_id', 'location_src_id', 'company_id', 'origin']))[0]
   if (!mo) return { name, ok: false, message: 'ordre introuvable' }
@@ -297,6 +297,12 @@ async function validerOrdre(uid, name, forcer) {
     const glacage = await integrerGlacage(uid, mo)
     if (!mo.qty_producing || mo.qty_producing !== mo.product_qty) {
       await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: mo.product_qty }])
+    }
+    // Ce que l'équipe a noté à l'écran fait foi : on l'écrit avant tout le reste.
+    for (const [moveId, valeur] of Object.entries(quantites || {})) {
+      const q = Number(valeur)
+      if (!(q >= 0)) continue
+      await odooCall(uid, 'stock.move', 'write', [[Number(moveId)], { quantity_done: q }]).catch(() => { })
     }
     // Validé par programme, Odoo ne remplit pas les quantités consommées des
     // composants — il refuse alors la validation (« You must indicate a
@@ -629,7 +635,7 @@ async function manquesDesOrdres(uid, names) {
   if (!mos.length) return []
   const moves = await odooSearchRead(uid, 'stock.move',
     [['raw_material_production_id', 'in', mos.map(m => m.id)]],
-    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'reserved_availability'], { limit: 500 })
+    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'reserved_availability', 'quantity_done'], { limit: 500 })
   const idsProd = [...new Set(moves.map(m => m.product_id[0]))]
   const stockParLieu = {}          // "lieu:produit" → { qty, unite }
   const lieux = [...new Set(mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean))]
@@ -662,7 +668,10 @@ async function manquesDesOrdres(uid, names) {
       const dispo = brut === null ? null : brut + (x.reserved_availability || 0)
       const comparable = dispo !== null                       // unités incompatibles → on n'affirme rien
       return {
+        id: x.id,
         produit: nomP, besoin: x.product_uom_qty, unite: uniteLigne,
+        // ce qui sera consommé — modifiable au moment de valider
+        consomme: x.quantity_done > 0 ? x.quantity_done : x.product_uom_qty,
         dispo: comparable ? Math.round(dispo * 100) / 100 : null, ignore,
         manque: (ignore || !comparable) ? 0 : Math.max(0, x.product_uom_qty - dispo),
       }
@@ -673,6 +682,7 @@ async function manquesDesOrdres(uid, names) {
       etat: m.state, pour: m.origin || '', dispo: m.components_availability || '',
       quand: m.date_planned_start || '',
       lieu: Array.isArray(m.location_src_id) ? m.location_src_id[1] : '',
+      lignes,                                   // toute la recette, pour noter les consommations
       manques: lignes.filter(l => l.manque > 0.0001),
     }
   })
@@ -1088,7 +1098,7 @@ export default async function handler(req, res) {
       }
       const uid = await odooAuth()
       const out = []
-      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true))
+      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true, (body.quantites || {})[n]))
       console.log(`[fabrication:valider] par ${body.actorId || '?'} · forcer=${body.forcer === true} · ${out.map(o => o.name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
       return res.status(200).json({ resultats: out })
     }

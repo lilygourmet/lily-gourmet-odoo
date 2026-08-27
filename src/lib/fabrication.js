@@ -137,11 +137,11 @@ export async function loadManques(ordres) {
  * `forcer` = passer outre les confirmations d'Odoo (stock insuffisant).
  * Renvoie [{ name, ok, message }].
  */
-export async function validerDansOdoo(ordres, forcer, actorId) {
+export async function validerDansOdoo(ordres, forcer, actorId, quantites = null) {
   const r = await fetch('/api/freezer-list?mode=valider', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ordres, forcer: !!forcer, actorId, test: estModeTest() }),
+    body: JSON.stringify({ ordres, forcer: !!forcer, actorId, quantites, test: estModeTest() }),
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
