@@ -3,8 +3,8 @@ import { supabase } from './supabase'
 /**
  * Ce que l'équipe fabrique en Stock Prod, hors cake design.
  * Liste arrêtée avec Layla à partir de ce qui a réellement été produit sur
- * 2 mois : 24 articles gardés, 5 retirés (crèmes au beurre, amandes
- * caramélisées, caramel beurre salé, vitrine — faits par ailleurs).
+ * 2 mois : 21 articles gardés, 8 retirés (crèmes au beurre, amandes
+ * caramélisées, caramel beurre salé, vitrine, les 3 mini cheese cakes).
  * L'unité est celle d'Odoo ; l'équipe peut noter dans une autre.
  */
 export const ARTICLES = [
@@ -14,11 +14,8 @@ export const ARTICLES = [
   { article: 'SM. chantilly mascarpone Finition', famille: 'Finitions', unite: 'g', photo: '/fab-prod/chantilly-mascarpone.jpg' },
   { article: 'SM. Subleme vanille Finition', famille: 'Finitions', unite: 'g', photo: '/fab-prod/subleme-vanille.jpg' },
   { article: 'SM. glacage chocolat noir (cake cbs) Finition', famille: 'Finitions', unite: 'g', photo: '/fab-prod/glacage-chocolat-noir-cake-cbs.jpg' },
-  { article: 'SM. mini cheese cake aromatisé (Fruits Rouges)', famille: 'Finitions', unite: 'u', photo: '/fab-prod/mini-cheese-cake-aromatise-fruits-rouges.jpg' },
   { article: 'SM. Ganache JIVARA gianduja Finition', famille: 'Finitions', unite: 'g', photo: '/fab-prod/ganache-jivara-gianduja.jpg' },
   { article: 'SM. Sirop Imbibage framboise Finition', famille: 'Finitions', unite: 'g', photo: '/fab-prod/sirop-imbibage-framboise.jpg' },
-  { article: 'SM. mini cheese cake aromatisé (Ananas)', famille: 'Finitions', unite: 'u', photo: '/fab-prod/mini-cheese-cake-aromatise-ananas.jpg' },
-  { article: 'SM. mini cheese cake aromatisé (Mangue/Passion)', famille: 'Finitions', unite: 'u', photo: '/fab-prod/mini-cheese-cake-aromatise-mangue-passion.jpg' },
   { article: 'SM. Glacage chocolat GIANDUJA Finition', famille: 'Finitions', unite: 'g', photo: '/fab-prod/glacage-chocolat-gianduja.jpg' },
   { article: 'SM. Namlaka Pistache', famille: 'Finitions', unite: 'g', photo: '/fab-prod/namlaka-pistache.jpg' },
   { article: 'SM. Creme mousseline paris brest', famille: 'Finitions', unite: 'g', photo: '/fab-prod/creme-mousseline-paris-brest.jpg' },
