@@ -14,10 +14,12 @@ CREATE TABLE IF NOT EXISTS prod_fabrications (
   qty NUMERIC NOT NULL,
   unite TEXT NOT NULL,
   fait_par UUID REFERENCES profiles(id),
-  fait_le TIMESTAMPTZ NOT NULL DEFAULT now(),
-  -- une seule déclaration par article et par jour : on la corrige, on n'empile pas
-  UNIQUE (jour, article)
+  fait_le TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- On note plusieurs fois le même article dans la journée (une ligne par
+-- fournée) : la contrainte d'unicité de la première version doit sauter.
+ALTER TABLE prod_fabrications DROP CONSTRAINT IF EXISTS prod_fabrications_jour_article_key;
 
 CREATE INDEX IF NOT EXISTS prod_fabrications_jour_idx ON prod_fabrications (jour DESC);
 

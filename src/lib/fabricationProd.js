@@ -50,7 +50,7 @@ export async function loadHistorique(jours = 60) {
   depuis.setDate(depuis.getDate() - jours)
   const { data, error } = await supabase
     .from('prod_fabrications')
-    .select('jour, article, qty, unite, fait_par, fait_le')
+    .select('id, jour, article, qty, unite, fait_par, fait_le')
     .gte('jour', depuis.toISOString().slice(0, 10))
     .order('jour', { ascending: false })
     .limit(2000)
@@ -63,30 +63,32 @@ export async function loadHistorique(jours = 60) {
   return [...parJour.entries()].map(([jour, lignes]) => ({ jour, lignes }))
 }
 
-/** Les déclarations d'une journée, rangées par article. */
+/**
+ * Le journal d'une journée : une ligne par fournée, dans l'ordre où elles ont
+ * été notées. Le même article peut y revenir plusieurs fois — c'est le but.
+ */
 export async function loadFabProd(jour) {
   const { data, error } = await supabase
     .from('prod_fabrications')
-    .select('article, qty, unite, fait_par, fait_le')
+    .select('id, article, qty, unite, fait_par, fait_le')
     .eq('jour', jour)
+    .order('fait_le', { ascending: true })
   if (error) throw error
-  const map = {}
-  for (const d of data || []) map[d.article] = d
-  return map
+  return data || []
 }
 
-/** Noter (ou corriger) ce qui a été fait. Une seule ligne par article et par jour. */
-export async function setFabProd(jour, article, qty, unite, userId) {
-  const { error } = await supabase.from('prod_fabrications').upsert({
-    jour, article, qty, unite, fait_par: userId || null, fait_le: new Date().toISOString(),
-  }, { onConflict: 'jour,article' })
+/** Ajouter une fournée au journal du jour. */
+export async function addFabProd(jour, article, qty, unite, userId) {
+  const { data, error } = await supabase.from('prod_fabrications')
+    .insert({ jour, article, qty, unite, fait_par: userId || null, fait_le: new Date().toISOString() })
+    .select('id, article, qty, unite, fait_par, fait_le').single()
   if (error) throw error
+  return data
 }
 
-/** Retirer une déclaration : on doit toujours pouvoir défaire un clic. */
-export async function delFabProd(jour, article) {
-  const { error } = await supabase.from('prod_fabrications')
-    .delete().eq('jour', jour).eq('article', article)
+/** Retirer une ligne du journal : on doit toujours pouvoir défaire un clic. */
+export async function delFabProd(id) {
+  const { error } = await supabase.from('prod_fabrications').delete().eq('id', id)
   if (error) throw error
 }
 
