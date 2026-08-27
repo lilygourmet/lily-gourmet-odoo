@@ -537,12 +537,28 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // pas encore. C'est l'app qui la met de côté.
   const misesDeCote = useMemo(() => {
     const tous = (data && data.ordres) || []
+    const parNom = new Map(tous.map(o => [o.name, o]))
     const ouverts = new Set(tous.filter(o => o.etat !== 'done').map(o => o.name))
+    // On remonte toute la lignée, sans limite de niveau : une crème pâtissière
+    // appartient encore à quelqu'un même si sa crème au beurre est déjà validée,
+    // tant que le gâteau du bout de la chaîne reste à faire. `vus` empêche de
+    // tourner en rond si deux ordres se citent l'un l'autre.
+    const attendQuelquun = (nom, vus = new Set()) => {
+      for (const p of String((parNom.get(nom) || {}).origine || '').split(',').map(x => x.trim())) {
+        if (!p || vus.has(p)) continue
+        vus.add(p)
+        if (ouverts.has(p)) return true
+        if (parNom.has(p) && attendQuelquun(p, vus)) return true
+      }
+      return false
+    }
     return tous
-      .filter(o => o.etat === 'done' && estPrepa(o.produit) && !estBase(o.produit))
-      // rattachée à un gâteau (ou une crème) qui reste à faire : sinon elle a
-      // déjà été consommée, ou elle appartient au stock commun
-      .filter(o => String(o.origine || '').split(',').some(x => ouverts.has(x.trim())))
+      // Tout ce qui a été fabriqué pour quelqu'un lui appartient : une crème,
+      // mais aussi un étage de gâteau monté pour une commande précise. Seules
+      // les bases restent communes — elles servent tout le monde par nature,
+      // y compris celles que Layla ajoute elle-même.
+      .filter(o => o.etat === 'done' && !estBase(o.produit))
+      .filter(o => attendQuelquun(o.name))
       .map(o => ({ produit: o.produit, qty: enKg(o.qty, o.unite).q }))
   }, [data])
 
@@ -579,7 +595,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // disponible pour le Cœur 10p — c'est le même article pour les deux.
     // Une base (crème nature, sirop…) et une tournée de réassort, elles, servent
     // tout le monde.
-    const dedieeAUnGateau = ord => estPrepa(ord.produit) && !estBase(ord.produit)
+    // Même règle que pour les préparations déjà validées (`misesDeCote`) : ce
+    // qui est fabriqué pour un ordre précis lui appartient, quel que soit
+    // l'article — une crème comme un étage de gâteau monté. Seules les bases
+    // restent communes.
+    const dedieeAUnGateau = ord => !estBase(ord.produit)
       && String(ord.origine || '').split(',').some(x => /^WH.*\/MO\//i.test(x.trim()))
 
     // 1) ce qui est coché par son ordre Odoo
