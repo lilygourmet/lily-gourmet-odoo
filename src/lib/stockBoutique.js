@@ -346,7 +346,31 @@ export async function sendMorningItem(stockDayId, productName, productCode, qty,
     console.error('[stockBoutique] sendMorningItem:', error)
     throw error
   }
+  // Vitrine salée : les boîtes sont déjà faites quand elles sont déclarées.
+  // Tâche de fond — Odoo ne doit jamais empêcher la vitrine d'envoyer sa ligne.
+  if (data && vitrineRoute(productName).label === 'GS') {
+    produireDansOdoo(data, qty).catch(e => console.warn('[vitrine-gs]', e?.message || e))
+  }
   return data
+}
+
+// Crée dans Odoo l'ordre de fabrication (validé, à l'annexe) et le transfert
+// annexe → vente (en brouillon). Le compte-rendu est écrit sur la ligne : il
+// sert de trace pour Layla, et `odoo_of` dit que cette ligne suit le NOUVEAU
+// circuit (elle n'ira donc pas dans le devis « Vitrine GS »).
+async function produireDansOdoo(item, qty) {
+  const r = await fetch('/api/freezer-list?mode=vitrine-gs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ produit: item.product_name, code: item.product_code, qty }),
+  }).then(x => x.json()).catch(e => ({ error: e?.message || String(e) }))
+
+  if (r.ignore && !r.message) return          // recette pas (encore) à l'annexe : ancien circuit
+  await updateItem(item.id, {
+    odoo_of: r.of || null,
+    odoo_transfert: r.transfert || null,
+    odoo_message: r.error || r.message || null,
+  })
 }
 
 // =============================================================
@@ -362,7 +386,9 @@ export async function confirmReception(itemId, qtyReceived, userId) {
   })
   // Article validé par le café → on l'ajoute à la commande client Odoo du jour (selon son type).
   // Tâche de fond : un échec Odoo ne doit JAMAIS bloquer la validation du café.
-  if (updated && Number(qtyReceived) > 0) {
+  // Sauf les lignes déjà passées en fabrication + transfert (odoo_of) : elles
+  // ont leur propre circuit, les remettre dans un devis les compterait deux fois.
+  if (updated && Number(qtyReceived) > 0 && !updated.odoo_of) {
     pushVitrineOrder(updated, qtyReceived).catch(e => console.warn('[vitrine-order-add]', e?.message || e))
   }
   return updated
@@ -384,7 +410,7 @@ const nomLisible = n => String(n || '').replace(/^\[\d+\]\s*/, '').trim()
 export async function alerterReceptionGs(user) {
   const { data } = await supabase
     .from('stock_day_items')
-    .select('id, product_name, qty_received, received_at')
+    .select('id, product_name, qty_received, received_at, odoo_transfert')
     .eq('reception_status', 'confirmed')
     .is('transfert_alerte_at', null)
     .gt('qty_received', 0)
@@ -403,13 +429,15 @@ export async function alerterReceptionGs(user) {
     .update({ transfert_alerte_at: new Date().toISOString() })
     .in('id', gs.map(i => i.id))
     .is('transfert_alerte_at', null)
-    .select('id, product_name, qty_received')
+    .select('id, product_name, qty_received, odoo_transfert')
   if (!pris || !pris.length) return false
 
   const liste = pris.map(i => `${nomLisible(i.product_name)} ×${Number(i.qty_received)}`).join(', ')
+  // Le n° du bon à valider, quand l'app l'a créé (nouveau circuit annexe → vente).
+  const bons = [...new Set(pris.map(i => i.odoo_transfert).filter(Boolean))].join(', ')
   await envoyerAuNumero(
     await loadWaSm(),
-    `Réception boutique confirmée : ${liste}. À vérifier, puis valider le transfert dans Odoo.`,
+    `Réception boutique confirmée : ${liste}. À vérifier, puis valider le transfert${bons ? ' ' + bons : ''} dans Odoo.`,
     user,
   )
   return true

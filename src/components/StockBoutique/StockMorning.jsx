@@ -582,6 +582,16 @@ export default function StockMorning({ user, activeView, onNavigate, onLogout, m
                           <div className="text-[10px] text-ink-mute font-mono">
                             {time} · annoncé : {it.qty_announced}
                           </div>
+                          {/* Ce que l'app a fait dans Odoo (fabrication + transfert à valider),
+                              ou ce qui a coincé — pour ne pas s'en apercevoir trop tard. */}
+                          {it.odoo_of && (
+                            <div className="text-[10px] text-ink-mute font-mono">
+                              🏭 {it.odoo_of}{it.odoo_transfert ? ` · 📦 ${it.odoo_transfert} (à valider dans Odoo)` : ''}
+                            </div>
+                          )}
+                          {it.odoo_message && (
+                            <div className="text-[10px] text-orange-700">⚠ Odoo : {it.odoo_message}</div>
+                          )}
                         </div>
                         <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${statusColor}`}>
                           {statusBadge}

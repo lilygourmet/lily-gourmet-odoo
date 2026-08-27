@@ -1036,6 +1036,127 @@ async function fetchCatalogue(uid, collecteIds = []) {
   }).filter(c => c.parfums.length)
 }
 
+// =============================================================
+// VITRINE SALÉ → ODOO   (GS- fabriqués à l'annexe)
+// -------------------------------------------------------------
+// La vitrine salée ne déclare ses boîtes qu'une fois PRÊTES : la marchandise
+// existe déjà. L'app crée donc l'ordre de fabrication à l'annexe ET le valide,
+// puis pose le transfert annexe → vente EN BROUILLON. C'est un humain qui
+// validera ce transfert dans Odoo, une fois la réception vérifiée en boutique
+// (la Checklist le prévient par WhatsApp).
+// Un GS- dont la recette n'est PAS à l'annexe n'est pas concerné : il garde son
+// ancien circuit (devis « Vitrine GS »). Le jour où sa recette passe à
+// l'annexe, il bascule tout seul, sans rien changer dans l'app.
+// =============================================================
+
+const TYPE_ANNEXE_VENTE = 92            // « Transferts internes prod annexe -> vente »
+const ORIGINE_VITRINE = 'VITRINE SALE'
+
+/**
+ * Le transfert annexe → vente, laissé EN BROUILLON. Tant qu'un brouillon est
+ * ouvert on s'y greffe : la boutique a un seul bon à vérifier, pas un par
+ * article. Dès qu'il est validé, la déclaration suivante ouvre un nouveau bon.
+ */
+async function transfertAnnexeVente(uid, prod, qty, uomId, origine) {
+  const type = (await odooSearchRead(uid, 'stock.picking.type', [['id', '=', TYPE_ANNEXE_VENTE]],
+    ['default_location_src_id', 'default_location_dest_id'], { limit: 1 }))[0]
+  if (!type) return null
+  const src = type.default_location_src_id[0]
+  const dest = type.default_location_dest_id[0]
+  const move = {
+    name: prod.display_name,
+    product_id: prod.id,
+    product_uom_qty: qty,
+    product_uom: uomId,
+    location_id: src,
+    location_dest_id: dest,
+  }
+  const [ouvert] = await odooSearchRead(uid, 'stock.picking', [
+    ['picking_type_id', '=', TYPE_ANNEXE_VENTE],
+    ['state', '=', 'draft'],
+    ['origin', 'like', ORIGINE_VITRINE + '%'],
+  ], ['id', 'name'], { limit: 1, order: 'id desc' })
+  if (ouvert) {
+    await odooCall(uid, 'stock.move', 'create', [{ ...move, picking_id: ouvert.id }])
+    return ouvert.name
+  }
+  const id = await odooCall(uid, 'stock.picking', 'create', [{
+    picking_type_id: TYPE_ANNEXE_VENTE,
+    location_id: src,
+    location_dest_id: dest,
+    origin: `${ORIGINE_VITRINE} ${origine}`.slice(0, 200),
+    move_ids_without_package: [[0, 0, move]],
+  }])
+  const [pick] = await odooSearchRead(uid, 'stock.picking', [['id', '=', id]], ['name'], { limit: 1 })
+  return pick ? pick.name : null
+}
+
+async function produireGsAnnexe(uid, { tmplId, nom, qty }) {
+  const domaine = tmplId ? [['product_tmpl_id', '=', Number(tmplId)]] : [['name', '=', nom]]
+  const prod = (await odooSearchRead(uid, 'product.product', domaine,
+    ['id', 'display_name', 'product_tmpl_id'], { limit: 1 }))[0]
+  if (!prod) return { ignore: true, message: 'article introuvable dans Odoo' }
+
+  const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id', '=', prod.product_tmpl_id[0]]],
+    ['id', 'product_qty', 'product_uom_id', 'picking_type_id'], { limit: 1 }))[0]
+  if (!bom || !Array.isArray(bom.picking_type_id)) return { ignore: true }
+
+  const type = (await odooSearchRead(uid, 'stock.picking.type', [['id', '=', bom.picking_type_id[0]]],
+    ['id', 'default_location_src_id', 'default_location_dest_id', 'company_id', 'warehouse_id'], { limit: 1 }))[0]
+  // C'est l'ATELIER de la recette qui décide : rien à faire tant que la recette
+  // n'est pas passée à l'annexe.
+  if (!type || !/annexe/i.test(String(Array.isArray(type.warehouse_id) ? type.warehouse_id[1] : ''))) {
+    return { ignore: true }
+  }
+
+  const modele = {
+    picking_type_id: [type.id],
+    location_src_id: [type.default_location_src_id[0]],
+    location_dest_id: [type.default_location_dest_id[0]],
+    company_id: [type.company_id[0]],
+  }
+  const id = await odooCall(uid, 'mrp.production', 'create', [{
+    product_id: prod.id,
+    product_qty: qty,
+    product_uom_id: Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined,
+    bom_id: bom.id,
+    origin: [ORIGINE_VITRINE, ORIGINE_APP].join(','),
+    picking_type_id: type.id,
+    location_src_id: modele.location_src_id[0],
+    location_dest_id: modele.location_dest_id[0],
+    company_id: modele.company_id[0],
+  }])
+  // Odoo ne déroule pas la nomenclature quand l'ordre est créé par programme.
+  const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+    ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
+  const lieuProd = await lieuProduction(uid)
+  const facteur = bom.product_qty ? qty / bom.product_qty : 1
+  for (const l of lignes) {
+    await odooCall(uid, 'stock.move', 'create', [{
+      name: prod.display_name,
+      product_id: l.product_id[0],
+      product_uom_qty: Math.round(l.product_qty * facteur * 1000) / 1000,
+      product_uom: l.product_uom_id[0],
+      location_id: modele.location_src_id[0],
+      location_dest_id: lieuProd ? lieuProd.id : modele.location_dest_id[0],
+      raw_material_production_id: id,
+      company_id: modele.company_id[0],
+    }])
+  }
+  await moveDuFini(uid, id, prod, qty, Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined, modele)
+  await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
+  await odooCall(uid, 'mrp.production', 'action_assign', [[id]]).catch(() => { })
+  const of = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name'], { limit: 1 }))[0]
+
+  // Les boîtes sont déjà faites : on valide. Un composant qui manque ne doit pas
+  // bloquer (le stock des étiquettes est négatif depuis toujours) → on force.
+  const res = await validerOrdre(uid, of.name, true)
+  const transfert = res.ok
+    ? await transfertAnnexeVente(uid, prod, qty, Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined, of.name)
+    : null
+  return { of: of.name, valide: !!res.ok, transfert, message: res.ok ? '' : (res.message || '') }
+}
+
 export default async function handler(req, res) {
   try {
     // création de l'ordre de glaçage (POST), quand l'équipe a fait sa tournée
@@ -1056,6 +1177,23 @@ export default async function handler(req, res) {
       const of = await creerOrdrePrepa(uid, quoi, t, body.colorants)
       console.log(`[${quoi}] ${t} tournée(s) par ${body.actorId || '?'} → ${of.name} (${of.qty} g)`)
       return res.status(200).json(of)
+    }
+
+    // La vitrine salée a fini ses boîtes (POST) : ordre de fabrication validé à
+    // l'annexe + transfert annexe → vente en brouillon.
+    if (req.method === 'POST' && req.query.mode === 'vitrine-gs') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const qty = Number(body.qty) || 0
+      if (!(qty > 0)) return res.status(400).json({ error: 'quantité invalide' })
+      if (body.test) return res.status(200).json({ of: 'TEST (rien créé dans Odoo)', test: true })
+      const uid = await odooAuth()
+      try {
+        const r = await produireGsAnnexe(uid, { tmplId: body.code, nom: body.produit, qty })
+        console.log(`[vitrine-gs] ${body.produit} x${qty} -> ${JSON.stringify(r)}`)
+        return res.status(200).json(r)
+      } catch (e) {
+        return res.status(200).json({ error: (e.message || String(e)).slice(0, 300) })
+      }
     }
 
     // L'équipe a fait une préparation qu'Odoo ne demandait pas : on crée l'ordre
