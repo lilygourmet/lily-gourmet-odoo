@@ -371,7 +371,7 @@ async function handleEconomat(req, res) {
       }
     }
 
-    const fields = ['id', 'name', 'display_name', 'uom_po_id']
+    const fields = ['id', 'name', 'display_name', 'uom_po_id', 'categ_id']
     if (withImage) fields.push('image_128')
 
     const limit = ids ? ids.length : (q ? 60 : 2000)
@@ -382,6 +382,8 @@ async function handleEconomat(req, res) {
       name: cleanEconomatName(p.display_name || p.name),
       odoo_name: p.display_name || p.name,
       unit: Array.isArray(p.uom_po_id) ? p.uom_po_id[1] : null,
+      // Catégorie Odoo : sert à deviner un article qu'on COMMANDE (les frais).
+      categ: Array.isArray(p.categ_id) ? p.categ_id[1] : null,
       image_url: (withImage && p.image_128) ? `data:image/png;base64,${p.image_128}` : null,
     }))
 

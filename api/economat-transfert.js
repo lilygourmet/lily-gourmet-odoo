@@ -58,8 +58,8 @@ const RECEPTIONS_ACHAT = {
   menage_boutique:          41,
   prod_annex:               64,
   chocolat_cuisine_menage:  64,
-  cuisine:                  64,
   menage_annex:             64,
+  // pas de « cuisine » : ses frais passent par LG traiteur (voir plus bas)
 }
 
 /**
@@ -93,10 +93,12 @@ async function fournisseurHabituel(uid, pid) {
       return { id: fid, nom, prix: recente ? recente.price_unit : 0 }
     }
   }
+  // Fiche article : sur ce modèle, le fournisseur s'appelle « name » (pas
+  // partner_id — Odoo 19 l'a renommé, l'ancien nom fait planter la requête).
   const [info] = await exec(uid, 'product.supplierinfo', 'search_read',
     [[['product_tmpl_id.product_variant_ids', '=', pid]]],
-    { fields: ['partner_id', 'price'], order: 'sequence asc, id asc', limit: 1 })
-  if (info) return { id: info.partner_id[0], nom: info.partner_id[1], prix: info.price || 0 }
+    { fields: ['name', 'price'], order: 'sequence asc, id asc', limit: 1 })
+  if (info && Array.isArray(info.name)) return { id: info.name[0], nom: info.name[1], prix: info.price || 0 }
   return null
 }
 
@@ -215,7 +217,11 @@ export default async function handler(req, res) {
     const lignesLgt = lignes.filter(l => l.source === 'lgt')
     // Achat : seulement si l'article est relié à Odoo — sans produit, aucun
     // fournisseur possible, la ligne reste dans le transfert interne.
-    const lignesAchat = lignes.filter(l => l.source !== 'lgt' && l.achat && l.odooProductId)
+    // La CUISINE est hors de ce circuit : ses produits frais viennent de LG
+    // traiteur (articles 'lgt'), pas d'un achat chez Lily Gourmet.
+    const lignesAchat = badge === 'cuisine'
+      ? []
+      : lignes.filter(l => l.source !== 'lgt' && l.achat && l.odooProductId)
     const lignesLg = lignes.filter(l => l.source !== 'lgt' && !lignesAchat.includes(l))
 
     const dest = DESTINATIONS[badge]

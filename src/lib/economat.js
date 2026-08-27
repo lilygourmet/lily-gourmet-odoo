@@ -409,12 +409,18 @@ export async function deleteGroup(id) {
 export async function loadCategoryManage(categoryId) {
   const [groupsRes, articlesRes] = await Promise.all([
     supabase.from('economat_groups').select('id, name, display_order').eq('category_id', categoryId).order('display_order'),
-    supabase.from('economat_articles').select('id, name, unit, photo_url, group_id, active, odoo_product_id, display_order').eq('category_id', categoryId).order('display_order'),
+    supabase.from('economat_articles').select('id, name, unit, photo_url, group_id, active, odoo_product_id, display_order, achat').eq('category_id', categoryId).order('display_order'),
   ])
   if (groupsRes.error) throw groupsRes.error
   if (articlesRes.error) throw articlesRes.error
   return { groups: groupsRes.data || [], articles: articlesRes.data || [] }
 }
+// Catégories Odoo dont TOUT le contenu se commande au fournisseur : elles ne
+// contiennent que des frais (vérifié le 2026-08-27). Les autres frais (œufs,
+// yaourt…) vivent dans des catégories fourre-tout : c'est la case à cocher de
+// l'écran Gérer qui les désigne, un par un.
+const CATEGS_ACHAT = new Set(['Fruits et Légumes', 'Purée de fruit', 'Beurre'])
+
 export async function addArticleFromOdoo({ categoryId, groupId, odoo }) {
   const { data: max } = await supabase.from('economat_articles')
     .select('display_order').eq('category_id', categoryId).order('display_order', { ascending: false }).limit(1).maybeSingle()
@@ -427,6 +433,8 @@ export async function addArticleFromOdoo({ categoryId, groupId, odoo }) {
     odoo_product_id: odoo.odoo_id,
     odoo_name: odoo.odoo_name || odoo.name,
     odoo_source: 'principal',
+    // Un fruit, une purée, un beurre : proposé d'office « à commander ».
+    achat: CATEGS_ACHAT.has(odoo.categ),
     display_order: (max?.display_order || 0) + 10,
   }).select().single()
   if (error) throw error
@@ -449,6 +457,12 @@ export async function setArticleActive(id, active) {
   const { error } = await supabase.from('economat_articles').update({ active }).eq('id', id)
   if (error) throw error
 }
+// « Se commande au fournisseur » plutôt que « pris dans le stock du magasin ».
+export async function setArticleAchat(id, achat) {
+  const { error } = await supabase.from('economat_articles').update({ achat }).eq('id', id)
+  if (error) throw error
+}
+
 export async function deleteArticle(id) {
   const { error } = await supabase.from('economat_articles').delete().eq('id', id)
   if (error) throw error

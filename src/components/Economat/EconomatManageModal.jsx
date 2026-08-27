@@ -3,12 +3,12 @@ import {
   loadProfils, createProfil, renameProfil, deleteProfil,
   loadAllCategories, createCategory, deleteCategory,
   loadCategoryProfils, setCategoryProfils, createGroup, deleteGroup,
-  loadCategoryManage, addArticleFromOdoo, setArticleActive, deleteArticle, linkArticleToOdoo,
+  loadCategoryManage, addArticleFromOdoo, setArticleActive, setArticleAchat, deleteArticle, linkArticleToOdoo,
   loadOdooProducts, syncWithOdoo,
 } from '../../lib/economat'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
-import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff, Link2, X, Pencil } from 'lucide-react'
+import { RefreshCw, Plus, Trash2, ChevronDown, ChevronRight, Search, Eye, EyeOff, Link2, X, Pencil, ShoppingCart } from 'lucide-react'
 import SearchSelect from '../SearchSelect'
 
 // Gestion de l'économat : catégories, groupes, articles (depuis Odoo).
@@ -145,6 +145,12 @@ export default function EconomatManageModal({ isAdmin = false, onClose, onChange
 
   async function toggleArticle(a) {
     try { await setArticleActive(a.id, !a.active); await reloadManage() }
+    catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+  // « Se commande au fournisseur » : la demande crée une demande de prix chez
+  // son fournisseur habituel au lieu de puiser dans le stock du magasin.
+  async function toggleAchat(a) {
+    try { await setArticleAchat(a.id, !a.achat); await reloadManage() }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
   async function removeArticle(a) {
@@ -302,13 +308,13 @@ export default function EconomatManageModal({ isAdmin = false, onClose, onChange
                         <span className="text-[12px] font-semibold text-ink">{g.name}</span>
                         <button onClick={() => removeGroup(g)} title="Supprimer le groupe" className="text-ink-mute hover:text-red-600"><Trash2 size={13} strokeWidth={1.8} /></button>
                       </div>
-                      <ArticleList articles={articlesByGroup(g.id)} onToggle={toggleArticle} onRemove={removeArticle} onLier={ouvrirLier} />
+                      <ArticleList articles={articlesByGroup(g.id)} onToggle={toggleArticle} onRemove={removeArticle} onLier={ouvrirLier} onAchat={toggleAchat} />
                     </div>
                   ))}
                   {articlesByGroup(null).length > 0 && (
                     <div className="border border-line/60 rounded-lg p-2">
                       <div className="text-[12px] font-semibold text-ink-mute mb-1.5">Sans groupe</div>
-                      <ArticleList articles={articlesByGroup(null)} onToggle={toggleArticle} onRemove={removeArticle} onLier={ouvrirLier} />
+                      <ArticleList articles={articlesByGroup(null)} onToggle={toggleArticle} onRemove={removeArticle} onLier={ouvrirLier} onAchat={toggleAchat} />
                     </div>
                   )}
                   {manage.groups.length === 0 && articlesByGroup(null).length === 0 && (
@@ -379,7 +385,7 @@ function LierPanel({ article, q, setQ, results, busy, onSearch, onPick, onUnlink
   )
 }
 
-function ArticleList({ articles, onToggle, onRemove, onLier }) {
+function ArticleList({ articles, onToggle, onRemove, onLier, onAchat }) {
   if (articles.length === 0) return <div className="text-[11px] text-ink-mute italic">Aucun article</div>
   return (
     <div className="space-y-1">
@@ -390,6 +396,15 @@ function ArticleList({ articles, onToggle, onRemove, onLier }) {
           </div>
           <span className="flex-1 text-ink">{a.name}{!a.odoo_product_id && <span className="text-[9px] text-amber-600 ml-1">(non lié Odoo)</span>}</span>
           {a.unit && <span className="text-[10px] text-ink-mute">{a.unit}</span>}
+          {onAchat && (
+            <button onClick={() => onAchat(a)}
+              title={a.achat
+                ? 'Se commande au fournisseur — clique pour le prendre dans le stock du magasin'
+                : 'Pris dans le stock du magasin — clique pour le commander au fournisseur'}
+              className={`px-1 ${a.achat ? 'text-amber-600' : 'text-ink-mute hover:text-bordeaux'}`}>
+              <ShoppingCart size={13} strokeWidth={1.8} />
+            </button>
+          )}
           {onLier && (
             <button onClick={() => onLier(a)} title={a.odoo_product_id ? 'Changer le produit Odoo lié' : 'Relier à un produit Odoo'}
               className={`px-1 ${a.odoo_product_id ? 'text-ink-mute hover:text-bordeaux' : 'text-amber-600 hover:text-bordeaux'}`}>
