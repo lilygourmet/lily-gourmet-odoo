@@ -1328,15 +1328,7 @@ export default async function handler(req, res) {
       }
       return res.status(200).json({
         lieu: Array.isArray(modele.location_src_id) ? modele.location_src_id[1] : '',
-        // aujourd'hui et les jours à venir d'abord ; les retards ferment la
-        // marche — sinon on fait défiler trois semaines de juillet avant
-        // d'arriver à ce qui se fabrique ce matin
-        jours: [...parJour.entries()].sort((a, b) => {
-          const aJour = new Date(); aJour.setHours(0, 0, 0, 0)
-          const auj = isoD(aJour).slice(0, 10)
-          const ra = a[0] < auj ? 1 : 0, rb = b[0] < auj ? 1 : 0
-          return ra - rb || a[0].localeCompare(b[0])
-        }).map(([jour, m]) => ({
+        jours: [...parJour.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([jour, m]) => ({
           jour,
           lignes: [...m.values()].sort((a, b) => b.nb - a.nb || a.produit.localeCompare(b.produit)),
         })),
