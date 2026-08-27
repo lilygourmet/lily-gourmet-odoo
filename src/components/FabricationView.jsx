@@ -529,6 +529,23 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // et celui où on valide, l'app tient son propre compte : + ce qui vient d'être
   // fabriqué, − ce que ces fabrications ont consommé. Sans ça l'écran redemande
   // une crème qu'on vient de faire, et un gâteau coché ne consomme rien.
+  // Une préparation VALIDÉE qui a été faite pour un gâteau précis lui
+  // appartient : elle est entrée dans le stock d'Odoo, mais personne d'autre ne
+  // doit pouvoir la prendre. Cas vécu : crème pâtissière faite la veille pour le
+  // 25 cm Oréo, dont la crème au beurre ne se fera que le lendemain — entre les
+  // deux, rien dans Odoo ne la réserve, puisque son ordre consommateur n'existe
+  // pas encore. C'est l'app qui la met de côté.
+  const misesDeCote = useMemo(() => {
+    const tous = (data && data.ordres) || []
+    const ouverts = new Set(tous.filter(o => o.etat !== 'done').map(o => o.name))
+    return tous
+      .filter(o => o.etat === 'done' && estPrepa(o.produit) && !estBase(o.produit))
+      // rattachée à un gâteau (ou une crème) qui reste à faire : sinon elle a
+      // déjà été consommée, ou elle appartient au stock commun
+      .filter(o => String(o.origine || '').split(',').some(x => ouverts.has(x.trim())))
+      .map(o => ({ produit: o.produit, qty: enKg(o.qty, o.unite).q }))
+  }, [data])
+
   const [stocks, stocksBases] = useMemo(() => {
     const s = {}, sb = {}
     for (const [k, v] of Object.entries((data && data.stocks) || {})) { s[k] = { ...v }; sb[k] = { ...v } }
@@ -606,8 +623,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       if (estBase(produit)) bouge(produit, q)
       consomme(produit, q)
     }
+    // Ce qui est mis de côté pour un gâteau quitte le stock que voient les
+    // autres. Il leur revient par `reservePour`, et par lui seul.
+    for (const m of misesDeCote) bouge(m.produit, -m.qty)
     return [s, sb]
-  }, [data, faits, recettes])
+  }, [data, faits, recettes, misesDeCote])
 
   // Le groupe d'un article = son « usage ». Une préparation fait son propre
   // groupe (elle ne se mélange avec rien, et STK reste distinct du normal) ;
@@ -624,9 +644,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     if (!lot || !lot.length) return 0
     const dedans = new Set()
     lot.forEach(o => descendanceDe(o.name).forEach(n => dedans.add(n)))
-    return ((data && data.ordres) || [])
-      .filter(o => dedans.has(o.name))
-      .reduce((s2, o) => s2 + ((o.reserves && o.reserves[produit]) || 0), 0)
+    const lesNotres = ((data && data.ordres) || []).filter(o => dedans.has(o.name))
+    const reserve = lesNotres.reduce((s2, o) => s2 + ((o.reserves && o.reserves[produit]) || 0), 0)
+    // Ce qui a déjà été fabriqué pour ce lot et attend son tour.
+    const dejaFait = lesNotres
+      .filter(o => o.etat === 'done' && o.produit === produit)
+      .reduce((s2, o) => s2 + enKg(o.qty, o.unite).q, 0)
+    // Le plus grand des deux, jamais la somme : dès que l'ordre consommateur
+    // existe et réserve, Odoo a déjà retiré cette quantité du stock libre.
+    return Math.max(reserve, dejaFait)
   }
 
   // le stock d'un article, jamais négatif (en kg, ou en unités pour les gâteaux)
