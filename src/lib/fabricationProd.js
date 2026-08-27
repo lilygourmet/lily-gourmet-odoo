@@ -31,6 +31,38 @@ export const ARTICLES = [
   { article: 'SM- mini miss pistache', famille: 'Autres', unite: 'u', photo: '/fab-prod/mini-miss-pistache.jpg' },
 ]
 
+/** Qui est qui : pour afficher « par Meriem » à côté d'une déclaration. */
+export async function loadNoms() {
+  const { data, error } = await supabase.from('profiles').select('id, full_name, username')
+  if (error) return {}
+  const map = {}
+  for (const p of data || []) map[p.id] = p.full_name || p.username || ''
+  return map
+}
+
+/**
+ * L'historique : toutes les déclarations des N derniers jours, groupées par
+ * journée. Sert à retrouver ce qui a été produit un jour passé, et à
+ * l'imprimer.
+ */
+export async function loadHistorique(jours = 60) {
+  const depuis = new Date()
+  depuis.setDate(depuis.getDate() - jours)
+  const { data, error } = await supabase
+    .from('prod_fabrications')
+    .select('jour, article, qty, unite, fait_par, fait_le')
+    .gte('jour', depuis.toISOString().slice(0, 10))
+    .order('jour', { ascending: false })
+    .limit(2000)
+  if (error) throw error
+  const parJour = new Map()
+  for (const d of data || []) {
+    if (!parJour.has(d.jour)) parJour.set(d.jour, [])
+    parJour.get(d.jour).push(d)
+  }
+  return [...parJour.entries()].map(([jour, lignes]) => ({ jour, lignes }))
+}
+
 /** Les déclarations d'une journée, rangées par article. */
 export async function loadFabProd(jour) {
   const { data, error } = await supabase

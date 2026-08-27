@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
-import { ARTICLES, loadFabProd, setFabProd, delFabProd, loadArticlesAjoutes, addArticle, delArticle } from '../lib/fabricationProd'
+import { ARTICLES, loadFabProd, setFabProd, delFabProd, loadArticlesAjoutes, addArticle, delArticle, loadNoms, loadHistorique } from '../lib/fabricationProd'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 const propre = n => String(n).replace(/^SM[.-]?\s*/i, '').replace(/\s*finition\s*$/i, '').trim()
@@ -17,6 +17,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const [faits, setFaits] = useState(null)
   const [ajoutes, setAjoutes] = useState([])     // articles ajoutés à la main
   const [nouveau, setNouveau] = useState(null)   // { nom, unite, photo } en cours de création
+  const [noms, setNoms] = useState({})           // qui a déclaré quoi
+  const [histo, setHisto] = useState(null)       // les journées passées
+  const [voirHisto, setVoirHisto] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [ouvert, setOuvert] = useState(null)     // l'article en cours de saisie
   const [valeur, setValeur] = useState('')
@@ -33,8 +36,13 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   useEffect(() => {
     let vivant = true
     loadArticlesAjoutes().then(l => { if (vivant) setAjoutes(l) }).catch(() => { })
+    loadNoms().then(n => { if (vivant) setNoms(n) }).catch(() => { })
     return () => { vivant = false }
   }, [])
+
+  // L'historique n'est lu qu'à l'ouverture, et relu après chaque déclaration
+  // pour qu'une journée qui vient d'être remplie y apparaisse.
+  const relireHisto = () => loadHistorique(60).then(setHisto).catch(() => setHisto([]))
 
   // La liste complète : celle du fichier, plus ce que l'équipe a ajouté.
   const tous = useMemo(() => [...ARTICLES, ...ajoutes], [ajoutes])
@@ -52,8 +60,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     if (!(q > 0)) { toast.error('Note une quantité'); return }
     try {
       await setFabProd(jour, a.article, q, unite, user?.id)
-      setFaits(f => ({ ...f, [a.article]: { article: a.article, qty: q, unite } }))
+      setFaits(f => ({ ...f, [a.article]: { article: a.article, qty: q, unite, fait_par: user?.id, fait_le: new Date().toISOString() } }))
       setOuvert(null)
+      setHisto(null)
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
   }
 
@@ -62,6 +71,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     try {
       await delFabProd(jour, a.article)
       setFaits(f => { const s = { ...f }; delete s[a.article]; return s })
+      setHisto(null)
       if (ouvert === a.article) setOuvert(null)
     } catch (e) { toast.error('Impossible de retirer : ' + (e.message || e)) }
   }
@@ -143,7 +153,38 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
             className="border border-line bg-white rounded-xl px-4 py-2.5 text-[13px] font-bold text-ink-soft">
             Imprimer
           </button>
+          <button onClick={() => { setVoirHisto(v => !v); if (!histo) relireHisto() }}
+            className={'rounded-xl px-4 py-2.5 text-[13px] font-bold border ' +
+              (voirHisto ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-soft')}>
+            Historique
+          </button>
         </div>
+
+        {/* Les journées déjà remplies : on en choisit une, on la voit, on l'imprime. */}
+        {voirHisto && (
+          <div className="mb-5 print:hidden">
+            {!histo && <Skeleton rows={2} />}
+            {histo && !histo.length && (
+              <p className="text-[13.5px] text-ink-mute">Rien n'a encore été déclaré.</p>
+            )}
+            {histo && histo.map(h => {
+              const qui = [...new Set(h.lignes.map(l => noms[l.fait_par]).filter(Boolean))]
+              return (
+                <button key={h.jour} onClick={() => { setFaits(null); setOuvert(null); setJour(h.jour) }}
+                  className={'w-full text-left bg-white border rounded-xl px-3.5 py-2.5 mb-1.5 flex items-baseline gap-3 ' +
+                    (h.jour === jour ? 'border-bordeaux' : 'border-line')}>
+                  <span className="text-[13.5px] font-bold flex-1 min-w-0">{jourLisible(h.jour)}</span>
+                  <span className="text-[12.5px] text-ink-soft whitespace-nowrap">
+                    {h.lignes.length} article{h.lignes.length > 1 ? 's' : ''}
+                  </span>
+                  {qui.length > 0 && (
+                    <span className="text-[11.5px] text-ink-mute truncate max-w-[45%]">par {qui.join(', ')}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* ce qui sort à l'impression : une feuille propre, sans les cartes */}
         <div className="hidden print:block">
@@ -153,13 +194,14 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
             <thead>
               <tr>
                 <th className="text-left border-b-2 border-ink py-1.5 text-[10.5px] uppercase tracking-wide">Article</th>
-                <th className="text-right border-b-2 border-ink py-1.5 text-[10.5px] uppercase tracking-wide w-[120px]">Quantité faite</th>
+                <th className="text-right border-b-2 border-ink py-1.5 text-[10.5px] uppercase tracking-wide w-[110px]">Quantité faite</th>
+                <th className="text-left border-b-2 border-ink py-1.5 text-[10.5px] uppercase tracking-wide w-[110px]">Par qui</th>
               </tr>
             </thead>
             <tbody>
               {FAMILLES.map(fam => (
                 <Fragment key={fam}>
-                  <tr><td colSpan={2} className="bg-[#f0f0f0] font-extrabold text-[10.5px] uppercase tracking-wide py-1 px-1">{fam}</td></tr>
+                  <tr><td colSpan={3} className="bg-[#f0f0f0] font-extrabold text-[10.5px] uppercase tracking-wide py-1 px-1">{fam}</td></tr>
                   {tous.filter(a => a.famille === fam).map(a => {
                     const d = faits && faits[a.article]
                     return (
@@ -167,6 +209,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                         <td className="border-b border-[#ddd] py-1.5 px-1">{propre(a.article)}</td>
                         <td className={'py-1.5 px-1 text-right font-bold ' + (d ? 'border-b border-[#ddd]' : 'border-b border-[#999]')}>
                           {d ? `${nb(d.qty)} ${d.unite}` : ' '}
+                        </td>
+                        <td className={'py-1.5 px-1 text-[11.5px] ' + (d ? 'border-b border-[#ddd]' : 'border-b border-[#999]')}>
+                          {(d && noms[d.fait_par]) || ' '}
                         </td>
                       </tr>
                     )
@@ -217,7 +262,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                             {propre(a.article)}
                           </div>
                           <div className="text-[11px] text-ink-mute mt-0.5">
-                            {d ? 'clique pour corriger' : `noter en ${a.unite}`}
+                            {d
+                              ? (noms[d.fait_par] ? `par ${noms[d.fait_par]}` : 'clique pour corriger')
+                              : `noter en ${a.unite}`}
                           </div>
                         </div>
                       </button>
