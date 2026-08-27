@@ -247,7 +247,7 @@ const normalizePhone = raw => {
 
 // Envoi direct à un numéro : message de conversation si elle est ouverte, sinon
 // modèle « wati_info » (qui n'accepte pas de retour à la ligne dans sa variable).
-async function envoyerAuNumero(numero, message, user) {
+export async function envoyerAuNumero(numero, message, user) {
   const phone = normalizePhone(numero)
   if (!phone) return false
   const texte = String(message).replace(/\s*\n\s*/g, ' ')

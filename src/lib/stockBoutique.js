@@ -8,6 +8,7 @@
 
 import { supabase } from './supabase'
 import { isGsSucre } from '../components/StockBoutique/ProductGrid'
+import { loadWaSm, envoyerAuNumero } from './transfertsStock'
 
 // =============================================================
 // HELPERS DATE
@@ -365,6 +366,53 @@ export async function confirmReception(itemId, qtyReceived, userId) {
     pushVitrineOrder(updated, qtyReceived).catch(e => console.warn('[vitrine-order-add]', e?.message || e))
   }
   return updated
+}
+
+// =============================================================
+// ALERTE « RÉCEPTION À VÉRIFIER » (GS- salés)
+// -------------------------------------------------------------
+// La boutique confirme un GS- salé dans la Checklist → on prévient par WhatsApp
+// le numéro qui valide les transferts (celui de l'onglet Transferts), pour qu'il
+// vérifie la réception. Les confirmations sont REGROUPÉES : le message ne part
+// que 10 min après la dernière, ce qui correspond à un seul transfert.
+// =============================================================
+
+const DELAI_ALERTE_MIN = 10
+
+const nomLisible = n => String(n || '').replace(/^\[\d+\]\s*/, '').trim()
+
+export async function alerterReceptionGs(user) {
+  const { data } = await supabase
+    .from('stock_day_items')
+    .select('id, product_name, qty_received, received_at')
+    .eq('reception_status', 'confirmed')
+    .is('transfert_alerte_at', null)
+    .gt('qty_received', 0)
+    .gte('received_at', `${todayISO()}T00:00:00`)
+
+  const gs = (data || []).filter(i => vitrineRoute(i.product_name).label === 'GS')
+  if (!gs.length) return false
+
+  // Le lot n'est pas fini tant que la dernière confirmation date de moins de 10 min.
+  const derniere = Math.max(...gs.map(i => new Date(i.received_at).getTime()))
+  if (Date.now() - derniere < DELAI_ALERTE_MIN * 60000) return false
+
+  // On marque AVANT d'envoyer : deux Checklists ouvertes ne doivent pas envoyer deux fois.
+  const { data: pris } = await supabase
+    .from('stock_day_items')
+    .update({ transfert_alerte_at: new Date().toISOString() })
+    .in('id', gs.map(i => i.id))
+    .is('transfert_alerte_at', null)
+    .select('id, product_name, qty_received')
+  if (!pris || !pris.length) return false
+
+  const liste = pris.map(i => `${nomLisible(i.product_name)} ×${Number(i.qty_received)}`).join(', ')
+  await envoyerAuNumero(
+    await loadWaSm(),
+    `Réception boutique confirmée : ${liste}. À vérifier, puis valider le transfert dans Odoo.`,
+    user,
+  )
+  return true
 }
 
 // Type de produit → client Odoo + repère de la commande.

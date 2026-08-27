@@ -24,7 +24,7 @@ import { supabase } from '../lib/supabase'
 import { loadSalesLinesForRange } from '../lib/salesLines'
 import { loadProdDoneForLines } from '../lib/prodDone'
 import { loadCafeReceivedForLines, markCafeReceived, unmarkCafeReceived } from '../lib/cafeReceived'
-import { confirmReception, todayISO } from '../lib/stockBoutique'
+import { confirmReception, todayISO, alerterReceptionGs } from '../lib/stockBoutique'
 import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
 import { loadVitrineReservations, loadResaRangees, markResaRangee, unmarkResaRangee } from '../lib/previsionsVitrine'
 import { toast } from '../lib/toast'
@@ -487,9 +487,18 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
     // Refresh toutes les 5 min en backup (realtime gere les changements instantanes)
     const interval = setInterval(() => refresh(true), 5 * 60 * 1000)
 
+    // Reception d'un GS- sale confirmee -> WhatsApp au numero qui valide les
+    // transferts, 10 min apres la derniere confirmation (un seul message = un
+    // seul transfert). On repasse toutes les 2 min : ce qui n'est pas parti
+    // (ecran ferme entre-temps) part a la prochaine ouverture de la Checklist.
+    const alerte = () => alerterReceptionGs(user).catch(e => console.warn('[alerte-reception-gs]', e?.message || e))
+    alerte()
+    const intervalAlerte = setInterval(alerte, 2 * 60 * 1000)
+
     return () => {
       channels.forEach(c => supabase.removeChannel(c))
       clearInterval(interval)
+      clearInterval(intervalAlerte)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
