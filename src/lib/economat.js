@@ -170,7 +170,7 @@ async function creerTransfertOdoo({ user, lines }) {
   const parId = new Map()
   if (ids.length) {
     const { data } = await supabase.from('economat_articles')
-      .select('id, odoo_product_id, unit, odoo_source, fournisseur_odoo_id, fournisseur_nom').in('id', ids)
+      .select('id, odoo_product_id, unit, odoo_source, fournisseur_odoo_id, fournisseur_nom, achat').in('id', ids)
     for (const a of (data || [])) parId.set(a.id, a)
   }
   // Le badge de l'employé décide de la destination du stock (son lieu de
@@ -196,6 +196,9 @@ async function creerTransfertOdoo({ user, lines }) {
         // 'lgt' = l'article vit dans l'Odoo LG traiteur : sa demande y part en
         // réception, chez son fournisseur.
         source: a?.odoo_source === 'lgt' ? 'lgt' : 'principal',
+        // Article qu'on ne prend pas en stock mais qu'on COMMANDE : sa ligne
+        // part en demande de prix chez son fournisseur habituel (les fruits).
+        achat: a?.achat === true,
         fournisseurId: a?.fournisseur_odoo_id || null,
         fournisseurNom: a?.fournisseur_nom || null,
       }
@@ -252,6 +255,10 @@ export async function createDemande({ user, categoryId, lines }) {
   const description = buildDemandeText(lines)
     + (refs.length
       ? '\n\n' + refs.map(t => {
+          if (t.source === 'achat') {
+            if (t.erreur) return `Achat — À COMMANDER À LA MAIN (aucun fournisseur connu) : ${(t.articles || []).join(', ')}`
+            return `Achat — demande de prix ${t.name} chez ${t.fournisseur} (brouillon)`
+          }
           if (t.source !== 'lgt') return `Transfert Odoo : ${t.name} (brouillon)`
           if (t.erreur) return `LG traiteur — À COMMANDER À LA MAIN (aucun fournisseur connu) : ${(t.articles || []).join(', ')}`
           return `LG traiteur — demande de prix ${t.name} chez ${t.fournisseur} (brouillon)`
