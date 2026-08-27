@@ -1277,24 +1277,41 @@ export default async function handler(req, res) {
       })
     }
 
-    // suggestions d'articles quand on ajoute un ingrédient à la main
+    // suggestions d'articles quand on ajoute un ingrédient à la main.
+    // On ne propose QUE ce qui est rangé dans le lieu de l'ordre
+    // (WHLVP/Stock/Stock Prod) : ailleurs, l'article n'est pas sous la main.
     if (req.query.mode === 'articles') {
       const q = String(req.query.q || '').trim()
       if (q.length < 2) return res.status(200).json({ articles: [] })
       const uid = await odooAuth()
-      // pas de filtre sur `type` : Odoo 19 en a changé les valeurs, on
-      // écarterait tout le catalogue sans s'en apercevoir
-      const arts = await odooSearchRead(uid, 'product.product',
-        [['name', 'ilike', q]], ['display_name', 'uom_id'], { limit: 80, order: 'name' })
+      const modele = await modeleWhlvp(uid)
+      const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
+      if (!lieu) return res.status(200).json({ articles: [] })
+
+      const quants = await odooSearchRead(uid, 'stock.quant',
+        [['location_id', 'child_of', lieu], ['product_id.name', 'ilike', q]],
+        ['product_id', 'quantity'], { limit: 300 })
+      const parProduit = new Map()
+      for (const k of quants) {
+        if (!Array.isArray(k.product_id)) continue
+        const [id, nom] = k.product_id
+        const d = parProduit.get(id) || { id, nom, qty: 0 }
+        d.qty += k.quantity || 0
+        parProduit.set(id, d)
+      }
+      if (!parProduit.size) return res.status(200).json({ articles: [] })
+
+      const unites = await odooCall(uid, 'product.product', 'read', [[...parProduit.keys()], ['uom_id']])
+      const uomDe = Object.fromEntries(unites.map(u => [u.id, u.uom_id]))
       // on cherche un ingrédient, pas un gâteau : les matières premières (MP-)
       // et les préparations (SM) passent devant les produits finis
       const rang = n => (/^\s*(\[[^\]]*\]\s*)?MP-/i.test(n) ? 0 : /^\s*(\[[^\]]*\]\s*)?SM/i.test(n) ? 1 : 2)
       return res.status(200).json({
-        articles: arts
+        articles: [...parProduit.values()]
           .map(a => ({
-            id: a.id, nom: a.display_name,
-            uom: Array.isArray(a.uom_id) ? a.uom_id[0] : null,
-            unite: Array.isArray(a.uom_id) ? a.uom_id[1] : '',
+            id: a.id, nom: a.nom, stock: Math.round(a.qty * 100) / 100,
+            uom: Array.isArray(uomDe[a.id]) ? uomDe[a.id][0] : null,
+            unite: Array.isArray(uomDe[a.id]) ? uomDe[a.id][1] : '',
           }))
           .sort((x, y) => rang(x.nom) - rang(y.nom) || x.nom.localeCompare(y.nom))
           .slice(0, 20),

@@ -44,7 +44,7 @@ function AjoutIngredient({ onChoisir }) {
           setRes([])
           setCherche(e.target.value.trim().length >= 2)
         }}
-        placeholder="+ ajouter un ingrédient (tape son nom)"
+        placeholder="+ ajouter un ingrédient présent en Stock Prod"
         className="w-full text-[13.5px] border border-line rounded-lg px-3 py-2 bg-white" />
       {q.trim().length >= 2 && (
         <div className="mt-1 border border-line rounded-lg bg-white max-h-[190px] overflow-y-auto">
@@ -53,7 +53,8 @@ function AjoutIngredient({ onChoisir }) {
           {res.map(a => (
             <button key={a.id} onClick={() => { onChoisir(a); setQ(''); setRes([]) }}
               className="w-full text-left px-3 py-2 text-[13px] border-b border-[#f0e8db] last:border-0 hover:bg-cream-warm">
-              {a.nom} <span className="text-ink-mute text-[11.5px]">({a.unite})</span>
+              {a.nom}
+              <span className="text-ink-mute text-[11.5px]"> · il y en a {qte(a.stock, a.unite)}</span>
             </button>
           ))}
         </div>
