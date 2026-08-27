@@ -60,3 +60,28 @@ export async function delFabProd(jour, article) {
     .delete().eq('jour', jour).eq('article', article)
   if (error) throw error
 }
+
+/** Les articles ajoutés à la main depuis l'onglet, en plus de la liste de base. */
+export async function loadArticlesAjoutes() {
+  const { data, error } = await supabase
+    .from('prod_articles').select('id, nom, unite, photo').order('nom')
+  if (error) throw error
+  return (data || []).map(a => ({
+    article: a.nom, famille: 'Autres', unite: a.unite, photo: a.photo, ajoute: a.id,
+  }))
+}
+
+/** Ajouter un article que la liste ne prévoyait pas. */
+export async function addArticle(nom, unite, photo, userId) {
+  const { data, error } = await supabase.from('prod_articles')
+    .insert({ nom: nom.trim(), unite, photo: photo || null, cree_par: userId || null })
+    .select('id').single()
+  if (error) throw error
+  return data.id
+}
+
+/** Retirer un article ajouté à la main. Ce qui a déjà été déclaré dessus reste. */
+export async function delArticle(id) {
+  const { error } = await supabase.from('prod_articles').delete().eq('id', id)
+  if (error) throw error
+}
