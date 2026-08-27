@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fabrication Prod — préparer les articles et leurs photos</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#fcfbf8; --cream-warm:#F7F2EA; --line:#e5d8c3; --bordeaux:#993556;
+    --ink:#2b2118; --ink-soft:#6b5c4c; --ink-mute:#9a8b7a;
+    --ok:#5c7a3f; --ok-bg:#EAF3DE; --ok-line:#cfe0b8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:Geist,system-ui,sans-serif;
+       padding:20px 14px 100px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:840px;margin:0 auto}
+  h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:26px;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:13px;margin:0 0 6px;line-height:1.55}
+  .sub b{color:var(--ink)}
+
+  h2{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--bordeaux);
+     display:flex;align-items:center;gap:10px;margin:26px 0 10px}
+  h2::after{content:"";flex:1;height:2px;background:var(--line)}
+  h2 .cpt{font-size:11px;color:var(--ink-mute);letter-spacing:0;text-transform:none;font-weight:600}
+
+  .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .carte{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;position:relative}
+  .zone{aspect-ratio:4/3;background:var(--cream-warm);display:grid;place-items:center;cursor:pointer;
+        border-bottom:1px solid var(--line);position:relative;text-align:center;padding:10px}
+  .zone.survol{background:#f3e6ea;outline:2px dashed var(--bordeaux);outline-offset:-6px}
+  .zone img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+  .zone .txt{font-size:12px;color:var(--ink-mute);line-height:1.5;pointer-events:none}
+  .zone .txt b{display:block;color:var(--ink-soft);font-size:12.5px;margin-bottom:2px}
+  .bas{padding:10px 12px}
+  .nom{font-size:13.5px;line-height:1.35;font-weight:600;min-height:36px}
+  .unite{font-size:11px;color:var(--ink-mute);margin-top:3px}
+  .outils{display:flex;gap:6px;margin-top:9px}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink-soft);border-radius:10px;
+       padding:7px 11px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
+  .btn:hover{background:var(--cream-warm)}
+  .btn-p{background:var(--bordeaux);border-color:var(--bordeaux);color:var(--cream)}
+  .btn-p:hover{background:#822c49}
+  .plein{flex:1}
+
+  .carte.cible{border-color:var(--bordeaux);box-shadow:0 0 0 3px rgba(153,53,86,.16)}
+  .carte.cible .zone{background:#f7ecef}
+  .badge{position:absolute;top:8px;left:8px;background:var(--bordeaux);color:var(--cream);
+         font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:999px;z-index:2}
+  kbd{font-family:inherit;font-size:11.5px;font-weight:800;background:#fff;border:1px solid var(--line);
+      border-bottom-width:2px;border-radius:5px;padding:1px 5px}
+  .retires .carte{opacity:.55}
+  .vide{color:var(--ink-mute);font-size:13.5px;padding:14px 2px}
+
+  .bilan{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+         padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;z-index:40}
+  .bilan b{font-size:14.5px;display:block}
+  .bilan span{font-size:12px;color:var(--ink-mute)}
+  .bilan .grp{display:flex;gap:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Fabrication Prod — préparer la liste</h1>
+  <p class="sub">
+    <b>1.</b> Sur internet, fais <b>clic droit sur l'image &rsaquo; Copier l'image</b>.<br>
+    <b>2.</b> Ici, <b>clique la carte</b> de l'article (elle s'entoure de rouge), puis <b>colle</b> :
+    <kbd>Cmd</kbd>+<kbd>V</kbd> sur Mac, <kbd>Ctrl</kbd>+<kbd>V</kbd> sur PC. La carte suivante se sélectionne toute seule.<br>
+    <b>3.</b> <b>Retire</b> les articles que l'équipe ne fait pas — ils passent en bas, tu peux les remettre.<br>
+    <b>4.</b> Clique <b>Enregistrer</b> en bas : ça télécharge un fichier que tu m'envoies. Les photos sont dedans.<br>
+    <span style="color:var(--ink-mute)">Tu peux aussi glisser un fichier sur une carte, ou cliquer « fichier » pour en choisir un.</span>
+  </p>
+  <p class="sub" style="color:var(--ink-mute)">Ton travail est gardé dans le navigateur : tu peux fermer et revenir.</p>
+
+  <div id="ecran"></div>
+</div>
+
+<div class="bilan">
+  <div>
+    <b id="bcpt"></b>
+    <span id="bdet"></span>
+  </div>
+  <div class="grp">
+    <button class="btn" onclick="tout()">Tout remettre</button>
+    <button class="btn btn-p" onclick="enregistrer()">Enregistrer</button>
+  </div>
+</div>
+
+<script>
+// Les 29 articles réellement produits en Stock Prod ces 2 mois, hors tout ce
+// qui contient « CD ». `u` = l'unité dans laquelle Odoo les compte.
+const BASE = [
+  {f:'Finitions', n:'SM. Meringue francaise finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme patissiere Angelo finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme diplomate finition', u:'g'},
+  {f:'Finitions', n:'SM. chantilly mascarpone Finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme au beurre praline Finition', u:'g'},
+  {f:'Finitions', n:'SM. Subleme vanille Finition', u:'g'},
+  {f:'Finitions', n:'SM. glacage chocolat noir (cake cbs) Finition', u:'g'},
+  {f:'Finitions', n:'SM. mini cheese cake aromatisé (Fruits Rouges)', u:'u'},
+  {f:'Finitions', n:'SM. Ganache JIVARA gianduja Finition', u:'g'},
+  {f:'Finitions', n:'SM. Sirop Imbibage framboise Finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme au beurre nature finition', u:'g'},
+  {f:'Finitions', n:'SM. Amandes Caramelisees Finition', u:'g'},
+  {f:'Finitions', n:'SM. mini cheese cake aromatisé (Ananas)', u:'u'},
+  {f:'Finitions', n:'SM. mini cheese cake aromatisé (Mangue/Passion)', u:'u'},
+  {f:'Finitions', n:'SM. caramel beurre sale finition', u:'g'},
+  {f:'Finitions', n:'SM. Glacage chocolat GIANDUJA Finition', u:'g'},
+  {f:'Finitions', n:'SM. Namlaka Pistache', u:'g'},
+  {f:'Finitions', n:'SM. Creme mousseline paris brest', u:'g'},
+  {f:'Finitions', n:'SM. Glacage gourmand Finition', u:'g'},
+  {f:'Finitions', n:'SM. Subleme coco Finition', u:'g'},
+  {f:'Finitions', n:'SM. sirop Imbibage Finition KG', u:'kg'},
+  {f:'Finitions', n:'SM. creme citron Finition', u:'g'},
+  {f:'Autres',    n:'Sm- Pr Black forest indiv', u:'u'},
+  {f:'Autres',    n:'Sm- Pr Black forest 10 pers', u:'u'},
+  {f:'Autres',    n:'Sm- Pr Black forest 5 pers', u:'u'},
+  {f:'Autres',    n:'Sm- Pr Gianduja indiv', u:'u'},
+  {f:'Autres',    n:'SM- miss pistache', u:'u'},
+  {f:'Autres',    n:'SM- mini miss pistache', u:'u'},
+  {f:'Autres',    n:'SM- 25 cm Vitrine (Praliné Amandes caramélisées)', u:'u'},
+]
+
+const CLE = 'fabprod-photos-v1'
+let etat = charger()
+
+function charger(){
+  try{ const v = JSON.parse(localStorage.getItem(CLE)); if(v && v.articles) return v }catch(e){}
+  return { articles: BASE.map(a => ({...a, photo:null, retire:false})) }
+}
+function garder(){
+  try{ localStorage.setItem(CLE, JSON.stringify(etat)) }
+  catch(e){ alert("Le navigateur ne peut plus rien garder (trop de photos). Clique Enregistrer maintenant pour ne rien perdre.") }
+}
+
+const propre = n => n.replace(/^SM[.\-]?\s*/i,'').replace(/\s*finition$/i,'').trim()
+
+// Une photo de téléphone fait plusieurs Mo : on la réduit à 700 px avant de la
+// garder, sinon le navigateur sature au bout de quelques articles.
+function reduire(file, cb){
+  const img = new Image()
+  img.onload = () => {
+    const max = 700
+    const e = Math.min(1, max/Math.max(img.width, img.height))
+    const c = document.createElement('canvas')
+    c.width = Math.round(img.width*e); c.height = Math.round(img.height*e)
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
+    cb(c.toDataURL('image/jpeg', 0.82))
+    URL.revokeObjectURL(img.src)
+  }
+  img.onerror = () => alert("Ce fichier n'est pas une image.")
+  img.src = URL.createObjectURL(file)
+}
+
+let cible = null      // la carte qui recevra le collage
+
+function viser(i){
+  cible = (cible === i) ? null : i
+  dessine()
+  const z = document.getElementById('z'+i)
+  if(z) z.scrollIntoView({block:'nearest', behavior:'smooth'})
+}
+
+// après un collage réussi, on avance sur le premier article encore sans photo :
+// on peut ainsi enchaîner copier / coller / copier / coller sans souris
+function suivant(depuis){
+  const ordre = etat.articles.map((a,i)=>i)
+    .filter(i => !etat.articles[i].retire && !etat.articles[i].photo && i !== depuis)
+  const apres = ordre.find(i => i > depuis)
+  cible = apres !== undefined ? apres : (ordre[0] !== undefined ? ordre[0] : null)
+}
+
+// Coller une image copiée sur internet. Selon le site et le navigateur, le
+// presse-papiers contient soit la vraie image, soit seulement son adresse.
+document.addEventListener('paste', ev => {
+  if(cible === null) return
+  const i = cible
+  const dt = ev.clipboardData
+  if(!dt) return
+  for(const item of dt.items || []){
+    if(item.type && item.type.startsWith('image/')){
+      const f = item.getAsFile()
+      if(f){ ev.preventDefault(); poser(i, f, true); return }
+    }
+  }
+  // pas d'image, mais peut-être son adresse
+  const html = dt.getData('text/html') || ''
+  const txt = (dt.getData('text/plain') || '').trim()
+  const url = (html.match(/<img[^>]+src=["']([^"']+)["']/i) || [])[1]
+    || (/^https?:\/\/\S+$/i.test(txt) ? txt : null)
+  if(!url) return
+  ev.preventDefault()
+  depuisAdresse(i, url)
+})
+
+// On essaie de rapatrier l'image pour la mettre dans le fichier final. Beaucoup
+// de sites l'interdisent (sécurité du navigateur) : dans ce cas on garde
+// l'adresse, l'image s'affiche quand même et je la récupérerai de mon côté.
+function depuisAdresse(i, url){
+  fetch(url, {mode:'cors'})
+    .then(r => { if(!r.ok) throw 0; return r.blob() })
+    .then(b => poser(i, b, true))
+    .catch(() => {
+      etat.articles[i].photo = url
+      etat.articles[i].distante = true
+      garder(); suivant(i); dessine()
+    })
+}
+
+function poser(i, file, enchaine){
+  if(!file || !/^image\//.test(file.type)) return alert("Glisse une image (jpg, png, heic converti…).")
+  reduire(file, d => {
+    etat.articles[i].photo = d
+    delete etat.articles[i].distante
+    garder()
+    if(enchaine) suivant(i)
+    dessine()
+  })
+}
+function retirerPhoto(i, ev){ ev.stopPropagation(); etat.articles[i].photo = null; garder(); dessine() }
+function basculer(i, ev){ ev.stopPropagation(); etat.articles[i].retire = !etat.articles[i].retire; garder(); dessine() }
+function tout(){ etat.articles.forEach(a => a.retire = false); garder(); dessine() }
+
+function carte(a, i){
+  const p = a.photo
+  const vise = (cible === i)
+  return `<div class="carte ${vise?'cible':''}">
+    ${vise ? `<span class="badge">colle ici</span>` : ''}
+    <div class="zone" id="z${i}"
+         ondragover="event.preventDefault();this.classList.add('survol')"
+         ondragleave="this.classList.remove('survol')"
+         ondrop="event.preventDefault();this.classList.remove('survol');poser(${i}, event.dataTransfer.files[0])"
+         onclick="viser(${i})">
+      ${a.distante ? `<span class="badge" style="left:auto;right:8px;background:#854F0B">lien</span>` : ''}
+      ${p ? `<img src="${p}" alt="">`
+          : `<div class="txt"><b>${vise ? 'Colle maintenant' : 'Clique, puis colle'}</b>${vise ? 'Cmd+V / Ctrl+V' : 'ou glisse une image ici'}</div>`}
+    </div>
+    <input type="file" id="f${i}" accept="image/*" hidden onchange="poser(${i}, this.files[0])">
+    <div class="bas">
+      <div class="nom">${propre(a.n)}</div>
+      <div class="unite">compté en ${a.u} — ${a.n}</div>
+      <div class="outils">
+        ${p ? `<button class="btn" onclick="retirerPhoto(${i}, event)">enlever</button>`
+            : `<button class="btn" onclick="event.stopPropagation();document.getElementById('f${i}').click()">fichier</button>`}
+        <button class="btn plein" onclick="basculer(${i}, event)">${a.retire ? 'remettre' : 'retirer'}</button>
+      </div>
+    </div>
+  </div>`
+}
+
+function dessine(){
+  let html = ''
+  for(const fam of ['Finitions','Autres']){
+    const idx = etat.articles.map((a,i)=>[a,i]).filter(([a])=>a.f===fam && !a.retire)
+    html += `<h2>${fam} <span class="cpt">${idx.length} article${idx.length>1?'s':''}</span></h2>`
+    html += idx.length ? `<div class="grille">${idx.map(([a,i])=>carte(a,i)).join('')}</div>`
+                       : `<p class="vide">Tout a été retiré de cette famille.</p>`
+  }
+  const out = etat.articles.map((a,i)=>[a,i]).filter(([a])=>a.retire)
+  if(out.length){
+    html += `<h2>Retirés <span class="cpt">${out.length} — ils n'iront pas dans l'onglet</span></h2>
+             <div class="grille retires">${out.map(([a,i])=>carte(a,i)).join('')}</div>`
+  }
+  document.getElementById('ecran').innerHTML = html
+
+  const gardes = etat.articles.filter(a=>!a.retire)
+  const avec = gardes.filter(a=>a.photo).length
+  document.getElementById('bcpt').textContent = `${gardes.length} article${gardes.length>1?'s':''} gardé${gardes.length>1?'s':''}`
+  document.getElementById('bdet').textContent = `${avec} avec photo, ${gardes.length-avec} sans`
+}
+
+function enregistrer(){
+  const gardes = etat.articles.filter(a=>!a.retire)
+  const donnees = {
+    quand: new Date().toISOString().slice(0,10),
+    gardes: gardes.map(a=>({famille:a.f, article:a.n, unite:a.u, photo:a.photo, distante:!!a.distante})),
+    retires: etat.articles.filter(a=>a.retire).map(a=>a.n),
+  }
+  const blob = new Blob([JSON.stringify(donnees)], {type:'application/json'})
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'fabrication-prod.json'
+  a.click()
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000)
+}
+
+dessine()
+</script>
+</body>
+</html>

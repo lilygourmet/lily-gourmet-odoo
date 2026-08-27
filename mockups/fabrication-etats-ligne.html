@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fabrication CD — états d'une ligne</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#fcfbf8; --cream-warm:#F7F2EA; --line:#e5d8c3; --bordeaux:#993556;
+    --ink:#2b2118; --ink-soft:#6b5c4c; --ink-mute:#9a8b7a; --ok:#5c7a3f; --ok-bg:#EAF3DE;
+    --ok-line:#cfe0b8; --warn-bg:#FFF7E0; --warn:#854F0B; --warn-line:#e6d3a3; --danger:#b03a3a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:22px 16px 60px}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:27px;margin:0 0 4px}
+  .sub{color:var(--ink-mute);font-size:13px;margin:0 0 26px}
+  h2{font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--bordeaux);
+     display:flex;align-items:center;gap:10px;margin:30px 0 10px}
+  h2::after{content:"";flex:1;height:2px;background:var(--line)}
+  .panneau{background:var(--cream-warm);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+  .titre-rec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
+  .ligne{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14px;border-bottom:1px dashed #e6ddcd}
+  .ligne:last-child{border-bottom:0}
+  .qte{min-width:92px;font-weight:700}
+  .nom{flex:1;min-width:0}
+  .nom.lien{color:var(--bordeaux);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+  .barre{text-decoration:line-through;opacity:.6}
+  .pastille{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .p-stock{background:var(--ok-bg);color:var(--ok)}
+  .p-warn{background:var(--warn-bg);color:var(--warn)}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink-mute);border-radius:9px;
+       padding:6px 11px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap}
+  .btn.ok{background:var(--ok);border-color:var(--ok);color:var(--cream)}
+  .btn.off{background:var(--cream-warm);opacity:.5;cursor:not-allowed}
+  .btn.mini{padding:6px 9px}
+  .note{font-size:12px;color:var(--warn);padding:2px 0 8px 102px;margin-top:-6px}
+  .cas{border:1px solid var(--line);border-radius:14px;background:#fff;padding:0 14px;margin-bottom:14px;overflow:hidden}
+  .cas-t{display:flex;align-items:baseline;gap:9px;padding:12px 0 4px;border-bottom:1px solid #f0e8db;margin:0 -14px 8px;padding-left:14px;padding-right:14px}
+  .num{width:22px;height:22px;flex:none;border-radius:50%;background:var(--bordeaux);color:var(--cream);
+       font-size:11.5px;font-weight:800;display:grid;place-items:center}
+  .cas-t b{font-size:14.5px}
+  .quoi{font-size:12.5px;color:var(--ink-soft);padding:2px 0 12px;line-height:1.55}
+  .quoi em{font-style:normal;background:var(--cream-warm);padding:1px 6px;border-radius:5px;font-weight:600}
+  .base{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);
+        border-left:4px solid var(--bordeaux);border-radius:12px;background:#fff;margin-bottom:8px}
+  .base.fini{border-left-color:var(--ok-line);background:var(--ok-bg)}
+  .base .reste{font-size:11.5px;color:var(--ink-mute);text-align:right;line-height:1.25}
+  .base .prod{text-align:right}
+  .base .prod b{font-size:18px;font-weight:800;color:var(--bordeaux)}
+  .base .prod span{display:block;font-size:10.5px;color:var(--ink-mute)}
+  .legende{background:var(--cream-warm);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:13px;line-height:1.7}
+  .legende b{font-size:12.5px}
+  .k{display:inline-block;min-width:74px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Ce qui se passe quand on marque « fait »</h1>
+  <p class="sub">Les six états possibles d'une ligne, tels que c'est codé aujourd'hui. Dis-moi ce qui ne va pas.</p>
+
+  <h2>Dans une recette</h2>
+
+  <div class="cas">
+    <div class="cas-t"><span class="num">1</span><b>Il faut la faire</b></div>
+    <div class="ligne">
+      <span class="qte">1 280 g</span>
+      <span class="nom lien">Crème au beurre Chocolat ▾</span>
+      <button class="btn">fait</button>
+    </div>
+    <p class="quoi">Rien en stock, personne ne l'a faite. Le bouton <em>fait</em> la déclare.</p>
+  </div>
+
+  <div class="cas">
+    <div class="cas-t"><span class="num">2</span><b>Il y en a déjà — rien à faire</b></div>
+    <div class="ligne">
+      <span class="qte">2 142 g</span>
+      <span class="nom">Crème au beurre Nature</span>
+      <span class="pastille p-stock">en stock</span>
+    </div>
+    <p class="quoi">Le stock couvre le besoin. <b>Pas barré</b> — personne ne l'a faite, il y en avait déjà. Aucun bouton : il n'y a rien à faire.</p>
+  </div>
+
+  <div class="cas">
+    <div class="cas-t"><span class="num">3</span><b>Elle vient d'être faite</b></div>
+    <div class="ligne">
+      <span class="qte barre">1 280 g</span>
+      <span class="nom lien barre">Crème au beurre Chocolat ▾</span>
+      <button class="btn ok">✓ fait</button>
+    </div>
+    <p class="quoi"><b>Barrée</b> = quelqu'un l'a faite, et la quantité couvre le besoin. Recliquer sur <em>✓ fait</em> annule la déclaration.</p>
+  </div>
+
+  <div class="cas">
+    <div class="cas-t"><span class="num">4</span><b>Faite, mais déjà consommée par un gâteau</b></div>
+    <div class="ligne">
+      <span class="qte">3 200 g</span>
+      <span class="nom lien">Crème au beurre Vanille ▾</span>
+      <button class="btn mini">↩</button>
+      <button class="btn">fait</button>
+    </div>
+    <p class="quoi">Tu avais fait 3 kg, ils sont partis dans la crème STK. Pour les 20 cm il en faut d'autres : la ligne
+      <b>n'est plus barrée</b>. <em>fait</em> ajoute une nouvelle fournée, <em>↩</em> retire la précédente.
+      C'est le « chacun sa crème ».</p>
+  </div>
+
+  <div class="cas">
+    <div class="cas-t"><span class="num">5</span><b>Bloquée par son composant</b></div>
+    <div class="ligne">
+      <span class="qte">3 000 g</span>
+      <span class="nom lien">Crème au beurre Vanille ▾</span>
+      <button class="btn off">fait</button>
+    </div>
+    <p class="note">à faire d'abord : Crème pâtissière</p>
+    <p class="quoi">Le bouton est éteint tant que la crème pâtissière n'est pas là. Elle se débloque toute seule dès que le composant est disponible.</p>
+  </div>
+
+  <div class="cas">
+    <div class="cas-t"><span class="num">6</span><b>Pas de recette dans Odoo</b></div>
+    <div class="ligne">
+      <span class="qte">500 g</span>
+      <span class="nom">SM CD* Décor spécial</span>
+      <span class="pastille p-warn">pas de recette</span>
+      <button class="btn">fait</button>
+    </div>
+    <p class="quoi">On ne peut pas la dérouler ni créer son ordre, donc elle ne bloque jamais son parent. Le repère explique pourquoi la ligne ne s'ouvre pas.</p>
+  </div>
+
+  <h2>Dans « bases à préparer »</h2>
+
+  <div class="base">
+    <span class="nom">Crème au beurre Nature</span>
+    <span class="reste">il en reste<br><b>5 780 g</b></span>
+    <span class="prod"><b>5 430 g</b><span>1 tournée</span></span>
+    <span style="color:var(--ink-mute)">▸</span>
+    <button class="btn">fait</button>
+  </div>
+
+  <div class="base fini">
+    <span class="nom barre">Crème au beurre Nature</span>
+    <span class="reste">il en reste<br><b>5 780 g</b></span>
+    <span class="prod barre"><b>5 430 g</b><span>1 tournée</span></span>
+    <span style="color:var(--ink-mute)">▸</span>
+    <button class="btn mini">↩</button>
+    <button class="btn ok">✓ fait</button>
+  </div>
+
+  <div class="base fini">
+    <span class="nom">Amandes Caramélisées</span>
+    <span style="flex:1"></span>
+    <span style="font-size:13px;font-weight:700;color:var(--ok)">en stock (3 140 g)</span>
+  </div>
+
+  <p class="quoi" style="padding-top:2px">
+    La base <b>garde toujours ses chiffres</b> et sa place, même une fois faite : elle se barre, elle ne bouge pas.
+    La troisième n'est pas barrée — il y en avait déjà assez, personne ne l'a faite.
+  </p>
+
+  <h2>En résumé</h2>
+  <div class="legende">
+    <div><span class="k"><b>Barré</b></span> quelqu'un a déclaré l'avoir fait — et rien d'autre.</div>
+    <div><span class="k"><b>En stock</b></span> il y en a assez, pas barré, pas de bouton.</div>
+    <div><span class="k"><b>fait</b></span> je déclare une fournée (crée l'ordre dans Odoo s'il n'existe pas).</div>
+    <div><span class="k"><b>✓ fait</b></span> c'est déclaré et ça couvre le besoin — recliquer annule.</div>
+    <div><span class="k"><b>↩</b></span> retirer la dernière fournée déclarée, tant que rien n'est validé.</div>
+    <div><span class="k"><b>éteint</b></span> un composant manque encore.</div>
+  </div>
+
+</div>
+</body>
+</html>

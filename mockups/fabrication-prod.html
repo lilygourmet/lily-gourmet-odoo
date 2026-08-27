@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fabrication Prod — maquette</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#fcfbf8; --cream-warm:#F7F2EA; --line:#e5d8c3; --bordeaux:#993556;
+    --ink:#2b2118; --ink-soft:#6b5c4c; --ink-mute:#9a8b7a;
+    --ok:#5c7a3f; --ok-bg:#EAF3DE; --ok-line:#cfe0b8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:Geist,system-ui,sans-serif;
+       padding:20px 14px 90px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto}
+
+  h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:26px;margin:0 0 3px}
+  .sub{color:var(--ink-mute);font-size:12.5px;margin:0 0 16px}
+
+  .barre{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+  .champ-date{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);
+              border-radius:12px;padding:8px 12px}
+  .champ-date label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-mute)}
+  .champ-date input{border:0;background:transparent;font-family:inherit;font-size:14px;font-weight:700;color:var(--ink);outline:none}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink-soft);border-radius:12px;
+       padding:9px 14px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
+  .btn:hover{background:var(--cream-warm)}
+  .btn-p{background:var(--bordeaux);border-color:var(--bordeaux);color:var(--cream)}
+
+  h2{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--bordeaux);
+     display:flex;align-items:center;gap:10px;margin:26px 0 9px}
+  h2::after{content:"";flex:1;height:2px;background:var(--line)}
+  h2 .cpt{font-size:11px;color:var(--ink-mute);letter-spacing:0;text-transform:none;font-weight:600}
+
+  .liste{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .ligne{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #f2ebdd;
+         cursor:pointer;background:#fff}
+  .ligne:last-child{border-bottom:0}
+  .ligne:hover{background:#fdfbf6}
+  .ligne .nom{flex:1;min-width:0;font-size:14.5px;line-height:1.3}
+  .ligne .hint{font-size:11.5px;color:var(--ink-mute);white-space:nowrap}
+  .ligne.fait{background:var(--ok-bg)}
+  .ligne.fait .nom{text-decoration:line-through;opacity:.65}
+  .valeur{font-size:15px;font-weight:800;color:var(--ok);white-space:nowrap}
+  .mini{border:1px solid var(--ok-line);background:#fff;color:var(--ink-mute);border-radius:9px;
+        padding:5px 9px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
+
+  /* panneau de saisie, ouvert au clic */
+  .saisie{padding:14px;background:var(--cream-warm);border-bottom:1px solid #f2ebdd}
+  .saisie .titre{font-size:13px;font-weight:700;margin-bottom:10px}
+  .rangee{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .rangee input[type=number]{width:130px;border:1px solid var(--line);border-radius:11px;padding:11px 12px;
+        font-family:inherit;font-size:19px;font-weight:800;text-align:right;background:#fff;outline:none}
+  .rangee input[type=number]:focus{border-color:var(--bordeaux)}
+  .unites{display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#fff}
+  .unites button{border:0;background:#fff;font-family:inherit;font-size:14px;font-weight:800;
+        padding:11px 15px;cursor:pointer;color:var(--ink-mute);border-right:1px solid var(--line)}
+  .unites button:last-child{border-right:0}
+  .unites button.on{background:var(--bordeaux);color:var(--cream)}
+  .actions{display:flex;gap:8px;margin-top:11px}
+  .note{font-size:12px;color:var(--ink-mute);margin-top:9px}
+
+  .bilan{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+         padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;z-index:40}
+  .bilan b{font-size:15px}
+  .bilan span{font-size:12px;color:var(--ink-mute);display:block}
+
+  /* feuille imprimée */
+  .feuille{display:none}
+  @media print{
+    body{background:#fff;padding:0}
+    .barre,.bilan,h1,.sub,.liste,h2,.saisie{display:none !important}
+    .feuille{display:block}
+    .feuille h3{font-family:Fraunces,Georgia,serif;font-style:italic;font-size:20px;margin:0 0 2px}
+    .feuille .quand{font-size:12px;color:#555;margin-bottom:14px}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    th{text-align:left;border-bottom:2px solid #000;padding:5px 4px;font-size:10.5px;
+       text-transform:uppercase;letter-spacing:.06em}
+    td{border-bottom:1px solid #ddd;padding:7px 4px}
+    td.q{text-align:right;font-weight:700;width:110px}
+    td.vide{border-bottom:1px solid #999}
+    .fam{background:#f0f0f0;font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Fabrication Prod</h1>
+  <p class="sub">Ce que l'équipe a fabriqué aujourd'hui. Clique sur un article pour noter la quantité.</p>
+
+  <div class="barre">
+    <div class="champ-date">
+      <label for="d">Journée</label>
+      <input type="date" id="d">
+    </div>
+    <button class="btn" onclick="window.print()">Imprimer</button>
+  </div>
+
+  <div id="ecran"></div>
+
+  <!-- ce qui sort à l'impression -->
+  <div class="feuille" id="feuille"></div>
+</div>
+
+<div class="bilan">
+  <div><b id="bcpt">0 article déclaré</b><span id="bdate"></span></div>
+  <button class="btn btn-p" onclick="window.print()">Imprimer la feuille</button>
+</div>
+
+<script>
+// Les 29 articles réellement produits en Stock Prod ces 2 mois (hors tout ce
+// qui contient « CD »), avec leur unité Odoo.
+const ARTICLES = [
+  {f:'Finitions', n:'SM. Meringue francaise finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme patissiere Angelo finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme diplomate finition', u:'g'},
+  {f:'Finitions', n:'SM. chantilly mascarpone Finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme au beurre praline Finition', u:'g'},
+  {f:'Finitions', n:'SM. Subleme vanille Finition', u:'g'},
+  {f:'Finitions', n:'SM. glacage chocolat noir (cake cbs) Finition', u:'g'},
+  {f:'Finitions', n:'SM. mini cheese cake aromatisé (Fruits Rouges)', u:'u'},
+  {f:'Finitions', n:'SM. Ganache JIVARA gianduja Finition', u:'g'},
+  {f:'Finitions', n:'SM. Sirop Imbibage framboise Finition', u:'g'},
+  {f:'Finitions', n:'SM. Creme au beurre nature finition', u:'g'},
+  {f:'Finitions', n:'SM. Amandes Caramelisees Finition', u:'g'},
+  {f:'Finitions', n:'SM. mini cheese cake aromatisé (Ananas)', u:'u'},
+  {f:'Finitions', n:'SM. mini cheese cake aromatisé (Mangue/Passion)', u:'u'},
+  {f:'Finitions', n:'SM. caramel beurre sale finition', u:'g'},
+  {f:'Finitions', n:'SM. Glacage chocolat GIANDUJA Finition', u:'g'},
+  {f:'Finitions', n:'SM. Namlaka Pistache', u:'g'},
+  {f:'Finitions', n:'SM. Creme mousseline paris brest', u:'g'},
+  {f:'Finitions', n:'SM. Glacage gourmand Finition', u:'g'},
+  {f:'Finitions', n:'SM. Subleme coco Finition', u:'g'},
+  {f:'Finitions', n:'SM. sirop Imbibage Finition KG', u:'kg'},
+  {f:'Finitions', n:'SM. creme citron Finition', u:'g'},
+  {f:'Autres',    n:'Sm- Pr Black forest indiv', u:'u'},
+  {f:'Autres',    n:'Sm- Pr Black forest 10 pers', u:'u'},
+  {f:'Autres',    n:'Sm- Pr Black forest 5 pers', u:'u'},
+  {f:'Autres',    n:'Sm- Pr Gianduja indiv', u:'u'},
+  {f:'Autres',    n:'SM- miss pistache', u:'u'},
+  {f:'Autres',    n:'SM- mini miss pistache', u:'u'},
+  {f:'Autres',    n:'SM- 25 cm Vitrine (Praliné Amandes caramélisées)', u:'u'},
+]
+
+const faits = {}          // { nom: {q, u} }
+let ouvert = null         // l'article en cours de saisie
+let uniteChoisie = null   // g / kg / u pendant la saisie
+
+const dInput = document.getElementById('d')
+dInput.value = new Date().toLocaleDateString('sv-SE')
+dInput.onchange = dessine
+
+const propre = n => n.replace(/^SM[.\-]?\s*/i, '').replace(/\s*finition$/i, '').trim()
+const nb = v => Number(v||0).toLocaleString('fr-FR', {maximumFractionDigits:2})
+
+function ouvrir(n){
+  const a = ARTICLES.find(x=>x.n===n)
+  ouvert = (ouvert === n) ? null : n
+  uniteChoisie = faits[n] ? faits[n].u : a.u
+  dessine()
+  if(ouvert){ const c=document.getElementById('q'); if(c){c.focus(); c.select()} }
+}
+function choisirUnite(u){ uniteChoisie = u; dessine(); const c=document.getElementById('q'); if(c) c.focus() }
+function enregistrer(){
+  const v = Number(document.getElementById('q').value)
+  if(!(v>0)) return
+  faits[ouvert] = {q:v, u:uniteChoisie}
+  ouvert = null
+  dessine()
+}
+function retirer(n, ev){ ev.stopPropagation(); delete faits[n]; dessine() }
+
+function dessine(){
+  const e = document.getElementById('ecran')
+  let html = ''
+  for(const fam of ['Finitions','Autres']){
+    const liste = ARTICLES.filter(a=>a.f===fam)
+    const n = liste.filter(a=>faits[a.n]).length
+    html += `<h2>${fam} <span class="cpt">${n} sur ${liste.length}</span></h2><div class="liste">`
+    for(const a of liste){
+      const f = faits[a.n]
+      html += `<div class="ligne ${f?'fait':''}" onclick="ouvrir('${a.n.replace(/'/g,"\\'")}')">
+        <span class="nom">${propre(a.n)}</span>
+        ${f ? `<span class="valeur">${nb(f.q)} ${f.u}</span>
+               <button class="mini" onclick="retirer('${a.n.replace(/'/g,"\\'")}', event)">retirer</button>`
+            : `<span class="hint">noter</span>`}
+      </div>`
+      if(ouvert === a.n){
+        const v = f ? f.q : ''
+        html += `<div class="saisie" onclick="event.stopPropagation()">
+          <div class="titre">${propre(a.n)} — combien en as-tu fait&nbsp;?</div>
+          <div class="rangee">
+            <input type="number" id="q" min="0" step="any" inputmode="decimal" value="${v}" placeholder="0">
+            <div class="unites">
+              ${['g','kg','u'].map(u=>`<button class="${uniteChoisie===u?'on':''}" onclick="choisirUnite('${u}')">${u}</button>`).join('')}
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-p" onclick="enregistrer()">Enregistrer</button>
+            <button class="btn" onclick="ouvrir(null)">Annuler</button>
+          </div>
+          <p class="note">Dans Odoo cet article se compte en <b>${a.u}</b>. Tu peux noter dans une autre unité, la conversion se fait toute seule.</p>
+        </div>`
+      }
+    }
+    html += `</div>`
+  }
+  e.innerHTML = html
+
+  const total = Object.keys(faits).length
+  document.getElementById('bcpt').textContent = total===0 ? 'Rien de déclaré' :
+    `${total} article${total>1?'s':''} déclaré${total>1?'s':''}`
+  const d = new Date(dInput.value+'T12:00:00')
+  document.getElementById('bdate').textContent = d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})
+  feuille()
+}
+
+// La feuille imprimée : ce qui est déclaré en chiffres, le reste en lignes
+// vides à remplir à la main dans l'atelier.
+function feuille(){
+  const d = new Date(dInput.value+'T12:00:00')
+  let html = `<h3>Fabrication Prod</h3>
+    <p class="quand">${d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+    <table><thead><tr><th>Article</th><th style="text-align:right">Quantité faite</th></tr></thead><tbody>`
+  for(const fam of ['Finitions','Autres']){
+    html += `<tr><td class="fam" colspan="2">${fam}</td></tr>`
+    for(const a of ARTICLES.filter(x=>x.f===fam)){
+      const f = faits[a.n]
+      html += `<tr><td>${propre(a.n)}</td>` +
+        (f ? `<td class="q">${nb(f.q)} ${f.u}</td>` : `<td class="q vide">&nbsp;</td>`) + `</tr>`
+    }
+  }
+  html += `</tbody></table>`
+  document.getElementById('feuille').innerHTML = html
+}
+
+dessine()
+</script>
+</body>
+</html>
