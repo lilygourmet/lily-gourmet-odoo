@@ -579,7 +579,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       }
       // une tournée lancée ailleurs (glaçage, pâte à sucre) encore ouverte
       const ord = parOrdre.get(cle)
-      if (ord) {
+      // un ordre terminé a déjà versé sa production dans le stock d'Odoo :
+      // le recompter ici le doublerait
+      if (ord && ord.etat !== 'done') {
         if (!dedieeAUnGateau(ord)) bouge(ord.produit, enKg(ord.qty, ord.unite).q)
         comptes.add(ord.produit)
       }
@@ -721,12 +723,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // Tous les ordres déjà déclarés, quelle que soit la coche.
   const ordresDeclares = useMemo(() => {
     const out = new Set()
+    // Un ordre terminé dans Odoo est fait, même si sa coche date d'hier : la
+    // crème validée hier soir ne doit pas être redemandée ce matin.
+    for (const o of (data && data.ordres) || []) if (o.etat === 'done') out.add(o.name)
     for (const [cle, info] of Object.entries(faits)) {
       if (!cle.startsWith('PREP:')) out.add(cle)
       for (const n of (info && info.ordres) || []) out.add(n)
     }
     return out
-  }, [faits])
+  }, [faits, data])
 
   // Ce composant a-t-il été déclaré POUR CE GÂTEAU ? On regarde les ordres
   // retenus au moment de la coche, pas le nom de la crème : deux gâteaux du même
@@ -947,7 +952,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const ordresAValider = useMemo(() => {
     const tous = (data && data.ordres) || []
     const out = new Set()
-    const ouverts = new Set(tous.map(o => o.name))
+    const ouverts = new Set(tous.filter(o => o.etat !== 'done').map(o => o.name))
     for (const o of gateaux) if (faits[o.name]) out.add(o.name)
     // les ordres créés ailleurs (tournées de glaçage) : la clé EST le nom d'ordre
     for (const c of Object.keys(faits)) if (/^WH.*\/MO\//i.test(c) && ouverts.has(c)) out.add(c)

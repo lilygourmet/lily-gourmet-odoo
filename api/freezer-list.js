@@ -734,6 +734,19 @@ async function fetchFabrication(uid, jours) {
       'date_planned_start', 'components_availability', 'location_src_id'],
   { limit: 500, order: 'date_planned_start asc' })
 
+  // Les préparations TERMINÉES ces derniers jours. Sans elles, une crème faite
+  // hier et validée disparaît de l'écran : l'app la redemanderait aujourd'hui
+  // alors qu'elle est faite et réservée pour son gâteau (cas WHLVP/MO/200441).
+  // Elles n'entrent QUE dans la liste des ordres, jamais dans les gâteaux à faire.
+  const jFinis = new Date(j0); jFinis.setDate(jFinis.getDate() - 10)
+  const finis = await odooSearchRead(uid, 'mrp.production', [
+    ['state', '=', 'done'],
+    ['product_id.name', 'ilike', 'CD*'],
+    ['date_planned_start', '>=', iso(jFinis)],
+  ], ['id', 'name', 'origin', 'state', 'product_id', 'product_qty', 'product_uom_id',
+      'date_planned_start', 'components_availability', 'location_src_id'],
+  { limit: 500, order: 'date_planned_start desc' })
+
   const nom = m => (Array.isArray(m.product_id) ? m.product_id[1] : '') || ''
   const uom = m => {
     const u = (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : '') || 'u'
@@ -964,7 +977,7 @@ async function fetchFabrication(uid, jours) {
     }
   }
 
-  const ordres = mos.map(m => ({
+  const ordres = [...mos, ...finis].map(m => ({
     name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
     etat: m.state, dispo: m.components_availability || '',
     origine: m.origin || '',
