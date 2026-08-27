@@ -45,51 +45,6 @@ const DESTINATIONS = {
 // n'affecte aucun stock). Le nom réel est porté par la description de la ligne.
 const AUTRE_ACHAT = 3159
 
-// Les articles marqués `achat` ne sont pas en stock au magasin : on les
-// COMMANDE. Leur ligne part en demande de prix (bon fournisseur en brouillon)
-// dans l'Odoo principal, une par fournisseur — comme pour LG traiteur.
-// 76 = « Entrepôt Lily VP: Réceptions vers stock de vente » : la marchandise
-// arrive là où va déjà le stock de la boutique.
-const ACHAT_PICKING_TYPE = 76
-
-/**
- * Le fournisseur chez qui on prend HABITUELLEMENT cet article : le plus
- * fréquent sur les 12 derniers mois, pas le dernier — un dépannage ponctuel
- * chez Marjane ne doit pas devenir le fournisseur par défaut. À défaut
- * d'historique, le fournisseur déclaré sur la fiche article.
- * Renvoie { id, nom, prix } ou null.
- */
-async function fournisseurHabituel(uid, pid) {
-  const depuis = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)
-  const lignes = await exec(uid, 'purchase.order.line', 'search_read',
-    [[['product_id', '=', pid], ['create_date', '>=', depuis]]],
-    { fields: ['order_id', 'price_unit'], order: 'id desc', limit: 40 })
-  if (lignes.length) {
-    const cmds = await exec(uid, 'purchase.order', 'read',
-      [[...new Set(lignes.map(l => l.order_id[0]))], ['partner_id']])
-    const partnerOf = new Map(cmds.map(c => [c.id, c.partner_id]))
-    const compte = new Map()
-    for (const l of lignes) {
-      const p = partnerOf.get(l.order_id[0])
-      if (!p) continue
-      compte.set(p[0], (compte.get(p[0]) || 0) + 1)
-    }
-    const [meilleur] = [...compte.entries()].sort((a, b) => b[1] - a[1])
-    if (meilleur) {
-      const fid = meilleur[0]
-      // Le prix le plus récent CHEZ CE FOURNISSEUR, pour ne pas partir de zéro.
-      const recente = lignes.find(l => (partnerOf.get(l.order_id[0]) || [])[0] === fid)
-      const nom = (cmds.find(c => c.partner_id[0] === fid) || {}).partner_id[1]
-      return { id: fid, nom, prix: recente ? recente.price_unit : 0 }
-    }
-  }
-  const [info] = await exec(uid, 'product.supplierinfo', 'search_read',
-    [[['product_tmpl_id.product_variant_ids', '=', pid]]],
-    { fields: ['partner_id', 'price'], order: 'sequence asc, id asc', limit: 1 })
-  if (info) return { id: info.partner_id[0], nom: info.partner_id[1], prix: info.price || 0 }
-  return null
-}
-
 // ── Odoo LG traiteur (2e base, société « LG traiteur ») ────────────────
 // Les articles marqués odoo_source = 'lgt' n'existent QUE là-bas. Ce ne sont
 // pas des transferts internes mais des ACHATS : on crée une DEMANDE DE PRIX
@@ -203,10 +158,7 @@ export default async function handler(req, res) {
     // Les articles LG traiteur partent dans l'autre Odoo : ils ne dépendent
     // pas du badge, mais de leur fournisseur.
     const lignesLgt = lignes.filter(l => l.source === 'lgt')
-    // Achat : seulement si l'article est relié à Odoo — sans produit, aucun
-    // fournisseur possible, la ligne reste dans le transfert interne.
-    const lignesAchat = lignes.filter(l => l.source !== 'lgt' && l.achat && l.odooProductId)
-    const lignesLg = lignes.filter(l => l.source !== 'lgt' && !lignesAchat.includes(l))
+    const lignesLg = lignes.filter(l => l.source !== 'lgt')
 
     const dest = DESTINATIONS[badge]
     if (lignesLg.length && !dest) {
@@ -220,7 +172,7 @@ export default async function handler(req, res) {
     const origine = `ÉCONOMAT — ${demandeur || 'demande'}${badgeLabel ? ` (${badgeLabel})` : ''}`
     const transferts = []
 
-    const uid = (lignesLg.length || lignesAchat.length) ? await auth() : null
+    const uid = lignesLg.length ? await auth() : null
 
     // Unité de chaque produit. Par défaut l'unité d'ACHAT (uom_po_id), celle
     // qu'affiche l'économat : « 1 » sur « Chocolat Callebaut Couverture Noir »
@@ -273,47 +225,6 @@ export default async function handler(req, res) {
       }])
       const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
       transferts.push({ source: 'principal', id, name: pick?.name, state: pick?.state, fournisseur: null })
-    }
-
-    // 1bis) Odoo Lily Gourmet : les articles qu'on COMMANDE (fruits) partent en
-    //       demande de prix, une par fournisseur, au lieu du transfert interne.
-    if (lignesAchat.length) {
-      const choisirUom = await uomChooser(exec, uid, lignesAchat, false)
-      const demain = new Date(Date.now() + 86400000).toISOString().slice(0, 19).replace('T', ' ')
-      const parFournisseur = new Map()
-      const sansFournisseur = []
-      for (const l of lignesAchat) {
-        const f = await fournisseurHabituel(uid, Number(l.odooProductId))
-        if (!f) { sansFournisseur.push(l); continue }
-        if (!parFournisseur.has(f.id)) parFournisseur.set(f.id, { nom: f.nom, lignes: [] })
-        parFournisseur.get(f.id).lignes.push({ ...l, prix: f.prix })
-      }
-      if (sansFournisseur.length) {
-        transferts.push({ source: 'achat', erreur: 'sans fournisseur',
-          articles: sansFournisseur.map(l => l.nom), fournisseur: null })
-      }
-      for (const [fid, lot] of parFournisseur) {
-        const id = await exec(uid, 'purchase.order', 'create', [{
-          partner_id: fid,
-          picking_type_id: ACHAT_PICKING_TYPE,
-          origin: origine,
-          date_planned: demain,
-          order_line: lot.lignes.map(l => {
-            const pid = Number(l.odooProductId)
-            return [0, 0, {
-              product_id: pid,
-              name: String(l.nom || '').slice(0, 200),
-              product_qty: Number(l.qty) || 1,
-              product_uom: choisirUom(pid, l.unite),
-              // Dernier prix payé chez ce fournisseur : un repère, modifiable.
-              price_unit: Number(l.prix) || 0,
-              date_planned: demain,
-            }]
-          }),
-        }])
-        const [po] = await exec(uid, 'purchase.order', 'read', [[id], ['name', 'state']])
-        transferts.push({ source: 'achat', id, name: po?.name, state: po?.state, fournisseur: lot.nom })
-      }
     }
 
     // 2) Odoo LG traiteur : une DEMANDE DE PRIX par fournisseur.
