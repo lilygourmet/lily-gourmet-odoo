@@ -1290,6 +1290,51 @@ export default async function handler(req, res) {
       })
     }
 
+    // Ce que l'équipe fabrique AUSSI dans le même lieu, en dehors du cake
+    // design : ça n'apparaît nulle part dans l'écran CD* alors que ça occupe la
+    // même équipe et pioche dans le même stock. Information seule, rien à faire.
+    if (req.query.mode === 'hors-cd') {
+      const jours = Math.min(60, Math.max(1, parseInt(req.query.jours) || 7))
+      const uid = await odooAuth()
+      const modele = await modeleWhlvp(uid)
+      const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
+      if (!lieu) return res.status(200).json({ jours: [], lieu: '' })
+
+      const d0 = new Date(); d0.setHours(0, 0, 0, 0)
+      const dFin = new Date(d0); dFin.setDate(dFin.getDate() + jours)
+      const dDeb = new Date(d0); dDeb.setDate(dDeb.getDate() - 30)   // les retards comptent aussi
+      const isoD = d => d.toISOString().slice(0, 19).replace('T', ' ')
+      const mos = await odooSearchRead(uid, 'mrp.production', [
+        ['state', 'in', ['confirmed', 'progress', 'to_close']],
+        ['location_src_id', '=', lieu],
+        ['date_planned_start', '>=', isoD(dDeb)],
+        ['date_planned_start', '<=', isoD(dFin)],
+      ], ['name', 'product_id', 'product_qty', 'product_uom_id', 'date_planned_start', 'state'],
+      { limit: 900, order: 'date_planned_start asc' })
+
+      const parJour = new Map()
+      for (const m of mos) {
+        const nomP = Array.isArray(m.product_id) ? m.product_id[1] : ''
+        if (/CD\*/.test(nomP)) continue                    // le cake design a déjà son écran
+        const jour = String(m.date_planned_start || '').slice(0, 10)
+        if (!parJour.has(jour)) parJour.set(jour, new Map())
+        const parArticle = parJour.get(jour)
+        const u = ((Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u')
+        const cle = nomP + '|' + u
+        const d = parArticle.get(cle) || { produit: nomP, unite: u, qty: 0, nb: 0 }
+        d.qty += m.product_qty || 0
+        d.nb += 1
+        parArticle.set(cle, d)
+      }
+      return res.status(200).json({
+        lieu: Array.isArray(modele.location_src_id) ? modele.location_src_id[1] : '',
+        jours: [...parJour.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([jour, m]) => ({
+          jour,
+          lignes: [...m.values()].sort((a, b) => b.nb - a.nb || a.produit.localeCompare(b.produit)),
+        })),
+      })
+    }
+
     // suggestions d'articles quand on ajoute un ingrédient à la main.
     // On ne propose QUE ce qui est rangé dans le lieu de l'ordre
     // (WHLVP/Stock/Stock Prod) : ailleurs, l'article n'est pas sous la main.

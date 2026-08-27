@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, saveBasesChoisies } from '../lib/fabrication'
+import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, saveBasesChoisies, loadHorsCd } from '../lib/fabrication'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
@@ -436,6 +436,75 @@ function ValiderModal({ ordres, user, onClose, onFini }) {
               <button onClick={() => setConfirmer(false)} className="rounded-xl py-3 px-4 text-[14px] border border-line">Annuler</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Ce que l'équipe fabrique AUSSI dans le même lieu, en dehors du cake design.
+ * Information seule : rien à cocher, rien à valider. On ne la charge qu'au
+ * moment où on l'ouvre — l'écran est déjà assez long à s'afficher.
+ */
+function HorsCd() {
+  const [ouvert, setOuvert] = useState(false)
+  const [data, setData] = useState(null)
+  const [erreur, setErreur] = useState(null)
+
+  const ouvrir = () => {
+    setOuvert(o => !o)
+    if (!data && !erreur) {
+      loadHorsCd(14).then(setData).catch(e => setErreur(e.message || String(e)))
+    }
+  }
+
+  const nomJour = j => {
+    const a = aujourdhui()
+    if (j === a) return "aujourd'hui"
+    const d = new Date(a); d.setDate(d.getDate() + 1)
+    if (j === d.toLocaleDateString('sv-SE', CASA)) return 'demain'
+    const q = new Date(j + 'T12:00:00')
+    const txt = q.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+    return j < a ? `${txt} — en retard` : txt
+  }
+
+  return (
+    <div className="mt-8">
+      <button onClick={ouvrir}
+        className="w-full text-left bg-cream-warm border border-line rounded-2xl px-4 py-3">
+        <span className="text-[14px] font-bold">{ouvert ? '▾' : '▸'} Aussi produit en Stock Prod</span>
+        <span className="block text-[12px] text-ink-mute mt-0.5">
+          hors cake design — pour information, il n'y a rien à faire ici
+        </span>
+      </button>
+
+      {ouvert && (
+        <div className="mt-2">
+          {erreur && <p className="text-[13px] text-danger px-1">Impossible de lire Odoo : {erreur}</p>}
+          {!data && !erreur && <Skeleton rows={3} />}
+          {data && !data.jours.length && (
+            <p className="text-ink-mute text-[13.5px] px-1 py-3">Rien d'autre de prévu.</p>
+          )}
+          {data && data.jours.map(j => (
+            <div key={j.jour} className="mb-3">
+              <div className={'text-[12px] font-bold uppercase tracking-wide mb-1 ' +
+                (j.jour < aujourdhui() ? 'text-[#854F0B]' : 'text-bordeaux')}>
+                {nomJour(j.jour)}
+              </div>
+              <div className="bg-white border border-line rounded-xl overflow-hidden">
+                {j.lignes.map((l, i) => (
+                  <div key={i} className="flex items-baseline gap-2.5 px-3 py-1.5 border-b border-[#f0e8db] last:border-0">
+                    <span className="text-[13px] font-bold text-ink-soft w-[62px] shrink-0 text-right">
+                      {nb(l.qty)} {l.unite}
+                    </span>
+                    <span className="text-[13.5px] flex-1 min-w-0">{l.produit}</span>
+                    {l.nb > 1 && <span className="text-[11.5px] text-ink-mute shrink-0">{l.nb} ordres</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1341,6 +1410,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   ))}
                 </>
               )}
+
+              <HorsCd />
             </>
           )}
         </div>

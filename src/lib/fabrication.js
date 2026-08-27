@@ -148,6 +148,13 @@ export async function validerDansOdoo(ordres, forcer, actorId, quantites = null,
   return data.resultats || []
 }
 
+/** Ce que l'équipe fabrique aussi dans le même lieu, hors cake design (info seule). */
+export async function loadHorsCd(jours = 14) {
+  const r = await fetch(`/api/freezer-list?mode=hors-cd&jours=${jours}`)
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return await r.json()
+}
+
 /** Articles Odoo dont le nom contient ce qu'on tape (pour ajouter un ingrédient). */
 export async function chercherArticles(q) {
   if (!q || q.trim().length < 2) return []
