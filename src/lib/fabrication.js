@@ -137,15 +137,23 @@ export async function loadManques(ordres) {
  * `forcer` = passer outre les confirmations d'Odoo (stock insuffisant).
  * Renvoie [{ name, ok, message }].
  */
-export async function validerDansOdoo(ordres, forcer, actorId, quantites = null) {
+export async function validerDansOdoo(ordres, forcer, actorId, quantites = null, ajouts = null) {
   const r = await fetch('/api/freezer-list?mode=valider', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ordres, forcer: !!forcer, actorId, quantites, test: estModeTest() }),
+    body: JSON.stringify({ ordres, forcer: !!forcer, actorId, quantites, ajouts, test: estModeTest() }),
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
   return data.resultats || []
+}
+
+/** Articles Odoo dont le nom contient ce qu'on tape (pour ajouter un ingrédient). */
+export async function chercherArticles(q) {
+  if (!q || q.trim().length < 2) return []
+  const r = await fetch(`/api/freezer-list?mode=articles&q=${encodeURIComponent(q.trim())}`)
+  if (!r.ok) return []
+  return (await r.json()).articles || []
 }
 
 /** Recette d'une préparation (glaçage, pâte à sucre) + stock des ingrédients, en grammes. */

@@ -287,7 +287,7 @@ async function reserverPourLeParent(uid, mo) {
   return pm.map(m => m.name).join(', ')
 }
 
-async function validerOrdre(uid, name, forcer, quantites = null) {
+async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null) {
   const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', name]],
     ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_id', 'location_src_id', 'company_id', 'origin']))[0]
   if (!mo) return { name, ok: false, message: 'ordre introuvable' }
@@ -297,6 +297,27 @@ async function validerOrdre(uid, name, forcer, quantites = null) {
     const glacage = await integrerGlacage(uid, mo)
     if (!mo.qty_producing || mo.qty_producing !== mo.product_qty) {
       await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: mo.product_qty }])
+    }
+    // Un ingrédient que la recette ne prévoyait pas : on l'ajoute à l'ordre.
+    // Passer par `write` sur la production (et non par un stock.move seul) est
+    // ce qui fait qu'Odoo confirme la nouvelle ligne au lieu de la laisser en
+    // brouillon — une ligne brouillon ne serait pas consommée à la validation.
+    for (const a of ajouts || []) {
+      const q = Number(a.qty)
+      if (!(q > 0) || !a.produit) continue
+      const lp = await lieuProduction(uid)
+      await odooCall(uid, 'mrp.production', 'write', [[mo.id], {
+        move_raw_ids: [[0, 0, {
+          name: Array.isArray(mo.product_id) ? mo.product_id[1] : name,
+          product_id: Number(a.produit),
+          product_uom_qty: q,
+          product_uom: Number(a.uom) || undefined,
+          location_id: mo.location_src_id[0],
+          location_dest_id: lp ? lp.id : mo.location_src_id[0],
+          company_id: mo.company_id[0],
+          quantity_done: q,
+        }]],
+      }])
     }
     // Ce que l'équipe a noté à l'écran fait foi : on l'écrit avant tout le reste.
     for (const [moveId, valeur] of Object.entries(quantites || {})) {
@@ -1098,7 +1119,7 @@ export default async function handler(req, res) {
       }
       const uid = await odooAuth()
       const out = []
-      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true, (body.quantites || {})[n]))
+      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true, (body.quantites || {})[n], (body.ajouts || {})[n]))
       console.log(`[fabrication:valider] par ${body.actorId || '?'} · forcer=${body.forcer === true} · ${out.map(o => o.name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
       return res.status(200).json({ resultats: out })
     }
@@ -1115,6 +1136,24 @@ export default async function handler(req, res) {
         ['name', 'product_id', 'state'], { limit: 500, order: 'id desc' })
       return res.status(200).json({
         ordres: mos.map(m => ({ name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', etat: m.state })),
+      })
+    }
+
+    // suggestions d'articles quand on ajoute un ingrédient à la main
+    if (req.query.mode === 'articles') {
+      const q = String(req.query.q || '').trim()
+      if (q.length < 2) return res.status(200).json({ articles: [] })
+      const uid = await odooAuth()
+      // pas de filtre sur `type` : Odoo 19 en a changé les valeurs, on
+      // écarterait tout le catalogue sans s'en apercevoir
+      const arts = await odooSearchRead(uid, 'product.product',
+        [['name', 'ilike', q]], ['display_name', 'uom_id'], { limit: 20, order: 'name' })
+      return res.status(200).json({
+        articles: arts.map(a => ({
+          id: a.id, nom: a.display_name,
+          uom: Array.isArray(a.uom_id) ? a.uom_id[0] : null,
+          unite: Array.isArray(a.uom_id) ? a.uom_id[1] : '',
+        })),
       })
     }
 

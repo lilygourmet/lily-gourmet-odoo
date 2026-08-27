@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadOrdres, loadFaits, loadManques, validerDansOdoo, dernierEcran, garderEcran } from '../lib/fabrication'
+import { loadOrdres, loadFaits, loadManques, validerDansOdoo, chercherArticles, dernierEcran, garderEcran } from '../lib/fabrication'
 
 // ====== « À valider » : la page dédiée ======
 // Tout ce que l'équipe a marqué « fait » (montages, préparations, tournées de
@@ -16,6 +16,52 @@ const propre = n => String(n || '')
   .replace(/^SM\.?\s*/i, '').replace(/^CD\*\s*/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
   .replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\baccs\b/i, '').trim()
 
+/**
+ * Champ de recherche d'un article Odoo : on tape, il propose.
+ * Sert à noter un ingrédient que la recette ne prévoyait pas.
+ */
+function AjoutIngredient({ onChoisir }) {
+  const [q, setQ] = useState('')
+  const [res, setRes] = useState([])
+  const [cherche, setCherche] = useState(false)
+
+  useEffect(() => {
+    if (q.trim().length < 2) return
+    let vivant = true
+    // on attend une petite pause avant d'interroger Odoo, sinon une question
+    // partirait à chaque lettre tapée
+    const t = setTimeout(async () => {
+      try { const a = await chercherArticles(q); if (vivant) setRes(a) } catch { if (vivant) setRes([]) }
+      if (vivant) setCherche(false)
+    }, 300)
+    return () => { vivant = false; clearTimeout(t) }
+  }, [q])
+
+  return (
+    <div className="mt-2">
+      <input value={q} onChange={e => {
+          setQ(e.target.value)
+          setRes([])
+          setCherche(e.target.value.trim().length >= 2)
+        }}
+        placeholder="+ ajouter un ingrédient (tape son nom)"
+        className="w-full text-[13.5px] border border-line rounded-lg px-3 py-2 bg-white" />
+      {q.trim().length >= 2 && (
+        <div className="mt-1 border border-line rounded-lg bg-white max-h-[190px] overflow-y-auto">
+          {cherche && <div className="px-3 py-2 text-[12.5px] text-ink-mute">recherche…</div>}
+          {!cherche && !res.length && <div className="px-3 py-2 text-[12.5px] text-ink-mute">aucun article de ce nom</div>}
+          {res.map(a => (
+            <button key={a.id} onClick={() => { onChoisir(a); setQ(''); setRes([]) }}
+              className="w-full text-left px-3 py-2 text-[13px] border-b border-[#f0e8db] last:border-0 hover:bg-cream-warm">
+              {a.nom} <span className="text-ink-mute text-[11.5px]">({a.unite})</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ValidationView({ user, onLogout, onNavigate, activeView }) {
   const [lignes, setLignes] = useState(() => dernierEcran('valider'))
   const [sel, setSel] = useState(() => (dernierEcran('valider') || []).map(x => x.name))
@@ -26,6 +72,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const [tour, setTour] = useState(0)
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
   const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
+  const [ajouts, setAjouts] = useState({})        // { ordre: [ingrédients ajoutés à la main] }
 
   useEffect(() => {
     let vivant = true
@@ -84,7 +131,16 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
       }
       if (Object.keys(conv).length) aEnvoyer[n] = conv
     }
-    try { setResultats(await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer)) }
+    const enPlus = {}
+    for (const n of cibles) {
+      const liste = (ajouts[n] || []).filter(a => Number(a.qty) > 0)
+      if (!liste.length) continue
+      enPlus[n] = liste.map(a => ({
+        produit: a.produit, uom: a.uom,
+        qty: Number(a.qty) / (norm(a.unite) === 'kg' ? 1000 : 1),
+      }))
+    }
+    try { setResultats(await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer, enPlus)) }
     catch (e) { toast.error(e.message || String(e)) }
     setEnvoi(false)
   }
@@ -191,13 +247,38 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                           </div>
                         )
                       })}
+
+                      {(ajouts[l.name] || []).map((a, i) => (
+                        <div key={'a' + i} className="flex items-center gap-2.5 py-1.5 border-b border-dashed border-[#f0e8db]">
+                          <span className="flex-1 text-[13.5px] min-w-0 text-bordeaux">{propre(a.nom)}</span>
+                          <input type="number" min="0" step="any" inputMode="decimal" value={a.qty}
+                            onChange={e => setAjouts(m => ({
+                              ...m,
+                              [l.name]: (m[l.name] || []).map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)),
+                            }))}
+                            className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                          <span className="text-[12px] text-ink-mute w-[26px]">{norm(a.unite) === 'kg' ? 'g' : a.unite}</span>
+                          <button onClick={() => setAjouts(m => ({
+                            ...m, [l.name]: (m[l.name] || []).filter((_, j) => j !== i),
+                          }))} className="text-ink-mute text-[15px] px-1" title="retirer">✕</button>
+                        </div>
+                      ))}
+
+                      <AjoutIngredient onChoisir={a => setAjouts(m => ({
+                        ...m,
+                        [l.name]: [...(m[l.name] || []), { produit: a.id, nom: a.nom, uom: a.uom, unite: a.unite, qty: '' }],
+                      }))} />
+
                       <div className="flex gap-2 mt-2.5">
                         <button onClick={() => setOuvert(null)}
                           className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
                           fermer sans changer
                         </button>
-                        {notes[l.name] && (
-                          <button onClick={() => setNotes(n => { const s2 = { ...n }; delete s2[l.name]; return s2 })}
+                        {(notes[l.name] || ajouts[l.name]) && (
+                          <button onClick={() => {
+                            setNotes(n => { const s2 = { ...n }; delete s2[l.name]; return s2 })
+                            setAjouts(m => { const s2 = { ...m }; delete s2[l.name]; return s2 })
+                          }}
                             className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-mute">
                             revenir à la recette
                           </button>
