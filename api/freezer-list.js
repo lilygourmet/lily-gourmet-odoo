@@ -1290,147 +1290,123 @@ export default async function handler(req, res) {
       })
     }
 
-    // L'arbre de l'annexe : ce qui s'y fabrique vraiment, et de quoi c'est fait.
-    // On part des ordres terminés là-bas, puis on descend les nomenclatures.
+    // L'arbre de l'annexe. Le premier écran montre les MÈRES — entremets (E-),
+    // viennoiseries (V-), mignardises (MI-) et bûches (N-) — et l'on descend
+    // vers les préparations. Jamais un morceau tout seul : il se trouve dans sa
+    // mère (règle de Layla, 28/08).
     if (req.query.mode === 'annexe') {
       const uid = await odooAuth()
       const lieux = await odooSearchRead(uid, 'stock.location',
         [['complete_name', 'ilike', 'Stock Prod annexe']], ['id'], { limit: 5 })
       if (!lieux.length) return res.status(200).json({ racines: [], recettes: {} })
 
+      const net = n => String(n || '').replace(/^\[\d+\]\s*/, '').trim()
+      // Odoo écrit les liens sur le MODÈLE (« Sm- PR Le Citron Framboise »)
+      // alors que l'atelier fabrique des VARIANTES (« … (10) ») : sans ça on
+      // perd des chaînes entières.
+      const modele = n => net(n).replace(/\s*\([^()]*\)\s*$/, '').trim()
+      const uniteDe = u => ((Array.isArray(u) ? u[1] : '') || 'u').replace(/^units?$/i, 'u')
+
       const d0 = new Date(); d0.setDate(d0.getDate() - 90)
       const isoD = d => d.toISOString().slice(0, 19).replace('T', ' ')
-      const mos = await odooSearchRead(uid, 'mrp.production', [
-        ['location_src_id', 'in', lieux.map(l => l.id)],
-        ['state', '=', 'done'],
-        ['date_planned_start', '>=', isoD(d0)],
-      ], ['product_id'], { limit: 3000 })
+      const [mos, boms, lignesBom, tmpl] = await Promise.all([
+        odooSearchRead(uid, 'mrp.production', [
+          ['location_src_id', 'in', lieux.map(l => l.id)],
+          ['state', '=', 'done'],
+          ['date_planned_start', '>=', isoD(d0)],
+        ], ['product_id'], { limit: 3000 }),
+        odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 }),
+        odooSearchRead(uid, 'mrp.bom.line', [], ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 40000 }),
+        odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 }),
+      ])
 
       const combien = {}
       for (const m of mos) {
-        const n = (Array.isArray(m.product_id) ? m.product_id[1] : '').replace(/^\[\d+\]\s*/, '')
+        const n = net(Array.isArray(m.product_id) ? m.product_id[1] : '')
         if (n) combien[n] = (combien[n] || 0) + 1
       }
 
-      // Les recettes, en descendant : d'abord celles des articles produits,
-      // puis celles de leurs composants fabriqués, sur quelques niveaux.
-      const recettes = {}
-      let aVoir = Object.keys(combien)
-      for (let niveau = 0; niveau < 4 && aVoir.length; niveau += 1) {
-        const prods = await odooSearchRead(uid, 'product.product', [['name', 'in', aVoir]],
-          ['id', 'name', 'product_tmpl_id'], { limit: 600 })
-        if (!prods.length) break
-        const boms = await odooSearchRead(uid, 'mrp.bom', [
-          '|', ['product_id', 'in', prods.map(p => p.id)],
-          ['product_tmpl_id', 'in', prods.map(p => p.product_tmpl_id[0])],
-        ], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 900 })
-        if (!boms.length) break
-        const lignes = await odooSearchRead(uid, 'mrp.bom.line',
-          [['bom_id', 'in', boms.map(b => b.id)]],
-          ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 6000 })
-        const parBom = new Map()
-        for (const l of lignes) {
-          const id = Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id
-          if (!parBom.has(id)) parBom.set(id, [])
-          parBom.get(id).push({
-            produit: (Array.isArray(l.product_id) ? l.product_id[1] : '').replace(/^\[\d+\]\s*/, ''),
-            qty: l.product_qty,
-            unite: ((Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
-            fabrique: /^\s*(\[\d+\]\s*)?SM/i.test(Array.isArray(l.product_id) ? l.product_id[1] : ''),
-          })
-        }
-        const parProduit = new Map(prods.map(p => [p.id, p.name]))
-        const parTmpl = new Map(prods.map(p => [p.product_tmpl_id[0], p.name]))
-        const suivant = new Set()
-        for (const b of boms) {
-          const nom = (b.product_id && parProduit.get(b.product_id[0]))
-            || (b.product_tmpl_id && parTmpl.get(b.product_tmpl_id[0]))
-          if (!nom || recettes[nom]) continue
-          const ing = parBom.get(b.id) || []
-          recettes[nom] = {
-            sortQty: b.product_qty,
-            sortUnite: ((Array.isArray(b.product_uom_id) ? b.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
-            lignes: ing,
-          }
-          for (const l of ing) if (l.fabrique && !recettes[l.produit]) suivant.add(l.produit)
-        }
-        aVoir = [...suivant]
-      }
-
-      // On ne garde que ce qui sert vraiment aux gâteaux de la maison : on part
-      // des entremets (E-), viennoiseries (V-), mignardises (MI-) et bûches
-      // (N-), et on descend leurs recettes. Les chocolats (RA-), les coffrets
-      // (GM-) et les fiches « archive » ne concernent pas l'annexe.
-      // Piège : Odoo écrit ces liens sur le MODÈLE (« Sm- PR Le Citron
-      // Framboise ») alors que l'atelier fabrique des VARIANTES (« … (10) ») —
-      // sans en tenir compte on perd toute une chaîne.
-      const modele = n => String(n || '').replace(/\s*\([^()]*\)\s*$/, '').trim()
-      const estFini = n => /^(E-|V-|MI-|N-)/i.test(String(n || ''))
-
-      // Les entremets finis sont montés ailleurs : leurs recettes ne sont pas
-      // dans ce qu'on vient de lire. On prend donc la carte complète des
-      // nomenclatures — c'est elle qui dit à quel gâteau sert chaque
-      // préparation. Une seule fois, le résultat est gardé par l'écran.
-      const [tousBoms, toutesLignes, tousTmpl] = await Promise.all([
-        odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id'], { limit: 5000 }),
-        odooSearchRead(uid, 'mrp.bom.line', [], ['bom_id', 'product_id'], { limit: 40000 }),
-        odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 }),
-      ])
-      const nomTmpl = new Map(tousTmpl.map(t => [t.id, String(t.name || '').replace(/^\[\d+\]\s*/, '').trim()]))
+      const nomTmpl = new Map(tmpl.map(t => [t.id, net(t.name)]))
       const ingParBom = new Map()
-      for (const l of toutesLignes) {
+      for (const l of lignesBom) {
         const id = Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id
         if (!ingParBom.has(id)) ingParBom.set(id, [])
-        ingParBom.get(id).push((Array.isArray(l.product_id) ? l.product_id[1] : '').replace(/^\[\d+\]\s*/, '').trim())
+        ingParBom.get(id).push({
+          produit: net(Array.isArray(l.product_id) ? l.product_id[1] : ''),
+          qty: l.product_qty,
+          unite: uniteDe(l.product_uom_id),
+          fabrique: /^\s*(SM|Sm)/.test(net(Array.isArray(l.product_id) ? l.product_id[1] : '')),
+        })
       }
-      // la recette d'un nom, rangée aussi sous son modèle
-      const carte = new Map()
-      for (const b of tousBoms) {
-        const nom = b.product_id
-          ? String(b.product_id[1]).replace(/^\[\d+\]\s*/, '').trim()
+      // toutes les recettes, rangées sous le nom exact ET sous le modèle
+      const carte = {}
+      for (const b of boms) {
+        const nom = b.product_id ? net(b.product_id[1])
           : nomTmpl.get(Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id)
         if (!nom) continue
-        const ing = ingParBom.get(b.id) || []
-        if (!carte.has(nom)) carte.set(nom, ing)
-        if (!carte.has(modele(nom))) carte.set(modele(nom), ing)
+        const r = {
+          sortQty: b.product_qty,
+          sortUnite: uniteDe(b.product_uom_id),
+          lignes: ingParBom.get(b.id) || [],
+        }
+        if (!carte[nom]) carte[nom] = r
+        if (!carte[modele(nom)]) carte[modele(nom)] = r
       }
+      const recetteDe = n => carte[n] || carte[modele(n)]
+      const estFini = n => /^(E-|V-|MI-|N-)/i.test(n)
+      const aLAnnexe = n => combien[n] !== undefined || combien[modele(n)] !== undefined
 
-      const utiles = new Set()
-      const descendre = (nom, prof, vus) => {
+      // une mère : un article fini dont la fabrication passe par l'annexe
+      const touche = (nom, prof, vus) => {
+        if (prof > 6) return false
+        for (const cle of [nom, modele(nom)]) {
+          if (vus.has(cle)) continue
+          vus.add(cle)
+          for (const l of (carte[cle] || { lignes: [] }).lignes) {
+            if (aLAnnexe(l.produit)) return true
+            if (touche(l.produit, prof + 1, vus)) return true
+          }
+        }
+        return false
+      }
+      const meres = [...new Set(Object.keys(carte)
+        .filter(n => estFini(n) && (carte[n].lignes || []).length && touche(n, 0, new Set()))
+        .map(modele))]
+
+      // ce que chaque mère fait travailler à l'annexe : les plus grosses devant
+      const poids = {}
+      const compter = (nom, prof, vus) => {
+        if (prof > 6) return 0
+        let t = 0
+        for (const cle of [nom, modele(nom)]) {
+          if (vus.has(cle)) continue
+          vus.add(cle)
+          for (const l of (carte[cle] || { lignes: [] }).lignes) {
+            t += combien[l.produit] || combien[modele(l.produit)] || 0
+            t += compter(l.produit, prof + 1, vus)
+          }
+        }
+        return t
+      }
+      for (const m of meres) poids[m] = compter(m, 0, new Set())
+      const racines = meres.sort((a, b) => (poids[b] || 0) - (poids[a] || 0))
+
+      // on ne renvoie que les recettes utiles : les mères et leur descendance
+      const aRendre = {}
+      const rendre = (nom, prof, vus) => {
         if (prof > 6) return
         for (const cle of [nom, modele(nom)]) {
           if (vus.has(cle)) continue
           vus.add(cle)
-          for (const c of carte.get(cle) || []) {
-            utiles.add(c)
-            utiles.add(modele(c))
-            descendre(c, prof + 1, vus)
-          }
+          const r = recetteDe(cle)
+          if (!r) continue
+          aRendre[cle] = r
+          for (const l of r.lignes) rendre(l.produit, prof + 1, vus)
         }
       }
-      for (const nom of carte.keys()) {
-        if (estFini(nom)) descendre(nom, 0, new Set())
-      }
-      // les donuts se vendent en coffret GM-, mais l'annexe les fabrique
-      const garde = n => utiles.has(n) || utiles.has(modele(n)) || /donut/i.test(n)
+      for (const m of meres) rendre(m, 0, new Set())
 
-      // Une racine, c'est ce que l'atelier fait de plus haut dans la chaîne :
-      // aucun AUTRE article fabriqué ici ne l'utilise. On ne regarde que les
-      // recettes des articles de l'annexe — sinon l'entremets fini, monté
-      // ailleurs, ferait de chaque préparation un simple composant et il ne
-      // resterait plus une seule carte.
-      const gardes = Object.keys(combien).filter(n => garde(n))
-      const composants = new Set()
-      for (const n of gardes) {
-        for (const c of carte.get(n) || carte.get(modele(n)) || []) {
-          composants.add(c); composants.add(modele(c))
-        }
-      }
-      const racines = gardes
-        .filter(n => !composants.has(n) && !composants.has(modele(n)))
-        .sort((a, b) => combien[b] - combien[a])
-
-      return res.status(200).json({ racines, combien, recettes })
+      return res.status(200).json({ racines, combien: { ...combien, ...poids }, recettes: aRendre })
     }
 
     // Les recettes d'une liste d'articles, telles qu'Odoo les tient. L'écran
