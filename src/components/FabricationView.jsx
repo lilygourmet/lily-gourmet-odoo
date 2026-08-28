@@ -524,6 +524,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const relire = () => { setData(null); setErreur(null); setRechargement(v => v + 1) }
 
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
+  // Les bases servent tout le monde : Odoo ne doit les réserver pour personne
+  // (voir `reserverOrdres`). On lui donne leurs noms, tels que l'écran les
+  // connaît — celles reconnues au nom comme celles ajoutées par Layla.
+  const nomsDesBases = useMemo(() => {
+    const out = new Set()
+    const voir = n => { if (estBase(n)) out.add(n) }
+    for (const [p, r] of Object.entries(recettes)) { voir(p); for (const l of r.lignes) voir(l.produit) }
+    for (const o of (data && data.ofs) || []) for (const l of o.recette || []) voir(l.produit)
+    return [...out]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recettes, data, mesBases])
   // ====== Le stock tel que l'app le voit ======
   // Odoo ne bouge qu'à la validation. Entre le moment où l'équipe coche « fait »
   // et celui où on valide, l'app tient son propre compte : + ce qui vient d'être
@@ -1141,9 +1152,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     }
     // On réserve toute la descendance : Odoo ne réserve que les composants
     // directs, et la crème au beurre nature entre dans la crème, pas dans le
-    // gâteau.
+    // gâteau. Les bases, elles, sont relâchées aussitôt : elles servent tout le
+    // monde (`nomsDesBases`).
     const aReserver = [...new Set(ordres.flatMap(n => [...descendanceDe(n)]))]
-    if (aReserver.length) reserverOrdres(aReserver, on)
+    if (aReserver.length) reserverOrdres(aReserver, on, nomsDesBases)
     setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
   }

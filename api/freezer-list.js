@@ -1255,7 +1255,26 @@ export default async function handler(req, res) {
       } catch (e) {
         return res.status(200).json({ ordres: 0, message: (e.message || String(e)).slice(0, 200) })
       }
-      return res.status(200).json({ ordres: ids.length })
+      // Réserver un ordre réserve SES COMPOSANTS. Or les bases (crème au beurre
+      // nature, sirop…) servent tout le monde : on relâche aussitôt leurs
+      // lignes, sinon la coche d'un gâteau les rend indisponibles pour les
+      // autres — et l'écran redemande d'en refaire alors qu'il y en a.
+      const bases = body.on ? (body.bases || []).filter(Boolean) : []
+      let liberes = 0
+      if (bases.length) {
+        try {
+          const mv = await odooSearchRead(uid, 'stock.move',
+            [['raw_material_production_id', 'in', ids]], ['product_id'], { limit: 800 })
+          const aLiberer = mv
+            .filter(m => bases.includes((Array.isArray(m.product_id) ? m.product_id[1] : '')))
+            .map(m => m.id)
+          if (aLiberer.length) {
+            await odooCall(uid, 'stock.move', '_do_unreserve', [aLiberer])
+            liberes = aLiberer.length
+          }
+        } catch { /* la réservation est un confort, pas une condition */ }
+      }
+      return res.status(200).json({ ordres: ids.length, basesLiberees: liberes })
     }
 
     // validation dans Odoo (POST) : action irréversible, réservée à perm_valider_of côté app
