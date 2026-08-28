@@ -363,6 +363,17 @@ export async function saveUnmatchedReleveLines(lines) {
   if (error) throw error
 }
 
+// Marque les lignes du relevé que le rapprochement AUTO vient d'attribuer : elles sortent
+// de « à lier » et rejoignent « déjà liés ». Sans ça, un ré-import de la même période les
+// remettait dans « à lier » alors qu'elles étaient déjà rapprochées.
+export async function markMatchedReleveLines(lines) {
+  if (!lines || !lines.length) return
+  const { error } = await supabase
+    .from('caisse_releve_lignes')
+    .upsert(lines, { onConflict: 'key' })
+  if (error) throw error
+}
+
 // Trace d'un import de relevé bancaire (historique « qu'est-ce que j'ai déjà importé »).
 export async function saveReleveImport(row) {
   const { error } = await supabase.from('caisse_releve_imports').insert(row)
@@ -582,22 +593,30 @@ export async function clearEnveloppeReleve(envId) {
     .select('amount_cash, note_proof, proof_url, payment_method').eq('id', envId).single()
 
   // 1) Libérer une ligne déjà mémorisée et rattachée à cette enveloppe
-  await supabase.from('caisse_releve_lignes').update({ used_by: null }).eq('used_by', envId)
+  const { data: liberees } = await supabase.from('caisse_releve_lignes')
+    .update({ used_by: null }).eq('used_by', envId).select('key')
 
-  // 2) Si la ligne n'était pas mémorisée (match auto à l'import), la (ré)insérer comme LIBRE
+  // 2) Si la ligne n'était pas mémorisée (vieux rapprochement d'avant le marquage auto),
+  //    la (ré)insérer comme LIBRE — sauf si le même dépôt y est déjà (même date + même
+  //    montant) : le libellé, lui, change d'un format de relevé à l'autre, s'y fier
+  //    créerait un doublon dans « à lier ».
   const np = env?.note_proof || ''
-  if (np.includes(' · ') && !np.includes(' | ') && np !== 'Confirmé manuellement') {
+  if (!liberees?.length && np.includes(' · ') && !np.includes(' | ') && np !== 'Confirmé manuellement') {
     const sep = np.indexOf(' · ')
     const d = np.slice(0, sep)
     const label = np.slice(sep + 3)
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
       const amt = Number(env.amount_cash)
-      const type = env.payment_method === 'cash' ? 'versement' : env.payment_method === 'cheque' ? 'cheque_depot' : 'virement_recu'
-      await supabase.from('caisse_releve_lignes').upsert([{
-        key: `${d}|${Math.round(amt * 100)}|${label.slice(0, 50)}`,
-        ligne_date: d, amount: amt, label: label.slice(0, 120), type,
-        releve_url: env.proof_url, used_by: null,
-      }], { onConflict: 'key' })
+      const { data: deja } = await supabase.from('caisse_releve_lignes')
+        .select('key').eq('ligne_date', d).gte('amount', amt - 0.005).lte('amount', amt + 0.005).limit(1)
+      if (!deja?.length) {
+        const type = env.payment_method === 'cash' ? 'versement' : env.payment_method === 'cheque' ? 'cheque_depot' : 'virement_recu'
+        await supabase.from('caisse_releve_lignes').upsert([{
+          key: `${d}|${Math.round(amt * 100)}|${label.slice(0, 50)}`,
+          ligne_date: d, amount: amt, label: label.slice(0, 120), type,
+          releve_url: env.proof_url, used_by: null,
+        }], { onConflict: 'key' })
+      }
     }
   }
 

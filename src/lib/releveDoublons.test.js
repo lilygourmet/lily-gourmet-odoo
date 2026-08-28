@@ -69,3 +69,31 @@ describe('doublons des lignes à lier', () => {
     expect(out.some(l => l.doublon_probable)).toBe(false)
   })
 })
+
+// Une opération s'identifie par sa DATE et son MONTANT — pas par son libellé, que chaque
+// format de relevé écrit à sa façon (cas vécus le 2026-08-28).
+describe('doublons — le libellé n\'est pas une identité', () => {
+  it('fusionne la même opération écrite avec le n° d\'un côté et le nom de l\'autre', () => {
+    const out = marquerDoublons([
+      L('a', '2026-06-23', 300, 'VIR INST RECU 2203444 3751003105', '2026-07-22T16:00:00'),
+      L('b', '2026-06-23', 300, 'VIRT RECU MLLE MERIAM MALEK', '2026-08-07T11:50:00'),
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('garde deux virements du même jour dont les n° d\'opération diffèrent', () => {
+    const out = marquerDoublons([
+      L('a', '2026-07-29', 200, 'VIR INST RECU EL 2376336 260729308078', '2026-07-30T10:00:00'),
+      L('b', '2026-07-29', 200, 'VIR INST RECU 2378161 682183838646', '2026-08-07T11:50:00'),
+    ])
+    expect(out).toHaveLength(2)
+  })
+
+  it('garde deux clients différents du même montant à un jour d\'écart', () => {
+    const out = marquerDoublons([
+      L('a', '2026-06-05', 400, 'VIRT RECU MME SELMA BENOMAR', '2026-07-01T10:00:00'),
+      L('b', '2026-06-06', 400, 'VIRT RECU MR OMAR TAZI', '2026-08-07T11:50:00'),
+    ])
+    expect(out).toHaveLength(2)
+  })
+})

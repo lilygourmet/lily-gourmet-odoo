@@ -40,6 +40,15 @@ export function similarite(a, b) {
 
 const jours = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000)
 const libelleNorm = s => (s || '').toUpperCase().replace(/\s+/g, ' ').trim()
+// N° d'opération imprimés dans le libellé (5 chiffres et plus).
+const numeros = s => new Set((s || '').match(/\d{5,}/g) || [])
+// Deux libellés qui portent des n° d'opération et n'en partagent AUCUN = deux opérations
+// réelles (ex. 200 dh le 29/07 : n° 2376336 et 2378161). Jamais fusionnées.
+const numerosContraires = (a, b) => {
+  const na = numeros(a), nb = numeros(b)
+  if (!na.size || !nb.size) return false
+  return ![...na].some(n => nb.has(n))
+}
 // Un nom ne sert à comparer que s'il est un peu consistant : au moins 2 mots et 6 lettres.
 // Sinon (« REMISE CHEQUE A ENC 47106191 » → rien d'utile) on comparerait du bruit.
 const nomFiable = n => !!n && n.split(' ').length >= 2 && n.replace(/ /g, '').length >= 6
@@ -77,7 +86,16 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         // Deux lignes du MÊME relevé sont deux opérations réelles : on n'y touche jamais.
         const memeImport = String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
         if (memeImport) continue
-        if (libelleNorm(a.label) === libelleNorm(b.label) && ecart <= ecartCertain) {
+        // Même montant + dates proches + imports différents = la MÊME opération, même si
+        // les deux relevés l'écrivent autrement (« VIRT RECU MLLE MERIAM MALEK » vs
+        // « VIR INST RECU 2203444 3751003105 ») — le libellé n'est pas une identité.
+        // Deux garde-fous : des n° d'opération qui se contredisent, ou deux noms de
+        // clients bien lisibles et différents, = deux opérations réelles.
+        // Deux noms de clients lisibles restent départagés par Layla (bloc « probable »
+        // ci-dessous) : c'est le seul cas où le libellé garde le dernier mot.
+        const deuxNoms = nomFiable(na) && nomFiable(nb)
+        if (ecart <= ecartCertain && !numerosContraires(a.label, b.label) &&
+            (libelleNorm(a.label) === libelleNorm(b.label) || !deuxNoms)) {
           retirees.add(b.key)                       // on garde la plus ancienne (a)
         } else if (ecart <= ecartProbable && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
           probables.set(a.key, { date: b.ligne_date, label: b.label })

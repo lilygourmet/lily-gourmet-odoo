@@ -407,8 +407,12 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     const npDate = env.note_proof.slice(0, sep)
     const npLabel = env.note_proof.slice(sep + 3, sep + 33)
     const amt = Number(env.amount_cash)
-    const m = credits.find(c => !used.has(c) && Math.abs(c.credit - amt) < 0.005 && c.dateIso === npDate &&
-      (c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30))))
+    // Même date + même montant = c'est elle. Le libellé ne sert plus qu'à départager deux
+    // lignes identiques du même jour : deux relevés de formats différents écrivent la même
+    // opération autrement (« MLE SAMIA CHERKA » vs « MLE 2027184 000010999370 SAMIA
+    // CHERKAOUI »), et l'exiger renvoyait dans « à lier » des dépôts déjà rapprochés.
+    const memes = credits.filter(c => !used.has(c) && Math.abs(c.credit - amt) < 0.005 && c.dateIso === npDate)
+    const m = memes.find(c => c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30))) || memes[0]
     if (m) used.add(m)
   }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
 import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
-import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, saveReleveImport } from '../../../lib/caisse'
+import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 import { confirmDialog } from '../../../lib/confirmDialog'
 
@@ -92,9 +92,10 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
           await Promise.all(toClear.slice(i, i + 15).map(r => clearEnveloppeReleve(r.env.id)))
         }
       }
-      // Mémoriser les lignes du relevé non attribuées (pour rattachement manuel)
+      // Fiche d'une ligne du relevé (clé stable) — utilisée pour les lignes trouvées
+      // comme pour celles restées libres.
       const vues = new Set()
-      const freeLines = (recon.unmatched || []).map(u => {
+      const ligneRow = (u, usedBy) => {
         // Clé stable par MONTANT + n° de versement (unique) → un même dépôt réimporté
         // sous une autre date/format ne crée plus de doublon. Repli si pas de n°.
         const ref = (u.label || '').match(/\d{5,}/)
@@ -107,14 +108,21 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
         let key = base
         for (let n = 2; vues.has(key); n++) key = `${base}#${n}`
         vues.add(key)
-        return {
+        const row = {
           key,
           ligne_date: u.dateIso, amount: u.credit, label: (u.label || '').slice(0, 120), type: u.type,
           releve_url: paths[u._fileIdx ?? 0] || paths[0],
           banque: banks[u._fileIdx ?? 0] || banks[0] || null,   // d'où vient le montant
         }
-      })
-      await saveUnmatchedReleveLines(freeLines)
+        if (usedBy) row.used_by = usedBy
+        return row
+      }
+      // Lignes que l'app vient d'attribuer toute seule : marquées PRISES, sinon un
+      // ré-import de la même période les ferait réapparaître dans « à lier ».
+      await markMatchedReleveLines(
+        toWrite.filter(r => r.status === 'trouve' && r.line).map(r => ligneRow(r.line, r.env.id)))
+      // Mémoriser les lignes du relevé non attribuées (pour rattachement manuel)
+      await saveUnmatchedReleveLines((recon.unmatched || []).map(u => ligneRow(u)))
       // Trace de l'import (historique) — non bloquant.
       try {
         await saveReleveImport({

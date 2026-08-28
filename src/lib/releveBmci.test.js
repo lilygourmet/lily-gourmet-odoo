@@ -40,3 +40,33 @@ describe('reconcileEnvelopes — anti-doublon preuve photo', () => {
     expect(a.status).toBe('trouve')
   })
 })
+
+// Ré-import d'un relevé qui recouvre une période DÉJÀ rapprochée : la même opération y
+// est écrite autrement selon le format de la banque. Elle doit rester reconnue comme
+// prise, sinon elle repart dans « à lier » (cas du 07/08 : 175 fausses lignes).
+describe('reconcileEnvelopes — ré-import, libellé écrit autrement', () => {
+  // Ce que le 2e relevé imprime : mêmes date et montant, libellé plus détaillé.
+  const ligne883 = {
+    credit: 883, dateIso: '2026-05-11', type: 'virement_recu',
+    label: 'VIR INST RECU MLE 2027184 000010999370 SAMIA CHERKAOUI',
+  }
+  const envVerte = {
+    id: 3363, amount_cash: 883, payment_method: 'virement',
+    releve_status: 'trouve', session_date: '2026-05-11',
+    note_proof: '2026-05-11 · VIR INST RECU MLE SAMIA CHERKA',
+  }
+
+  it('ne renvoie pas dans « à lier » un dépôt déjà rapproché', () => {
+    const { unmatched } = reconcileEnvelopes([envVerte], [ligne883], {})
+    expect(unmatched).toHaveLength(0)
+  })
+
+  it("ne propose pas ce dépôt à une autre enveloppe du même montant", () => {
+    const autre = {
+      id: 'C', amount_cash: 883, payment_method: 'virement',
+      releve_status: null, session_date: '2026-05-11', virement_client: 'Samia Cherkaoui',
+    }
+    const { results } = reconcileEnvelopes([envVerte, autre], [ligne883], {})
+    expect(results.find(r => r.env.id === 'C').status).toBe('absent')
+  })
+})
