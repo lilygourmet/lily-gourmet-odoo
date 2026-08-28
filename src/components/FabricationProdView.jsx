@@ -266,18 +266,17 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
               <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {liste.map(a => {
-                  const fois = combienDe[a.article] || 0
                   const actif = ouvert === a.article
                   return (
                     <div key={a.article}
                       className={'bg-white border rounded-2xl overflow-hidden ' +
-                        (actif ? 'border-bordeaux ring-2 ring-bordeaux/15' : 'border-line')}>
+                        (actif ? 'border-bordeaux' : 'border-line')}>
                       <button onClick={() => ouvrir(a)} className="block w-full text-left">
                         <div className="relative aspect-[4/3] bg-cream-warm">
                           <img src={a.photo} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                          {fois > 0 && (
+                          {combienDe[a.article] > 0 && (
                             <span className="absolute top-2 left-2 bg-ok text-cream text-[12px] font-extrabold px-2.5 py-1 rounded-full">
-                              {fois} fois
+                              {combienDe[a.article]} fois
                             </span>
                           )}
                         </div>
@@ -291,80 +290,6 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                         </div>
                       </button>
 
-                      {actif && (() => {
-                        const r = recettes[a.article]
-                        return (
-                          <div className="px-3 pb-3 bg-cream-warm border-t border-line pt-3">
-                            <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2 mb-2.5">
-                              <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
-                                className="w-[52px] h-[52px] shrink-0 border-2 border-line rounded-xl text-[26px] font-extrabold text-bordeaux leading-none">
-                                −
-                              </button>
-                              <div className="flex-1 text-center">
-                                <b className="block text-[34px] font-extrabold leading-none">{nb(fois)}</b>
-                                <span className="text-[11px] text-ink-mute font-bold">fois la recette</span>
-                              </div>
-                              <button onClick={() => setFois(f => (f < 1 ? f + 0.5 : f + 1))}
-                                className="w-[52px] h-[52px] shrink-0 border-2 border-line rounded-xl text-[26px] font-extrabold text-bordeaux leading-none">
-                                +
-                              </button>
-                            </div>
-
-                            <div className="grid grid-cols-4 gap-1.5 mb-2.5">
-                              {[0.5, 1, 2, 3].map(n => (
-                                <button key={n} onClick={() => setFois(n)}
-                                  className={'py-2.5 text-[15px] font-extrabold border-2 rounded-xl ' +
-                                    (fois === n ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
-                                  {n === 0.5 ? '½' : n}
-                                </button>
-                              ))}
-                            </div>
-
-                            {r && r.lignes.length > 0 && (
-                              <div className="bg-white border border-line rounded-2xl overflow-hidden mb-2.5">
-                                <div className="bg-cream-warm px-3 py-1.5 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
-                                  Ce qu'il faut
-                                </div>
-                                {r.lignes.map((l, i) => (
-                                  <div key={i} className="flex items-center gap-2.5 px-3 py-2 border-b border-[#f4eee2] last:border-0">
-                                    <span className="text-[15px] font-extrabold min-w-[84px] text-right">
-                                      {nb(l.qty * fois)} {l.unite}
-                                    </span>
-                                    <span className={'text-[13px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-semibold' : '')}>
-                                      {propre(l.produit)}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {r && (
-                              <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-xl px-3 py-2.5 mb-2.5 flex items-baseline gap-2">
-                                <b className="text-[20px] font-extrabold text-ok">{nb(r.sortQty * fois)} {r.sortUnite}</b>
-                                <span className="text-[12px] text-ok">en sortie</span>
-                              </div>
-                            )}
-                            {!r && (
-                              <p className="text-[11.5px] text-[#854F0B] mb-2.5">
-                                Pas de recette dans Odoo pour cet article : on note seulement le nombre de fournées.
-                              </p>
-                            )}
-
-                            <div className="flex gap-2">
-                              <button onClick={() => noter(a)}
-                                className="flex-1 bg-ok text-cream rounded-xl py-3 text-[15px] font-extrabold">
-                                C'est fait
-                              </button>
-                              {a.ajoute && !combienDe[a.article] && (
-                                <button onClick={ev => supprimer(a, ev)}
-                                  className="border border-line bg-white rounded-xl px-3 py-3 text-[13px] font-bold text-danger">
-                                  supprimer
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })()}
                     </div>
                   )
                 })}
@@ -468,6 +393,86 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
           </div>
         )}
       </div>
+
+      {ouvert && (() => {
+        const a = tous.find(x => x.article === ouvert)
+        if (!a) return null
+        const r = recettes[a.article]
+        return (
+          <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end justify-center print:hidden"
+            onPointerDown={e => { if (e.target === e.currentTarget) setOuvert(null) }}>
+            <div className="bg-cream w-full max-w-[560px] rounded-t-[24px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
+              <div className="flex items-center gap-3 mb-3">
+                <img src={a.photo} alt="" className="w-[62px] h-[62px] rounded-2xl object-cover shrink-0" />
+                <b className="text-[19px] leading-tight">{propre(a.article)}</b>
+              </div>
+
+              <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
+                <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
+                  className="w-16 h-16 shrink-0 border-2 border-line rounded-2xl text-[32px] font-extrabold text-bordeaux leading-none">−</button>
+                <div className="flex-1 text-center">
+                  <b className="block text-[44px] font-extrabold leading-none">{nb(fois)}</b>
+                  <span className="text-[12.5px] text-ink-mute font-bold">fois la recette</span>
+                </div>
+                <button onClick={() => setFois(f => (f < 1 ? f + 0.5 : f + 1))}
+                  className="w-16 h-16 shrink-0 border-2 border-line rounded-2xl text-[32px] font-extrabold text-bordeaux leading-none">+</button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 mb-3.5">
+                {[0.5, 1, 2, 3].map(n => (
+                  <button key={n} onClick={() => setFois(n)}
+                    className={'py-3 text-[17px] font-extrabold border-2 rounded-2xl ' +
+                      (fois === n ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
+                    {n === 0.5 ? '½' : n}
+                  </button>
+                ))}
+              </div>
+
+              {r && r.lignes.length > 0 && (
+                <div className="bg-white border border-line rounded-2xl overflow-hidden mb-3">
+                  <div className="bg-cream-warm px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
+                    Ce qu'il faut
+                  </div>
+                  {r.lignes.map((l, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
+                      <span className="text-[19px] font-extrabold min-w-[104px] text-right">{nb(l.qty * fois)} {l.unite}</span>
+                      <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
+                        {propre(l.produit)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {r && (
+                <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 flex items-baseline gap-2.5">
+                  <b className="text-[26px] font-extrabold text-ok">{nb(r.sortQty * fois)} {r.sortUnite}</b>
+                  <span className="text-[13.5px] text-ok">en sortie</span>
+                </div>
+              )}
+              {!r && (
+                <p className="text-[12.5px] text-[#854F0B]">Pas de recette dans Odoo : on note seulement les fournées.</p>
+              )}
+
+              <button onClick={() => noter(a)}
+                className="w-full mt-3 py-4 rounded-2xl bg-ok text-white text-[19px] font-extrabold flex items-center justify-center gap-2.5">
+                <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
+                C'est fait
+              </button>
+              {a.ajoute && !combienDe[a.article] && (
+                <button onClick={ev => supprimer(a, ev)}
+                  className="w-full mt-2 py-3 rounded-2xl bg-white border border-line text-danger text-[14px] font-bold">
+                  supprimer cet article
+                </button>
+              )}
+              <button onClick={() => setOuvert(null)}
+                className="w-full mt-2 py-3.5 rounded-2xl bg-white border border-line text-ink-mute text-[15px] font-bold">
+                fermer
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {journal && (
         <div className="lg-bottom-bar z-40 bg-white border-t border-line px-4 py-3 flex items-center justify-between gap-3 print:hidden">
