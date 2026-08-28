@@ -1389,7 +1389,36 @@ export default async function handler(req, res) {
         return t
       }
       for (const m of meres) poids[m] = compter(m, 0, new Set())
-      const racines = meres.sort((a, b) => (poids[b] || 0) - (poids[a] || 0))
+
+      // On ne montre que ce qui se vend encore. La case « peut être vendu »
+      // d'Odoo ne dit pas la vérité (le Fraisier y est à NON alors qu'il fait
+      // 1 600 ventes) : on regarde les ventes réelles sur 12 mois glissants,
+      // ce qui garde les articles de saison comme les bûches de Noël.
+      const dVente = new Date(); dVente.setMonth(dVente.getMonth() - 12)
+      const tmplMeres = await odooSearchRead(uid, 'product.template',
+        [['name', 'in', meres]], ['id', 'name'], { limit: 400 })
+      let vendues = new Set()
+      if (tmplMeres.length) {
+        const ventes = await odooSearchRead(uid, 'sale.order.line', [
+          ['product_template_id', 'in', tmplMeres.map(t => t.id)],
+          ['state', 'in', ['sale', 'done']],
+          ['create_date', '>=', isoD(dVente)],
+        ], ['product_template_id'], { limit: 20000 })
+        const nomDe = new Map(tmplMeres.map(t => [t.id, net(t.name)]))
+        for (const l of ventes) {
+          const n = nomDe.get(Array.isArray(l.product_template_id) ? l.product_template_id[0] : l.product_template_id)
+          if (n) vendues.add(n)
+        }
+        // un article absent du catalogue de vente ne peut pas être jugé : on le garde
+        const connus = new Set(tmplMeres.map(t => net(t.name)))
+        for (const m of meres) if (!connus.has(m)) vendues.add(m)
+      } else {
+        vendues = new Set(meres)
+      }
+
+      const racines = meres
+        .filter(m => vendues.has(m))
+        .sort((a, b) => (poids[b] || 0) - (poids[a] || 0))
 
       // on ne renvoie que les recettes utiles : les mères et leur descendance
       const aRendre = {}
