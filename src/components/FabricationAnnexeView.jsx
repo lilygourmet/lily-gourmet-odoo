@@ -45,6 +45,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [erreur, setErreur] = useState(null)
   const [journal, setJournal] = useState(null)
   const [chemin, setChemin] = useState([])
+  const [cheminB, setCheminB] = useState([])   // où l'on est dans « ce qu'il faut faire »
   const [saisie, setSaisie] = useState(null)
   const [fois, setFois] = useState(1)
   const [besoins, setBesoins] = useState({})      // besoins modifiés à la main
@@ -117,6 +118,24 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return out
   }
+  // ce qu'il faut faire juste en dessous d'un article : ses composants qui
+  // manquent pour la quantité qu'on a décidé de produire
+  const besoinDe = nom => (besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom))
+  const sousBesoins = nom => {
+    const r = recettes[nom]
+    const b = besoinDe(nom)
+    if (!r || b <= 0) return []
+    const n = r.sortQty ? b / r.sortQty : 1
+    const out = []
+    for (const l of r.lignes) {
+      if (!l.fabrique || !recettes[l.produit]) continue
+      const manque = Math.max(0, l.qty * n - (stocks[l.produit] || 0))
+      if (manque > 0.001 && !out.some(x => x.nom === l.produit)) {
+        out.push({ nom: l.produit, besoin: Math.ceil(manque) })
+      }
+    }
+    return out
+  }
   const aFaire = useMemo(() => {
     if (!arbre) return []
     return (arbre.racines || [])
@@ -124,6 +143,19 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       .map(m => ({ mere: m, lignes: travailDe(m) }))
       .filter(x => x.lignes.length)
   }, [arbre, caches, besoins, stocks, minmax])
+
+  // ce que montre l'écran des besoins : les mères, puis les morceaux
+  const listeBesoins = useMemo(() => {
+    if (!arbre) return []
+    if (!cheminB.length) return aFaire.map(x => ({ nom: x.mere, combien: x.lignes.length, mere: true }))
+    const ici = cheminB[cheminB.length - 1]
+    if (cheminB.length === 1) {
+      return enfantsDe(ici)
+        .filter(e => besoinDe(e) > 0)
+        .map(e => ({ nom: e, besoin: besoinDe(e) }))
+    }
+    return sousBesoins(ici).map(x => ({ nom: x.nom, besoin: besoins[x.nom] !== undefined ? besoins[x.nom] : x.besoin }))
+  }, [arbre, cheminB, aFaire, besoins, stocks, minmax])
 
   // ===== ce qu'on a fait =====
   const liste = useMemo(() => {
@@ -191,7 +223,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   }
 
   const poser = (nom, v) => setBesoins(b => ({ ...b, [nom]: Math.max(0, Number(v) || 0) }))
-  const bouger = (nom, actuel, d) => poser(nom, actuel + d)
 
   return (
     <div className="min-h-[100dvh] bg-cream">
@@ -200,7 +231,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       <div className="max-w-[860px] mx-auto px-3 py-4 pb-28 print:p-0 print:max-w-none">
         <div className="flex gap-2 mb-4 print:hidden">
           {[['besoins', 'Ce qu\'il faut faire'], ['declarer', 'Déclarer ce qu\'on a fait']].map(([v, t]) => (
-            <button key={v} onClick={() => { setVue(v); setChemin([]); setSaisie(null) }}
+            <button key={v} onClick={() => { setVue(v); setChemin([]); setCheminB([]); setSaisie(null) }}
               className={'flex-1 py-3 rounded-2xl text-[14.5px] font-extrabold border-2 flex items-center justify-center gap-2 ' +
                 (vue === v ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
               {t}
@@ -222,71 +253,66 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         {/* ===================== CE QU'IL FAUT FAIRE ===================== */}
         {vue === 'besoins' && arbre && (
           <div className="print:hidden">
-            {!aFaire.length && (
-              <p className="text-center text-ink-mute text-[14px] py-10">Rien à faire aujourd'hui.</p>
-            )}
-            {aFaire.map(({ mere, lignes }) => (
-              <div key={mere} className="bg-white border border-line rounded-[18px] mb-3 overflow-hidden">
-                <div className="flex items-center gap-3 px-3 py-2.5 bg-cream-warm border-b border-line">
-                  <Vignette nom={mere} photo={photoDe(mere)} taille={44} />
-                  <span className="flex-1 min-w-0 text-[15px] font-extrabold leading-tight">{propre(mere)}</span>
+            {cheminB.length > 0 && (
+              <div className="flex items-center gap-2 mb-3">
+                <button onClick={() => setCheminB(c => c.slice(0, -1))}
+                  className="w-10 h-10 shrink-0 border border-line bg-white rounded-xl grid place-items-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-bordeaux fill-none" strokeWidth="2.4">
+                    <path d="M15 5l-7 7 7 7" /></svg>
+                </button>
+                <div className="flex items-center gap-1.5 flex-wrap min-w-0 text-[14px] font-extrabold">
+                  {cheminB.map((n, k) => (
+                    <span key={n} className="flex items-center gap-1.5">
+                      {k > 0 && <span className="text-ink-mute">›</span>}
+                      <Vignette nom={n} photo={photoDe(n)} taille={30} rond={9} />
+                      <span>{propre(n)}</span>
+                    </span>
+                  ))}
                 </div>
-                {lignes.map(({ nom, besoin, prof }) => {
-                  const r = recettes[nom]
-                  const f = r && r.sortQty ? besoin / r.sortQty : 0
-                  const rond = Math.ceil(f * 2) / 2
-                  const collee = r && r.sortQty ? Math.round(rond * r.sortQty) : besoin
-                  const mm = minmax[nom]
-                  const decal = { paddingLeft: 12 + (prof - 1) * 22 }
-                  return (
-                    <div key={nom}>
-                      <div className="flex items-center gap-2.5 py-2.5 pr-3 border-t border-[#f4eee2] relative"
-                        style={decal}>
-                        <span className="absolute top-0 bottom-0 w-1"
-                          style={{ left: (prof - 1) * 22, background: NIVEAU[Math.min(prof - 1, 3)] }} />
-                        <Vignette nom={nom} photo="" taille={28} rond={8} />
-                        <span className="flex-1 min-w-0 text-[14px] leading-tight">
-                          {propre(nom)}
-                          <span className="block text-[11.5px] text-ink-mute mt-0.5">
-                            {mm && mm.min > 0
-                              ? <>il en reste <b className="text-danger">{nb(stocks[nom] || 0)}</b> · minimum {nb(mm.min)}</>
-                              : <>il en reste {nb(stocks[nom] || 0)}</>}
-                            {prof > 1 && <em className="not-italic text-[#b58f3c] font-bold"> · pour celui du dessus</em>}
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <button onClick={() => bouger(nom, besoin, -1)}
-                            className="w-[34px] h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">−</button>
-                          <input type="number" value={besoin} onChange={e => poser(nom, e.target.value)}
-                            className="w-[62px] h-10 border border-line rounded-[10px] text-center text-[17px] font-extrabold bg-white outline-none focus:border-bordeaux" />
-                          <button onClick={() => bouger(nom, besoin, 1)}
-                            className="w-[34px] h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">+</button>
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap py-2 pr-3 bg-[#FBF3DF] border-t border-[#ecdfc0] text-[12.5px]"
-                        style={decal}>
-                        <span>= <b className="text-[16px] font-extrabold text-[#b58f3c]">{nb(f)}</b> fois la recette</span>
-                        {Math.abs(f - rond) > 0.01 && (
-                          <button onClick={() => poser(nom, collee)}
-                            className="border border-[#b58f3c] text-[#b58f3c] bg-white rounded-[9px] px-2.5 py-1.5 text-[12px] font-extrabold">
-                            arrondir à {nb(rond)} → {collee}
-                          </button>
-                        )}
-                        <button onClick={() => ouvrirFiche(nom)}
-                          className="border border-line bg-white rounded-[9px] px-2.5 py-1.5 text-[12px] font-extrabold text-ink-soft">
-                          la recette
-                        </button>
-                        <button onClick={() => noter(nom, Math.max(0.5, rond))}
-                          className="ml-auto bg-ok text-white rounded-[10px] px-3 py-2 text-[13px] font-extrabold flex items-center gap-1.5">
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
-                          C'est fait
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
-            ))}
+            )}
+
+            {!listeBesoins.length && (
+              <p className="text-center text-ink-mute text-[14px] py-10">
+                {cheminB.length ? 'Plus rien à faire ici.' : "Rien à faire aujourd'hui."}
+              </p>
+            )}
+
+            <div className="grid gap-2.5"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+              {listeBesoins.map(x => {
+                const r = recettes[x.nom]
+                const f = !x.mere && r && r.sortQty ? x.besoin / r.sortQty : 0
+                const dessous = x.mere ? 0 : sousBesoins(x.nom).length
+                const prof = cheminB.length
+                return (
+                  <button key={x.nom}
+                    onClick={() => (x.mere ? setCheminB([x.nom]) : ouvrirFiche(x.nom))}
+                    className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
+                    <span className="absolute top-0 left-0 right-0 h-1 z-10"
+                      style={{ background: NIVEAU[Math.min(prof, 3)] }} />
+                    <span className="block w-full aspect-square overflow-hidden">
+                      <Vignette nom={x.nom} photo={photoDe(x.nom)} taille={400} rond={0} />
+                    </span>
+                    <span className="absolute top-1.5 left-1.5 right-1.5 bg-danger text-white rounded-lg px-2 py-1 text-[12.5px] font-extrabold text-center">
+                      {x.mere ? `${x.combien} à faire` : `${nb(x.besoin)} à faire`}
+                    </span>
+                    {dessous > 0 && (
+                      <span onClick={ev => { ev.stopPropagation(); setCheminB(c => [...c, x.nom]) }}
+                        className="absolute bottom-[46px] right-1.5 bg-white/95 border border-line rounded-full px-2 py-0.5 text-[11.5px] font-extrabold text-bordeaux">
+                        {dessous} ›
+                      </span>
+                    )}
+                    <span className="block px-2 py-1.5 text-[12px] font-bold leading-tight">{propre(x.nom)}</span>
+                    {!x.mere && (
+                      <span className="block px-2 pb-2 text-[11.5px] font-extrabold text-[#b58f3c]">
+                        {nb(f)} fois la recette
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
@@ -518,6 +544,35 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 </span>
               </div>
             )}
+
+            {vue === 'besoins' && (() => {
+              const b = besoinDe(saisie)
+              const r = recettes[saisie]
+              const f2 = r && r.sortQty ? b / r.sortQty : 0
+              const rond = Math.ceil(f2 * 2) / 2
+              const collee = r && r.sortQty ? Math.round(rond * r.sortQty) : b
+              return (
+                <div className="bg-white border border-line rounded-2xl p-2.5 mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11.5px] font-extrabold uppercase tracking-wide text-ink-mute flex-1">
+                      à faire
+                    </span>
+                    <button onClick={() => poser(saisie, b - 1)}
+                      className="w-9 h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">−</button>
+                    <input type="number" value={b} onChange={e => poser(saisie, e.target.value)}
+                      className="w-[76px] h-10 border border-line rounded-[10px] text-center text-[18px] font-extrabold bg-white outline-none focus:border-bordeaux" />
+                    <button onClick={() => poser(saisie, b + 1)}
+                      className="w-9 h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">+</button>
+                  </div>
+                  {Math.abs(f2 - rond) > 0.01 && (
+                    <button onClick={() => { poser(saisie, collee); setFois(Math.max(0.5, rond)) }}
+                      className="w-full mt-2 border border-[#b58f3c] text-[#b58f3c] bg-white rounded-[10px] py-2 text-[12.5px] font-extrabold">
+                      arrondir à {nb(rond)} fois → {collee}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
               <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
