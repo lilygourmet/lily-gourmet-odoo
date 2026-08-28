@@ -1419,6 +1419,8 @@ export default async function handler(req, res) {
       const racines = meres
         .filter(m => vendues.has(m))
         .sort((a, b) => (poids[b] || 0) - (poids[a] || 0))
+      // ce qui a été écarté reste proposé derrière le « + » de l'écran
+      const ecartees = meres.filter(m => !vendues.has(m)).sort()
 
       // on ne renvoie que les recettes utiles : les mères et leur descendance
       const aRendre = {}
@@ -1435,7 +1437,7 @@ export default async function handler(req, res) {
       }
       for (const m of meres) rendre(m, 0, new Set())
 
-      return res.status(200).json({ racines, combien: { ...combien, ...poids }, recettes: aRendre })
+      return res.status(200).json({ racines, ecartees, combien: { ...combien, ...poids }, recettes: aRendre })
     }
 
     // Les recettes d'une liste d'articles, telles qu'Odoo les tient. L'écran

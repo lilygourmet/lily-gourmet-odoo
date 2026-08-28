@@ -61,10 +61,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [fois, setFois] = useState(1)
   const [noms, setNoms] = useState({})
   const [caches, setCaches] = useState([])
-  const [voirCaches, setVoirCaches] = useState(false)
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
   const [q, setQ] = useState('')            // recherche rapide
+  const [voirPlus, setVoirPlus] = useState(false)  // remettre un article écarté
 
   useEffect(() => {
     let vivant = true
@@ -147,8 +147,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     catch (e) { toast.error('Impossible de ranger : ' + (e.message || e)) }
   }
   const remettre = async nom => {
-    try { await demasquer(nom); setCaches(c => c.filter(x => x !== nom)) }
-    catch (e) { toast.error('Impossible de remettre : ' + (e.message || e)) }
+    try {
+      await demasquer(nom)
+      setCaches(c => c.filter(x => x !== nom))
+      // un article écarté parce qu'il ne se vend plus rejoint les cartes
+      setArbre(a => (a && (a.ecartees || []).includes(nom)
+        ? { ...a, racines: [...a.racines, nom], ecartees: a.ecartees.filter(x => x !== nom) }
+        : a))
+      toast.success('Article ajouté')
+    } catch (e) { toast.error('Impossible de remettre : ' + (e.message || e)) }
   }
 
   return (
@@ -272,6 +279,35 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
           })}
         </div>
 
+        {/* remettre un article rangé ou écarté */}
+        {!chemin.length && !q.trim() && arbre && (
+          <button onClick={() => setVoirPlus(v => !v)}
+            className="w-full mt-3 py-3.5 rounded-2xl bg-white border border-dashed border-line text-[14px] font-bold text-bordeaux print:hidden">
+            + ajouter un article
+          </button>
+        )}
+
+        {voirPlus && arbre && (
+          <div className="mt-3 print:hidden">
+            <p className="text-[12px] text-ink-mute mb-2">
+              Ce qui n'est pas montré : rangé à la main, ou plus vendu depuis un an.
+            </p>
+            {[...new Set([...caches, ...(arbre.ecartees || [])])].sort().map(n => (
+              <div key={n} className="flex items-center gap-3 bg-white border border-line rounded-xl px-3 py-2.5 mb-1.5">
+                <span className="rounded-lg overflow-hidden shrink-0 flex"><Vignette nom={n} taille={38} /></span>
+                <span className="flex-1 text-[13.5px] min-w-0">{propre(n)}</span>
+                <button onClick={() => remettre(n)}
+                  className="border border-line rounded-lg px-3 py-1.5 text-[12.5px] font-bold text-bordeaux">
+                  ajouter
+                </button>
+              </div>
+            ))}
+            {![...caches, ...(arbre.ecartees || [])].length && (
+              <p className="text-[13.5px] text-ink-mute">Tout est déjà affiché.</p>
+            )}
+          </div>
+        )}
+
         {arbre && !liste.length && (
           <p className="text-[13.5px] text-ink-mute py-6 text-center print:hidden">
             {q.trim() ? 'Aucun article de ce nom.' : 'Rien ici. Reviens en arrière avec la flèche.'}
@@ -307,26 +343,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             </div>
           ))}
         </div>
-
-        {/* les articles rangés */}
-        {!chemin.length && caches.length > 0 && (
-          <div className="mt-8 print:hidden">
-            <button onClick={() => setVoirCaches(v => !v)}
-              className="text-[12.5px] font-bold text-ink-mute">
-              {voirCaches ? '▾' : '▸'} {caches.length} article{caches.length > 1 ? 's' : ''} rangé{caches.length > 1 ? 's' : ''}
-            </button>
-            {voirCaches && (
-              <div className="mt-2">
-                {caches.map(n => (
-                  <div key={n} className="flex items-center gap-3 bg-white border border-line rounded-xl px-3 py-2 mb-1.5">
-                    <span className="flex-1 text-[13.5px] min-w-0">{propre(n)}</span>
-                    <button onClick={() => remettre(n)} className="text-[12.5px] font-bold text-bordeaux">remettre</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* la feuille imprimée */}
         <div className="hidden print:block print-area">
