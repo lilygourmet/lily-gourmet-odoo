@@ -125,6 +125,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_fabrication_glacage: formData.permFabricationGlacage,
         perm_fabrication_pate_sucre: formData.permFabricationPateSucre,
         perm_fabrication_prod: formData.permFabricationProd,
+        perm_fabrication_annexe: formData.permFabricationAnnexe,
         perm_delete: formData.permDelete,
         perm_patissier: formData.permPatissier,
         perm_print_batch: formData.permPrintBatch,
@@ -206,6 +207,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_fabrication_glacage: formData.permFabricationGlacage,
         perm_fabrication_pate_sucre: formData.permFabricationPateSucre,
         perm_fabrication_prod: formData.permFabricationProd,
+        perm_fabrication_annexe: formData.permFabricationAnnexe,
         perm_delete: formData.permDelete,
         perm_patissier: formData.permPatissier,
         perm_print_batch: formData.permPrintBatch,
@@ -684,6 +686,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHa
   if (user.perm_fabrication_glacage) perms.push('Fabrication Glaçage')
   if (user.perm_fabrication_pate_sucre) perms.push('Fabrication Pâte à sucre')
   if (user.perm_fabrication_prod) perms.push('Fabrication Prod')
+  if (user.perm_fabrication_annexe) perms.push('Fabrication Annexe')
   if (user.perm_valider_of) perms.push('Valider fabrication Odoo')
   if (user.perm_recaps) perms.push('Recaps ventes')
   if (user.perm_define_gm) perms.push('Définir GM')
@@ -802,6 +805,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permFabricationGlacage: initialData?.perm_fabrication_glacage || false,
     permFabricationPateSucre: initialData?.perm_fabrication_pate_sucre || false,
     permFabricationProd: initialData?.perm_fabrication_prod || false,
+    permFabricationAnnexe: initialData?.perm_fabrication_annexe || false,
     permDelete: initialData?.perm_delete || false,
     permPatissier: initialData?.perm_patissier || false,
     permPrintBatch: initialData?.perm_print_batch || false,
@@ -1041,6 +1045,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-fabrication-cd" label="Fabrication CD" desc="Onglet « Fabrication CD » : voir ce qu'il y a à fabriquer et cocher « fait »." checked={isAdmin || formData.permFabricationCd} onChange={v => update('permFabricationCd', v)} />
             <PermCheckbox id="perm-fabrication-glacage" label="Fabrication Glaçage" desc="Onglet « Fabrication Glaçage » : lancer des tournées de glaçage cake design." checked={isAdmin || formData.permFabricationGlacage} onChange={v => update('permFabricationGlacage', v)} />
             <PermCheckbox id="perm-fabrication-pate-sucre" label="Fabrication Pâte à sucre" desc="Onglet « Fabrication Pâte à sucre » : lancer des tournées de pâte à sucre." checked={isAdmin || formData.permFabricationPateSucre} onChange={v => update('permFabricationPateSucre', v)} />
+            <PermCheckbox id="perm-fabrication-annexe" label="Fabrication Annexe" desc="Onglet « Fabrication Annexe » : dire combien de fois une recette a été faite." checked={isAdmin || formData.permFabricationAnnexe} onChange={v => update('permFabricationAnnexe', v)} />
             <PermCheckbox id="perm-fabrication-prod" label="Fabrication Prod" desc="Onglet « Fabrication Prod » : noter ce que l'équipe a fabriqué dans la journée." checked={isAdmin || formData.permFabricationProd} onChange={v => update('permFabricationProd', v)} />
             <PermCheckbox id="perm-valider-of" label="Valider la fabrication dans Odoo" desc="Peut valider les ordres de fabrication : consomme les composants et entre le produit fini en stock. Action irréversible." checked={isAdmin || formData.permValiderOf} onChange={v => update('permValiderOf', v)} />
             <PermCheckbox id="perm-polys" label="Taille des polys" desc="Choisir la taille des boîtes/polys à l'impression." checked={isAdmin || formData.permPolys} onChange={v => update('permPolys', v)} />

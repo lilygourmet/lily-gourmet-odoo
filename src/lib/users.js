@@ -12,7 +12,7 @@ import { PERM_KEYS } from './permsList'
 async function _loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_etiquettes_boites, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_valider_of, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_stock_poly, perm_simu_gateaux, perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits, perm_facture_ocp, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_besoins_achat, perm_achat, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_etiquettes_boites, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_valider_of, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_fabrication_annexe, perm_stock_poly, perm_simu_gateaux, perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits, perm_facture_ocp, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_besoins_achat, perm_achat, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -59,7 +59,7 @@ export async function createUser({
   perm_devis = false,
   perm_commande = false,
   perm_ai_tools = false,
-  perm_photoshop = false, perm_valider_of = false, perm_fabrication_cd = false, perm_fabrication_glacage = false, perm_fabrication_pate_sucre = false, perm_fabrication_prod = false,
+  perm_photoshop = false, perm_valider_of = false, perm_fabrication_cd = false, perm_fabrication_glacage = false, perm_fabrication_pate_sucre = false, perm_fabrication_prod = false, perm_fabrication_annexe = false,
   perm_stock_poly = false,
   perm_simu_gateaux = false,
   perm_transfert_annexe = false, perm_transfert_boutique = false, perm_transfert_produits = false,
@@ -114,7 +114,7 @@ export async function createUser({
           perm_devis,
           perm_commande,
           perm_ai_tools,
-          perm_photoshop, perm_valider_of, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod,
+          perm_photoshop, perm_valider_of, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_fabrication_annexe,
           perm_stock_poly,
           perm_simu_gateaux,
           perm_transfert_annexe,
@@ -283,7 +283,7 @@ export async function updateUser(userId, {
   perm_commande,
   perm_ai_tools,
   perm_photoshop,
-  perm_valider_of, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod,
+  perm_valider_of, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_fabrication_annexe,
   perm_stock_poly,
   perm_simu_gateaux,
   perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits,
@@ -346,6 +346,7 @@ export async function updateUser(userId, {
   if (perm_fabrication_glacage !== undefined) updates.perm_fabrication_glacage = perm_fabrication_glacage
   if (perm_fabrication_pate_sucre !== undefined) updates.perm_fabrication_pate_sucre = perm_fabrication_pate_sucre
   if (perm_fabrication_prod !== undefined) updates.perm_fabrication_prod = perm_fabrication_prod
+  if (perm_fabrication_annexe !== undefined) updates.perm_fabrication_annexe = perm_fabrication_annexe
   if (perm_stock_poly !== undefined) updates.perm_stock_poly = perm_stock_poly
   if (perm_simu_gateaux !== undefined) updates.perm_simu_gateaux = perm_simu_gateaux
   if (perm_transfert_annexe !== undefined) updates.perm_transfert_annexe = perm_transfert_annexe

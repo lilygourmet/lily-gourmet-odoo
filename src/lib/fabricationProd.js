@@ -45,12 +45,13 @@ export async function loadNoms() {
  * journée. Sert à retrouver ce qui a été produit un jour passé, et à
  * l'imprimer.
  */
-export async function loadHistorique(jours = 60) {
+export async function loadHistorique(jours = 60, atelier = 'prod') {
   const depuis = new Date()
   depuis.setDate(depuis.getDate() - jours)
   const { data, error } = await supabase
     .from('prod_fabrications')
     .select('id, jour, article, qty, unite, fois, fait_par, fait_le')
+    .eq('atelier', atelier)
     .gte('jour', depuis.toISOString().slice(0, 10))
     .order('jour', { ascending: false })
     .limit(2000)
@@ -67,11 +68,12 @@ export async function loadHistorique(jours = 60) {
  * Le journal d'une journée : une ligne par fournée, dans l'ordre où elles ont
  * été notées. Le même article peut y revenir plusieurs fois — c'est le but.
  */
-export async function loadFabProd(jour) {
+export async function loadFabProd(jour, atelier = 'prod') {
   const { data, error } = await supabase
     .from('prod_fabrications')
     .select('id, article, qty, unite, fois, fait_par, fait_le')
     .eq('jour', jour)
+    .eq('atelier', atelier)
     .order('fait_le', { ascending: true })
   if (error) throw error
   return data || []
@@ -82,9 +84,9 @@ export async function loadFabProd(jour) {
  * a été faite ; `qty` = ce que ça produit, pour garder une trace chiffrée même
  * si la recette change plus tard dans Odoo.
  */
-export async function addFabProd(jour, article, qty, unite, userId, fois = null) {
+export async function addFabProd(jour, article, qty, unite, userId, fois = null, atelier = 'prod') {
   const { data, error } = await supabase.from('prod_fabrications')
-    .insert({ jour, article, qty, unite, fois, fait_par: userId || null, fait_le: new Date().toISOString() })
+    .insert({ jour, article, qty, unite, fois, atelier, fait_par: userId || null, fait_le: new Date().toISOString() })
     .select('id, article, qty, unite, fois, fait_par, fait_le').single()
   if (error) throw error
   return data
