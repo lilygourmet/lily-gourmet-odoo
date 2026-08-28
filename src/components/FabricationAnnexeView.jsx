@@ -9,62 +9,51 @@ import { dernierEcran, garderEcran } from '../lib/fabrication'
 
 const ATELIER = 'annexe'
 const nb = v => Number(Number(v || 0).toFixed(2)).toLocaleString('fr-FR')
-const propre = n => String(n || '').replace(/^(SM[.\- ]?|Sm[.\- ]?)/i, '').replace(/\s*(finition|production)\s*$/i, '').trim()
+const propre = n => String(n || '')
+  .replace(/^(E-|V-|MI-|N-|SM[.\- ]?|Sm[.\- ]?|SMT?[.\- ]?)\s*/i, '')
+  .replace(/\s*(finition|production)\s*$/i, '').trim()
 const jourLisible = j => new Date(j + 'T12:00:00')
   .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '')
 
-// Une vignette tant qu'il n'y a pas de photo : la première lettre sur un fond
-// dont la couleur découle du nom, pour que chaque article reste reconnaissable.
+// bordeaux = le gâteau, or = sa préparation, gris = la préparation de la préparation
+const NIVEAU = ['#993556', '#b58f3c', '#9a8b7a', '#9a8b7a']
+
+// Une vignette tant qu'il n'y a pas de photo : l'initiale sur un fond dont la
+// couleur découle du nom, pour que chaque article reste reconnaissable.
 const couleur = n => {
   let h = 0
-  for (let i = 0; i < n.length; i += 1) h = (h * 31 + n.charCodeAt(i)) % 360
+  for (let i = 0; i < String(n).length; i += 1) h = (h * 31 + String(n).charCodeAt(i)) % 360
   return `hsl(${h} 32% 62%)`
 }
 
-// Une fiche Odoo peut lister le même ingrédient une fois par taille de gâteau.
-// On le montre une seule fois, avec toutes ses quantités : « 20 / 80 / 120 g ».
-function regrouper(lignes) {
-  const out = []
-  const vus = new Map()
-  for (const l of lignes) {
-    const cle = l.produit + '|' + l.unite
-    if (vus.has(cle)) {
-      const d = vus.get(cle)
-      if (!d.tailles) d.tailles = [d.qty]
-      if (!d.tailles.includes(l.qty)) d.tailles.push(l.qty)
-      continue
-    }
-    const d = { ...l }
-    vus.set(cle, d)
-    out.push(d)
-  }
-  return out
-}
-
-function Vignette({ nom, taille }) {
+function Vignette({ nom, photo, taille, rond }) {
+  const style = { width: taille, height: taille, borderRadius: rond || 12 }
+  if (photo) return <img src={photo} alt="" className="object-cover shrink-0" style={style} />
   return (
-    <span className="grid place-items-center font-serif italic text-cream"
-      style={{ background: couleur(nom), width: taille, height: taille, fontSize: taille * 0.42 }}>
+    <span className="grid place-items-center font-serif italic text-cream shrink-0"
+      style={{ ...style, background: couleur(nom), fontSize: taille * 0.42 }}>
       {propre(nom).slice(0, 1).toUpperCase()}
     </span>
   )
 }
 
 export default function FabricationAnnexeView({ user, onLogout, onNavigate, activeView }) {
+  const [vue, setVue] = useState('besoins')       // besoins | declarer
   const [jour, setJour] = useState(todayISO())
   const [arbre, setArbre] = useState(() => dernierEcran('annexe'))
   const [erreur, setErreur] = useState(null)
   const [journal, setJournal] = useState(null)
-  const [chemin, setChemin] = useState([])        // où l'on est descendu
-  const [saisie, setSaisie] = useState(null)      // l'article dont on ouvre la fiche
+  const [chemin, setChemin] = useState([])
+  const [saisie, setSaisie] = useState(null)
   const [fois, setFois] = useState(1)
+  const [besoins, setBesoins] = useState({})      // besoins modifiés à la main
   const [noms, setNoms] = useState({})
   const [caches, setCaches] = useState([])
+  const [voirPlus, setVoirPlus] = useState(false)
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
-  const [q, setQ] = useState('')            // recherche rapide
-  const [voirPlus, setVoirPlus] = useState(false)  // remettre un article écarté
+  const [q, setQ] = useState('')
 
   useEffect(() => {
     let vivant = true
@@ -85,27 +74,64 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   }, [jour])
 
   const recettes = (arbre && arbre.recettes) || {}
-  // Une fiche Odoo couvre parfois plusieurs tailles à la fois (le Fraisier
-  // liste sirop, génoise et crème une fois par taille) : sans dédoublonnage,
-  // la même carte apparaîtrait cinq fois de suite.
+  const stocks = (arbre && arbre.stocks) || {}
+  const minmax = (arbre && arbre.minmax) || {}
+  const photoDe = n => (arbre && arbre.photos && arbre.photos[n]
+    ? `/api/freezer-list?mode=photo&id=${arbre.photos[n]}` : '')
+
   const enfantsDe = nom => {
     const r = recettes[nom]
     if (!r) return []
     return [...new Set(r.lignes.filter(l => l.fabrique && recettes[l.produit]).map(l => l.produit))]
   }
 
-  // La liste affichée : le résultat de la recherche, sinon les mères ou les
-  // morceaux de là où l'on est.
+  // ===== ce qu'il faut faire, en cascade =====
+  // pour faire le gâteau il faut sa préparation ; si elle manque aussi, elle
+  // apparaît en dessous avec son propre besoin, et ainsi de suite
+  const besoinDeBase = nom => {
+    const mm = minmax[nom]
+    const st = stocks[nom] || 0
+    if (!mm || !(mm.min > 0) || st >= mm.min) return 0
+    return Math.max(0, (mm.max || mm.min) - st)
+  }
+  const cascade = (nom, besoin, prof, out, vus) => {
+    if (prof > 4 || vus.has(nom)) return out
+    vus.add(nom)
+    const r = recettes[nom]
+    const b = besoins[nom] !== undefined ? besoins[nom] : besoin
+    out.push({ nom, besoin: b, prof })
+    if (!r || b <= 0) return out
+    const n = r.sortQty ? b / r.sortQty : 1
+    for (const l of r.lignes) {
+      if (!l.fabrique || !recettes[l.produit]) continue
+      const manque = Math.max(0, l.qty * n - (stocks[l.produit] || 0))
+      if (manque > 0.001) cascade(l.produit, Math.ceil(manque), prof + 1, out, vus)
+    }
+    return out
+  }
+  const travailDe = mere => {
+    const out = []
+    for (const e of enfantsDe(mere)) {
+      const b = besoins[e] !== undefined ? besoins[e] : besoinDeBase(e)
+      if (b > 0) cascade(e, b, 1, out, new Set())
+    }
+    return out
+  }
+  const aFaire = useMemo(() => {
+    if (!arbre) return []
+    return (arbre.racines || [])
+      .filter(m => !caches.includes(m))
+      .map(m => ({ mere: m, lignes: travailDe(m) }))
+      .filter(x => x.lignes.length)
+  }, [arbre, caches, besoins, stocks, minmax])
+
+  // ===== ce qu'on a fait =====
   const liste = useMemo(() => {
     if (!arbre) return []
     const cherche = q.trim().toLowerCase()
     if (cherche.length >= 2) {
-      // on cherche partout, y compris dans les morceaux : c'est fait pour
-      // retrouver une crème sans savoir dans quel gâteau elle se range
-      const tous = [...new Set([...Object.keys(arbre.recettes || {}), ...Object.keys(arbre.combien || {})])]
-      return tous
-        .filter(n => propre(n).toLowerCase().includes(cherche) || n.toLowerCase().includes(cherche))
-        .sort((a, b) => (arbre.combien[b] || 0) - (arbre.combien[a] || 0))
+      const tous = [...new Set([...Object.keys(recettes), ...Object.keys(arbre.combien || {})])]
+      return tous.filter(n => propre(n).toLowerCase().includes(cherche) || n.toLowerCase().includes(cherche))
         .slice(0, 40)
     }
     if (!chemin.length) return (arbre.racines || []).filter(n => !caches.includes(n))
@@ -118,18 +144,25 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return m
   }, [journal])
 
-  const ouvrirFiche = nom => { setSaisie(nom); setFois(1) }
+  const ouvrirFiche = nom => {
+    setSaisie(nom)
+    const r = recettes[nom]
+    const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
+    setFois(b > 0 && r && r.sortQty ? Math.max(0.5, Math.ceil((b / r.sortQty) * 2) / 2) : 1)
+  }
 
-  const valider = async () => {
-    const r = recettes[saisie]
-    const q = r ? Math.round(r.sortQty * fois * 100) / 100 : fois
+  const noter = async (nom, combienFois) => {
+    const f = Number(combienFois) || 1
+    const r = recettes[nom]
+    const qte = r ? Math.round(r.sortQty * f * 100) / 100 : f
     const u = r ? r.sortUnite : 'u'
     try {
-      const ligne = await addFabProd(jour, saisie, q, u, user?.id, fois, ATELIER)
+      const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER)
       setJournal(l => [...(l || []), ligne])
+      setBesoins(b => ({ ...b, [nom]: 0 }))
       setSaisie(null)
       setHisto(null)
-      toast.success(propre(saisie) + ' — ' + nb(fois) + ' fois')
+      toast.success(propre(nom) + ' — ' + nb(f) + ' fois')
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
   }
 
@@ -150,7 +183,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     try {
       await demasquer(nom)
       setCaches(c => c.filter(x => x !== nom))
-      // un article écarté parce qu'il ne se vend plus rejoint les cartes
       setArbre(a => (a && (a.ecartees || []).includes(nom)
         ? { ...a, racines: [...a.racines, nom], ecartees: a.ecartees.filter(x => x !== nom) }
         : a))
@@ -158,78 +190,27 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     } catch (e) { toast.error('Impossible de remettre : ' + (e.message || e)) }
   }
 
+  const poser = (nom, v) => setBesoins(b => ({ ...b, [nom]: Math.max(0, Number(v) || 0) }))
+  const bouger = (nom, actuel, d) => poser(nom, actuel + d)
+
   return (
     <div className="min-h-[100dvh] bg-cream">
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
 
-      <div className="max-w-[820px] mx-auto px-3 py-4 pb-28 print:p-0 print:max-w-none">
-        <div className="flex items-center gap-2 mb-4 print:hidden">
-          <div className="flex-1 bg-white border border-line rounded-2xl px-3.5 py-2.5">
-            <input type="date" value={jour}
-              onChange={e => { setJournal(null); setSaisie(null); setJour(e.target.value) }}
-              className="w-full bg-transparent border-0 outline-none text-[16px] font-extrabold text-ink" />
-          </div>
-          <button onClick={() => window.print()} title="Imprimer"
-            className="w-[52px] h-[52px] shrink-0 border border-line bg-white rounded-2xl grid place-items-center">
-            <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-ink-soft fill-none" strokeWidth="1.7">
-              <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z" /></svg>
-          </button>
-          <button onClick={() => { setVoirHisto(v => !v); if (!histo) loadHistorique(60, ATELIER).then(setHisto).catch(() => setHisto([])) }}
-            title="Historique"
-            className={'w-[52px] h-[52px] shrink-0 rounded-2xl grid place-items-center border ' +
-              (voirHisto ? 'bg-bordeaux border-bordeaux' : 'bg-white border-line')}>
-            <svg viewBox="0 0 24 24" className={'w-6 h-6 fill-none ' + (voirHisto ? 'stroke-cream' : 'stroke-ink-soft')} strokeWidth="1.7">
-              <path d="M12 8v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4" /></svg>
-          </button>
-        </div>
-
-        <div className="relative mb-4 print:hidden">
-          <svg viewBox="0 0 24 24"
-            className="w-5 h-5 stroke-ink-mute fill-none absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-            strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
-          <input value={q} onChange={e => setQ(e.target.value)}
-            placeholder="Chercher un article"
-            className="w-full bg-white border border-line rounded-2xl pl-11 pr-11 py-3 text-[15px] outline-none focus:border-bordeaux" />
-          {q && (
-            <button onClick={() => setQ('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 grid place-items-center">
-              <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] stroke-ink-mute fill-none" strokeWidth="2.4">
-                <path d="M6 6l12 12M18 6L6 18" /></svg>
+      <div className="max-w-[860px] mx-auto px-3 py-4 pb-28 print:p-0 print:max-w-none">
+        <div className="flex gap-2 mb-4 print:hidden">
+          {[['besoins', 'Ce qu\'il faut faire'], ['declarer', 'Déclarer ce qu\'on a fait']].map(([v, t]) => (
+            <button key={v} onClick={() => { setVue(v); setChemin([]); setSaisie(null) }}
+              className={'flex-1 py-3 rounded-2xl text-[14.5px] font-extrabold border-2 flex items-center justify-center gap-2 ' +
+                (vue === v ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
+              {t}
+              {v === 'besoins' && aFaire.length > 0 && (
+                <span className={'rounded-full px-2 py-0.5 text-[12.5px] ' +
+                  (vue === v ? 'bg-white/25' : 'bg-danger text-white')}>{aFaire.length}</span>
+              )}
             </button>
-          )}
+          ))}
         </div>
-
-        {voirHisto && (
-          <div className="mb-4 print:hidden">
-            {!histo && <Skeleton rows={2} />}
-            {histo && !histo.length && <p className="text-[13.5px] text-ink-mute">Rien encore.</p>}
-            {histo && histo.map(h => (
-              <button key={h.jour} onClick={() => { setJournal(null); setJour(h.jour) }}
-                className={'w-full text-left bg-white border rounded-xl px-3.5 py-2.5 mb-1.5 flex items-baseline gap-3 ' +
-                  (h.jour === jour ? 'border-bordeaux' : 'border-line')}>
-                <span className="text-[14px] font-bold flex-1">{jourLisible(h.jour)}</span>
-                <span className="text-[12.5px] text-ink-soft">{h.lignes.length} fait{h.lignes.length > 1 ? 's' : ''}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* le fil : où l'on est, avec la flèche pour remonter */}
-        {chemin.length > 0 && !q.trim() && (
-          <div className="flex items-center gap-2.5 mb-3.5 print:hidden">
-            <button onClick={() => setChemin(c => c.slice(0, -1))}
-              className="w-[46px] h-[46px] shrink-0 border border-line bg-white rounded-2xl grid place-items-center">
-              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px] stroke-bordeaux fill-none" strokeWidth="2.4">
-                <path d="M15 5l-7 7 7 7" /></svg>
-            </button>
-            <span className="rounded-xl overflow-hidden shrink-0 flex">
-              <Vignette nom={chemin[chemin.length - 1]} taille={46} />
-            </span>
-            <span className="text-[17px] font-extrabold leading-tight flex-1 min-w-0">
-              {propre(chemin[chemin.length - 1])}
-            </span>
-          </div>
-        )}
 
         {erreur && (
           <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] mb-3 print:hidden">
@@ -238,111 +219,254 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         )}
         {!arbre && !erreur && <Skeleton rows={5} />}
 
-        {/* les cartes */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 print:hidden">
-          {liste.map(nom => {
-            const morceaux = enfantsDe(nom).length
-            const fait = combienDe[nom] || 0
-            return (
-              <button key={nom} onClick={() => ouvrirFiche(nom)}
-                className={'relative bg-white border rounded-[20px] overflow-hidden text-left ' +
-                  (fait ? 'border-2 border-ok' : 'border-line')}>
-                <span className="block aspect-square w-full overflow-hidden">
-                  <Vignette nom={nom} taille={400} />
-                </span>
-                {fait > 0 && (
-                  <span className="absolute top-2.5 right-2.5 w-[42px] h-[42px] rounded-full bg-ok grid place-items-center shadow-md">
-                    <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
-                  </span>
-                )}
-                {fait > 1 && (
-                  <span className="absolute top-2.5 left-2.5 bg-ink/70 text-cream text-[14px] font-extrabold px-2.5 py-1 rounded-full">
-                    {fait}
-                  </span>
-                )}
-                {morceaux > 0 && (
-                  <span onClick={ev => { ev.stopPropagation(); setChemin(c => [...c, nom]) }}
-                    className="absolute bottom-[52px] left-2.5 bg-white/95 border border-line rounded-full px-2.5 py-1 flex items-center gap-1.5 text-[13px] font-extrabold text-bordeaux">
-                    {morceaux}
-                    <svg viewBox="0 0 24 24" className="w-[15px] h-[15px] stroke-bordeaux fill-none" strokeWidth="2.6"><path d="M9 5l7 7-7 7" /></svg>
-                  </span>
-                )}
-                {!chemin.length && !q.trim() && (
-                  <span onClick={ev => cacher(nom, ev)} title="ranger"
-                    className="absolute top-2.5 left-2.5 w-[34px] h-[34px] rounded-full bg-white/90 border border-line grid place-items-center">
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-ink-mute fill-none" strokeWidth="2.4"><path d="M6 6l12 12M18 6L6 18" /></svg>
-                  </span>
-                )}
-                <span className="block px-3 py-2.5 text-[15px] font-bold leading-tight">{propre(nom)}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* remettre un article rangé ou écarté */}
-        {!chemin.length && !q.trim() && arbre && (
-          <button onClick={() => setVoirPlus(v => !v)}
-            className="w-full mt-3 py-3.5 rounded-2xl bg-white border border-dashed border-line text-[14px] font-bold text-bordeaux print:hidden">
-            + ajouter un article
-          </button>
-        )}
-
-        {voirPlus && arbre && (
-          <div className="mt-3 print:hidden">
-            <p className="text-[12px] text-ink-mute mb-2">
-              Ce qui n'est pas montré : rangé à la main, ou plus vendu depuis un an.
-            </p>
-            {[...new Set([...caches, ...(arbre.ecartees || [])])].sort().map(n => (
-              <div key={n} className="flex items-center gap-3 bg-white border border-line rounded-xl px-3 py-2.5 mb-1.5">
-                <span className="rounded-lg overflow-hidden shrink-0 flex"><Vignette nom={n} taille={38} /></span>
-                <span className="flex-1 text-[13.5px] min-w-0">{propre(n)}</span>
-                <button onClick={() => remettre(n)}
-                  className="border border-line rounded-lg px-3 py-1.5 text-[12.5px] font-bold text-bordeaux">
-                  ajouter
-                </button>
+        {/* ===================== CE QU'IL FAUT FAIRE ===================== */}
+        {vue === 'besoins' && arbre && (
+          <div className="print:hidden">
+            {!aFaire.length && (
+              <p className="text-center text-ink-mute text-[14px] py-10">Rien à faire aujourd'hui.</p>
+            )}
+            {aFaire.map(({ mere, lignes }) => (
+              <div key={mere} className="bg-white border border-line rounded-[18px] mb-3 overflow-hidden">
+                <div className="flex items-center gap-3 px-3 py-2.5 bg-cream-warm border-b border-line">
+                  <Vignette nom={mere} photo={photoDe(mere)} taille={44} />
+                  <span className="flex-1 min-w-0 text-[15px] font-extrabold leading-tight">{propre(mere)}</span>
+                </div>
+                {lignes.map(({ nom, besoin, prof }) => {
+                  const r = recettes[nom]
+                  const f = r && r.sortQty ? besoin / r.sortQty : 0
+                  const rond = Math.ceil(f * 2) / 2
+                  const collee = r && r.sortQty ? Math.round(rond * r.sortQty) : besoin
+                  const mm = minmax[nom]
+                  const decal = { paddingLeft: 12 + (prof - 1) * 22 }
+                  return (
+                    <div key={nom}>
+                      <div className="flex items-center gap-2.5 py-2.5 pr-3 border-t border-[#f4eee2] relative"
+                        style={decal}>
+                        <span className="absolute top-0 bottom-0 w-1"
+                          style={{ left: (prof - 1) * 22, background: NIVEAU[Math.min(prof - 1, 3)] }} />
+                        <Vignette nom={nom} photo="" taille={28} rond={8} />
+                        <span className="flex-1 min-w-0 text-[14px] leading-tight">
+                          {propre(nom)}
+                          <span className="block text-[11.5px] text-ink-mute mt-0.5">
+                            {mm && mm.min > 0
+                              ? <>il en reste <b className="text-danger">{nb(stocks[nom] || 0)}</b> · minimum {nb(mm.min)}</>
+                              : <>il en reste {nb(stocks[nom] || 0)}</>}
+                            {prof > 1 && <em className="not-italic text-[#b58f3c] font-bold"> · pour celui du dessus</em>}
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => bouger(nom, besoin, -1)}
+                            className="w-[34px] h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">−</button>
+                          <input type="number" value={besoin} onChange={e => poser(nom, e.target.value)}
+                            className="w-[62px] h-10 border border-line rounded-[10px] text-center text-[17px] font-extrabold bg-white outline-none focus:border-bordeaux" />
+                          <button onClick={() => bouger(nom, besoin, 1)}
+                            className="w-[34px] h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">+</button>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap py-2 pr-3 bg-[#FBF3DF] border-t border-[#ecdfc0] text-[12.5px]"
+                        style={decal}>
+                        <span>= <b className="text-[16px] font-extrabold text-[#b58f3c]">{nb(f)}</b> fois la recette</span>
+                        {Math.abs(f - rond) > 0.01 && (
+                          <button onClick={() => poser(nom, collee)}
+                            className="border border-[#b58f3c] text-[#b58f3c] bg-white rounded-[9px] px-2.5 py-1.5 text-[12px] font-extrabold">
+                            arrondir à {nb(rond)} → {collee}
+                          </button>
+                        )}
+                        <button onClick={() => ouvrirFiche(nom)}
+                          className="border border-line bg-white rounded-[9px] px-2.5 py-1.5 text-[12px] font-extrabold text-ink-soft">
+                          la recette
+                        </button>
+                        <button onClick={() => noter(nom, Math.max(0.5, rond))}
+                          className="ml-auto bg-ok text-white rounded-[10px] px-3 py-2 text-[13px] font-extrabold flex items-center gap-1.5">
+                          <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
+                          C'est fait
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             ))}
-            {![...caches, ...(arbre.ecartees || [])].length && (
-              <p className="text-[13.5px] text-ink-mute">Tout est déjà affiché.</p>
-            )}
           </div>
         )}
 
-        {arbre && !liste.length && (
-          <p className="text-[13.5px] text-ink-mute py-6 text-center print:hidden">
-            {q.trim() ? 'Aucun article de ce nom.' : 'Rien ici. Reviens en arrière avec la flèche.'}
-          </p>
-        )}
-
-        {/* ce qui a été fait aujourd'hui */}
-        <div className="flex items-center gap-2.5 mt-8 mb-3 print:hidden">
-          <span className="text-[11px] font-extrabold uppercase tracking-[.1em] text-bordeaux">Aujourd'hui</span>
-          <span className="flex-1 h-0.5 bg-line" />
-        </div>
-        <div className="print:hidden">
-          {!journal && <Skeleton rows={2} />}
-          {journal && !journal.length && (
-            <div className="bg-white border border-dashed border-line rounded-2xl py-6 text-center text-ink-mute text-[14px]">
-              Tape ce que tu as fait.
-            </div>
-          )}
-          {journal && journal.map(l => (
-            <div key={l.id} className="flex items-center gap-3 bg-white border border-line rounded-2xl px-3 py-2.5 mb-2">
-              <span className="rounded-xl overflow-hidden shrink-0 flex"><Vignette nom={l.article} taille={52} /></span>
-              <span className="flex-1 min-w-0 text-[15px] font-semibold leading-tight">
-                {propre(l.article)}
-                <span className="block text-[12px] text-ink-mute font-normal mt-0.5">
-                  {nb(l.fois || 1)} fois{noms[l.fait_par] ? ' · ' + noms[l.fait_par] : ''} · {heure(l.fait_le)}
-                </span>
-              </span>
-              <span className="text-[18px] font-extrabold text-ok whitespace-nowrap">{nb(l.qty)} {l.unite}</span>
-              <button onClick={() => retirerLigne(l.id)}
-                className="w-10 h-10 shrink-0 border border-line rounded-xl grid place-items-center">
-                <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] stroke-danger fill-none" strokeWidth="2.6"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        {/* ===================== DÉCLARER ===================== */}
+        {vue === 'declarer' && (
+          <>
+            <div className="flex items-center gap-2 mb-3 print:hidden">
+              <div className="flex-1 bg-white border border-line rounded-2xl px-3.5 py-2.5">
+                <input type="date" value={jour}
+                  onChange={e => { setJournal(null); setSaisie(null); setJour(e.target.value) }}
+                  className="w-full bg-transparent border-0 outline-none text-[15px] font-extrabold text-ink" />
+              </div>
+              <button onClick={() => window.print()} title="Imprimer"
+                className="w-[48px] h-[48px] shrink-0 border border-line bg-white rounded-2xl grid place-items-center">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-ink-soft fill-none" strokeWidth="1.7">
+                  <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z" /></svg>
+              </button>
+              <button onClick={() => { setVoirHisto(v => !v); if (!histo) loadHistorique(60, ATELIER).then(setHisto).catch(() => setHisto([])) }}
+                title="Historique"
+                className={'w-[48px] h-[48px] shrink-0 rounded-2xl grid place-items-center border ' +
+                  (voirHisto ? 'bg-bordeaux border-bordeaux' : 'bg-white border-line')}>
+                <svg viewBox="0 0 24 24" className={'w-5 h-5 fill-none ' + (voirHisto ? 'stroke-cream' : 'stroke-ink-soft')} strokeWidth="1.7">
+                  <path d="M12 8v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4" /></svg>
               </button>
             </div>
-          ))}
-        </div>
+
+            {voirHisto && (
+              <div className="mb-4 print:hidden">
+                {!histo && <Skeleton rows={2} />}
+                {histo && !histo.length && <p className="text-[13.5px] text-ink-mute">Rien encore.</p>}
+                {histo && histo.map(h => (
+                  <button key={h.jour} onClick={() => { setJournal(null); setJour(h.jour) }}
+                    className={'w-full text-left bg-white border rounded-xl px-3.5 py-2.5 mb-1.5 flex items-baseline gap-3 ' +
+                      (h.jour === jour ? 'border-bordeaux' : 'border-line')}>
+                    <span className="text-[14px] font-bold flex-1">{jourLisible(h.jour)}</span>
+                    <span className="text-[12.5px] text-ink-soft">{h.lignes.length} fait{h.lignes.length > 1 ? 's' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="relative mb-3.5 print:hidden">
+              <svg viewBox="0 0 24 24"
+                className="w-5 h-5 stroke-ink-mute fill-none absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un article"
+                className="w-full bg-white border border-line rounded-2xl pl-11 pr-11 py-2.5 text-[15px] outline-none focus:border-bordeaux" />
+              {q && (
+                <button onClick={() => setQ('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 grid place-items-center">
+                  <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] stroke-ink-mute fill-none" strokeWidth="2.4">
+                    <path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              )}
+            </div>
+
+            {chemin.length > 0 && !q.trim() && (
+              <div className="flex items-center gap-2 mb-3 print:hidden">
+                <button onClick={() => setChemin(c => c.slice(0, -1))}
+                  className="w-10 h-10 shrink-0 border border-line bg-white rounded-xl grid place-items-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-bordeaux fill-none" strokeWidth="2.4">
+                    <path d="M15 5l-7 7 7 7" /></svg>
+                </button>
+                <div className="flex items-center gap-1.5 flex-wrap min-w-0 text-[14px] font-extrabold">
+                  {chemin.map((n, k) => (
+                    <span key={n} className="flex items-center gap-1.5">
+                      {k > 0 && <span className="text-ink-mute">›</span>}
+                      <Vignette nom={n} photo={photoDe(n)} taille={30} rond={9} />
+                      <span>{propre(n)}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3.5 text-[11.5px] text-ink-mute mb-3 flex-wrap print:hidden">
+              {[['#993556', 'gâteau'], ['#b58f3c', 'sa préparation'], ['#9a8b7a', 'préparation de préparation']].map(([c, t]) => (
+                <span key={t} className="flex items-center gap-1.5">
+                  <i className="w-3 h-3 rounded" style={{ background: c }} />{t}
+                </span>
+              ))}
+            </div>
+
+            <div className="grid gap-2.5 print:hidden"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+              {liste.map(nom => {
+                const morceaux = enfantsDe(nom).length
+                const fait = combienDe[nom] || 0
+                const mm = minmax[nom]
+                const alerte = mm && mm.min > 0 && (stocks[nom] || 0) < mm.min
+                const prof = q.trim() ? 1 : chemin.length
+                return (
+                  <button key={nom}
+                    onClick={() => (morceaux ? setChemin(c => [...c, nom]) : ouvrirFiche(nom))}
+                    className={'relative bg-white border rounded-[14px] overflow-hidden text-left ' +
+                      (fait ? 'border-2 border-ok' : 'border-line')}>
+                    <span className="absolute top-0 left-0 right-0 h-1 z-10"
+                      style={{ background: NIVEAU[Math.min(prof, 3)] }} />
+                    <span className="block w-full aspect-square overflow-hidden">
+                      <Vignette nom={nom} photo={photoDe(nom)} taille={400} rond={0} />
+                    </span>
+                    {fait > 0 && (
+                      <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-ok grid place-items-center">
+                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-white fill-none" strokeWidth="3.4"><path d="M4 13l5 5L20 7" /></svg>
+                      </span>
+                    )}
+                    {morceaux > 0 && (
+                      <span className="absolute top-1.5 right-1.5 bg-white/95 border border-line rounded-full px-2 py-0.5 text-[11.5px] font-extrabold text-bordeaux">
+                        {morceaux} ›
+                      </span>
+                    )}
+                    {alerte && (
+                      <span className="absolute bottom-8 left-1.5 bg-danger text-white rounded-full px-2 py-0.5 text-[11px] font-extrabold">
+                        à faire
+                      </span>
+                    )}
+                    {!chemin.length && !q.trim() && (
+                      <span onClick={ev => cacher(nom, ev)} title="ranger"
+                        className="absolute bottom-8 right-1.5 w-7 h-7 rounded-full bg-white/90 border border-line grid place-items-center">
+                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-ink-mute fill-none" strokeWidth="2.4">
+                          <path d="M6 6l12 12M18 6L6 18" /></svg>
+                      </span>
+                    )}
+                    <span className="block px-2 py-1.5 text-[12px] font-bold leading-tight">{propre(nom)}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {!chemin.length && !q.trim() && arbre && (
+              <button onClick={() => setVoirPlus(v => !v)}
+                className="w-full mt-3 py-3 rounded-2xl bg-white border border-dashed border-line text-[13.5px] font-bold text-bordeaux print:hidden">
+                + ajouter un article
+              </button>
+            )}
+            {voirPlus && arbre && (
+              <div className="mt-3 print:hidden">
+                {[...new Set([...caches, ...(arbre.ecartees || [])])].sort().map(n => (
+                  <div key={n} className="flex items-center gap-3 bg-white border border-line rounded-xl px-3 py-2.5 mb-1.5">
+                    <Vignette nom={n} photo={photoDe(n)} taille={38} rond={10} />
+                    <span className="flex-1 text-[13.5px] min-w-0">{propre(n)}</span>
+                    <button onClick={() => remettre(n)}
+                      className="border border-line rounded-lg px-3 py-1.5 text-[12.5px] font-bold text-bordeaux">ajouter</button>
+                  </div>
+                ))}
+                {![...caches, ...(arbre.ecartees || [])].length && (
+                  <p className="text-[13.5px] text-ink-mute">Tout est déjà affiché.</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2.5 mt-7 mb-3 print:hidden">
+              <span className="text-[11px] font-extrabold uppercase tracking-[.1em] text-bordeaux">Aujourd'hui</span>
+              <span className="flex-1 h-0.5 bg-line" />
+            </div>
+            <div className="print:hidden">
+              {!journal && <Skeleton rows={2} />}
+              {journal && !journal.length && (
+                <div className="bg-white border border-dashed border-line rounded-2xl py-6 text-center text-ink-mute text-[14px]">
+                  Tape ce que tu as fait.
+                </div>
+              )}
+              {journal && journal.map(l => (
+                <div key={l.id} className="flex items-center gap-3 bg-white border border-line rounded-2xl px-3 py-2.5 mb-2">
+                  <Vignette nom={l.article} photo={photoDe(l.article)} taille={46} rond={11} />
+                  <span className="flex-1 min-w-0 text-[14.5px] font-semibold leading-tight">
+                    {propre(l.article)}
+                    <span className="block text-[11.5px] text-ink-mute font-normal mt-0.5">
+                      {nb(l.fois || 1)} fois{noms[l.fait_par] ? ' · ' + noms[l.fait_par] : ''} · {heure(l.fait_le)}
+                    </span>
+                  </span>
+                  <span className="text-[17px] font-extrabold text-ok whitespace-nowrap">{nb(l.qty)} {l.unite}</span>
+                  <button onClick={() => retirerLigne(l.id)}
+                    className="w-9 h-9 shrink-0 border border-line rounded-xl grid place-items-center">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-danger fill-none" strokeWidth="2.6"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* la feuille imprimée */}
         <div className="hidden print:block print-area">
@@ -354,7 +478,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 <tr>
                   <th className="text-left border-b-2 border-ink py-1.5 text-[10.5px] uppercase w-[60px]">Heure</th>
                   <th className="text-left border-b-2 border-ink py-1.5 text-[10.5px] uppercase">Article</th>
-                  <th className="text-right border-b-2 border-ink py-1.5 text-[10.5px] uppercase w-[80px]">Fois</th>
+                  <th className="text-right border-b-2 border-ink py-1.5 text-[10.5px] uppercase w-[70px]">Fois</th>
                   <th className="text-right border-b-2 border-ink py-1.5 text-[10.5px] uppercase w-[100px]">Sortie</th>
                   <th className="text-left border-b-2 border-ink py-1.5 text-[10.5px] uppercase w-[110px]">Par qui</th>
                 </tr>
@@ -379,44 +503,46 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       {saisie && (
         <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end justify-center print:hidden"
           onPointerDown={e => { if (e.target === e.currentTarget) setSaisie(null) }}>
-          <div className="bg-cream w-full max-w-[560px] rounded-t-[24px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
+          <div className="bg-cream w-full max-w-[540px] rounded-t-[22px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-3">
-              <span className="rounded-2xl overflow-hidden shrink-0 flex"><Vignette nom={saisie} taille={62} /></span>
-              <b className="text-[19px] leading-tight">{propre(saisie)}</b>
+              <Vignette nom={saisie} photo={photoDe(saisie)} taille={58} rond={15} />
+              <b className="text-[18px] leading-tight">{propre(saisie)}</b>
             </div>
+
+            {minmax[saisie] && minmax[saisie].min > 0 && (stocks[saisie] || 0) < minmax[saisie].min && (
+              <div className="bg-[#FCEEE8] border border-[#f0cfc5] rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3">
+                <b className="text-[27px] font-extrabold text-danger leading-none">{nb(stocks[saisie] || 0)}</b>
+                <span className="text-[12.5px] text-danger leading-snug">
+                  il en reste <b>{nb(stocks[saisie] || 0)}</b><br />
+                  il en faut au moins <b>{nb(minmax[saisie].min)}</b>, jusqu'à <b>{nb(minmax[saisie].max)}</b>
+                </span>
+              </div>
+            )}
 
             <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
               <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
-                className="w-16 h-16 shrink-0 border-2 border-line rounded-2xl text-[32px] font-extrabold text-bordeaux leading-none">−</button>
+                className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">−</button>
               <div className="flex-1 text-center">
-                <b className="block text-[44px] font-extrabold leading-none">{nb(fois)}</b>
-                <span className="text-[12.5px] text-ink-mute font-bold">fois la recette</span>
+                <input type="number" step="0.5" min="0.5" value={fois}
+                  onChange={e => setFois(Math.max(0.5, Number(e.target.value) || 0.5))}
+                  className="w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
+                <span className="text-[11.5px] text-ink-mute font-bold">fois la recette</span>
               </div>
               <button onClick={() => setFois(f => (f < 1 ? f + 0.5 : f + 1))}
-                className="w-16 h-16 shrink-0 border-2 border-line rounded-2xl text-[32px] font-extrabold text-bordeaux leading-none">+</button>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2 mb-3.5">
-              {[0.5, 1, 2, 3].map(n => (
-                <button key={n} onClick={() => setFois(n)}
-                  className={'py-3 text-[17px] font-extrabold border-2 rounded-2xl ' +
-                    (fois === n ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
-                  {n === 0.5 ? '½' : n}
-                </button>
-              ))}
+                className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">+</button>
             </div>
 
             {recettes[saisie] && recettes[saisie].lignes.length > 0 && (
-              <div className="bg-white border border-line rounded-2xl overflow-hidden mb-3">
-                <div className="bg-cream-warm px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
+              <div className="bg-white border border-line rounded-2xl overflow-hidden mb-2.5">
+                <div className="bg-cream-warm px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
                   Ce qu'il faut
                 </div>
                 {regrouper(recettes[saisie].lignes).map((l, i) => (
                   <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
-                    <span className="text-[19px] font-extrabold min-w-[104px] text-right">
-                      {l.tailles ? l.tailles.map(q => nb(q * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
+                    <span className="text-[17px] font-extrabold min-w-[96px] text-right">
+                      {l.tailles ? l.tailles.map(x => nb(x * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
                     </span>
-                    <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
+                    <span className={'text-[14px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                       {propre(l.produit)}
                     </span>
                   </div>
@@ -425,41 +551,49 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             )}
 
             {recettes[saisie] && (
-              <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 mb-1 flex items-baseline gap-2.5">
-                <b className="text-[26px] font-extrabold text-ok">
+              <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 flex items-baseline gap-2.5">
+                <b className="text-[23px] font-extrabold text-ok">
                   {nb(recettes[saisie].sortQty * fois)} {recettes[saisie].sortUnite}
                 </b>
-                <span className="text-[13.5px] text-ok">en sortie</span>
+                <span className="text-[12.5px] text-ok">en sortie</span>
               </div>
             )}
             {!recettes[saisie] && (
-              <p className="text-[12.5px] text-[#854F0B] mb-2">Pas de recette dans Odoo : on note seulement les fournées.</p>
+              <p className="text-[12.5px] text-[#854F0B]">Pas de recette dans Odoo : on note seulement les fournées.</p>
             )}
 
-            <button onClick={valider}
-              className="w-full mt-3 py-4 rounded-2xl bg-ok text-white text-[19px] font-extrabold flex items-center justify-center gap-2.5">
-              <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
+            <button onClick={() => noter(saisie, fois)}
+              className="w-full mt-3 py-4 rounded-2xl bg-ok text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5">
+              <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
               C'est fait
             </button>
             <button onClick={() => setSaisie(null)}
-              className="w-full mt-2 py-3.5 rounded-2xl bg-white border border-line text-ink-mute text-[15px] font-bold">
+              className="w-full mt-2 py-3 rounded-2xl bg-white border border-line text-ink-mute text-[14.5px] font-bold">
               fermer
             </button>
           </div>
         </div>
       )}
-
-      {journal && (
-        <div className="lg-bottom-bar z-40 bg-white border-t border-line px-4 py-3 flex items-center gap-3 print:hidden">
-          <b className="text-[16px] flex-1">
-            {journal.length === 0 ? 'Rien fait' : journal.length + (journal.length > 1 ? ' faits' : ' fait')}
-          </b>
-          <button onClick={() => window.print()}
-            className="bg-bordeaux text-cream rounded-2xl px-4 py-3 text-[15px] font-extrabold">
-            Imprimer
-          </button>
-        </div>
-      )}
     </div>
   )
+}
+
+// Une fiche Odoo peut lister le même ingrédient une fois par taille de gâteau.
+// On le montre une seule fois, avec toutes ses quantités : « 20 / 80 / 120 g ».
+function regrouper(lignes) {
+  const out = []
+  const vus = new Map()
+  for (const l of lignes) {
+    const cle = l.produit + '|' + l.unite
+    if (vus.has(cle)) {
+      const d = vus.get(cle)
+      if (!d.tailles) d.tailles = [d.qty]
+      if (!d.tailles.includes(l.qty)) d.tailles.push(l.qty)
+      continue
+    }
+    const d = { ...l }
+    vus.set(cle, d)
+    out.push(d)
+  }
+  return out
 }
