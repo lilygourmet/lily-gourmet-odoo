@@ -1365,8 +1365,35 @@ export default async function handler(req, res) {
       // Framboise ») alors que l'atelier fabrique des VARIANTES (« … (10) ») —
       // sans en tenir compte on perd toute une chaîne.
       const modele = n => String(n || '').replace(/\s*\([^()]*\)\s*$/, '').trim()
-      const recetteDe = n => recettes[n] || recettes[modele(n)]
       const estFini = n => /^(E-|V-|MI-|N-)/i.test(String(n || ''))
+
+      // Les entremets finis sont montés ailleurs : leurs recettes ne sont pas
+      // dans ce qu'on vient de lire. On prend donc la carte complète des
+      // nomenclatures — c'est elle qui dit à quel gâteau sert chaque
+      // préparation. Une seule fois, le résultat est gardé par l'écran.
+      const [tousBoms, toutesLignes, tousTmpl] = await Promise.all([
+        odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id'], { limit: 5000 }),
+        odooSearchRead(uid, 'mrp.bom.line', [], ['bom_id', 'product_id'], { limit: 40000 }),
+        odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 }),
+      ])
+      const nomTmpl = new Map(tousTmpl.map(t => [t.id, String(t.name || '').replace(/^\[\d+\]\s*/, '').trim()]))
+      const ingParBom = new Map()
+      for (const l of toutesLignes) {
+        const id = Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id
+        if (!ingParBom.has(id)) ingParBom.set(id, [])
+        ingParBom.get(id).push((Array.isArray(l.product_id) ? l.product_id[1] : '').replace(/^\[\d+\]\s*/, '').trim())
+      }
+      // la recette d'un nom, rangée aussi sous son modèle
+      const carte = new Map()
+      for (const b of tousBoms) {
+        const nom = b.product_id
+          ? String(b.product_id[1]).replace(/^\[\d+\]\s*/, '').trim()
+          : nomTmpl.get(Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id)
+        if (!nom) continue
+        const ing = ingParBom.get(b.id) || []
+        if (!carte.has(nom)) carte.set(nom, ing)
+        if (!carte.has(modele(nom))) carte.set(modele(nom), ing)
+      }
 
       const utiles = new Set()
       const descendre = (nom, prof, vus) => {
@@ -1374,16 +1401,14 @@ export default async function handler(req, res) {
         for (const cle of [nom, modele(nom)]) {
           if (vus.has(cle)) continue
           vus.add(cle)
-          const r = recettes[cle]
-          if (!r) continue
-          for (const l of r.lignes) {
-            utiles.add(l.produit)
-            utiles.add(modele(l.produit))
-            descendre(l.produit, prof + 1, vus)
+          for (const c of carte.get(cle) || []) {
+            utiles.add(c)
+            utiles.add(modele(c))
+            descendre(c, prof + 1, vus)
           }
         }
       }
-      for (const nom of Object.keys(recettes)) {
+      for (const nom of carte.keys()) {
         if (estFini(nom)) descendre(nom, 0, new Set())
       }
       // les donuts se vendent en coffret GM-, mais l'annexe les fabrique
@@ -1397,9 +1422,9 @@ export default async function handler(req, res) {
       const gardes = Object.keys(combien).filter(n => garde(n))
       const composants = new Set()
       for (const n of gardes) {
-        const r = recetteDe(n)
-        if (!r) continue
-        for (const l of r.lignes) { composants.add(l.produit); composants.add(modele(l.produit)) }
+        for (const c of carte.get(n) || carte.get(modele(n)) || []) {
+          composants.add(c); composants.add(modele(c))
+        }
       }
       const racines = gardes
         .filter(n => !composants.has(n) && !composants.has(modele(n)))
