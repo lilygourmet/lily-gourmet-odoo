@@ -473,16 +473,36 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                   <div className="bg-cream-warm px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
                     Ce qu'il faut
                   </div>
-                  {regrouper(r.lignes).map((l, i) => (
-                    <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
-                      <span className="text-[19px] font-extrabold min-w-[104px] text-right">
-                        {l.tailles ? l.tailles.map(q => nb(q * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
-                      </span>
-                      <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
-                        {propre(l.produit)}
-                      </span>
-                    </div>
-                  ))}
+                  {regrouper(r.lignes).map((l, i) => {
+                    // si l'app connaît la recette de cet ingrédient, on peut
+                    // entrer dedans pour la faire à son tour
+                    const cible = tous.find(a => a.article === l.produit)
+                    const ouvrable = l.fabrique && cible && recettes[l.produit]
+                    const contenu = (
+                      <>
+                        <span className="text-[19px] font-extrabold min-w-[104px] text-right">
+                          {l.tailles ? l.tailles.map(q => nb(q * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
+                        </span>
+                        <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
+                          {propre(l.produit)}
+                        </span>
+                        {ouvrable && (
+                          <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
+                            <path d="M9 5l7 7-7 7" /></svg>
+                        )}
+                      </>
+                    )
+                    return ouvrable ? (
+                      <button key={i} onClick={() => ouvrir(cible)}
+                        className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
+                        {contenu}
+                      </button>
+                    ) : (
+                      <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
+                        {contenu}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 

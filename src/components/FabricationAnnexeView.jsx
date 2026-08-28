@@ -55,6 +55,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [chemin, setChemin] = useState([])
   const [cheminB, setCheminB] = useState([])   // où l'on est dans « ce qu'il faut faire »
   const [saisie, setSaisie] = useState(null)
+  const [pile, setPile] = useState([])        // d'où l'on vient dans les fiches
   const [fois, setFois] = useState(1)
   const [besoins, setBesoins] = useState({})      // besoins modifiés à la main
   const [noms, setNoms] = useState({})
@@ -184,7 +185,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return m
   }, [journal])
 
-  const ouvrirFiche = nom => {
+  const ouvrirFiche = (nom, depuis) => {
+    setPile(p => (depuis ? [...p, depuis] : []))
+    setSaisie(nom)
+    const r = recettes[nom]
+    const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
+    setFois(b > 0 && r && r.sortQty ? Math.max(0.5, Math.ceil((b / r.sortQty) * 2) / 2) : 1)
+  }
+
+  const ouvrirFicheSimple = nom => {
     setSaisie(nom)
     const r = recettes[nom]
     const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
@@ -201,6 +210,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       setJournal(l => [...(l || []), ligne])
       setBesoins(b => ({ ...b, [nom]: 0 }))
       setSaisie(null)
+      setPile([])
       setHisto(null)
       toast.success(propre(nom) + ' — ' + nb(f) + ' fois')
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
@@ -289,8 +299,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             <div className="grid gap-2.5"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
               {listeBesoins.map(x => {
-                const r = recettes[x.nom]
-                const f = !x.mere && r && r.sortQty ? x.besoin / r.sortQty : 0
                 const dessous = x.mere ? 0 : sousBesoins(x.nom).length
                 const prof = cheminB.length
                 return (
@@ -312,11 +320,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       </span>
                     )}
                     <span className="block px-2 py-1.5 text-[12px] font-bold leading-tight">{propre(x.nom)}</span>
-                    {!x.mere && (
-                      <span className="block px-2 pb-2 text-[11.5px] font-extrabold text-[#b58f3c]">
-                        {nb(f)} fois la recette
-                      </span>
-                    )}
                   </button>
                 )
               })}
@@ -536,12 +539,24 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       {/* la fiche : combien de fois, et la recette qui suit */}
       {saisie && (
         <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end justify-center print:hidden"
-          onPointerDown={e => { if (e.target === e.currentTarget) setSaisie(null) }}>
+          onPointerDown={e => { if (e.target === e.currentTarget) { setSaisie(null); setPile([]) } }}>
           <div className="bg-cream w-full max-w-[540px] rounded-t-[22px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-3">
+              {pile.length > 0 && (
+                <button onClick={() => { const p = [...pile]; const r = p.pop(); setPile(p); ouvrirFicheSimple(r) }}
+                  className="w-10 h-10 shrink-0 border border-line bg-white rounded-xl grid place-items-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-bordeaux fill-none" strokeWidth="2.4">
+                    <path d="M15 5l-7 7 7 7" /></svg>
+                </button>
+              )}
               <Vignette nom={saisie} photo={photoDe(saisie)} taille={58} rond={15} />
-              <b className="text-[18px] leading-tight">{propre(saisie)}</b>
+              <b className="text-[18px] leading-tight flex-1 min-w-0">{propre(saisie)}</b>
             </div>
+            {pile.length > 0 && (
+              <p className="text-[12px] text-ink-mute -mt-1 mb-3">
+                pour faire <b>{propre(pile[pile.length - 1])}</b>
+              </p>
+            )}
 
             {minmax[saisie] && minmax[saisie].min > 0 && (stocks[saisie] || 0) < minmax[saisie].min && (
               <div className="bg-[#FCEEE8] border border-[#f0cfc5] rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3">
@@ -600,16 +615,35 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 <div className="bg-cream-warm px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
                   Ce qu'il faut
                 </div>
-                {regrouper(recettes[saisie].lignes).map((l, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
-                    <span className="text-[17px] font-extrabold min-w-[96px] text-right">
-                      {l.tailles ? l.tailles.map(x => nb(x * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
-                    </span>
-                    <span className={'text-[14px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
-                      {propre(l.produit)}
-                    </span>
-                  </div>
-                ))}
+                {regrouper(recettes[saisie].lignes).map((l, i) => {
+                  // un ingrédient qui se fabrique lui-même : on peut entrer
+                  // dans sa recette pour la faire à son tour
+                  const ouvrable = l.fabrique && recettes[l.produit]
+                  const contenu = (
+                    <>
+                      <span className="text-[17px] font-extrabold min-w-[96px] text-right">
+                        {l.tailles ? l.tailles.map(x => nb(x * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
+                      </span>
+                      <span className={'text-[14px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
+                        {propre(l.produit)}
+                      </span>
+                      {ouvrable && (
+                        <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
+                          <path d="M9 5l7 7-7 7" /></svg>
+                      )}
+                    </>
+                  )
+                  return ouvrable ? (
+                    <button key={i} onClick={() => ouvrirFiche(l.produit, saisie)}
+                      className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
+                      {contenu}
+                    </button>
+                  ) : (
+                    <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
+                      {contenu}
+                    </div>
+                  )
+                })}
               </div>
             )}
 
@@ -630,7 +664,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
               C'est fait
             </button>
-            <button onClick={() => setSaisie(null)}
+            <button onClick={() => { setSaisie(null); setPile([]) }}
               className="w-full mt-2 py-3 rounded-2xl bg-white border border-line text-ink-mute text-[14.5px] font-bold">
               fermer
             </button>
