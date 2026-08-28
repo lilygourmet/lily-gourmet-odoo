@@ -1357,12 +1357,47 @@ export default async function handler(req, res) {
         aVoir = [...suivant]
       }
 
+      // On ne garde que ce qui sert vraiment aux gâteaux de la maison : on part
+      // des entremets (E-), viennoiseries (V-), mignardises (MI-) et bûches
+      // (N-), et on descend leurs recettes. Les chocolats (RA-), les coffrets
+      // (GM-) et les fiches « archive » ne concernent pas l'annexe.
+      // Piège : Odoo écrit ces liens sur le MODÈLE (« Sm- PR Le Citron
+      // Framboise ») alors que l'atelier fabrique des VARIANTES (« … (10) ») —
+      // sans en tenir compte on perd toute une chaîne.
+      const modele = n => String(n || '').replace(/\s*\([^()]*\)\s*$/, '').trim()
+      const recetteDe = n => recettes[n] || recettes[modele(n)]
+      const estFini = n => /^(E-|V-|MI-|N-)/i.test(String(n || ''))
+
+      const utiles = new Set()
+      const descendre = (nom, prof, vus) => {
+        if (prof > 6) return
+        for (const cle of [nom, modele(nom)]) {
+          if (vus.has(cle)) continue
+          vus.add(cle)
+          const r = recettes[cle]
+          if (!r) continue
+          for (const l of r.lignes) {
+            utiles.add(l.produit)
+            utiles.add(modele(l.produit))
+            descendre(l.produit, prof + 1, vus)
+          }
+        }
+      }
+      for (const nom of Object.keys(recettes)) {
+        if (estFini(nom)) descendre(nom, 0, new Set())
+      }
+      // les donuts se vendent en coffret GM-, mais l'annexe les fabrique
+      const garde = n => utiles.has(n) || utiles.has(modele(n)) || /donut/i.test(n)
+
       // Une racine, c'est un article produit à l'annexe qui n'entre dans la
       // recette d'aucun autre : personne ne l'attend, c'est un bout de chaîne.
       const composants = new Set()
-      for (const r of Object.values(recettes)) for (const l of r.lignes) composants.add(l.produit)
+      for (const r of Object.values(recettes)) for (const l of r.lignes) {
+        composants.add(l.produit); composants.add(modele(l.produit))
+      }
       const racines = Object.keys(combien)
-        .filter(n => !composants.has(n))
+        .filter(n => garde(n))
+        .filter(n => !composants.has(n) && !composants.has(modele(n)))
         .sort((a, b) => combien[b] - combien[a])
 
       return res.status(200).json({ racines, combien, recettes })
