@@ -52,8 +52,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [arbre, setArbre] = useState(() => dernierEcran('annexe'))
   const [erreur, setErreur] = useState(null)
   const [journal, setJournal] = useState(null)
-  const [chemin, setChemin] = useState([])
-  const [cheminB, setCheminB] = useState([])   // où l'on est dans « ce qu'il faut faire »
   const [saisie, setSaisie] = useState(null)
   const [pile, setPile] = useState([])        // d'où l'on vient dans les fiches
   const [fois, setFois] = useState(1)
@@ -127,24 +125,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return out
   }
-  // ce qu'il faut faire juste en dessous d'un article : ses composants qui
-  // manquent pour la quantité qu'on a décidé de produire
   const besoinDe = nom => (besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom))
-  const sousBesoins = nom => {
-    const r = recettes[nom]
-    const b = besoinDe(nom)
-    if (!r || b <= 0) return []
-    const n = r.sortQty ? b / r.sortQty : 1
-    const out = []
-    for (const l of r.lignes) {
-      if (!l.fabrique || !recettes[l.produit]) continue
-      const manque = Math.max(0, l.qty * n - (stocks[l.produit] || 0))
-      if (manque > 0.001 && !out.some(x => x.nom === l.produit)) {
-        out.push({ nom: l.produit, besoin: Math.ceil(manque) })
-      }
-    }
-    return out
-  }
+
+  // les gâteaux qui ont du travail : quelque chose manque dans leur chaîne
   const aFaire = useMemo(() => {
     if (!arbre) return []
     return (arbre.racines || [])
@@ -152,19 +135,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       .map(m => ({ mere: m, lignes: travailDe(m) }))
       .filter(x => x.lignes.length)
   }, [arbre, caches, besoins, stocks, minmax])
-
-  // ce que montre l'écran des besoins : les mères, puis les morceaux
-  const listeBesoins = useMemo(() => {
-    if (!arbre) return []
-    if (!cheminB.length) return aFaire.map(x => ({ nom: x.mere, combien: x.lignes.length, mere: true }))
-    const ici = cheminB[cheminB.length - 1]
-    if (cheminB.length === 1) {
-      return enfantsDe(ici)
-        .filter(e => besoinDe(e) > 0)
-        .map(e => ({ nom: e, besoin: besoinDe(e) }))
-    }
-    return sousBesoins(ici).map(x => ({ nom: x.nom, besoin: besoins[x.nom] !== undefined ? besoins[x.nom] : x.besoin }))
-  }, [arbre, cheminB, aFaire, besoins, stocks, minmax])
 
   // ===== ce qu'on a fait =====
   const liste = useMemo(() => {
@@ -175,9 +145,8 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       return tous.filter(n => propre(n).toLowerCase().includes(cherche) || n.toLowerCase().includes(cherche))
         .slice(0, 40)
     }
-    if (!chemin.length) return (arbre.racines || []).filter(n => !caches.includes(n))
-    return enfantsDe(chemin[chemin.length - 1])
-  }, [arbre, chemin, caches, q])
+    return (arbre.racines || []).filter(n => !caches.includes(n))
+  }, [arbre, caches, q])
 
   const combienDe = useMemo(() => {
     const m = {}
@@ -249,7 +218,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       <div className="max-w-[860px] mx-auto px-3 py-4 pb-28 print:p-0 print:max-w-none">
         <div className="flex gap-2 mb-4 print:hidden">
           {[['besoins', 'Ce qu\'il faut faire'], ['declarer', 'Déclarer ce qu\'on a fait']].map(([v, t]) => (
-            <button key={v} onClick={() => { setVue(v); setChemin([]); setCheminB([]); setSaisie(null) }}
+            <button key={v} onClick={() => { setVue(v); setSaisie(null); setPile([]) }}
               className={'flex-1 py-3 rounded-2xl text-[14.5px] font-extrabold border-2 flex items-center justify-center gap-2 ' +
                 (vue === v ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
               {t}
@@ -271,58 +240,24 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         {/* ===================== CE QU'IL FAUT FAIRE ===================== */}
         {vue === 'besoins' && arbre && (
           <div className="print:hidden">
-            {cheminB.length > 0 && (
-              <div className="flex items-center gap-2 mb-3">
-                <button onClick={() => setCheminB(c => c.slice(0, -1))}
-                  className="w-10 h-10 shrink-0 border border-line bg-white rounded-xl grid place-items-center">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-bordeaux fill-none" strokeWidth="2.4">
-                    <path d="M15 5l-7 7 7 7" /></svg>
-                </button>
-                <div className="flex items-center gap-1.5 flex-wrap min-w-0 text-[14px] font-extrabold">
-                  {cheminB.map((n, k) => (
-                    <span key={n} className="flex items-center gap-1.5">
-                      {k > 0 && <span className="text-ink-mute">›</span>}
-                      <Vignette nom={n} photo={photoDe(n)} taille={30} rond={9} />
-                      <span>{propre(n)}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
+            {!aFaire.length && (
+              <p className="text-center text-ink-mute text-[14px] py-10">Rien à faire aujourd'hui.</p>
             )}
-
-            {!listeBesoins.length && (
-              <p className="text-center text-ink-mute text-[14px] py-10">
-                {cheminB.length ? 'Plus rien à faire ici.' : "Rien à faire aujourd'hui."}
-              </p>
-            )}
-
             <div className="grid gap-2.5"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
-              {listeBesoins.map(x => {
-                const dessous = x.mere ? 0 : sousBesoins(x.nom).length
-                const prof = cheminB.length
-                return (
-                  <button key={x.nom}
-                    onClick={() => (x.mere ? setCheminB([x.nom]) : ouvrirFiche(x.nom))}
-                    className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
-                    <span className="absolute top-0 left-0 right-0 h-1 z-10"
-                      style={{ background: NIVEAU[Math.min(prof, 3)] }} />
-                    <span className="block w-full aspect-square overflow-hidden">
-                      <Vignette nom={x.nom} photo={photoDe(x.nom)} taille={400} rond={0} />
-                    </span>
-                    <span className="absolute top-1.5 left-1.5 right-1.5 bg-danger text-white rounded-lg px-2 py-1 text-[12.5px] font-extrabold text-center">
-                      {x.mere ? `${x.combien} à faire` : `${nb(x.besoin)} à faire`}
-                    </span>
-                    {dessous > 0 && (
-                      <span onClick={ev => { ev.stopPropagation(); setCheminB(c => [...c, x.nom]) }}
-                        className="absolute bottom-[46px] right-1.5 bg-white/95 border border-line rounded-full px-2 py-0.5 text-[11.5px] font-extrabold text-bordeaux">
-                        {dessous} ›
-                      </span>
-                    )}
-                    <span className="block px-2 py-1.5 text-[12px] font-bold leading-tight">{propre(x.nom)}</span>
-                  </button>
-                )
-              })}
+              {aFaire.map(({ mere, lignes }) => (
+                <button key={mere} onClick={() => ouvrirFiche(mere)}
+                  className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
+                  <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
+                  <span className="block w-full aspect-square overflow-hidden">
+                    <Vignette nom={mere} photo={photoDe(mere)} taille={400} rond={0} />
+                  </span>
+                  <span className="absolute top-1.5 left-1.5 right-1.5 bg-danger text-white rounded-lg px-2 py-1 text-[12.5px] font-extrabold text-center">
+                    {lignes.length} à faire
+                  </span>
+                  <span className="block px-2 py-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -379,48 +314,18 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )}
             </div>
 
-            {chemin.length > 0 && !q.trim() && (
-              <div className="flex items-center gap-2 mb-3 print:hidden">
-                <button onClick={() => setChemin(c => c.slice(0, -1))}
-                  className="w-10 h-10 shrink-0 border border-line bg-white rounded-xl grid place-items-center">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-bordeaux fill-none" strokeWidth="2.4">
-                    <path d="M15 5l-7 7 7 7" /></svg>
-                </button>
-                <div className="flex items-center gap-1.5 flex-wrap min-w-0 text-[14px] font-extrabold">
-                  {chemin.map((n, k) => (
-                    <span key={n} className="flex items-center gap-1.5">
-                      {k > 0 && <span className="text-ink-mute">›</span>}
-                      <Vignette nom={n} photo={photoDe(n)} taille={30} rond={9} />
-                      <span>{propre(n)}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3.5 text-[11.5px] text-ink-mute mb-3 flex-wrap print:hidden">
-              {[['#993556', 'gâteau'], ['#b58f3c', 'sa préparation'], ['#9a8b7a', 'préparation de préparation']].map(([c, t]) => (
-                <span key={t} className="flex items-center gap-1.5">
-                  <i className="w-3 h-3 rounded" style={{ background: c }} />{t}
-                </span>
-              ))}
-            </div>
-
             <div className="grid gap-2.5 print:hidden"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
               {liste.map(nom => {
-                const morceaux = enfantsDe(nom).length
                 const fait = combienDe[nom] || 0
                 const mm = minmax[nom]
                 const alerte = mm && mm.min > 0 && (stocks[nom] || 0) < mm.min
-                const prof = q.trim() ? 1 : chemin.length
                 return (
-                  <button key={nom}
-                    onClick={() => (morceaux ? setChemin(c => [...c, nom]) : ouvrirFiche(nom))}
+                  <button key={nom} onClick={() => ouvrirFiche(nom)}
                     className={'relative bg-white border rounded-[14px] overflow-hidden text-left ' +
                       (fait ? 'border-2 border-ok' : 'border-line')}>
                     <span className="absolute top-0 left-0 right-0 h-1 z-10"
-                      style={{ background: NIVEAU[Math.min(prof, 3)] }} />
+                      style={{ background: NIVEAU[0] }} />
                     <span className="block w-full aspect-square overflow-hidden">
                       <Vignette nom={nom} photo={photoDe(nom)} taille={400} rond={0} />
                     </span>
@@ -429,17 +334,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                         <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-white fill-none" strokeWidth="3.4"><path d="M4 13l5 5L20 7" /></svg>
                       </span>
                     )}
-                    {morceaux > 0 && (
-                      <span className="absolute top-1.5 right-1.5 bg-white/95 border border-line rounded-full px-2 py-0.5 text-[11.5px] font-extrabold text-bordeaux">
-                        {morceaux} ›
-                      </span>
-                    )}
                     {alerte && (
                       <span className="absolute bottom-8 left-1.5 bg-danger text-white rounded-full px-2 py-0.5 text-[11px] font-extrabold">
                         à faire
                       </span>
                     )}
-                    {!chemin.length && !q.trim() && (
+                    {!q.trim() && (
                       <span onClick={ev => cacher(nom, ev)} title="ranger"
                         className="absolute bottom-8 right-1.5 w-7 h-7 rounded-full bg-white/90 border border-line grid place-items-center">
                         <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-ink-mute fill-none" strokeWidth="2.4">
@@ -452,7 +352,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               })}
             </div>
 
-            {!chemin.length && !q.trim() && arbre && (
+            {!q.trim() && arbre && (
               <button onClick={() => setVoirPlus(v => !v)}
                 className="w-full mt-3 py-3 rounded-2xl bg-white border border-dashed border-line text-[13.5px] font-bold text-bordeaux print:hidden">
                 + ajouter un article
