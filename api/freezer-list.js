@@ -1290,6 +1290,84 @@ export default async function handler(req, res) {
       })
     }
 
+    // L'arbre de l'annexe : ce qui s'y fabrique vraiment, et de quoi c'est fait.
+    // On part des ordres terminés là-bas, puis on descend les nomenclatures.
+    if (req.query.mode === 'annexe') {
+      const uid = await odooAuth()
+      const lieux = await odooSearchRead(uid, 'stock.location',
+        [['complete_name', 'ilike', 'Stock Prod annexe']], ['id'], { limit: 5 })
+      if (!lieux.length) return res.status(200).json({ racines: [], recettes: {} })
+
+      const d0 = new Date(); d0.setDate(d0.getDate() - 90)
+      const isoD = d => d.toISOString().slice(0, 19).replace('T', ' ')
+      const mos = await odooSearchRead(uid, 'mrp.production', [
+        ['location_src_id', 'in', lieux.map(l => l.id)],
+        ['state', '=', 'done'],
+        ['date_planned_start', '>=', isoD(d0)],
+      ], ['product_id'], { limit: 3000 })
+
+      const combien = {}
+      for (const m of mos) {
+        const n = (Array.isArray(m.product_id) ? m.product_id[1] : '').replace(/^\[\d+\]\s*/, '')
+        if (n) combien[n] = (combien[n] || 0) + 1
+      }
+
+      // Les recettes, en descendant : d'abord celles des articles produits,
+      // puis celles de leurs composants fabriqués, sur quelques niveaux.
+      const recettes = {}
+      let aVoir = Object.keys(combien)
+      for (let niveau = 0; niveau < 4 && aVoir.length; niveau += 1) {
+        const prods = await odooSearchRead(uid, 'product.product', [['name', 'in', aVoir]],
+          ['id', 'name', 'product_tmpl_id'], { limit: 600 })
+        if (!prods.length) break
+        const boms = await odooSearchRead(uid, 'mrp.bom', [
+          '|', ['product_id', 'in', prods.map(p => p.id)],
+          ['product_tmpl_id', 'in', prods.map(p => p.product_tmpl_id[0])],
+        ], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 900 })
+        if (!boms.length) break
+        const lignes = await odooSearchRead(uid, 'mrp.bom.line',
+          [['bom_id', 'in', boms.map(b => b.id)]],
+          ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 6000 })
+        const parBom = new Map()
+        for (const l of lignes) {
+          const id = Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id
+          if (!parBom.has(id)) parBom.set(id, [])
+          parBom.get(id).push({
+            produit: (Array.isArray(l.product_id) ? l.product_id[1] : '').replace(/^\[\d+\]\s*/, ''),
+            qty: l.product_qty,
+            unite: ((Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
+            fabrique: /^\s*(\[\d+\]\s*)?SM/i.test(Array.isArray(l.product_id) ? l.product_id[1] : ''),
+          })
+        }
+        const parProduit = new Map(prods.map(p => [p.id, p.name]))
+        const parTmpl = new Map(prods.map(p => [p.product_tmpl_id[0], p.name]))
+        const suivant = new Set()
+        for (const b of boms) {
+          const nom = (b.product_id && parProduit.get(b.product_id[0]))
+            || (b.product_tmpl_id && parTmpl.get(b.product_tmpl_id[0]))
+          if (!nom || recettes[nom]) continue
+          const ing = parBom.get(b.id) || []
+          recettes[nom] = {
+            sortQty: b.product_qty,
+            sortUnite: ((Array.isArray(b.product_uom_id) ? b.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
+            lignes: ing,
+          }
+          for (const l of ing) if (l.fabrique && !recettes[l.produit]) suivant.add(l.produit)
+        }
+        aVoir = [...suivant]
+      }
+
+      // Une racine, c'est un article produit à l'annexe qui n'entre dans la
+      // recette d'aucun autre : personne ne l'attend, c'est un bout de chaîne.
+      const composants = new Set()
+      for (const r of Object.values(recettes)) for (const l of r.lignes) composants.add(l.produit)
+      const racines = Object.keys(combien)
+        .filter(n => !composants.has(n))
+        .sort((a, b) => combien[b] - combien[a])
+
+      return res.status(200).json({ racines, combien, recettes })
+    }
+
     // Les recettes d'une liste d'articles, telles qu'Odoo les tient. L'écran
     // « Fabrication Prod » s'en sert pour montrer ce qu'il faut et multiplier
     // par le nombre de fournées.
