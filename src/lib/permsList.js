@@ -34,6 +34,7 @@ export const PERMS = [
   { key: 'perm_stock_prod_vitrine', group: 'Vitrine & Stock (boutique)', label: 'Stock Prod Vitrine', desc: 'Stock de production vitrine (SM-).' },
   { key: 'perm_stock_prod_annexe', group: 'Vitrine & Stock (boutique)', label: 'Stock Prod Annexe', desc: 'Stock de production annexe (SM-).' },
   { key: 'perm_stock_minmax', group: 'Vitrine & Stock (boutique)', label: 'Régler les seuils min/max', desc: 'Définir les alertes de réassort (GS- / Prod).' },
+  { key: 'perm_check_cd', group: 'Production', label: 'Check CD-', desc: "Deuxième contrôle des gâteaux sortis du congélateur : sélectionner puis valider l'ordre dans Odoo." },
   { key: 'perm_stock_poly', group: 'Vitrine & Stock (boutique)', label: 'Stock poly', desc: 'Gérer le stock de poly découpé (morceaux 5/2 cm) + alerte WhatsApp.' },
   { key: 'perm_simu_gateaux', group: 'Vitrine & Stock (boutique)', label: 'Simulation gâteaux', desc: 'Voir le simulateur visuel de gâteaux par nombre de personnes et d\'étages.' },
   { key: 'perm_facture_ocp', group: 'Vitrine & Stock (boutique)', label: 'Facture OCP', desc: 'Générer la facture mensuelle OCP à partir des commandes non facturées.' },

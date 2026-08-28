@@ -1,0 +1,396 @@
+<title>Congélo &amp; Check CD-</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Geist+Mono:wght@400;500&family=Geist:wght@400;500;600;700;800&display=swap">
+<style>
+  :root{
+    --ground:#f3efe7; --card:#ffffff; --card-2:#fbf8f3;
+    --ink:#1a0f0a; --soft:#4a3a30; --mute:#8a7a70; --line:#e7ded0;
+    --bordeaux:#993556; --bordeaux-deep:#7a2a44;
+    --gold:#b8893c; --gold-pale:#f0deb8;
+    --froid:#3d6f8e; --froid-bg:#e9f1f6;
+    --ok:#2f6b2f; --ok-bg:#e4f0dc; --ok-line:#cfe0b8;
+    --warn:#8c6a20; --warn-bg:#fdf3d8;
+    --off:#9c9187; --off-bg:#f2efea;
+    --shadow:0 2px 8px rgba(80,40,30,.07);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#171210; --card:#221b18; --card-2:#1c1613;
+      --ink:#f6efe8; --soft:#d3c5ba; --mute:#9d8c80; --line:#3a2e28;
+      --bordeaux:#d9758f; --bordeaux-deep:#b3576f;
+      --gold:#d9a95c; --gold-pale:#4a3a1e;
+      --froid:#8fc0dd; --froid-bg:#1e2c35;
+      --ok:#8dc47f; --ok-bg:#20301c; --ok-line:#3d5a33;
+      --warn:#e0bb63; --warn-bg:#332a12;
+      --off:#7e736a; --off-bg:#241d1a;
+      --shadow:0 2px 8px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#171210; --card:#221b18; --card-2:#1c1613;
+    --ink:#f6efe8; --soft:#d3c5ba; --mute:#9d8c80; --line:#3a2e28;
+    --bordeaux:#d9758f; --bordeaux-deep:#b3576f;
+    --gold:#d9a95c; --gold-pale:#4a3a1e;
+    --froid:#8fc0dd; --froid-bg:#1e2c35;
+    --ok:#8dc47f; --ok-bg:#20301c; --ok-line:#3d5a33;
+    --warn:#e0bb63; --warn-bg:#332a12;
+    --off:#7e736a; --off-bg:#241d1a;
+    --shadow:0 2px 8px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);
+    font-family:Geist,-apple-system,'Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:460px;margin:0 auto;padding:0 0 7.5rem;min-height:100dvh;background:var(--card-2)}
+
+  .top{background:var(--bordeaux);color:#fff;padding:1.1rem 1.1rem .9rem;position:sticky;top:0;z-index:30;box-shadow:var(--shadow)}
+  .top h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:1.45rem;margin:0}
+  .top p{margin:.3rem 0 0;font-size:.8rem;opacity:.82;line-height:1.4}
+  .tabs{display:flex;gap:.4rem;margin-top:.85rem}
+  .tabs button{flex:1;border:0;border-radius:.75rem;padding:.6rem .5rem;font-family:inherit;
+    font-size:.87rem;font-weight:700;cursor:pointer;background:rgba(255,255,255,.16);color:#fff;transition:background .15s}
+  .tabs button[aria-selected="true"]{background:#fff;color:var(--bordeaux-deep)}
+  .tabs button:focus-visible{outline:2px solid var(--gold-pale);outline-offset:2px}
+
+  /* choix de la vue */
+  .vues{display:flex;gap:.3rem;margin:.55rem 0 0;padding:.25rem;background:rgba(0,0,0,.16);border-radius:.75rem}
+  .vues button{flex:1;border:0;background:none;color:#fff;font-family:inherit;font-size:.8rem;
+    font-weight:600;padding:.45rem;border-radius:.55rem;cursor:pointer;opacity:.75;transition:.15s}
+  .vues button[aria-pressed="true"]{background:rgba(255,255,255,.94);color:var(--bordeaux-deep);opacity:1;font-weight:700}
+
+  .heure{display:flex;align-items:baseline;gap:.6rem;padding:1.3rem 1.1rem .5rem}
+  .heure b{font-family:'Geist Mono',ui-monospace,monospace;font-size:1.02rem;font-weight:500;
+    color:var(--bordeaux);font-variant-numeric:tabular-nums}
+  .heure span{font-size:.76rem;color:var(--mute);letter-spacing:.05em;text-transform:uppercase}
+  .heure .trait{flex:1;height:1px;background:var(--line)}
+
+  .carte{margin:0 .8rem .55rem;background:var(--card);border:1px solid var(--line);
+    border-radius:1.1rem;box-shadow:var(--shadow);overflow:hidden}
+  .piste{position:relative;padding:.85rem .9rem;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+  .piste .fond{position:absolute;inset:0;background:var(--ok-bg);display:flex;align-items:center;
+    padding-left:1.1rem;font-weight:700;color:var(--ok);font-size:.9rem;opacity:0}
+  .glisse{position:relative;background:var(--card);transition:transform .28s cubic-bezier(.2,.9,.3,1);
+    display:flex;align-items:center;gap:.8rem}
+  .carte.sorti{border-color:var(--ok-line)}
+  .carte.sorti .glisse{background:var(--ok-bg)}
+
+  .pouce{flex-shrink:0;width:3rem;height:3rem;border-radius:.9rem;background:var(--froid-bg);
+    color:var(--froid);display:grid;place-items:center;font-size:1.2rem;font-weight:800;
+    border:1px dashed color-mix(in srgb,var(--froid) 40%,transparent);
+    font-variant-numeric:tabular-nums}
+  .carte.sorti .pouce{background:var(--ok);color:#fff;border:0}
+  .pouce.qte{font-size:1.35rem;font-family:'Geist Mono',ui-monospace,monospace}
+
+  .info{flex:1;min-width:0}
+  .titre{font-size:1.05rem;font-weight:800;line-height:1.25}
+  .titre em{font-style:normal;font-weight:600;color:var(--soft)}
+  .client{font-size:.82rem;color:var(--soft);margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ref{font-family:'Geist Mono',ui-monospace,monospace;font-size:.68rem;color:var(--mute);margin-top:.2rem}
+  .indice{flex-shrink:0;color:var(--froid);opacity:.5;font-size:1rem}
+  .carte.sorti .indice{display:none}
+
+  .fait{display:none;align-items:center;gap:.5rem;padding:.5rem .9rem .7rem;border-top:1px solid var(--ok-line);
+    font-size:.78rem;color:var(--ok);font-weight:600}
+  .carte.sorti .fait{display:flex}
+  .fait button{margin-left:auto;background:none;border:0;color:var(--mute);font-family:inherit;
+    font-size:.76rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+
+  /* détail dépliable d'un groupe */
+  .deplier{width:100%;background:var(--card-2);border:0;border-top:1px solid var(--line);
+    font-family:inherit;font-size:.76rem;font-weight:600;color:var(--soft);
+    padding:.5rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.35rem}
+  .detail{border-top:1px solid var(--line);background:var(--card-2)}
+  .detail .u{display:flex;align-items:center;gap:.65rem;padding:.55rem .9rem;
+    border-bottom:1px solid var(--line);font-size:.84rem}
+  .detail .u:last-child{border-bottom:0}
+  .detail .u .qui{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .detail .u .h{font-family:'Geist Mono',ui-monospace,monospace;font-size:.75rem;color:var(--mute)}
+  .detail .u button{border:1px solid var(--line);background:var(--card);border-radius:.6rem;
+    font-family:inherit;font-size:.75rem;font-weight:700;padding:.35rem .7rem;cursor:pointer;color:var(--froid)}
+  .detail .u.ok button{background:var(--ok);border-color:var(--ok);color:#fff}
+
+  .barre-prog{height:4px;background:var(--line)}
+  .barre-prog i{display:block;height:100%;background:var(--ok);transition:width .25s}
+
+  /* écran 2 */
+  .ligne{margin:0 .8rem .55rem;background:var(--card);border:1px solid var(--line);border-radius:1.1rem;
+    box-shadow:var(--shadow);padding:.8rem .9rem;display:flex;align-items:flex-start;gap:.8rem;
+    cursor:pointer;transition:border-color .15s,background .15s}
+  .ligne.on{border-color:var(--bordeaux);background:color-mix(in srgb,var(--bordeaux) 5%,var(--card))}
+  .ligne.bloque,.ligne.hors{cursor:default;opacity:.75}
+  .case{flex-shrink:0;width:1.6rem;height:1.6rem;border-radius:.5rem;border:2px solid var(--line);
+    display:grid;place-items:center;margin-top:.15rem;color:transparent;font-size:.95rem;font-weight:800;transition:.15s}
+  .ligne.on .case{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+  .ligne.bloque .case,.ligne.hors .case{border-style:dashed;background:var(--off-bg)}
+  .etat{display:inline-flex;align-items:center;gap:.3rem;margin-top:.4rem;font-size:.73rem;font-weight:700;
+    padding:.2rem .5rem;border-radius:999px}
+  .etat.ok{background:var(--ok-bg);color:var(--ok)}
+  .etat.manque{background:var(--warn-bg);color:var(--warn)}
+  .etat.hors{background:var(--off-bg);color:var(--off)}
+  .etat code{font-family:'Geist Mono',ui-monospace,monospace;font-size:.72rem}
+
+  .lg-bottom-bar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--card);
+    border-top:1px solid var(--line);padding:.75rem .9rem calc(.75rem + env(safe-area-inset-bottom));
+    box-shadow:0 -6px 24px rgba(80,40,30,.10)}
+  .lg-bottom-bar .inner{max-width:460px;margin:0 auto;display:flex;align-items:center;gap:.75rem}
+  .compte{font-size:.8rem;color:var(--soft);line-height:1.3}
+  .compte b{display:block;font-size:1.15rem;color:var(--ink);font-variant-numeric:tabular-nums}
+  .envoyer{flex:1;border:0;border-radius:.9rem;padding:.95rem 1rem;background:var(--bordeaux);color:#fff;
+    font-family:inherit;font-size:1rem;font-weight:800;cursor:pointer;box-shadow:var(--shadow)}
+  .envoyer[disabled]{background:var(--off-bg);color:var(--off);box-shadow:none;cursor:default}
+  .envoyer:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+  .note{margin:.5rem .8rem 0;padding:.8rem .9rem;background:var(--card-2);border:1px dashed var(--line);
+    border-radius:1rem;font-size:.79rem;color:var(--soft);line-height:1.55}
+  .note b{color:var(--ink)}
+  .legende{margin:1.6rem .8rem 0;padding-top:1.1rem;border-top:1px solid var(--line)}
+  .legende h2{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:1.05rem;
+    margin:0 0 .5rem;color:var(--bordeaux)}
+  .legende p{margin:.45rem 0;font-size:.8rem;color:var(--soft);line-height:1.6}
+  .legende p b{color:var(--ink)}
+  [hidden]{display:none !important}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1 id="titre">Sortie du congélateur</h1>
+    <p id="soustitre">Glissez la carte vers la droite quand le gâteau est sorti.</p>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" id="t1">❄ CD Négatif</button>
+      <button role="tab" aria-selected="false" id="t2">✓ Check CD-</button>
+    </div>
+    <div class="vues">
+      <button id="vHeure" aria-pressed="true">Par heure</button>
+      <button id="vProduit" aria-pressed="false">Par produit</button>
+    </div>
+  </header>
+
+  <section id="ecran"></section>
+
+  <div class="legende">
+    <h2>Ce que dit chaque état</h2>
+    <p><b>Étage en stock</b> — l'étage congelé est disponible : l'ordre sera validé à l'envoi.</p>
+    <p><b>Étage manquant</b> — pas en stock : rien ne se fait dans Odoo, à traiter à la main.</p>
+    <p><b>Hors contrôle</b> — pas d'étage « x cm CD* » dans la recette (Cœur, bombé, Rose/Bleu) : jamais validé automatiquement.</p>
+  </div>
+</div>
+
+<div class="lg-bottom-bar" id="barre" hidden>
+  <div class="inner">
+    <span class="compte" id="compte"><b>0</b> sélectionné</span>
+    <button class="envoyer" id="envoyer" disabled>Envoyer en validation</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  // une unité = un gâteau à sortir
+  const U = [
+    { id:1,  t:'15 cm', p:'Citron',    h:'11:00', c:'Mouna Saouss',        s:'S52071', mo:'MO/200068', etage:'15 cm CD* (Citron)',   dispo:'ok' },
+    { id:2,  t:'15 cm', p:'Citron',    h:'11:00', c:'Nadia Bennani',       s:'S52090', mo:'MO/200101', etage:'15 cm CD* (Citron)',   dispo:'ok' },
+    { id:3,  t:'15 cm', p:'Citron',    h:'15:00', c:'Sara Idrissi',        s:'S52094', mo:'MO/200112', etage:'15 cm CD* (Citron)',   dispo:'ok' },
+    { id:4,  t:'15 cm', p:'Citron',    h:'15:00', c:'Yassine Alaoui',      s:'S52099', mo:'MO/200118', etage:'15 cm CD* (Citron)',   dispo:'manque' },
+    { id:5,  t:'20 cm', p:'Praliné',   h:'11:00', c:'fadwa ali ahmad',     s:'S51949', mo:'MO/200072', etage:'20 cm CD* (Praliné)',  dispo:'ok' },
+    { id:6,  t:'20 cm', p:'Praliné',   h:'11:00', c:'Kaltoume Massaoudi',  s:'S51905', mo:'MO/199463', etage:'20 cm CD* (Praliné)',  dispo:'ok' },
+    { id:7,  t:'20 cm', p:'Praliné',   h:'15:00', c:'Ahmed Lahlou',        s:'S52055', mo:'MO/200075', etage:'20 cm CD* (Praliné)',  dispo:'ok' },
+    { id:8,  t:'25 cm', p:'Vanille',   h:'15:00', c:'Souad Berrada',       s:'S52120', mo:'MO/200311', etage:'25 cm CD* (Vanille)',  dispo:'ok' },
+    { id:9,  t:'25 cm', p:'Vanille',   h:'15:00', c:'Mohammed Bhaya',      s:'S52083', mo:'MO/200127', etage:'25 cm CD* (Vanille)',  dispo:'manque' },
+    { id:10, t:'Cœur 10p', p:'Praliné Chocolaté', h:'11:00', c:'Hessbaoui M. Amine', s:'S52081', mo:'MO/200182', etage:null, dispo:'hors' },
+  ]
+  const sortis = new Set(), coches = new Set()
+  let onglet2 = false, parProduit = false
+
+  const ecran = document.getElementById('ecran')
+  const barre = document.getElementById('barre')
+  const compte = document.getElementById('compte')
+  const envoyer = document.getElementById('envoyer')
+  const cle = u => u.t + ' ' + u.p
+
+  // ---------- glissement ----------
+  function glissable(carte, ids){
+    const piste = carte.querySelector('.piste')
+    const glisse = carte.querySelector('.glisse')
+    const fond = carte.querySelector('.fond')
+    let x0 = null, dx = 0
+    piste.addEventListener('pointerdown', e => {
+      if (ids.every(i => sortis.has(i))) return
+      x0 = e.clientX; dx = 0; glisse.style.transition = 'none'
+      piste.setPointerCapture(e.pointerId)
+    })
+    piste.addEventListener('pointermove', e => {
+      if (x0 === null) return
+      dx = Math.max(0, e.clientX - x0)
+      glisse.style.transform = 'translateX(' + Math.min(dx, piste.offsetWidth * .8) + 'px)'
+      fond.style.opacity = Math.min(1, dx / (piste.offsetWidth * .55))
+    })
+    const fin = () => {
+      if (x0 === null) return
+      const passe = dx > piste.offsetWidth * .55
+      glisse.style.transition = ''; glisse.style.transform = ''; fond.style.opacity = 0
+      x0 = null
+      if (passe) { ids.forEach(i => sortis.add(i)); rendre() }
+    }
+    piste.addEventListener('pointerup', fin)
+    piste.addEventListener('pointercancel', fin)
+  }
+
+  // ---------- écran 1 ----------
+  function carteUnite(u){
+    const est = sortis.has(u.id)
+    const el = document.createElement('div')
+    el.className = 'carte' + (est ? ' sorti' : '')
+    el.innerHTML =
+      '<div class="piste"><div class="fond">Sorti ✓</div><div class="glisse">' +
+        '<div class="pouce">' + (est ? '✓' : '❄') + '</div>' +
+        '<div class="info"><div class="titre">' + u.t + ' <em>' + u.p + '</em></div>' +
+        '<div class="client">' + u.c + '</div><div class="ref">' + u.s + ' · ' + u.mo + '</div></div>' +
+        (est ? '' : '<div class="indice">›››</div>') +
+      '</div></div>' +
+      (est ? '<div class="fait">Sorti à 09:12 par Fatima<button type="button">annuler</button></div>' : '')
+    if (est) el.querySelector('.fait button').addEventListener('click', () => { sortis.delete(u.id); rendre() })
+    else glissable(el, [u.id])
+    return el
+  }
+
+  function carteGroupe(nom, liste){
+    const faits = liste.filter(u => sortis.has(u.id)).length
+    const tout = faits === liste.length
+    const el = document.createElement('div')
+    el.className = 'carte' + (tout ? ' sorti' : '')
+    const restant = liste.length - faits
+    el.innerHTML =
+      '<div class="piste"><div class="fond">Tout sorti ✓</div><div class="glisse">' +
+        '<div class="pouce qte">' + (tout ? '✓' : restant) + '</div>' +
+        '<div class="info"><div class="titre">' + nom + '</div>' +
+        '<div class="client">' + (tout ? 'les ' + liste.length + ' sont sortis'
+            : faits ? faits + ' sur ' + liste.length + ' sortis · ' + restant + ' à prendre'
+                    : liste.length + ' à sortir') + '</div>' +
+        '<div class="ref">' + [...new Set(liste.map(u => u.h))].join(' · ') + '</div></div>' +
+        (tout ? '' : '<div class="indice">›››</div>') +
+      '</div></div>' +
+      '<div class="barre-prog"><i style="width:' + Math.round(faits / liste.length * 100) + '%"></i></div>' +
+      '<button class="deplier" type="button">' + (tout ? 'voir le détail' : 'en sortir seulement une partie') + ' ▾</button>' +
+      '<div class="detail" hidden></div>'
+
+    if (!tout) glissable(el, liste.map(u => u.id))
+
+    const det = el.querySelector('.detail')
+    det.innerHTML = liste.map(u =>
+      '<div class="u' + (sortis.has(u.id) ? ' ok' : '') + '">' +
+        '<span class="h">' + u.h + '</span>' +
+        '<span class="qui">' + u.c + '</span>' +
+        '<button type="button" data-id="' + u.id + '">' + (sortis.has(u.id) ? '✓ sorti' : 'sortir') + '</button>' +
+      '</div>').join('')
+    det.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      const id = Number(b.dataset.id)
+      sortis.has(id) ? sortis.delete(id) : sortis.add(id)
+      rendre(true)
+    }))
+    el.querySelector('.deplier').addEventListener('click', () => { det.hidden = !det.hidden })
+    return el
+  }
+
+  // ---------- écran 2 ----------
+  function ligne(u){
+    const el = document.createElement('div')
+    const libre = u.dispo === 'ok'
+    el.className = 'ligne ' + (libre ? (coches.has(u.id) ? 'on' : '') : u.dispo === 'manque' ? 'bloque' : 'hors')
+    const badge = libre ? '<span class="etat ok">Étage en stock · <code>' + u.etage + '</code></span>'
+      : u.dispo === 'manque' ? '<span class="etat manque">Étage manquant · <code>' + u.etage + '</code></span>'
+      : '<span class="etat hors">Hors contrôle · pas d\'étage CD*</span>'
+    el.innerHTML = '<div class="case">✓</div><div class="info">' +
+      '<div class="titre">' + u.t + ' <em>' + u.p + '</em></div>' +
+      '<div class="client">' + u.c + '</div>' +
+      '<div class="ref">' + u.s + ' · ' + u.mo + '</div>' + badge + '</div>'
+    if (libre) el.addEventListener('click', () => {
+      coches.has(u.id) ? coches.delete(u.id) : coches.add(u.id); rendre()
+    })
+    return el
+  }
+
+  function ligneGroupe(nom, liste){
+    const libres = liste.filter(u => u.dispo === 'ok')
+    const tous = libres.length && libres.every(u => coches.has(u.id))
+    const el = document.createElement('div')
+    el.className = 'ligne' + (tous ? ' on' : '') + (libres.length ? '' : ' hors')
+    const manque = liste.length - libres.length
+    el.innerHTML = '<div class="case">✓</div><div class="info">' +
+      '<div class="titre">' + nom + ' <em>×' + liste.length + '</em></div>' +
+      '<div class="client">' + libres.length + ' étage' + (libres.length > 1 ? 's' : '') + ' en stock sur ' + liste.length + '</div>' +
+      (manque ? '<span class="etat manque">' + manque + ' sans étage disponible · non traité' + (manque > 1 ? 's' : '') + '</span>'
+              : '<span class="etat ok">tous les étages sont en stock</span>') + '</div>'
+    if (libres.length) el.addEventListener('click', () => {
+      tous ? libres.forEach(u => coches.delete(u.id)) : libres.forEach(u => coches.add(u.id))
+      rendre()
+    })
+    return el
+  }
+
+  // ---------- rendu ----------
+  function rendre(garderDetail){
+    const ouverts = garderDetail ? [...ecran.querySelectorAll('.detail:not([hidden])')].length : 0
+    ecran.innerHTML = ''
+    const source = onglet2 ? U.filter(u => sortis.has(u.id)) : U
+
+    if (!source.length){
+      ecran.innerHTML = '<div class="note" style="margin-top:1.5rem">Rien ici pour le moment. ' +
+        (onglet2 ? 'Les gâteaux apparaîtront dès qu\'ils seront sortis du congélateur.' : '') + '</div>'
+    } else if (parProduit){
+      const grp = {}
+      source.forEach(u => (grp[cle(u)] ||= []).push(u))
+      const t = document.createElement('div')
+      t.className = 'heure'
+      t.innerHTML = '<b>Par produit</b><span>' + Object.keys(grp).length + ' sortes · ' + source.length + ' gâteaux</span><i class="trait"></i>'
+      ecran.appendChild(t)
+      Object.entries(grp).forEach(([nom, l]) =>
+        ecran.appendChild(onglet2 ? ligneGroupe(nom, l) : carteGroupe(nom, l)))
+    } else {
+      const grp = {}
+      source.forEach(u => (grp[u.h] ||= []).push(u))
+      Object.entries(grp).sort().forEach(([h, l]) => {
+        const t = document.createElement('div')
+        t.className = 'heure'
+        t.innerHTML = '<b>' + h + '</b><span>' + l.length + ' gâteau' + (l.length > 1 ? 'x' : '') + '</span><i class="trait"></i>'
+        ecran.appendChild(t)
+        l.forEach(u => ecran.appendChild(onglet2 ? ligne(u) : carteUnite(u)))
+      })
+    }
+
+    const n = onglet2 ? U.filter(u => coches.has(u.id)).length : 0
+    compte.innerHTML = '<b>' + n + '</b> sélectionné' + (n > 1 ? 's' : '')
+    envoyer.disabled = !n
+    envoyer.textContent = n ? 'Envoyer en validation (' + n + ')' : 'Envoyer en validation'
+    if (ouverts) ecran.querySelectorAll('.detail')[0] && (ecran.querySelectorAll('.detail')[0].hidden = false)
+  }
+
+  envoyer.addEventListener('click', () => {
+    const n = U.filter(u => coches.has(u.id)).length
+    envoyer.textContent = n + ' ordre' + (n > 1 ? 's' : '') + ' validé' + (n > 1 ? 's' : '') + ' dans Odoo ✓'
+    envoyer.disabled = true
+    U.forEach(u => { if (coches.has(u.id)) u.dispo = 'valide' })
+    coches.clear()
+    setTimeout(() => rendre(), 1300)
+  })
+
+  const t1 = document.getElementById('t1'), t2 = document.getElementById('t2')
+  const vH = document.getElementById('vHeure'), vP = document.getElementById('vProduit')
+  const titre = document.getElementById('titre'), sous = document.getElementById('soustitre')
+  function majEntete(){
+    t1.setAttribute('aria-selected', String(!onglet2)); t2.setAttribute('aria-selected', String(onglet2))
+    vH.setAttribute('aria-pressed', String(!parProduit)); vP.setAttribute('aria-pressed', String(parProduit))
+    barre.hidden = !onglet2
+    titre.textContent = onglet2 ? 'Check CD-' : 'Sortie du congélateur'
+    sous.textContent = onglet2
+      ? (parProduit ? 'Cochez une sorte entière d\'un coup, puis envoyez.' : 'Vérifiez, cochez, puis envoyez en validation.')
+      : (parProduit ? 'Glissez pour sortir toute une sorte d\'un coup.' : 'Glissez la carte vers la droite quand le gâteau est sorti.')
+  }
+  t1.addEventListener('click', () => { onglet2 = false; majEntete(); rendre(); window.scrollTo({top:0}) })
+  t2.addEventListener('click', () => { onglet2 = true; majEntete(); rendre(); window.scrollTo({top:0}) })
+  vH.addEventListener('click', () => { parProduit = false; majEntete(); rendre() })
+  vP.addEventListener('click', () => { parProduit = true; majEntete(); rendre() })
+
+  majEntete(); rendre()
+})()
+</script>

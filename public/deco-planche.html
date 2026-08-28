@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planche de décors à imprimer</title>
+<style>
+  :root { --bordeaux:#7a1f2b; --or:#b08d3f; --fond:#fcfbf8; --trait:#e5e0d5; }
+  * { box-sizing:border-box }
+  body { margin:0; font-family:-apple-system,'Segoe UI',system-ui,sans-serif; background:var(--fond); color:#2b2622 }
+  header { background:var(--bordeaux); color:#fff; padding:18px 20px }
+  header h1 { margin:0; font-size:19px; font-weight:600 }
+  header p { margin:6px 0 0; font-size:13px; opacity:.85 }
+  main { max-width:900px; margin:0 auto; padding:20px }
+  .carte { background:#fff; border:1px solid var(--trait); border-radius:14px; padding:18px; margin-bottom:16px }
+  .carte h2 { margin:0 0 12px; font-size:15px; color:var(--bordeaux) }
+  label { display:block; font-size:13px; margin-bottom:5px; color:#6b625a }
+  input[type=text], input[type=number] { width:100%; padding:9px 11px; border:1px solid var(--trait); border-radius:9px; font-size:15px; background:#fff }
+  .etage { display:flex; gap:10px; align-items:flex-end; margin-bottom:10px }
+  .etage > div { flex:1 }
+  .etage .nom { flex:0 0 88px; font-size:13px; color:#6b625a; padding-bottom:10px }
+  button { background:var(--bordeaux); color:#fff; border:0; padding:12px 20px; border-radius:10px; font-size:15px; cursor:pointer }
+  button:disabled { opacity:.5; cursor:default }
+  button.clair { background:#fff; color:var(--bordeaux); border:1px solid var(--bordeaux) }
+  #apercu { max-width:210px; border-radius:10px; display:none; margin-top:10px }
+  .msg { padding:11px 13px; border-radius:9px; font-size:14px; margin-top:12px }
+  .msg.err { background:#fdecec; color:#8c2020 }
+  .msg.info { background:#f4f0e4; color:#6b5a2a }
+  .liste { font-size:14px; border-collapse:collapse; width:100% }
+  .liste td { padding:6px 4px; border-bottom:1px solid var(--trait) }
+  .liste td:last-child { text-align:right; white-space:nowrap; color:#6b625a }
+
+  /* ---- la planche : tailles en cm RÉELS ---- */
+  .planche { background:#fff; width:21cm; min-height:29.7cm; padding:1cm; margin:0 auto;
+             border:1px solid var(--trait); display:flex; flex-wrap:wrap; align-content:flex-start;
+             gap:0.6cm; align-items:flex-start }
+  .piece { border:1px dashed #bbb; padding:2px; text-align:center; page-break-inside:avoid }
+  .piece img { display:block; width:100%; height:100%; object-fit:contain }
+  .piece .txt { display:flex; align-items:center; justify-content:center; width:100%; height:100%;
+                font-weight:800; letter-spacing:.02em; white-space:nowrap; color:#111 }
+  .etiq { font-size:7pt; color:#888; margin-top:1px }
+  .regle { width:10cm; height:0.7cm; border:1px solid #333; position:relative; margin-top:0.4cm }
+  .regle span { position:absolute; top:0; bottom:0; border-left:1px solid #333 }
+  .regle b { position:absolute; left:0; top:0.8cm; font-size:7pt; font-weight:400; color:#555 }
+  @media print {
+    header, main .carte, .noprint { display:none !important }
+    body { background:#fff }
+    .planche { border:0; margin:0; padding:1cm; width:auto }
+    @page { size:A4; margin:0 }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Planche de décors à imprimer</h1>
+  <p>La photo d'un gâteau modèle → les décors redessinés, à la taille de VOTRE gâteau, sur une feuille A4.</p>
+</header>
+
+<main>
+  <div class="carte">
+    <h2>1. La photo du modèle</h2>
+    <input type="file" id="fichier" accept="image/*">
+    <img id="apercu" alt="">
+  </div>
+
+  <div class="carte">
+    <h2>2. Les mesures de VOTRE gâteau</h2>
+    <div id="etages"></div>
+    <button class="clair" id="ajouter" style="padding:7px 13px;font-size:13px">+ un étage</button>
+  </div>
+
+  <div class="carte">
+    <h2>3. Le texte à écrire (facultatif)</h2>
+    <label>Il remplacera le texte du modèle, à la même taille.</label>
+    <input type="text" id="texte" placeholder="HAPPY BIRTHDAY YASMINE">
+  </div>
+
+  <div class="carte">
+    <button id="go">Fabriquer la planche</button>
+    <div id="msg"></div>
+    <div id="resultat" style="display:none;margin-top:16px">
+      <table class="liste" id="tableau"></table>
+      <button class="clair" style="margin-top:14px" onclick="window.print()">Imprimer la planche</button>
+      <div class="msg info">Dans la fenêtre d'impression, choisissez <b>Échelle : 100 %</b> (surtout pas « ajuster à la page »), puis vérifiez la règle avec un vrai mètre.</div>
+    </div>
+  </div>
+</main>
+
+<div class="planche" id="planche" style="display:none"></div>
+
+<script>
+// en ligne : on appelle le site qui sert la page (marche aussi en préproduction).
+// ouverte en double-clic depuis l'ordinateur : on appelle la prod.
+const API = (location.protocol === 'file:' ? 'https://lily-gourmet-odoo.vercel.app' : '')
+          + '/api/wati-webhook?action=deco-planche'
+let photo = null
+
+// --- étages ---
+const etagesDiv = document.getElementById('etages')
+function ligneEtage(diam, haut) {
+  const d = document.createElement('div')
+  d.className = 'etage'
+  d.innerHTML = `<div class="nom"></div>
+    <div><label>Diamètre (cm)</label><input type="number" class="diam" value="${diam}" min="1" step="0.5"></div>
+    <div><label>Hauteur (cm)</label><input type="number" class="haut" value="${haut}" min="1" step="0.5"></div>`
+  etagesDiv.appendChild(d)
+  renommer()
+}
+function renommer() {
+  [...etagesDiv.children].forEach((l, i, t) => {
+    l.querySelector('.nom').textContent = i === 0 ? 'Base' : (i === t.length - 1 ? 'Dessus' : 'Étage ' + (i + 1))
+  })
+}
+ligneEtage(20, 12); ligneEtage(15, 15)
+document.getElementById('ajouter').onclick = () => ligneEtage(10, 10)
+
+// --- photo ---
+document.getElementById('fichier').onchange = e => {
+  const f = e.target.files[0]; if (!f) return
+  const r = new FileReader()
+  r.onload = () => { photo = r.result; const a = document.getElementById('apercu'); a.src = photo; a.style.display = 'block' }
+  r.readAsDataURL(f)
+}
+
+// --- lancement ---
+document.getElementById('go').onclick = async () => {
+  const msg = document.getElementById('msg')
+  if (!photo) { msg.innerHTML = '<div class="msg err">Choisissez d\'abord la photo du modèle.</div>'; return }
+  const etages = [...etagesDiv.children].map(l => ({
+    diametre_cm: parseFloat(l.querySelector('.diam').value),
+    hauteur_cm: parseFloat(l.querySelector('.haut').value),
+  }))
+  const btn = document.getElementById('go')
+  btn.disabled = true
+  msg.innerHTML = '<div class="msg info">L\'IA regarde la photo, puis dessine chaque décor… (30 à 60 secondes)</div>'
+  try {
+    const r = await fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: photo, etages, texte: document.getElementById('texte').value.trim() }),
+    })
+    const data = await r.json()
+    if (!r.ok) throw new Error(data.error || 'erreur')
+    await afficher(data.decors)
+    msg.innerHTML = ''
+  } catch (e) {
+    msg.innerHTML = '<div class="msg err">' + (e.message || 'erreur') + '</div>'
+  }
+  btn.disabled = false
+}
+
+// L'IA rend l'objet sur un fond blanc, souvent carré. On enlève ce blanc pour que
+// la LARGEUR imprimée soit exactement la mesure calculée (sinon l'objet sort trop petit).
+function rogner(src) {
+  return new Promise(resolve => {
+    const im = new Image()
+    im.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = im.width; c.height = im.height
+      const x = c.getContext('2d')
+      x.drawImage(im, 0, 0)
+      const d = x.getImageData(0, 0, c.width, c.height).data
+      let g = c.width, dr = 0, h = c.height, b = 0
+      for (let y = 0; y < c.height; y++) for (let px = 0; px < c.width; px++) {
+        const i = (y * c.width + px) * 4
+        if (d[i] > 243 && d[i+1] > 243 && d[i+2] > 243) continue   // blanc = fond
+        if (px < g) g = px; if (px > dr) dr = px
+        if (y < h) h = y; if (y > b) b = y
+      }
+      if (dr <= g || b <= h) return resolve({ src, ratio: im.height / im.width })
+      const m = Math.round(Math.min(c.width, c.height) * 0.01)      // 1% de marge
+      g = Math.max(0, g - m); h = Math.max(0, h - m)
+      dr = Math.min(c.width - 1, dr + m); b = Math.min(c.height - 1, b + m)
+      const w = dr - g + 1, ht = b - h + 1
+      const c2 = document.createElement('canvas')
+      c2.width = w; c2.height = ht
+      c2.getContext('2d').drawImage(c, g, h, w, ht, 0, 0, w, ht)
+      resolve({ src: c2.toDataURL('image/png'), ratio: ht / w })
+    }
+    im.onerror = () => resolve({ src, ratio: 1 })
+    im.src = src
+  })
+}
+
+async function afficher(decors) {
+  remplirTableau(decors)
+  document.getElementById('resultat').style.display = 'block'
+  await monter(decors)
+}
+
+function remplirTableau(decors) {
+    const tab = document.getElementById('tableau')
+    tab.innerHTML = decors.map((d, i) => {
+      const manque = !d.image && d.type !== 'texte'
+      return `<tr><td>${d.nom}
+        ${d.avertissement ? '<div style="color:#8c6a20;font-size:12px">⚠ ' + d.avertissement + '</div>' : ''}
+        ${manque ? `<div style="color:#8c2020;font-size:12px">L'IA refuse de dessiner ce décor (personnage ou logo de marque).
+           <label style="color:var(--bordeaux);cursor:pointer;text-decoration:underline">ajouter mon image
+           <input type="file" accept="image/*" data-i="${i}" class="perso" style="display:none"></label></div>` : ''}
+      </td><td>${d.largeur_cm} × ${d.hauteur_cm} cm</td></tr>`
+    }).join('')
+    tab.querySelectorAll('.perso').forEach(inp => inp.onchange = e => {
+      const f = e.target.files[0]; if (!f) return
+      const r = new FileReader()
+      r.onload = () => { decors[e.target.dataset.i].image = r.result; monter(decors) }
+      r.readAsDataURL(f)
+    })
+}
+
+async function monter(decors) {
+  const planche = document.getElementById('planche')
+  planche.innerHTML = ''
+  for (const d of decors) {
+    if (!d.image && d.type !== 'texte') continue
+    const el = document.createElement('div')
+    el.className = 'piece'
+    el.style.width = d.largeur_cm + 'cm'
+    if (d.type === 'texte') {
+      el.style.height = d.hauteur_cm + 'cm'
+      el.innerHTML = `<div class="txt" style="font-size:${Math.max(d.hauteur_cm * 0.62, 0.3)}cm">${d.contenu || ''}</div>`
+    } else {
+      const net = await rogner(d.image)
+      d.hauteur_cm = Math.round(d.largeur_cm * net.ratio * 10) / 10   // hauteur réelle du dessin
+      el.style.height = d.hauteur_cm + 'cm'
+      el.innerHTML = `<img src="${net.src}" alt="">`
+    }
+    const bloc = document.createElement('div')
+    bloc.appendChild(el)
+    const et = document.createElement('div')
+    et.className = 'etiq'
+    et.textContent = d.nom + ' — ' + d.largeur_cm + '×' + d.hauteur_cm + ' cm'
+    bloc.appendChild(et)
+    planche.appendChild(bloc)
+  }
+  const r = document.createElement('div')
+  r.style.width = '100%'
+  r.innerHTML = '<div class="regle">' +
+    [1,2,3,4,5,6,7,8,9].map(i => `<span style="left:${i}cm"></span>`).join('') +
+    '<b>règle de contrôle : ce trait doit mesurer 10 cm avec un vrai mètre</b></div>'
+  planche.appendChild(r)
+  planche.style.display = 'flex'
+  remplirTableau(decors)
+}
+</script>
+</body>
+</html>

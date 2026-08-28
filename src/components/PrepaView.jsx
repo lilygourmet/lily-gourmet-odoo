@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadPrepa, lancerPrepa, setFait, loadFaits, reserverOrdres, annulerOfPrepa, dernierEcran, garderEcran } from '../lib/fabrication'
+import { loadPrepa, lancerPrepa, setFait, loadFaits, loadManques, reserverOrdres, annulerOfPrepa, dernierEcran, garderEcran } from '../lib/fabrication'
 
 // ====== Fabrication d'une préparation (glaçage royal, pâte à sucre) ======
 // Ces articles n'ont ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
@@ -46,9 +46,20 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
     loadFaits().then(f => {
       if (!vivant) return
       const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
-      setFaits(Object.entries(f)
+      const liste = Object.entries(f)
         .filter(([n, i]) => /^WH.*\/MO\//i.test(n) && String(i.fait_le || '').slice(0, 10) >= jour)
-        .map(([name, i]) => ({ name, produit: i.produit, qty: i.qty, heure: new Date(i.fait_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) })))
+        .map(([name, i]) => ({ name, produit: i.produit, qty: i.qty, heure: new Date(i.fait_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }))
+      setFaits(liste)
+      // Où en est vraiment chaque ordre dans Odoo : sans ça la ligne restait
+      // « en attente de validation » toute la journée, même une fois validée.
+      if (!liste.length) return
+      loadManques(liste.map(x => x.name))
+        .then(etats => {
+          if (!vivant) return
+          const parNom = new Map(etats.map(e => [e.name, e.etat]))
+          setFaits(liste.map(x => ({ ...x, etat: parNom.get(x.name) || null })))
+        })
+        .catch(() => { })   // Odoo muet : on garde l'étiquette prudente
     }).catch(() => { })
     loadPrepa(quoi)
       .then(d => {
@@ -201,13 +212,26 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
                       {nb(f.qty)} g
                       <span className="block text-[11.5px] font-medium text-ink-soft font-mono">{f.heure} · {f.name}</span>
                     </span>
-                    <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">
-                      en attente de validation
-                    </span>
-                    <button onClick={() => retirer(f)}
-                      className="flex-shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-bold border border-line bg-white text-ink-soft">
-                      ↩ retirer
-                    </button>
+                    {f.etat === 'done' ? (
+                      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#E4F0DC] text-[#2F6B25] whitespace-nowrap">
+                        validé ✓
+                      </span>
+                    ) : f.etat === 'cancel' ? (
+                      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#F4E4E4] text-[#8c2020] whitespace-nowrap">
+                        annulé
+                      </span>
+                    ) : (
+                      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">
+                        en attente de validation
+                      </span>
+                    )}
+                    {/* une fois validé, le stock est monté : on ne peut plus retirer */}
+                    {f.etat !== 'done' && (
+                      <button onClick={() => retirer(f)}
+                        className="flex-shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-bold border border-line bg-white text-ink-soft">
+                        ↩ retirer
+                      </button>
+                    )}
                   </div>
                 ))}
               </>

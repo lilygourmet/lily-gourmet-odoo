@@ -3,9 +3,9 @@ import { logout } from '../lib/auth'
 import AppHeader from './AppHeader'
 import { loadFreezerDoneIds, markFreezerDone, unmarkFreezerDone } from '../lib/freezerDone'
 import { toast } from '../lib/toast'
+import GlisserPourSortir from './GlisserPourSortir'
+import { fmtDayLabel } from '../lib/jourLisible'
 
-const DAY_NAMES = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
-const MONTH_NAMES = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 
 // Cache localStorage : evite le rechargement Odoo lent a chaque visite
 const CACHE_KEY = 'lg_freezer_cache_v2'
@@ -37,18 +37,6 @@ function fmtLocalDate(d) {
   return `${y}-${m}-${dd}`
 }
 
-function fmtDayLabel(dateStr, today) {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
-  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const diff = Math.round((date - todayDate) / 86400000)
-  const dayName = DAY_NAMES[date.getDay() === 0 ? 6 : date.getDay() - 1]
-  const monthName = MONTH_NAMES[date.getMonth()]
-  let label = `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${date.getDate()} ${monthName}`
-  if (diff === 0) label += ' · Aujourd\'hui'
-  else if (diff === 1) label += ' · Demain'
-  return label
-}
 
 export default function FreezerView({ user, onLogout, onNavigate, activeView }) {
   const [allItems, setAllItems] = useState([])
@@ -56,7 +44,6 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [groupBy, setGroupBy] = useState('product')   // 'client' ou 'product' (defaut produit)
-  const [showDone, setShowDone] = useState({})       // par date : true/false
   const [showHistory, setShowHistory] = useState(false)   // afficher l'historique J-7 (bouton à part)
   const [cacheInfo, setCacheInfo] = useState(null)   // { ts } si on affiche du cache
 
@@ -264,7 +251,6 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
     const dayItems = itemsByDate[date]
     const todoItems = dayItems.filter(it => !_isDone(it))
     const doneItems = dayItems.filter(it => _isDone(it))
-    const showingDone = showDone[date]
     let visibleItems, headerRight, emptyMsg, cardCls
     if (mode === 'history') {
       visibleItems = doneItems; emptyMsg = 'Aucun fait'; cardCls = 'bg-cream-warm/40 border-line/60'
@@ -276,11 +262,15 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       visibleItems = todoItems; emptyMsg = 'Aucun à sortir'; cardCls = 'bg-cream-warm border-red-200'
       headerRight = <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-red-100 text-red-700">🔴 En retard ({todoItems.length})</span>
     } else {
-      visibleItems = showingDone ? doneItems : todoItems; emptyMsg = showingDone ? 'Aucun fait' : 'Aucun à sortir'; cardCls = 'bg-cream-warm border-line'
+      // Tout le jour d'un coup : ce qui est sorti se voit maintenant à sa couleur
+      // (carte verte, ✓) — plus besoin de basculer entre deux listes. L'historique
+      // des jours passés garde son bouton à part, en haut de l'écran.
+      visibleItems = dayItems; emptyMsg = 'Rien ce jour-là'; cardCls = 'bg-cream-warm border-line'
       headerRight = (<>
-        <button onClick={() => setShowDone(prev => ({ ...prev, [date]: false }))} className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${!showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}>À sortir ({todoItems.length})</button>
-        <button onClick={() => setShowDone(prev => ({ ...prev, [date]: true }))} className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full ${showingDone ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft'}`}>Faits ({doneItems.length})</button>
-        {visibleItems.length > 0 && <button onClick={() => printDay(date, dayItems, showingDone)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title={`Imprimer ${showingDone ? 'les faits' : 'à sortir'} · ce jour + les 2 suivants`}>Imprimer 3j {showingDone ? '(faits)' : ''}</button>}
+        <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream text-ink-soft border border-line">
+          {todoItems.length ? `${todoItems.length} à sortir` : 'tout est sorti'}
+        </span>
+        {visibleItems.length > 0 && <button onClick={() => printDay(date, dayItems, false)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title="Imprimer · ce jour + les 2 suivants">Imprimer 3j</button>}
       </>)
     }
     return (
@@ -436,56 +426,92 @@ function ProductGroupedList({ items, doneMap, onToggle }) {
   }
   const keys = Object.keys(byProd).sort()
 
-  async function toggleAll(lines) {
-    // Si tous cochés → tous décocher, sinon tous cocher
-    const allDone = lines.every(it => doneMap[it.mo_id])
-    for (const it of lines) {
-      const isDone = !!doneMap[it.mo_id]
-      if (allDone && isDone) await onToggle(it)
-      else if (!allDone && !isDone) await onToggle(it)
-    }
-  }
-
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {keys.map(prodKey => {
         const lines = byProd[prodKey]
-        const allDone = lines.every(it => doneMap[it.mo_id])
-        return (
-          <div
-            key={prodKey}
-            className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${allDone ? 'bg-cream-warm/40 opacity-60' : 'bg-cream hover:bg-cream-warm'}`}
-          >
-            <button
-              onClick={() => toggleAll(lines)}
-              className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center text-[11px] transition-colors ${allDone ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream hover:border-bordeaux'}`}
-              title={allDone ? 'Décocher tous' : 'Marquer tous comme sortis'}
-            >
-              {allDone ? '✓' : ''}
-            </button>
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] text-ink font-medium">{prodKey}</div>
-              <div className="font-mono text-[10px] text-ink-mute">{lines.map(it => `${it.scode || '?'}${(it.qty || 1) > 1 ? ` ×${it.qty}` : ''}`).join(' · ')}</div>
-            </div>
-            <span className="font-mono text-[12px] text-bordeaux font-bold">×{lines.reduce((s, it) => s + (it.qty || 1), 0)}</span>
-          </div>
-        )
+        return <GroupeProduit key={prodKey} nom={prodKey} lignes={lines} doneMap={doneMap} onToggle={onToggle} />
       })}
+    </div>
+  )
+}
+
+/**
+ * Une sorte de gâteau (« 15 cm Citron ») et tout ce qu'il y en a à sortir.
+ * Glisser la carte sort toute la sorte d'un coup — c'est le geste rapide au
+ * congélateur. Le détail se déplie pour n'en sortir qu'une partie, cas fréquent
+ * quand on ne prend pas tout le lot d'un coup.
+ */
+function GroupeProduit({ nom, lignes, doneMap, onToggle }) {
+  const [ouvert, setOuvert] = useState(false)
+  const faits = lignes.filter(it => doneMap[it.mo_id]).length
+  const total = lignes.length
+  const tout = faits === total
+  const restant = total - faits
+
+  async function sortirTout() {
+    for (const it of lignes) if (!doneMap[it.mo_id]) await onToggle(it)
+  }
+
+  const corps = (
+    <div className={`flex items-center gap-3 px-3 py-2.5 ${tout ? 'bg-[#EAF3DE]' : 'bg-cream-warm'}`}>
+      <span className={`flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center font-mono text-[19px] font-bold ${tout ? 'bg-[#2F6B25] text-cream' : 'bg-[#E9F1F6] text-[#3d6f8e] border border-dashed border-[#3d6f8e]/40'}`}>
+        {tout ? '✓' : restant}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[14.5px] text-ink font-bold leading-tight">{nom}</div>
+        <div className="text-[11.5px] text-ink-soft mt-0.5">
+          {tout ? `les ${total} sont sortis`
+            : faits ? `${faits} sur ${total} sortis · ${restant} à prendre`
+              : `${total} à sortir`}
+        </div>
+      </div>
+      {!tout && <span className="flex-shrink-0 text-[#3d6f8e]/50 text-[13px]">›››</span>}
+    </div>
+  )
+
+  return (
+    <div className={`rounded-xl overflow-hidden border ${tout ? 'border-[#cfe0b8]' : 'border-line'}`}>
+      {tout ? corps : <GlisserPourSortir onFait={sortirTout} texte="Tout sorti">{corps}</GlisserPourSortir>}
+      {total > 1 && (
+        <div className="h-1 bg-line">
+          <div className="h-full bg-[#2F6B25] transition-all" style={{ width: `${Math.round(faits / total * 100)}%` }} />
+        </div>
+      )}
+      <button onClick={() => setOuvert(v => !v)}
+        className="w-full py-1.5 text-[11px] font-semibold text-ink-soft bg-cream border-t border-line">
+        {ouvert ? 'replier' : tout ? 'voir le détail' : 'en sortir seulement une partie'} {ouvert ? '▴' : '▾'}
+      </button>
+      {ouvert && (
+        <div className="border-t border-line bg-cream">
+          {lignes.map(it => {
+            const fait = !!doneMap[it.mo_id]
+            return (
+              <div key={it.mo_id} className="flex items-center gap-2.5 px-3 py-1.5 border-b border-line last:border-b-0 text-[12.5px]">
+                <span className="font-mono text-[10.5px] text-ink-mute w-11">
+                  {it.hour ? `${String(it.hour).padStart(2, '0')}h${String(it.minute).padStart(2, '0')}` : ''}
+                </span>
+                <span className="flex-1 min-w-0 truncate text-ink-soft">{it.client_name || it.scode}</span>
+                <button onClick={() => onToggle(it)}
+                  className={`flex-shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold border ${fait ? 'bg-[#2F6B25] border-[#2F6B25] text-cream' : 'bg-cream-warm border-line text-[#3d6f8e]'}`}>
+                  {fait ? '✓ sorti' : 'sortir'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
 function ItemLine({ item, done, doneInfo, onToggle, compact = false }) {
   const hourLabel = item.hour ? `${String(item.hour).padStart(2, '0')}h${String(item.minute).padStart(2, '0')}` : ''
-  return (
-    <div className={`flex items-center gap-2 px-2 py-1.5 rounded ${done ? 'bg-cream-warm/40 opacity-60' : 'bg-cream-warm hover:bg-cream-warm/80'}`}>
-      <button
-        onClick={() => onToggle(item)}
-        className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center text-[11px] transition-colors ${done ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream hover:border-bordeaux'}`}
-        title={done ? `Fait par ${doneInfo?.doneByName || ''}` : 'Marquer comme sorti'}
-      >
-        {done ? '✓' : ''}
-      </button>
+  const corps = (
+    <div className={`flex items-center gap-2.5 px-2 py-2 ${done ? 'bg-[#EAF3DE]' : 'bg-cream-warm'}`}>
+      <span className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-[15px] font-bold ${done ? 'bg-[#2F6B25] text-cream' : 'bg-[#E9F1F6] text-[#3d6f8e] border border-dashed border-[#3d6f8e]/40'}`}>
+        {done ? '✓' : '❄'}
+      </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           {!compact && <span className="text-[12px] text-ink font-medium">{item.taille} {item.parfum}</span>}
@@ -499,6 +525,24 @@ function ItemLine({ item, done, doneInfo, onToggle, compact = false }) {
         </div>
         <div className="font-mono text-[9px] text-ink-mute mt-0.5">{item.mo_name}</div>
       </div>
+      {!done && <span className="flex-shrink-0 text-[#3d6f8e]/50 text-[13px] pr-1">›››</span>}
     </div>
+  )
+  // sorti : plus de geste, juste la trace et un petit lien pour se corriger
+  if (done) {
+    return (
+      <div className="rounded-xl overflow-hidden border border-[#cfe0b8] mb-1">
+        {corps}
+        <div className="flex items-center gap-2 px-2.5 py-1 bg-[#EAF3DE] border-t border-[#cfe0b8] text-[10.5px] font-semibold text-[#2F6B25]">
+          Sorti{doneInfo?.doneByName ? ` par ${doneInfo.doneByName}` : ''}
+          <button onClick={() => onToggle(item)} className="ml-auto text-ink-mute underline underline-offset-2 font-normal">annuler</button>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <GlisserPourSortir onFait={() => onToggle(item)} classe="mb-1 border border-line">
+      {corps}
+    </GlisserPourSortir>
   )
 }

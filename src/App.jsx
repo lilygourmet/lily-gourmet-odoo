@@ -11,6 +11,7 @@ const FabricationProdView = lazy(() => import('./components/FabricationProdView'
 const FabricationAnnexeView = lazy(() => import('./components/FabricationAnnexeView'))
 const ValidationView = lazy(() => import('./components/ValidationView'))
 const FreezerView = lazy(() => import('./components/FreezerView'))
+const CheckCdView = lazy(() => import('./components/CheckCdView'))
 const MessagesView = lazy(() => import('./components/MessagesView'))
 const EtiquettesView = lazy(() => import('./components/EtiquettesView'))
 const EtiquettesBoitesView = lazy(() => import('./components/EtiquettesBoitesView'))
@@ -390,6 +391,7 @@ function App() {
     if (activeView === 'fabrication-valider') return <ValidationView {...navProps} />
     if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
     if (activeView === 'freezer') return <FreezerView {...navProps} />
+    if (activeView === 'check-cd') return <CheckCdView {...navProps} />
     if (activeView === 'messages') return <MessagesView {...navProps} />
     if (activeView === 'cake-vision-edit') return <CakeVisionView {...navProps} />
     if (activeView === 'etiquettes') return <EtiquettesView {...navProps} />

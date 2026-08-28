@@ -1,17 +1,51 @@
 {
   "functions": {
-    "api/wati-webhook.js": { "maxDuration": 60 }
+    "api/wati-webhook.js": {
+      "maxDuration": 60
+    }
   },
   "rewrites": [
-    { "source": "/api/push-send", "destination": "/api/push?action=send" },
-    { "source": "/api/push-subscribe", "destination": "/api/push?action=subscribe" },
-    { "source": "/api/task-reminders", "destination": "/api/wati-webhook?action=task-reminders" },
-    { "source": "/api/close-open-sessions", "destination": "/api/pointage-api?action=close-open-sessions" },
-    { "source": "/iclock/:path*", "destination": "/api/pointage-api?iclock=:path*" }
+    {
+      "source": "/api/push-send",
+      "destination": "/api/push?action=send"
+    },
+    {
+      "source": "/api/push-subscribe",
+      "destination": "/api/push?action=subscribe"
+    },
+    {
+      "source": "/api/task-reminders",
+      "destination": "/api/wati-webhook?action=task-reminders"
+    },
+    {
+      "source": "/api/close-open-sessions",
+      "destination": "/api/pointage-api?action=close-open-sessions"
+    },
+    {
+      "source": "/iclock/:path*",
+      "destination": "/api/pointage-api?iclock=:path*"
+    },
+    {
+      "source": "/api/check-cd-parents",
+      "destination": "/api/freezer-list?mode=parents-pos"
+    }
   ],
   "crons": [
-    { "path": "/api/task-reminders", "schedule": "0 7 * * *" },
-    { "path": "/api/sync-etiquettes", "schedule": "0 6 * * *" },
-    { "path": "/api/close-open-sessions", "schedule": "0 23 * * *" }
+    {
+      "path": "/api/task-reminders",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/sync-etiquettes",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/close-open-sessions",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/check-cd-parents",
+      "schedule": "0 7 * * *"
+    }
   ]
 }

@@ -102,6 +102,7 @@ export default async function handler(req, res) {
   if (action === 'vitrine-order-add') return handleVitrineOrderAdd(req, res)
   if (action === 'cake-vision') return handleCakeVision(req, res)
   if (action === 'poly-estimate') return handlePolyEstimate(req, res)
+  if (action === 'deco-planche') return handleDecoPlanche(req, res)
   if (action === 'releve-ocr') return handleReleveOcr(req, res)
   if (action === 'translate-ar') return handleTranslateAr(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
@@ -2125,6 +2126,106 @@ Il doit y avoir exactement ${n} objet(s) dans "etages", du bas vers le haut.`
     return res.status(200).json(data)
   } catch (e) {
     console.error('[poly-estimate]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Planche de décors à imprimer : lit la photo d'un gâteau modèle, liste les décors
+// imprimables (sujets, logos, textes), calcule leur taille RÉELLE pour le gâteau de
+// Lily Gourmet (proportions du modèle × mesures données), puis fabrique une image
+// nette de chacun. Les textes ne sont PAS générés (l'IA écrit mal) : la page les
+// dessine en vraie typo. Sortie = éléments dimensionnés en cm, à poser sur une A4.
+async function handleDecoPlanche(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST requis' })
+
+  const { image, etages, texte } = req.body || {}
+  if (!image || !Array.isArray(etages) || !etages.length) {
+    return res.status(400).json({ error: 'image et etages requis' })
+  }
+
+  const listeEtages = etages
+    .map((e, i) => `étage ${i + 1} (du bas) : diamètre ${e.diametre_cm} cm, hauteur ${e.hauteur_cm} cm`)
+    .join(' ; ')
+
+  const promptVision = `Tu es pâtissier décorateur. Cette photo est un gâteau MODÈLE qu'une cliente veut faire reproduire.
+Repère TOUS les décors imprimables, sans en oublier :
+- les SUJETS et PERSONNAGES imprimés (c'est le décor principal, ne l'oublie jamais ; s'il apparaît deux fois en deux tailles, note-le deux fois) ;
+- les logos, chiffres d'âge, lettrages et bandeaux de texte ;
+- les accessoires plats découpés (valise, biberon, tétine, cravate, nœud papillon, ballon...).
+N'inclus PAS ce qui se fabrique en pâtisserie : glaçage, crème, perles, boules de sucre, biscuits, feuilles de chocolat.
+N'INVENTE AUCUN décor : décris uniquement ce que tu vois réellement sur cette photo. Si tu n'es pas sûr de ce qu'est un objet, décris sa forme et sa couleur sans lui donner un nom inventé.
+Vérifie bien l'étage : un décor collé sur la paroi appartient à l'étage qu'il touche.
+Pour CHAQUE décor :
+- "nom" : nom court en français (ex "Logo BABY BOSS", "Valise noire").
+- "type" : "texte" si c'est uniquement du lettrage à écrire, sinon "image".
+- "contenu" : si type="texte", le texte exact lu sur la photo ; sinon "".
+- "etage" : le numéro de l'étage qui le porte (1 = celui du bas). Un décor posé sur le dessus du gâteau prend le numéro de l'étage du haut.
+- "largeur_pct" : largeur du décor DIVISÉE par le diamètre visible de l'étage qui le porte, en pourcentage.
+- "hauteur_pct" : hauteur du décor divisée par ce MÊME diamètre, en pourcentage (même repère, pour garder les proportions).
+- "description" : description visuelle très précise du décor, en français, pour qu'un illustrateur le redessine sans voir la photo (forme, couleurs, position des éléments, expression).
+Le gâteau à reproduire mesure : ${listeEtages}.
+Réponds UNIQUEMENT en JSON strict, sans texte autour :
+{"decors":[{"nom":"","type":"image|texte","contenu":"","etage":1,"largeur_pct":0,"hauteur_pct":0,"description":""}]}`
+
+  try {
+    const vision = await generateText({
+      model: 'claude-haiku-4-5',
+      messages: [{ role: 'user', content: [{ type: 'text', text: promptVision }, { type: 'image', image }] }],
+    })
+    const m = (vision.text || '').match(/\{[\s\S]*\}/)
+    if (!m) return res.status(502).json({ error: "L'IA n'a pas su lire la photo." })
+    let data
+    try { data = JSON.parse(m[0]) } catch { return res.status(502).json({ error: 'Réponse IA illisible.' }) }
+    const decors = (data.decors || []).slice(0, 12)
+    if (!decors.length) return res.status(502).json({ error: 'Aucun décor imprimable repéré sur cette photo.' })
+
+    // proportions du modèle × mesures réelles du gâteau de Lily Gourmet
+    const A4_UTILE_CM = 19
+    for (const d of decors) {
+      const et = etages[Math.min(Math.max((d.etage || 1) - 1, 0), etages.length - 1)]
+      const diam = Number(et.diametre_cm) || 0
+      d.largeur_cm = Math.round((Number(d.largeur_pct) || 0) / 100 * diam * 10) / 10
+      d.hauteur_cm = Math.round((Number(d.hauteur_pct) || 0) / 100 * diam * 10) / 10
+      if (d.largeur_cm > A4_UTILE_CM) d.avertissement = `${d.largeur_cm} cm de large : trop grand pour une A4, à imprimer en 2 morceaux`
+    }
+
+    // le texte personnalisé remplace celui du modèle (même taille)
+    if (texte) {
+      const cible = decors.find(d => d.type === 'texte')
+      if (cible) cible.contenu = texte
+    }
+
+    // une image nette par décor, par lots de 3
+    const aGenerer = decors.filter(d => d.type !== 'texte')
+    for (let i = 0; i < aGenerer.length; i += 3) {
+      await Promise.all(aGenerer.slice(i, i + 3).map(async d => {
+        const p = `Illustration à plat, style autocollant à découper, représentant : ${d.description}.
+RÈGLES ABSOLUES :
+- l'objet doit être ENTIER et COMPLET, jamais coupé par le bord, avec une petite marge blanche tout autour ;
+- vue strictement de face, à plat, sans perspective, sans ombre portée, sans reflet, sans relief ;
+- fond BLANC uni et RIEN d'autre : pas de cadre, pas de cercle, pas de bordure, pas de décor, pas de gâteau, aucun texte ajouté ;
+- dessin aux contours nets et aux couleurs pleines, PAS une photographie réaliste ;
+- l'objet est centré et occupe la plus grande partie de l'image.
+Ce dessin sera imprimé sur une feuille azyme comestible puis découpé aux ciseaux pour être collé sur un gâteau.`
+        try {
+          const r = await generateText({
+            model: 'google/gemini-3.1-flash-image-preview',
+            messages: [{ role: 'user', content: [{ type: 'text', text: p }] }],
+          })
+          const f = (r.files || []).find(x => x.mediaType?.startsWith('image/'))
+          if (f) d.image = `data:${f.mediaType};base64,${f.base64}`
+          // refus fréquent sur les personnages/logos de marque : on renvoie la raison
+          else d.erreur = (r.text || '').trim().slice(0, 300) || "l'IA n'a pas renvoyé d'image"
+        } catch (e) { d.erreur = e?.message || 'génération impossible' }
+      }))
+    }
+    return res.status(200).json({ decors })
+  } catch (e) {
+    console.error('[deco-planche]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

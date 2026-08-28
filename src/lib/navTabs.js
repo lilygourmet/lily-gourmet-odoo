@@ -5,7 +5,7 @@
 // NB : miroir des règles d'affichage de AppHeader.jsx.
 // ============================================================
 import {
-  isAdmin, isLivreur, canRecaps, canSeeCalendar, canSeeFreezer, canSeeMessages,
+  isAdmin, isLivreur, canRecaps, canSeeCalendar, canSeeFreezer, canCheckCd, canSeeMessages,
   canSeeEtiquettes, canSeeEtiquettesBoites, canSeeCakeVision, canSeeChecklist, canStockPatissier, canStockCafe,
   canStockAudit, canStockGS, canSeeVitrineSale, canSeeCaisse, canSeeConversations, canSeeDevis, canViewPayments,
   canSeePhotoshop, canSeeAiTools, canSeeStockPoly, canSeeSimuGateaux,
@@ -55,6 +55,7 @@ const TAB_DEFS = [
   { view: 'paiements',         emoji: '💰', label: 'Paiements',         can: u => !isLivreur(u) && canViewPayments(u) },
   { view: 'reglements-livraisons', emoji: '💵', label: 'Règlements livr.', can: u => !isLivreur(u) && canStockCafe(u) },
   { view: 'freezer',           emoji: '❄️', label: 'CD Négatif',        can: u => !isLivreur(u) && canSeeFreezer(u) },
+  { view: 'check-cd',          emoji: '✅', label: 'Check CD-',         can: u => !isLivreur(u) && canCheckCd(u) },
   { view: 'caisse',            emoji: '💰', label: 'Caisse',            can: u => !isLivreur(u) && canSeeCaisse(u) && (isAdmin(u) || !u?.perm_admin_users) },
   { view: 'caisse-livreur',    emoji: '💰', label: 'Caisse livreur',    can: u => isLivreurDefaut(u) },
   { view: 'hr',                emoji: '🏢', label: 'RH',                can: u => (isAdmin(u) || !!u?.perm_hr) && (isAdmin(u) || !u?.perm_admin_users) },

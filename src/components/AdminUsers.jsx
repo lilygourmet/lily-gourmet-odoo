@@ -163,6 +163,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_notif_ocp: formData.permNotifOcp,
         perm_photoshop: formData.permPhotoshop,
         perm_stock_poly: formData.permStockPoly,
+        perm_check_cd: formData.permCheckCd,
         perm_simu_gateaux: formData.permSimuGateaux,
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
@@ -245,6 +246,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_notif_ocp: formData.permNotifOcp,
         perm_photoshop: formData.permPhotoshop,
         perm_stock_poly: formData.permStockPoly,
+        perm_check_cd: formData.permCheckCd,
         perm_simu_gateaux: formData.permSimuGateaux,
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
@@ -843,6 +845,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permNotifOcp: initialData?.perm_notif_ocp !== undefined ? initialData.perm_notif_ocp : false,
     permPhotoshop: initialData?.perm_photoshop !== undefined ? initialData.perm_photoshop : false,
     permStockPoly: initialData?.perm_stock_poly !== undefined ? initialData.perm_stock_poly : false,
+    permCheckCd: initialData?.perm_check_cd !== undefined ? initialData.perm_check_cd : false,
     permSimuGateaux: initialData?.perm_simu_gateaux !== undefined ? initialData.perm_simu_gateaux : false,
     permTransfertAnnexe: initialData?.perm_transfert_annexe !== undefined ? initialData.perm_transfert_annexe : false,
     permTransfertBoutique: initialData?.perm_transfert_boutique !== undefined ? initialData.perm_transfert_boutique : false,
@@ -1072,6 +1075,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-simu-gateaux" label="Simulation gâteaux" desc="Voir le simulateur visuel de gâteaux par nombre de personnes et d'étages." checked={isAdmin || formData.permSimuGateaux} onChange={v => update('permSimuGateaux', v)} />
             <PermCheckbox id="perm-facture-ocp" label="Facture OCP" desc="Générer la facture mensuelle OCP à partir des commandes non facturées." checked={isAdmin || formData.permFactureOcp} onChange={v => update('permFactureOcp', v)} />
             <PermCheckbox id="perm-freezer" label="Sortie congélateur" desc="Voir la liste des sorties de congélateur." checked={isAdmin || formData.permFreezer} onChange={v => update('permFreezer', v)} />
+            <PermCheckbox id="perm-check-cd" label="Check CD-" desc="Deuxième contrôle des gâteaux sortis du congélateur, et validation de l'ordre dans Odoo." checked={isAdmin || formData.permCheckCd} onChange={v => update('permCheckCd', v)} />
           </PermGroup>
 
           <PermGroup emoji="🏷️" title="Étiquettes & visuels">
