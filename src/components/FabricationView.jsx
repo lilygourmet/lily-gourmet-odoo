@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, saveBasesChoisies } from '../lib/fabrication'
+import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, saveBasesChoisies, libererBase } from '../lib/fabrication'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
@@ -522,6 +522,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // Odoo fait foi : après une annulation, une modification ou une validation
   // faite là-bas, ce bouton remet l'écran à jour sans changer de page.
   const relire = () => { setData(null); setErreur(null); setRechargement(v => v + 1) }
+
+  // Une base réservée par un ordre disparaît du stock que voient les autres.
+  // Ce bouton la rend à tout le monde, sans passer par Odoo.
+  const liberer = async produit => {
+    const r = await libererBase(produit)
+    if (r && r.test) return toast.success('Mode test : rien libéré dans Odoo')
+    if (r && r.message) return toast.error('Odoo : ' + r.message)
+    if (!r || !r.lignes) return toast.success('Rien ne la réservait')
+    toast.success(`Libérée de : ${(r.ordres || []).join(', ')}`)
+    relire()
+  }
 
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
   // Les bases servent tout le monde : Odoo ne doit les réserver pour personne
@@ -1229,7 +1240,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         <span className="text-[11.5px] text-ink-mute text-right leading-tight">
                           il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b>
                           {b.reserve > 0.001 && (
-                            <span className="block text-[10.5px]">{qteLisible(b.reserve, b.unite)} réservés</span>
+                            <span className="block text-[10.5px]">
+                              {qteLisible(b.reserve, b.unite)} réservés{' '}
+                              <button onClick={e => { e.stopPropagation(); liberer(b.produit) }}
+                                title="Une base sert tout le monde : la rendre disponible pour les autres gâteaux"
+                                className="underline underline-offset-2 font-bold text-bordeaux">libérer</button>
+                            </span>
                           )}
                         </span>
                         <span className="text-right">

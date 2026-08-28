@@ -99,6 +99,19 @@ export async function reserverOrdres(ordres, on, bases = []) {
 }
 
 /**
+ * Rend une base à tout le monde : libère dans Odoo ce que des ordres lui ont
+ * réservé. Renvoie { lignes, ordres } — les ordres qui la retenaient.
+ */
+export async function libererBase(produit) {
+  const r = await fetch('/api/freezer-list?mode=liberer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ produit, test: estModeTest() }),
+  })
+  return await r.json()
+}
+
+/**
  * Crée dans Odoo l'ordre de fabrication d'une préparation qu'Odoo ne demandait
  * pas (crème au beurre nature…). Renvoie { name } ou { error }.
  */

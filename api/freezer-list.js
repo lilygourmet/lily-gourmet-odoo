@@ -1277,6 +1277,35 @@ export default async function handler(req, res) {
       return res.status(200).json({ ordres: ids.length, basesLiberees: liberes })
     }
 
+    // Rend une base à tout le monde : on relâche ce que des ordres lui ont
+    // réservé. Sert aux réservations posées avant qu'on cesse de réserver les
+    // bases — Odoo re-réservera de lui-même si un ordre en a vraiment besoin.
+    if (req.method === 'POST' && req.query.mode === 'liberer') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const produit = String(body.produit || '').trim()
+      if (!produit) return res.status(400).json({ error: 'aucun article' })
+      if (body.test) return res.status(200).json({ lignes: 0, test: true })
+      const uid = await odooAuth()
+      const mv = await odooSearchRead(uid, 'stock.move',
+        [['raw_material_production_id', '!=', false], ['state', 'not in', ['done', 'cancel']],
+          ['reserved_availability', '>', 0]],
+        ['id', 'product_id', 'raw_material_production_id'], { limit: 800 })
+      // On compare sur le nom complet : c'est celui que l'app affiche.
+      const siennes = mv.filter(m => (Array.isArray(m.product_id) ? m.product_id[1] : '') === produit)
+      if (!siennes.length) return res.status(200).json({ lignes: 0, ordres: [] })
+      try {
+        await odooCall(uid, 'stock.move', '_do_unreserve', [siennes.map(m => m.id)])
+      } catch (e) {
+        return res.status(200).json({ lignes: 0, ordres: [], message: (e.message || String(e)).slice(0, 200) })
+      }
+      return res.status(200).json({
+        lignes: siennes.length,
+        ordres: [...new Set(siennes
+          .map(m => (Array.isArray(m.raw_material_production_id) ? m.raw_material_production_id[1] : ''))
+          .filter(Boolean))],
+      })
+    }
+
     // validation dans Odoo (POST) : action irréversible, réservée à perm_valider_of côté app
     if (req.method === 'POST' && req.query.mode === 'valider') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
