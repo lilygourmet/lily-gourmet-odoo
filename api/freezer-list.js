@@ -198,6 +198,95 @@ async function fetchListForDate(date, uid, includeDone = false) {
   return items
 }
 
+
+// ============================================================
+// « Check CD- » : le double contrôle des sorties de congélateur.
+// Un gâteau sorti porte un ordre « N cm cakedesign » (le B). Sa recette
+// contient l'étage congelé « N cm CD* » (le A). On ne valide le B dans Odoo
+// que si le A est en stock ; un B sans A (Cœur, bombé, Rose/Bleu) n'est
+// jamais traité automatiquement — Layla s'en occupe à la main.
+// ============================================================
+const EST_ETAGE_CD = n => /^\s*\d+\s*cm\s*CD\*/i.test(String(n || ''))
+
+async function etatsCheckCd(uid, moIds) {
+  const mos = await odooSearchRead(uid, 'mrp.production', [['id', 'in', moIds]],
+    ['id', 'name', 'product_id', 'product_qty', 'state', 'move_raw_ids'])
+  if (!mos.length) return []
+
+  const idsMoves = mos.flatMap(m => m.move_raw_ids || [])
+  const moves = idsMoves.length
+    ? await odooCall(uid, 'stock.move', 'read', [idsMoves,
+        ['id', 'raw_material_production_id', 'product_id', 'product_uom_qty']])
+    : []
+  const parOrdre = {}
+  for (const mv of moves) {
+    const par = Array.isArray(mv.raw_material_production_id) ? mv.raw_material_production_id[0] : null
+    if (par) (parOrdre[par] ||= []).push(mv)
+  }
+
+  // le stock des étages, lu LÀ OÙ la fabrication puise
+  const lieuCD = await lieuStockProd(uid)
+  const idsEtages = [...new Set(moves.filter(mv => EST_ETAGE_CD(mv.product_id[1]))
+    .map(mv => mv.product_id[0]))]
+  const stockDe = {}
+  if (idsEtages.length) {
+    for (const p of await odooCall(uid, 'product.product', 'read', [idsEtages, ['free_qty']],
+      lieuCD ? { context: { location: lieuCD.id } } : {})) stockDe[p.id] = p.free_qty || 0
+  }
+
+  return mos.map(m => {
+    const etage = (parOrdre[m.id] || []).find(mv => EST_ETAGE_CD(mv.product_id[1]))
+    if (m.state === 'done') return { mo_id: m.id, mo_name: m.name, dispo: 'valide', etage: etage ? etage.product_id[1] : null }
+    if (m.state === 'cancel') return { mo_id: m.id, mo_name: m.name, dispo: 'hors', etage: null, raison: 'ordre annulé dans Odoo' }
+    if (!etage) return { mo_id: m.id, mo_name: m.name, dispo: 'hors', etage: null, raison: "pas d'étage « N cm CD* » dans la recette" }
+    const besoin = etage.product_uom_qty || 0
+    const stock = stockDe[etage.product_id[0]] || 0
+    return {
+      mo_id: m.id, mo_name: m.name,
+      etage: etage.product_id[1], besoin, stock,
+      dispo: stock >= besoin ? 'ok' : 'manque',
+    }
+  })
+}
+
+
+// Le client est venu chercher sa commande : elle passe en caisse (POS), et le
+// gâteau entier « CD- Cake Design x étages » — le parent des étages — peut être
+// validé. Chaque ligne POS porte son devis d'origine (S52071), ce qui donne le
+// parent sans ambiguïté. Appelé chaque matin à 8h ; avec `dry`, il se contente
+// de lister ce qui reste à valider, pour l'afficher dans l'écran.
+async function parentsEncaisses(uid, jours, dry) {
+  const depuis = new Date(Date.now() - jours * 86400000)
+  const iso = d => d.toISOString().slice(0, 19).replace('T', ' ')
+  const lignes = await odooSearchRead(uid, 'pos.order.line',
+    [['product_id.name', 'ilike', 'CD- Cake Design'], ['create_date', '>=', iso(depuis)]],
+    ['order_id', 'product_id', 'sale_order_origin_id'], { limit: 300 })
+  if (!lignes.length) return []
+
+  const codes = [...new Set(lignes
+    .map(l => (Array.isArray(l.sale_order_origin_id) ? l.sale_order_origin_id[1] : '').trim())
+    .filter(Boolean))]
+  if (!codes.length) return []
+
+  // les ordres du gâteau entier rattachés à ces commandes, encore ouverts
+  const mos = await odooSearchRead(uid, 'mrp.production',
+    [['product_id.name', 'ilike', 'CD- Cake Design'],
+     ['state', 'in', ['confirmed', 'progress', 'to_close']]],
+    ['id', 'name', 'origin', 'product_id', 'components_availability'], { limit: 500 })
+
+  const out = []
+  for (const code of codes) {
+    for (const m of mos.filter(x => String(x.origin || '').includes(code))) {
+      if (out.some(o => o.mo_name === m.name)) continue
+      const base = { mo_id: m.id, mo_name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', scode: code }
+      if (dry) { out.push({ ...base, ok: false, message: 'à valider' }); continue }
+      const r = await validerOrdre(uid, m.name, false)
+      out.push({ ...base, ok: r.ok, message: r.message })
+    }
+  }
+  return out
+}
+
 async function odooCall(uid, model, method, args, kwargs = {}) {
   return await odooJsonRpc('object', 'execute_kw', [
     process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, method, args, kwargs,
@@ -213,6 +302,13 @@ async function odooCall(uid, model, method, args, kwargs = {}) {
 // Cakedesign CD* »…), par opposition aux préparations « SM… ».
 const lieuProduction = uid => memo('lieuprod', async () =>
   (await odooSearchRead(uid, 'stock.location', [['usage', '=', 'production']], ['id'], { limit: 1 }))[0])
+
+// La fabrication cake design ne se fait QU'À LA BOUTIQUE, dans « Stock Prod »
+// (décision de Layla, 2026-08-28). On cherche par le nom court : l'emplacement
+// garde le même nom même si on le range ailleurs dans l'arbre Odoo.
+const lieuStockProd = uid => memo('lieustockprod', async () =>
+  (await odooSearchRead(uid, 'stock.location',
+    [['name', '=', 'Stock Prod'], ['usage', '=', 'internal']], ['id'], { limit: 1 }))[0])
 
 // Jamais compté comme manquant : l'eau du robinet (elle ne se gère pas en
 // stock, elle est toujours là) et la génoise (son stock restera négatif un
@@ -725,11 +821,18 @@ async function fetchFabrication(uid, jours) {
   const jRetard = new Date(j0); jRetard.setFullYear(jRetard.getFullYear() - 1)
   const iso = d => d.toISOString().slice(0, 19).replace('T', ' ')
 
+  // Tout l'écran (ordres ET stocks) se limite à l'atelier cake design de la
+  // boutique : ce qui se fabrique à l'annexe ne le regarde pas.
+  const lieuCD = await lieuStockProd(uid)
+  const lieuProd = lieuCD ? lieuCD.id : null
+  const dansAtelierCD = lieuProd ? [['location_src_id', '=', lieuProd]] : []
+
   const mos = await odooSearchRead(uid, 'mrp.production', [
     ['state', 'in', ['confirmed', 'progress', 'to_close']],   // pas les brouillons
     ['product_id.name', 'ilike', 'CD*'],
     ['date_planned_start', '>=', iso(jRetard)],
     ['date_planned_start', '<=', iso(j1)],
+    ...dansAtelierCD,
   ], ['id', 'name', 'origin', 'state', 'product_id', 'product_qty', 'product_uom_id',
       'date_planned_start', 'components_availability', 'location_src_id'],
   { limit: 500, order: 'date_planned_start asc' })
@@ -743,6 +846,7 @@ async function fetchFabrication(uid, jours) {
     ['state', '=', 'done'],
     ['product_id.name', 'ilike', 'CD*'],
     ['date_planned_start', '>=', iso(jFinis)],
+    ...dansAtelierCD,
   ], ['id', 'name', 'origin', 'state', 'product_id', 'product_qty', 'product_uom_id',
       'date_planned_start', 'components_availability', 'location_src_id'],
   { limit: 500, order: 'date_planned_start desc' })
@@ -897,7 +1001,6 @@ async function fetchFabrication(uid, jours) {
   ].filter(Boolean))]
   // Stocks lus À L'EMPLACEMENT DE PRODUCTION (celui d'où les ordres puisent),
   // sinon on compterait le stock du magasin et de l'annexe.
-  const lieuProd = mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean)[0] || null
   const prods = idsProduits.length
     ? await odooCall(uid, 'product.product', 'read', [idsProduits, ['display_name', 'free_qty', 'qty_available', 'uom_id']],
       lieuProd ? { context: { location: lieuProd } } : {})
@@ -1259,6 +1362,48 @@ export default async function handler(req, res) {
     }
 
     // validation dans Odoo (POST) : action irréversible, réservée à perm_valider_of côté app
+    // Gâteaux entiers dont la commande est passée en caisse.
+    // Sans `dry`, on valide (c'est le rendez-vous de 8h) ; avec, on liste.
+    if (req.query.mode === 'parents-pos') {
+      const jours = Math.min(7, Math.max(1, parseInt(req.query.jours, 10) || 1))
+      const dry = req.query.dry === '1'
+      const uid = await odooAuth()
+      const out = await parentsEncaisses(uid, jours, dry)
+      if (!dry) console.log(`[check-cd:parents] ${out.length} gâteau(x) · ${out.map(o => o.mo_name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
+      return res.status(200).json({ parents: out })
+    }
+
+    // Check CD- : l'état de chaque gâteau sorti (son étage est-il en stock ?)
+    if (req.query.mode === 'check-cd') {
+      const ids = String(req.query.mos || '').split(',').map(x => parseInt(x, 10)).filter(Boolean)
+      if (!ids.length) return res.status(200).json({ etats: [] })
+      const uid = await odooAuth()
+      return res.status(200).json({ etats: await etatsCheckCd(uid, ids) })
+    }
+
+    // Check CD- : envoyer en validation. On revérifie l'étage juste avant :
+    // entre l'affichage et l'envoi, quelqu'un a pu consommer le stock.
+    if (req.method === 'POST' && req.query.mode === 'check-cd-valider') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const ids = (body.mos || []).map(x => parseInt(x, 10)).filter(Boolean)
+      if (!ids.length) return res.status(400).json({ error: 'aucun gâteau sélectionné' })
+      const uid = await odooAuth()
+      const etats = await etatsCheckCd(uid, ids)
+      const out = []
+      for (const e of etats) {
+        if (e.dispo === 'valide') { out.push({ ...e, ok: true, message: 'déjà validé dans Odoo' }); continue }
+        if (e.dispo !== 'ok') {
+          out.push({ ...e, ok: false, message: e.raison || `étage manquant (${e.stock} sur ${e.besoin} demandés)` })
+          continue
+        }
+        if (body.test) { out.push({ ...e, ok: true, message: 'simulé — rien envoyé à Odoo', test: true }); continue }
+        const r = await validerOrdre(uid, e.mo_name, false)
+        out.push({ ...e, ok: r.ok, message: r.message })
+      }
+      console.log(`[check-cd] par ${body.actorId || '?'} · ${out.map(o => o.mo_name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
+      return res.status(200).json({ resultats: out })
+    }
+
     if (req.method === 'POST' && req.query.mode === 'valider') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const names = (body.ordres || []).filter(Boolean)
@@ -1288,6 +1433,20 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ordres: mos.map(m => ({ name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', etat: m.state })),
       })
+    }
+
+    // La photo d'un article, telle qu'elle est dans Odoo. Servie à part : mise
+    // bout à bout, 55 photos pèseraient près d'un mégaoctet dans l'arbre.
+    if (req.query.mode === 'photo') {
+      const id = parseInt(req.query.id, 10)
+      if (!id) return res.status(404).end()
+      const uid = await odooAuth()
+      const t = await odooCall(uid, 'product.template', 'read', [[id], ['image_128']])
+      const b64 = t && t[0] && t[0].image_128
+      if (!b64) return res.status(404).end()
+      res.setHeader('Content-Type', 'image/png')
+      res.setHeader('Cache-Control', 'public, max-age=86400')
+      return res.status(200).send(Buffer.from(b64, 'base64'))
     }
 
     // L'arbre de l'annexe. Le premier écran montre les MÈRES — entremets (E-),
@@ -1437,7 +1596,36 @@ export default async function handler(req, res) {
       }
       for (const m of meres) rendre(m, 0, new Set())
 
-      return res.status(200).json({ racines, ecartees, combien: { ...combien, ...poids }, recettes: aRendre })
+      // Ce qu'il y a en stock à l'annexe, et les minimums déclarés dans Odoo :
+      // c'est ce qui dit s'il y a du travail.
+      const nomsArbre = [...new Set(Object.keys(aRendre))]
+      const [quants, points, tmplPhotos] = await Promise.all([
+        odooSearchRead(uid, 'stock.quant', [['location_id', 'child_of', lieux.map(l => l.id)]],
+          ['product_id', 'quantity'], { limit: 3000 }),
+        odooSearchRead(uid, 'stock.warehouse.orderpoint', [['location_id', 'in', lieux.map(l => l.id)]],
+          ['product_id', 'product_min_qty', 'product_max_qty', 'qty_on_hand'], { limit: 800 }),
+        odooSearchRead(uid, 'product.template', [['name', 'in', racines]],
+          ['id', 'name', 'image_128'], { limit: 400 }),
+      ])
+      const stocks = {}
+      for (const k of quants) {
+        const n = net(Array.isArray(k.product_id) ? k.product_id[1] : '')
+        if (n) stocks[n] = (stocks[n] || 0) + (k.quantity || 0)
+      }
+      const minmax = {}
+      for (const o of points) {
+        const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
+        if (!n) continue
+        minmax[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
+        if (stocks[n] === undefined) stocks[n] = o.qty_on_hand || 0
+      }
+      const photos = {}
+      for (const t of tmplPhotos) if (t.image_128) photos[net(t.name)] = t.id
+
+      return res.status(200).json({
+        racines, ecartees, photos, stocks, minmax,
+        combien: { ...combien, ...poids }, recettes: aRendre,
+      })
     }
 
     // Les recettes d'une liste d'articles, telles qu'Odoo les tient. L'écran
