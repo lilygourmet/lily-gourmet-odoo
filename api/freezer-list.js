@@ -1389,14 +1389,19 @@ export default async function handler(req, res) {
       // les donuts se vendent en coffret GM-, mais l'annexe les fabrique
       const garde = n => utiles.has(n) || utiles.has(modele(n)) || /donut/i.test(n)
 
-      // Une racine, c'est un article produit à l'annexe qui n'entre dans la
-      // recette d'aucun autre : personne ne l'attend, c'est un bout de chaîne.
+      // Une racine, c'est ce que l'atelier fait de plus haut dans la chaîne :
+      // aucun AUTRE article fabriqué ici ne l'utilise. On ne regarde que les
+      // recettes des articles de l'annexe — sinon l'entremets fini, monté
+      // ailleurs, ferait de chaque préparation un simple composant et il ne
+      // resterait plus une seule carte.
+      const gardes = Object.keys(combien).filter(n => garde(n))
       const composants = new Set()
-      for (const r of Object.values(recettes)) for (const l of r.lignes) {
-        composants.add(l.produit); composants.add(modele(l.produit))
+      for (const n of gardes) {
+        const r = recetteDe(n)
+        if (!r) continue
+        for (const l of r.lignes) { composants.add(l.produit); composants.add(modele(l.produit)) }
       }
-      const racines = Object.keys(combien)
-        .filter(n => garde(n))
+      const racines = gardes
         .filter(n => !composants.has(n) && !composants.has(modele(n)))
         .sort((a, b) => combien[b] - combien[a])
 
