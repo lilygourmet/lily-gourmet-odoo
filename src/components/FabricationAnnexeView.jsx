@@ -64,6 +64,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [voirCaches, setVoirCaches] = useState(false)
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
+  const [q, setQ] = useState('')            // recherche rapide
 
   useEffect(() => {
     let vivant = true
@@ -93,12 +94,23 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return [...new Set(r.lignes.filter(l => l.fabrique && recettes[l.produit]).map(l => l.produit))]
   }
 
-  // La liste affichée : les racines, ou les morceaux de là où l'on est.
+  // La liste affichée : le résultat de la recherche, sinon les mères ou les
+  // morceaux de là où l'on est.
   const liste = useMemo(() => {
     if (!arbre) return []
+    const cherche = q.trim().toLowerCase()
+    if (cherche.length >= 2) {
+      // on cherche partout, y compris dans les morceaux : c'est fait pour
+      // retrouver une crème sans savoir dans quel gâteau elle se range
+      const tous = [...new Set([...Object.keys(arbre.recettes || {}), ...Object.keys(arbre.combien || {})])]
+      return tous
+        .filter(n => propre(n).toLowerCase().includes(cherche) || n.toLowerCase().includes(cherche))
+        .sort((a, b) => (arbre.combien[b] || 0) - (arbre.combien[a] || 0))
+        .slice(0, 40)
+    }
     if (!chemin.length) return (arbre.racines || []).filter(n => !caches.includes(n))
     return enfantsDe(chemin[chemin.length - 1])
-  }, [arbre, chemin, caches])
+  }, [arbre, chemin, caches, q])
 
   const combienDe = useMemo(() => {
     const m = {}
@@ -164,6 +176,22 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
           </button>
         </div>
 
+        <div className="relative mb-4 print:hidden">
+          <svg viewBox="0 0 24 24"
+            className="w-5 h-5 stroke-ink-mute fill-none absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+            strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+          <input value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Chercher un article"
+            className="w-full bg-white border border-line rounded-2xl pl-11 pr-11 py-3 text-[15px] outline-none focus:border-bordeaux" />
+          {q && (
+            <button onClick={() => setQ('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 grid place-items-center">
+              <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] stroke-ink-mute fill-none" strokeWidth="2.4">
+                <path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          )}
+        </div>
+
         {voirHisto && (
           <div className="mb-4 print:hidden">
             {!histo && <Skeleton rows={2} />}
@@ -180,7 +208,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         )}
 
         {/* le fil : où l'on est, avec la flèche pour remonter */}
-        {chemin.length > 0 && (
+        {chemin.length > 0 && !q.trim() && (
           <div className="flex items-center gap-2.5 mb-3.5 print:hidden">
             <button onClick={() => setChemin(c => c.slice(0, -1))}
               className="w-[46px] h-[46px] shrink-0 border border-line bg-white rounded-2xl grid place-items-center">
@@ -232,7 +260,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <svg viewBox="0 0 24 24" className="w-[15px] h-[15px] stroke-bordeaux fill-none" strokeWidth="2.6"><path d="M9 5l7 7-7 7" /></svg>
                   </span>
                 )}
-                {!chemin.length && (
+                {!chemin.length && !q.trim() && (
                   <span onClick={ev => cacher(nom, ev)} title="ranger"
                     className="absolute top-2.5 left-2.5 w-[34px] h-[34px] rounded-full bg-white/90 border border-line grid place-items-center">
                     <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-ink-mute fill-none" strokeWidth="2.4"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -246,7 +274,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 
         {arbre && !liste.length && (
           <p className="text-[13.5px] text-ink-mute py-6 text-center print:hidden">
-            Rien ici. Reviens en arrière avec la flèche.
+            {q.trim() ? 'Aucun article de ce nom.' : 'Rien ici. Reviens en arrière avec la flèche.'}
           </p>
         )}
 

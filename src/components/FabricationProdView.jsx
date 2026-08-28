@@ -48,6 +48,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const [noms, setNoms] = useState({})
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
+  const [q, setQ] = useState('')            // recherche rapide
 
   useEffect(() => {
     let vivant = true
@@ -210,6 +211,22 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
         </div>
 
         {/* Les journées déjà remplies : on en choisit une, on la voit, on l'imprime. */}
+        <div className="relative mb-4 print:hidden">
+          <svg viewBox="0 0 24 24"
+            className="w-5 h-5 stroke-ink-mute fill-none absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+            strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+          <input value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Chercher un article"
+            className="w-full bg-white border border-line rounded-2xl pl-11 pr-11 py-3 text-[15px] outline-none focus:border-bordeaux" />
+          {q && (
+            <button onClick={() => setQ('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 grid place-items-center">
+              <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] stroke-ink-mute fill-none" strokeWidth="2.4">
+                <path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          )}
+        </div>
+
         {voirHisto && (
           <div className="mb-5 print:hidden">
             {!histo && <Skeleton rows={2} />}
@@ -276,7 +293,10 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
         {!journal && <Skeleton rows={4} />}
 
         {journal && FAMILLES.map(fam => {
+          const cherche = q.trim().toLowerCase()
           const liste = tous.filter(a => a.famille === fam)
+            .filter(a => !cherche || propre(a.article).toLowerCase().includes(cherche)
+              || a.article.toLowerCase().includes(cherche))
           return (
             <div key={fam} className="print:hidden">
               <div className="flex items-center gap-2.5 mt-6 mb-2.5">
@@ -314,7 +334,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                   )
                 })}
 
-                {fam === 'Autres' && (
+                {fam === 'Autres' && !q.trim() && (
                   nouveau ? (
                     <div className="bg-white border border-bordeaux ring-2 ring-bordeaux/15 rounded-2xl overflow-hidden">
                       <label
