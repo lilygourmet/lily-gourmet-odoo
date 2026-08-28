@@ -1441,8 +1441,10 @@ export default async function handler(req, res) {
       const id = parseInt(req.query.id, 10)
       if (!id) return res.status(404).end()
       const uid = await odooAuth()
-      const t = await odooCall(uid, 'product.template', 'read', [[id], ['image_128']])
-      const b64 = t && t[0] && t[0].image_128
+      // la grande image : en 128 px, la photo est floue dès qu'on l'affiche
+      // sur un écran de téléphone
+      const t = await odooCall(uid, 'product.template', 'read', [[id], ['image_512', 'image_256', 'image_128']])
+      const b64 = t && t[0] && (t[0].image_512 || t[0].image_256 || t[0].image_128)
       if (!b64) return res.status(404).end()
       res.setHeader('Content-Type', 'image/png')
       res.setHeader('Cache-Control', 'public, max-age=86400')

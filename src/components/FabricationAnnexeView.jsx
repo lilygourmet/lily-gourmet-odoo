@@ -29,7 +29,15 @@ const couleur = n => {
 
 function Vignette({ nom, photo, taille, rond }) {
   const style = { width: taille, height: taille, borderRadius: rond || 12 }
-  if (photo) return <img src={photo} alt="" className="object-cover shrink-0" style={style} />
+  // `contain` et non `cover` : la photo entière doit tenir dans le carré,
+  // sinon on ne voit qu'un morceau du gâteau
+  if (photo) {
+    return (
+      <span className="shrink-0 grid place-items-center bg-cream-warm overflow-hidden" style={style}>
+        <img src={photo} alt="" className="w-full h-full object-contain" />
+      </span>
+    )
+  }
   return (
     <span className="grid place-items-center font-serif italic text-cream shrink-0"
       style={{ ...style, background: couleur(nom), fontSize: taille * 0.42 }}>
