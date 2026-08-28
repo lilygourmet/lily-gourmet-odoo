@@ -49,3 +49,11 @@ ALTER TABLE prod_articles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS prod_articles_all ON prod_articles;
 CREATE POLICY prod_articles_all ON prod_articles
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- ------------------------------------------------------------
+-- On ne pèse plus : on compte les fournées (« 2 fois la recette »).
+-- `qty` garde ce que la fournée produit, `fois` ce que le pâtissier a déclaré.
+-- ------------------------------------------------------------
+
+ALTER TABLE prod_fabrications
+  ADD COLUMN IF NOT EXISTS fois NUMERIC;

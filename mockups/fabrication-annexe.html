@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fabrication Annexe — maquette</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#fcfbf8; --cream-warm:#F7F2EA; --line:#e5d8c3; --bordeaux:#993556;
+    --ink:#2b2118; --ink-soft:#6b5c4c; --ink-mute:#9a8b7a;
+    --ok:#5c7a3f; --ok-bg:#EAF3DE;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:Geist,system-ui,sans-serif;
+       padding:16px 12px 120px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto}
+
+  /* en-tête : une date, un bouton. rien d'autre */
+  .haut{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .date{flex:1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+  .date input{border:0;background:transparent;font-family:inherit;font-size:16px;font-weight:800;
+              color:var(--ink);outline:none;width:100%}
+  .rond{width:52px;height:52px;flex:none;border-radius:16px;border:1px solid var(--line);background:#fff;
+        display:grid;place-items:center;cursor:pointer}
+  .rond svg{width:24px;height:24px;stroke:var(--ink-soft);fill:none;stroke-width:1.7}
+
+  /* le fil : où je suis, en photos */
+  .fil{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .fil .retour{width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:#fff;
+               display:grid;place-items:center;cursor:pointer;flex:none}
+  .fil .retour svg{width:22px;height:22px;stroke:var(--bordeaux);fill:none;stroke-width:2.2}
+  .fil .vign{width:46px;height:46px;border-radius:12px;flex:none;object-fit:cover}
+  .fil .ou{font-size:17px;font-weight:800;line-height:1.2;flex:1;min-width:0}
+
+  /* les grandes cartes */
+  .grille{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(min-width:620px){ .grille{grid-template-columns:repeat(3,1fr)} }
+  .carte{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;
+         cursor:pointer;position:relative;padding:0;text-align:left;font-family:inherit;width:100%}
+  .carte .img{aspect-ratio:1/1;width:100%;display:block;object-fit:cover;background:var(--cream-warm)}
+  .carte .t{padding:11px 12px 13px;font-size:15px;font-weight:700;line-height:1.25}
+  .carte.fait{border-color:var(--ok);border-width:2px}
+  .coche{position:absolute;top:10px;right:10px;width:42px;height:42px;border-radius:50%;
+         background:var(--ok);display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+  .coche svg{width:24px;height:24px;stroke:#fff;fill:none;stroke-width:3}
+  .combien{position:absolute;top:10px;left:10px;background:rgba(43,33,24,.72);color:#fff;
+           font-size:14px;font-weight:800;padding:5px 11px;border-radius:999px}
+  .morceaux{position:absolute;bottom:52px;left:10px;background:rgba(255,255,255,.94);
+            border:1px solid var(--line);border-radius:999px;padding:5px 10px;display:flex;
+            align-items:center;gap:5px;font-size:13px;font-weight:800;color:var(--bordeaux)}
+  .morceaux svg{width:15px;height:15px;stroke:var(--bordeaux);fill:none;stroke-width:2.6}
+
+  /* la calculette, en grand, par-dessus tout */
+  .voile{position:fixed;inset:0;background:rgba(43,33,24,.55);display:grid;place-items:end center;z-index:60}
+  .feuille{background:var(--cream);width:100%;max-width:560px;border-radius:24px 24px 0 0;padding:16px 16px 22px}
+  .feuille .qui{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .feuille .qui img{width:62px;height:62px;border-radius:16px;object-fit:cover}
+  .feuille .qui b{font-size:19px;line-height:1.2}
+  /* combien de fois la recette */
+  .fois{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);
+        border-radius:18px;padding:10px;margin-bottom:12px}
+  .fois button{width:64px;height:64px;flex:none;border:2px solid var(--line);border-radius:16px;background:#fff;
+               font-size:32px;font-weight:800;font-family:inherit;cursor:pointer;color:var(--bordeaux);line-height:1}
+  .fois .n{flex:1;text-align:center}
+  .fois .n b{display:block;font-size:44px;font-weight:800;line-height:1}
+  .fois .n span{font-size:12.5px;color:var(--ink-mute);font-weight:700}
+  .raccourcis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+  .raccourcis button{padding:13px 0;font-size:17px;font-weight:800;border:2px solid var(--line);
+                     border-radius:14px;background:#fff;font-family:inherit;cursor:pointer;color:var(--ink-mute)}
+  .raccourcis button.on{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+  .recette{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:12px}
+  .recette .tt{background:var(--cream-warm);padding:9px 14px;font-size:11.5px;font-weight:800;
+               letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--line)}
+  .ing{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #f4eee2}
+  .ing:last-child{border-bottom:0}
+  .ing .p{font-size:20px;font-weight:800;min-width:106px;text-align:right;color:var(--ink)}
+  .ing .l{flex:1;min-width:0;font-size:15px}
+  .ing.sous{background:#fbf8f2}
+  .ing.sous .l{color:var(--bordeaux);font-weight:700}
+  .sortie{background:var(--ok-bg);border:1px solid #cfe0b8;border-radius:16px;padding:12px 14px;
+          display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .sortie b{font-size:26px;font-weight:800;color:var(--ok)}
+  .sortie span{font-size:13.5px;color:var(--ok)}
+
+  .valider{width:100%;margin-top:12px;padding:18px;border:0;border-radius:16px;background:var(--ok);
+           color:#fff;font-size:19px;font-weight:800;font-family:inherit;cursor:pointer;
+           display:flex;align-items:center;justify-content:center;gap:10px}
+  .valider[disabled]{background:#fff;border:1px solid var(--line);color:var(--ink-mute)}
+  .valider svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:3}
+  .fermer{width:100%;margin-top:8px;padding:14px;border:1px solid var(--line);border-radius:16px;
+          background:#fff;color:var(--ink-mute);font-size:15px;font-weight:700;font-family:inherit;cursor:pointer}
+
+  /* ce qui a été fait aujourd'hui */
+  .titre{font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--bordeaux);
+         display:flex;align-items:center;gap:10px;margin:30px 0 12px}
+  .titre::after{content:"";flex:1;height:2px;background:var(--line)}
+  .ligne{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);
+         border-radius:16px;padding:10px 12px;margin-bottom:8px}
+  .ligne img{width:52px;height:52px;border-radius:12px;object-fit:cover;flex:none}
+  .ligne .n{flex:1;min-width:0;font-size:15px;font-weight:600;line-height:1.25}
+  .ligne .n small{display:block;font-size:12px;color:var(--ink-mute);font-weight:400;margin-top:2px}
+  .ligne .q{font-size:19px;font-weight:800;color:var(--ok);white-space:nowrap}
+  .ligne .x{width:40px;height:40px;flex:none;border:1px solid var(--line);border-radius:12px;background:#fff;
+            display:grid;place-items:center;cursor:pointer}
+  .ligne .x svg{width:18px;height:18px;stroke:#b03a3a;fill:none;stroke-width:2.6}
+  .vide{background:#fff;border:1px dashed var(--line);border-radius:16px;padding:22px;text-align:center;
+        color:var(--ink-mute);font-size:14px}
+
+  .bas{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+       padding:12px 14px;display:flex;align-items:center;gap:12px;z-index:40}
+  .bas b{font-size:17px;flex:1}
+  .bas button{border:0;background:var(--bordeaux);color:#fff;border-radius:14px;padding:14px 18px;
+              font-size:15px;font-weight:800;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .bas svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8}
+  .note{background:var(--cream-warm);border:1px solid var(--line);border-radius:16px;padding:14px 16px;
+        font-size:13px;line-height:1.7;margin-top:28px}
+  .note b{display:block;margin-bottom:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="haut">
+    <div class="date"><input type="date" id="d"></div>
+    <button class="rond" title="Imprimer">
+      <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg>
+    </button>
+  </div>
+
+  <div id="fil"></div>
+  <div class="grille" id="grille"></div>
+
+  <div class="titre">Aujourd'hui</div>
+  <div id="journal"></div>
+
+  <div class="note">
+    <b>Ce qui a changé</b>
+    Plus de listes ni de recettes écrites. On voit des photos, on tape dessus.
+    Une carte avec le repère <b style="display:inline;color:var(--bordeaux)">3 ›</b> se compose de plusieurs morceaux :
+    on tape le repère pour les voir. Pour dire « j'ai fait ça », on tape simplement la photo.
+  </div>
+</div>
+
+<div id="modale"></div>
+
+<div class="bas">
+  <b id="cpt">Rien fait</b>
+  <button><svg viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg>Imprimer</button>
+</div>
+
+<script>
+// Vraies recettes de l'annexe (Odoo). Les matières premières n'apparaissent
+// plus : on ne les fabrique pas, elles n'ont rien à faire à l'écran.
+const P = (t, c) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="${c}"/>`+
+  `<text x="150" y="165" font-size="120" text-anchor="middle" fill="rgba(255,255,255,.85)" font-family="Georgia" font-style="italic">${t}</text></svg>`)
+
+// r = la recette pour UNE fois : [quantité, unité, nom, estUneAutreFabrication]
+const ARBRE = [
+  { nom:"Pistache fleur d'oranger", img:P('P','#8aa06a'), sort:[1,'entremets'], r:[
+      [1,'u','Biscuit pistache',1],[1,'u','Crunchy pistache',1],[1,'u','Crémeux pistache',1],[600,'g','Mousse pistache',1],
+    ], enfants:[
+    { nom:'Biscuit pistache', img:P('B','#a8b98c'), enfants:[
+      { nom:'Biscuit pistache plaque', img:P('Bp','#bcc9a4'), enfants:[
+        { nom:'Pâte de vanille maison', img:P('V','#c9b892'), sort:[240,'g'], r:[
+          [40,'g','Vanille gousse Bourbon'],[100,'g','Sucre cassonade'],[100,'g','Eau'],
+        ]},
+      ]},
+    ]},
+    { nom:'Crunchy pistache', img:P('C','#c2a878'), enfants:[
+      { nom:'Crumble pistache', img:P('Cr','#d3bf98'), sort:[5320,'g'], r:[
+        [1250,'g','Beurre entremets'],[1250,'g','Sucre granulé'],[1250,'g','Farine'],[1550,'g','Amandes poudre'],[20,'g','Sel'],
+      ]},
+      { nom:'Praliné maison pistache', img:P('Pr','#b58f5e'), sort:[3240,'g'], r:[
+        [2000,'g','Pistache entière'],[1000,'g','Sucre granulé'],[240,'g','Eau'],
+      ]},
+    ]},
+    { nom:'Crémeux pistache', img:P('Cx','#9db77f'), sort:[220,'g'], r:[
+      [210,'g','Crème whipping'],[63,'g','Lait'],[58,'g','Jaunes'],[60,'g','Pâte de pistache'],[180,'g','Chocolat Ivoire'],[14,'g','Gélatine poudre'],
+    ]},
+    { nom:'Mousse pistache', img:P('M','#adc491'), sort:[600,'g'], r:[
+      [150,'g','Lait'],[450,'g','Crème whipping'],[180,'g','Pâte de pistache'],[210,'g','Chocolat Ivoire 35%'],[4.5,'g','Gélatine'],
+    ]},
+  ]},
+  { nom:'Flan vanille 20 cm', img:P('F','#d8b95f'), sort:[1,'flan'], r:[
+      [500,'g','Crème whipping'],[500,'g','Lait'],[200,'g','Œufs entiers'],[160,'g','Sucre granulé'],[100,'g','Maïzena'],
+      [100,'g','Beurre entremets'],[100,'g','Praliné noisette'],[8,'g','Vanille gousse'],
+      [100,'g','Pécan caramélisé',1],[1,'u','Base flan vanille',1],
+    ], enfants:[
+    { nom:'Pécan caramélisé', img:P('Pc','#a97f4a'), sort:[1620,'g'], r:[
+      [1000,'g','Pécan'],[500,'g','Sucre granulé'],[120,'g','Eau'],
+    ]},
+    { nom:'Base flan vanille', img:P('Bf','#e0cc8e'), enfants:[
+      { nom:'Sablé crispy', img:P('S','#c9a870'), sort:[5598,'g'], r:[
+        [2400,'g','Farine'],[1560,'g','Sucre cassonade'],[1200,'g','Beurre entremets'],[300,'g','Œufs entiers'],[90,'g','Lait'],[36,'g','Levure chimique'],[12,'g','Sel'],
+      ]},
+    ]},
+  ]},
+  { nom:'Gianduja 10 pers', img:P('G','#8a6042'), enfants:[
+    { nom:'Crémeux gianduja', img:P('Cg','#a4785a') },
+    { nom:'Crémeux vanille', img:P('Cv','#d3c39a') },
+    { nom:'Biscuit chocolat Gianduja', img:P('Bc','#6f4a33') },
+  ]},
+  { nom:'Le Citron Framboise', img:P('CF','#c76a7a'), enfants:[
+    { nom:'Crème légère vanille citron', img:P('Cl','#e0c98a') },
+    { nom:'Génoise vanille', img:P('Gv','#dcc79b') },
+  ]},
+  { nom:'Chantilly à la Rose', img:P('R','#cf8fa2'), sort:[1152,'g'], r:[
+    [1000,'g','Crème whipping'],[120,'g','Sucre glace'],[32,'g','Eau de rose'],
+  ]},
+  { nom:'Crème au beurre nature', img:P('Cb','#e4d5b0'), sort:[8318,'g'], r:[
+    [4000,'g','Beurre entremets'],[2000,'g','Sucre granulé'],[1600,'g','Blancs d\u2019œufs'],[718,'g','Eau'],
+  ]},
+  { nom:'Sirop imbibage', img:P('Si','#b9a37c') },
+]
+
+let chemin = []          // où je suis dans l'arbre
+let saisie = null        // l'article en cours de saisie
+let fois = 1             // combien de fois la recette a été faite
+const journal = []
+
+const d = document.getElementById('d')
+d.value = new Date().toLocaleDateString('sv-SE')
+
+const nombre = v => Number(v.toFixed(2)).toLocaleString('fr-FR')
+const ici = () => chemin.reduce((n, i) => n.enfants[i], { enfants: ARBRE })
+const noeud = () => (chemin.length ? chemin.reduce((n, i) => n.enfants[i], { enfants: ARBRE }) : null)
+const cheminNoms = () => { let n = { enfants: ARBRE }, out = []
+  for (const i of chemin) { n = n.enfants[i]; out.push(n.nom) } return out }
+const cleDe = nom => [...cheminNoms(), nom].join(' > ')
+const foisDe = k => journal.filter(x => x.cle === k).length
+const dedans = (n, k) => (n.enfants || []).some(e => foisDe(k + ' > ' + e.nom) || dedans(e, k + ' > ' + e.nom))
+
+function dessine(){
+  // le fil : bouton retour + où je suis
+  const f = document.getElementById('fil')
+  const n = noeud()
+  f.innerHTML = chemin.length ? `
+    <div class="fil">
+      <button class="retour" onclick="remonter()"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <img class="vign" src="${n.img}">
+      <span class="ou">${n.nom}</span>
+    </div>` : ''
+
+  // les cartes
+  const liste = (n ? n.enfants : ARBRE) || []
+  document.getElementById('grille').innerHTML = liste.map((e, i) => {
+    const k = cleDe(e.nom)
+    const fois = foisDe(k)
+    const nb = (e.enfants || []).length
+    return `<button class="carte ${fois ? 'fait' : ''}" onclick="taper(${i})">
+      <img class="img" src="${e.img}">
+      ${fois ? `<span class="coche"><svg viewBox="0 0 24 24"><path d="M4 13l5 5L20 7"/></svg></span>` : ''}
+      ${fois > 1 ? `<span class="combien">${fois}</span>` : ''}
+      ${nb ? `<span class="morceaux" onclick="event.stopPropagation();descendre(${i})">${nb}
+              <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></span>` : ''}
+      <span class="t">${e.nom}</span>
+    </button>`
+  }).join('')
+
+  // ce qui a été fait
+  const j = document.getElementById('journal')
+  j.innerHTML = journal.length ? journal.map((l, i) => `
+    <div class="ligne">
+      <img src="${l.img}">
+      <span class="n">${l.nom}<small>${l.fois} fois la recette${l.pour ? ' &middot; pour ' + l.pour : ''}</small></span>
+      <span class="q">${l.q} ${l.u}</span>
+      <button class="x" onclick="retirer(${i})"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>`).join('')
+    : `<div class="vide">Tape la photo de ce que tu as fait.</div>`
+  document.getElementById('cpt').textContent = journal.length ? journal.length + (journal.length > 1 ? ' faits' : ' fait') : 'Rien fait'
+
+  modale()
+}
+
+function taper(i){ const e = (noeud() ? noeud().enfants : ARBRE)[i]
+  saisie = { ...e, cle: cleDe(e.nom), pour: cheminNoms().slice(-1)[0] || '' }
+  fois = 1; dessine() }
+function descendre(i){ chemin.push(i); dessine() }
+function remonter(){ chemin.pop(); dessine() }
+function setFois(n){ fois = Math.max(0.5, Math.round(n * 2) / 2); dessine() }
+function fermer(){ saisie = null; dessine() }
+function valider(){
+  const s = saisie.sort || [1, 'u']
+  journal.unshift({ ...saisie, fois, q: nombre(s[0] * fois), u: s[1] })
+  saisie = null; dessine()
+}
+function retirer(i){ journal.splice(i, 1); dessine() }
+
+function modale(){
+  const m = document.getElementById('modale')
+  if (!saisie){ m.innerHTML = ''; return }
+  const r = saisie.r || []
+  const s0 = saisie.sort || [1, 'u']
+  m.innerHTML = `<div class="voile" onclick="if(event.target===this)fermer()"><div class="feuille">
+    <div class="qui"><img src="${saisie.img}"><b>${saisie.nom}</b></div>
+
+    <div class="fois">
+      <button onclick="setFois(fois - (fois > 1 ? 1 : 0.5))">&minus;</button>
+      <span class="n"><b>${nombre(fois)}</b><span>fois la recette</span></span>
+      <button onclick="setFois(fois + (fois < 1 ? 0.5 : 1))">+</button>
+    </div>
+    <div class="raccourcis">
+      ${[0.5, 1, 2, 3].map(n => `<button class="${fois === n ? 'on' : ''}" onclick="setFois(${n})">${n === 0.5 ? '&frac12;' : n}</button>`).join('')}
+    </div>
+
+    ${r.length ? `<div class="recette">
+      <div class="tt">Ce qu'il faut</div>
+      ${r.map(l => `<div class="ing ${l[3] ? 'sous' : ''}">
+        <span class="p">${nombre(l[0] * fois)} ${l[1]}</span>
+        <span class="l">${l[2]}</span>
+      </div>`).join('')}
+    </div>` : ''}
+
+    <div class="sortie"><b>${nombre(s0[0] * fois)} ${s0[1]}</b><span>en sortie</span></div>
+
+    <button class="valider" onclick="valider()">
+      <svg viewBox="0 0 24 24"><path d="M4 13l5 5L20 7"/></svg> C'est fait
+    </button>
+    <button class="fermer" onclick="fermer()">fermer</button>
+  </div></div>`
+}
+
+dessine()
+</script>
+</body>
+</html>

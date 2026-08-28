@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import {
   ARTICLES, loadFabProd, addFabProd, delFabProd,
-  loadArticlesAjoutes, addArticle, delArticle, loadNoms, loadHistorique,
+  loadArticlesAjoutes, addArticle, delArticle, loadNoms, loadHistorique, loadRecettes,
 } from '../lib/fabricationProd'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
@@ -16,36 +16,13 @@ const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit
 
 const FAMILLES = ['Finitions', 'Autres']
 
-/**
- * La calculette qui s'ouvre sous l'article. Même allure que celle des
- * transferts, avec une virgule en plus : ici on note 7,5 kg.
- * La valeur est tenue en texte pour que « 7, » existe entre deux touches.
- */
-function Pave({ setValeur }) {
-  const chiffre = d => setValeur(v => (v.replace(',', '').length >= 6 ? v : (v === '0' ? d : v + d)))
-  const virgule = () => setValeur(v => (v.includes(',') ? v : (v === '' ? '0,' : v + ',')))
-  const effacer = () => setValeur(v => v.slice(0, -1))
-
-  const touche = 'py-3 text-[17px] font-bold border border-line rounded-lg bg-white active:bg-cream-warm'
-  return (
-    <div className="grid grid-cols-3 gap-1.5">
-      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
-        <button key={n} type="button" onClick={() => chiffre(String(n))} className={touche}>{n}</button>
-      ))}
-      <button type="button" onClick={virgule} className={touche}>,</button>
-      <button type="button" onClick={() => chiffre('0')} className={touche}>0</button>
-      <button type="button" onClick={effacer} className={touche + ' text-[15px] text-ink-mute'}>&#9003;</button>
-    </div>
-  )
-}
-
 export default function FabricationProdView({ user, onLogout, onNavigate, activeView }) {
   const [jour, setJour] = useState(todayISO())
   const [journal, setJournal] = useState(null)    // les fournées notées ce jour-là
   const [erreur, setErreur] = useState(null)
   const [ouvert, setOuvert] = useState(null)      // l'article en cours de saisie
-  const [valeur, setValeur] = useState('')
-  const [unite, setUnite] = useState(null)
+  const [fois, setFois] = useState(1)             // combien de fois la recette
+  const [recettes, setRecettes] = useState({})
   const [ajoutes, setAjoutes] = useState([])      // articles ajoutés à la main
   const [nouveau, setNouveau] = useState(null)    // { nom, unite, photo } en cours de création
   const [noms, setNoms] = useState({})
@@ -69,14 +46,22 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
   const relireHisto = () => loadHistorique(60).then(setHisto).catch(() => setHisto([]))
 
-  // Sur ordinateur, taper au clavier fait la même chose que la calculette.
+  // Les recettes viennent d'Odoo : si elles y changent, l'écran suit tout seul.
+  useEffect(() => {
+    let vivant = true
+    const noms = [...ARTICLES, ...ajoutes].map(a => a.article)
+    loadRecettes(noms).then(r => { if (vivant) setRecettes(r) }).catch(() => { })
+    return () => { vivant = false }
+  }, [ajoutes])
+
+  // Sur ordinateur : les flèches changent le nombre de fournées, Échap referme.
   useEffect(() => {
     if (!ouvert) return undefined
     const touche = e => {
-      if (e.key >= '0' && e.key <= '9') setValeur(v => (v.replace(',', '').length >= 6 ? v : (v === '0' ? e.key : v + e.key)))
-      else if (e.key === ',' || e.key === '.') setValeur(v => (v.includes(',') ? v : (v === '' ? '0,' : v + ',')))
-      else if (e.key === 'Backspace') setValeur(v => v.slice(0, -1))
+      if (e.key === 'ArrowUp' || e.key === '+') setFois(f => (f < 1 ? f + 0.5 : f + 1))
+      else if (e.key === 'ArrowDown' || e.key === '-') setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))
       else if (e.key === 'Escape') setOuvert(null)
+      else if (e.key >= '1' && e.key <= '9') setFois(Number(e.key))
       else return
       e.preventDefault()
     }
@@ -97,20 +82,20 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const ouvrir = a => {
     if (ouvert === a.article) { setOuvert(null); return }
     setOuvert(a.article)
-    setValeur('')
-    setUnite(null)          // à choisir exprès : g, kg ou u
+    setFois(1)
   }
 
   const noter = async a => {
-    const q = Number(String(valeur).replace(',', '.'))
-    if (!(q > 0)) { toast.error('Note une quantité'); return }
-    if (!unite) { toast.error('Choisis grammes, kilos ou unités'); return }
+    const r = recettes[a.article]
+    // sans recette dans Odoo, on garde au moins la trace de la fournée
+    const q = r ? Math.round(r.sortQty * fois * 100) / 100 : fois
+    const u = r ? r.sortUnite : a.unite
     try {
-      const ligne = await addFabProd(jour, a.article, q, unite, user?.id)
+      const ligne = await addFabProd(jour, a.article, q, u, user?.id, fois)
       setJournal(l => [...(l || []), ligne])
       setOuvert(null)
       setHisto(null)
-      toast.success(propre(a.article) + ' — ' + nb(q) + ' ' + unite)
+      toast.success(propre(a.article) + ' — ' + nb(fois) + (fois > 1 ? ' fois' : ' fois'))
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
   }
 
@@ -183,7 +168,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
       <div className="max-w-[1100px] mx-auto px-4 py-5 pb-28 print:p-0 print:max-w-none">
         <h1 className="font-serif italic text-[26px] leading-tight print:hidden">Fabrication Prod</h1>
         <p className="text-[12.5px] text-ink-mute mb-4 print:hidden">
-          Clique un article et note la quantité. Tu peux le noter plusieurs fois dans la journée.
+          Clique un article, dis combien de fois tu as fait la recette. Plusieurs fois par jour si besoin.
         </p>
 
         <div className="flex items-center gap-2 flex-wrap mb-5 print:hidden">
@@ -251,7 +236,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                 {(journal || []).map(l => (
                   <tr key={l.id}>
                     <td className="border-b border-[#ddd] py-1.5 px-1">{heure(l.fait_le)}</td>
-                    <td className="border-b border-[#ddd] py-1.5 px-1">{propre(l.article)}</td>
+                    <td className="border-b border-[#ddd] py-1.5 px-1">
+                      {propre(l.article)}{l.fois ? ' — ' + nb(l.fois) + ' fois' : ''}
+                    </td>
                     <td className="border-b border-[#ddd] py-1.5 px-1 text-right font-bold">{nb(l.qty)} {l.unite}</td>
                     <td className="border-b border-[#ddd] py-1.5 px-1 text-[11.5px]">{noms[l.fait_par] || ''}</td>
                   </tr>
@@ -296,51 +283,88 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                         </div>
                         <div className="px-3 py-2.5">
                           <div className="text-[13.5px] font-semibold leading-tight">{propre(a.article)}</div>
-                          <div className="text-[11px] text-ink-mute mt-0.5">noter en {a.unite}</div>
+                          <div className="text-[11px] text-ink-mute mt-0.5">
+                            {recettes[a.article]
+                              ? `1 fois = ${nb(recettes[a.article].sortQty)} ${recettes[a.article].sortUnite}`
+                              : 'pas de recette'}
+                          </div>
                         </div>
                       </button>
 
-                      {actif && (
-                        <div className="px-3 pb-3 bg-cream-warm border-t border-line pt-3">
-                          <div className="bg-white border border-line rounded-xl px-3 py-2.5 mb-2 flex items-baseline justify-end gap-2">
-                            <span className="text-[26px] font-extrabold leading-none">{valeur || '0'}</span>
-                            <span className={'text-[14px] font-bold ' + (unite ? 'text-ink-soft' : 'text-ink-mute')}>
-                              {unite || '?'}
-                            </span>
-                          </div>
-                          <Pave setValeur={setValeur} />
-                          <div className="flex border border-line rounded-xl overflow-hidden bg-white mt-2">
-                            {['g', 'kg', 'u'].map(u => (
-                              <button key={u} onClick={() => setUnite(u)}
-                                className={'flex-1 py-2.5 text-[14px] font-extrabold border-r border-line last:border-r-0 ' +
-                                  (unite === u ? 'bg-bordeaux text-cream' : 'text-ink-mute')}>
-                                {u}
+                      {actif && (() => {
+                        const r = recettes[a.article]
+                        return (
+                          <div className="px-3 pb-3 bg-cream-warm border-t border-line pt-3">
+                            <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2 mb-2.5">
+                              <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
+                                className="w-[52px] h-[52px] shrink-0 border-2 border-line rounded-xl text-[26px] font-extrabold text-bordeaux leading-none">
+                                −
                               </button>
-                            ))}
-                          </div>
-                          {!unite && (
-                            <p className="text-[11.5px] text-[#854F0B] mt-2">
-                              Choisis l'unité : grammes, kilos ou unités.
-                            </p>
-                          )}
-                          <div className="flex gap-2 mt-2.5">
-                            <button onClick={() => noter(a)}
-                              disabled={!unite || !(Number(String(valeur).replace(',', '.')) > 0)}
-                              className={'flex-1 rounded-xl py-2.5 text-[13px] font-bold ' +
-                                (unite && Number(String(valeur).replace(',', '.')) > 0
-                                  ? 'bg-bordeaux text-cream'
-                                  : 'bg-white border border-line text-ink-mute')}>
-                              Ajouter à la liste
-                            </button>
-                            {a.ajoute && fois === 0 && (
-                              <button onClick={ev => supprimer(a, ev)}
-                                className="border border-line bg-white rounded-xl px-3 py-2.5 text-[13px] font-bold text-danger">
-                                supprimer
+                              <div className="flex-1 text-center">
+                                <b className="block text-[34px] font-extrabold leading-none">{nb(fois)}</b>
+                                <span className="text-[11px] text-ink-mute font-bold">fois la recette</span>
+                              </div>
+                              <button onClick={() => setFois(f => (f < 1 ? f + 0.5 : f + 1))}
+                                className="w-[52px] h-[52px] shrink-0 border-2 border-line rounded-xl text-[26px] font-extrabold text-bordeaux leading-none">
+                                +
                               </button>
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-1.5 mb-2.5">
+                              {[0.5, 1, 2, 3].map(n => (
+                                <button key={n} onClick={() => setFois(n)}
+                                  className={'py-2.5 text-[15px] font-extrabold border-2 rounded-xl ' +
+                                    (fois === n ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
+                                  {n === 0.5 ? '½' : n}
+                                </button>
+                              ))}
+                            </div>
+
+                            {r && r.lignes.length > 0 && (
+                              <div className="bg-white border border-line rounded-2xl overflow-hidden mb-2.5">
+                                <div className="bg-cream-warm px-3 py-1.5 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
+                                  Ce qu'il faut
+                                </div>
+                                {r.lignes.map((l, i) => (
+                                  <div key={i} className="flex items-center gap-2.5 px-3 py-2 border-b border-[#f4eee2] last:border-0">
+                                    <span className="text-[15px] font-extrabold min-w-[84px] text-right">
+                                      {nb(l.qty * fois)} {l.unite}
+                                    </span>
+                                    <span className={'text-[13px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-semibold' : '')}>
+                                      {propre(l.produit)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
                             )}
+
+                            {r && (
+                              <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-xl px-3 py-2.5 mb-2.5 flex items-baseline gap-2">
+                                <b className="text-[20px] font-extrabold text-ok">{nb(r.sortQty * fois)} {r.sortUnite}</b>
+                                <span className="text-[12px] text-ok">en sortie</span>
+                              </div>
+                            )}
+                            {!r && (
+                              <p className="text-[11.5px] text-[#854F0B] mb-2.5">
+                                Pas de recette dans Odoo pour cet article : on note seulement le nombre de fournées.
+                              </p>
+                            )}
+
+                            <div className="flex gap-2">
+                              <button onClick={() => noter(a)}
+                                className="flex-1 bg-ok text-cream rounded-xl py-3 text-[15px] font-extrabold">
+                                C'est fait
+                              </button>
+                              {a.ajoute && !combienDe[a.article] && (
+                                <button onClick={ev => supprimer(a, ev)}
+                                  className="border border-line bg-white rounded-xl px-3 py-3 text-[13px] font-bold text-danger">
+                                  supprimer
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )
+                      })()}
                     </div>
                   )
                 })}
@@ -425,7 +449,10 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                 {journal.map(l => (
                   <div key={l.id} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f2ebdd] last:border-0">
                     <span className="text-[11.5px] text-ink-mute w-[42px] shrink-0">{heure(l.fait_le)}</span>
-                    <span className="text-[14px] flex-1 min-w-0">{propre(l.article)}</span>
+                    <span className="text-[14px] flex-1 min-w-0">
+                      {propre(l.article)}
+                      {l.fois ? <span className="block text-[11.5px] text-ink-mute">{nb(l.fois)} fois la recette</span> : null}
+                    </span>
                     <span className="text-[14px] font-extrabold text-ok whitespace-nowrap">{nb(l.qty)} {l.unite}</span>
                     {noms[l.fait_par] && (
                       <span className="text-[11.5px] text-ink-mute hidden sm:block max-w-[110px] truncate">{noms[l.fait_par]}</span>

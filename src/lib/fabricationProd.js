@@ -50,7 +50,7 @@ export async function loadHistorique(jours = 60) {
   depuis.setDate(depuis.getDate() - jours)
   const { data, error } = await supabase
     .from('prod_fabrications')
-    .select('id, jour, article, qty, unite, fait_par, fait_le')
+    .select('id, jour, article, qty, unite, fois, fait_par, fait_le')
     .gte('jour', depuis.toISOString().slice(0, 10))
     .order('jour', { ascending: false })
     .limit(2000)
@@ -70,20 +70,32 @@ export async function loadHistorique(jours = 60) {
 export async function loadFabProd(jour) {
   const { data, error } = await supabase
     .from('prod_fabrications')
-    .select('id, article, qty, unite, fait_par, fait_le')
+    .select('id, article, qty, unite, fois, fait_par, fait_le')
     .eq('jour', jour)
     .order('fait_le', { ascending: true })
   if (error) throw error
   return data || []
 }
 
-/** Ajouter une fournée au journal du jour. */
-export async function addFabProd(jour, article, qty, unite, userId) {
+/**
+ * Ajouter une fournée au journal du jour. `fois` = combien de fois la recette
+ * a été faite ; `qty` = ce que ça produit, pour garder une trace chiffrée même
+ * si la recette change plus tard dans Odoo.
+ */
+export async function addFabProd(jour, article, qty, unite, userId, fois = null) {
   const { data, error } = await supabase.from('prod_fabrications')
-    .insert({ jour, article, qty, unite, fait_par: userId || null, fait_le: new Date().toISOString() })
-    .select('id, article, qty, unite, fait_par, fait_le').single()
+    .insert({ jour, article, qty, unite, fois, fait_par: userId || null, fait_le: new Date().toISOString() })
+    .select('id, article, qty, unite, fois, fait_par, fait_le').single()
   if (error) throw error
   return data
+}
+
+/** Les recettes Odoo des articles de l'écran (ce qu'il faut, et ce que ça sort). */
+export async function loadRecettes(articles) {
+  if (!articles.length) return {}
+  const r = await fetch('/api/freezer-list?mode=recettes&articles=' + encodeURIComponent(articles.join('|')))
+  if (!r.ok) return {}
+  return (await r.json()).recettes || {}
 }
 
 /** Retirer une ligne du journal : on doit toujours pouvoir défaire un clic. */

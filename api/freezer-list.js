@@ -1290,6 +1290,55 @@ export default async function handler(req, res) {
       })
     }
 
+    // Les recettes d'une liste d'articles, telles qu'Odoo les tient. L'écran
+    // « Fabrication Prod » s'en sert pour montrer ce qu'il faut et multiplier
+    // par le nombre de fournées.
+    if (req.query.mode === 'recettes') {
+      const noms = String(req.query.articles || '').split('|').map(x => x.trim()).filter(Boolean)
+      if (!noms.length) return res.status(200).json({ recettes: {} })
+      const uid = await odooAuth()
+      const prods = await odooSearchRead(uid, 'product.product', [['name', 'in', noms]],
+        ['id', 'name', 'product_tmpl_id'], { limit: 200 })
+      if (!prods.length) return res.status(200).json({ recettes: {} })
+
+      const boms = await odooSearchRead(uid, 'mrp.bom', [
+        '|', ['product_id', 'in', prods.map(p => p.id)],
+        ['product_tmpl_id', 'in', prods.map(p => p.product_tmpl_id[0])],
+      ], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 300 })
+      if (!boms.length) return res.status(200).json({ recettes: {} })
+
+      const lignes = await odooSearchRead(uid, 'mrp.bom.line',
+        [['bom_id', 'in', boms.map(b => b.id)]],
+        ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 2000 })
+      const parBom = new Map()
+      for (const l of lignes) {
+        const id = Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id
+        if (!parBom.has(id)) parBom.set(id, [])
+        parBom.get(id).push({
+          produit: (Array.isArray(l.product_id) ? l.product_id[1] : '').replace(/^\[\d+\]\s*/, ''),
+          qty: l.product_qty,
+          unite: ((Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
+          // un ingrédient qui se fabrique lui-même : on le montre autrement
+          fabrique: /^\s*(\[\d+\]\s*)?SM/i.test(Array.isArray(l.product_id) ? l.product_id[1] : ''),
+        })
+      }
+      // à chaque article, la première recette qui le concerne
+      const parProduit = new Map(prods.map(p => [p.id, p.name]))
+      const parTmpl = new Map(prods.map(p => [p.product_tmpl_id[0], p.name]))
+      const out = {}
+      for (const b of boms) {
+        const nom = (b.product_id && parProduit.get(b.product_id[0]))
+          || (b.product_tmpl_id && parTmpl.get(b.product_tmpl_id[0]))
+        if (!nom || out[nom]) continue
+        out[nom] = {
+          sortQty: b.product_qty,
+          sortUnite: ((Array.isArray(b.product_uom_id) ? b.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
+          lignes: parBom.get(b.id) || [],
+        }
+      }
+      return res.status(200).json({ recettes: out })
+    }
+
     // suggestions d'articles quand on ajoute un ingrédient à la main.
     // On ne propose QUE ce qui est rangé dans le lieu de l'ordre
     // (WHLVP/Stock/Stock Prod) : ailleurs, l'article n'est pas sous la main.
