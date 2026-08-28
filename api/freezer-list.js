@@ -1477,7 +1477,9 @@ export default async function handler(req, res) {
           ['date_planned_start', '>=', isoD(d0)],
         ], ['product_id'], { limit: 3000 }),
         odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 }),
-        odooSearchRead(uid, 'mrp.bom.line', [], ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 40000 }),
+        odooSearchRead(uid, 'mrp.bom.line', [],
+          ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
+          { limit: 40000 }),
         odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 }),
       ])
 
@@ -1497,21 +1499,52 @@ export default async function handler(req, res) {
           qty: l.product_qty,
           unite: uniteDe(l.product_uom_id),
           fabrique: /^\s*(SM|Sm)/.test(net(Array.isArray(l.product_id) ? l.product_id[1] : '')),
+          // à quels parfums cette ligne est réservée (vide = tous)
+          pour: l.bom_product_template_attribute_value_ids || [],
         })
       }
-      // toutes les recettes, rangées sous le nom exact ET sous le modèle
+
+      // Une recette de modèle sert plusieurs parfums, et chaque ligne dit à
+      // quel(s) parfum(s) elle appartient. Sans ce tri, le « 15 cm Vitrine
+      // Praliné » afficherait aussi la crème citron.
+      const tmplDesBoms = [...new Set(boms.map(b =>
+        (Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id)).filter(Boolean))]
+      const variantes = tmplDesBoms.length
+        ? await odooSearchRead(uid, 'product.product', [['product_tmpl_id', 'in', tmplDesBoms]],
+          ['id', 'display_name', 'product_tmpl_id', 'product_template_attribute_value_ids'], { limit: 12000 })
+        : []
+      const parTmpl = new Map()
+      for (const v of variantes) {
+        const t = Array.isArray(v.product_tmpl_id) ? v.product_tmpl_id[0] : v.product_tmpl_id
+        if (!parTmpl.has(t)) parTmpl.set(t, [])
+        parTmpl.get(t).push(v)
+      }
+      const pourCeParfum = (lignes, valeurs) => {
+        const mien = new Set(valeurs || [])
+        return lignes.filter(l => !l.pour.length || l.pour.some(x => mien.has(x)))
+      }
+
       const carte = {}
       for (const b of boms) {
-        const nom = b.product_id ? net(b.product_id[1])
-          : nomTmpl.get(Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id)
-        if (!nom) continue
-        const r = {
-          sortQty: b.product_qty,
-          sortUnite: uniteDe(b.product_uom_id),
-          lignes: ingParBom.get(b.id) || [],
+        const ing = ingParBom.get(b.id) || []
+        const base = { sortQty: b.product_qty, sortUnite: uniteDe(b.product_uom_id) }
+        if (b.product_id) {
+          // recette faite pour une variante précise : rien à trier
+          const nom = net(b.product_id[1])
+          if (nom && !carte[nom]) carte[nom] = { ...base, lignes: ing }
+          if (nom && !carte[modele(nom)]) carte[modele(nom)] = { ...base, lignes: ing }
+          continue
         }
-        if (!carte[nom]) carte[nom] = r
-        if (!carte[modele(nom)]) carte[modele(nom)] = r
+        const t = Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id
+        const nomT = nomTmpl.get(t)
+        const liste = parTmpl.get(t) || []
+        for (const v of liste) {
+          const nomV = net(v.display_name)
+          if (!nomV || carte[nomV]) continue
+          carte[nomV] = { ...base, lignes: pourCeParfum(ing, v.product_template_attribute_value_ids) }
+        }
+        // le modèle garde la recette entière, pour les articles sans parfum
+        if (nomT && !carte[nomT]) carte[nomT] = { ...base, lignes: ing }
       }
       const recetteDe = n => carte[n] || carte[modele(n)]
       const estFini = n => /^(E-|V-|MI-|N-)/i.test(n)
