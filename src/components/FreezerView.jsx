@@ -256,7 +256,10 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   // Carte d'un jour. mode : 'current' (futur/auj), 'overdue' (passé non fait), 'history' (passé fait)
   const renderCard = (date, mode) => {
     const dayItems = itemsByDate[date]
-    const todoItems = dayItems.filter(it => !_sorti(it))
+    // Reste à sortir = ni coché ici, NI déjà terminé dans Odoo. Sans cette
+    // deuxième condition, les ordres qu'Odoo a terminés de son côté (et que
+    // personne n'a cochés) revenaient dans la liste comme s'il y avait à faire.
+    const todoItems = dayItems.filter(it => !_traite(it))
     const doneItems = dayItems.filter(_sorti)
     let visibleItems, headerRight, emptyMsg
     if (mode === 'history') {
@@ -269,10 +272,10 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       visibleItems = dayItems.filter(it => !_traite(it)); emptyMsg = 'Aucun à sortir'
       headerRight = <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-red-100 text-red-700">🔴 En retard ({dayItems.filter(it => !_traite(it)).length})</span>
     } else {
-      // Tout le jour d'un coup : ce qui est sorti se voit maintenant à sa couleur
-      // (carte verte, ✓) — plus besoin de basculer entre deux listes. L'historique
-      // des jours passés garde son bouton à part, en haut de l'écran.
-      visibleItems = dayItems; emptyMsg = 'Rien ce jour-là'
+      // Uniquement ce qui RESTE à sortir — l'écran doit refléter les ordres encore
+      // confirmés dans Odoo, comme la liste que Layla y lit. Dès qu'un gâteau est
+      // sorti, il quitte la liste et rejoint l'Historique (bouton à part en haut).
+      visibleItems = todoItems; emptyMsg = 'Tout est sorti'
       headerRight = (<>
         <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream text-ink-soft border border-line">
           {todoItems.length ? `${todoItems.length} à sortir` : 'tout est sorti'}
