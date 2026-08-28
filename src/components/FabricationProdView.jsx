@@ -16,6 +16,26 @@ const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit
 
 const FAMILLES = ['Finitions', 'Autres']
 
+// Une fiche Odoo peut lister le même ingrédient une fois par taille de gâteau.
+// On le montre une seule fois, avec toutes ses quantités : « 20 / 80 / 120 g ».
+function regrouper(lignes) {
+  const out = []
+  const vus = new Map()
+  for (const l of lignes) {
+    const cle = l.produit + '|' + l.unite
+    if (vus.has(cle)) {
+      const d = vus.get(cle)
+      if (!d.tailles) d.tailles = [d.qty]
+      if (!d.tailles.includes(l.qty)) d.tailles.push(l.qty)
+      continue
+    }
+    const d = { ...l }
+    vus.set(cle, d)
+    out.push(d)
+  }
+  return out
+}
+
 export default function FabricationProdView({ user, onLogout, onNavigate, activeView }) {
   const [jour, setJour] = useState(todayISO())
   const [journal, setJournal] = useState(null)    // les fournées notées ce jour-là
@@ -433,9 +453,11 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                   <div className="bg-cream-warm px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
                     Ce qu'il faut
                   </div>
-                  {r.lignes.map((l, i) => (
+                  {regrouper(r.lignes).map((l, i) => (
                     <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
-                      <span className="text-[19px] font-extrabold min-w-[104px] text-right">{nb(l.qty * fois)} {l.unite}</span>
+                      <span className="text-[19px] font-extrabold min-w-[104px] text-right">
+                        {l.tailles ? l.tailles.map(q => nb(q * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
+                      </span>
                       <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                         {propre(l.produit)}
                       </span>

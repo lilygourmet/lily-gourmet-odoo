@@ -22,6 +22,26 @@ const couleur = n => {
   return `hsl(${h} 32% 62%)`
 }
 
+// Une fiche Odoo peut lister le même ingrédient une fois par taille de gâteau.
+// On le montre une seule fois, avec toutes ses quantités : « 20 / 80 / 120 g ».
+function regrouper(lignes) {
+  const out = []
+  const vus = new Map()
+  for (const l of lignes) {
+    const cle = l.produit + '|' + l.unite
+    if (vus.has(cle)) {
+      const d = vus.get(cle)
+      if (!d.tailles) d.tailles = [d.qty]
+      if (!d.tailles.includes(l.qty)) d.tailles.push(l.qty)
+      continue
+    }
+    const d = { ...l }
+    vus.set(cle, d)
+    out.push(d)
+  }
+  return out
+}
+
 function Vignette({ nom, taille }) {
   return (
     <span className="grid place-items-center font-serif italic text-cream"
@@ -64,10 +84,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   }, [jour])
 
   const recettes = (arbre && arbre.recettes) || {}
+  // Une fiche Odoo couvre parfois plusieurs tailles à la fois (le Fraisier
+  // liste sirop, génoise et crème une fois par taille) : sans dédoublonnage,
+  // la même carte apparaîtrait cinq fois de suite.
   const enfantsDe = nom => {
     const r = recettes[nom]
     if (!r) return []
-    return r.lignes.filter(l => l.fabrique && recettes[l.produit]).map(l => l.produit)
+    return [...new Set(r.lignes.filter(l => l.fabrique && recettes[l.produit]).map(l => l.produit))]
   }
 
   // La liste affichée : les racines, ou les morceaux de là où l'on est.
@@ -344,9 +367,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 <div className="bg-cream-warm px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
                   Ce qu'il faut
                 </div>
-                {recettes[saisie].lignes.map((l, i) => (
+                {regrouper(recettes[saisie].lignes).map((l, i) => (
                   <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
-                    <span className="text-[19px] font-extrabold min-w-[104px] text-right">{nb(l.qty * fois)} {l.unite}</span>
+                    <span className="text-[19px] font-extrabold min-w-[104px] text-right">
+                      {l.tailles ? l.tailles.map(q => nb(q * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
+                    </span>
                     <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                       {propre(l.produit)}
                     </span>
