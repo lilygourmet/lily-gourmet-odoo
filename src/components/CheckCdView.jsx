@@ -150,12 +150,15 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
         <div className="space-y-4">
           {jours.map(({ date, groupes }) => (
             <div key={date}>
-              <div className="flex items-center gap-2.5 mb-2">
-                <h2 className="font-fraunces italic text-[17px] text-ink">{fmtDayLabel(date, new Date())}</h2>
-                <span className="text-[11px] text-ink-mute">
-                  {groupes.reduce((n, [, l]) => n + l.length, 0)} gâteau{groupes.reduce((n, [, l]) => n + l.length, 0) > 1 ? 'x' : ''}
-                </span>
-                <span className="flex-1 h-px bg-line" />
+              {/* la date reste visible pendant le défilement, comme dans CD Négatif */}
+              <div className="sticky top-0 z-20 -mx-1 px-1 pt-2 pb-1.5 mb-1 bg-cream">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="font-fraunces italic text-[17px] text-ink">{fmtDayLabel(date, new Date())}</h2>
+                  <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream-warm text-ink-soft border border-line">
+                    {groupes.reduce((n, [, l]) => n + l.length, 0)} gâteau{groupes.reduce((n, [, l]) => n + l.length, 0) > 1 ? 'x' : ''}
+                  </span>
+                  <span className="flex-1 h-px bg-line min-w-[20px]" />
+                </div>
               </div>
               <div className="space-y-3">
           {groupes.map(([cle, lignes]) => {

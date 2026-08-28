@@ -117,8 +117,8 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
 
     function buildSection(d) {
       const dayItems = itemsByDate[d] || []
-      // « Fait/sorti » = fabriqué dans Odoo (it.made) OU coché dans l'app (doneMap) — même règle qu'à l'écran (_isDone).
-      const items = wantDone ? dayItems.filter(it => it.made || doneMap[it.mo_id]) : dayItems.filter(it => !(it.made || doneMap[it.mo_id]))
+      // Même règle qu'à l'écran : « sorti » = coché ici par quelqu'un.
+      const items = wantDone ? dayItems.filter(it => doneMap[it.mo_id]) : dayItems.filter(it => !doneMap[it.mo_id])
       const dayLabel = fmtDayLabel(d, today)
 
       if (items.length === 0) {
@@ -239,33 +239,40 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   }
   const dateKeys = Object.keys(itemsByDate).sort()
   const _todayStr = fmtLocalDate(today)
-  const _isDone = it => !!it.made || !!doneMap[it.mo_id]   // fait = fabriqué dans Odoo (done) OU coché dans l'app
+  // Deux notions à ne pas confondre :
+  //  - SORTI : quelqu'un l'a vraiment sorti du congélateur et coché ici.
+  //  - traité : sorti, OU déjà fabriqué dans Odoo sans passer par l'app.
+  // L'historique ne montre que ce qui a été SORTI (demande de Layla) ; « traité »
+  // ne sert plus qu'à repérer les jours passés réellement en retard, pour ne pas
+  // ressortir des centaines de vieux ordres qu'Odoo a terminés de son côté.
+  const _sorti = it => !!doneMap[it.mo_id]
+  const _traite = it => !!it.made || !!doneMap[it.mo_id]
   const futureKeys = dateKeys.filter(d => d >= _todayStr)                                                          // aujourd'hui + futur
-  const pastUndoneKeys = dateKeys.filter(d => d < _todayStr && itemsByDate[d].some(it => !_isDone(it)))  // passé pas coché = en retard (du + ancien au + récent → reste en haut)
+  const pastUndoneKeys = dateKeys.filter(d => d < _todayStr && itemsByDate[d].some(it => !_traite(it)))  // passé pas coché = en retard (du + ancien au + récent → reste en haut)
   // Historique = tout ce qui est coché (sorti). On sépare le futur (sorti à l'avance) et le passé.
-  const doneFutureKeys = dateKeys.filter(d => d >= _todayStr && itemsByDate[d].some(_isDone))
-  const donePastKeys = dateKeys.filter(d => d < _todayStr && itemsByDate[d].some(_isDone)).reverse()
+  const doneFutureKeys = dateKeys.filter(d => d >= _todayStr && itemsByDate[d].some(_sorti))
+  const donePastKeys = dateKeys.filter(d => d < _todayStr && itemsByDate[d].some(_sorti)).reverse()
 
   // Carte d'un jour. mode : 'current' (futur/auj), 'overdue' (passé non fait), 'history' (passé fait)
   const renderCard = (date, mode) => {
     const dayItems = itemsByDate[date]
-    const todoItems = dayItems.filter(it => !_isDone(it))
-    const doneItems = dayItems.filter(it => _isDone(it))
-    let visibleItems, headerRight, emptyMsg, cardCls
+    const todoItems = dayItems.filter(it => !_sorti(it))
+    const doneItems = dayItems.filter(_sorti)
+    let visibleItems, headerRight, emptyMsg
     if (mode === 'history') {
-      visibleItems = doneItems; emptyMsg = 'Aucun fait'; cardCls = 'bg-cream-warm/40 border-line/60'
+      visibleItems = doneItems; emptyMsg = 'Aucun fait'
       headerRight = (<>
         <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-ink/10 text-ink-soft">Historique ({doneItems.length})</span>
         {doneItems.length > 0 && <button onClick={() => printDay(date, dayItems, true, true)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title="Imprimer les faits · ce jour + les 2 précédents">Imprimer 3j</button>}
       </>)
     } else if (mode === 'overdue') {
-      visibleItems = todoItems; emptyMsg = 'Aucun à sortir'; cardCls = 'bg-cream-warm border-red-200'
-      headerRight = <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-red-100 text-red-700">🔴 En retard ({todoItems.length})</span>
+      visibleItems = dayItems.filter(it => !_traite(it)); emptyMsg = 'Aucun à sortir'
+      headerRight = <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-red-100 text-red-700">🔴 En retard ({dayItems.filter(it => !_traite(it)).length})</span>
     } else {
       // Tout le jour d'un coup : ce qui est sorti se voit maintenant à sa couleur
       // (carte verte, ✓) — plus besoin de basculer entre deux listes. L'historique
       // des jours passés garde son bouton à part, en haut de l'écran.
-      visibleItems = dayItems; emptyMsg = 'Rien ce jour-là'; cardCls = 'bg-cream-warm border-line'
+      visibleItems = dayItems; emptyMsg = 'Rien ce jour-là'
       headerRight = (<>
         <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream text-ink-soft border border-line">
           {todoItems.length ? `${todoItems.length} à sortir` : 'tout est sorti'}
@@ -274,12 +281,17 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       </>)
     }
     return (
-      <div key={date + mode} className={`rounded-2xl border overflow-hidden shadow-sm ${cardCls}`}>
-        <div className="px-4 py-3 border-b border-line bg-cream flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-fraunces italic text-[18px] text-ink">{fmtDayLabel(date, today)}</h2>
-          <div className="flex items-center gap-2">{headerRight}</div>
+      <div key={date + mode}>
+        {/* La date reste visible pendant qu'on fait défiler : au congélateur on
+            perd vite le fil de savoir à quel jour on en est. */}
+        <div className="sticky top-0 z-20 -mx-1 px-1 pt-2 pb-1.5 bg-cream">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="font-fraunces italic text-[17px] text-ink">{fmtDayLabel(date, today)}</h2>
+            {headerRight}
+            <span className="flex-1 h-px bg-line min-w-[20px]" />
+          </div>
         </div>
-        <div className="p-2">
+        <div className={mode === 'overdue' ? 'border-l-2 border-red-200 pl-1.5' : ''}>
           {visibleItems.length === 0
             ? <div className="text-center py-3 text-[11px] text-ink-mute italic">{emptyMsg}</div>
             : groupBy === 'product'
