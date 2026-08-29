@@ -114,6 +114,11 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
 
         <div className="flex items-center gap-3 mb-4 flex-wrap text-[11px]">
           <span className="px-2.5 py-1 rounded-full bg-[#EAF3DE] text-[#2F6B25] font-bold">{prets.length} à vérifier</span>
+          {etages.filter(e => e.dispo !== 'hors' && !sortis[e.mo_id]).length > 0 && (
+            <span className="px-2.5 py-1 rounded-full bg-[#E9F1F6] text-[#3d6f8e] font-bold">
+              {etages.filter(e => e.dispo !== 'hors' && !sortis[e.mo_id]).length} à marquer sortis dans CD Négatif
+            </span>
+          )}
           <button onClick={rafraichir} className="text-ink-mute underline underline-offset-2">rafraîchir</button>
         </div>
 
@@ -151,7 +156,12 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
                   {list.map(e => {
                     const on = choisis.has(e.mo_id)
                     const libre = cochable(e)
-                    const et = (e.dispo === 'ok' && !sortis[e.mo_id]) ? ETIQ.attente : (ETIQ[e.dispo] || ETIQ.hors)
+                    // On montre CE QUI BLOQUE, pas l'état le plus flatteur : un étage
+                    // déjà fabriqué mais jamais sorti du congélateur affichait
+                    // « Déjà fabriqué » et restait grisé sans qu'on comprenne pourquoi.
+                    const et = e.dispo === 'hors' ? ETIQ.hors
+                      : !sortis[e.mo_id] ? ETIQ.attente
+                        : (ETIQ[e.dispo] || ETIQ.hors)
                     const refus = envoyes[e.mo_id] && !envoyes[e.mo_id].odoo_ok ? envoyes[e.mo_id].odoo_msg : null
                     return (
                       <div key={e.mo_id} onClick={() => basculer(e)}
