@@ -382,6 +382,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <span className="block w-full aspect-square overflow-hidden">
                       <Vignette nom={mere} photo={photoDe(mere)} plein rond={0} />
                     </span>
+                    {lignes.some(l => (stocks[l.nom] || 0) <= 0) && (
+                      <span className="absolute top-1.5 left-1.5 right-1.5 bg-danger text-white rounded-lg px-2 py-1 text-[11.5px] font-extrabold text-center">
+                        rupture
+                      </span>
+                    )}
                     <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
                     <span className="block px-2 pb-2 pt-1">
                       {directs.slice(0, 3).map(l => (
@@ -390,11 +395,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                             <b className="text-danger font-extrabold">{nb(l.besoin)}</b>
                             <span className="text-ink-soft truncate">{courtNom(l.nom)}</span>
                           </span>
-                          {minmax[l.nom] && minmax[l.nom].min > 0 && (
-                            <span className="text-[10.5px] text-ink-mute">
-                              il en reste {nb(Math.max(0, stocks[l.nom] || 0))} sur {nb(minmax[l.nom].min)}
-                            </span>
-                          )}
+                          {(stocks[l.nom] || 0) <= 0
+                            ? <span className="text-[10.5px] font-extrabold text-danger">rupture</span>
+                            : (minmax[l.nom] && minmax[l.nom].min > 0 && (
+                              <span className="text-[10.5px] text-ink-mute">
+                                il en reste {nb(stocks[l.nom] || 0)} sur {nb(minmax[l.nom].min)}
+                              </span>
+                            ))}
                         </span>
                       ))}
                       {directs.length > 3 && (
@@ -626,7 +633,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       <b className="text-[19px] font-extrabold text-danger min-w-[62px] text-right">{nb(l.besoin)}</b>
                       <span className="flex-1 min-w-0 text-[14px]">
                         {courtNom(l.nom)}
-                        {l.prof > 1 && <span className="block text-[11px] text-[#b58f3c] font-bold">pour celui du dessus</span>}
+                        <span className="block text-[11px] mt-0.5">
+                          {(stocks[l.nom] || 0) <= 0
+                            ? <b className="text-danger">rupture</b>
+                            : (minmax[l.nom] && minmax[l.nom].min > 0
+                              ? <span className="text-ink-mute">il en reste {nb(stocks[l.nom])} sur {nb(minmax[l.nom].min)}</span>
+                              : <span className="text-ink-mute">il en reste {nb(stocks[l.nom] || 0)}</span>)}
+                          {l.prof > 1 && <span className="text-[#b58f3c] font-bold"> · pour celui du dessus</span>}
+                        </span>
                       </span>
                       <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
                         <path d="M9 5l7 7-7 7" /></svg>
