@@ -109,7 +109,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // apparaît en dessous avec son propre besoin, et ainsi de suite
   const besoinDeBase = nom => {
     const mm = minmax[nom]
-    const st = stocks[nom] || 0
+    const st = Math.max(0, stocks[nom] || 0)
     if (!mm || !(mm.min > 0) || st >= mm.min) return 0
     return Math.max(0, (mm.max || mm.min) - st)
   }
@@ -123,7 +123,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     const n = r.sortQty ? b / r.sortQty : 1
     for (const l of r.lignes) {
       if (!l.fabrique || !recettes[l.produit]) continue
-      const manque = Math.max(0, l.qty * n - (stocks[l.produit] || 0))
+      // un stock négatif veut dire que l'inventaire est en retard, pas qu'il
+      // faut en produire 7 766 : on le compte comme zéro
+      const manque = Math.max(0, l.qty * n - Math.max(0, stocks[l.produit] || 0))
       if (manque > 0.001) cascade(l.produit, Math.ceil(manque), prof + 1, out, vus)
     }
     return out
@@ -461,7 +463,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       </div>
 
       {/* la fiche : combien de fois, et la recette qui suit */}
-      {saisie && (
+      {saisie && (() => {
+        // le gâteau vendu n'est pas fabriqué à l'annexe : on n'y montre que ce
+        // qui manque, pas sa recette de montage ni le compteur de fournées
+        const estMere = (arbre && (arbre.racines || []).includes(saisie))
+        return (
         <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end justify-center print:hidden"
           onPointerDown={e => { if (e.target === e.currentTarget) { setSaisie(null); setPile([]) } }}>
           <div className="bg-cream w-full max-w-[540px] rounded-t-[22px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
@@ -546,6 +552,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )
             })()}
 
+            {!estMere && (
             <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
               <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">−</button>
@@ -558,8 +565,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               <button onClick={() => setFois(f => (f < 1 ? f + 0.5 : f + 1))}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">+</button>
             </div>
+            )}
 
-            {recettes[saisie] && recettes[saisie].lignes.length > 0 && (
+            {!estMere && recettes[saisie] && recettes[saisie].lignes.length > 0 && (
               <div className="bg-white border border-line rounded-2xl overflow-hidden mb-2.5">
                 <div className="bg-cream-warm px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
                   Ce qu'il faut
@@ -596,7 +604,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               </div>
             )}
 
-            {recettes[saisie] && (
+            {!estMere && recettes[saisie] && (
               <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 flex items-baseline gap-2.5">
                 <b className="text-[23px] font-extrabold text-ok">
                   {nb(recettes[saisie].sortQty * fois)} {recettes[saisie].sortUnite}
@@ -604,22 +612,25 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 <span className="text-[12.5px] text-ok">en sortie</span>
               </div>
             )}
-            {!recettes[saisie] && (
+            {!estMere && !recettes[saisie] && (
               <p className="text-[12.5px] text-[#854F0B]">Pas de recette dans Odoo : on note seulement les fournées.</p>
             )}
 
-            <button onClick={() => noter(saisie, fois)}
-              className="w-full mt-3 py-4 rounded-2xl bg-ok text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5">
-              <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
-              C'est fait
-            </button>
+            {!estMere && (
+              <button onClick={() => noter(saisie, fois)}
+                className="w-full mt-3 py-4 rounded-2xl bg-ok text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
+                C'est fait
+              </button>
+            )}
             <button onClick={() => { setSaisie(null); setPile([]) }}
               className="w-full mt-2 py-3 rounded-2xl bg-white border border-line text-ink-mute text-[14.5px] font-bold">
               fermer
             </button>
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
