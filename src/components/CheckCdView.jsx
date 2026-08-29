@@ -21,6 +21,11 @@ const ETIQ = {
   attente: { texte: 'Pas encore sorti du congélateur', fond: 'bg-[#E9F1F6]', encre: 'text-[#3d6f8e]' },
 }
 
+const aujourdhui = (() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})()
+
 export default function CheckCdView({ user, onLogout, onNavigate, activeView }) {
   const [etages, setEtages] = useState([])
   const [sortis, setSortis] = useState({})
@@ -51,7 +56,11 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   // dans CD Négatif — même s'il est déjà fabriqué dans Odoo. Ensuite seulement :
   // soit son étage congelé est en stock, soit il est déjà fabriqué (on confirme
   // alors le contrôle). Une taille hors norme pas encore fabriquée reste grisée.
-  const cochable = e => !!sortis[e.mo_id] && ['ok', 'fait'].includes(e.dispo)
+  // Un gâteau dont la date de retrait est passée est forcément sorti du
+  // congélateur — le client est venu le chercher (règle de Layla). On n'attend
+  // donc la coche de CD Négatif que pour aujourd'hui et les jours à venir.
+  const estSorti = e => !!sortis[e.mo_id] || (!!e.date && e.date < aujourdhui)
+  const cochable = e => estSorti(e) && ['ok', 'fait'].includes(e.dispo)
   const prets = useMemo(() => etages.filter(cochable),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [etages, sortis])
@@ -114,9 +123,9 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
 
         <div className="flex items-center gap-3 mb-4 flex-wrap text-[11px]">
           <span className="px-2.5 py-1 rounded-full bg-[#EAF3DE] text-[#2F6B25] font-bold">{prets.length} à vérifier</span>
-          {etages.filter(e => e.dispo !== 'hors' && !sortis[e.mo_id]).length > 0 && (
+          {etages.filter(e => e.dispo !== 'hors' && !estSorti(e)).length > 0 && (
             <span className="px-2.5 py-1 rounded-full bg-[#E9F1F6] text-[#3d6f8e] font-bold">
-              {etages.filter(e => e.dispo !== 'hors' && !sortis[e.mo_id]).length} à marquer sortis dans CD Négatif
+              {etages.filter(e => e.dispo !== 'hors' && !estSorti(e)).length} à marquer sortis dans CD Négatif
             </span>
           )}
           <button onClick={rafraichir} className="text-ink-mute underline underline-offset-2">rafraîchir</button>
@@ -160,7 +169,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
                     // déjà fabriqué mais jamais sorti du congélateur affichait
                     // « Déjà fabriqué » et restait grisé sans qu'on comprenne pourquoi.
                     const et = e.dispo === 'hors' ? ETIQ.hors
-                      : !sortis[e.mo_id] ? ETIQ.attente
+                      : !estSorti(e) ? ETIQ.attente
                         : (ETIQ[e.dispo] || ETIQ.hors)
                     const refus = envoyes[e.mo_id] && !envoyes[e.mo_id].odoo_ok ? envoyes[e.mo_id].odoo_msg : null
                     return (
