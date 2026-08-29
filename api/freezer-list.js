@@ -269,6 +269,77 @@ async function etatsCheckCd(uid, moIds) {
 // passées en caisse) ; sans `codes`, on les prend tous — c'est la liste de
 // l'écran Check CD-, où Layla contrôle puis valide elle-même.
 
+// La liste de l'écran Check CD- : les ÉTAGES dont le gâteau entier attend encore.
+// Layla contrôle l'étage (il est bien monté, il est bien là), et le gâteau entier
+// sera marqué fait plus tard par le rendez-vous de 8h. Un étage apparaît donc même
+// s'il est déjà validé dans Odoo — ce qui compte, c'est que son parent attend.
+async function etagesDesGateauxEnAttente(uid, jours) {
+  const depuis = new Date(Date.now() - (jours || 30) * 86400000)
+  const parents = await odooSearchRead(uid, 'mrp.production',
+    [['product_id.name', '=ilike', 'CD-%'], ['product_id.name', 'not ilike', 'ganache'],
+     ['state', 'in', ['confirmed', 'progress', 'to_close']],
+     ['date_planned_finished', '>=', depuis.toISOString().slice(0, 19).replace('T', ' ')]],
+    ['id', 'name', 'origin', 'product_id', 'date_planned_finished'],
+    { limit: 500, order: 'date_planned_finished desc' })
+  if (!parents.length) return []
+
+  const parNom = {}
+  for (const p of parents) parNom[p.name] = p
+  const enfants = await odooSearchRead(uid, 'mrp.production',
+    [['origin', 'in', parents.map(p => p.name)]],
+    ['id', 'name', 'product_id', 'product_qty', 'state', 'origin', 'date_planned_finished', 'move_raw_ids'],
+    { limit: 800 })
+  if (!enfants.length) return []
+
+  // l'étage congelé « N cm CD* » que consomme chaque montage, et son stock
+  const idsMoves = enfants.flatMap(e => e.move_raw_ids || [])
+  const moves = idsMoves.length
+    ? await odooCall(uid, 'stock.move', 'read', [idsMoves,
+        ['raw_material_production_id', 'product_id', 'product_uom_qty', 'reserved_availability']])
+    : []
+  const congeleDe = {}
+  for (const mv of moves) {
+    if (!EST_ETAGE_CD(mv.product_id[1])) continue
+    const par = Array.isArray(mv.raw_material_production_id) ? mv.raw_material_production_id[0] : null
+    if (par) congeleDe[par] = mv
+  }
+  const lieuCD = await lieuStockProd(uid)
+  const ids = [...new Set(Object.values(congeleDe).map(mv => mv.product_id[0]))]
+  const stockDe = {}
+  if (ids.length) {
+    for (const p of await odooCall(uid, 'product.product', 'read', [ids, ['free_qty']],
+      lieuCD ? { context: { location: lieuCD.id } } : {})) stockDe[p.id] = p.free_qty || 0
+  }
+
+  // Un parent a d'autres enfants que ses étages (crèmes, préparations…) : on ne
+  // garde que les montages « N cm cakedesign » et les formes « … Cakedesign CD* ».
+  const estEtage = n => /cakedesign/i.test(String(n || '')) || EST_ETAGE_CD(n)
+  return enfants
+    .filter(e => e.state !== 'cancel' && estEtage(Array.isArray(e.product_id) ? e.product_id[1] : ''))
+    .map(e => {
+    const par = parNom[e.origin] || {}
+    const mv = congeleDe[e.id]
+    const stock = mv ? Math.max(stockDe[mv.product_id[0]] || 0, mv.reserved_availability || 0) : 0
+    const besoin = mv ? (mv.product_uom_qty || 0) : 0
+    return {
+      mo_id: e.id, mo_name: e.name,
+      produit: Array.isArray(e.product_id) ? e.product_id[1] : '',
+      qty: e.product_qty,
+      date: String(e.date_planned_finished || '').slice(0, 10),
+      etat: e.state,                                   // done = déjà fabriqué dans Odoo
+      parent: par.name || '', parent_produit: Array.isArray(par.product_id) ? par.product_id[1] : '',
+      scode: (String(par.origin || '').match(/S\d{3,}/i) || [''])[0].toUpperCase(),
+      congele: mv ? mv.product_id[1] : null,           // l'étage « N cm CD* »
+      besoin, stock,
+      // L'ordre du test compte : un étage DÉJÀ FABRIQUÉ est « fait », même s'il
+      // n'a pas d'étage congelé (tailles hors normes). Sans ça, un 20 cm
+      // Rose/Bleu pourtant fabriqué restait grisé et ne pouvait plus être
+      // contrôlé. « Pas encore fabriqué » ne concerne que ce qui reste à faire.
+      dispo: e.state === 'done' ? 'fait' : (!mv ? 'hors' : (stock >= besoin ? 'ok' : 'manque')),
+    }
+  })
+}
+
 async function parentsEncaisses(uid, jours, dry) {
   const depuis = new Date(Date.now() - jours * 86400000)
   const iso = d => d.toISOString().slice(0, 19).replace('T', ' ')
@@ -1428,6 +1499,15 @@ export default async function handler(req, res) {
       const out = await parentsEncaisses(uid, jours, dry)
       if (!dry) console.log(`[check-cd:parents] ${out.length} gâteau(x) · ${out.map(o => o.mo_name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
       return res.status(200).json({ parents: out })
+    }
+
+    // Check CD- : les étages dont le gâteau entier attend encore d'être marqué
+    // fait. On les garde même s'ils sont déjà validés dans Odoo (par Fabrication
+    // par exemple) : tant que le contrôle n'est pas fait ici, ils restent.
+    if (req.query.mode === 'check-cd-liste') {
+      const jours = Math.min(90, Math.max(1, parseInt(req.query.jours, 10) || 30))
+      const uid = await odooAuth()
+      return res.status(200).json({ etages: await etagesDesGateauxEnAttente(uid, jours) })
     }
 
     // Check CD- : l'état de chaque gâteau sorti (son étage est-il en stock ?)
