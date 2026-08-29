@@ -122,11 +122,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     out.push({ nom, besoin: b, prof })
     if (!r || b <= 0) return out
     const n = r.sortQty ? b / r.sortQty : 1
-    for (const l of r.lignes) {
+    // Une fiche Odoo liste parfois le même ingrédient une fois par taille :
+    // additionner toutes les lignes gonflerait le besoin. On regroupe et on
+    // retient la plus grande quantité.
+    for (const l of regrouper(r.lignes)) {
       if (!l.fabrique || !recettes[l.produit]) continue
+      const parFois = l.tailles ? Math.max(...l.tailles) : l.qty
       // un stock négatif veut dire que l'inventaire est en retard, pas qu'il
       // faut en produire 7 766 : on le compte comme zéro
-      const manque = Math.max(0, l.qty * n - Math.max(0, stocks[l.produit] || 0))
+      const manque = Math.max(0, parFois * n - Math.max(0, stocks[l.produit] || 0))
       if (manque > 0.001) cascade(l.produit, Math.ceil(manque), prof + 1, out, vus)
     }
     return out
@@ -494,11 +498,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 </button>
               )}
               <Vignette nom={saisie} photo={photoDe(saisie)} taille={58} rond={15} />
-              <b className="text-[18px] leading-tight flex-1 min-w-0">{propre(saisie)}</b>
+              <b className="text-[18px] leading-tight flex-1 min-w-0">{courtNom(saisie)}</b>
             </div>
             {pile.length > 0 && (
               <p className="text-[12px] text-ink-mute -mt-1 mb-3">
-                pour faire <b>{propre(pile[pile.length - 1])}</b>
+                pour faire <b>{courtNom(pile[pile.length - 1])}</b>
               </p>
             )}
 
@@ -597,7 +601,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                         {l.tailles ? l.tailles.map(x => nb(x * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
                       </span>
                       <span className={'text-[14px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
-                        {propre(l.produit)}
+                        {courtNom(l.produit)}
                       </span>
                       {ouvrable && (
                         <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
