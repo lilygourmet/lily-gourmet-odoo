@@ -1,19 +1,15 @@
 import { supabase } from './supabase'
 
-/** L'état de chaque gâteau sorti : son étage « N cm CD* » est-il en stock ? */
-export async function loadEtatsCheckCd(moIds) {
-  if (!moIds.length) return {}
-  const r = await fetch(`/api/freezer-list?mode=check-cd&mos=${moIds.join(',')}`)
+/** Les gâteaux entiers encore à valider, avec leurs étages et ce qui manque. */
+export async function loadParentsAValider(jours = 30) {
+  const r = await fetch(`/api/freezer-list?mode=check-cd-parents&jours=${jours}`)
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
-  const { etats } = await r.json()
-  const parId = {}
-  for (const e of etats || []) parId[e.mo_id] = e
-  return parId
+  return (await r.json()).parents || []
 }
 
-/** Envoie les gâteaux sélectionnés en validation dans Odoo. */
-export async function envoyerEnValidation(moIds, actorId) {
-  const r = await fetch('/api/freezer-list?mode=check-cd-valider', {
+/** Valide dans Odoo les gâteaux cochés. Les étages sont revérifiés avant. */
+export async function validerParents(moIds, actorId) {
+  const r = await fetch('/api/freezer-list?mode=check-cd-parents-valider', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mos: moIds, actorId }),
@@ -21,8 +17,8 @@ export async function envoyerEnValidation(moIds, actorId) {
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
   const resultats = data.resultats || []
-  // On garde la trace de l'envoi, réussi ou non : c'est ce qui permet de
-  // retrouver le lendemain ce qu'Odoo a refusé.
+  // On garde la trace de chaque envoi, réussi ou non : c'est ce qui permet de
+  // retrouver ensuite ce qu'Odoo a refusé, et qui a validé quoi.
   if (resultats.length) {
     await supabase.from('check_cd_done').upsert(resultats.map(x => ({
       odoo_mo_id: x.mo_id,
@@ -36,7 +32,7 @@ export async function envoyerEnValidation(moIds, actorId) {
   return resultats
 }
 
-/** Ce qui a déjà été envoyé (pour ne pas le reproposer). */
+/** Ce qui a déjà été envoyé (pour afficher les refus d'Odoo). */
 export async function loadDejaEnvoyes() {
   const { data, error } = await supabase.from('check_cd_done').select('odoo_mo_id, odoo_ok, odoo_msg, checked_at')
   if (error) throw error

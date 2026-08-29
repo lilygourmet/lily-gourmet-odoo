@@ -260,6 +260,72 @@ async function etatsCheckCd(uid, moIds) {
 // validé. Chaque ligne POS porte son devis d'origine (S52071), ce qui donne le
 // parent sans ambiguïté. Appelé chaque matin à 8h ; avec `dry`, il se contente
 // de lister ce qui reste à valider, pour l'afficher dans l'écran.
+// Les gâteaux entiers encore ouverts, avec leurs étages et ce qu'il leur manque.
+// `codes` limite aux commandes données (le rendez-vous de 8h ne prend que celles
+// passées en caisse) ; sans `codes`, on les prend tous — c'est la liste de
+// l'écran Check CD-, où Layla contrôle puis valide elle-même.
+async function parentsAValider(uid, codes, opts = {}) {
+  // À l'écran, Layla contrôle elle-même : on montre toutes les formes (Gateau
+  // Forme, Letter Cake, grands formats…). Le rendez-vous automatique, lui, reste
+  // volontairement limité aux « CD- Cake Design N étages ».
+  const famille = opts.toutesFormes
+    ? [['product_id.name', '=ilike', 'CD-%'], ['product_id.name', 'not ilike', 'ganache']]
+    : [['product_id.name', 'ilike', 'CD- Cake Design']]
+  // et on s'arrête aux gâteaux récents : au-delà, ce sont des ordres oubliés.
+  const depuis = new Date(Date.now() - (opts.jours || 30) * 86400000)
+  const mos = await odooSearchRead(uid, 'mrp.production',
+    [...famille,
+     ['state', 'in', ['confirmed', 'progress', 'to_close']],
+     ['date_planned_finished', '>=', depuis.toISOString().slice(0, 19).replace('T', ' ')]],
+    ['id', 'name', 'origin', 'product_id', 'product_qty', 'date_planned_finished', 'move_raw_ids'],
+    { limit: 500, order: 'date_planned_finished desc' })
+
+  const retenus = codes
+    ? mos.filter(m => codes.some(c => String(m.origin || '').includes(c)))
+        .map(m => ({ mo: m, code: codes.find(c => String(m.origin || '').includes(c)) }))
+    : mos.map(m => ({ mo: m, code: (String(m.origin || '').match(/S\d{3,}/i) || [''])[0].toUpperCase() }))
+  if (!retenus.length) return []
+
+  const idsMoves = retenus.flatMap(r => r.mo.move_raw_ids || [])
+  const moves = idsMoves.length
+    ? await odooCall(uid, 'stock.move', 'read', [idsMoves,
+        ['raw_material_production_id', 'product_id', 'product_uom_qty', 'reserved_availability']])
+    : []
+  const etagesDe = {}
+  for (const mv of moves) {
+    if (!/cakedesign/i.test(mv.product_id[1] || '')) continue
+    const par = Array.isArray(mv.raw_material_production_id) ? mv.raw_material_production_id[0] : null
+    if (par) (etagesDe[par] ||= []).push(mv)
+  }
+  const lieuCD = await lieuStockProd(uid)
+  const idsEtages = [...new Set(Object.values(etagesDe).flat().map(mv => mv.product_id[0]))]
+  const stockDe = {}
+  if (idsEtages.length) {
+    for (const p of await odooCall(uid, 'product.product', 'read', [idsEtages, ['free_qty']],
+      lieuCD ? { context: { location: lieuCD.id } } : {})) stockDe[p.id] = p.free_qty || 0
+  }
+  // un étage réservé pour CE gâteau lui appartient : il compte comme disponible
+  const dispoDe = mv => Math.max(stockDe[mv.product_id[0]] || 0, mv.reserved_availability || 0)
+
+  return retenus.map(({ mo: m, code }) => {
+    const etages = etagesDe[m.id] || []
+    const base = {
+      mo_id: m.id, mo_name: m.name, scode: code,
+      produit: Array.isArray(m.product_id) ? m.product_id[1] : '',
+      qty: m.product_qty,
+      date: String(m.date_planned_finished || '').slice(0, 10),
+      etages: etages.map(mv => ({
+        nom: mv.product_id[1], besoin: mv.product_uom_qty || 0, stock: dispoDe(mv),
+        ok: dispoDe(mv) >= (mv.product_uom_qty || 0),
+      })),
+    }
+    if (!etages.length) return { ...base, pret: false, raison: "pas d'étage monté dans la recette" }
+    const manquant = base.etages.find(e => !e.ok)
+    if (manquant) return { ...base, pret: false, raison: `${manquant.nom} pas disponible (${manquant.stock} pour ${manquant.besoin})` }
+    return { ...base, pret: true }
+  })
+}
+
 async function parentsEncaisses(uid, jours, dry) {
   const depuis = new Date(Date.now() - jours * 86400000)
   const iso = d => d.toISOString().slice(0, 19).replace('T', ' ')
@@ -1419,6 +1485,30 @@ export default async function handler(req, res) {
       const out = await parentsEncaisses(uid, jours, dry)
       if (!dry) console.log(`[check-cd:parents] ${out.length} gâteau(x) · ${out.map(o => o.mo_name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
       return res.status(200).json({ parents: out })
+    }
+
+    // Check CD- : les gâteaux entiers encore à valider, avec leurs étages.
+    if (req.query.mode === 'check-cd-parents') {
+      const uid = await odooAuth()
+      const jours = Math.min(90, Math.max(1, parseInt(req.query.jours, 10) || 30))
+      return res.status(200).json({ parents: await parentsAValider(uid, null, { toutesFormes: true, jours }) })
+    }
+
+    // Check CD- : valider les gâteaux entiers cochés (on revérifie les étages).
+    if (req.method === 'POST' && req.query.mode === 'check-cd-parents-valider') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const ids = (body.mos || []).map(x => parseInt(x, 10)).filter(Boolean)
+      if (!ids.length) return res.status(400).json({ error: 'aucun gâteau sélectionné' })
+      const uid = await odooAuth()
+      const tous = await parentsAValider(uid, null, { toutesFormes: true, jours: 90 })
+      const out = []
+      for (const p of tous.filter(x => ids.includes(x.mo_id))) {
+        if (!p.pret) { out.push({ ...p, ok: false, message: p.raison }); continue }
+        const r = await validerOrdre(uid, p.mo_name, false)
+        out.push({ ...p, ok: r.ok, message: r.message })
+      }
+      console.log(`[check-cd-parents] par ${body.actorId || '?'} · ${out.map(o => o.mo_name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
+      return res.status(200).json({ resultats: out })
     }
 
     // Check CD- : l'état de chaque gâteau sorti (son étage est-il en stock ?)
