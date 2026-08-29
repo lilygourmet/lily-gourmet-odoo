@@ -560,7 +560,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 se fait par tournée entière : le compteur de fournées suffit */}
             {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie)
               && recettes[saisie] && recettes[saisie].sortUnite !== 'u'
-              && !tournees[saisie] && (() => {
+              && !tournees[saisie] && !poidsUnite(recettes[saisie].sortUnite) && (() => {
               const b = besoinDe(saisie)
               const r = recettes[saisie]
               const f2 = r && r.sortQty ? b / r.sortQty : 0
