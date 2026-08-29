@@ -6,6 +6,7 @@ import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
+import { loadStockProdCatalog } from '../lib/stockProd'
 
 const ATELIER = 'annexe'
 const nb = v => Number(Number(v || 0).toFixed(2)).toLocaleString('fr-FR')
@@ -90,6 +91,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [besoins, setBesoins] = useState({})      // besoins modifiés à la main
   const [noms, setNoms] = useState({})
   const [caches, setCaches] = useState([])
+  const [catalogue, setCatalogue] = useState(null)   // les mini/maxi de « Stock Prod Annexe »
   const [voirPlus, setVoirPlus] = useState(false)
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
@@ -102,6 +104,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     loadNoms().then(n => { if (vivant) setNoms(n) }).catch(() => { })
     loadMasques().then(m => { if (vivant) setCaches(m) }).catch(() => { })
+    // Les mini/maxi de l'onglet « Stock Prod Annexe » font foi : c'est là que
+    // Layla les règle. Ceux d'Odoo ne servent qu'aux articles absents.
+    loadStockProdCatalog('annexe').then(c => { if (vivant) setCatalogue(c) }).catch(() => { })
     return () => { vivant = false }
   }, [])
 
@@ -115,7 +120,17 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 
   const recettes = (arbre && arbre.recettes) || {}
   const stocks = (arbre && arbre.stocks) || {}
-  const minmax = (arbre && arbre.minmax) || {}
+  const minmax = useMemo(() => {
+    const base = { ...((arbre && arbre.minmax) || {}) }
+    for (const c of catalogue || []) {
+      if (!c.actif) continue
+      const min = Number(c.stock_min) || 0
+      if (!(min > 0)) continue
+      const max = c.stock_max != null ? Number(c.stock_max) : (base[c.product_name] || {}).max
+      base[c.product_name] = { min, max: max > min ? max : min }
+    }
+    return base
+  }, [arbre, catalogue])
   const tournees = (arbre && arbre.tournees) || {}
   const photoDe = n => (arbre && arbre.photos && arbre.photos[n]
     ? `/api/freezer-list?mode=photo&id=${arbre.photos[n]}` : '')
