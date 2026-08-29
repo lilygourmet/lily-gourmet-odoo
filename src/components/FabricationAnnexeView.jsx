@@ -202,7 +202,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         return { mere: m, lignes, urgence: Math.max(0, ...lignes.map(l => urgenceDe(l.nom))) }
       })
       .filter(x => x.lignes.length)
-      .sort((a, b) => b.urgence - a.urgence || b.lignes.length - a.lignes.length)
+      // à manque égal (tout le monde à zéro), le plus gros volume passe devant
+      .sort((a, b) => b.urgence - a.urgence
+        || b.lignes.reduce((t, l) => t + l.besoin, 0) - a.lignes.reduce((t, l) => t + l.besoin, 0)
+        || b.lignes.length - a.lignes.length)
   }, [arbre, caches, besoins, stocks, minmax])
 
   // ===== ce qu'on a fait =====
@@ -351,9 +354,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
                     <span className="block px-2 pb-2 pt-1">
                       {directs.slice(0, 3).map(l => (
-                        <span key={l.nom} className="flex items-baseline gap-1.5 text-[11.5px] leading-tight mb-0.5">
-                          <b className="text-danger font-extrabold">{nb(l.besoin)}</b>
-                          <span className="text-ink-soft truncate">{courtNom(l.nom)}</span>
+                        <span key={l.nom} className="block text-[11.5px] leading-tight mb-1">
+                          <span className="flex items-baseline gap-1.5">
+                            <b className="text-danger font-extrabold">{nb(l.besoin)}</b>
+                            <span className="text-ink-soft truncate">{courtNom(l.nom)}</span>
+                          </span>
+                          {minmax[l.nom] && minmax[l.nom].min > 0 && (
+                            <span className="text-[10.5px] text-ink-mute">
+                              il en reste {nb(Math.max(0, stocks[l.nom] || 0))} sur {nb(minmax[l.nom].min)}
+                            </span>
+                          )}
                         </span>
                       ))}
                       {directs.length > 3 && (
