@@ -27,6 +27,17 @@ const couleur = n => {
   return `hsl(${h} 32% 62%)`
 }
 
+// Sous « Suprême amande », inutile de répéter le parfum à chaque ligne :
+// « 15 cm Vitrine (Praliné Amandes caramélisées) » se lit « 15 cm Vitrine ».
+// On garde en revanche les parenthèses qui sont un nombre de parts — « (10) »
+// est une taille, pas un parfum.
+function courtNom(nom) {
+  const t = propre(nom)
+  const fin = (t.match(/\(([^()]*)\)\s*$/) || [])[1]
+  if (!fin || /^\s*\d+\s*$/.test(fin)) return t
+  return t.replace(/\s*\([^()]*\)\s*$/, '').trim() || t
+}
+
 function Vignette({ nom, photo, taille, rond }) {
   const style = { width: taille, height: taille, borderRadius: rond || 12 }
   // `contain` et non `cover` : la photo entière doit tenir dans le carré,
@@ -245,19 +256,32 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             )}
             <div className="grid gap-2.5"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
-              {aFaire.map(({ mere, lignes }) => (
-                <button key={mere} onClick={() => ouvrirFiche(mere)}
-                  className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
-                  <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
-                  <span className="block w-full aspect-square overflow-hidden">
-                    <Vignette nom={mere} photo={photoDe(mere)} taille={400} rond={0} />
-                  </span>
-                  <span className="absolute top-1.5 left-1.5 right-1.5 bg-danger text-white rounded-lg px-2 py-1 text-[12.5px] font-extrabold text-center">
-                    {lignes.length} à faire
-                  </span>
-                  <span className="block px-2 py-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
-                </button>
-              ))}
+              {aFaire.map(({ mere, lignes }) => {
+                // « 5 à faire » ne dit pas quoi : on nomme chaque taille et sa
+                // quantité, c'est ça que le pâtissier a besoin de lire
+                const directs = lignes.filter(l => l.prof === 1)
+                return (
+                  <button key={mere} onClick={() => ouvrirFiche(mere)}
+                    className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
+                    <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
+                    <span className="block w-full aspect-square overflow-hidden">
+                      <Vignette nom={mere} photo={photoDe(mere)} taille={400} rond={0} />
+                    </span>
+                    <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
+                    <span className="block px-2 pb-2 pt-1">
+                      {directs.slice(0, 3).map(l => (
+                        <span key={l.nom} className="flex items-baseline gap-1.5 text-[11.5px] leading-tight mb-0.5">
+                          <b className="text-danger font-extrabold">{nb(l.besoin)}</b>
+                          <span className="text-ink-soft truncate">{courtNom(l.nom)}</span>
+                        </span>
+                      ))}
+                      {directs.length > 3 && (
+                        <span className="block text-[11px] text-ink-mute">+ {directs.length - 3} autres</span>
+                      )}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -468,7 +492,32 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               </div>
             )}
 
-            {vue === 'besoins' && (() => {
+            {(() => {
+              const travail = (aFaire.find(x => x.mere === saisie) || {}).lignes
+              if (!travail || !travail.length) return null
+              return (
+                <div className="bg-white border border-danger rounded-2xl overflow-hidden mb-2.5">
+                  <div className="bg-[#FCEEE8] px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-danger border-b border-[#f0cfc5]">
+                    Ce qu'il manque
+                  </div>
+                  {travail.map(l => (
+                    <button key={l.nom} onClick={() => ouvrirFiche(l.nom, saisie)}
+                      className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm"
+                      style={{ paddingLeft: 14 + (l.prof - 1) * 16 }}>
+                      <b className="text-[19px] font-extrabold text-danger min-w-[62px] text-right">{nb(l.besoin)}</b>
+                      <span className="flex-1 min-w-0 text-[14px]">
+                        {courtNom(l.nom)}
+                        {l.prof > 1 && <span className="block text-[11px] text-[#b58f3c] font-bold">pour celui du dessus</span>}
+                      </span>
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
+                        <path d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
+
+            {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie) && (() => {
               const b = besoinDe(saisie)
               const r = recettes[saisie]
               const f2 = r && r.sortQty ? b / r.sortQty : 0
