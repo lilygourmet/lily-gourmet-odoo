@@ -460,9 +460,11 @@ function ProductGroupedList({ items, doneMap, onToggle }) {
  */
 function GroupeProduit({ nom, lignes, doneMap, onToggle }) {
   const [ouvert, setOuvert] = useState(false)
-  const faits = lignes.filter(it => doneMap[it.mo_id]).length
-  const total = lignes.length
-  const tout = faits === total
+  // On compte les PIÈCES, pas les lignes : un ordre peut en porter deux.
+  const pieces = l => l.reduce((n, it) => n + (it.qty || 1), 0)
+  const faits = pieces(lignes.filter(it => doneMap[it.mo_id]))
+  const total = pieces(lignes)
+  const tout = lignes.every(it => doneMap[it.mo_id])
   const restant = total - faits
 
   async function sortirTout() {
@@ -507,7 +509,10 @@ function GroupeProduit({ nom, lignes, doneMap, onToggle }) {
                 <span className="font-mono text-[10.5px] text-ink-mute w-11">
                   {it.hour ? `${String(it.hour).padStart(2, '0')}h${String(it.minute).padStart(2, '0')}` : ''}
                 </span>
-                <span className="flex-1 min-w-0 truncate text-ink-soft">{it.client_name || it.scode}</span>
+                <span className="flex-1 min-w-0 truncate text-ink-soft">
+                  {(it.qty || 1) > 1 && <b className="font-mono text-bordeaux">×{it.qty} </b>}
+                  {it.client_name || it.scode}
+                </span>
                 <button onClick={() => onToggle(it)}
                   className={`flex-shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold border ${fait ? 'bg-[#2F6B25] border-[#2F6B25] text-cream' : 'bg-cream-warm border-line text-[#3d6f8e]'}`}>
                   {fait ? '✓ sorti' : 'sortir'}
@@ -530,6 +535,12 @@ function ItemLine({ item, done, doneInfo, onToggle, compact = false }) {
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
+          {/* deux gâteaux identiques sur une même ligne : il faut le voir */}
+          {(item.qty || 1) > 1 && (
+            <span className="font-mono text-[12px] font-extrabold text-bordeaux bg-cream px-1.5 py-0.5 rounded-md border border-bordeaux/30">
+              ×{item.qty}
+            </span>
+          )}
           {!compact && <span className="text-[12px] text-ink font-medium">{item.taille} {item.parfum}</span>}
           {compact && (
             <>
