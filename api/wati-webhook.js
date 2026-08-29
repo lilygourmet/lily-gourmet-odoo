@@ -23,6 +23,7 @@ import { estLigneLivraison, heurePreparation, creneauClient, heureLisible, texte
 import { sendPushToTargets } from './push.js'
 import { generateText } from 'ai'
 import crypto from 'crypto'
+import { waitUntil } from '@vercel/functions'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -268,9 +269,15 @@ async function handleInbound(req, res) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  let messageId = null
 
+  // Wati n'attend pas : si on met trop longtemps, il raccroche, l'exécution est annulée
+  // (« operation aborted »), la requête est comptée en 5xx et Wati RENVOIE le message —
+  // ce qui rajoute de la charge et fait boule de neige. On enregistre donc le strict
+  // nécessaire, on répond, et le reste (média, notifications, auto-réponse) se fait après.
+  let conv
   try {
-    const conv = await getOrCreateConversation(supabase, phone, name)
+    conv = await getOrCreateConversation(supabase, phone, name)
 
     // Anti-doublon : Wati renvoie aussi nos propres messages sortants (owner=true).
     // Si l'app les a déjà enregistrés (sender_user_id rempli, récent), on ignore l'écho.
@@ -287,31 +294,34 @@ async function handleInbound(req, res) {
       if (dup && dup.length > 0) return res.status(200).json({ ok: true, echoSkipped: true })
     }
 
-    // Média entrant : le lien Wati exige le token -> on télécharge et on ré-héberge.
-    let storedMedia = mediaUrl
-    if (mediaUrl) {
-      const rehosted = await rehostWatiMedia(supabase, mediaUrl)
-      if (rehosted) storedMedia = rehosted
-    }
-
-    // Insère le message (dédoublonné sur wa_message_id si Wati renvoie le webhook)
-    const { error: msgErr } = await supabase.from('messages').insert({
+    // Insère le message (dédoublonné sur wa_message_id si Wati renvoie le webhook).
+    // Le média garde d'abord le lien Wati : le ré-hébergement se fait après la réponse.
+    const { data: inserted, error: msgErr } = await supabase.from('messages').insert({
       conversation_id: conv.id,
       sender_type: senderType,
       body: body || null,
-      media_url: storedMedia || null,
+      media_url: mediaUrl || null,
       media_type: (mediaUrl && type && type !== 'text') ? type : null,
       sent_at: sentAt,
       wa_message_id: waMsgId || null,
-    })
+    }).select('id').single()
     if (msgErr) {
       if (msgErr.code === '23505') {
         return res.status(200).json({ ok: true, duplicate: true })
       }
       throw msgErr
     }
+    messageId = inserted?.id || null
+  } catch (e) {
+    // Échec AVANT enregistrement : là, le 5xx est utile — Wati réessaiera et le message
+    // ne sera pas perdu (le doublon est bloqué par wa_message_id).
+    console.error('[wati-webhook]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
 
-    // Met à jour le fil : date du dernier message (+ dernier reçu si entrant)
+  // Met à jour le fil : date du dernier message (+ dernier reçu si entrant).
+  // Le message est déjà enregistré : une erreur ici ne doit plus faire échouer le webhook.
+  try {
     const patch = { last_message_at: sentAt, updated_at: new Date().toISOString() }
     if (senderType === 'client') {
       patch.last_inbound_at = sentAt
@@ -323,34 +333,54 @@ async function handleInbound(req, res) {
     }
     if (!conv.client_name && name) patch.client_name = name
     await supabase.from('conversations').update(patch).eq('id', conv.id)
+  } catch (e) { console.warn('[wati-conv-update]', e?.message || e) }
 
-    // Notif push aux users ayant accès aux Conversations (entrant client seulement).
-    // Le push ne doit jamais faire échouer le webhook -> on isole avec catch.
-    if (senderType === 'client') {
-      await notifyConversationUsers(supabase, conv.id, name || conv.client_name || phone, body, mediaUrl)
-        .catch(e => console.warn('[wati push]', e?.message || e))
-    }
+  // Réponse à Wati MAINTENANT (le message est en base) …
+  res.status(200).json({ ok: true })
 
-    // Auto-réponses : (1) message d'absence hors horaires (une seule fois par période
-    // fermée), sinon (2) réponses par mot-clé (RIB, etc.). Sur message client texte.
-    let autoReplied = false
-    if (senderType === 'client' && body) {
-      autoReplied = await maybeClosedAutoReply(supabase, conv, phone)
-        .catch(e => { console.warn('[closed-reply]', e?.message || e); return false })
-      if (!autoReplied) {
-        autoReplied = await maybeAutoReply(supabase, conv, phone, body)
-          .catch(e => { console.warn('[auto-reply]', e?.message || e); return false })
-      }
-    }
+  // … puis le travail lent, sans faire attendre Wati.
+  runAfterResponse(inboundFollowUp(supabase, {
+    conv, messageId, mediaUrl, senderType, body, phone, name,
+  }))
+}
 
-    // (Brouillon de réponse IA à la réception : DÉSACTIVÉ — coûtait un appel IA par
-    // message reçu. La correction et « suggérer 3 réponses » restent, à la demande.)
+// Garde l'exécution Vercel en vie le temps du travail d'après-réponse. Hors Vercel
+// (dev local), waitUntil n'a pas de contexte : on laisse simplement tourner la promesse.
+function runAfterResponse(promise) {
+  const p = Promise.resolve(promise).catch(e => console.warn('[wati-after]', e?.message || e))
+  try { waitUntil(p) } catch { /* pas de contexte Vercel */ }
+}
 
-    return res.status(200).json({ ok: true })
-  } catch (e) {
-    console.error('[wati-webhook]', e?.message || e)
-    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+// Travail non urgent, fait APRÈS avoir répondu à Wati : ré-hébergement du média,
+// notifications push, auto-réponses. Rien ici ne doit pouvoir casser la réception.
+async function inboundFollowUp(supabase, { conv, messageId, mediaUrl, senderType, body, phone, name }) {
+  // Média entrant : le lien Wati exige le token -> on télécharge et on ré-héberge.
+  // En cas d'échec on garde le lien Wati d'origine, déjà enregistré.
+  if (mediaUrl && messageId) {
+    try {
+      const rehosted = await rehostWatiMedia(supabase, mediaUrl)
+      if (rehosted) await supabase.from('messages').update({ media_url: rehosted }).eq('id', messageId)
+    } catch (e) { console.warn('[wati-media]', e?.message || e) }
   }
+
+  if (senderType !== 'client') return
+
+  // Notif push aux users ayant accès aux Conversations (entrant client seulement).
+  await notifyConversationUsers(supabase, conv.id, name || conv.client_name || phone, body, mediaUrl)
+    .catch(e => console.warn('[wati push]', e?.message || e))
+
+  // Auto-réponses : (1) message d'absence hors horaires (une seule fois par période
+  // fermée), sinon (2) réponses par mot-clé (RIB, etc.). Sur message client texte.
+  if (!body) return
+  const autoReplied = await maybeClosedAutoReply(supabase, conv, phone)
+    .catch(e => { console.warn('[closed-reply]', e?.message || e); return false })
+  if (!autoReplied) {
+    await maybeAutoReply(supabase, conv, phone, body)
+      .catch(e => { console.warn('[auto-reply]', e?.message || e); return false })
+  }
+
+  // (Brouillon de réponse IA à la réception : DÉSACTIVÉ — coûtait un appel IA par
+  // message reçu. La correction et « suggérer 3 réponses » restent, à la demande.)
 }
 
 // ============================================================
@@ -436,7 +466,7 @@ async function sendAutoReply(supabase, conv, phone, text) {
   const base = apiEndpoint.replace(/\/$/, '')
   const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
   const url = `${base}/api/v1/sendSessionMessage/${number}?${new URLSearchParams({ messageText: text })}`
-  const r = await fetchWithTimeout(url, { method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' } })
+  const r = await fetchWithTimeout(url, { method: 'POST', headers: { Authorization: authHeader, Accept: 'application/json' } }, 10000)
   if (!r.ok) { console.warn('[auto-reply] WATI status', r.status); return }
   const now = new Date().toISOString()
   await supabase.from('messages').insert({
@@ -3827,7 +3857,7 @@ async function rehostWatiMedia(supabase, watiUrl) {
     const apiToken = process.env.WATI_API_TOKEN
     if (!apiToken) return null
     const authHeader = apiToken.startsWith('Bearer ') ? apiToken : `Bearer ${apiToken}`
-    const r = await fetchWithTimeout(watiUrl, { headers: { Authorization: authHeader } })
+    const r = await fetchWithTimeout(watiUrl, { headers: { Authorization: authHeader } }, 15000)
     if (!r.ok) return null
     const m = /fileName=([^&]+)/.exec(watiUrl)
     const fileName = m ? decodeURIComponent(m[1]) : watiUrl
