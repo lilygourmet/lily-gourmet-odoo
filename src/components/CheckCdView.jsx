@@ -56,10 +56,13 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   // dans CD Négatif — même s'il est déjà fabriqué dans Odoo. Ensuite seulement :
   // soit son étage congelé est en stock, soit il est déjà fabriqué (on confirme
   // alors le contrôle). Une taille hors norme pas encore fabriquée reste grisée.
-  // Un gâteau dont la date de retrait est passée est forcément sorti du
-  // congélateur — le client est venu le chercher (règle de Layla). On n'attend
-  // donc la coche de CD Négatif que pour aujourd'hui et les jours à venir.
-  const estSorti = e => !!sortis[e.mo_id] || (!!e.date && e.date < aujourdhui)
+  // Trois façons d'être sûr qu'un étage est sorti du congélateur :
+  //  - quelqu'un l'a coché dans CD Négatif ;
+  //  - il est DÉJÀ FABRIQUÉ : pour monter un « 20 cm cakedesign » il a bien
+  //    fallu consommer l'étage congelé « 20 cm CD* », donc le sortir ;
+  //  - sa date de retrait est passée : le client est venu le chercher.
+  // On n'attend donc la coche que pour ce qui reste vraiment au congélateur.
+  const estSorti = e => !!sortis[e.mo_id] || e.dispo === 'fait' || (!!e.date && e.date < aujourdhui)
   const cochable = e => estSorti(e) && ['ok', 'fait'].includes(e.dispo)
   const prets = useMemo(() => etages.filter(cochable),
     // eslint-disable-next-line react-hooks/exhaustive-deps
