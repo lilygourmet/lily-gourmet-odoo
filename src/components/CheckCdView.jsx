@@ -108,12 +108,12 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   const jours = useMemo(() => {
     const g = {}
     for (const e of etages) (g[e.date || '—'] ||= []).push(e)
-    // Même ordre que CD Négatif : aujourd'hui et les jours qui viennent d'abord
-    // (le plus lointain en bas), puis les journées passées, de la plus récente
-    // à la plus ancienne tout en bas.
-    const aVenir = Object.entries(g).filter(([d]) => d >= aujourdhui).sort((a, b) => a[0].localeCompare(b[0]))
+    // Les journées passées EN HAUT : elles traînent, on ne veut pas les oublier
+    // au fond de la liste. Puis aujourd'hui et les jours qui viennent, le plus
+    // lointain en bas. Dans chaque bloc, la date la plus récente d'abord.
     const passees = Object.entries(g).filter(([d]) => d < aujourdhui).sort((a, b) => b[0].localeCompare(a[0]))
-    return [...aVenir, ...passees]
+    const aVenir = Object.entries(g).filter(([d]) => d >= aujourdhui).sort((a, b) => a[0].localeCompare(b[0]))
+    return [...passees, ...aVenir]
   }, [etages])
 
   const nb = choisis.size

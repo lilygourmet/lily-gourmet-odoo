@@ -377,11 +377,11 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
                   </>}
                 </>
           ) : (
-            /* Aujourd'hui en haut, puis les jours qui viennent (le plus lointain
-               en bas), et les retards tout en bas — du plus récent au plus ancien. */
+            /* Les retards EN HAUT (on ne veut pas les oublier), du plus récent au
+               plus ancien, puis aujourd'hui et les jours qui viennent. */
             <>
-              {futureKeys.map(date => renderCard(date, 'current'))}
               {[...pastUndoneKeys].reverse().map(date => renderCard(date, 'overdue'))}
+              {futureKeys.map(date => renderCard(date, 'current'))}
             </>
           )}
         </div>
