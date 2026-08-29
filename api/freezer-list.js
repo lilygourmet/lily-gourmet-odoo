@@ -263,12 +263,11 @@ async function etatsCheckCd(uid, moIds) {
 async function parentsEncaisses(uid, jours, dry) {
   const depuis = new Date(Date.now() - jours * 86400000)
   const iso = d => d.toISOString().slice(0, 19).replace('T', ' ')
-  // Tous les gâteaux cake design, pas seulement les « CD- Cake Design N étages » :
-  // il y a aussi les Gateau Forme (carré, cœur…), Letter Cake, Créa' Cake, et les
-  // grands formats 35/40/45 cm. La ganache est un ingrédient, pas un gâteau.
+  // Pour l'instant : seulement les « CD- Cake Design N étages ». Les Gateau Forme,
+  // Letter Cake, Créa' Cake et les grands formats 35/40/45 cm attendent — Layla
+  // veut les traiter plus tard.
   const lignes = await odooSearchRead(uid, 'pos.order.line',
-    [['product_id.name', '=ilike', 'CD-%'], ['product_id.name', 'not ilike', 'ganache'],
-     ['create_date', '>=', iso(depuis)]],
+    [['product_id.name', 'ilike', 'CD- Cake Design'], ['create_date', '>=', iso(depuis)]],
     ['order_id', 'product_id', 'sale_order_origin_id'], { limit: 300 })
   if (!lignes.length) return []
 
@@ -279,7 +278,7 @@ async function parentsEncaisses(uid, jours, dry) {
 
   // les ordres du gâteau entier rattachés à ces commandes, encore ouverts
   const mos = await odooSearchRead(uid, 'mrp.production',
-    [['product_id.name', '=ilike', 'CD-%'], ['product_id.name', 'not ilike', 'ganache'],
+    [['product_id.name', 'ilike', 'CD- Cake Design'],
      ['state', 'in', ['confirmed', 'progress', 'to_close']]],
     ['id', 'name', 'origin', 'product_id', 'components_availability', 'move_raw_ids'], { limit: 500 })
 
