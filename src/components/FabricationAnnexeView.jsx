@@ -47,6 +47,14 @@ function poidsUnite(u) {
   return /kg/i.test(m[2]) ? v * 1000 : v
 }
 
+// Combien pèse une quantité écrite dans une unité quelconque, en grammes.
+const enGrammes = (q, u) => {
+  if (/^kg$/i.test(u)) return q * 1000
+  if (/^g$/i.test(u)) return q
+  const p = poidsUnite(u)
+  return p ? q * p : null
+}
+
 function Vignette({ nom, photo, taille, rond, plein }) {
   // `plein` : la vignette prend toute la place du carré. Sans ça elle gardait
   // une taille fixe de 400 px dans une carte de 112 px, et l'on ne voyait que
@@ -127,6 +135,21 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     if (!mm || !(mm.min > 0) || st >= mm.min) return 0
     return Math.max(0, (mm.max || mm.min) - st)
   }
+  // convertit une quantité vers l'unité dans laquelle Odoo compte cet article
+  const versUniteDe = (nom, qty, uniteLigne) => {
+    const r = recettes[nom]
+    if (!r) return qty
+    const pSortie = poidsUnite(r.sortUnite)
+    if (!pSortie) return qty
+    const g = enGrammes(qty, uniteLigne)
+    return g === null ? qty : g / pSortie
+  }
+  // une tournée ne se coupe pas en deux : on arrondit au-dessus
+  const arrondiUtile = (nom, q) => {
+    const r = recettes[nom]
+    return (r && poidsUnite(r.sortUnite)) ? Math.ceil(q * 100) / 100 : Math.ceil(q)
+  }
+
   const cascade = (nom, besoin, prof, out, vus) => {
     if (prof > 4 || vus.has(nom)) return out
     vus.add(nom)
@@ -141,10 +164,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     for (const l of regrouper(r.lignes)) {
       if (!l.fabrique || !recettes[l.produit]) continue
       const parFois = l.tailles ? Math.max(...l.tailles) : l.qty
+      // La recette demande « 250 g » d'un article qu'Odoo compte en
+      // « Tournée (3 kg) » : sans convertir, on comparerait des grammes à des
+      // tournées et le besoin serait mille fois trop grand.
+      const besoinLigne = versUniteDe(l.produit, parFois * n, l.unite)
       // un stock négatif veut dire que l'inventaire est en retard, pas qu'il
       // faut en produire 7 766 : on le compte comme zéro
-      const manque = Math.max(0, parFois * n - Math.max(0, stocks[l.produit] || 0))
-      if (manque > 0.001) cascade(l.produit, Math.ceil(manque), prof + 1, out, vus)
+      const manque = Math.max(0, besoinLigne - Math.max(0, stocks[l.produit] || 0))
+      if (manque > 0.001) cascade(l.produit, arrondiUtile(l.produit, manque), prof + 1, out, vus)
     }
     return out
   }
@@ -191,9 +218,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const foisPour = (nom, b) => {
     const r = recettes[nom]
     if (!(b > 0) || !r || !r.sortQty) return 1
-    // le besoin est en grammes, la sortie parfois en « Tournée (3 kg) »
-    const poids = poidsUnite(r.sortUnite)
-    const brut = poids ? b / (r.sortQty * poids) : b / r.sortQty
+    // le besoin arrive déjà dans l'unité de l'article (voir versUniteDe)
+    const brut = b / r.sortQty
+    // un article compté en tournées se fait par tournées entières
+    if (poidsUnite(r.sortUnite)) return Math.max(1, Math.ceil(brut))
     const pas = tournees[nom]
     if (pas && r.sortQty) {
       const parFois = pas / r.sortQty          // une tournée = tant de fois la recette
@@ -644,7 +672,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               </div>
             )}
 
-            {!estMere && tournees[saisie] && recettes[saisie] && (
+            {!estMere && recettes[saisie] && poidsUnite(recettes[saisie].sortUnite) && (
+              <p className="mb-2.5 border border-[#b58f3c] text-[#b58f3c] bg-[#FBF3DF] rounded-2xl px-3.5 py-2.5 text-[12.5px] font-bold">
+                Cet article se compte en {recettes[saisie].sortUnite} : il se fait par tournées entières.
+              </p>
+            )}
+
+            {!estMere && tournees[saisie] && !poidsUnite(recettes[saisie] && recettes[saisie].sortUnite) && recettes[saisie] && (
               <button onClick={() => setFois(tournees[saisie] / recettes[saisie].sortQty)}
                 className="w-full mb-2.5 border border-[#b58f3c] text-[#b58f3c] bg-[#FBF3DF] rounded-2xl px-3.5 py-2.5 text-[12.5px] font-bold text-left">
                 Cet article se fait par tournée entière de {nb(tournees[saisie])} {recettes[saisie].sortUnite} —
