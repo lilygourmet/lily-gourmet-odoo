@@ -529,7 +529,8 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )
             })()}
 
-            {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie) && (() => {
+            {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie)
+              && recettes[saisie] && recettes[saisie].sortUnite !== 'u' && (() => {
               const b = besoinDe(saisie)
               const r = recettes[saisie]
               const f2 = r && r.sortQty ? b / r.sortQty : 0
@@ -544,7 +545,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <button onClick={() => poser(saisie, b - 1)}
                       className="w-9 h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">−</button>
                     <input type="number" value={b} onChange={e => poser(saisie, e.target.value)}
-                      className="w-[76px] h-10 border border-line rounded-[10px] text-center text-[18px] font-extrabold bg-white outline-none focus:border-bordeaux" />
+                      className="sans-fleches w-[76px] h-10 border border-line rounded-[10px] text-center text-[18px] font-extrabold bg-white outline-none focus:border-bordeaux" />
                     <button onClick={() => poser(saisie, b + 1)}
                       className="w-9 h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">+</button>
                   </div>
@@ -565,7 +566,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               <div className="flex-1 text-center">
                 <input type="number" step="0.25" min="0.01" value={fois}
                   onChange={e => setFois(Math.max(0.01, Number(e.target.value) || 0.01))}
-                  className="w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
+                  className="sans-fleches w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
                 <span className="text-[11.5px] text-ink-mute font-bold">fois la recette</span>
               </div>
               <button onClick={() => setFois(f => (f < 1 ? Math.round((f + 0.25) * 100) / 100 : f + 1))}
