@@ -38,6 +38,15 @@ function courtNom(nom) {
   return t.replace(/\s*\([^()]*\)\s*$/, '').trim() || t
 }
 
+// Certaines unités d'Odoo portent leur poids dans leur nom : « Tournée (3 kg) ».
+// Sans le lire, un besoin de 5 250 g devient « 5 250 tournées » au lieu de 1,75.
+function poidsUnite(u) {
+  const m = String(u || '').match(/(\d+(?:[.,]\d+)?)\s*(kg|g)\b/i)
+  if (!m) return null
+  const v = Number(m[1].replace(',', '.'))
+  return /kg/i.test(m[2]) ? v * 1000 : v
+}
+
 function Vignette({ nom, photo, taille, rond, plein }) {
   // `plein` : la vignette prend toute la place du carré. Sans ça elle gardait
   // une taille fixe de 400 px dans une carte de 112 px, et l'on ne voyait que
@@ -182,7 +191,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const foisPour = (nom, b) => {
     const r = recettes[nom]
     if (!(b > 0) || !r || !r.sortQty) return 1
-    const brut = b / r.sortQty
+    // le besoin est en grammes, la sortie parfois en « Tournée (3 kg) »
+    const poids = poidsUnite(r.sortUnite)
+    const brut = poids ? b / (r.sortQty * poids) : b / r.sortQty
     const pas = tournees[nom]
     if (pas && r.sortQty) {
       const parFois = pas / r.sortQty          // une tournée = tant de fois la recette
@@ -545,8 +556,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )
             })()}
 
+            {/* pas de « à faire » quand l'article se compte en unités ni quand il
+                se fait par tournée entière : le compteur de fournées suffit */}
             {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie)
-              && recettes[saisie] && recettes[saisie].sortUnite !== 'u' && (() => {
+              && recettes[saisie] && recettes[saisie].sortUnite !== 'u'
+              && !tournees[saisie] && (() => {
               const b = besoinDe(saisie)
               const r = recettes[saisie]
               const f2 = r && r.sortQty ? b / r.sortQty : 0
@@ -643,7 +657,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 <b className="text-[23px] font-extrabold text-ok">
                   {nb(recettes[saisie].sortQty * fois)} {recettes[saisie].sortUnite}
                 </b>
-                <span className="text-[12.5px] text-ok">en sortie</span>
+                <span className="text-[12.5px] text-ok">
+                  en sortie
+                  {poidsUnite(recettes[saisie].sortUnite) && (
+                    <> · {nb(recettes[saisie].sortQty * fois * poidsUnite(recettes[saisie].sortUnite))} g</>
+                  )}
+                </span>
               </div>
             )}
             {!estMere && !recettes[saisie] && (
