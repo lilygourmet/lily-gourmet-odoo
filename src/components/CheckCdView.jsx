@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import { loadFreezerDoneIds } from '../lib/freezerDone'
-import { loadEtagesEnAttente, envoyerEnValidation, loadDejaEnvoyes } from '../lib/checkCd'
+import { loadEtagesEnAttente, envoyerEnValidation, loadDejaEnvoyes, loadEnAttente } from '../lib/checkCd'
 import { fmtDayLabel } from '../lib/jourLisible'
 import { toast } from '../lib/toast'
 
@@ -35,6 +35,8 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [tour, setTour] = useState(0)
+  const [vue, setVue] = useState('controle')   // 'controle' | 'attente'
+  const [enAttente, setEnAttente] = useState([])
   const rafraichir = () => { setChargement(true); setTour(t => t + 1) }
 
   useEffect(() => {
@@ -47,6 +49,9 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
         // déjà contrôlé ici : il n'y a plus rien à en faire
         setEtages(list.filter(e => !deja[e.mo_id]?.odoo_ok))
       })
+    // Les gâteaux déjà récupérés par le client et toujours pas marqués faits :
+    // c'est ce qui reste en plan, et que le rendez-vous de 8h n'a pas pu passer.
+    loadEnAttente(7).then(r => { if (vivant) setEnAttente(r.gateaux) }).catch(() => { })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
       .finally(() => { if (vivant) setChargement(false) })
     return () => { vivant = false }
@@ -130,6 +135,17 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
           le gâteau entier sera marqué fait ensuite.
         </p>
 
+        <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line mb-3">
+          <button onClick={() => setVue('controle')}
+            className={`px-3.5 py-1.5 text-[12px] font-bold rounded-full ${vue === 'controle' ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>
+            À contrôler{prets.length ? ` (${nbPieces(prets)})` : ''}
+          </button>
+          <button onClick={() => setVue('attente')}
+            className={`px-3.5 py-1.5 text-[12px] font-bold rounded-full ${vue === 'attente' ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>
+            En attente{enAttente.length ? ` (${enAttente.length})` : ''}
+          </button>
+        </div>
+
         <div className="flex items-center gap-3 mb-4 flex-wrap text-[11px]">
           <span className="px-2.5 py-1 rounded-full bg-[#EAF3DE] text-[#2F6B25] font-bold">{nbPieces(prets)} à vérifier</span>
           {etages.filter(e => e.dispo !== 'hors' && !estSorti(e)).length > 0 && (
@@ -148,7 +164,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
           </div>
         )}
 
-        <div className="space-y-4">
+        {vue === 'controle' && <div className="space-y-4">
           {jours.map(([date, list]) => {
             const libres = list.filter(cochable)
             const tous = libres.length > 0 && libres.every(e => choisis.has(e.mo_id))
@@ -210,10 +226,39 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
               </div>
             )
           })}
-        </div>
+        </div>}
+
+        {/* Ce qui est parti chez le client sans être marqué fait dans Odoo. */}
+        {vue === 'attente' && (
+          <div className="space-y-1.5">
+            {!enAttente.length && (
+              <div className="text-center py-10 text-[13px] text-ink-mute">
+                Rien en attente : tous les gâteaux récupérés sont marqués faits dans Odoo.
+              </div>
+            )}
+            {enAttente.map(g => {
+              const pret = g.message === 'prêt à valider'
+              return (
+                <div key={g.mo_id} className={`rounded-2xl border px-3.5 py-3 ${pret ? 'border-[#cfe0b8] bg-[#EAF3DE]' : 'border-line bg-cream-warm'}`}>
+                  <div className="text-[14px] font-bold text-ink leading-tight">{g.produit}</div>
+                  <div className="font-mono text-[9.5px] text-ink-mute mt-0.5">{g.scode || '—'} · {g.mo_name}</div>
+                  <span className={`inline-block mt-1.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full ${pret ? 'bg-[#2F6B25] text-cream' : 'bg-[#FDF3D8] text-[#8c6a20]'}`}>
+                    {pret ? 'partira au prochain passage de 8h' : g.message}
+                  </span>
+                  {g.etage && <div className="text-[11px] text-ink-soft mt-1">étage : {g.etage}</div>}
+                </div>
+              )
+            })}
+            <p className="text-[11.5px] text-ink-mute pt-2 leading-relaxed">
+              Le client est venu chercher ces gâteaux, mais leur ordre n'est pas encore marqué
+              fait dans Odoo. Ceux qui sont prêts partiront demain à 8h ; les autres attendent
+              qu'on règle ce qui est indiqué.
+            </p>
+          </div>
+        )}
       </div>
 
-      {prets.length > 0 && (
+      {vue === 'controle' && prets.length > 0 && (
         <div className="lg-bottom-bar fixed left-0 right-0 bottom-0 z-40 bg-cream-warm border-t border-line px-4 py-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
           <div className="max-w-3xl mx-auto flex items-center gap-3">

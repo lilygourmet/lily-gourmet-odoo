@@ -4,6 +4,8 @@ import { countUnreadTasks } from './tasks'
 import { countConversationBadges, countDevisInternetNonTraites } from './conversations'
 import { countModificationsATraiter } from './modifications'
 import { countLivraisonsARelancer } from './deliveries'
+import { compterCheckCd } from './checkCd'
+import { canCheckCd } from './auth'
 
 // Compteurs de notif pour le mini-rail de la bande gauche (desktop).
 // Rafraîchis au montage + toutes les 180 s + au retour sur la fenêtre.
@@ -22,6 +24,10 @@ export function useNavBadges(user) {
         countLivraisonsARelancer().then(n => set('livraisons', n)).catch(() => {}),
         countModificationsATraiter().then(n => set('modifications', n)).catch(() => {}),
         countDevisInternetNonTraites().then(n => set('devis-internet', n)).catch(() => {}),
+        // Le double contrôle des sorties : combien d'étages attendent d'être
+        // vérifiés. Seulement pour qui en a la charge — la lecture passe par
+        // Odoo, inutile de la faire tourner pour tout le monde.
+        canCheckCd(user) ? compterCheckCd().then(n => set('check-cd', n)).catch(() => {}) : Promise.resolve(),
         (async () => {
           const [{ count: c1 }, { count: c2 }] = await Promise.all([
             supabase.from('conges').select('id', { count: 'exact', head: true }).eq('statut', 'demande'),

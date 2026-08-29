@@ -51,3 +51,21 @@ export async function loadDejaEnvoyes() {
   for (const x of data || []) parId[x.odoo_mo_id] = x
   return parId
 }
+
+/** Les gâteaux déjà récupérés par le client mais pas encore marqués faits dans
+ *  Odoo. C'est ce qui reste en plan : soit un étage manque, soit le contrôle
+ *  n'a pas été fait. `jours` remonte au plus loin autorisé par le serveur. */
+export async function loadEnAttente(jours = 7) {
+  const r = await fetch(`/api/freezer-list?mode=parents-pos&jours=${jours}&dry=1`)
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  const d = await r.json()
+  return { gateaux: d.parents || [], chaineStricte: d.chaine_stricte === 'active' }
+}
+
+/** Le chiffre du badge : combien d'étages attendent un contrôle. */
+export async function compterCheckCd() {
+  try {
+    const [etages, deja] = await Promise.all([loadEtagesEnAttente(30), loadDejaEnvoyes()])
+    return etages.filter(e => !deja[e.mo_id]?.odoo_ok && (e.dispo === 'ok' || e.dispo === 'fait')).length
+  } catch { return 0 }
+}
