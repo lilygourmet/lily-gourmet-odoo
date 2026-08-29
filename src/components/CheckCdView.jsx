@@ -20,6 +20,7 @@ const ETIQ = {
   ok: { texte: 'Étage en stock', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
   manque: { texte: 'Étage manquant', fond: 'bg-[#FDF3D8]', encre: 'text-[#8c6a20]' },
   hors: { texte: 'Hors contrôle', fond: 'bg-cream-deep', encre: 'text-ink-mute' },
+  attente: { texte: 'Pas encore sorti du congélateur', fond: 'bg-[#E9F1F6]', encre: 'text-[#3d6f8e]' },
   valide: { texte: 'Validé dans Odoo', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
 }
 
@@ -27,6 +28,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   const [items, setItems] = useState([])
   const [etats, setEtats] = useState({})
   const [envoyes, setEnvoyes] = useState({})
+  const [sortis, setSortis] = useState({})   // ce que CD Négatif a coché
   const [choisis, setChoisis] = useState(() => new Set())
   const [parProduit, setParProduit] = useState(false)
   const [chargement, setChargement] = useState(true)
@@ -39,19 +41,23 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     let vivant = true
     const j = new Date()
     const dates = []
-    for (let k = -3; k <= 7; k++) { const x = new Date(j); x.setDate(x.getDate() + k); dates.push(jourISO(x)) }
+    // large en arrière : un gâteau sorti il y a dix jours et jamais validé doit
+    // rester visible, sinon personne ne peut s'apercevoir qu'il traîne.
+    for (let k = -14; k <= 14; k++) { const x = new Date(j); x.setDate(x.getDate() + k); dates.push(jourISO(x)) }
 
     Promise.all([
       fetch(`/api/freezer-list?dates=${dates.join(',')}`).then(r => r.json()),
       loadFreezerDoneIds(),
       loadDejaEnvoyes(),
     ])
-      .then(async ([api, sortis, deja]) => {
+      .then(async ([api, deja2, deja]) => {
         if (!vivant) return
         setEnvoyes(deja)
-        // On ne contrôle que ce qui a été SORTI du congélateur (coché par
-        // quelqu'un), et qui n'a pas déjà été envoyé avec succès.
-        const aVoir = (api.items || []).filter(it => sortis[it.mo_id] && !deja[it.mo_id]?.odoo_ok)
+        setSortis(deja2)
+        // On montre TOUT ce qui reste à valider — y compris ce qui n'est pas
+        // encore sorti du congélateur, pour voir la semaine venir. Seuls les
+        // gâteaux déjà sortis pourront être cochés (voir `basculer`).
+        const aVoir = (api.items || []).filter(it => !it.made && !deja[it.mo_id]?.odoo_ok)
         if (!aVoir.length) { setItems([]); return }
         try {
           const e = await loadEtatsCheckCd([...new Set(aVoir.map(it => it.mo_id))])
@@ -68,12 +74,17 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     return () => { vivant = false }
   }, [tour])
 
+  // Cochable seulement si quelqu'un l'a VRAIMENT sorti du congélateur, et si
+  // son étage est en stock. Le reste s'affiche, mais ne se coche pas.
+  const cochable = it => !!sortis[it.mo_id] && etats[it.mo_id]?.dispo === 'ok'
+
   const selectionnables = useMemo(
-    () => items.filter(it => etats[it.mo_id]?.dispo === 'ok'),
-    [items, etats])
+    () => items.filter(cochable),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, etats, sortis])
 
   function basculer(it) {
-    if (etats[it.mo_id]?.dispo !== 'ok') return
+    if (!cochable(it)) return
     setChoisis(prev => {
       const s = new Set(prev)
       s.has(it.mo_id) ? s.delete(it.mo_id) : s.add(it.mo_id)
@@ -82,7 +93,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   }
 
   function basculerGroupe(lignes) {
-    const libres = lignes.filter(it => etats[it.mo_id]?.dispo === 'ok')
+    const libres = lignes.filter(cochable)
     if (!libres.length) return
     const tous = libres.every(it => choisis.has(it.mo_id))
     setChoisis(prev => {
@@ -171,7 +182,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
               </div>
               <div className="space-y-3">
           {groupes.map(([cle, lignes]) => {
-            const libres = lignes.filter(it => etats[it.mo_id]?.dispo === 'ok')
+            const libres = lignes.filter(cochable)
             const tousChoisis = libres.length > 0 && libres.every(it => choisis.has(it.mo_id))
             return (
               <div key={cle} className="rounded-2xl border border-line bg-cream-warm overflow-hidden">
@@ -182,14 +193,19 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
                   )}
                   <span className="font-bold text-[13.5px] text-ink flex-1">{cle}</span>
                   <span className="text-[11px] text-ink-mute">
-                    {parProduit ? `${libres.length} sur ${lignes.length} en stock` : `${lignes.length} gâteau${lignes.length > 1 ? 'x' : ''}`}
+                    {parProduit
+                      ? `${libres.length} sur ${lignes.length} à contrôler`
+                      : `${lignes.length} gâteau${lignes.length > 1 ? 'x' : ''}`}
                   </span>
                 </div>
                 {lignes.map(it => {
                   const e = etats[it.mo_id] || {}
-                  const libre = e.dispo === 'ok'
+                  const libre = cochable(it)
                   const on = choisis.has(it.mo_id)
-                  const et = ETIQ[e.dispo] || { texte: 'Lecture…', fond: 'bg-cream-deep', encre: 'text-ink-mute' }
+                  // pas encore sorti : on le dit, plutôt que d'annoncer un étage en stock
+                  const et = !sortis[it.mo_id]
+                    ? ETIQ.attente
+                    : (ETIQ[e.dispo] || { texte: 'Lecture…', fond: 'bg-cream-deep', encre: 'text-ink-mute' })
                   const refus = envoyes[it.mo_id] && !envoyes[it.mo_id].odoo_ok ? envoyes[it.mo_id].odoo_msg : null
                   return (
                     <div key={it.mo_id} onClick={() => basculer(it)}
@@ -202,7 +218,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
                         <div className="text-[11.5px] text-ink-soft truncate">{it.client_name || it.scode}</div>
                         <div className="font-mono text-[9.5px] text-ink-mute mt-0.5">{it.scode} · {it.mo_name}</div>
                         <span className={`inline-block mt-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full ${et.fond} ${et.encre}`}>
-                          {et.texte}{e.etage ? ` · ${e.etage}` : ''}{e.dispo === 'manque' ? ` (${e.stock} sur ${e.besoin})` : ''}
+                          {et.texte}{sortis[it.mo_id] && e.etage ? ` · ${e.etage}` : ''}{sortis[it.mo_id] && e.dispo === 'manque' ? ` (${e.stock} sur ${e.besoin})` : ''}
                         </span>
                         {refus && <div className="text-[10.5px] text-[#8c2020] mt-1">Odoo a refusé : {refus}</div>}
                       </div>
