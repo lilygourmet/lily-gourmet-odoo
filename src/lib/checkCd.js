@@ -62,10 +62,12 @@ export async function loadEnAttente(jours = 7) {
   return { gateaux: d.parents || [], chaineStricte: d.chaine_stricte === 'active' }
 }
 
-/** Le chiffre du badge : combien d'étages attendent un contrôle. */
+/** Le chiffre du badge : les gâteaux déjà partis chez le client et toujours pas
+ *  marqués faits dans Odoo. C'est ce qui appelle une action — le travail courant
+ *  de contrôle, lui, n'a pas besoin d'un compteur qui clignote. */
 export async function compterCheckCd() {
   try {
-    const [etages, deja] = await Promise.all([loadEtagesEnAttente(30), loadDejaEnvoyes()])
-    return etages.filter(e => !deja[e.mo_id]?.odoo_ok && (e.dispo === 'ok' || e.dispo === 'fait')).length
+    const { gateaux } = await loadEnAttente(7)
+    return gateaux.length
   } catch { return 0 }
 }

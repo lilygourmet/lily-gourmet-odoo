@@ -138,7 +138,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
         <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line mb-3">
           <button onClick={() => setVue('controle')}
             className={`px-3.5 py-1.5 text-[12px] font-bold rounded-full ${vue === 'controle' ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>
-            À contrôler{prets.length ? ` (${nbPieces(prets)})` : ''}
+            À contrôler
           </button>
           <button onClick={() => setVue('attente')}
             className={`px-3.5 py-1.5 text-[12px] font-bold rounded-full ${vue === 'attente' ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>
