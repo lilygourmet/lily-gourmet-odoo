@@ -182,10 +182,18 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return Math.max(0.01, Math.round(brut * 100) / 100)
   }
-  const ouvrirFiche = (nom, depuis) => {
+  // `besoinConnu` : la quantité calculée par la cascade (« il faut 5 040 g de
+  // crème praliné »). Sans elle, la fiche repartait du minimum de l'article —
+  // souvent absent — et proposait une fournée entière de 7 052 g.
+  const ouvrirFiche = (nom, depuis, besoinConnu) => {
     setPile(p => (depuis ? [...p, depuis] : []))
     setSaisie(nom)
-    const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
+    const b = besoinConnu !== undefined && besoinConnu > 0
+      ? besoinConnu
+      : (besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom))
+    if (besoinConnu > 0 && besoins[nom] === undefined) {
+      setBesoins(x => ({ ...x, [nom]: Math.round(besoinConnu) }))
+    }
     setFois(foisPour(nom, b))
   }
 
@@ -513,7 +521,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     Ce qu'il manque
                   </div>
                   {travail.map(l => (
-                    <button key={l.nom} onClick={() => ouvrirFiche(l.nom, saisie)}
+                    <button key={l.nom} onClick={() => ouvrirFiche(l.nom, saisie, l.besoin)}
                       className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm"
                       style={{ paddingLeft: 14 + (l.prof - 1) * 16 }}>
                       <b className="text-[19px] font-extrabold text-danger min-w-[62px] text-right">{nb(l.besoin)}</b>
@@ -598,7 +606,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     </>
                   )
                   return ouvrable ? (
-                    <button key={i} onClick={() => ouvrirFiche(l.produit, saisie)}
+                    <button key={i}
+                      onClick={() => ouvrirFiche(l.produit, saisie,
+                        Math.max(0, (l.tailles ? Math.max(...l.tailles) : l.qty) * fois
+                          - Math.max(0, stocks[l.produit] || 0)))}
                       className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
                       {contenu}
                     </button>
