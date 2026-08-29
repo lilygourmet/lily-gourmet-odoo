@@ -970,7 +970,20 @@ async function fetchFabrication(uid, jours) {
       ['id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 200 })
     if (!boms.length) break
     const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', 'in', boms.map(b => b.id)]],
-      ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 1000 })
+      ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
+      { limit: 1000 })
+    // Une recette de modèle sert plusieurs parfums et chaque ligne dit
+    // auxquels : sans ce tri, la boule cake pops montre le Nutella ET le
+    // caramel. Même règle que pour les gâteaux (voir recetteDeSecours).
+    const varPrepa = await odooSearchRead(uid, 'product.product',
+      [['product_tmpl_id', 'in', boms.map(b => (Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id))]],
+      ['display_name', 'product_tmpl_id', 'product_template_attribute_value_ids'], { limit: 600 }).catch(() => [])
+    const varsDe = new Map()
+    for (const v of varPrepa) {
+      const t = Array.isArray(v.product_tmpl_id) ? v.product_tmpl_id[0] : v.product_tmpl_id
+      if (!varsDe.has(t)) varsDe.set(t, [])
+      varsDe.get(t).push(v)
+    }
     const suivant = []
     for (const b of boms) {
       const nomProd = Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[1] : ''
@@ -987,6 +1000,28 @@ async function fetchFabrication(uid, jours) {
           if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
           return { produit: p, qty: Math.round(q * 1000) / 1000, unite: u.replace(/^units?$/i, 'u'), prepa: estPrepaNom(p) }
         }),
+      }
+      // et la même recette, rangée sous chaque parfum, débarrassée des lignes
+      // qui appartiennent aux autres
+      const t = Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id
+      for (const v of varsDe.get(t) || []) {
+        const nomV = String(v.display_name || '').replace(/^\[\d+\]\s*/, '').trim()
+        if (!nomV || nomV === nomProd || recettesPrepa[nomV]) continue
+        const mien = new Set(v.product_template_attribute_value_ids || [])
+        const gardees = lignes.filter(l => l.bom_id[0] === b.id)
+          .filter(l => !(l.bom_product_template_attribute_value_ids || []).length
+            || (l.bom_product_template_attribute_value_ids || []).some(x => mien.has(x)))
+        recettesPrepa[nomV] = {
+          qty: recettesPrepa[nomProd].qty,
+          unite: recettesPrepa[nomProd].unite,
+          lignes: gardees.map(l => {
+            const pr = (Array.isArray(l.product_id) ? l.product_id[1] : '') || ''
+            let q = l.product_qty || 0
+            let u = (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'u')
+            if (/^g$/i.test(u) && q >= 1000) { q = q / 1000; u = 'kg' }
+            return { produit: pr, qty: Math.round(q * 1000) / 1000, unite: u.replace(/^units?$/i, 'u'), prepa: estPrepaNom(pr) }
+          }),
+        }
       }
     }
     aChercher = [...new Set(suivant.filter(n => !recettesPrepa[n]))]
@@ -1748,7 +1783,7 @@ export default async function handler(req, res) {
       if (!noms.length) return res.status(200).json({ recettes: {} })
       const uid = await odooAuth()
       const prods = await odooSearchRead(uid, 'product.product', [['name', 'in', noms]],
-        ['id', 'name', 'product_tmpl_id'], { limit: 200 })
+        ['id', 'name', 'product_tmpl_id', 'product_template_attribute_value_ids'], { limit: 200 })
       if (!prods.length) return res.status(200).json({ recettes: {} })
 
       const boms = await odooSearchRead(uid, 'mrp.bom', [
@@ -1759,7 +1794,8 @@ export default async function handler(req, res) {
 
       const lignes = await odooSearchRead(uid, 'mrp.bom.line',
         [['bom_id', 'in', boms.map(b => b.id)]],
-        ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 2000 })
+        ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
+        { limit: 2000 })
       const parBom = new Map()
       for (const l of lignes) {
         const id = Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id
@@ -1770,6 +1806,7 @@ export default async function handler(req, res) {
           unite: ((Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
           // un ingrédient qui se fabrique lui-même : on le montre autrement
           fabrique: /^\s*(\[\d+\]\s*)?SM/i.test(Array.isArray(l.product_id) ? l.product_id[1] : ''),
+          pour: l.bom_product_template_attribute_value_ids || [],
         })
       }
       // à chaque article, la première recette qui le concerne
@@ -1780,10 +1817,13 @@ export default async function handler(req, res) {
         const nom = (b.product_id && parProduit.get(b.product_id[0]))
           || (b.product_tmpl_id && parTmpl.get(b.product_tmpl_id[0]))
         if (!nom || out[nom]) continue
+        // même règle qu'ailleurs : une recette de modèle sert plusieurs
+        // parfums, chaque ligne dit auxquels elle appartient
+        const mien = new Set((prods.find(x => x.name === nom) || {}).product_template_attribute_value_ids || [])
         out[nom] = {
           sortQty: b.product_qty,
           sortUnite: ((Array.isArray(b.product_uom_id) ? b.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
-          lignes: parBom.get(b.id) || [],
+          lignes: (parBom.get(b.id) || []).filter(l => !l.pour.length || l.pour.some(x => mien.has(x))),
         }
       }
       return res.status(200).json({ recettes: out })
