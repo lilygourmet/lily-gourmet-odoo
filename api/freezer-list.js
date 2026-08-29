@@ -1909,23 +1909,27 @@ export default async function handler(req, res) {
         const n = net(Array.isArray(k.product_id) ? k.product_id[1] : '')
         if (n) stocks[n] = (stocks[n] || 0) + (k.quantity || 0)
       }
-      // Une règle posée à l'annexe l'emporte : c'est là qu'on fabrique. Sinon on
-      // prend celle d'ailleurs, faute de mieux — mais seulement si un minimum
-      // y est vraiment renseigné.
+      // La règle d'Odoo d'abord (choix de Layla) : celle posée ailleurs
+      // qu'à l'annexe fait foi ; on ne retient celle de l'annexe que si
+      // Odoo n'en a aucune autre. Dans les deux cas il faut un minimum
+      // vraiment renseigné, sinon la règle ne dit rien.
       const idsAnnexe = new Set(lieux.map(l => l.id))
-      const minmax = {}
-      const vientDeLAnnexe = {}
+      const ailleurs = {}
+      const aLAnnexeMM = {}
       for (const o of points) {
         const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
-        if (!n) continue
-        const ici = idsAnnexe.has(Array.isArray(o.location_id) ? o.location_id[0] : o.location_id)
-        const utile = (o.product_min_qty || 0) > 0
-        if (minmax[n] && (vientDeLAnnexe[n] || !ici) && !(ici && utile && !vientDeLAnnexe[n])) continue
-        if (!utile && minmax[n]) continue
-        minmax[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
-        vientDeLAnnexe[n] = ici
-        if (ici && stocks[n] === undefined) stocks[n] = o.qty_on_hand || 0
+        if (!n || !((o.product_min_qty || 0) > 0)) continue
+        const cible = idsAnnexe.has(Array.isArray(o.location_id) ? o.location_id[0] : o.location_id)
+          ? aLAnnexeMM : ailleurs
+        if (!cible[n]) cible[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0, surPlace: cible === aLAnnexeMM, dispo: o.qty_on_hand }
       }
+      const minmax = {}
+      for (const n of new Set([...Object.keys(ailleurs), ...Object.keys(aLAnnexeMM)])) {
+        const r = ailleurs[n] || aLAnnexeMM[n]
+        minmax[n] = { min: r.min, max: r.max }
+        if (r.surPlace && stocks[n] === undefined) stocks[n] = r.dispo || 0
+      }
+
       const photos = {}
       for (const t of tmplPhotos) if (t.image_128) photos[net(t.name)] = t.id
 
