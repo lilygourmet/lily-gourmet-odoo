@@ -95,6 +95,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const recettes = (arbre && arbre.recettes) || {}
   const stocks = (arbre && arbre.stocks) || {}
   const minmax = (arbre && arbre.minmax) || {}
+  const tournees = (arbre && arbre.tournees) || {}
   const photoDe = n => (arbre && arbre.photos && arbre.photos[n]
     ? `/api/freezer-list?mode=photo&id=${arbre.photos[n]}` : '')
 
@@ -167,19 +168,31 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return m
   }, [journal])
 
+  // Ce qu'il faut vraiment : la recette POUR le besoin, pas arrondie à la
+  // fournée entière. Sauf si l'article se fait par tournée — l'app le sait en
+  // regardant ce que l'atelier a produit sur un an.
+  const foisPour = (nom, b) => {
+    const r = recettes[nom]
+    if (!(b > 0) || !r || !r.sortQty) return 1
+    const brut = b / r.sortQty
+    const pas = tournees[nom]
+    if (pas && r.sortQty) {
+      const parFois = pas / r.sortQty          // une tournée = tant de fois la recette
+      if (parFois > 0) return Math.max(parFois, Math.ceil(brut / parFois) * parFois)
+    }
+    return Math.max(0.01, Math.round(brut * 100) / 100)
+  }
   const ouvrirFiche = (nom, depuis) => {
     setPile(p => (depuis ? [...p, depuis] : []))
     setSaisie(nom)
-    const r = recettes[nom]
     const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
-    setFois(b > 0 && r && r.sortQty ? Math.max(0.5, Math.ceil((b / r.sortQty) * 2) / 2) : 1)
+    setFois(foisPour(nom, b))
   }
 
   const ouvrirFicheSimple = nom => {
     setSaisie(nom)
-    const r = recettes[nom]
     const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
-    setFois(b > 0 && r && r.sortQty ? Math.max(0.5, Math.ceil((b / r.sortQty) * 2) / 2) : 1)
+    setFois(foisPour(nom, b))
   }
 
   const noter = async (nom, combienFois) => {
@@ -547,15 +560,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 
             {!estMere && (
             <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
-              <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
+              <button onClick={() => setFois(f => Math.max(0.01, f > 1 ? f - 1 : Math.round((f - 0.25) * 100) / 100))}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">−</button>
               <div className="flex-1 text-center">
-                <input type="number" step="0.5" min="0.5" value={fois}
-                  onChange={e => setFois(Math.max(0.5, Number(e.target.value) || 0.5))}
+                <input type="number" step="0.25" min="0.01" value={fois}
+                  onChange={e => setFois(Math.max(0.01, Number(e.target.value) || 0.01))}
                   className="w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
                 <span className="text-[11.5px] text-ink-mute font-bold">fois la recette</span>
               </div>
-              <button onClick={() => setFois(f => (f < 1 ? f + 0.5 : f + 1))}
+              <button onClick={() => setFois(f => (f < 1 ? Math.round((f + 0.25) * 100) / 100 : f + 1))}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">+</button>
             </div>
             )}
@@ -595,6 +608,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   )
                 })}
               </div>
+            )}
+
+            {!estMere && tournees[saisie] && recettes[saisie] && (
+              <button onClick={() => setFois(tournees[saisie] / recettes[saisie].sortQty)}
+                className="w-full mb-2.5 border border-[#b58f3c] text-[#b58f3c] bg-[#FBF3DF] rounded-2xl px-3.5 py-2.5 text-[12.5px] font-bold text-left">
+                Cet article se fait par tournée entière de {nb(tournees[saisie])} {recettes[saisie].sortUnite} —
+                <b> revenir à une tournée</b>
+              </button>
             )}
 
             {!estMere && recettes[saisie] && (

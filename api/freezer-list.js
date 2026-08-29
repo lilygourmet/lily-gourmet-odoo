@@ -1533,9 +1533,27 @@ export default async function handler(req, res) {
       ])
 
       const combien = {}
+      const qtesFaites = {}
       for (const m of mos) {
         const n = net(Array.isArray(m.product_id) ? m.product_id[1] : '')
-        if (n) combien[n] = (combien[n] || 0) + 1
+        if (!n) continue
+        combien[n] = (combien[n] || 0) + 1
+        ;(qtesFaites[n] ||= []).push(m.product_qty || 0)
+      }
+      // Certains articles se font par TOURNÉE ENTIÈRE (la pâte à sucre sort
+      // toujours en multiples de 6 925 g), d'autres à la quantité voulue. Odoo
+      // ne le dit nulle part : on le déduit de ce que l'atelier a réellement
+      // produit sur un an. Au moins 4 fournées, et toutes multiples d'un même
+      // pas à 2 % près.
+      const tournees = {}
+      for (const [n, qs] of Object.entries(qtesFaites)) {
+        if (qs.length < 4) continue
+        const vals = [...new Set(qs.map(x => Math.round(x * 100) / 100))].filter(x => x > 0).sort((a, b) => a - b)
+        if (!vals.length) continue
+        const pas = vals[0]
+        const toutes = vals.every(x => Math.abs(x / pas - Math.round(x / pas)) < 0.02)
+        if (toutes && vals.length > 1) tournees[n] = pas
+        else if (vals.length === 1) tournees[n] = pas
       }
 
       const nomTmpl = new Map(tmpl.map(t => [t.id, net(t.name)]))
@@ -1707,7 +1725,7 @@ export default async function handler(req, res) {
       for (const t of tmplPhotos) if (t.image_128) photos[net(t.name)] = t.id
 
       return res.status(200).json({
-        racines, ecartees, photos, stocks, minmax,
+        racines, ecartees, photos, stocks, minmax, tournees,
         combien: { ...combien, ...poids }, recettes: aRendre,
       })
     }
