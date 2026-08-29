@@ -96,6 +96,12 @@ export function extractTailleFromName(productName) {
   if (!productName) return null
   const m = String(productName).match(TAILLE_KEYWORDS)
   if (m) return m[0]
+  // Certains titres ecrivent « Sables boite de 12 Taille : Grand » (hors parenthese).
+  const libelle = String(productName).match(/taille\s*:\s*([^·|\n]+)/i)
+  if (libelle) {
+    const v = libelle[1].trim().split(/\s{2,}|,/)[0].trim()
+    if (TAILLE_SEULE.test(v) || TAILLE_KEYWORDS.test(v)) return v
+  }
   // Taille seule : uniquement dans la parenthese (sinon "Plateau grand format" matcherait)
   const paren = String(productName).match(/\(([^)]+)\)/)
   if (paren) {

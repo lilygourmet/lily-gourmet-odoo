@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { odooParfumsNames, odooParfumsLabel } from './gmFiches'
+import { odooParfumsNames, odooParfumsLabel, extractTailleFromName } from './gmFiches'
 
 // Le commercial saisit ses lots sans parfum : le parfum doit rester visible via Odoo.
 describe('parfums Odoo des accessoires', () => {
@@ -23,5 +23,18 @@ describe('parfums Odoo des accessoires', () => {
   it('la taille n est pas prise pour un parfum', () => {
     const item = { title: 'Cupcake boite de 18 (Mini simple, Vanille, Vanille, Vanille)', parfums: ['Vanille', 'Vanille', 'Vanille'], quantity: 1, pers: null }
     expect(odooParfumsNames(item, 'cupcake')).toEqual(['Vanille'])
+  })
+})
+
+// Certains titres ecrivent la taille hors parenthese.
+describe('taille des accessoires', () => {
+  it('lit « Taille : Grand » ecrit a la suite du titre', () => {
+    expect(extractTailleFromName('Sablés boite de 12 Taille : Grand')).toBe('Grand')
+  })
+  it('lit toujours la taille dans la parenthese', () => {
+    expect(extractTailleFromName('Cupcake boite de 12 (Grand personnalisé, Vanille)')).toBe('Grand personnalisé')
+  })
+  it('ne prend pas « Taille & Type : boite de 12 » pour une taille', () => {
+    expect(extractTailleFromName('Magnum Taille & Type : boite de 12 parfum : Mixte')).toBe(null)
   })
 })
