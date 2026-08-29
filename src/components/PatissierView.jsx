@@ -4,7 +4,7 @@ import {
   isLotDone, isItemFullyDone, aggregateByProduct,
   markLotDone, unmarkLotDone, markItemAllDone, unmarkItemAllDone,
   TYPE_LABELS, TYPE_EMOJIS,
-  getRealQuantity, loadGmLogs, extractTailleFromName, splitParfums,
+  getRealQuantity, loadGmLogs, extractTailleFromName, odooParfumsLabel,
 } from '../lib/gmFiches'
 import { toast } from '../lib/toast'
 import AppHeader from './AppHeader'
@@ -480,6 +480,12 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
   const typeGm = fiche.type_gm
   const emoji = TYPE_EMOJIS[typeGm] || '✏️'
   const fullyDone = isItemFullyDone(fiche, dones)
+  // Parfums d'Odoo : affiches des que les lots ne les portent pas (mixte, boite multi-parfums),
+  // sinon le parfum est deja sur chaque pastille de lot.
+  const lotsOntParfum = (fiche.lots || []).some(l => l.parfum)
+  const parfumsLabel = (fiche.parfum_normal || !lotsOntParfum)
+    ? (odooParfumsLabel(item, typeGm) || (fiche.parfum_normal ? 'parfum normal' : ''))
+    : ''
 
   async function toggleAllDone() {
     try {
@@ -541,12 +547,8 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800" title="Saisi par le commercial à la prise de commande — à confirmer">✎ commercial · à confirmer</span>
             )}
             {fiche.is_mixte && <span className="text-[9px] font-mono text-bordeaux uppercase tracking-wider">MIXTE</span>}
-            {fiche.parfum_normal && (
-              <span className="text-[10px] text-ink-mute italic">
-                {splitParfums(item).length > 0
-                  ? splitParfums(item).map(p => `${p.qty} ${p.parfum}`).join(', ')
-                  : 'parfum normal'}
-              </span>
+            {parfumsLabel && (
+              <span className="text-[10px] text-ink-mute italic">{parfumsLabel}</span>
             )}
           </div>
           {fiche.note_patissier && (
@@ -815,12 +817,13 @@ function buildPrintHtml(dateStr, ordersList, palette, viewMode) {
         const label = TYPE_LABELS[typeGm] || typeGm
         let lotsHtml = ''
         if (fiche.parfum_normal) {
-          const split = splitParfums(item)
-          const parfumsLabel = split.length > 0
-            ? split.map(p => `${p.qty} ${p.parfum}`).join(', ')
-            : 'parfum normal'
-          lotsHtml = ` <em style="color:#888">${parfumsLabel}</em>`
+          lotsHtml = ` <em style="color:#888">${odooParfumsLabel(item, typeGm) || 'parfum normal'}</em>`
         } else {
+          // Lots sans parfum (mixte, boite multi-parfums) : on rappelle ceux d'Odoo.
+          if (!(fiche.lots || []).some(l => l.parfum)) {
+            const lbl = odooParfumsLabel(item, typeGm)
+            if (lbl) lotsHtml += ` <em style="color:#888">${lbl}</em>`
+          }
           for (const lot of (fiche.lots || [])) {
             const couleur = findCol(lot.couleur_id)
             const zigzag = findCol(lot.zigzag_couleur_id)

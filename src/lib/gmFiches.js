@@ -65,6 +65,18 @@ export function splitParfums(item) {
   return [...counts].map(([parfum, n]) => ({ parfum, qty: Math.round(total * n / list.length) }))
 }
 
+// Parfums venus d'Odoo, dedoublonnes : ['Vanille'] ou ['Sellou', 'Nougat'] pour un mixte.
+export function odooParfumsNames(item, typeGm) {
+  return [...new Set(extractParfumsFromName(item?.title, typeGm))]
+}
+
+// Libelle des parfums d'Odoo a afficher sur l'article : « 12 Vanille » ou « Sellou + Nougat ».
+export function odooParfumsLabel(item, typeGm) {
+  const split = splitParfums(item)
+  if (split.length > 0) return split.map(p => `${p.qty} ${p.parfum}`).join(', ')
+  return odooParfumsNames(item, typeGm).join(' + ')
+}
+
 // Pour les produits mixtes, retourne les 2 sous-parfums automatiques
 export function getMixteParfums(typeGm) {
   if (typeGm === 'sellou_nougat') return ['Sellou', 'Nougat']
@@ -539,6 +551,16 @@ function scalePreficheLots(lots, item) {
   return lots.map(l => ({ ...l, qty: (parseFloat(l.qty) || 0) * boites }))
 }
 
+// Le commercial saisit ses lots sans parfum (il ne choisit que couleur/quantite).
+// Si Odoo ne donne qu'UN parfum pour l'article, on le repose sur chaque lot.
+function fillLotsParfum(lots, item) {
+  if (!Array.isArray(lots) || lots.length === 0) return lots
+  if (lots.some(l => l.parfum)) return lots
+  const split = splitParfums(item)
+  if (split.length !== 1) return lots
+  return lots.map(l => ({ ...l, parfum: split[0].parfum }))
+}
+
 export async function loadOrdersWithFichesForDate(date) {
   const [yyyy, mm, dd] = String(date).split('-').map(Number)
   const start = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0))
@@ -623,6 +645,11 @@ async function _loadOrdersWithFichesForBounds(start, end) {
           lots: split.map(p => ({ ...makeEmptyLot(p.parfum), qty: p.qty })),
         }
       }
+    }
+    // Lots sans parfum (saisie commerciale) : on remet celui d'Odoo quand il n'y en a qu'un.
+    if (fiche && !fiche.parfum_normal) {
+      const withParfum = fillLotsParfum(fiche.lots, it)
+      if (withParfum !== fiche.lots) fiche = { ...fiche, lots: withParfum }
     }
     itemsByOrder[it.order_id].push({
       item: it,
@@ -740,8 +767,11 @@ export function aggregateByProduct(ordersWithFiches) {
       }
 
       const lots = Array.isArray(fiche.lots) ? fiche.lots : []
+      // Lots sans parfum (mixte, ou boite a plusieurs parfums) : on groupe sous les parfums
+      // d'Odoo (« Sellou + Nougat ») au lieu de « (sans parfum) ».
+      const parfumsOdoo = odooParfumsNames(item, typeGm).join(' + ')
       lots.forEach((lot, lotIdx) => {
-        const parfum = lot.parfum || '__sansparfum__'
+        const parfum = lot.parfum || parfumsOdoo || '__sansparfum__'
         if (!tree[typeGm][parfum]) tree[typeGm][parfum] = {}
         const key = lotFusionKey(lot, typeGm, taille)
 
