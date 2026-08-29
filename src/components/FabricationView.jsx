@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies } from '../lib/fabrication'
@@ -1089,7 +1089,23 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
    * Faute d'ordre (Odoo n'en demandait pas), l'app en crée un et la coche porte
    * son nom ; en tout dernier recours seulement, on garde la clé « PREP:… ».
    */
+  // Verrou anti double-appui : sans lui, deux touches rapprochées lançaient deux
+  // créations d'ordre pour le même article. Le 29/08, cinq ordres de 2,24 kg de
+  // crème au beurre vanille sont partis en 18 secondes.
+  const enCours = useRef(new Set())
+
   const marquer = async (cleDemandee, produit, qty) => {
+    const verrou = `${cleDemandee}|${produit}`
+    if (enCours.current.has(verrou)) return
+    enCours.current.add(verrou)
+    try {
+      return await marquerVraiment(cleDemandee, produit, qty)
+    } finally {
+      enCours.current.delete(verrou)
+    }
+  }
+
+  const marquerVraiment = async (cleDemandee, produit, qty) => {
     const prepa = cleDemandee.startsWith('PREP:')
     if (!prepa) return marquerOrdre(cleDemandee, produit, qty)
 

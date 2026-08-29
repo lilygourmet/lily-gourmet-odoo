@@ -767,6 +767,24 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = []) {
   const qty = Math.round((/^kg$/i.test(uniteBom) ? qtyKg : qtyKg * 1000) * 1000) / 1000
   if (!(qty > 0)) throw new Error('quantité invalide')
 
+  const origine = [...parents, ORIGINE_APP].join(',')
+
+  // ANTI-DOUBLON. Deux appuis rapprochés sur le même bouton creaient deux ordres
+  // identiques : le 29/08, cinq ordres de 2,24 kg de creme au beurre vanille en
+  // 18 secondes (dont deux paires dans la meme seconde), soit 11,2 kg programmes
+  // au lieu de 2,24. Si le meme article, pour le meme gateau, a deja ete lance
+  // dans les cinq dernieres minutes et n'est pas termine, on rend cet ordre-la
+  // au lieu d'en creer un second.
+  const cinqMin = new Date(Date.now() - 5 * 60000).toISOString().slice(0, 19).replace('T', ' ')
+  const deja = (await odooSearchRead(uid, 'mrp.production',
+    [['product_id', '=', prod.id], ['origin', '=', origine],
+     ['state', 'in', ['draft', 'confirmed', 'progress']], ['create_date', '>=', cinqMin]],
+    ['id', 'name', 'product_qty', 'state'], { limit: 1, order: 'id desc' }))[0]
+  if (deja) {
+    console.log(`[creer-of] doublon evite : ${deja.name} vient d'etre cree pour ${prod.display_name}`)
+    return { id: deja.id, name: deja.name, produit: prod.display_name, qty: deja.product_qty, etat: deja.state, deja: true }
+  }
+
   const modele = await modeleWhlvp(uid)
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
   const id = await odooCall(uid, 'mrp.production', 'create', [{
@@ -777,7 +795,7 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = []) {
     // Rattaché aux gâteaux pour lesquels on le fabrique — Odoo accepte
     // plusieurs origines séparées par des virgules. Le repère LG-APP reste au
     // bout pour savoir que l'app l'a créé.
-    origin: [...parents, ORIGINE_APP].join(','),
+    origin: origine,
     picking_type_id: modele.picking_type_id[0],
     location_src_id: modele.location_src_id[0],
     location_dest_id: modele.location_dest_id[0],
