@@ -186,12 +186,23 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const besoinDe = nom => (besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom))
 
   // les gâteaux qui ont du travail : quelque chose manque dans leur chaîne
+  // À quel point ça presse : ce qui est tombé à zéro (ou dans le négatif)
+  // passe devant ce qui frôle seulement son minimum.
+  const urgenceDe = nom => {
+    const mm = minmax[nom]
+    if (!mm || !(mm.min > 0)) return 0
+    return (mm.min - (stocks[nom] || 0)) / mm.min
+  }
   const aFaire = useMemo(() => {
     if (!arbre) return []
     return (arbre.racines || [])
       .filter(m => !caches.includes(m))
-      .map(m => ({ mere: m, lignes: travailDe(m) }))
+      .map(m => {
+        const lignes = travailDe(m)
+        return { mere: m, lignes, urgence: Math.max(0, ...lignes.map(l => urgenceDe(l.nom))) }
+      })
       .filter(x => x.lignes.length)
+      .sort((a, b) => b.urgence - a.urgence || b.lignes.length - a.lignes.length)
   }, [arbre, caches, besoins, stocks, minmax])
 
   // ===== ce qu'on a fait =====
