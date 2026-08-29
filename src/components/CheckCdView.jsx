@@ -1,20 +1,36 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
-import { loadParentsAValider, validerParents, loadDejaEnvoyes } from '../lib/checkCd'
+import { loadFreezerDoneIds } from '../lib/freezerDone'
 import { fmtDayLabel } from '../lib/jourLisible'
+import { loadEtatsCheckCd, envoyerEnValidation, loadDejaEnvoyes } from '../lib/checkCd'
 import { toast } from '../lib/toast'
 
-// Le dernier contrôle avant de marquer un gâteau entier comme fait dans Odoo.
+// Le double contrôle des sorties de congélateur.
 //
-// On liste les gâteaux « CD- … » encore ouverts (toutes les formes) avec leurs
-// étages : Layla vérifie que l'étage est bien là, coche, puis envoie. La
-// validation ne part que sur ce qui est coché, et les étages sont revérifiés
-// juste avant l'envoi — quelqu'un a pu consommer le stock entre-temps.
+// Une personne sort le gâteau (onglet CD Négatif) ; ici une deuxième vérifie,
+// sélectionne, puis ENVOIE en validation : l'ordre « N cm cakedesign » est alors
+// validé dans Odoo — seulement si son étage « N cm CD* » est en stock.
+// Tant qu'on n'a pas envoyé, une sélection s'annule sans laisser de trace.
+
+function jourISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const ETIQ = {
+  ok: { texte: 'Étage en stock', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
+  manque: { texte: 'Étage manquant', fond: 'bg-[#FDF3D8]', encre: 'text-[#8c6a20]' },
+  hors: { texte: 'Hors contrôle', fond: 'bg-cream-deep', encre: 'text-ink-mute' },
+  attente: { texte: 'Pas encore sorti du congélateur', fond: 'bg-[#E9F1F6]', encre: 'text-[#3d6f8e]' },
+  valide: { texte: 'Validé dans Odoo', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
+}
 
 export default function CheckCdView({ user, onLogout, onNavigate, activeView }) {
-  const [parents, setParents] = useState([])
+  const [items, setItems] = useState([])
+  const [etats, setEtats] = useState({})
   const [envoyes, setEnvoyes] = useState({})
+  const [sortis, setSortis] = useState({})   // ce que CD Négatif a coché
   const [choisis, setChoisis] = useState(() => new Set())
+  const [parProduit, setParProduit] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState(null)
@@ -23,35 +39,66 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
 
   useEffect(() => {
     let vivant = true
-    Promise.all([loadParentsAValider(30), loadDejaEnvoyes()])
-      .then(([list, deja]) => {
+    const j = new Date()
+    const dates = []
+    // large en arrière : un gâteau sorti il y a dix jours et jamais validé doit
+    // rester visible, sinon personne ne peut s'apercevoir qu'il traîne.
+    for (let k = -14; k <= 14; k++) { const x = new Date(j); x.setDate(x.getDate() + k); dates.push(jourISO(x)) }
+
+    Promise.all([
+      fetch(`/api/freezer-list?dates=${dates.join(',')}`).then(r => r.json()),
+      loadFreezerDoneIds(),
+      loadDejaEnvoyes(),
+    ])
+      .then(async ([api, deja2, deja]) => {
         if (!vivant) return
-        setParents(list)
         setEnvoyes(deja)
+        setSortis(deja2)
+        // On montre TOUT ce qui reste à valider — y compris ce qui n'est pas
+        // encore sorti du congélateur, pour voir la semaine venir. Seuls les
+        // gâteaux déjà sortis pourront être cochés (voir `basculer`).
+        const aVoir = (api.items || []).filter(it => !it.made && !deja[it.mo_id]?.odoo_ok)
+        if (!aVoir.length) { setItems([]); return }
+        try {
+          const e = await loadEtatsCheckCd([...new Set(aVoir.map(it => it.mo_id))])
+          if (!vivant) return
+          setEtats(e)
+          // Déjà validé dans Odoo : il n'y a plus rien à contrôler, on l'enlève.
+          setItems(aVoir.filter(it => e[it.mo_id]?.dispo !== 'valide'))
+        } catch {
+          if (vivant) setItems(aVoir)   // Odoo muet : on montre la liste sans les états
+        }
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
       .finally(() => { if (vivant) setChargement(false) })
     return () => { vivant = false }
   }, [tour])
 
-  const prets = useMemo(() => parents.filter(p => p.pret), [parents])
+  // Cochable seulement si quelqu'un l'a VRAIMENT sorti du congélateur, et si
+  // son étage est en stock. Le reste s'affiche, mais ne se coche pas.
+  const cochable = it => !!sortis[it.mo_id] && etats[it.mo_id]?.dispo === 'ok'
 
-  function basculer(p) {
-    if (!p.pret) return
+  const selectionnables = useMemo(
+    () => items.filter(cochable),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, etats, sortis])
+
+  function basculer(it) {
+    if (!cochable(it)) return
     setChoisis(prev => {
       const s = new Set(prev)
-      s.has(p.mo_id) ? s.delete(p.mo_id) : s.add(p.mo_id)
+      s.has(it.mo_id) ? s.delete(it.mo_id) : s.add(it.mo_id)
       return s
     })
   }
 
-  function basculerJour(list) {
-    const libres = list.filter(p => p.pret)
+  function basculerGroupe(lignes) {
+    const libres = lignes.filter(cochable)
     if (!libres.length) return
-    const tous = libres.every(p => choisis.has(p.mo_id))
+    const tous = libres.every(it => choisis.has(it.mo_id))
     setChoisis(prev => {
       const s = new Set(prev)
-      libres.forEach(p => tous ? s.delete(p.mo_id) : s.add(p.mo_id))
+      libres.forEach(it => tous ? s.delete(it.mo_id) : s.add(it.mo_id))
       return s
     })
   }
@@ -60,10 +107,10 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     if (!choisis.size) return
     setEnvoi(true)
     try {
-      const res = await validerParents([...choisis], user?.id)
+      const res = await envoyerEnValidation([...choisis], user?.id)
       const ok = res.filter(r => r.ok).length
       const rates = res.filter(r => !r.ok)
-      if (ok) toast.success(`${ok} gâteau${ok > 1 ? 'x' : ''} marqué${ok > 1 ? 's' : ''} comme fait${ok > 1 ? 's' : ''} dans Odoo`)
+      if (ok) toast.success(`${ok} ordre${ok > 1 ? 's' : ''} validé${ok > 1 ? 's' : ''} dans Odoo`)
       if (rates.length) toast.error(`${rates.length} refusé${rates.length > 1 ? 's' : ''} : ${rates[0].message}`)
       setChoisis(new Set())
       rafraichir()
@@ -73,12 +120,20 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     setEnvoi(false)
   }
 
-  // par jour de retrait, du plus récent au plus ancien
+  // On classe d'abord par JOUR de retrait, comme dans CD Négatif : c'est le
+  // repère de l'équipe. À l'intérieur, par commande ou par produit.
   const jours = useMemo(() => {
-    const g = {}
-    for (const p of parents) (g[p.date || '—'] ||= []).push(p)
-    return Object.entries(g).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [parents])
+    const parJour = {}
+    for (const it of items) (parJour[it.date] ||= []).push(it)
+    return Object.keys(parJour).sort().map(date => {
+      const g = {}
+      for (const it of parJour[date]) {
+        const cle = parProduit ? `${it.taille} ${it.parfum}` : (it.scode || '?')
+        ;(g[cle] ||= []).push(it)
+      }
+      return { date, groupes: Object.entries(g).sort() }
+    })
+  }, [items, parProduit])
 
   const nb = choisis.size
 
@@ -88,92 +143,98 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
 
       <div className="max-w-3xl mx-auto px-4 pt-4">
         <h1 className="font-fraunces italic text-[26px] text-ink leading-none mb-1">Check CD-</h1>
-        <p className="text-[12px] text-ink-mute mb-3">
-          Le dernier contrôle avant de marquer le gâteau comme fait dans Odoo.
-          Vérifie ses étages, coche, puis envoie. Rien ne part avant l'envoi.
+        <p className="text-[12px] text-ink-mute mb-4">
+          Deuxième contrôle des gâteaux sortis. Sélectionne, puis envoie en validation :
+          l'ordre est alors validé dans Odoo. Rien ne part avant l'envoi.
         </p>
 
-        <div className="flex items-center gap-3 mb-4 flex-wrap text-[11px]">
-          <span className="px-2.5 py-1 rounded-full bg-[#EAF3DE] text-[#2F6B25] font-bold">{prets.length} prêt{prets.length > 1 ? 's' : ''}</span>
-          {parents.length - prets.length > 0 && (
-            <span className="px-2.5 py-1 rounded-full bg-[#FDF3D8] text-[#8c6a20] font-bold">
-              {parents.length - prets.length} en attente d'un étage
-            </span>
-          )}
-          <button onClick={rafraichir} className="text-ink-mute underline underline-offset-2">rafraîchir</button>
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="inline-flex bg-cream-warm rounded-full p-0.5 border border-line">
+            <button onClick={() => setParProduit(false)}
+              className={`px-3 py-1 text-[11px] font-medium rounded-full ${!parProduit ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>Par commande</button>
+            <button onClick={() => setParProduit(true)}
+              className={`px-3 py-1 text-[11px] font-medium rounded-full ${parProduit ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>Par produit</button>
+          </div>
+          <button onClick={rafraichir} className="text-[11px] text-ink-mute underline underline-offset-2">rafraîchir</button>
         </div>
 
         {erreur && <div className="bg-[#fdecec] text-[#8c2020] rounded-xl px-3.5 py-3 text-[13px] mb-3">{erreur}</div>}
         {chargement && <div className="text-center py-10 text-[13px] text-ink-mute">Lecture d'Odoo…</div>}
-        {!chargement && !parents.length && (
+
+        {!chargement && !items.length && (
           <div className="text-center py-10 text-[13px] text-ink-mute">
-            Aucun gâteau en attente. Tout est marqué fait dans Odoo.
+            Rien à contrôler. Les gâteaux apparaissent ici dès qu'ils sont sortis du congélateur.
           </div>
         )}
 
         <div className="space-y-4">
-          {jours.map(([date, list]) => {
-            const libres = list.filter(p => p.pret)
-            const tous = libres.length > 0 && libres.every(p => choisis.has(p.mo_id))
+          {jours.map(({ date, groupes }) => (
+            <div key={date}>
+              {/* la date reste visible pendant le défilement, comme dans CD Négatif */}
+              <div className="sticky top-0 z-20 -mx-1 px-1 pt-2 pb-1.5 mb-1 bg-cream">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="font-fraunces italic text-[17px] text-ink">{fmtDayLabel(date, new Date())}</h2>
+                  <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream-warm text-ink-soft border border-line">
+                    {groupes.reduce((n, [, l]) => n + l.length, 0)} gâteau{groupes.reduce((n, [, l]) => n + l.length, 0) > 1 ? 'x' : ''}
+                  </span>
+                  <span className="flex-1 h-px bg-line min-w-[20px]" />
+                </div>
+              </div>
+              <div className="space-y-3">
+          {groupes.map(([cle, lignes]) => {
+            const libres = lignes.filter(cochable)
+            const tousChoisis = libres.length > 0 && libres.every(it => choisis.has(it.mo_id))
             return (
-              <div key={date}>
-                <div className="sticky top-0 z-20 -mx-1 px-1 pt-2 pb-1.5 mb-1 bg-cream">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    {libres.length > 0 && (
-                      <button onClick={() => basculerJour(list)}
-                        className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center text-[12px] font-bold ${tous ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream-warm text-transparent'}`}>✓</button>
-                    )}
-                    <h2 className="font-fraunces italic text-[17px] text-ink">
-                      {date === '—' ? 'sans date' : fmtDayLabel(date, new Date())}
-                    </h2>
-                    <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream-warm text-ink-soft border border-line">
-                      {list.length} gâteau{list.length > 1 ? 'x' : ''}
-                    </span>
-                    <span className="flex-1 h-px bg-line min-w-[20px]" />
-                  </div>
+              <div key={cle} className="rounded-2xl border border-line bg-cream-warm overflow-hidden">
+                <div className="px-3.5 py-2 bg-cream border-b border-line flex items-center gap-2.5">
+                  {parProduit && libres.length > 0 && (
+                    <button onClick={() => basculerGroupe(lignes)}
+                      className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center text-[12px] font-bold ${tousChoisis ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream-warm text-transparent'}`}>✓</button>
+                  )}
+                  <span className="font-bold text-[13.5px] text-ink flex-1">{cle}</span>
+                  <span className="text-[11px] text-ink-mute">
+                    {parProduit
+                      ? `${libres.length} sur ${lignes.length} à contrôler`
+                      : `${lignes.length} gâteau${lignes.length > 1 ? 'x' : ''}`}
+                  </span>
                 </div>
-
-                <div className="space-y-1.5">
-                  {list.map(p => {
-                    const on = choisis.has(p.mo_id)
-                    const refus = envoyes[p.mo_id] && !envoyes[p.mo_id].odoo_ok ? envoyes[p.mo_id].odoo_msg : null
-                    return (
-                      <div key={p.mo_id} onClick={() => basculer(p)}
-                        className={`rounded-2xl border px-3.5 py-3 flex items-start gap-2.5 ${p.pret ? 'cursor-pointer' : 'opacity-80'} ${on ? 'border-bordeaux bg-bordeaux/5' : 'border-line bg-cream-warm'}`}>
-                        <span className={`flex-shrink-0 w-6 h-6 mt-0.5 rounded-lg border-2 flex items-center justify-center text-[12px] font-bold ${on ? 'bg-bordeaux border-bordeaux text-cream' : p.pret ? 'border-line bg-cream text-transparent' : 'border-dashed border-line bg-cream-deep text-transparent'}`}>✓</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[14px] font-bold text-ink leading-tight">
-                            {p.produit}{p.qty > 1 ? ` ×${p.qty}` : ''}
-                          </div>
-                          <div className="font-mono text-[9.5px] text-ink-mute mt-0.5">{p.scode || '—'} · {p.mo_name}</div>
-
-                          {/* ses étages : c'est là-dessus que porte le contrôle */}
-                          <div className="mt-1.5 space-y-0.5">
-                            {p.etages.map((e, i) => (
-                              <div key={i} className={`text-[11.5px] flex items-center gap-1.5 ${e.ok ? 'text-[#2F6B25]' : 'text-[#8c6a20]'}`}>
-                                <span className="font-bold">{e.ok ? '✓' : '✗'}</span>
-                                <span className="truncate">{e.nom}</span>
-                                <span className="text-ink-mute whitespace-nowrap">
-                                  {e.besoin > 1 ? `${e.besoin} demandés · ` : ''}{e.stock} en stock
-                                </span>
-                              </div>
-                            ))}
-                            {!p.etages.length && <div className="text-[11.5px] text-ink-mute">{p.raison}</div>}
-                          </div>
-
-                          {refus && <div className="text-[10.5px] text-[#8c2020] mt-1">Odoo a refusé : {refus}</div>}
+                {lignes.map(it => {
+                  const e = etats[it.mo_id] || {}
+                  const libre = cochable(it)
+                  const on = choisis.has(it.mo_id)
+                  // pas encore sorti : on le dit, plutôt que d'annoncer un étage en stock
+                  const et = !sortis[it.mo_id]
+                    ? ETIQ.attente
+                    : (ETIQ[e.dispo] || { texte: 'Lecture…', fond: 'bg-cream-deep', encre: 'text-ink-mute' })
+                  const refus = envoyes[it.mo_id] && !envoyes[it.mo_id].odoo_ok ? envoyes[it.mo_id].odoo_msg : null
+                  return (
+                    <div key={it.mo_id} onClick={() => basculer(it)}
+                      className={`flex items-start gap-2.5 px-3.5 py-2.5 border-b border-line last:border-b-0 ${libre ? 'cursor-pointer' : 'opacity-70'} ${on ? 'bg-bordeaux/5' : ''}`}>
+                      <span className={`flex-shrink-0 w-6 h-6 mt-0.5 rounded-lg border-2 flex items-center justify-center text-[12px] font-bold ${on ? 'bg-bordeaux border-bordeaux text-cream' : libre ? 'border-line bg-cream text-transparent' : 'border-dashed border-line bg-cream-deep text-transparent'}`}>✓</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[14px] font-bold text-ink leading-tight">
+                          {it.taille} <span className="font-medium text-ink-soft">{it.parfum}</span>
                         </div>
+                        <div className="text-[11.5px] text-ink-soft truncate">{it.client_name || it.scode}</div>
+                        <div className="font-mono text-[9.5px] text-ink-mute mt-0.5">{it.scode} · {it.mo_name}</div>
+                        <span className={`inline-block mt-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full ${et.fond} ${et.encre}`}>
+                          {et.texte}{sortis[it.mo_id] && e.etage ? ` · ${e.etage}` : ''}{sortis[it.mo_id] && e.dispo === 'manque' ? ` (${e.stock} sur ${e.besoin})` : ''}
+                        </span>
+                        {refus && <div className="text-[10.5px] text-[#8c2020] mt-1">Odoo a refusé : {refus}</div>}
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {prets.length > 0 && (
+      {selectionnables.length > 0 && (
         <div className="lg-bottom-bar fixed left-0 right-0 bottom-0 z-40 bg-cream-warm border-t border-line px-4 py-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
           <div className="max-w-3xl mx-auto flex items-center gap-3">
@@ -183,7 +244,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
             </span>
             <button onClick={envoyer} disabled={!nb || envoi}
               className={`flex-1 rounded-xl py-3.5 text-[15px] font-extrabold ${nb && !envoi ? 'bg-bordeaux text-cream' : 'bg-cream-deep text-ink-mute'}`}>
-              {envoi ? 'Envoi en cours…' : nb ? `Marquer comme fait (${nb})` : 'Marquer comme fait'}
+              {envoi ? 'Envoi en cours…' : nb ? `Envoyer en validation (${nb})` : 'Envoyer en validation'}
             </button>
           </div>
         </div>
