@@ -67,14 +67,12 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
     // gros volume à produire d'abord.
     const manque = m => (m.stock_min > 0 ? (m.stock_min - m.qty) / m.stock_min : (m.qty <= 0 ? 1 : 0))
     const aProduire = m => Math.max(0, (m.stock_max != null ? m.stock_max : m.stock_min) - m.qty)
-    return [...list].sort((a, b) => {
-      const ua = a.qty <= a.stock_min ? 0 : 1
-      const ub = b.qty <= b.stock_min ? 0 : 1
-      if (ua !== ub) return ua - ub
-      if (ua === 0) return manque(b) - manque(a) || aProduire(b) - aProduire(a)
-        || a.name.localeCompare(b.name, 'fr')
-      return a.name.localeCompare(b.name, 'fr')
-    })
+    // 1) les ruptures (plus rien en stock), 2) les articles à refill,
+    // 3) le reste. Dans chaque groupe, le plus gros manque devant.
+    const rang = m => (m.qty <= 0 ? 0 : (m.qty <= m.stock_min ? 1 : 2))
+    return [...list].sort((a, b) => (rang(a) - rang(b))
+      || (rang(a) < 2 ? (manque(b) - manque(a) || aProduire(b) - aProduire(a)) : 0)
+      || a.name.localeCompare(b.name, 'fr'))
   }, [merged, adminMode, q])
 
   // Admin : (dé)activer un article. À la 1ère activation, on pré-remplit le
