@@ -48,11 +48,20 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     ])
       .then(async ([api, sortis, deja]) => {
         if (!vivant) return
-        // On ne contrôle que ce qui est SORTI du congélateur, et pas déjà envoyé.
-        const aVoir = (api.items || []).filter(it => (sortis[it.mo_id] || it.made) && !deja[it.mo_id]?.odoo_ok)
-        setItems(aVoir)
         setEnvoyes(deja)
-        if (aVoir.length) setEtats(await loadEtatsCheckCd([...new Set(aVoir.map(it => it.mo_id))]))
+        // On ne contrôle que ce qui a été SORTI du congélateur (coché par
+        // quelqu'un), et qui n'a pas déjà été envoyé avec succès.
+        const aVoir = (api.items || []).filter(it => sortis[it.mo_id] && !deja[it.mo_id]?.odoo_ok)
+        if (!aVoir.length) { setItems([]); return }
+        try {
+          const e = await loadEtatsCheckCd([...new Set(aVoir.map(it => it.mo_id))])
+          if (!vivant) return
+          setEtats(e)
+          // Déjà validé dans Odoo : il n'y a plus rien à contrôler, on l'enlève.
+          setItems(aVoir.filter(it => e[it.mo_id]?.dispo !== 'valide'))
+        } catch {
+          if (vivant) setItems(aVoir)   // Odoo muet : on montre la liste sans les états
+        }
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
       .finally(() => { if (vivant) setChargement(false) })

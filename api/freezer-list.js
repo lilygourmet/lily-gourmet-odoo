@@ -272,17 +272,54 @@ async function parentsEncaisses(uid, jours, dry) {
   const mos = await odooSearchRead(uid, 'mrp.production',
     [['product_id.name', 'ilike', 'CD- Cake Design'],
      ['state', 'in', ['confirmed', 'progress', 'to_close']]],
-    ['id', 'name', 'origin', 'product_id', 'components_availability'], { limit: 500 })
+    ['id', 'name', 'origin', 'product_id', 'components_availability', 'move_raw_ids'], { limit: 500 })
 
-  const out = []
+  const retenus = []
   for (const code of codes) {
     for (const m of mos.filter(x => String(x.origin || '').includes(code))) {
-      if (out.some(o => o.mo_name === m.name)) continue
-      const base = { mo_id: m.id, mo_name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', scode: code }
-      if (dry) { out.push({ ...base, ok: false, message: 'à valider' }); continue }
-      const r = await validerOrdre(uid, m.name, false)
-      out.push({ ...base, ok: r.ok, message: r.message })
+      if (!retenus.some(o => o.mo.name === m.name)) retenus.push({ mo: m, code })
     }
+  }
+  if (!retenus.length) return []
+
+  // Règle de Layla : un gâteau entier ne se valide QUE si son étage monté
+  // (« 25 cm cakedesign (Chocolat) »…) est disponible. Les autres composants
+  // (polystyrène, support, pâte à sucre) ne bloquent pas — leur stock est
+  // souvent négatif dans Odoo sans que ça empêche de travailler.
+  const idsMoves = retenus.flatMap(r => r.mo.move_raw_ids || [])
+  const moves = idsMoves.length
+    ? await odooCall(uid, 'stock.move', 'read', [idsMoves,
+        ['raw_material_production_id', 'product_id', 'product_uom_qty']])
+    : []
+  const etagesDe = {}
+  for (const mv of moves) {
+    if (!/cakedesign/i.test(mv.product_id[1] || '')) continue
+    const par = Array.isArray(mv.raw_material_production_id) ? mv.raw_material_production_id[0] : null
+    if (par) (etagesDe[par] ||= []).push(mv)
+  }
+  const lieuCD = await lieuStockProd(uid)
+  const idsEtages = [...new Set(Object.values(etagesDe).flat().map(mv => mv.product_id[0]))]
+  const stockDe = {}
+  if (idsEtages.length) {
+    for (const p of await odooCall(uid, 'product.product', 'read', [idsEtages, ['free_qty']],
+      lieuCD ? { context: { location: lieuCD.id } } : {})) stockDe[p.id] = p.free_qty || 0
+  }
+
+  const out = []
+  for (const { mo: m, code } of retenus) {
+    const base = { mo_id: m.id, mo_name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', scode: code }
+    const etages = etagesDe[m.id] || []
+    if (!etages.length) { out.push({ ...base, ok: false, message: "pas d'étage monté dans la recette" }); continue }
+    const manquant = etages.find(mv => (stockDe[mv.product_id[0]] || 0) < (mv.product_uom_qty || 0))
+    if (manquant) {
+      out.push({ ...base, ok: false,
+        message: `${manquant.product_id[1]} pas disponible (${stockDe[manquant.product_id[0]] || 0} pour ${manquant.product_uom_qty})` })
+      continue
+    }
+    base.etage = etages.map(mv => mv.product_id[1]).join(', ')
+    if (dry) { out.push({ ...base, ok: false, message: 'prêt à valider' }); continue }
+    const r = await validerOrdre(uid, m.name, false)
+    out.push({ ...base, ok: r.ok, message: r.message })
   }
   return out
 }
