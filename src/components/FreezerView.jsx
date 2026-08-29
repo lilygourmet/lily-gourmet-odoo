@@ -377,10 +377,10 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
                   </>}
                 </>
           ) : (
-            /* Vue normale : de la date la plus récente à la plus ancienne, comme
-               dans Check CD- — les retards se retrouvent donc tout en bas. */
+            /* Aujourd'hui en haut, puis les jours qui viennent (le plus lointain
+               en bas), et les retards tout en bas — du plus récent au plus ancien. */
             <>
-              {[...futureKeys].reverse().map(date => renderCard(date, 'current'))}
+              {futureKeys.map(date => renderCard(date, 'current'))}
               {[...pastUndoneKeys].reverse().map(date => renderCard(date, 'overdue'))}
             </>
           )}
