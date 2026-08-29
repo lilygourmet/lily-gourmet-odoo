@@ -64,6 +64,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   // On n'attend donc la coche que pour ce qui reste vraiment au congélateur.
   const estSorti = e => !!sortis[e.mo_id] || e.dispo === 'fait' || (!!e.date && e.date < aujourdhui)
   const cochable = e => estSorti(e) && ['ok', 'fait'].includes(e.dispo)
+  const nbPieces = l => l.reduce((n, e) => n + (e.qty || 1), 0)
   const prets = useMemo(() => etages.filter(cochable),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [etages, sortis])
@@ -130,10 +131,10 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
         </p>
 
         <div className="flex items-center gap-3 mb-4 flex-wrap text-[11px]">
-          <span className="px-2.5 py-1 rounded-full bg-[#EAF3DE] text-[#2F6B25] font-bold">{prets.length} à vérifier</span>
+          <span className="px-2.5 py-1 rounded-full bg-[#EAF3DE] text-[#2F6B25] font-bold">{nbPieces(prets)} à vérifier</span>
           {etages.filter(e => e.dispo !== 'hors' && !estSorti(e)).length > 0 && (
             <span className="px-2.5 py-1 rounded-full bg-[#E9F1F6] text-[#3d6f8e] font-bold">
-              {etages.filter(e => e.dispo !== 'hors' && !estSorti(e)).length} à marquer sortis dans CD Négatif
+              {nbPieces(etages.filter(e => e.dispo !== 'hors' && !estSorti(e)))} à marquer sortis dans CD Négatif
             </span>
           )}
           <button onClick={rafraichir} className="text-ink-mute underline underline-offset-2">rafraîchir</button>
@@ -163,7 +164,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
                       {date === '—' ? 'sans date' : fmtDayLabel(date, new Date())}
                     </h2>
                     <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream-warm text-ink-soft border border-line">
-                      {list.length} étage{list.length > 1 ? 's' : ''}
+                      {nbPieces(list)} étage{nbPieces(list) > 1 ? 's' : ''}
                     </span>
                     <span className="flex-1 h-px bg-line min-w-[20px]" />
                   </div>

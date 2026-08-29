@@ -185,7 +185,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
 
       return `
         <section>
-          <h3>${dayLabel} <span class="count">· ${items.length} composants</span></h3>
+          <h3>${dayLabel} <span class="count">· ${items.reduce((n, it) => n + (it.qty || 1), 0)} composants</span></h3>
           ${body}
         </section>
       `
@@ -245,6 +245,9 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
   // L'historique ne montre que ce qui a été SORTI (demande de Layla) ; « traité »
   // ne sert plus qu'à repérer les jours passés réellement en retard, pour ne pas
   // ressortir des centaines de vieux ordres qu'Odoo a terminés de son côté.
+  // Un ordre peut porter plusieurs gâteaux : partout où on annonce un nombre,
+  // on compte les PIÈCES. Sinon « 3 à sortir » pour 4 gâteaux au congélateur.
+  const nbPieces = l => l.reduce((n, it) => n + (it.qty || 1), 0)
   const _sorti = it => !!doneMap[it.mo_id]
   const _traite = it => !!it.made || !!doneMap[it.mo_id]
   const futureKeys = dateKeys.filter(d => d >= _todayStr)                                                          // aujourd'hui + futur
@@ -265,12 +268,12 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
     if (mode === 'history') {
       visibleItems = doneItems; emptyMsg = 'Aucun fait'
       headerRight = (<>
-        <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-ink/10 text-ink-soft">Historique ({doneItems.length})</span>
+        <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-ink/10 text-ink-soft">Historique ({nbPieces(doneItems)})</span>
         {doneItems.length > 0 && <button onClick={() => printDay(date, dayItems, true, true)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title="Imprimer les faits · ce jour + les 2 précédents">Imprimer 3j</button>}
       </>)
     } else if (mode === 'overdue') {
       visibleItems = dayItems.filter(it => !_traite(it)); emptyMsg = 'Aucun à sortir'
-      headerRight = <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-red-100 text-red-700">🔴 En retard ({dayItems.filter(it => !_traite(it)).length})</span>
+      headerRight = <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-red-100 text-red-700">🔴 En retard ({nbPieces(dayItems.filter(it => !_traite(it)))})</span>
     } else {
       // Uniquement ce qui RESTE à sortir — l'écran doit refléter les ordres encore
       // confirmés dans Odoo, comme la liste que Layla y lit. Dès qu'un gâteau est
@@ -278,7 +281,7 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
       visibleItems = todoItems; emptyMsg = 'Tout est sorti'
       headerRight = (<>
         <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream text-ink-soft border border-line">
-          {todoItems.length ? `${todoItems.length} à sortir` : 'tout est sorti'}
+          {todoItems.length ? `${nbPieces(todoItems)} à sortir` : 'tout est sorti'}
         </span>
         {visibleItems.length > 0 && <button onClick={() => printDay(date, dayItems, false)} className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full border border-bordeaux text-bordeaux hover:bg-bordeaux hover:text-cream transition-all" title="Imprimer · ce jour + les 2 suivants">Imprimer 3j</button>}
       </>)
