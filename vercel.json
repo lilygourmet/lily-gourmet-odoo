@@ -42,10 +42,6 @@
     {
       "path": "/api/close-open-sessions",
       "schedule": "0 23 * * *"
-    },
-    {
-      "path": "/api/check-cd-parents",
-      "schedule": "0 7 * * *"
     }
   ]
 }
