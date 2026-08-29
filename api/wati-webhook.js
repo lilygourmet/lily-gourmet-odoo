@@ -104,6 +104,7 @@ export default async function handler(req, res) {
   if (action === 'cake-vision') return handleCakeVision(req, res)
   if (action === 'poly-estimate') return handlePolyEstimate(req, res)
   if (action === 'deco-planche') return handleDecoPlanche(req, res)
+  if (action === 'nav-usage') return handleNavUsage(req, res)
   if (action === 'releve-ocr') return handleReleveOcr(req, res)
   if (action === 'translate-ar') return handleTranslateAr(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
@@ -2158,6 +2159,34 @@ Il doit y avoir exactement ${n} objet(s) dans "etages", du bas vers le haut.`
     console.error('[poly-estimate]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
+}
+
+// Classement d'usage des onglets : qui ouvre quoi, et surtout ce que personne
+// n'ouvre. Réservé : la liste dit nommément qui utilise quoi, elle n'a rien à
+// faire en accès libre. Protégé par le même secret que les tâches planifiées.
+async function handleNavUsage(req, res) {
+  const secret = req.query.secret || (req.headers.authorization || '').replace('Bearer ', '')
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'non autorisé' })
+  }
+  const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  const { data, error } = await sb.from('nav_usage').select('user_id, view, jour').limit(50000)
+  if (error) return res.status(500).json({ error: error.message })
+
+  const { data: gens } = await sb.from('profiles').select('id, full_name, username')
+  const nom = Object.fromEntries((gens || []).map(u => [u.id, u.full_name || u.username]))
+
+  const parOnglet = {}
+  for (const l of data || []) {
+    const o = (parOnglet[l.view] ||= { view: l.view, jours: 0, gens: new Set(), dernier: null })
+    o.jours++
+    o.gens.add(nom[l.user_id] || l.user_id)
+    if (!o.dernier || l.jour > o.dernier) o.dernier = l.jour
+  }
+  const classement = Object.values(parOnglet)
+    .map(o => ({ view: o.view, ouvertures: o.jours, personnes: [...o.gens], dernier: o.dernier }))
+    .sort((a, b) => b.ouvertures - a.ouvertures)
+  return res.status(200).json({ depuis: (data || []).reduce((m, l) => (!m || l.jour < m ? l.jour : m), null), classement })
 }
 
 // Planche de décors à imprimer : lit la photo d'un gâteau modèle, liste les décors

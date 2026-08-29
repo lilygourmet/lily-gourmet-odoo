@@ -60,6 +60,7 @@ import MobileBottomNav from './components/MobileBottomNav'
 import SideNav from './components/SideNav'
 import TabLockGate from './components/TabLockGate'
 import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, isLivreurDefaut, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, canSeeLivraisons, canSeeModifications, canSeeDevis, hasValidJwt } from './lib/auth'
+import { tracerOnglet } from './lib/navUsage'
 import { estModeTest } from './lib/modeTest'
 import { refreshOnReturn } from './lib/autoRefresh'
 
@@ -305,6 +306,12 @@ function App() {
     }, 1200)
     return () => clearTimeout(id)
   }, [user?.id])
+
+  // Qui ouvre quels onglets. Une ligne par personne, par onglet et par jour :
+  // de quoi savoir ce qui sert vraiment, et ce que personne n'ouvre jamais.
+  useEffect(() => {
+    if (user?.id && activeView) tracerOnglet(activeView, user.id)
+  }, [user?.id, activeView])
 
   function handleLoginSuccess(u) {
     setUser(u)
