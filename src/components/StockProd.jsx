@@ -61,10 +61,20 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
     let list = adminMode ? merged : merged.filter(m => m.actif)
     if (q) list = list.filter(m => m.name.toLowerCase().includes(q))
     // Catalogue (admin) : juste alphabétique.
-    // Liste stock : urgents d'abord (stock ≤ mini = à réappro), puis alphabétique.
     if (adminMode) return [...list].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
-    const urgent = m => (m.qty <= m.stock_min ? 0 : 1)
-    return [...list].sort((a, b) => (urgent(a) - urgent(b)) || a.name.localeCompare(b.name, 'fr'))
+    // Liste stock : du plus pressé au moins pressé. Ce qui est tombé à zéro
+    // passe devant ce qui frôle seulement son mini ; à manque égal, le plus
+    // gros volume à produire d'abord.
+    const manque = m => (m.stock_min > 0 ? (m.stock_min - m.qty) / m.stock_min : (m.qty <= 0 ? 1 : 0))
+    const aProduire = m => Math.max(0, (m.stock_max != null ? m.stock_max : m.stock_min) - m.qty)
+    return [...list].sort((a, b) => {
+      const ua = a.qty <= a.stock_min ? 0 : 1
+      const ub = b.qty <= b.stock_min ? 0 : 1
+      if (ua !== ub) return ua - ub
+      if (ua === 0) return manque(b) - manque(a) || aProduire(b) - aProduire(a)
+        || a.name.localeCompare(b.name, 'fr')
+      return a.name.localeCompare(b.name, 'fr')
+    })
   }, [merged, adminMode, q])
 
   // Admin : (dé)activer un article. À la 1ère activation, on pré-remplit le
