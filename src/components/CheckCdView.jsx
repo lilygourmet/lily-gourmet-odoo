@@ -20,6 +20,7 @@ const ETIQ = {
   ok: { texte: 'Étage en stock', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
   manque: { texte: 'Étage manquant', fond: 'bg-[#FDF3D8]', encre: 'text-[#8c6a20]' },
   hors: { texte: 'Hors contrôle', fond: 'bg-cream-deep', encre: 'text-ink-mute' },
+  direct: { texte: 'Fabriqué directement (pas d\'étage congelé)', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
   attente: { texte: 'Pas encore sorti du congélateur', fond: 'bg-[#E9F1F6]', encre: 'text-[#3d6f8e]' },
   valide: { texte: 'Validé dans Odoo', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
 }
@@ -76,7 +77,9 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
 
   // Cochable seulement si quelqu'un l'a VRAIMENT sorti du congélateur, et si
   // son étage est en stock. Le reste s'affiche, mais ne se coche pas.
-  const cochable = it => !!sortis[it.mo_id] && etats[it.mo_id]?.dispo === 'ok'
+  // Cochable si le gâteau a été sorti du congélateur, et que son étage est en
+  // stock — ou qu'il n'en a pas (tailles hors normes, fabriquées directement).
+  const cochable = it => !!sortis[it.mo_id] && ['ok', 'direct'].includes(etats[it.mo_id]?.dispo)
 
   const selectionnables = useMemo(
     () => items.filter(cochable),

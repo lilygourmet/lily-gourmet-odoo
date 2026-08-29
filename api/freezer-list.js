@@ -238,7 +238,11 @@ async function etatsCheckCd(uid, moIds) {
     const etage = (parOrdre[m.id] || []).find(mv => EST_ETAGE_CD(mv.product_id[1]))
     if (m.state === 'done') return { mo_id: m.id, mo_name: m.name, dispo: 'valide', etage: etage ? etage.product_id[1] : null }
     if (m.state === 'cancel') return { mo_id: m.id, mo_name: m.name, dispo: 'hors', etage: null, raison: 'ordre annulé dans Odoo' }
-    if (!etage) return { mo_id: m.id, mo_name: m.name, dispo: 'hors', etage: null, raison: "pas d'étage « N cm CD* » dans la recette" }
+    // Les tailles hors normes (40x40, 23x23, 18cm bombé, Rose/Bleu…) se font
+    // directement à partir de génoise, crème et sirop : elles SONT l'étage, il
+    // n'y a donc pas d'étage congelé à vérifier. On ne les bloque plus — la
+    // garantie, c'est que quelqu'un les a sorties du congélateur.
+    if (!etage) return { mo_id: m.id, mo_name: m.name, dispo: 'direct', etage: null, raison: "fabriqué directement, sans étage congelé" }
     const besoin = etage.product_uom_qty || 0
     const libre = stockDe[etage.product_id[0]] || 0
     // Odoo met le stock DE CÔTÉ pour un ordre : il n'est alors plus « libre »,
@@ -1445,7 +1449,7 @@ export default async function handler(req, res) {
       const out = []
       for (const e of etats) {
         if (e.dispo === 'valide') { out.push({ ...e, ok: true, message: 'déjà validé dans Odoo' }); continue }
-        if (e.dispo !== 'ok') {
+        if (e.dispo !== 'ok' && e.dispo !== 'direct') {
           out.push({ ...e, ok: false, message: e.raison || `étage manquant (${e.stock} sur ${e.besoin} demandés)` })
           continue
         }
