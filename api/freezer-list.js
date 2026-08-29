@@ -216,7 +216,7 @@ async function etatsCheckCd(uid, moIds) {
   const idsMoves = mos.flatMap(m => m.move_raw_ids || [])
   const moves = idsMoves.length
     ? await odooCall(uid, 'stock.move', 'read', [idsMoves,
-        ['id', 'raw_material_production_id', 'product_id', 'product_uom_qty']])
+        ['id', 'raw_material_production_id', 'product_id', 'product_uom_qty', 'reserved_availability']])
     : []
   const parOrdre = {}
   for (const mv of moves) {
@@ -240,7 +240,12 @@ async function etatsCheckCd(uid, moIds) {
     if (m.state === 'cancel') return { mo_id: m.id, mo_name: m.name, dispo: 'hors', etage: null, raison: 'ordre annulé dans Odoo' }
     if (!etage) return { mo_id: m.id, mo_name: m.name, dispo: 'hors', etage: null, raison: "pas d'étage « N cm CD* » dans la recette" }
     const besoin = etage.product_uom_qty || 0
-    const stock = stockDe[etage.product_id[0]] || 0
+    const libre = stockDe[etage.product_id[0]] || 0
+    // Odoo met le stock DE CÔTÉ pour un ordre : il n'est alors plus « libre »,
+    // mais il appartient bien à cet ordre-là. Sans ça, un étage déjà réservé
+    // pour son gâteau passait pour manquant.
+    const reserve = etage.reserved_availability || 0
+    const stock = Math.max(libre, reserve)
     return {
       mo_id: m.id, mo_name: m.name,
       etage: etage.product_id[1], besoin, stock,
@@ -258,8 +263,12 @@ async function etatsCheckCd(uid, moIds) {
 async function parentsEncaisses(uid, jours, dry) {
   const depuis = new Date(Date.now() - jours * 86400000)
   const iso = d => d.toISOString().slice(0, 19).replace('T', ' ')
+  // Tous les gâteaux cake design, pas seulement les « CD- Cake Design N étages » :
+  // il y a aussi les Gateau Forme (carré, cœur…), Letter Cake, Créa' Cake, et les
+  // grands formats 35/40/45 cm. La ganache est un ingrédient, pas un gâteau.
   const lignes = await odooSearchRead(uid, 'pos.order.line',
-    [['product_id.name', 'ilike', 'CD- Cake Design'], ['create_date', '>=', iso(depuis)]],
+    [['product_id.name', '=ilike', 'CD-%'], ['product_id.name', 'not ilike', 'ganache'],
+     ['create_date', '>=', iso(depuis)]],
     ['order_id', 'product_id', 'sale_order_origin_id'], { limit: 300 })
   if (!lignes.length) return []
 
@@ -270,7 +279,7 @@ async function parentsEncaisses(uid, jours, dry) {
 
   // les ordres du gâteau entier rattachés à ces commandes, encore ouverts
   const mos = await odooSearchRead(uid, 'mrp.production',
-    [['product_id.name', 'ilike', 'CD- Cake Design'],
+    [['product_id.name', '=ilike', 'CD-%'], ['product_id.name', 'not ilike', 'ganache'],
      ['state', 'in', ['confirmed', 'progress', 'to_close']]],
     ['id', 'name', 'origin', 'product_id', 'components_availability', 'move_raw_ids'], { limit: 500 })
 
@@ -289,7 +298,7 @@ async function parentsEncaisses(uid, jours, dry) {
   const idsMoves = retenus.flatMap(r => r.mo.move_raw_ids || [])
   const moves = idsMoves.length
     ? await odooCall(uid, 'stock.move', 'read', [idsMoves,
-        ['raw_material_production_id', 'product_id', 'product_uom_qty']])
+        ['raw_material_production_id', 'product_id', 'product_uom_qty', 'reserved_availability']])
     : []
   const etagesDe = {}
   for (const mv of moves) {
@@ -310,10 +319,13 @@ async function parentsEncaisses(uid, jours, dry) {
     const base = { mo_id: m.id, mo_name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', scode: code }
     const etages = etagesDe[m.id] || []
     if (!etages.length) { out.push({ ...base, ok: false, message: "pas d'étage monté dans la recette" }); continue }
-    const manquant = etages.find(mv => (stockDe[mv.product_id[0]] || 0) < (mv.product_uom_qty || 0))
+    // Un étage déjà RÉSERVÉ pour ce gâteau lui appartient : il compte comme
+    // disponible, même si Odoo ne le voit plus comme « libre ».
+    const dispoDe = mv => Math.max(stockDe[mv.product_id[0]] || 0, mv.reserved_availability || 0)
+    const manquant = etages.find(mv => dispoDe(mv) < (mv.product_uom_qty || 0))
     if (manquant) {
       out.push({ ...base, ok: false,
-        message: `${manquant.product_id[1]} pas disponible (${stockDe[manquant.product_id[0]] || 0} pour ${manquant.product_uom_qty})` })
+        message: `${manquant.product_id[1]} pas disponible (${dispoDe(manquant)} pour ${manquant.product_uom_qty})` })
       continue
     }
     base.etage = etages.map(mv => mv.product_id[1]).join(', ')
