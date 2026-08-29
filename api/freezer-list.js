@@ -1896,8 +1896,11 @@ export default async function handler(req, res) {
       const [quants, points, tmplPhotos] = await Promise.all([
         odooSearchRead(uid, 'stock.quant', [['location_id', 'child_of', lieux.map(l => l.id)]],
           ['product_id', 'quantity'], { limit: 3000 }),
-        odooSearchRead(uid, 'stock.warehouse.orderpoint', [['location_id', 'in', lieux.map(l => l.id)]],
-          ['product_id', 'product_min_qty', 'product_max_qty', 'qty_on_hand'], { limit: 800 }),
+        // toutes les règles min/max d'Odoo, pas seulement celles de l'annexe :
+        // beaucoup d'articles n'en ont qu'ailleurs et n'apparaissaient donc
+        // jamais dans « ce qu'il faut faire »
+        odooSearchRead(uid, 'stock.warehouse.orderpoint', [],
+          ['product_id', 'product_min_qty', 'product_max_qty', 'qty_on_hand', 'location_id'], { limit: 3000 }),
         odooSearchRead(uid, 'product.template', [['name', 'in', racines]],
           ['id', 'name', 'image_128'], { limit: 400 }),
       ])
@@ -1906,12 +1909,22 @@ export default async function handler(req, res) {
         const n = net(Array.isArray(k.product_id) ? k.product_id[1] : '')
         if (n) stocks[n] = (stocks[n] || 0) + (k.quantity || 0)
       }
+      // Une règle posée à l'annexe l'emporte : c'est là qu'on fabrique. Sinon on
+      // prend celle d'ailleurs, faute de mieux — mais seulement si un minimum
+      // y est vraiment renseigné.
+      const idsAnnexe = new Set(lieux.map(l => l.id))
       const minmax = {}
+      const vientDeLAnnexe = {}
       for (const o of points) {
         const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
         if (!n) continue
+        const ici = idsAnnexe.has(Array.isArray(o.location_id) ? o.location_id[0] : o.location_id)
+        const utile = (o.product_min_qty || 0) > 0
+        if (minmax[n] && (vientDeLAnnexe[n] || !ici) && !(ici && utile && !vientDeLAnnexe[n])) continue
+        if (!utile && minmax[n]) continue
         minmax[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
-        if (stocks[n] === undefined) stocks[n] = o.qty_on_hand || 0
+        vientDeLAnnexe[n] = ici
+        if (ici && stocks[n] === undefined) stocks[n] = o.qty_on_hand || 0
       }
       const photos = {}
       for (const t of tmplPhotos) if (t.image_128) photos[net(t.name)] = t.id
