@@ -1543,8 +1543,19 @@ export default async function handler(req, res) {
       // Certains articles se font par TOURNÉE ENTIÈRE (la pâte à sucre sort
       // toujours en multiples de 6 925 g), d'autres à la quantité voulue. Odoo
       // ne le dit nulle part : on le déduit de ce que l'atelier a réellement
-      // produit sur un an. Au moins 4 fournées, et toutes multiples d'un même
-      // pas à 2 % près.
+      // produit. Il faut un an et les deux ateliers pour avoir assez de
+      // fournées — 90 jours à l'annexe seule ne suffisent pas.
+      const dAn = new Date(); dAn.setMonth(dAn.getMonth() - 12)
+      const anciens = await odooSearchRead(uid, 'mrp.production', [
+        ['location_src_id', 'in', [...lieux.map(l => l.id), 52]],
+        ['state', '=', 'done'],
+        ['date_planned_start', '>=', isoD(dAn)],
+      ], ['product_id', 'product_qty'], { limit: 12000 })
+      for (const m of anciens) {
+        const n = net(Array.isArray(m.product_id) ? m.product_id[1] : '')
+        if (n) (qtesFaites[n] ||= []).push(m.product_qty || 0)
+      }
+
       const tournees = {}
       for (const [n, qs] of Object.entries(qtesFaites)) {
         if (qs.length < 4) continue
