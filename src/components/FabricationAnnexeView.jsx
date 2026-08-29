@@ -38,20 +38,24 @@ function courtNom(nom) {
   return t.replace(/\s*\([^()]*\)\s*$/, '').trim() || t
 }
 
-function Vignette({ nom, photo, taille, rond }) {
-  const style = { width: taille, height: taille, borderRadius: rond || 12 }
-  // `contain` et non `cover` : la photo entière doit tenir dans le carré,
-  // sinon on ne voit qu'un morceau du gâteau
+function Vignette({ nom, photo, taille, rond, plein }) {
+  // `plein` : la vignette prend toute la place du carré. Sans ça elle gardait
+  // une taille fixe de 400 px dans une carte de 112 px, et l'on ne voyait que
+  // le coin de la photo.
+  const style = plein
+    ? { width: '100%', height: '100%', borderRadius: rond === 0 ? 0 : (rond || 12) }
+    : { width: taille, height: taille, borderRadius: rond === 0 ? 0 : (rond || 12) }
   if (photo) {
     return (
       <span className="shrink-0 grid place-items-center bg-cream-warm overflow-hidden" style={style}>
-        <img src={photo} alt="" className="w-full h-full object-contain" />
+        {/* la photo entière tient dans le carré, avec un peu d'air autour */}
+        <img src={photo} alt="" className="w-full h-full object-contain p-1" />
       </span>
     )
   }
   return (
     <span className="grid place-items-center font-serif italic text-cream shrink-0"
-      style={{ ...style, background: couleur(nom), fontSize: taille * 0.42 }}>
+      style={{ ...style, background: couleur(nom), fontSize: (plein ? 44 : taille) * 0.42 }}>
       {propre(nom).slice(0, 1).toUpperCase()}
     </span>
   )
@@ -292,7 +296,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
                     <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
                     <span className="block w-full aspect-square overflow-hidden">
-                      <Vignette nom={mere} photo={photoDe(mere)} taille={400} rond={0} />
+                      <Vignette nom={mere} photo={photoDe(mere)} plein rond={0} />
                     </span>
                     <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
                     <span className="block px-2 pb-2 pt-1">
@@ -376,7 +380,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <span className="absolute top-0 left-0 right-0 h-1 z-10"
                       style={{ background: NIVEAU[0] }} />
                     <span className="block w-full aspect-square overflow-hidden">
-                      <Vignette nom={nom} photo={photoDe(nom)} taille={400} rond={0} />
+                      <Vignette nom={nom} photo={photoDe(nom)} plein rond={0} />
                     </span>
                     {fait > 0 && (
                       <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-ok grid place-items-center">
