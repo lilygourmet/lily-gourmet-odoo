@@ -344,8 +344,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
               {liste.map(nom => {
                 const fait = combienDe[nom] || 0
-                const mm = minmax[nom]
-                const alerte = mm && mm.min > 0 && (stocks[nom] || 0) < mm.min
                 return (
                   <button key={nom} onClick={() => ouvrirFiche(nom)}
                     className={'relative bg-white border rounded-[14px] overflow-hidden text-left ' +
@@ -358,11 +356,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     {fait > 0 && (
                       <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-ok grid place-items-center">
                         <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-white fill-none" strokeWidth="3.4"><path d="M4 13l5 5L20 7" /></svg>
-                      </span>
-                    )}
-                    {alerte && (
-                      <span className="absolute bottom-8 left-1.5 bg-danger text-white rounded-full px-2 py-0.5 text-[11px] font-extrabold">
-                        à faire
                       </span>
                     )}
                     {!q.trim() && (
@@ -470,7 +463,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         return (
         <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end justify-center print:hidden"
           onPointerDown={e => { if (e.target === e.currentTarget) { setSaisie(null); setPile([]) } }}>
-          <div className="bg-cream w-full max-w-[540px] rounded-t-[22px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
+          <div className="bg-cream w-full max-w-[540px] rounded-t-[22px] p-4 pb-6 h-[82dvh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-3">
               {pile.length > 0 && (
                 <button onClick={() => { const p = [...pile]; const r = p.pop(); setPile(p); ouvrirFicheSimple(r) }}
@@ -488,7 +481,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               </p>
             )}
 
-            {minmax[saisie] && minmax[saisie].min > 0 && (stocks[saisie] || 0) < minmax[saisie].min && (
+            {vue === 'besoins' && minmax[saisie] && minmax[saisie].min > 0 && (stocks[saisie] || 0) < minmax[saisie].min && (
               <div className="bg-[#FCEEE8] border border-[#f0cfc5] rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3">
                 <b className="text-[27px] font-extrabold text-danger leading-none">{nb(stocks[saisie] || 0)}</b>
                 <span className="text-[12.5px] text-danger leading-snug">
@@ -498,7 +491,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               </div>
             )}
 
-            {(() => {
+            {vue === 'besoins' && (() => {
               const travail = (aFaire.find(x => x.mere === saisie) || {}).lignes
               if (!travail || !travail.length) return null
               return (
