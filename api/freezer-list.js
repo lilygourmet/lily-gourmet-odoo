@@ -879,6 +879,19 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   const modele = await modeleWhlvp(uid)
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
   const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
+
+  // Anti-doublon, comme pour les crèmes : deux appuis rapprochés sur « C'est
+  // fait » ne doivent pas lancer deux tournées identiques.
+  const cinqMinP = new Date(Date.now() - 5 * 60000).toISOString().slice(0, 19).replace('T', ' ')
+  const dejaP = (await odooSearchRead(uid, 'mrp.production',
+    [['product_id', '=', prod.id], ['product_qty', '=', qty],
+     ['state', 'in', ['draft', 'confirmed', 'progress']], ['create_date', '>=', cinqMinP]],
+    ['id', 'name'], { limit: 1, order: 'id desc' }))[0]
+  if (dejaP) {
+    console.log(`[creer-of-prepa] doublon evite : ${dejaP.name} vient d'etre cree pour ${prod.display_name}`)
+    return { id: dejaP.id, name: dejaP.name, deja: true }
+  }
+
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,
     product_qty: qty,
@@ -1419,6 +1432,17 @@ async function produireGsAnnexe(uid, { tmplId, nom, qty }) {
     location_dest_id: [type.default_location_dest_id[0]],
     company_id: [type.company_id[0]],
   }
+  // Anti-doublon : même article, même origine, lancé il y a moins de cinq minutes
+  const cinqMinV = new Date(Date.now() - 5 * 60000).toISOString().slice(0, 19).replace('T', ' ')
+  const dejaV = (await odooSearchRead(uid, 'mrp.production',
+    [['product_id', '=', prod.id], ['origin', '=', [ORIGINE_VITRINE, ORIGINE_APP].join(',')],
+     ['state', 'in', ['draft', 'confirmed', 'progress']], ['create_date', '>=', cinqMinV]],
+    ['id', 'name'], { limit: 1, order: 'id desc' }))[0]
+  if (dejaV) {
+    console.log(`[vitrine] doublon evite : ${dejaV.name}`)
+    return { name: dejaV.name, deja: true }
+  }
+
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,
     product_qty: qty,

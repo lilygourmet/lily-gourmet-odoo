@@ -236,6 +236,19 @@ export default async function handler(req, res) {
     const origine = `ÉCONOMAT — ${demandeur || 'demande'}${badgeLabel ? ` (${badgeLabel})` : ''}`
     const transferts = []
 
+    // Anti-doublon : deux appuis rapprochés sur « envoyer » créaient deux
+    // transferts identiques dans Odoo. Deux minutes suffisent à séparer un
+    // double appui d'une vraie seconde demande du même économe.
+    const ilYaDeuxMin = new Date(Date.now() - 2 * 60000).toISOString().slice(0, 19).replace('T', ' ')
+    const dejaEnvoye = async (modele, ex, u) => {
+      try {
+        const l = await ex(u, modele, 'search_read', [
+          [['origin', '=', origine], ['state', 'not in', ['cancel']], ['create_date', '>=', ilYaDeuxMin]],
+          ['id', 'name']], { limit: 1, order: 'id desc' })
+        return l && l[0] ? l[0] : null
+      } catch { return null }
+    }
+
     const uid = (lignesLg.length || lignesAchat.length) ? await auth() : null
 
     // Unité de chaque produit. Par défaut l'unité d'ACHAT (uom_po_id), celle
@@ -279,16 +292,23 @@ export default async function handler(req, res) {
 
     // 1) Odoo Lily Gourmet : le transfert interne habituel, vers le lieu du badge
     if (lignesLg.length) {
-      const choisirUom = await uomChooser(exec, uid, lignesLg, true)
-      const id = await exec(uid, 'stock.picking', 'create', [{
+      const vu = await dejaEnvoye('stock.picking', exec, uid)
+      if (vu) {
+        transferts.push({ source: 'principal', id: vu.id, name: vu.name, deja: true, fournisseur: null })
+        console.log('[economat] doublon evite :', vu.name)
+      }
+      const choisirUom = vu ? null : await uomChooser(exec, uid, lignesLg, true)
+      const id = vu ? vu.id : await exec(uid, 'stock.picking', 'create', [{
         picking_type_id: dest.type,
         location_id: dest.src,
         location_dest_id: dest.dest,
         origin: origine,
         move_ids_without_package: lignesLg.map(l => enMove(l, choisirUom, dest.src, dest.dest, AUTRE_ACHAT)),
       }])
-      const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
-      transferts.push({ source: 'principal', id, name: pick?.name, state: pick?.state, fournisseur: null })
+      if (!vu) {
+        const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
+        transferts.push({ source: 'principal', id, name: pick?.name, state: pick?.state, fournisseur: null })
+      }
     }
 
     // 1bis) Odoo Lily Gourmet : les articles qu'on COMMANDE (les frais) partent
@@ -316,7 +336,8 @@ export default async function handler(req, res) {
         transferts.push({ source: 'achat', erreur: 'sans fournisseur',
           articles: sansFournisseur.map(l => l.nom), fournisseur: null })
       }
-      for (const [fid, lot] of parFournisseur) {
+      const dejaAchat = await dejaEnvoye('purchase.order', exec, uid)
+      for (const [fid, lot] of dejaAchat ? [] : parFournisseur) {
         const id = await exec(uid, 'purchase.order', 'create', [{
           partner_id: fid,
           picking_type_id: reception,
