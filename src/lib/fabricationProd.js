@@ -100,6 +100,17 @@ export async function loadRecettes(articles) {
   return (await r.json()).recettes || {}
 }
 
+/**
+ * Les gâteaux qui utilisent ce semi-fini (lu dans Odoo à l'envers), avec la quantité
+ * par taille et ce qui est déjà commandé pour la journée. Sert à calculer combien en
+ * fabriquer : les recettes archivées dans Odoo n'y sont pas.
+ */
+export async function loadConsommateurs(article, jour) {
+  const r = await fetch(`/api/freezer-list?mode=consommateurs&article=${encodeURIComponent(article)}&jour=${jour}`)
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return (await r.json()).produits || []
+}
+
 /** Retirer une ligne du journal : on doit toujours pouvoir défaire un clic. */
 export async function delFabProd(id) {
   const { error } = await supabase.from('prod_fabrications').delete().eq('id', id)

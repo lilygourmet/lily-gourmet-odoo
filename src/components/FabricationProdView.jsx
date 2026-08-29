@@ -6,7 +6,9 @@ import { todayISO } from '../lib/dates'
 import {
   ARTICLES, loadFabProd, addFabProd, delFabProd,
   loadArticlesAjoutes, addArticle, delArticle, loadNoms, loadHistorique, loadRecettes,
+  loadConsommateurs,
 } from '../lib/fabricationProd'
+import { loadPrevisions } from '../lib/previsionsVitrine'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 const propre = n => String(n).replace(/^SM[.-]?\s*/i, '').replace(/\s*finition\s*$/i, '').trim()
@@ -49,6 +51,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
   const [q, setQ] = useState('')            // recherche rapide
+  const [calcul, setCalcul] = useState(null)      // l'article dont on calcule la quantité
 
   useEffect(() => {
     let vivant = true
@@ -516,6 +519,13 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                 <p className="text-[12.5px] text-[#854F0B]">Pas de recette dans Odoo : on note seulement les fournées.</p>
               )}
 
+              {r && (
+                <button onClick={() => setCalcul(a)}
+                  className="w-full mt-3 py-3.5 rounded-2xl bg-white border-2 border-bordeaux text-bordeaux text-[15px] font-extrabold">
+                  Combien en faire ? — depuis les gâteaux du jour
+                </button>
+              )}
+
               <button onClick={() => noter(a)}
                 className="w-full mt-3 py-4 rounded-2xl bg-ok text-white text-[19px] font-extrabold flex items-center justify-center gap-2.5">
                 <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
@@ -536,6 +546,16 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
         )
       })()}
 
+      {calcul && (
+        <CalculFournee
+          article={calcul}
+          recette={recettes[calcul.article]}
+          jour={jour}
+          onFermer={() => setCalcul(null)}
+          onUtiliser={n => { setFois(n); setCalcul(null) }}
+        />
+      )}
+
       {journal && (
         <div className="lg-bottom-bar z-40 bg-white border-t border-line px-4 py-3 flex items-center justify-between gap-3 print:hidden">
           <div>
@@ -550,6 +570,134 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ============================================================
+// « Combien en faire ? » : on part des gâteaux à produire (pré-remplis avec les
+// prévisions du jour, sinon les commandes) et on remonte à la quantité de crème.
+// ============================================================
+
+// Odoo compte en personnes : « 1 » = individuel, « 10 » = 10 personnes.
+const tailleLisible = l => (/^\d+$/.test(String(l)) ? (String(l) === '1' ? 'indiv' : `${l} pers`) : l)
+
+function CalculFournee({ article, recette, jour, onFermer, onUtiliser }) {
+  const [produits, setProduits] = useState(null)
+  const [erreur, setErreur] = useState(null)
+  const [qtes, setQtes] = useState({})          // "tmplId|label" -> nombre de gâteaux
+
+  useEffect(() => {
+    let vivant = true
+    Promise.all([
+      loadConsommateurs(article.article, jour),
+      loadPrevisions(jour).catch(() => []),
+    ])
+      .then(([prods, prev]) => {
+        if (!vivant) return
+        // La prévision de la journée passe avant les commandes : elle les comprend déjà.
+        const parVariante = {}
+        for (const p of prev) parVariante[p.variant_id] = Number(p.qty_prevue) || 0
+        const depart = {}
+        for (const p of prods) {
+          for (const d of p.declinaisons) {
+            const prevu = d.variantId != null ? parVariante[d.variantId] : undefined
+            depart[`${p.tmplId}|${d.label}`] = prevu !== undefined ? prevu : (d.commande || 0)
+          }
+        }
+        setProduits(prods); setQtes(depart)
+      })
+      .catch(e => { if (vivant) setErreur(e.message || String(e)) })
+    return () => { vivant = false }
+  }, [article.article, jour])
+
+  const total = useMemo(() => {
+    let t = 0
+    for (const p of produits || []) {
+      for (const d of p.declinaisons) t += (Number(qtes[`${p.tmplId}|${d.label}`]) || 0) * d.qty
+    }
+    return t
+  }, [produits, qtes])
+
+  const unite = produits?.[0]?.declinaisons?.[0]?.unite || article.unite
+  // On ne fait jamais moins que nécessaire : on arrondit au demi-tour de recette au-dessus.
+  const fois = recette && recette.sortQty ? Math.ceil((total / recette.sortQty) * 2) / 2 : 0
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-ink/55 flex items-end justify-center print:hidden"
+      onPointerDown={e => { if (e.target === e.currentTarget) onFermer() }}>
+      <div className="bg-cream w-full max-w-[640px] rounded-t-[24px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
+        <div className="flex items-baseline gap-2 mb-1">
+          <b className="text-[19px] leading-tight">{propre(article.article)}</b>
+          <span className="text-[13px] text-ink-mute">— combien en faire ?</span>
+        </div>
+        <p className="text-[12px] text-ink-mute mb-3">
+          Les gâteaux prévus pour {jourLisible(jour)} sont déjà remplis. Corrige ou ajoute ce que tu veux.
+        </p>
+
+        {!produits && !erreur && <Skeleton rows={3} />}
+        {erreur && (
+          <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px]">
+            Impossible de lire les recettes : {erreur}
+          </div>
+        )}
+        {produits && produits.length === 0 && (
+          <p className="text-[13.5px] text-ink-mute">Aucun gâteau d'Odoo n'utilise cet article.</p>
+        )}
+
+        {(produits || []).map(p => (
+          <div key={p.tmplId} className="bg-white border border-line rounded-2xl p-3 mb-2.5">
+            <div className="text-[14px] font-semibold mb-2">{propre(p.produit)}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {p.declinaisons.map(d => {
+                const cle = `${p.tmplId}|${d.label}`
+                return (
+                  <label key={cle} className="flex items-center gap-2 bg-cream-warm border border-line rounded-xl px-2.5 py-2">
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[13px] font-bold truncate">{tailleLisible(d.label)}</span>
+                      <span className="block text-[11px] text-ink-mute">{nb(d.qty)} {d.unite} pièce</span>
+                    </span>
+                    <input type="number" min="0" inputMode="numeric"
+                      value={qtes[cle] ?? 0}
+                      onChange={e => setQtes(q => ({ ...q, [cle]: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+                      className="w-14 text-center text-[17px] font-extrabold border border-line rounded-lg bg-white py-1 outline-none focus:border-bordeaux" />
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+
+        {produits && produits.length > 0 && (
+          <>
+            <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 flex items-baseline gap-2.5 flex-wrap">
+              <b className="text-[26px] font-extrabold text-ok">{nb(Math.round(total))} {unite}</b>
+              {unite === 'g' && total >= 1000 && (
+                <span className="text-[13.5px] text-ok">soit {nb(Math.round(total / 10) / 100)} kg</span>
+              )}
+              {recette && recette.sortQty > 0 && (
+                <span className="text-[13.5px] text-ok ml-auto">
+                  ≈ {nb(fois)} fois la recette
+                </span>
+              )}
+            </div>
+
+            {recette && recette.sortQty > 0 && (
+              <button onClick={() => onUtiliser(Math.max(0.5, fois))}
+                disabled={total <= 0}
+                className={'w-full mt-3 py-4 rounded-2xl text-[17px] font-extrabold ' +
+                  (total > 0 ? 'bg-bordeaux text-cream' : 'bg-white border border-line text-ink-mute')}>
+                Mettre {nb(Math.max(0.5, fois))} fois dans la fiche
+              </button>
+            )}
+          </>
+        )}
+
+        <button onClick={onFermer}
+          className="w-full mt-2 py-3.5 rounded-2xl bg-white border border-line text-ink-mute text-[15px] font-bold">
+          fermer
+        </button>
+      </div>
     </div>
   )
 }

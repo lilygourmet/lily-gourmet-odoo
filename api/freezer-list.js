@@ -1942,6 +1942,94 @@ export default async function handler(req, res) {
     // Les recettes d'une liste d'articles, telles qu'Odoo les tient. L'écran
     // « Fabrication Prod » s'en sert pour montrer ce qu'il faut et multiplier
     // par le nombre de fournées.
+    // Qui CONSOMME un semi-fini (« SM. Creme diplomate finition ») : les gateaux qui
+    // l'utilisent, la quantite par declinaison (taille ou parfum), et ce qui est deja
+    // commande pour la journee. Sert a calculer combien en fabriquer.
+    if (req.query.mode === 'consommateurs') {
+      const article = String(req.query.article || '').trim()
+      const jour = String(req.query.jour || '').slice(0, 10)
+      if (!article) return res.status(200).json({ produits: [] })
+      const uid = await odooAuth()
+
+      const prods = await odooSearchRead(uid, 'product.product', [['name', '=', article]], ['id'], { limit: 20 })
+      if (!prods.length) return res.status(200).json({ produits: [] })
+
+      const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['product_id', 'in', prods.map(p => p.id)]],
+        ['bom_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'], { limit: 1000 })
+      if (!lignes.length) return res.status(200).json({ produits: [] })
+
+      const bomIds = [...new Set(lignes.map(l => (Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id)))]
+      const boms = await odooSearchRead(uid, 'mrp.bom', [['id', 'in', bomIds]], ['id', 'product_tmpl_id', 'product_qty'], { limit: 1000 })
+      const bomById = new Map(boms.map(b => [b.id, b]))
+      const tmplIds = [...new Set(boms.map(b => b.product_tmpl_id[0]))]
+
+      // Les variantes servent a deux choses : nommer la declinaison et retrouver ce qui
+      // est deja commande (les commandes Odoo pointent une variante).
+      const variantes = await odooSearchRead(uid, 'product.product', [['product_tmpl_id', 'in', tmplIds]],
+        ['id', 'product_tmpl_id', 'product_template_attribute_value_ids'], { limit: 500 })
+      const attrIds = [...new Set([
+        ...lignes.flatMap(l => l.bom_product_template_attribute_value_ids || []),
+        ...variantes.flatMap(v => v.product_template_attribute_value_ids || []),
+      ])]
+      const attrs = attrIds.length
+        ? await odooSearchRead(uid, 'product.template.attribute.value', [['id', 'in', attrIds]], ['name'], { limit: 2000 })
+        : []
+      const attrName = new Map(attrs.map(a => [a.id, a.name]))
+
+      // Ce qui est deja commande ce jour-la (devis + confirmes), par variante.
+      const commande = {}
+      if (/^\d{4}-\d{2}-\d{2}$/.test(jour)) {
+        const cmds = await odooSearchRead(uid, 'sale.order',
+          [['state', 'in', ['draft', 'sent', 'sale']],
+            ['commitment_date', '>=', `${jour} 00:00:00`], ['commitment_date', '<=', `${jour} 23:59:59`]],
+          ['order_line'], { limit: 500 })
+        const lineIds = cmds.flatMap(o => o.order_line || [])
+        if (lineIds.length) {
+          const sol = await odooSearchRead(uid, 'sale.order.line', [['id', 'in', lineIds]],
+            ['product_id', 'product_uom_qty', 'display_type'], { limit: 3000 })
+          for (const l of sol) {
+            if (l.display_type) continue
+            const pid = Array.isArray(l.product_id) ? l.product_id[0] : l.product_id
+            if (pid) commande[pid] = (commande[pid] || 0) + (Number(l.product_uom_qty) || 0)
+          }
+        }
+      }
+
+      const net = n => String(n || '').replace(/^\[\d+\]\s*/, '').trim()
+      const parTmpl = new Map()
+      for (const l of lignes) {
+        const b = bomById.get(Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id)
+        if (!b) continue
+        const tmplId = b.product_tmpl_id[0]
+        if (!parTmpl.has(tmplId)) parTmpl.set(tmplId, { produit: net(b.product_tmpl_id[1]), tmplId, declinaisons: [] })
+        const vals = l.bom_product_template_attribute_value_ids || []
+        // La variante qui porte exactement cette declinaison (pour lire les commandes).
+        const mesVariantes = variantes.filter(v => v.product_tmpl_id[0] === tmplId)
+        const variante = vals.length
+          ? mesVariantes.find(v => vals.every(id => (v.product_template_attribute_value_ids || []).includes(id)))
+          : (mesVariantes.length === 1 ? mesVariantes[0] : null)
+        parTmpl.get(tmplId).declinaisons.push({
+          label: vals.map(id => attrName.get(id)).filter(Boolean).join(' + ') || 'unité',
+          qty: (l.product_qty || 0) / (b.product_qty || 1),
+          unite: ((Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
+          variantId: variante ? variante.id : null,
+          commande: variante ? (commande[variante.id] || 0) : 0,
+        })
+      }
+
+      // Les tailles se lisent dans l'ordre (indiv, 5, 10, 15, 20), pas dans celui d'Odoo.
+      const produits = [...parTmpl.values()]
+      for (const p of produits) {
+        p.declinaisons.sort((a, b) => {
+          const na = parseFloat(a.label), nb2 = parseFloat(b.label)
+          if (!isNaN(na) && !isNaN(nb2)) return na - nb2
+          return String(a.label).localeCompare(String(b.label), 'fr')
+        })
+      }
+      produits.sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+      return res.status(200).json({ article, produits })
+    }
+
     if (req.query.mode === 'recettes') {
       const noms = String(req.query.articles || '').split('|').map(x => x.trim()).filter(Boolean)
       if (!noms.length) return res.status(200).json({ recettes: {} })
