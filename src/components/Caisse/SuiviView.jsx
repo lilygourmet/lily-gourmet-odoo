@@ -494,6 +494,17 @@ function NonLieSection() {
   }
   useEffect(() => { reload() }, [view])
   async function handleLink(env, line) {
+    // Enveloppe déjà rapprochée : c'est souvent la MAUVAISE remise (relevés importés mois
+    // par mois -> l'app a validé la seule ligne du fichier en cours). On détache d'abord,
+    // ce qui renvoie l'ancienne ligne dans « non liés », puis on relie à la bonne.
+    if (env.deja_rapprochee) {
+      const quoi = env.note_proof ? `« ${env.note_proof} »` : 'une autre ligne du relevé'
+      const ok = await confirmDialog(
+        `Cette enveloppe est déjà rapprochée à ${quoi}.\n\nLa relier au dépôt du ${line.ligne_date} à la place ? L'ancienne ligne repartira dans « non liés ».`,
+        { danger: true, confirmLabel: 'Remplacer' })
+      if (!ok) return
+      await clearEnveloppeReleve(env.id)
+    }
     await linkReleveLineToEnv(env, line)
     setLinkLine(null)
     reload()
@@ -677,7 +688,10 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
     let l = envs.filter(e => (e.payment_method || 'cash') === method)
     const s = q.trim().toLowerCase()
     if (s) l = l.filter(e => String(e.amount_cash).includes(s) || (e.virement_client || '').toLowerCase().includes(s) || (e.source || '').toLowerCase().includes(s))
-    return l.sort((a, b) => Math.abs(Number(a.amount_cash) - Number(line.amount)) - Math.abs(Number(b.amount_cash) - Number(line.amount)))
+    // Les enveloppes encore libres d'abord ; les déjà rapprochées à la fin (dépannage).
+    return l.sort((a, b) =>
+      (a.deja_rapprochee ? 1 : 0) - (b.deja_rapprochee ? 1 : 0) ||
+      Math.abs(Number(a.amount_cash) - Number(line.amount)) - Math.abs(Number(b.amount_cash) - Number(line.amount)))
   }, [envs, q, method, line.amount])
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
@@ -701,8 +715,15 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
               const hasGap = Math.abs(diff) >= 0.005
               return (
                 <button key={e.id} onClick={() => onLink(e, line)}
-                  style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <span>{(e.virement_client || e.source || 'Enveloppe').trim()} · {fmtDateCourte(e.session_date)}</span>
+                  style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: `1px solid ${e.deja_rapprochee ? '#f0d9b8' : '#e5d8c3'}`, background: e.deja_rapprochee ? '#FDF7EE' : '#F9F6F1', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <span>
+                    {(e.virement_client || e.source || 'Enveloppe').trim()} · {fmtDateCourte(e.session_date)}
+                    {e.deja_rapprochee && (
+                      <span style={{ display: 'block', fontSize: 10.5, color: '#a9620a', marginTop: 2 }}>
+                        ⚠ déjà rapprochée{e.note_proof ? ` au ${e.note_proof.slice(0, 10)}` : ''} — cliquer pour remplacer
+                      </span>
+                    )}
+                  </span>
                   <span style={{ fontWeight: 600 }}>{fmtMoney(e.amount_cash)}{hasGap ? <span style={{ color: '#99201E', fontWeight: 600 }}> · écart {diff > 0 ? '+' : ''}{fmtMoney(diff)}</span> : ''}</span>
                 </button>
               )

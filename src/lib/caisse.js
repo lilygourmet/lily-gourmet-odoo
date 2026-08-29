@@ -520,16 +520,23 @@ export async function clearEnveloppeProof(envId) {
   if (error) throw error
 }
 
-// Enveloppes affectées à la Banque, encore en attente (sans preuve) — toutes dates.
+// Enveloppes Banque proposables quand on lie une ligne de relevé à la main.
+// On renvoie AUSSI celles déjà rapprochées : un rapprochement automatique peut s'être
+// trompé de remise (relevés importés mois par mois -> l'app valide la seule ligne du
+// fichier en cours). Sans elles, la bonne enveloppe est introuvable et la ligne reste
+// « non liée » pour toujours. `deja_rapprochee` sert à prévenir avant de remplacer.
+// limit explicite : sans elle Supabase s'arrête à 1000 lignes en silence.
 export async function loadPendingBanqueEnvelopes() {
   const { data, error } = await supabase
     .from('caisse_enveloppes')
     .select('*, destinataire:caisse_destinataires(*)')
     .not('destinataire_id', 'is', null)
-    .is('proof_url', null)
     .order('session_date', { ascending: false })
+    .limit(5000)
   if (error) throw error
-  return (data || []).filter(e => e.destinataire?.type === 'banque' && !e.releve_ignore)
+  return (data || [])
+    .filter(e => e.destinataire?.type === 'banque' && !e.releve_ignore)
+    .map(e => ({ ...e, deja_rapprochee: !!(e.proof_url || e.releve_status) }))
 }
 
 // Enveloppes Banque ayant un ÉCART de montant (amount_proof ≠ amount_cash),

@@ -361,6 +361,14 @@ function windowFor(method) {
   return { min: -2, max: 100 }
 }
 
+// Au-delà de ce délai, un chèque n'est plus validé TOUT SEUL (il passe « à confirmer »).
+// Les relevés s'importent mois par mois : « une seule ligne possible » veut alors dire
+// « une seule ligne DANS CE FICHIER-LÀ », et le vrai dépôt peut se trouver dans un mois
+// pas encore importé. Vécu : un chèque du 15/01 collé à la remise du 17/03 alors que la
+// bonne (05/02) est arrivée à l'import suivant — l'app ne retouchant jamais une enveloppe
+// déjà verte, l'erreur devenait définitive.
+const CHEQUE_AUTO_MAX_DAYS = 45
+
 // Rapproche les enveloppes Banque avec les lignes du relevé.
 // Ne touche pas aux enveloppes déjà 'trouve'. status: 'trouve' | 'a_confirmer' | 'absent'
 export function reconcileEnvelopes(envelopes, txns, opts = {}) {
@@ -461,7 +469,12 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     for (const env of pending) {
       if (decided.has(env.id)) continue
       const c = avail(env)
-      if (c.length === 1) { used.add(c[0]); decided.set(env.id, { status: 'trouve', line: c[0], candidates: [] }); changed = true }
+      if (c.length !== 1) continue
+      // Chèque déposé longtemps après la vente : on laisse l'étape 2 le mettre
+      // « à confirmer » plutôt que de le valider en vert sur une seule hypothèse.
+      if ((env.payment_method || 'cash') === 'cheque'
+        && Math.abs(signedDays(c[0].dateIso, env.session_date)) > CHEQUE_AUTO_MAX_DAYS) continue
+      used.add(c[0]); decided.set(env.id, { status: 'trouve', line: c[0], candidates: [] }); changed = true
     }
   }
   // 2) Le reste : 0 ligne dispo → absent ; sinon → à confirmer (lignes restantes, hors déjà prises)

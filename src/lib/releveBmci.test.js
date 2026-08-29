@@ -70,3 +70,40 @@ describe('reconcileEnvelopes — ré-import, libellé écrit autrement', () => {
     expect(results.find(r => r.env.id === 'C').status).toBe('absent')
   })
 })
+
+// Cas vécu (enveloppe 283) : un chèque du 15/01 de 364 dh a été validé en vert sur la
+// remise du 17/03 — la seule de ce montant dans le relevé de mars, importé seul. La vraie
+// remise (05/02) est arrivée à l'import suivant, mais l'app ne retouche jamais une
+// enveloppe verte : la ligne du 05/02 est restée « non liée » pour toujours.
+describe('reconcileEnvelopes — chèque encaissé longtemps après', () => {
+  const envCheque = {
+    id: 283, amount_cash: 364, payment_method: 'cheque',
+    releve_status: null, proof_url: null, session_date: '2026-01-15',
+  }
+  const remiseMars = { credit: 364, dateIso: '2026-03-17', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 46264440' }
+  const remiseFev  = { credit: 364, dateIso: '2026-02-05', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 45888840' }
+
+  it('ne valide plus tout seul une remise à plus de 45 jours', () => {
+    const { results } = reconcileEnvelopes([envCheque], [remiseMars], {})
+    const r = results.find(x => x.env.id === 283)
+    expect(r.status).toBe('a_confirmer')
+    expect(r.candidates).toHaveLength(1)
+  })
+
+  it('valide toujours en vert une remise dans le délai normal', () => {
+    const { results } = reconcileEnvelopes([envCheque], [remiseFev], {})
+    expect(results.find(x => x.env.id === 283).status).toBe('trouve')
+  })
+
+  it('avec les deux remises dans le même fichier, laisse choisir', () => {
+    const { results } = reconcileEnvelopes([envCheque], [remiseFev, remiseMars], {})
+    expect(results.find(x => x.env.id === 283).status).toBe('a_confirmer')
+  })
+
+  it('un versement espèces tardif reste validé automatiquement', () => {
+    const envCash = { ...envCheque, id: 'E', payment_method: 'cash' }
+    const versement = { credit: 364, dateIso: '2026-03-17', type: 'versement', label: 'VERSEMENT ESPECES' }
+    const { results } = reconcileEnvelopes([envCash], [versement], {})
+    expect(results.find(x => x.env.id === 'E').status).toBe('trouve')
+  })
+})
