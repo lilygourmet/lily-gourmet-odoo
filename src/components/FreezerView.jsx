@@ -377,10 +377,11 @@ export default function FreezerView({ user, onLogout, onNavigate, activeView }) 
                   </>}
                 </>
           ) : (
-            /* Vue normale : le passé NON coché (en retard) EN HAUT, puis aujourd'hui + futur */
+            /* Vue normale : aujourd'hui et les jours qui viennent d'abord, les
+               retards en bas — le plus ancien tout en bas (demande de Layla). */
             <>
-              {pastUndoneKeys.map(date => renderCard(date, 'overdue'))}
               {futureKeys.map(date => renderCard(date, 'current'))}
+              {[...pastUndoneKeys].reverse().map(date => renderCard(date, 'overdue'))}
             </>
           )}
         </div>
