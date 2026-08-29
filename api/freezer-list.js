@@ -5,6 +5,21 @@
 // Format : { items: [{ date, mo_id, mo_name, taille, parfum, scode, hour, minute }] }
 // ============================================================
 
+import { createClient } from '@supabase/supabase-js'
+
+// Ce que Check CD- a déjà contrôlé. Sans la base (SQL pas lancé, variables
+// absentes), on renvoie null : la chaîne stricte se met alors en veille plutôt
+// que de tout bloquer.
+async function etagesControles() {
+  if (!process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  try {
+    const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    const { data, error } = await sb.from('check_cd_done').select('odoo_mo_id, odoo_ok')
+    if (error) return null
+    return new Set((data || []).filter(x => x.odoo_ok).map(x => x.odoo_mo_id))
+  } catch { return null }
+}
+
 async function odooJsonRpc(service, method, args) {
   const url = `${process.env.ODOO_URL}/jsonrpc`
   const body = { jsonrpc: '2.0', method: 'call', params: { service, method, args }, id: Date.now() }
@@ -393,6 +408,24 @@ async function parentsEncaisses(uid, jours, dry) {
       lieuCD ? { context: { location: lieuCD.id } } : {})) stockDe[p.id] = p.free_qty || 0
   }
 
+  // Chaîne stricte : un gâteau n'est marqué fait que si CHACUN de ses étages a
+  // été contrôlé dans Check CD-. C'est tout le sens du double contrôle : sans
+  // ça, le passage en caisse suffirait à valider, et personne n'aurait rien
+  // vérifié. Si la base est injoignable, on n'exige rien plutôt que tout bloquer.
+  const controles = await etagesControles()
+  const enfants = controles
+    ? await odooSearchRead(uid, 'mrp.production',
+        [['origin', 'in', retenus.map(r => r.mo.name)]],
+        ['id', 'name', 'product_id', 'origin', 'state'], { limit: 800 })
+    : []
+  const etagesDuParent = {}
+  for (const e of enfants) {
+    const nom = Array.isArray(e.product_id) ? e.product_id[1] : ''
+    if (!/cakedesign/i.test(nom) && !EST_ETAGE_CD(nom)) continue
+    if (e.state === 'cancel') continue
+    ;(etagesDuParent[e.origin] ||= []).push(e)
+  }
+
   const out = []
   for (const { mo: m, code } of retenus) {
     const base = { mo_id: m.id, mo_name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', scode: code }
@@ -408,6 +441,15 @@ async function parentsEncaisses(uid, jours, dry) {
       continue
     }
     base.etage = etages.map(mv => mv.product_id[1]).join(', ')
+    if (controles) {
+      const siens = etagesDuParent[m.name] || []
+      const pasControles = siens.filter(e => !controles.has(e.id))
+      if (pasControles.length) {
+        out.push({ ...base, ok: false,
+          message: `pas encore contrôlé dans Check CD- : ${pasControles.map(e => e.name).join(', ')}` })
+        continue
+      }
+    }
     if (dry) { out.push({ ...base, ok: false, message: 'prêt à valider' }); continue }
     const r = await validerOrdre(uid, m.name, false)
     out.push({ ...base, ok: r.ok, message: r.message })
@@ -1497,8 +1539,16 @@ export default async function handler(req, res) {
       const dry = req.query.dry === '1'
       const uid = await odooAuth()
       const out = await parentsEncaisses(uid, jours, dry)
-      if (!dry) console.log(`[check-cd:parents] ${out.length} gâteau(x) · ${out.map(o => o.mo_name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
-      return res.status(200).json({ parents: out })
+      // Dire si le double contrôle est bien exigé : sans accès à la base de
+      // l'app, la chaîne stricte se met en veille — il vaut mieux le savoir.
+      const ctrl = await etagesControles()
+      const stricte = ctrl !== null
+      if (!dry) console.log(`[check-cd:parents] ${out.length} gâteau(x) · chaîne stricte ${stricte ? 'active' : 'EN VEILLE'} · ${out.map(o => o.mo_name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
+      return res.status(200).json({
+        parents: out,
+        chaine_stricte: stricte ? 'active' : 'en veille',
+        etages_deja_controles: ctrl ? ctrl.size : null,
+      })
     }
 
     // Check CD- : les étages dont le gâteau entier attend encore d'être marqué
