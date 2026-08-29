@@ -103,10 +103,14 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     return m
   }, [journal])
 
-  const ouvrir = a => {
+  // `besoin` = le grammage demandé par la recette d'où l'on vient : on ouvre l'enfant
+  // sur cette quantité-là, au lieu de repartir d'une fournée entière.
+  const ouvrir = (a, besoin = null) => {
     if (ouvert === a.article) { setOuvert(null); return }
     setOuvert(a.article)
-    setFois(1)
+    const r = recettes[a.article]
+    const f = besoin > 0 && r && r.sortQty > 0 ? Math.round((besoin / r.sortQty) * 100) / 100 : 1
+    setFois(f > 0 ? f : 1)
   }
 
   const noter = async a => {
@@ -496,7 +500,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                       </>
                     )
                     return ouvrable ? (
-                      <button key={i} onClick={() => ouvrir(cible)}
+                      <button key={i} onClick={() => ouvrir(cible, l.tailles ? null : l.qty * fois)}
                         className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
                         {contenu}
                       </button>

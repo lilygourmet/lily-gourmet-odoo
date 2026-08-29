@@ -1979,8 +1979,9 @@ export default async function handler(req, res) {
       // Ce qui est deja commande ce jour-la (devis + confirmes), par variante.
       const commande = {}
       if (/^\d{4}-\d{2}-\d{2}$/.test(jour)) {
+        // Seules les commandes CONFIRMEES comptent : un devis n'est pas une commande.
         const cmds = await odooSearchRead(uid, 'sale.order',
-          [['state', 'in', ['draft', 'sent', 'sale']],
+          [['state', 'in', ['sale', 'done']],
             ['commitment_date', '>=', `${jour} 00:00:00`], ['commitment_date', '<=', `${jour} 23:59:59`]],
           ['order_line'], { limit: 500 })
         const lineIds = cmds.flatMap(o => o.order_line || [])
