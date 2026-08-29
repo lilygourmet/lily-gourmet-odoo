@@ -20,7 +20,11 @@ const ETIQ = {
   ok: { texte: 'Étage en stock', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
   manque: { texte: 'Étage manquant', fond: 'bg-[#FDF3D8]', encre: 'text-[#8c6a20]' },
   hors: { texte: 'Hors contrôle', fond: 'bg-cream-deep', encre: 'text-ink-mute' },
-  direct: { texte: 'Fabriqué directement (pas d\'étage congelé)', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
+  // Taille hors norme (40x40, 23x23, bombé, Rose/Bleu) : elle se fabrique
+  // directement, il n'y a pas d'étage congelé à vérifier. Tant qu'elle n'est pas
+  // fabriquée, il n'y a rien à valider ici — elle reste grisée. Une fois faite,
+  // elle quitte la liste toute seule.
+  direct: { texte: 'Pas encore fabriqué', fond: 'bg-cream-deep', encre: 'text-ink-mute' },
   attente: { texte: 'Pas encore sorti du congélateur', fond: 'bg-[#E9F1F6]', encre: 'text-[#3d6f8e]' },
   valide: { texte: 'Validé dans Odoo', fond: 'bg-[#EAF3DE]', encre: 'text-[#2F6B25]' },
 }
@@ -77,9 +81,10 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
 
   // Cochable seulement si quelqu'un l'a VRAIMENT sorti du congélateur, et si
   // son étage est en stock. Le reste s'affiche, mais ne se coche pas.
-  // Cochable si le gâteau a été sorti du congélateur, et que son étage est en
-  // stock — ou qu'il n'en a pas (tailles hors normes, fabriquées directement).
-  const cochable = it => !!sortis[it.mo_id] && ['ok', 'direct'].includes(etats[it.mo_id]?.dispo)
+  // Cochable : le gâteau est sorti du congélateur ET son étage congelé est en
+  // stock. Les tailles hors normes n'ont pas d'étage : tant qu'elles ne sont pas
+  // fabriquées, il n'y a rien à valider, elles restent grisées.
+  const cochable = it => !!sortis[it.mo_id] && etats[it.mo_id]?.dispo === 'ok'
 
   const selectionnables = useMemo(
     () => items.filter(cochable),

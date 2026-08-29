@@ -1449,7 +1449,7 @@ export default async function handler(req, res) {
       const out = []
       for (const e of etats) {
         if (e.dispo === 'valide') { out.push({ ...e, ok: true, message: 'déjà validé dans Odoo' }); continue }
-        if (e.dispo !== 'ok' && e.dispo !== 'direct') {
+        if (e.dispo !== 'ok') {
           out.push({ ...e, ok: false, message: e.raison || `étage manquant (${e.stock} sur ${e.besoin} demandés)` })
           continue
         }
