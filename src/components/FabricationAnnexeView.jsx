@@ -190,11 +190,27 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return out
   }
+  // Tout ce qui se fabrique sous ce gâteau, à n'importe quelle profondeur.
+  const touteLaDescendance = (nom, prof = 0, vus = new Set(), out = []) => {
+    if (prof > 5) return out
+    for (const e of enfantsDe(nom)) {
+      if (vus.has(e)) continue
+      vus.add(e)
+      out.push({ nom: e, prof: prof + 1 })
+      touteLaDescendance(e, prof + 1, vus, out)
+    }
+    return out
+  }
   const travailDe = mere => {
     const out = []
-    for (const e of enfantsDe(mere)) {
-      const b = besoins[e] !== undefined ? besoins[e] : besoinDeBase(e)
-      if (b > 0) cascade(e, b, 1, out, new Set())
+    const vus = new Set()
+    // On part de tout article qui est sous SON PROPRE minimum, où qu'il soit
+    // dans l'arbre : « Pistache fleur d'oranger indiv » a son seuil à lui, il
+    // doit remonter même si le gâteau au-dessus n'en réclame pas.
+    for (const { nom, prof } of touteLaDescendance(mere)) {
+      if (vus.has(nom)) continue
+      const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
+      if (b > 0) cascade(nom, b, Math.min(prof, 3), out, vus)
     }
     return out
   }
