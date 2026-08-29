@@ -1,12 +1,5 @@
 import { supabase } from './supabase'
 
-/** Les étages dont le gâteau entier attend encore d'être marqué fait. */
-export async function loadEtagesEnAttente(jours = 30) {
-  const r = await fetch(`/api/freezer-list?mode=check-cd-liste&jours=${jours}`)
-  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
-  return (await r.json()).etages || []
-}
-
 /** L'état de chaque gâteau sorti : son étage « N cm CD* » est-il en stock ? */
 export async function loadEtatsCheckCd(moIds) {
   if (!moIds.length) return {}
