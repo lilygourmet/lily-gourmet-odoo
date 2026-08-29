@@ -201,6 +201,21 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return out
   }
+  // On ne s'occupe que des articles suivis dans « Stock Prod Annexe » : c'est
+  // la liste que Layla tient. Un article qu'elle n'y a pas activé n'a rien à
+  // faire ici, même si Odoo lui connaît un minimum.
+  const suivis = useMemo(() => {
+    const out = new Set()
+    for (const c of catalogue || []) {
+      if (!c.actif) continue
+      out.add(c.product_name)
+      out.add(String(c.product_name).replace(/\s*\([^()]*\)\s*$/, '').trim())
+    }
+    return out
+  }, [catalogue])
+  const estSuivi = nom => !suivis.size
+    || suivis.has(nom) || suivis.has(String(nom).replace(/\s*\([^()]*\)\s*$/, '').trim())
+
   const travailDe = mere => {
     const out = []
     const vus = new Set()
@@ -209,6 +224,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     // doit remonter même si le gâteau au-dessus n'en réclame pas.
     for (const { nom, prof } of touteLaDescendance(mere)) {
       if (vus.has(nom)) continue
+      if (!estSuivi(nom)) continue
       const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
       if (b > 0) cascade(nom, b, Math.min(prof, 3), out, vus)
     }
