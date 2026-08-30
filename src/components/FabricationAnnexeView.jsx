@@ -637,19 +637,24 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             {vue === 'besoins' && (() => {
               const travail = (aFaire.find(x => x.mere === saisie) || {}).lignes
               if (!travail || !travail.length) return null
-              return (
-                <div className="bg-white border border-danger rounded-2xl overflow-hidden mb-2.5">
-                  <div className="bg-[#FCEEE8] px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-danger border-b border-[#f0cfc5]">
-                    Ce qu'il manque
+              // Un panneau par chaîne : le « 10 pers » et l'« indiv » sont deux
+              // chantiers différents, ils ne doivent pas se lire à la suite.
+              const groupes = []
+              for (const l of travail) {
+                const g = groupes.find(x => x.tete === l.tete)
+                if (g) g.lignes.push(l)
+                else groupes.push({ tete: l.tete, lignes: [l] })
+              }
+              return groupes.map(g => (
+                <div key={g.tete} className="bg-white border-2 border-danger rounded-2xl overflow-hidden mb-3">
+                  <div className="bg-[#FCEEE8] px-3.5 py-2 border-b border-[#f0cfc5] flex items-baseline gap-2">
+                    <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-danger">
+                      Ce qu'il manque
+                    </span>
+                    <span className="text-[12px] font-bold text-danger truncate">— {courtNom(g.tete)}</span>
                   </div>
-                  {travail.map((l, i) => (
-                    <div key={l.nom + i}>
-                      {/* chaque chaîne part d'un article suivi : on les sépare
-                          pour ne pas confondre le « 10 pers » et l'« indiv » */}
-                      {i > 0 && travail[i - 1].tete !== l.tete && (
-                        <div className="h-2 bg-cream-warm border-y border-[#f0e8db]" />
-                      )}
-                    <button onClick={() => ouvrirFiche(l.nom, saisie, l.besoin)}
+                  {g.lignes.map((l, i) => (
+                    <button key={l.nom + i} onClick={() => ouvrirFiche(l.nom, saisie, l.besoin)}
                       className={'w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm '
                         + (l.prof === 1 ? 'bg-[#fdf8f9]' : '')}
                       style={{ paddingLeft: 14 + (l.prof - 1) * 16 }}>
@@ -668,14 +673,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
                         <path d="M9 5l7 7-7 7" /></svg>
                     </button>
-                    </div>
                   ))}
                 </div>
-              )
+              ))
             })()}
 
-            {/* pas de « à faire » quand l'article se compte en unités ni quand il
-                se fait par tournée entière : le compteur de fournées suffit */}
             {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie)
               && recettes[saisie] && recettes[saisie].sortUnite !== 'u'
               && !tournees[saisie] && !poidsUnite(recettes[saisie].sortUnite) && (() => {
