@@ -1901,8 +1901,10 @@ export default async function handler(req, res) {
         // toutes les règles min/max d'Odoo, pas seulement celles de l'annexe :
         // beaucoup d'articles n'en ont qu'ailleurs et n'apparaissaient donc
         // jamais dans « ce qu'il faut faire »
+        // surtout pas `qty_on_hand` : Odoo le recalcule règle par règle et la
+        // lecture passe de 1 à 13 secondes. Les stocks viennent des quants.
         odooSearchRead(uid, 'stock.warehouse.orderpoint', [],
-          ['product_id', 'product_min_qty', 'product_max_qty', 'qty_on_hand', 'location_id'], { limit: 3000 }),
+          ['product_id', 'product_min_qty', 'product_max_qty', 'location_id'], { limit: 3000 }),
         odooSearchRead(uid, 'product.template', [['name', 'in', racines]],
           ['id', 'name', 'image_128'], { limit: 400 }),
       ])
@@ -1923,13 +1925,12 @@ export default async function handler(req, res) {
         if (!n || !((o.product_min_qty || 0) > 0)) continue
         const cible = idsAnnexe.has(Array.isArray(o.location_id) ? o.location_id[0] : o.location_id)
           ? aLAnnexeMM : ailleurs
-        if (!cible[n]) cible[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0, surPlace: cible === aLAnnexeMM, dispo: o.qty_on_hand }
+        if (!cible[n]) cible[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
       }
       const minmax = {}
       for (const n of new Set([...Object.keys(ailleurs), ...Object.keys(aLAnnexeMM)])) {
         const r = ailleurs[n] || aLAnnexeMM[n]
         minmax[n] = { min: r.min, max: r.max }
-        if (r.surPlace && stocks[n] === undefined) stocks[n] = r.dispo || 0
       }
 
       const photos = {}
