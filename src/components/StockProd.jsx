@@ -1,6 +1,6 @@
 // src/components/StockProd.jsx
 // Vue Stock Prod (Vitrine ou Annexe) : articles SM- depuis Odoo à un lieu donné.
-// - Perms : voient seulement les articles ACTIVÉS, avec stock + badge « à refill ».
+// - Perms : voient seulement les articles ACTIVÉS, avec stock + badge « à remplir ».
 // - Admin : bouton « ⚙️ Catalogue » pour activer/désactiver et régler le stock mini.
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { RefreshCw, Settings, Check } from 'lucide-react'
@@ -67,7 +67,7 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
     // gros volume à produire d'abord.
     const manque = m => (m.stock_min > 0 ? (m.stock_min - m.qty) / m.stock_min : (m.qty <= 0 ? 1 : 0))
     const aProduire = m => Math.max(0, (m.stock_max != null ? m.stock_max : m.stock_min) - m.qty)
-    // 1) les ruptures (plus rien en stock), 2) les articles à refill,
+    // 1) les ruptures (plus rien en stock), 2) les articles à remplir,
     // 3) le reste. Dans chaque groupe, le plus gros manque devant.
     const rang = m => (m.qty <= 0 ? 0 : (m.qty <= m.stock_min ? 1 : 2))
     return [...list].sort((a, b) => (rang(a) - rang(b))
@@ -139,7 +139,7 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
             <div><span className="text-[11px] text-ink-mute uppercase tracking-wider">{adminMode ? 'Articles SM-' : 'Affichés'}</span>
               <div className="text-[20px] font-semibold text-ink">{adminMode ? merged.length : actifsCount}</div></div>
             {!adminMode && lowCount > 0 && (
-              <div><span className="text-[11px] text-amber-700 uppercase tracking-wider">⚠ À refill</span>
+              <div><span className="text-[11px] text-amber-700 uppercase tracking-wider">⚠ À remplir</span>
                 <div className="text-[20px] font-semibold text-amber-700">{lowCount}</div></div>
             )}
             {adminMode && <div><span className="text-[11px] text-ink-mute uppercase tracking-wider">Activés</span>
@@ -166,14 +166,14 @@ export default function StockProd({ user, lieu, activeView, onNavigate, onLogout
   )
 }
 
-// Carte vue (perm) : stock + badge à refill + objectif max à atteindre
+// Carte vue (perm) : stock + badge à remplir + objectif max à atteindre
 function ViewRow({ m }) {
-  const besoin = m.qty <= m.stock_min            // à refill
+  const besoin = m.qty <= m.stock_min            // à remplir
   const zero = m.qty <= 0
   const aProduire = m.stock_max != null ? Math.max(0, Math.round((m.stock_max - m.qty) * 100) / 100) : null
   let box = 'bg-white border-line/60', pill = 'bg-emerald-600 text-white', badge = null
   if (zero) { box = 'bg-red-50 border-red-300'; pill = 'bg-red-600 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded-full ml-2">Rupture</span> }
-  else if (besoin) { box = 'bg-amber-50 border-amber-300'; pill = 'bg-amber-500 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full ml-2">À refill</span> }
+  else if (besoin) { box = 'bg-amber-50 border-amber-300'; pill = 'bg-amber-500 text-white'; badge = <span className="text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full ml-2">À remplir</span> }
   return (
     <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 shadow-sm ${box}`}>
       <div className="flex-1 min-w-0">
