@@ -398,11 +398,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <span className="block w-full aspect-square overflow-hidden">
                       <Vignette nom={mere} photo={photoDe(mere)} plein rond={0} />
                     </span>
-                    {lignes.some(l => (stocks[l.nom] || 0) <= 0) && (
-                      <span className="absolute top-1.5 left-1.5 right-1.5 bg-danger text-white rounded-lg px-2 py-1 text-[11.5px] font-extrabold text-center">
-                        rupture
-                      </span>
-                    )}
+                    <span className={'absolute top-1.5 left-1.5 right-1.5 rounded-lg px-2 py-1 text-[11.5px] font-extrabold text-center text-white '
+                      + (lignes.some(l => (stocks[l.nom] || 0) <= 0) ? 'bg-danger' : 'bg-[#854F0B]')}>
+                      {lignes.some(l => (stocks[l.nom] || 0) <= 0) ? 'rupture' : 'à remplir'}
+                    </span>
                     <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
                     <span className="block px-2 pb-2 pt-1">
                       {directs.slice(0, 3).map(l => (
@@ -413,11 +412,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                           </span>
                           {(stocks[l.nom] || 0) <= 0
                             ? <span className="text-[10.5px] font-extrabold text-danger">rupture</span>
-                            : (minmax[l.nom] && minmax[l.nom].min > 0 && (
-                              <span className="text-[10.5px] text-ink-mute">
-                                il en reste {nb(stocks[l.nom] || 0)} sur {nb(minmax[l.nom].min)}
+                            : (
+                              <span className="text-[10.5px]">
+                                <b className="text-[#854F0B]">à remplir</b>
+                                {minmax[l.nom] && minmax[l.nom].min > 0 && (
+                                  <span className="text-ink-mute"> · il en reste {nb(stocks[l.nom])} sur {nb(minmax[l.nom].min)}</span>
+                                )}
                               </span>
-                            ))}
+                            )}
                         </span>
                       ))}
                       {directs.length > 3 && (
@@ -625,9 +627,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             )}
 
             {vue === 'besoins' && minmax[saisie] && minmax[saisie].min > 0 && (stocks[saisie] || 0) < minmax[saisie].min && (
-              <div className="bg-[#FCEEE8] border border-[#f0cfc5] rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3">
-                <b className="text-[27px] font-extrabold text-danger leading-none">{nb(stocks[saisie] || 0)}</b>
-                <span className="text-[12.5px] text-danger leading-snug">
+              <div className={'rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3 border '
+                + ((stocks[saisie] || 0) <= 0 ? 'bg-[#FCEEE8] border-[#f0cfc5]' : 'bg-[#FFF7E0] border-[#e6d3a3]')}>
+                <b className={'text-[27px] font-extrabold leading-none '
+                  + ((stocks[saisie] || 0) <= 0 ? 'text-danger' : 'text-[#854F0B]')}>{nb(stocks[saisie] || 0)}</b>
+                <span className={'text-[12.5px] leading-snug '
+                  + ((stocks[saisie] || 0) <= 0 ? 'text-danger' : 'text-[#854F0B]')}>
                   il en reste <b>{nb(stocks[saisie] || 0)}</b><br />
                   il en faut au moins <b>{nb(minmax[saisie].min)}</b>, jusqu'à <b>{nb(minmax[saisie].max)}</b>
                 </span>
@@ -664,9 +669,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                         <span className="block text-[11px] mt-0.5">
                           {(stocks[l.nom] || 0) <= 0
                             ? <b className="text-danger">rupture</b>
-                            : (minmax[l.nom] && minmax[l.nom].min > 0
-                              ? <span className="text-ink-mute">il en reste {nb(stocks[l.nom])} sur {nb(minmax[l.nom].min)}</span>
-                              : <span className="text-ink-mute">il en reste {nb(stocks[l.nom] || 0)}</span>)}
+                            : (
+                              <>
+                                <b className="text-[#854F0B]">à remplir</b>
+                                {minmax[l.nom] && minmax[l.nom].min > 0
+                                  ? <span className="text-ink-mute"> · il en reste {nb(stocks[l.nom])} sur {nb(minmax[l.nom].min)}</span>
+                                  : <span className="text-ink-mute"> · il en reste {nb(stocks[l.nom])}</span>}
+                              </>
+                            )}
                           {l.prof > 1 && <span className="text-[#b58f3c] font-bold"> · pour celui du dessus</span>}
                         </span>
                       </span>
