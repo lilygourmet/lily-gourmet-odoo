@@ -1686,7 +1686,12 @@ export default async function handler(req, res) {
     // vers les préparations. Jamais un morceau tout seul : il se trouve dans sa
     // mère (règle de Layla, 28/08).
     if (req.query.mode === 'annexe') {
+      // ?chrono=1 : renvoie le temps de chaque étape, pour savoir quoi optimiser
+      const t0 = Date.now()
+      const chrono = []
+      const top = nom => { chrono.push(`${nom} ${Date.now() - t0} ms`) }
       const uid = await odooAuth()
+      top('connexion')
       const lieux = await odooSearchRead(uid, 'stock.location',
         [['complete_name', 'ilike', 'Stock Prod annexe']], ['id'], { limit: 5 })
       if (!lieux.length) return res.status(200).json({ racines: [], recettes: {} })
@@ -1699,10 +1704,13 @@ export default async function handler(req, res) {
       const uniteDe = u => ((Array.isArray(u) ? u[1] : '') || 'u').replace(/^units?$/i, 'u')
 
       const d0 = new Date(); d0.setDate(d0.getDate() - 90)
+      const dAn0 = new Date(); dAn0.setMonth(dAn0.getMonth() - 12)
       const isoD = d => d.toISOString().slice(0, 19).replace('T', ' ')
       // Les nomenclatures pèsent 45 000 lignes et ne changent qu'à la main :
       // on les garde en mémoire. Les stocks et les ordres, eux, sont relus.
-      const [mos, boms, lignesBom, tmpl] = await Promise.all([
+      // Tout part en même temps : quatre vagues successives faisaient attendre
+      // l'écran pour rien.
+      const [mos, boms, lignesBom, tmpl, anciens, quants, points] = await Promise.all([
         odooSearchRead(uid, 'mrp.production', [
           ['location_src_id', 'in', lieux.map(l => l.id)],
           ['state', '=', 'done'],
@@ -1713,8 +1721,20 @@ export default async function handler(req, res) {
           ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
           { limit: 40000 })),
         memo('tmplnoms', () => odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 })),
+        memo('anciensordres', () => odooSearchRead(uid, 'mrp.production', [
+          ['location_src_id', 'in', [...lieux.map(l => l.id), 52]],
+          ['state', '=', 'done'],
+          ['date_planned_start', '>=', isoD(dAn0)],
+        ], ['product_id', 'product_qty'], { limit: 12000 })),
+        odooSearchRead(uid, 'stock.quant', [['location_id', 'child_of', lieux.map(l => l.id)]],
+          ['product_id', 'quantity'], { limit: 3000 }),
+        // surtout pas `qty_on_hand` : Odoo le recalcule règle par règle et la
+        // lecture passe de 1 à 13 secondes. Les stocks viennent des quants.
+        memo('orderpoints', () => odooSearchRead(uid, 'stock.warehouse.orderpoint', [],
+          ['product_id', 'product_min_qty', 'product_max_qty', 'location_id'], { limit: 3000 })),
       ])
 
+      top('lectures principales')
       const combien = {}
       const qtesFaites = {}
       for (const m of mos) {
@@ -1728,12 +1748,8 @@ export default async function handler(req, res) {
       // ne le dit nulle part : on le déduit de ce que l'atelier a réellement
       // produit. Il faut un an et les deux ateliers pour avoir assez de
       // fournées — 90 jours à l'annexe seule ne suffisent pas.
-      const dAn = new Date(); dAn.setMonth(dAn.getMonth() - 12)
-      const anciens = await memo('anciensordres', () => odooSearchRead(uid, 'mrp.production', [
-        ['location_src_id', 'in', [...lieux.map(l => l.id), 52]],
-        ['state', '=', 'done'],
-        ['date_planned_start', '>=', isoD(dAn)],
-      ], ['product_id', 'product_qty'], { limit: 12000 }))
+      // l'historique d'un an complète les 90 jours : sans lui, trop peu de
+      // fournées pour reconnaître les articles qui se font par tournée
       for (const m of anciens) {
         const n = net(Array.isArray(m.product_id) ? m.product_id[1] : '')
         if (n) (qtesFaites[n] ||= []).push(m.product_qty || 0)
@@ -1807,6 +1823,7 @@ export default async function handler(req, res) {
         // le modèle garde la recette entière, pour les articles sans parfum
         if (nomT && !carte[nomT]) carte[nomT] = { ...base, lignes: ing }
       }
+      top('carte des recettes')
       const recetteDe = n => carte[n] || carte[modele(n)]
       const estFini = n => /^(E-|V-|MI-|N-)/i.test(n)
       const aLAnnexe = n => combien[n] !== undefined || combien[modele(n)] !== undefined
@@ -1871,6 +1888,7 @@ export default async function handler(req, res) {
         vendues = new Set(meres)
       }
 
+      top('mères et ventes')
       const racines = meres
         .filter(m => vendues.has(m))
         .sort((a, b) => (poids[b] || 0) - (poids[a] || 0))
@@ -1894,20 +1912,10 @@ export default async function handler(req, res) {
 
       // Ce qu'il y a en stock à l'annexe, et les minimums déclarés dans Odoo :
       // c'est ce qui dit s'il y a du travail.
-      const nomsArbre = [...new Set(Object.keys(aRendre))]
-      const [quants, points, tmplPhotos] = await Promise.all([
-        odooSearchRead(uid, 'stock.quant', [['location_id', 'child_of', lieux.map(l => l.id)]],
-          ['product_id', 'quantity'], { limit: 3000 }),
-        // toutes les règles min/max d'Odoo, pas seulement celles de l'annexe :
-        // beaucoup d'articles n'en ont qu'ailleurs et n'apparaissaient donc
-        // jamais dans « ce qu'il faut faire »
-        // surtout pas `qty_on_hand` : Odoo le recalcule règle par règle et la
-        // lecture passe de 1 à 13 secondes. Les stocks viennent des quants.
-        odooSearchRead(uid, 'stock.warehouse.orderpoint', [],
-          ['product_id', 'product_min_qty', 'product_max_qty', 'location_id'], { limit: 3000 }),
-        odooSearchRead(uid, 'product.template', [['name', 'in', racines]],
-          ['id', 'name', 'image_128'], { limit: 400 }),
-      ])
+      top('recettes à rendre')
+      const tmplPhotos = await odooSearchRead(uid, 'product.template', [['name', 'in', racines]],
+        ['id', 'name', 'image_128'], { limit: 400 })
+
       const stocks = {}
       for (const k of quants) {
         const n = net(Array.isArray(k.product_id) ? k.product_id[1] : '')
@@ -1933,9 +1941,12 @@ export default async function handler(req, res) {
         minmax[n] = { min: r.min, max: r.max }
       }
 
+      top('stocks et min/max')
       const photos = {}
       for (const t of tmplPhotos) if (t.image_128) photos[net(t.name)] = t.id
 
+      top('total')
+      if (req.query.chrono) return res.status(200).json({ chrono })
       res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=1800')
       return res.status(200).json({
         racines, ecartees, photos, stocks, minmax, tournees,
