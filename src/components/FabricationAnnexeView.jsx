@@ -388,9 +388,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             <div className="grid gap-2.5"
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
               {aFaire.map(({ mere, lignes }) => {
-                // « 5 à faire » ne dit pas quoi : on nomme chaque taille et sa
-                // quantité, c'est ça que le pâtissier a besoin de lire
-                const directs = lignes.filter(l => l.prof === 1)
+                // Ce qu'on montre : les articles SUIVIS (les têtes de chaîne),
+                // pas leurs composants. Se fier à la profondeur laissait des
+                // cartes vides quand la tête était plus bas dans l'arbre.
+                const directs = lignes.filter(l => l.tete === l.nom)
+                // L'état de la carte parle de ces articles-là : dire « rupture »
+                // parce qu'un ingrédient profond est à zéro était trompeur.
+                const enRupture = directs.some(l => (stocks[l.nom] || 0) <= 0)
                 return (
                   <button key={mere} onClick={() => ouvrirFiche(mere)}
                     className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
@@ -399,8 +403,8 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       <Vignette nom={mere} photo={photoDe(mere)} plein rond={0} />
                     </span>
                     <span className={'absolute top-3 left-2.5 right-2.5 rounded-full px-3 py-1.5 text-[11.5px] font-extrabold text-center text-white shadow-md '
-                      + (lignes.some(l => (stocks[l.nom] || 0) <= 0) ? 'bg-danger' : 'bg-[#854F0B]')}>
-                      {lignes.some(l => (stocks[l.nom] || 0) <= 0) ? 'rupture' : 'à remplir'}
+                      + (enRupture ? 'bg-danger' : 'bg-[#854F0B]')}>
+                      {enRupture ? 'rupture' : 'à remplir'}
                     </span>
                     <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
                     <span className="block px-2 pb-2 pt-1">
