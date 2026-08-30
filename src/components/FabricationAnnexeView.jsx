@@ -165,12 +165,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return (r && poidsUnite(r.sortUnite)) ? Math.ceil(q * 100) / 100 : Math.ceil(q)
   }
 
-  const cascade = (nom, besoin, prof, out, vus) => {
+  const cascade = (nom, besoin, prof, out, vus, tete) => {
     if (prof > 4 || vus.has(nom)) return out
     vus.add(nom)
     const r = recettes[nom]
     const b = besoins[nom] !== undefined ? besoins[nom] : besoin
-    out.push({ nom, besoin: b, prof })
+    out.push({ nom, besoin: b, prof, tete: tete || nom })
     if (!r || b <= 0) return out
     const n = r.sortQty ? b / r.sortQty : 1
     // Une fiche Odoo liste parfois le même ingrédient une fois par taille :
@@ -186,7 +186,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       // un stock négatif veut dire que l'inventaire est en retard, pas qu'il
       // faut en produire 7 766 : on le compte comme zéro
       const manque = Math.max(0, besoinLigne - Math.max(0, stocks[l.produit] || 0))
-      if (manque > 0.001) cascade(l.produit, arrondiUtile(l.produit, manque), prof + 1, out, vus)
+      if (manque > 0.001) cascade(l.produit, arrondiUtile(l.produit, manque), prof + 1, out, vus, tete || nom)
     }
     return out
   }
@@ -226,7 +226,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       if (vus.has(nom)) continue
       if (!estSuivi(nom)) continue
       const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
-      if (b > 0) cascade(nom, b, Math.min(prof, 3), out, vus)
+      if (b > 0) cascade(nom, b, Math.min(prof, 3), out, vus, nom)
     }
     return out
   }
@@ -642,12 +642,19 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   <div className="bg-[#FCEEE8] px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-danger border-b border-[#f0cfc5]">
                     Ce qu'il manque
                   </div>
-                  {travail.map(l => (
-                    <button key={l.nom} onClick={() => ouvrirFiche(l.nom, saisie, l.besoin)}
-                      className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm"
+                  {travail.map((l, i) => (
+                    <div key={l.nom + i}>
+                      {/* chaque chaîne part d'un article suivi : on les sépare
+                          pour ne pas confondre le « 10 pers » et l'« indiv » */}
+                      {i > 0 && travail[i - 1].tete !== l.tete && (
+                        <div className="h-2 bg-cream-warm border-y border-[#f0e8db]" />
+                      )}
+                    <button onClick={() => ouvrirFiche(l.nom, saisie, l.besoin)}
+                      className={'w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm '
+                        + (l.prof === 1 ? 'bg-[#fdf8f9]' : '')}
                       style={{ paddingLeft: 14 + (l.prof - 1) * 16 }}>
                       <b className="text-[19px] font-extrabold text-danger min-w-[62px] text-right">{nb(l.besoin)}</b>
-                      <span className="flex-1 min-w-0 text-[14px]">
+                      <span className={'flex-1 min-w-0 text-[14px] ' + (l.prof === 1 ? 'font-bold' : '')}>
                         {courtNom(l.nom)}
                         <span className="block text-[11px] mt-0.5">
                           {(stocks[l.nom] || 0) <= 0
@@ -661,6 +668,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
                         <path d="M9 5l7 7-7 7" /></svg>
                     </button>
+                    </div>
                   ))}
                 </div>
               )
