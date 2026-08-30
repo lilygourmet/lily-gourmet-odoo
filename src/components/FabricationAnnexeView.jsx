@@ -398,7 +398,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <span className="block w-full aspect-square overflow-hidden">
                       <Vignette nom={mere} photo={photoDe(mere)} plein rond={0} />
                     </span>
-                    <span className={'absolute top-1.5 left-1.5 right-1.5 rounded-lg px-2 py-1 text-[11.5px] font-extrabold text-center text-white '
+                    <span className={'absolute top-3 left-2.5 right-2.5 rounded-full px-3 py-1.5 text-[11.5px] font-extrabold text-center text-white shadow-md '
                       + (lignes.some(l => (stocks[l.nom] || 0) <= 0) ? 'bg-danger' : 'bg-[#854F0B]')}>
                       {lignes.some(l => (stocks[l.nom] || 0) <= 0) ? 'rupture' : 'à remplir'}
                     </span>
