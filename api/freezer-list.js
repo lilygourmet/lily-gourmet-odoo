@@ -1700,17 +1700,19 @@ export default async function handler(req, res) {
 
       const d0 = new Date(); d0.setDate(d0.getDate() - 90)
       const isoD = d => d.toISOString().slice(0, 19).replace('T', ' ')
+      // Les nomenclatures pèsent 45 000 lignes et ne changent qu'à la main :
+      // on les garde en mémoire. Les stocks et les ordres, eux, sont relus.
       const [mos, boms, lignesBom, tmpl] = await Promise.all([
         odooSearchRead(uid, 'mrp.production', [
           ['location_src_id', 'in', lieux.map(l => l.id)],
           ['state', '=', 'done'],
           ['date_planned_start', '>=', isoD(d0)],
         ], ['product_id'], { limit: 3000 }),
-        odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 }),
-        odooSearchRead(uid, 'mrp.bom.line', [],
+        memo('boms', () => odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 })),
+        memo('bomlignes', () => odooSearchRead(uid, 'mrp.bom.line', [],
           ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
-          { limit: 40000 }),
-        odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 }),
+          { limit: 40000 })),
+        memo('tmplnoms', () => odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 })),
       ])
 
       const combien = {}
@@ -1727,11 +1729,11 @@ export default async function handler(req, res) {
       // produit. Il faut un an et les deux ateliers pour avoir assez de
       // fournées — 90 jours à l'annexe seule ne suffisent pas.
       const dAn = new Date(); dAn.setMonth(dAn.getMonth() - 12)
-      const anciens = await odooSearchRead(uid, 'mrp.production', [
+      const anciens = await memo('anciensordres', () => odooSearchRead(uid, 'mrp.production', [
         ['location_src_id', 'in', [...lieux.map(l => l.id), 52]],
         ['state', '=', 'done'],
         ['date_planned_start', '>=', isoD(dAn)],
-      ], ['product_id', 'product_qty'], { limit: 12000 })
+      ], ['product_id', 'product_qty'], { limit: 12000 }))
       for (const m of anciens) {
         const n = net(Array.isArray(m.product_id) ? m.product_id[1] : '')
         if (n) (qtesFaites[n] ||= []).push(m.product_qty || 0)
@@ -1769,8 +1771,8 @@ export default async function handler(req, res) {
       const tmplDesBoms = [...new Set(boms.map(b =>
         (Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id)).filter(Boolean))]
       const variantes = tmplDesBoms.length
-        ? await odooSearchRead(uid, 'product.product', [['product_tmpl_id', 'in', tmplDesBoms]],
-          ['id', 'display_name', 'product_tmpl_id', 'product_template_attribute_value_ids'], { limit: 12000 })
+        ? await memo('variantes', () => odooSearchRead(uid, 'product.product', [['product_tmpl_id', 'in', tmplDesBoms]],
+          ['id', 'display_name', 'product_tmpl_id', 'product_template_attribute_value_ids'], { limit: 12000 }))
         : []
       const parTmpl = new Map()
       for (const v of variantes) {
@@ -1852,11 +1854,11 @@ export default async function handler(req, res) {
         [['name', 'in', meres]], ['id', 'name'], { limit: 400 })
       let vendues = new Set()
       if (tmplMeres.length) {
-        const ventes = await odooSearchRead(uid, 'sale.order.line', [
+        const ventes = await memo('ventes12m', () => odooSearchRead(uid, 'sale.order.line', [
           ['product_template_id', 'in', tmplMeres.map(t => t.id)],
           ['state', 'in', ['sale', 'done']],
           ['create_date', '>=', isoD(dVente)],
-        ], ['product_template_id'], { limit: 20000 })
+        ], ['product_template_id'], { limit: 20000 }))
         const nomDe = new Map(tmplMeres.map(t => [t.id, net(t.name)]))
         for (const l of ventes) {
           const n = nomDe.get(Array.isArray(l.product_template_id) ? l.product_template_id[0] : l.product_template_id)
@@ -1933,6 +1935,7 @@ export default async function handler(req, res) {
       const photos = {}
       for (const t of tmplPhotos) if (t.image_128) photos[net(t.name)] = t.id
 
+      res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=1800')
       return res.status(200).json({
         racines, ecartees, photos, stocks, minmax, tournees,
         combien: { ...combien, ...poids }, recettes: aRendre,
