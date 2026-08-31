@@ -89,6 +89,26 @@ function stripOdooPrefix(name) {
   return String(name || '').replace(/^\[\d+\]\s*/, '').trim()
 }
 
+// Coupe un texte en lignes d'au plus `parLigne` caracteres, sans couper les mots
+// (sauf mot plus long qu'une ligne). Au-dela de `maxLignes`, on tronque avec « . ».
+function couperEnLignes(texte, parLigne, maxLignes) {
+  const lignes = []
+  let courante = ''
+  for (const mot of String(texte || '').split(/\s+/).filter(Boolean)) {
+    const essai = courante ? `${courante} ${mot}` : mot
+    if (essai.length <= parLigne) { courante = essai; continue }
+    if (courante) lignes.push(courante)
+    courante = mot.length > parLigne ? mot.slice(0, parLigne) : mot
+  }
+  if (courante) lignes.push(courante)
+  if (lignes.length > maxLignes) {
+    const gardees = lignes.slice(0, maxLignes)
+    gardees[maxLignes - 1] = gardees[maxLignes - 1].slice(0, Math.max(1, parLigne - 1)) + '.'
+    return gardees
+  }
+  return lignes
+}
+
 function buildSingleZpl(name, subtitle, priceLine, barcode) {
   // Format Zebra 5cm x 2.5cm (203dpi -> 400 x 200 dots)
   //
@@ -112,29 +132,45 @@ function buildSingleZpl(name, subtitle, priceLine, barcode) {
   lines.push('^LS0')
 
   // ===== ZONE TEXTE (haut) =====
-  // Nom de l'article : 1-2 lignes, gauche, police moyenne
-  // Largeur de bloc reservee : 250 (laisse 140 pour le prix a droite)
+  // On decoupe le nom NOUS-MEMES, une ligne = un champ ^FO. Laisser ZPL le faire
+  // (^FB) le fait imprimer les lignes en trop PAR-DESSUS les precedentes : un nom
+  // de trois lignes sortait illisible (« nohseblat » pour « chocolat noisette »,
+  // vecu le 2026-08-31). Et ^FO (coin haut-gauche) au lieu de ^FT (ligne de base),
+  // sinon la premiere ligne sort hors de l'etiquette.
+  // Le prix est en BAS A DROITE (choix de Layla, 2026-08-31) : le nom prend donc
+  // toute la largeur en haut au lieu de s'ecraser sur 250 points.
   const hasPrice = !!priceLine
-  const nameWidth = hasPrice ? 250 : 380
-  lines.push(`^FT10,30^A0N,22,20^FB${nameWidth},2,0,L,0^FD${escapeZpl(name)}^FS`)
+  const nameWidth = 380
+  const nameFont = escapeZpl(name).length > 22 ? 20 : 24
+  // Avec ^A0N,h,w chaque caractere occupe exactement w points : on sait combien
+  // en tiennent par ligne. Le sous-titre prend la place d'une ligne de nom.
+  const parLigne = Math.floor(nameWidth / (nameFont - 2))
+  const nomLignes = couperEnLignes(escapeZpl(name), parLigne, subtitle ? 2 : 3)
+  const interligne = nameFont + 3
+  nomLignes.forEach((l, i) => {
+    lines.push(`^FO10,${10 + i * interligne}^A0N,${nameFont},${nameFont - 2}^FD${l}^FS`)
+  })
 
-  // Subtitle (X personnes) : sous le nom, plus petit
+  // Subtitle (X personnes) : juste sous la DERNIERE ligne du nom, jamais dessus.
   if (subtitle) {
-    lines.push(`^FT10,90^A0N,20,18^FB${nameWidth},1,0,L,0^FD${escapeZpl(subtitle)}^FS`)
+    const y = 10 + nomLignes.length * interligne + 2
+    lines.push(`^FO10,${y}^A0N,20,18^FD${escapeZpl(subtitle)}^FS`)
   }
 
-  // Prix : a droite, plus gros, aligne avec le nom
-  if (hasPrice) {
-    lines.push(`^FT265,40^A0N,32,24^FB130,1,0,R,0^FD${escapeZpl(priceLine)}^FS`)
-  }
-
-  // ===== CODE-BARRES (bas) =====
-  // Code 128, hauteur 65 dots, ligne texte interpretee visible en dessous
-  // ^BY2 = module 2 dots (largeur de barre fine)
-  // ^BCN,65,Y,N,N = Code 128, normal, 65 high, print interpretation line YES, line above NO, no UCC check
-  lines.push('^FO10,115^BY2')
-  lines.push('^BCN,65,Y,N,N')
+  // ===== BAS : code-barres a gauche, PRIX a droite =====
+  lines.push('^FO12,108^BY2')
+  lines.push('^BCN,52,Y,N,N')
   lines.push(`^FD${escapeZplBarcode(barcode)}^FS`)
+
+  // Prix aligne a droite : avec ^A0N,h,w chaque caractere fait w points, donc on
+  // calcule nous-memes le x (^FB,R replierait le texte, cf. le nom plus haut).
+  if (hasPrice) {
+    // Marge de 22 points a droite : colle au bord, le « DH » sortait de l'etiquette.
+    const p = escapeZpl(priceLine)
+    const w = 26
+    const x = Math.max(230, 378 - p.length * w)
+    lines.push(`^FO${x},132^A0N,32,${w}^FD${p}^FS`)
+  }
 
   lines.push('^PQ1,0,1,Y')
   lines.push('^XZ')
