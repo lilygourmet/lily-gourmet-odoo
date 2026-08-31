@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { todayISO } from '../lib/dates'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
+import { sendEtiquettes } from '../lib/printTicket'
 import { confirmDialog } from '../lib/confirmDialog'
 import { usePersistedState } from '../lib/usePersistedState'
 import { Cake, Cookie, Snowflake } from 'lucide-react'
@@ -23,6 +24,7 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
   const [search, setSearch] = useState('')
   const [qtys, setQtys] = useState({})   // { "tplId:size": qty } ou { "tplId": qty }
   const [downloading, setDownloading] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
@@ -99,6 +101,22 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
   }, [qtys, articles])
 
   const totalLabels = selectedItems.reduce((s, it) => s + it.qty, 0)
+
+  // Impression directe : le PC de la boutique vient chercher le ZPL et l'envoie
+  // a la GG-D410. Remplace le detour par le fichier + le Bloc-notes.
+  async function handlePrint() {
+    if (totalLabels === 0 || printing) return
+    setPrinting(true)
+    try {
+      const [r] = await sendEtiquettes([buildZplLabels(selectedItems)])
+      if (r?.ok) toast.success(`${totalLabels} étiquette${totalLabels > 1 ? 's' : ''} envoyée${totalLabels > 1 ? 's' : ''}`)
+      else toast.error(r?.error || 'Impression ratée')
+    } catch (e) {
+      toast.error('Impression : ' + e.message)
+    } finally {
+      setPrinting(false)
+    }
+  }
 
   async function handleDownload() {
     if (totalLabels === 0) return
@@ -239,9 +257,16 @@ export default function EtiquettesView({ user, activeView, onNavigate, onLogout 
               Tout décocher
             </button>
             <button
+              onClick={handlePrint}
+              disabled={printing}
+              className="text-[12px] px-4 py-1.5 bg-bordeaux text-cream hover:bg-bordeaux-deep rounded-full font-medium disabled:opacity-50"
+            >
+              {printing ? 'Impression…' : 'Imprimer'}
+            </button>
+            <button
               onClick={handleDownload}
               disabled={downloading}
-              className="text-[12px] px-4 py-1.5 bg-bordeaux text-cream hover:bg-bordeaux-deep rounded-full font-medium disabled:opacity-50"
+              className="text-[12px] px-4 py-1.5 border border-line text-ink-soft rounded-full font-medium disabled:opacity-50"
             >
               {downloading ? 'Génération...' : 'Télécharger ZPL'}
             </button>

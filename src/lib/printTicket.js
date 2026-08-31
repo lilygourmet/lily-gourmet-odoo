@@ -201,11 +201,22 @@ function enBase64(texte) {
 // Depose N tickets d'un coup et attend qu'ils soient tous sortis.
 // Renvoie un tableau, dans l'ordre : { ok: true } ou { ok: false, error }.
 export async function sendTickets(textes) {
+  return deposer(textes, { printer: 'ticket', cut: true })
+}
+
+// Etiquettes ZPL -> imprimante G&G GG-D410. Meme chemin que les tickets (le PC de
+// la boutique vient les chercher), mais une autre imprimante et pas de coupe.
+export async function sendEtiquettes(zpls) {
+  return deposer(zpls, { printer: 'etiquette', cut: false })
+}
+
+// Depose des travaux et attend que le PC dise ce qu'ils sont devenus.
+async function deposer(textes, { printer, cut }) {
   if (!textes.length) return []
 
   const { data: jobs, error } = await supabase
     .from('print_jobs')
-    .insert(textes.map(t => ({ text: enBase64(t), cut: true })))
+    .insert(textes.map(t => ({ text: enBase64(t), cut, printer })))
     .select('id')
   if (error) {
     // La table n'accepte que les utilisateurs connectes : un jeton expire fait

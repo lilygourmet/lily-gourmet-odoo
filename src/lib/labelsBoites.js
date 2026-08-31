@@ -175,11 +175,6 @@ function gfField(canvas, x, y) {
   return [`^FO${x},${y}^GFA,${total},${total},${bytesPerRow},`, ...dataLines, '^FS'].join('\n')
 }
 
-// Nettoie un texte pour un champ ZPL ^FD (retire les caractères de contrôle ZPL).
-function escapeFd(s) {
-  return String(s).replace(/[\^~\\]/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
 // Impression DIRECTE (image, sans fichier ni Bloc-notes) : ouvre la fenêtre
 // d'impression avec l'étiquette dessinée (FR + arabe) au format 50 × 25 mm.
 // deg permet de tourner si le pilote impose une orientation.
@@ -225,12 +220,11 @@ export function buildZplBoites(fr, ar, qty) {
   const lines = ['^XA', '^CI28', '^MMT', `^PW${W}`, `^LL${H}`, '^LS0']
 
   if (hasFr) {
-    const t = escapeFd(fr)
-    const font = t.length <= 8 ? 56 : 42   // court = plus gros
-    const yFr = hasAr ? 10 : 60
-    // double-frappe (x puis x+2) → effet gras ; ^FB…C = centré, 2 lignes max
-    lines.push(`^FO0,${yFr}^A0N,${font},${Math.round(font * 0.92)}^FB${W},2,4,C,0^FD${t}^FS`)
-    lines.push(`^FO2,${yFr}^A0N,${font},${Math.round(font * 0.92)}^FB${W},2,4,C,0^FD${t}^FS`)
+    // Le français part en IMAGE comme l'arabe : la G&G GG-D410 ignore ^CI28 et lit
+    // sa police CP437, qui n'a pas les majuscules accentuées (GÂTEAU, À, È…) et
+    // sortait du charabia. En image, ce qu'on voit à l'écran est ce qui s'imprime.
+    const frCanvas = renderRegion(fr, W, hasAr ? 92 : 176, false)
+    lines.push(gfField(frCanvas, 0, hasAr ? 6 : 12))
   }
   if (hasFr && hasAr) lines.push('^FO60,98^GB280,3,3^FS')   // séparateur
   if (hasAr) {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { todayISO } from '../lib/dates'
 import { toast } from '../lib/toast'
+import { sendEtiquettes } from '../lib/printTicket'
 import AppHeader from './AppHeader'
 import { drawLabel, buildZplBoites, printLabels, translateToArabic } from '../lib/labelsBoites.js'
 
@@ -10,6 +11,7 @@ export default function EtiquettesBoitesView({ user, activeView, onNavigate, onL
   const [qty, setQty] = useState(1)
   const [translating, setTranslating] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [sending, setSending] = useState(false)
   const canvasRef = useRef(null)
 
   // Aperçu : redessine l'étiquette à chaque changement de texte.
@@ -36,6 +38,22 @@ export default function EtiquettesBoitesView({ user, activeView, onNavigate, onL
       printLabels(fr, ar, qty)
     } catch (e) {
       toast.error(e.message)
+    }
+  }
+
+  // Envoi direct a l'etiqueteuse G&G : le PC de la boutique vient chercher le ZPL.
+  async function handleEtiqueteuse() {
+    if (!fr.trim() && !ar.trim()) { toast.error('Écris au moins un texte.'); return }
+    if (sending) return
+    setSending(true)
+    try {
+      const [r] = await sendEtiquettes([buildZplBoites(fr, ar, qty)])
+      if (r?.ok) toast.success(`${qty} étiquette${qty > 1 ? 's' : ''} envoyée${qty > 1 ? 's' : ''}`)
+      else toast.error(r?.error || 'Impression ratée')
+    } catch (e) {
+      toast.error('Impression : ' + e.message)
+    } finally {
+      setSending(false)
     }
   }
 
@@ -126,6 +144,14 @@ export default function EtiquettesBoitesView({ user, activeView, onNavigate, onL
             className="ml-auto text-[13px] px-5 py-2 bg-bordeaux text-cream hover:bg-bordeaux-deep rounded-full font-medium"
           >
             Imprimer ({qty})
+          </button>
+          <button
+            onClick={handleEtiqueteuse}
+            disabled={sending}
+            className="text-[13px] px-5 py-2 bg-bordeaux text-cream hover:bg-bordeaux-deep rounded-full font-medium disabled:opacity-50"
+            title="Envoyer directement à l'étiqueteuse de la boutique"
+          >
+            {sending ? '…' : `Étiqueteuse (${qty})`}
           </button>
           <button
             onClick={handleDownload}

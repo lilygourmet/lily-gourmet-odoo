@@ -7,7 +7,8 @@
 // refusent sans reglage possible), et l'adresse du PC change quand la box la
 // redistribue. Alors c'est le PC qui vient CHERCHER le travail ici.
 //
-//   GET  ?token=...&printerIp=...&found=1  -> { jobs: [{ id, text, cut }] }
+//   GET  ?token=...&printerIp=...&found=1  -> { jobs: [{ id, text, cut, printer }] }
+//        printer = 'ticket' (Epson) ou 'etiquette' (G&G GG-D410) : le PC route
 //        (donne aussi signe de vie, et passe les tickets pris en « printing »)
 //   POST ?token=...   body { id, ok, error } -> { ok: true }
 //        (le PC dit si le ticket est sorti ou non)
@@ -64,10 +65,16 @@ async function pull(req, res, supabase) {
     .eq('status', 'printing')
     .lt('taken_at', limite)
 
-  const { data: jobs, error } = await supabase
+  // Garde-fou : un PC qui n'a pas encore la version « deux imprimantes » ne doit
+  // JAMAIS recevoir d'etiquette — il l'enverrait a l'Epson, qui cracherait du ZPL
+  // en clair. Le PC annonce sa version (v=2) ; sans elle, il n'a que les tickets.
+  const version = parseInt(req.query.v, 10) || 1
+  let q = supabase
     .from('print_jobs')
-    .select('id, text, cut')
+    .select('id, text, cut, printer')
     .eq('status', 'pending')
+  if (version < 2) q = q.eq('printer', 'ticket')
+  const { data: jobs, error } = await q
     .order('id', { ascending: true })
     .limit(20)
   if (error) throw error
