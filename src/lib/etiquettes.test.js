@@ -38,3 +38,11 @@ describe('mise en page des étiquettes produits', () => {
     expect(Number(x) + texte.length * Number(w)).toBeLessThanOrEqual(400)
   })
 })
+
+// Le prix ne sort QUE sur les GS- : ni les entremets E- (sur mesure), ni les SU-.
+describe('le prix ne sort que pour les GS-', () => {
+  const avecPrix = cat => buildZplLabels([{ article: { name: 'Test', price: 55, barcode: '1', category: cat }, size: null, qty: 1 }]).includes('55 DH')
+  it('GS- : prix affiché', () => expect(avecPrix('gs')).toBe(true))
+  it('E- (entremets) : pas de prix', () => expect(avecPrix('cd')).toBe(false))
+  it('SU- : pas de prix', () => expect(avecPrix('su')).toBe(false))
+})

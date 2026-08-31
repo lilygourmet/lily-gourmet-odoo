@@ -37,10 +37,10 @@ export function buildZplLabels(items) {
     const nameClean = stripAllPrefixes(article.name)
     const subtitle = size ? `${size} personnes` : ''
 
-    // Prix : uniquement pour GS et SU (jamais pour les entremets E-)
+    // Prix : uniquement pour les GS- (regle de Layla, 2026-08-31). Ni les
+    // entremets E-, ni les SU- qui en avaient un jusqu'ici.
     let priceLine = null
-    if ((article.category === 'gs' || article.category === 'su')
-        && article.price && article.price > 0) {
+    if (article.category === 'gs' && article.price && article.price > 0) {
       priceLine = formatPrice(article.price)
     }
 
