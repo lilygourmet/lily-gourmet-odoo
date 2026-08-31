@@ -1161,6 +1161,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     if (!/cakedesign/i.test(String(produit || ''))) return
     const n = Math.min(20, Math.max(1, Math.round(Number(qty) || 1)))
     try {
+      // L'etage porte son parfum et sa date, rien d'autre : le numero de commande
+      // va sur l'etiquette du cake design entier, pas sur le morceau congele.
       const titre = String(produit).replace(/^\[\d+\]\s*/, '').trim()
       const [r] = await sendEtiquettes([buildZplInfo({
         titre,
