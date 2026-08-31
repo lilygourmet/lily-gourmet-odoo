@@ -1164,9 +1164,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       // L'etage porte son parfum et sa date, rien d'autre : le numero de commande
       // va sur l'etiquette du cake design entier, pas sur le morceau congele.
       const titre = String(produit).replace(/^\[\d+\]\s*/, '').trim()
+      // Meme ecriture que sur les etiquettes de Check CD- : « Lundi 31/08/26 ».
+      const j = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: '2-digit' })
       const [r] = await sendEtiquettes([buildZplInfo({
+        entete: j.charAt(0).toUpperCase() + j.slice(1),
         titre,
-        lignes: [`Prod. ${new Date().toLocaleDateString('fr-FR')}`],
         qty: n,
       })])
       if (!r?.ok) toast.error(r?.error || 'Étiquette non imprimée')

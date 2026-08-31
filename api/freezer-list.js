@@ -318,6 +318,28 @@ async function etagesDesGateauxEnAttente(uid, jours) {
     const par = Array.isArray(mv.raw_material_production_id) ? mv.raw_material_production_id[0] : null
     if (par) congeleDe[par] = mv
   }
+  // Le rendez-vous du client (jour + heure) : c'est lui qu'on imprime sur
+  // l'etiquette de l'etage, pour savoir pour quand le gateau est attendu.
+  // Heure du MAROC : le serveur tourne en UTC, sans ca on decale d'une heure.
+  const codesRdv = [...new Set(parents.map(p => (String(p.origin || '').match(/S\d{3,}/i) || [''])[0].toUpperCase()).filter(Boolean))]
+  const rdvDe = {}
+  if (codesRdv.length) {
+    const cmds = await odooSearchRead(uid, 'sale.order', [['name', 'in', codesRdv]], ['name', 'commitment_date'], { limit: 500 })
+    for (const o of cmds) {
+      if (!o.commitment_date) continue
+      const d = new Date(String(o.commitment_date).replace(' ', 'T') + 'Z')
+      if (isNaN(d)) continue
+      // « Lundi 31/08/26 12:30 » : le jour de la semaine d'abord, c'est ce qu'on
+      // lit en premier au frigo. La majuscule, elle, n'est pas dans le format fr.
+      const txt = d.toLocaleString('fr-FR', {
+        timeZone: 'Africa/Casablanca',
+        weekday: 'long', day: '2-digit', month: '2-digit', year: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      })
+      rdvDe[o.name] = txt.charAt(0).toUpperCase() + txt.slice(1)
+    }
+  }
+
   const lieuCD = await lieuStockProd(uid)
   const ids = [...new Set(Object.values(congeleDe).map(mv => mv.product_id[0]))]
   const stockDe = {}
@@ -344,6 +366,7 @@ async function etagesDesGateauxEnAttente(uid, jours) {
       etat: e.state,                                   // done = déjà fabriqué dans Odoo
       parent: par.name || '', parent_produit: Array.isArray(par.product_id) ? par.product_id[1] : '',
       scode: (String(par.origin || '').match(/S\d{3,}/i) || [''])[0].toUpperCase(),
+      rdv: rdvDe[(String(par.origin || '').match(/S\d{3,}/i) || [''])[0].toUpperCase()] || null,
       congele: mv ? mv.product_id[1] : null,           // l'étage « N cm CD* »
       besoin, stock,
       // L'ordre du test compte : un étage DÉJÀ FABRIQUÉ est « fait », même s'il

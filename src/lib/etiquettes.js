@@ -95,12 +95,11 @@ function stripOdooPrefix(name) {
 // aux commandes (« … / 31/08/2026 / S52279 »). Pas de code-barres : ces gateaux
 // n'en ont pas.
 // ============================================================
-export function buildZplInfo({ titre, lignes = [], qty = 1 }) {
+export function buildZplInfo({ entete, titre, code, qty = 1 }) {
   const n = Math.max(1, Number(qty) || 1)
+  const LARGEUR = 320                        // largeur reellement imprimee, mesuree
+  // Le produit prend la plus grosse police qui le fait tenir sur deux lignes.
   const t = escapeZpl(titre)
-  // Meme regle que pour les etiquettes produits : la police descend jusqu'a ce
-  // que le titre tienne dans la largeur REELLEMENT imprimee (320 points).
-  const LARGEUR = 320
   let font = 26
   let titreLignes = []
   for (const f of [26, 24, 22, 20, 18, 16]) {
@@ -111,20 +110,24 @@ export function buildZplInfo({ titre, lignes = [], qty = 1 }) {
   const blocs = []
   for (let i = 0; i < n; i++) {
     const out = ['^XA', '^CI28', '^MMT', '^PW400', '^LL200', '^LS0']
-    let y = 12
+    // 1) la date et l'heure, en haut
+    if (entete) out.push(`^FO10,10^A0N,18,16^FD${escapeZpl(entete)}^FS`)
+    // 2) le produit (taille + parfum), apres un vrai blanc
+    let y = entete ? 46 : 16
     for (const l of titreLignes) {
       out.push(`^FO10,${y}^A0N,${font},${font - 2}^FD${l}^FS`)
       y += font + 3
     }
-    y += 6
-    for (const info of lignes.filter(Boolean)) {
-      const txt = escapeZpl(info)
-      const petit = 20
-      for (const l of couperEnLignes(txt, Math.floor(LARGEUR / (petit - 2)), 2)) {
-        if (y > 176) break                       // ne jamais deborder du bas
-        out.push(`^FO10,${y}^A0N,${petit},${petit - 2}^FD${l}^FS`)
-        y += petit + 2
-      }
+    // 3) le numero de commande : en bas, centre, gros et gras. Le gras se fait
+    // en frappant deux fois avec 2 points de decalage (le ZPL n'en a pas).
+    if (code) {
+      const c = escapeZpl(code).trim()
+      const h = 34, w = 32
+      // La police est un peu plus large que le « w » annonce : on majore de 5 %
+      // avant de centrer, sinon un numero long part vers la droite.
+      const x = Math.max(10, Math.round(200 - (c.length * w * 1.05) / 2))
+      out.push(`^FO${x},150^A0N,${h},${w}^FD${c}^FS`)
+      out.push(`^FO${x + 2},150^A0N,${h},${w}^FD${c}^FS`)
     }
     out.push('^PQ1,0,1,Y', '^XZ')
     blocs.push(out.join('\n'))

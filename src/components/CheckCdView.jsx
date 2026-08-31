@@ -100,10 +100,12 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   // son parfum, le jour, et le numero de commande — c'est lui qui dit a qui il
   // est. Une etiquette par piece.
   async function imprimerEtiquettes(liste) {
-    const jour = new Date().toLocaleDateString('fr-FR')
     const zpl = liste.map(e => buildZplInfo({
+      // D'abord POUR QUAND le gateau est attendu (pas quand on l'a sorti),
+      // puis la taille et le parfum, puis le numero de commande en bas.
+      entete: e.rdv || e.date || null,
       titre: String(e.produit || '').replace(/^\[\d+\]\s*/, '').trim(),
-      lignes: [`Prod. ${jour}`, e.scode || null],
+      code: e.scode || null,
       qty: Math.min(20, Math.max(1, Math.round(Number(e.qty) || 1))),
     })).join('\n')
     try {
