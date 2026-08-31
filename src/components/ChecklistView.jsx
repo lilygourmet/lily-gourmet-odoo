@@ -203,7 +203,10 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
 
   async function handleResaDone(x) {
     setResaRangees(prev => new Set(prev).add(x.lineId))   // optimiste
-    try { await markResaRangee({ day: todayISO(), lineId: x.lineId, orderId: x.orderId, orderName: x.orderName, clientName: x.clientName, productName: x.text, userId: user?.id }) }
+    try {
+      await markResaRangee({ day: todayISO(), lineId: x.lineId, orderId: x.orderId, orderName: x.orderName, clientName: x.clientName, productName: x.text, userId: user?.id })
+      imprimerEtiquettes(x.text, x.qty)
+    }
     catch (e) { toast.error(e?.message || 'Erreur'); loadVitrineResa() }
   }
   async function handleResaUndo(x) {
@@ -513,15 +516,23 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   // Retrouve l'article dans la liste des etiquettes a partir du nom de la ligne
   // (« [2020] V- Cake Citron (6) ») et lui rend sa taille quand c'en est une.
   function articlePourLigne(productName) {
-    // Une ligne peut porter un mot du client a la suite (« E- Black Forest (5) »
-    // puis « Message : Joyeux anniversaire ») : seule la 1re ligne est le produit.
-    const brut = String(productName || '').split('\n')[0].replace(/^\[\d+\]\s*/, '').trim()
+    // Deux ecritures tres differentes selon d'ou vient la ligne :
+    //   Prod      : « [2020] E- Black Forest (5) » puis « Message : … » a la ligne
+    //   Reservation vitrine : « Citron meringue Nombre de personnes : 10 Message : … »
+    //                         (sur UNE ligne, et SANS le prefixe E-)
+    let brut = String(productName || '').split('\n')[0].replace(/^\[\d+\]\s*/, '').trim()
+    const pers = brut.match(/nombre de personnes\s*:\s*(\d+)/i)
+    brut = brut.split(/\s*(?:nombre de personnes|message|mod[eè]le|parfum|d[eé]cor|fleurs|impression|modelage|taille)\s*:/i)[0].trim()
     const paren = brut.match(/\((\d+)[^)]*\)\s*$/)
     const sansTaille = brut.replace(/\s*\([^)]*\)\s*$/, '').trim()
-    const cle = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-    const article = articlesEtiq.find(a => cle(a.name) === cle(sansTaille))
+    const sansAccents = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const sansPrefixe = t => sansAccents(t).replace(/^[a-z]{1,3}-\s*/, '')
+    // D'abord le nom EXACT (prefixe compris), sinon sans prefixe — sinon
+    // « GS- Cookies » et « MI- Cookies » se confondraient.
+    const article = articlesEtiq.find(a => sansAccents(a.name) === sansAccents(sansTaille))
+      || articlesEtiq.find(a => sansPrefixe(a.name) === sansPrefixe(sansTaille))
     if (!article) return null
-    const n = paren ? Number(paren[1]) : null
+    const n = pers ? Number(pers[1]) : (paren ? Number(paren[1]) : null)
     const size = n && Array.isArray(article.sizes) && article.sizes.includes(n) ? n : null
     return { article, size }
   }
@@ -549,7 +560,6 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       await confirmReception(item.id, item.qty_announced, user.id)
       setVitrineItems(prev => prev.filter(i => i.id !== item.id))
       refresh(true)
-      imprimerEtiquettes(item.product_name, item.qty_announced)
     } catch (e) {
       console.error('[handleVitrineDone]', e)
       toast.error('Erreur : ' + (e.message || e))
