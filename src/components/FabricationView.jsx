@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies } from '../lib/fabrication'
+import { buildZplInfo } from '../lib/etiquettes'
+import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
@@ -1149,10 +1151,34 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return marquerOrdre(cleDemandee, produit, part)
   }
 
+  /**
+   * Une etiquette par gateau monte, a coller dessus au frigo : le nom de
+   * l'etage, son parfum, et le jour ou il a ete fait. Seulement pour les etages
+   * « N cm cakedesign » / formes : les cremes et bases se comptent en KILOS, on
+   * ne va pas sortir 1135 etiquettes pour 1135 g de pate a sucre.
+   */
+  const imprimerEtiquettesFab = async (produit, qty) => {
+    if (!/cakedesign/i.test(String(produit || ''))) return
+    const n = Math.min(20, Math.max(1, Math.round(Number(qty) || 1)))
+    try {
+      const titre = String(produit).replace(/^\[\d+\]\s*/, '').trim()
+      const [r] = await sendEtiquettes([buildZplInfo({
+        titre,
+        lignes: [`Prod. ${new Date().toLocaleDateString('fr-FR')}`],
+        qty: n,
+      })])
+      if (!r?.ok) toast.error(r?.error || 'Étiquette non imprimée')
+    } catch (e) {
+      // L'etiquette ne doit JAMAIS empecher de cocher ce qui est fait.
+      toast.error('Étiquette : ' + (e.message || e))
+    }
+  }
+
   /** Pose ou retire la coche d'UN ordre (ou d'une clé, faute d'ordre). */
   const marquerOrdre = async (cle, produit, qty) => {
     const on = !faits[cle]
     const avant = faits[cle]
+    if (on) imprimerEtiquettesFab(produit, qty)
     const ordres = /^WH.*\/MO\//i.test(cle) ? [cle] : ((avant && avant.ordres) || [])
     setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty, ordres }; else delete n[cle]; return n })
 

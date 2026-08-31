@@ -89,6 +89,49 @@ function stripOdooPrefix(name) {
   return String(name || '').replace(/^\[\d+\]\s*/, '').trim()
 }
 
+// ============================================================
+// Etiquette « texte » : un titre en gros, puis des lignes d'information.
+// Sert a la fabrication (« 20 cm cakedesign / Vanille / Produit le 31/08 ») et
+// aux commandes (« … / 31/08/2026 / S52279 »). Pas de code-barres : ces gateaux
+// n'en ont pas.
+// ============================================================
+export function buildZplInfo({ titre, lignes = [], qty = 1 }) {
+  const n = Math.max(1, Number(qty) || 1)
+  const t = escapeZpl(titre)
+  // Meme regle que pour les etiquettes produits : la police descend jusqu'a ce
+  // que le titre tienne dans la largeur REELLEMENT imprimee (320 points).
+  const LARGEUR = 320
+  let font = 26
+  let titreLignes = []
+  for (const f of [26, 24, 22, 20, 18, 16]) {
+    font = f
+    titreLignes = couperEnLignes(t, Math.floor(LARGEUR / (f - 2)), 2)
+    if (!aEteTronque(t, titreLignes)) break
+  }
+  const blocs = []
+  for (let i = 0; i < n; i++) {
+    const out = ['^XA', '^CI28', '^MMT', '^PW400', '^LL200', '^LS0']
+    let y = 12
+    for (const l of titreLignes) {
+      out.push(`^FO10,${y}^A0N,${font},${font - 2}^FD${l}^FS`)
+      y += font + 3
+    }
+    y += 6
+    for (const info of lignes.filter(Boolean)) {
+      const txt = escapeZpl(info)
+      const petit = 20
+      for (const l of couperEnLignes(txt, Math.floor(LARGEUR / (petit - 2)), 2)) {
+        if (y > 176) break                       // ne jamais deborder du bas
+        out.push(`^FO10,${y}^A0N,${petit},${petit - 2}^FD${l}^FS`)
+        y += petit + 2
+      }
+    }
+    out.push('^PQ1,0,1,Y', '^XZ')
+    blocs.push(out.join('\n'))
+  }
+  return blocs.join('\n')
+}
+
 // Le decoupage a-t-il perdu des caracteres (nom trop long meme en petit) ?
 function aEteTronque(texte, lignes) {
   return lignes.join(' ').length < String(texte || '').trim().length
