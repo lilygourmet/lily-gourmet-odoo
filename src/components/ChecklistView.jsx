@@ -28,7 +28,8 @@ import { confirmReception, todayISO, alerterReceptionGs } from '../lib/stockBout
 import { loadItemSteps, checkItemStep, uncheckItemStep } from '../lib/orders'
 import { loadVitrineReservations, loadResaRangees, markResaRangee, unmarkResaRangee } from '../lib/previsionsVitrine'
 import { toast } from '../lib/toast'
-import { printArticleBatch, printGroupTicket } from '../lib/printTicket'
+import { printArticleBatch, printGroupTicket, sendEtiquettes } from '../lib/printTicket'
+import { loadEtiquettesArticles, buildZplLabels } from '../lib/etiquettes'
 import { RefreshCw } from 'lucide-react'
 
 // Prefixes pour repartir entre les sections PROD et ACCESSOIRES dans sales_lines
@@ -504,6 +505,43 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
   }, [])
 
   // ============================================================
+  // Etiquettes de prix : la reception d'un article en sort autant que la quantite
+  // ============================================================
+  const [articlesEtiq, setArticlesEtiq] = useState([])
+  useEffect(() => { loadEtiquettesArticles().then(setArticlesEtiq).catch(() => {}) }, [])
+
+  // Retrouve l'article dans la liste des etiquettes a partir du nom de la ligne
+  // (« [2020] V- Cake Citron (6) ») et lui rend sa taille quand c'en est une.
+  function articlePourLigne(productName) {
+    // Une ligne peut porter un mot du client a la suite (« E- Black Forest (5) »
+    // puis « Message : Joyeux anniversaire ») : seule la 1re ligne est le produit.
+    const brut = String(productName || '').split('\n')[0].replace(/^\[\d+\]\s*/, '').trim()
+    const paren = brut.match(/\((\d+)[^)]*\)\s*$/)
+    const sansTaille = brut.replace(/\s*\([^)]*\)\s*$/, '').trim()
+    const cle = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const article = articlesEtiq.find(a => cle(a.name) === cle(sansTaille))
+    if (!article) return null
+    const n = paren ? Number(paren[1]) : null
+    const size = n && Array.isArray(article.sizes) && article.sizes.includes(n) ? n : null
+    return { article, size }
+  }
+
+  // Sort les etiquettes SANS bloquer la reception : un article absent de la liste
+  // (SAK-, « A preciser »…) n'a pas d'etiquette, ce n'est pas une erreur.
+  async function imprimerEtiquettes(productName, qty) {
+    const trouve = articlePourLigne(productName)
+    if (!trouve) return
+    const n = Math.max(1, Number(qty) || 1)
+    try {
+      const [r] = await sendEtiquettes([buildZplLabels([{ ...trouve, qty: n }])])
+      if (r?.ok) toast.success(`${n} étiquette${n > 1 ? 's' : ''}`)
+      else toast.error(r?.error || 'Étiquette non imprimée')
+    } catch (e) {
+      toast.error('Étiquette : ' + (e.message || e))
+    }
+  }
+
+  // ============================================================
   // Actions de click
   // ============================================================
   async function handleVitrineDone(item) {
@@ -511,6 +549,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       await confirmReception(item.id, item.qty_announced, user.id)
       setVitrineItems(prev => prev.filter(i => i.id !== item.id))
       refresh(true)
+      imprimerEtiquettes(item.product_name, item.qty_announced)
     } catch (e) {
       console.error('[handleVitrineDone]', e)
       toast.error('Erreur : ' + (e.message || e))
@@ -522,6 +561,7 @@ export default function ChecklistView({ user, activeView, onNavigate, onLogout }
       await markCafeReceived(line.odoo_line_id, user.id)
       setProdLines(prev => prev.filter(l => l.odoo_line_id !== line.odoo_line_id))
       refresh(true)
+      imprimerEtiquettes(line.product_name, line.quantity)
     } catch (e) {
       console.error('[handleProdDone]', e)
       toast.error('Erreur : ' + (e.message || e))

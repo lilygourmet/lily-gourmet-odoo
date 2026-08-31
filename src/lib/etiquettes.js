@@ -89,6 +89,11 @@ function stripOdooPrefix(name) {
   return String(name || '').replace(/^\[\d+\]\s*/, '').trim()
 }
 
+// Le decoupage a-t-il perdu des caracteres (nom trop long meme en petit) ?
+function aEteTronque(texte, lignes) {
+  return lignes.join(' ').length < String(texte || '').trim().length
+}
+
 // Coupe un texte en lignes d'au plus `parLigne` caracteres, sans couper les mots
 // (sauf mot plus long qu'une ligne). Au-dela de `maxLignes`, on tronque avec « . ».
 function couperEnLignes(texte, parLigne, maxLignes) {
@@ -140,12 +145,21 @@ function buildSingleZpl(name, subtitle, priceLine, barcode) {
   // Le prix est en BAS A DROITE (choix de Layla, 2026-08-31) : le nom prend donc
   // toute la largeur en haut au lieu de s'ecraser sur 250 points.
   const hasPrice = !!priceLine
-  const nameWidth = 380
-  const nameFont = escapeZpl(name).length > 22 ? 20 : 24
-  // Avec ^A0N,h,w chaque caractere occupe exactement w points : on sait combien
-  // en tiennent par ligne. Le sous-titre prend la place d'une ligne de nom.
-  const parLigne = Math.floor(nameWidth / (nameFont - 2))
-  const nomLignes = couperEnLignes(escapeZpl(name), parLigne, subtitle ? 2 : 3)
+  // Largeur REELLEMENT imprimee, MESUREE sur la machine le 2026-08-31 (mire de
+  // 12/14/16/18 caracteres en police 22) : 16 caracteres de 20 points passent,
+  // 18 sont coupes. L'etiquette fait 400 points mais les bords ne recoivent rien.
+  const nameWidth = 320
+  const maxLignes = subtitle ? 2 : 3
+  // On essaie la plus grosse police qui rentre, puis on descend. Avec ^A0N,h,w
+  // chaque caractere occupe exactement w points, donc le compte est exact.
+  const nom = escapeZpl(name)
+  let nameFont = 22
+  let nomLignes = []
+  for (const f of [22, 20, 18, 16, 14]) {
+    nameFont = f
+    nomLignes = couperEnLignes(nom, Math.floor(nameWidth / (f - 2)), maxLignes)
+    if (nomLignes.every(l => l.length * (f - 2) <= nameWidth) && !aEteTronque(nom, nomLignes)) break
+  }
   const interligne = nameFont + 3
   nomLignes.forEach((l, i) => {
     lines.push(`^FO10,${10 + i * interligne}^A0N,${nameFont},${nameFont - 2}^FD${l}^FS`)
