@@ -4,6 +4,8 @@ import { loadFreezerDoneIds } from '../lib/freezerDone'
 import { loadEtagesEnAttente, envoyerEnValidation, loadDejaEnvoyes, loadEnAttente } from '../lib/checkCd'
 import { fmtDayLabel } from '../lib/jourLisible'
 import { toast } from '../lib/toast'
+import { buildZplInfo } from '../lib/etiquettes'
+import { sendEtiquettes } from '../lib/printTicket'
 
 // Le dernier contrôle des étages, avant que le gâteau entier soit marqué fait.
 //
@@ -94,6 +96,25 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     })
   }
 
+  // Chaque etage valide sort son etiquette, a coller sur le gateau : le nom avec
+  // son parfum, le jour, et le numero de commande — c'est lui qui dit a qui il
+  // est. Une etiquette par piece.
+  async function imprimerEtiquettes(liste) {
+    const jour = new Date().toLocaleDateString('fr-FR')
+    const zpl = liste.map(e => buildZplInfo({
+      titre: String(e.produit || '').replace(/^\[\d+\]\s*/, '').trim(),
+      lignes: [`Prod. ${jour}`, e.scode || null],
+      qty: Math.min(20, Math.max(1, Math.round(Number(e.qty) || 1))),
+    })).join('\n')
+    try {
+      const [r] = await sendEtiquettes([zpl])
+      if (!r?.ok) toast.error(r?.error || 'Étiquettes non imprimées')
+    } catch (e) {
+      // L'etiquette ne doit jamais faire echouer une validation deja passee.
+      toast.error('Étiquettes : ' + (e.message || e))
+    }
+  }
+
   async function envoyer() {
     if (!choisis.size) return
     setEnvoi(true)
@@ -101,6 +122,8 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
       const res = await envoyerEnValidation([...choisis], user?.id)
       const ok = res.filter(r => r.ok).length
       const rates = res.filter(r => !r.ok)
+      const valides = res.filter(r => r.ok).map(r => etages.find(e => e.mo_id === r.mo_id)).filter(Boolean)
+      if (valides.length) imprimerEtiquettes(valides)
       if (ok) toast.success(`${ok} étage${ok > 1 ? 's' : ''} vérifié${ok > 1 ? 's' : ''}`)
       if (rates.length) toast.error(`${rates.length} refusé${rates.length > 1 ? 's' : ''} : ${rates[0].message}`)
       setChoisis(new Set())
