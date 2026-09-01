@@ -423,9 +423,10 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       // lignes identiques du même jour : deux relevés de formats différents écrivent la même
       // opération autrement (« MLE SAMIA CHERKA » vs « MLE 2027184 000010999370 SAMIA
       // CHERKAOUI »), et l'exiger renvoyait dans « à lier » des dépôts déjà rapprochés.
-      // Sur une remise splittée, aucune ligne ne fait le montant de l'enveloppe : on se
+      // Sur une remise splittée — ou sur un « 🔗 2 virements = 1 ligne », où la ligne vaut
+      // la somme de DEUX caisses — aucune ligne ne fait le montant de l'enveloppe : on se
       // repère sur la date + le libellé, et sans libellé reconnu on ne prend rien.
-      const split = parts.length > 1
+      const split = parts.length > 1 || env.note_proof.includes('🔗')
       const memes = credits.filter(c => !used.has(c) && c.dateIso === npDate
         && (split || Math.abs(c.credit - amt) < 0.005))
       const m = memes.find(c => c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30)))

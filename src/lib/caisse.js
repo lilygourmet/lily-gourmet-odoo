@@ -548,6 +548,15 @@ export async function confirmReleveLine(env, choice) {
   })
 }
 
+// Marque une ligne du relevé comme prise par une caisse (sans toucher au reste).
+// Sert au « 🔗 2 virements = 1 ligne » : la base ne peut rattacher une ligne qu'à UNE
+// caisse (used_by), on la donne à la première — l'essentiel est qu'elle sorte de
+// « Reçus banque non liés », les deux caisses portant le même libellé « 🔗 ».
+export async function takeReleveLine(key, envId) {
+  const { error } = await supabase.from('caisse_releve_lignes').update({ used_by: envId }).eq('key', key)
+  if (error) throw error
+}
+
 // Retire la preuve manuelle d'une enveloppe (photo/PDF uploadée) -> repasse en attente.
 export async function clearEnveloppeProof(envId) {
   const { error } = await supabase.from('caisse_enveloppes')
@@ -643,8 +652,10 @@ export async function clearEnveloppeReleve(envId) {
   //    la (ré)insérer comme LIBRE — sauf si le même dépôt y est déjà (même date + même
   //    montant) : le libellé, lui, change d'un format de relevé à l'autre, s'y fier
   //    créerait un doublon dans « à lier ».
+  // Le « 🔗 2 virements = 1 ligne » est exclu : la ligne vaut la somme des DEUX caisses,
+  // la recréer au montant de celle-ci inventerait un dépôt qui n'existe pas au relevé.
   const np = env?.note_proof || ''
-  if (!liberees?.length && np.includes(' · ') && !np.includes(' | ') && np !== 'Confirmé manuellement') {
+  if (!liberees?.length && np.includes(' · ') && !np.includes(' | ') && !np.includes('🔗') && np !== 'Confirmé manuellement') {
     const sep = np.indexOf(' · ')
     const d = np.slice(0, sep)
     const label = np.slice(sep + 3)
