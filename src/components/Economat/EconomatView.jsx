@@ -445,15 +445,15 @@ function HistoryModal({ demandes, onClose }) {
   return (
     <div className="fixed inset-0 h-[100dvh] z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
          onClick={onClose}>
-      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88dvh] overflow-y-auto overscroll-contain shadow-2xl border border-line"
+      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-line"
            onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-line px-5 py-3 flex items-center justify-between">
+        <div className="flex-shrink-0 bg-cream border-b border-line px-5 py-3 flex items-center justify-between">
           <h3 className="font-fraunces italic text-[18px] text-ink">Mes demandes</h3>
           <button onClick={onClose}
                   className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center">×</button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
           {demandes === null ? (
             <div className="text-center text-ink-mute italic py-6">Chargement...</div>
           ) : demandes.length === 0 ? (

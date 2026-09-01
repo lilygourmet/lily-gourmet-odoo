@@ -5,6 +5,7 @@ const Calendar = lazy(() => import('./components/Calendar'))
 const RecapVentes = lazy(() => import('./components/RecapVentes'))
 const PatissierView = lazy(() => import('./components/PatissierView'))
 const ProdView = lazy(() => import('./components/ProdView'))
+const InventaireView = lazy(() => import('./components/InventaireView'))
 const FabricationView = lazy(() => import('./components/FabricationView'))
 const PrepaView = lazy(() => import('./components/PrepaView'))
 const FabricationProdView = lazy(() => import('./components/FabricationProdView'))
@@ -59,7 +60,7 @@ import ConfirmHost from './components/ConfirmHost'
 import MobileBottomNav from './components/MobileBottomNav'
 import SideNav from './components/SideNav'
 import TabLockGate from './components/TabLockGate'
-import { getCurrentUser, logout, isAdmin, isPatissierOnly, isProdOnly, isLivreur, isLivreurDefaut, loadFreshUser, canStockPatissier, canStockCafe, canStockAudit, canSeeCalendar, canSeeConversations, canViewPayments, canSeeLivraisons, canSeeModifications, canSeeDevis, hasValidJwt } from './lib/auth'
+import { getCurrentUser, logout, isAdmin, isLivreur, loadFreshUser, canSeeCalendar, canSeeConversations, canViewPayments, canSeeLivraisons, canSeeModifications, canSeeDevis, hasValidJwt } from './lib/auth'
 import { tracerOnglet } from './lib/navUsage'
 import { estModeTest } from './lib/modeTest'
 import { refreshOnReturn } from './lib/autoRefresh'
@@ -132,35 +133,9 @@ function App() {
     }
   }
 
-  // Choisit la vue par defaut en fonction du user
-  function pickDefaultView(u) {
-    if (!u) return 'calendar'
-    // Hamid (livreur par défaut) démarre sur sa caisse ; les autres livreurs sur Livraisons.
-    if (isLivreur(u)) return isLivreurDefaut(u) ? 'caisse-livreur' : 'livraisons'
-    if (u.role === 'recap') return 'recap'
-    if (u.role === 'admin') return 'calendar'
-    // Stock granulaire : si user a UNIQUEMENT une perm stock, on l'oriente sur SON onglet
-    const hasStockPatissier = canStockPatissier(u)
-    const hasStockCafe = canStockCafe(u)
-    const hasStockAudit = canStockAudit(u)
-    const hasOtherMain = u.perm_calendar || isProdOnly(u) || isPatissierOnly(u)
-    if (!hasOtherMain) {
-      if (hasStockPatissier && !hasStockCafe && !hasStockAudit) return 'vitrine'
-      if (hasStockCafe && !hasStockPatissier && !hasStockAudit) {
-        const hour = new Date().getHours()
-        if (hour >= 17) return 'fin-journee'
-        return 'reception-vitrine'
-      }
-      if (hasStockAudit && !hasStockPatissier && !hasStockCafe) return 'stock'
-    }
-    if (u.perm_calendar) return 'calendar'
-    if (isProdOnly(u)) {
-      if (u.perm_sales && !u.perm_prod) return 'sales'
-      return 'prod'
-    }
-    if (isPatissierOnly(u)) return 'patissier'
-    // Fallback sûr : Tâches est visible par tous les users (aucune permission requise).
-    // Évite d'envoyer par défaut sur Calendrier un user sans perm_calendar (ex: Ismail).
+  // Ecran d'accueil : tout le monde arrive sur Taches (demande de Layla, 01/09/2026).
+  // La vue memorisee dans le navigateur reste prioritaire : un Cmd+R garde l'onglet en cours.
+  function pickDefaultView() {
     return 'tasks'
   }
 
@@ -216,7 +191,7 @@ function App() {
     } else if (persisted) {
       setActiveView(persisted)
     } else {
-      setActiveView(pickDefaultView(stored))
+      setActiveView(pickDefaultView())
     }
     // Recharge les permissions a jour depuis Supabase
     loadFreshUser(stored.id).then(fresh => {
@@ -238,7 +213,7 @@ function App() {
             stored.perm_stock_gs !== fresh.perm_stock_gs
           )
           if (permsChanged) {
-            setActiveView(pickDefaultView(fresh))
+            setActiveView(pickDefaultView())
           }
         }
       } else if (fresh === null) {
@@ -315,7 +290,7 @@ function App() {
 
   function handleLoginSuccess(u) {
     setUser(u)
-    setActiveView(pickDefaultView(u))
+    setActiveView(pickDefaultView())
     // Recharge les perms fresh juste apres login pour s'assurer d'avoir
     // toutes les colonnes (le login peut ne pas renvoyer toutes les perms)
     if (u?.id) {
@@ -324,7 +299,7 @@ function App() {
           setUser(fresh)
           // Recalcule la vue si les perms diffèrent (cas typique : nouvel onglet
           // ajoute apres le dernier login)
-          setActiveView(pickDefaultView(fresh))
+          setActiveView(pickDefaultView())
         }
       }).catch(() => {})
     }
@@ -414,6 +389,7 @@ function App() {
     if (activeView === 'stock-gs') return <StockGS {...navProps} />
     if (activeView === 'stock-prod-vitrine') return <StockProd {...navProps} lieu="vitrine" />
     if (activeView === 'stock-prod-annexe') return <StockProd {...navProps} lieu="annexe" />
+    if (activeView === 'inventaire') return <InventaireView {...navProps} />
     if (activeView === 'tasks') return <TasksWrapper {...navProps} taskDeep={deepLinkTask} />
     if (activeView === 'hr') return isAdmin(user)
       ? <TabLockGate label="RH"><HRWrapper {...navProps} hrDeep={hrDeep} /></TabLockGate>
