@@ -467,49 +467,63 @@ export async function loadAllLinkedReleveLines() {
 // Lignes du relevé encore libres (non rattachées) d'un montant donné, du MÊME
 // type que l'enveloppe : chèque↔remise chèque, virement↔virement reçu, espèces↔versement.
 // (même correspondance que le rapprochement auto, candidatesFor)
+// amount = null : TOUTES les lignes libres de ce type (la banque split souvent une remise
+// de chèques en plusieurs encaissements -> aucune ligne ne fait le montant exact).
 export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
   const a = Number(amount)
   const types = paymentMethod === 'cheque' ? ['cheque_depot']
     : paymentMethod === 'virement' ? ['virement_recu', 'autre']
     : ['versement']
-  const { data, error } = await supabase
+  let q = supabase
     .from('caisse_releve_lignes')
     .select('*')
     .is('used_by', null)
     .not('ignored', 'is', true)            // lignes ignorées manuellement exclues
     .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
-    .gte('amount', a - 0.005)
-    .lte('amount', a + 0.005)
     .in('type', types)
-    .order('ligne_date', { ascending: false })
+  if (amount != null) q = q.gte('amount', a - 0.005).lte('amount', a + 0.005)
+  const { data, error } = await q.order('ligne_date', { ascending: false }).limit(1000)
   if (error) throw error
   return data || []
 }
 
-// Rattache manuellement une ligne du relevé à une enveloppe → enveloppe verte + ligne prise.
-export async function attachReleveLine(env, line) {
-  await setEnveloppeReleve(env.id, {
-    proofUrl: line.releve_url || undefined,
-    proofDate: line.ligne_date || undefined,
-    status: 'trouve',
-    libelle: `${line.ligne_date} · ${line.label}`.slice(0, 220),
-    candidates: null,
-  })
-  await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).eq('key', line.key)
+// Lignes du relevé déjà rattachées à UNE enveloppe (une remise splittée en compte plusieurs).
+export async function loadEnvReleveLines(envId) {
+  const { data, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('*')
+    .eq('used_by', envId)
+    .order('ligne_date', { ascending: true })
+  if (error) throw error
+  return data || []
 }
 
-// Lie une ligne de relevé (depuis « Reçus non liés ») à une enveloppe choisie.
-// Enregistre amount_proof = montant réel du relevé -> écart si ≠ du montant Odoo.
-export async function linkReleveLineToEnv(env, line) {
+// Rattache manuellement UNE OU PLUSIEURS lignes du relevé à une enveloppe → verte + lignes
+// prises. Plusieurs lignes = remise splittée par la banque : amount_proof est la SOMME des
+// lignes, donc l'écart compare bien la remise entière au montant Odoo.
+// Les lignes déjà rattachées à cette enveloppe et non reprises sont libérées.
+export async function attachReleveLines(env, lines) {
+  if (!lines?.length) return
+  const ordered = [...lines].sort((a, b) => String(a.ligne_date).localeCompare(String(b.ligne_date)))
+  const total = ordered.reduce((s, l) => s + Number(l.amount || 0), 0)
+  // Une seule ligne : format historique « date · libellé ». Plusieurs : on les liste
+  // séparées par «  |  » (même séparateur que les lignes « à confirmer »).
+  const libelle = ordered.length === 1
+    ? `${ordered[0].ligne_date} · ${ordered[0].label}`.slice(0, 220)
+    : ordered.map(l => `${l.ligne_date} · ${l.label}`.slice(0, 70)).join('  |  ').slice(0, 300)
   await setEnveloppeReleve(env.id, {
-    proofUrl: line.releve_url || undefined,
-    proofDate: line.ligne_date || undefined,
+    proofUrl: ordered[0].releve_url || undefined,
+    proofDate: ordered[0].ligne_date || undefined,
     status: 'trouve',
-    libelle: `${line.ligne_date} · ${line.label}`.slice(0, 220),
+    libelle,
     candidates: null,
   })
-  await supabase.from('caisse_enveloppes').update({ amount_proof: Number(line.amount) }).eq('id', env.id)
-  await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).eq('key', line.key)
+  await supabase.from('caisse_enveloppes').update({ amount_proof: total }).eq('id', env.id)
+  const keys = ordered.map(l => l.key)
+  const { data: deja } = await supabase.from('caisse_releve_lignes').select('key').eq('used_by', env.id)
+  const aLiberer = (deja || []).map(l => l.key).filter(k => !keys.includes(k))
+  if (aLiberer.length) await supabase.from('caisse_releve_lignes').update({ used_by: null }).in('key', aLiberer)
+  await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).in('key', keys)
 }
 
 // Retire la preuve manuelle d'une enveloppe (photo/PDF uploadée) -> repasse en attente.

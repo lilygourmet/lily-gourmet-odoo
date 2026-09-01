@@ -107,3 +107,36 @@ describe('reconcileEnvelopes — chèque encaissé longtemps après', () => {
     expect(results.find(x => x.env.id === 'E').status).toBe('trouve')
   })
 })
+
+// Remise de chèques splittée par la banque : une caisse est rattachée à PLUSIEURS lignes du
+// relevé. Au ré-import, chacune doit rester « prise » — sinon elle repart dans « à lier »
+// ou, pire, est proposée à une autre caisse du même montant.
+describe('reconcileEnvelopes — remise splittée en plusieurs encaissements', () => {
+  const l7000 = { credit: 7000, dateIso: '2026-08-12', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 46160271' }
+  const l5000 = { credit: 5000, dateIso: '2026-08-14', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 46160272' }
+  const envSplit = {
+    id: 900, amount_cash: 12000, amount_proof: 12000, payment_method: 'cheque',
+    releve_status: 'trouve', session_date: '2026-08-10',
+    note_proof: '2026-08-12 · REMISE CHEQUE A ENC 46160271  |  2026-08-14 · REMISE CHEQUE A ENC 46160272',
+  }
+
+  it('ne renvoie aucune des 2 lignes dans « à lier »', () => {
+    const { unmatched } = reconcileEnvelopes([envSplit], [l7000, l5000], {})
+    expect(unmatched).toHaveLength(0)
+  })
+
+  it("ne propose pas un morceau de la remise à une autre caisse du même montant", () => {
+    const autre = {
+      id: 901, amount_cash: 7000, payment_method: 'cheque',
+      releve_status: null, proof_url: null, session_date: '2026-08-11',
+    }
+    const { results } = reconcileEnvelopes([envSplit, autre], [l7000, l5000], {})
+    expect(results.find(r => r.env.id === 901).status).toBe('absent')
+  })
+
+  it('une ligne du même jour au libellé différent reste libre', () => {
+    const autreDepot = { credit: 3000, dateIso: '2026-08-12', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 99999999' }
+    const { unmatched } = reconcileEnvelopes([envSplit], [l7000, l5000, autreDepot], {})
+    expect(unmatched.map(u => u.credit)).toEqual([3000])
+  })
+})
