@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -176,11 +176,19 @@ function BanqueSection({ user }) {
 
   // Lier manuellement 2 virements à 1 seule ligne du relevé : les deux passent
   // « Rapprochée » avec une note « lié manuellement » (la banque les a reçus en une fois).
-  async function handleLink(a, b) {
+  // Avec la ligne choisie, elle sort aussi de « Reçus banque non liés ».
+  async function handleLink(a, b, line) {
     const total = Number(a.amount_cash) + Number(b.amount_cash)
-    const note = `🔗 Lié manuellement · 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`
-    await setEnveloppeReleve(a.id, { status: 'trouve', libelle: note, candidates: null })
-    await setEnveloppeReleve(b.id, { status: 'trouve', libelle: note, candidates: null })
+    // Libellé au format « date · libellé » d'abord : c'est comme ça que le rapprochement
+    // auto retrouve la ligne prise au ré-import (le 🔗 lui dit que la ligne vaut 2 caisses).
+    const note = line
+      ? `${line.ligne_date} · ${line.label} · 🔗 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`.slice(0, 300)
+      : `🔗 Lié manuellement · 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`
+    const commun = { status: 'trouve', libelle: note, candidates: null,
+      proofDate: line?.ligne_date || undefined, proofUrl: line?.releve_url || undefined }
+    await setEnveloppeReleve(a.id, commun)
+    await setEnveloppeReleve(b.id, commun)
+    if (line) await takeReleveLine(line.key, a.id)
     setLinkFrom(null)
     reload()
   }
@@ -887,7 +895,16 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
 }
 
 function LinkTwoModal({ from, list, onClose, onLink }) {
+  const [autre, setAutre] = useState(null)   // 2e virement choisi
+  const [lines, setLines] = useState(null)   // lignes du relevé du montant TOTAL
   const candidates = list.filter(e => e.id !== from.id && (e.payment_method || 'cash') === 'virement' && e.releve_status !== 'trouve')
+  const total = autre ? Number(from.amount_cash) + Number(autre.amount_cash) : 0
+  // 2e virement choisi -> on cherche les lignes du relevé du montant TOTAL des deux.
+  async function choisir(e) {
+    setAutre(e); setLines(null)
+    try { setLines(await loadFreeReleveLines(Number(from.amount_cash) + Number(e.amount_cash), 'virement')) }
+    catch { setLines([]) }
+  }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -895,19 +912,50 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
           Virement 1 : <b>{fmtMoney(from.amount_cash)} dh</b>{from.virement_client ? ` · ${from.virement_client}` : ''}
         </div>
-        <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>Choisis le 2ᵉ virement (la banque les a reçus en un seul virement) :</div>
-        {candidates.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucun autre virement à lier.</div>
+        {!autre ? (
+          <>
+            <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>Choisis le 2ᵉ virement (la banque les a reçus en un seul virement) :</div>
+            {candidates.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucun autre virement à lier.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {candidates.map(e => (
+                  <button key={e.id} onClick={() => choisir(e)}
+                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
+                    <b>{fmtMoney(e.amount_cash)} dh</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
+                    <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))} dh</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-            {candidates.map(e => (
-              <button key={e.id} onClick={() => onLink(from, e)}
-                style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
-                <b>{fmtMoney(e.amount_cash)} dh</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
-                <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))} dh</span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
+              Virement 2 : <b>{fmtMoney(autre.amount_cash)} dh</b>{autre.virement_client ? ` · ${autre.virement_client}` : ''}
+            </div>
+            <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 10 }}>
+              Quelle ligne de <b>{fmtMoney(total)}</b> dans le relevé ? Sans elle, la ligne restera dans « Reçus banque non liés ».
+            </div>
+            {lines === null ? (
+              <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Chargement…</div>
+            ) : lines.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucune ligne libre de {fmtMoney(total)} dans les relevés importés.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {lines.map(l => (
+                  <button key={l.key} onClick={() => onLink(from, autre, l)}
+                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
+                    <b>{l.ligne_date}</b> · {l.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => onLink(from, autre, null)} style={{ ...btnNormal, width: '100%', marginBottom: 8, fontSize: 12 }}>
+              Je ne trouve pas la ligne — lier quand même
+            </button>
+            <button onClick={() => setAutre(null)} style={{ ...btnNormal, width: '100%', marginBottom: 8, fontSize: 12 }}>← Changer de virement</button>
+          </>
         )}
         <button onClick={onClose} style={{ ...btnNormal, width: '100%' }}>Annuler</button>
       </div>

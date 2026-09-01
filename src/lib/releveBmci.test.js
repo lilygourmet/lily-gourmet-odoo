@@ -140,3 +140,24 @@ describe('reconcileEnvelopes — remise splittée en plusieurs encaissements', (
     expect(unmatched.map(u => u.credit)).toEqual([3000])
   })
 })
+
+// « 🔗 2 virements = 1 ligne » : la banque a reçu 2 virements en une seule opération. La
+// ligne vaut la somme des 2 caisses — aucune ne fait son montant — et doit rester prise au
+// ré-import, sinon elle est proposée à une autre caisse du total.
+describe('reconcileEnvelopes — 2 virements = 1 ligne', () => {
+  const ligne700 = { credit: 700, dateIso: '2026-06-16', type: 'virement_recu', label: 'VIR INST RECU MME NAJAT IDRISSI' }
+  const note = '2026-06-16 · VIR INST RECU MME NAJAT IDRISSI · 🔗 2 virements = 1 ligne (total 700 dh)'
+  const envA = { id: 'A700', amount_cash: 350, payment_method: 'virement', releve_status: 'trouve', session_date: '2026-06-15', note_proof: note }
+  const envB = { id: 'B700', amount_cash: 350, payment_method: 'virement', releve_status: 'trouve', session_date: '2026-06-15', note_proof: note }
+
+  it('ne renvoie pas la ligne dans « à lier »', () => {
+    const { unmatched } = reconcileEnvelopes([envA, envB], [ligne700], {})
+    expect(unmatched).toHaveLength(0)
+  })
+
+  it("ne propose pas la ligne à une autre caisse du montant total", () => {
+    const autre = { id: 'C700', amount_cash: 700, payment_method: 'virement', releve_status: null, session_date: '2026-06-15', virement_client: 'Najat Idrissi' }
+    const { results } = reconcileEnvelopes([envA, envB, autre], [ligne700], {})
+    expect(results.find(r => r.env.id === 'C700').status).toBe('absent')
+  })
+})
