@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, attachReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, linkReleveLineToEnv, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -168,24 +168,27 @@ function BanqueSection({ user }) {
   }
 
   // Confirmer une enveloppe orange en choisissant la bonne ligne du relevé
-  async function handlePickLine(envId, choice) {
-    await setEnveloppeReleve(envId, {
-      status: 'trouve',
-      proofDate: choice?.d || undefined,
-      libelle: choice ? `${choice.d} · ${choice.l}` : 'Confirmé manuellement',
-      candidates: null,
-    })
+  async function handlePickLine(env, choice) {
+    await confirmReleveLine(env, choice)
     setConfirmEnv(null)
     reload()
   }
 
   // Lier manuellement 2 virements à 1 seule ligne du relevé : les deux passent
   // « Rapprochée » avec une note « lié manuellement » (la banque les a reçus en une fois).
-  async function handleLink(a, b) {
+  // Avec la ligne choisie, elle sort aussi de « Reçus banque non liés ».
+  async function handleLink(a, b, line) {
     const total = Number(a.amount_cash) + Number(b.amount_cash)
-    const note = `🔗 Lié manuellement · 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`
-    await setEnveloppeReleve(a.id, { status: 'trouve', libelle: note, candidates: null })
-    await setEnveloppeReleve(b.id, { status: 'trouve', libelle: note, candidates: null })
+    // Libellé au format « date · libellé » d'abord : c'est comme ça que le rapprochement
+    // auto retrouve la ligne prise au ré-import (le 🔗 lui dit que la ligne vaut 2 caisses).
+    const note = line
+      ? `${line.ligne_date} · ${line.label} · 🔗 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`.slice(0, 300)
+      : `🔗 Lié manuellement · 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`
+    const commun = { status: 'trouve', libelle: note, candidates: null,
+      proofDate: line?.ligne_date || undefined, proofUrl: line?.releve_url || undefined }
+    await setEnveloppeReleve(a.id, commun)
+    await setEnveloppeReleve(b.id, commun)
+    if (line) await takeReleveLine(line.key, a.id)
     setLinkFrom(null)
     reload()
   }
@@ -203,9 +206,9 @@ function BanqueSection({ user }) {
     reload()
   }
 
-  // Rattacher manuellement une ligne libre du relevé à une enveloppe
-  async function handleAttach(env, line) {
-    await attachReleveLine(env, line)
+  // Rattacher manuellement une ou plusieurs lignes libres du relevé à une caisse
+  async function handleAttach(env, lignes) {
+    await attachReleveLines(env, lignes)
     setSuggestEnv(null)
     reload()
   }
@@ -383,6 +386,11 @@ function BanqueSection({ user }) {
                 ✓ Confirmer
               </button>
             )}
+            {env.releve_status === 'trouve' && (
+              <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
+                ➕ Ajouter une ligne
+              </button>
+            )}
             {env.releve_status && (
               <button onClick={() => handleClearReleve(env.id)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#99201E' }}>
                 ↺ Annuler
@@ -394,15 +402,9 @@ function BanqueSection({ user }) {
               </button>
             )}
             {!env.releve_status && !env.proof_url && !env.releve_ignore && (
-              hasSuggestion(env) ? (
-                <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
-                  💡 Suggérer
-                </button>
-              ) : (
-                <button disabled style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#9a8f86', border: '1px solid #e5d8c3', background: '#f3efe9', cursor: 'default', opacity: 0.75 }}>
-                  Sans suggestion
-                </button>
-              )
+              <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: `1px solid ${hasSuggestion(env) ? '#D6C3EA' : '#e5d8c3'}` }}>
+                {hasSuggestion(env) ? '💡 Suggérer' : '🔍 Chercher'}
+              </button>
             )}
             {!env.releve_status && !env.proof_url && !env.releve_ignore && (
               <button onClick={() => { setIgnoreEnv(env); setIgnoreReason('') }} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#8a7a70' }}>
@@ -494,18 +496,29 @@ function NonLieSection() {
   }
   useEffect(() => { reload() }, [view])
   async function handleLink(env, line) {
-    // Enveloppe déjà rapprochée : c'est souvent la MAUVAISE remise (relevés importés mois
-    // par mois -> l'app a validé la seule ligne du fichier en cours). On détache d'abord,
-    // ce qui renvoie l'ancienne ligne dans « non liés », puis on relie à la bonne.
+    let deja = []
     if (env.deja_rapprochee) {
-      const quoi = env.note_proof ? `« ${env.note_proof} »` : 'une autre ligne du relevé'
-      const ok = await confirmDialog(
-        `Cette enveloppe est déjà rapprochée à ${quoi}.\n\nLa relier au dépôt du ${line.ligne_date} à la place ? L'ancienne ligne repartira dans « non liés ».`,
-        { danger: true, confirmLabel: 'Remplacer' })
-      if (!ok) return
-      await clearEnveloppeReleve(env.id)
+      try { deja = await loadEnvReleveLines(env.id) } catch { deja = [] }
+      if (deja.length) {
+        // Remise splittée par la banque : on AJOUTE ce dépôt aux lignes déjà rattachées.
+        const dejaTotal = deja.reduce((s, l) => s + Number(l.amount || 0), 0)
+        const ok = await confirmDialog(
+          `Cette caisse est déjà liée à ${deja.length} ligne(s) du relevé (${fmtMoney(dejaTotal)}).\n\n` +
+          `Ajouter le dépôt du ${line.ligne_date} de ${fmtMoney(line.amount)} ?\n` +
+          `Total : ${fmtMoney(dejaTotal + Number(line.amount || 0))} pour une caisse de ${fmtMoney(env.amount_cash)}.`,
+          { confirmLabel: 'Ajouter' })
+        if (!ok) return
+      } else {
+        // Aucune ligne mémorisée (vieux rapprochement) : on ne peut que remplacer.
+        const quoi = env.note_proof ? `« ${env.note_proof} »` : 'une autre ligne du relevé'
+        const ok = await confirmDialog(
+          `Cette enveloppe est déjà rapprochée à ${quoi}.\n\nLa relier au dépôt du ${line.ligne_date} à la place ? L'ancienne ligne repartira dans « non liés ».`,
+          { danger: true, confirmLabel: 'Remplacer' })
+        if (!ok) return
+        await clearEnveloppeReleve(env.id)
+      }
     }
-    await linkReleveLineToEnv(env, line)
+    await attachReleveLines(env, [...deja, line])
     setLinkLine(null)
     reload()
   }
@@ -515,9 +528,18 @@ function NonLieSection() {
   }
   async function handleDelier(l) {
     if (!l.used_by) return
-    if (!await confirmDialog('Délier ce montant du versement ? (la ligne redevient « non liée »)', { danger: true, confirmLabel: 'Délier' })) return
-    try { await clearEnveloppeReleve(l.used_by); reload() }
-    catch (e) { alert('Erreur : ' + (e?.message || e)) }
+    let reste = []
+    try { reste = (await loadEnvReleveLines(l.used_by)).filter(x => x.key !== l.key) } catch { reste = [] }
+    // Remise splittée : on ne retire QUE cette ligne, les autres restent rattachées.
+    const msg = reste.length
+      ? `Délier ce montant ? La caisse reste rapprochée aux ${reste.length} autre(s) ligne(s).`
+      : 'Délier ce montant du versement ? (la ligne redevient « non liée »)'
+    if (!await confirmDialog(msg, { danger: true, confirmLabel: 'Délier' })) return
+    try {
+      if (reste.length) await attachReleveLines({ id: l.used_by }, reste)
+      else await clearEnveloppeReleve(l.used_by)
+      reload()
+    } catch (e) { alert('Erreur : ' + (e?.message || e)) }
   }
   const TYPE_GROUP = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
   const count = useMemo(() => {
@@ -736,46 +758,98 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
   )
 }
 
-// Suggestions de lignes LIBRES du relevé (même montant) pour rattacher une enveloppe grise
+// Lignes du relevé à rattacher à une caisse. La banque split souvent une remise de chèques
+// en PLUSIEURS encaissements : on coche autant de lignes qu'il en faut, le total se compare
+// au montant de la caisse. Rouvrable sur une caisse déjà rapprochée (ses lignes sont cochées).
 function SuggestModal({ env, onClose, onAttach }) {
   const [lines, setLines] = useState(null)
+  const [sel, setSel] = useState([])        // clés cochées
+  const [q, setQ] = useState('')
+  const montant = Number(env.amount_cash)
   useEffect(() => {
     (async () => {
-      let ls
-      try { ls = await loadFreeReleveLines(env.amount_cash, env.payment_method) } catch { ls = [] }
+      let libres = [], miennes = []
+      try { libres = await loadFreeReleveLines(null, env.payment_method) } catch { libres = [] }
+      try { miennes = env.releve_status ? await loadEnvReleveLines(env.id) : [] } catch { miennes = [] }
+      const exact = l => Math.abs(Number(l.amount) - montant) < 0.005
       // Auto : parmi les lignes du même montant, une SEULE "VIR INST RECU" à la
       // même date que l'enveloppe -> on l'attache et on l'accorde directement.
-      const sameDayInst = ls.filter(l => l.type === 'virement_recu'
+      const sameDayInst = libres.filter(l => exact(l) && l.type === 'virement_recu'
         && /\bINST\b/i.test(l.label || '') && l.ligne_date === env.session_date)
-      if (sameDayInst.length === 1) {
-        onAttach(env, sameDayInst[0])
+      if (!env.releve_status && sameDayInst.length === 1) {
+        onAttach(env, sameDayInst)
         return
       }
-      setLines(ls)
+      // Ordre : les lignes déjà rattachées, puis celles du montant exact, puis le reste.
+      const prises = new Set(miennes.map(l => l.key))
+      const autres = libres.filter(l => !prises.has(l.key))
+      setLines([...miennes, ...autres.filter(exact), ...autres.filter(l => !exact(l))])
+      setSel(miennes.map(l => l.key))
     })()
   }, [env.id])
+
+  const toggle = k => setSel(s => (s.includes(k) ? s.filter(x => x !== k) : [...s, k]))
+  const coche = (lines || []).filter(l => sel.includes(l.key))
+  const totalCoche = coche.reduce((s, l) => s + Number(l.amount || 0), 0)
+  const reste = montant - totalCoche
+  const visibles = useMemo(() => {
+    if (!lines) return []
+    const t = q.trim().toLowerCase()
+    if (!t) return lines.slice(0, 80)
+    return lines.filter(l => String(l.amount).includes(t)
+      || (l.label || '').toLowerCase().includes(t) || (l.ligne_date || '').includes(t)).slice(0, 80)
+  }, [lines, q])
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 480, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Lignes du relevé de {fmtMoney(env.amount_cash)} encore libres</div>
-        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
-          {env.virement_client ? `${env.virement_client} · ` : ''}{fmtDateCourte(env.session_date)} — choisis la ligne qui correspond :
+      <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 520, maxHeight: '85dvh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Caisse de {fmtMoney(montant)} — quelles lignes du relevé ?</div>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 10 }}>
+          {env.virement_client ? `${env.virement_client} · ` : ''}{fmtDateCourte(env.session_date)} — coche <b>une ou plusieurs</b> lignes
+          (la banque peut avoir splitté la remise).
         </div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un montant, une date, un libellé…"
+          style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 8, marginBottom: 10 }} />
         {lines === null ? (
           <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Chargement…</div>
-        ) : lines.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Aucune ligne libre de ce montant dans les relevés importés.</div>
+        ) : visibles.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>
+            {lines.length ? 'Aucune ligne ne correspond à cette recherche.' : 'Aucune ligne libre de ce type dans les relevés importés.'}
+          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-            {lines.map(l => (
-              <button key={l.key} onClick={() => onAttach(env, l)}
-                style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
-                <b>{l.ligne_date}</b> · {l.label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, overflowY: 'auto' }}>
+            {visibles.map(l => {
+              const on = sel.includes(l.key)
+              return (
+                <label key={l.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, textAlign: 'left', padding: '9px 11px', borderRadius: 10, cursor: 'pointer', fontSize: 13, border: on ? '1px solid #993556' : '1px solid #e5d8c3', background: on ? '#FBF0F3' : '#F9F6F1' }}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(l.key)} style={{ marginTop: 2 }} />
+                  <span>
+                    <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
+                    <div style={{ fontSize: 11, color: '#8a7a70', lineHeight: 1.3 }}>{l.label}</div>
+                  </span>
+                </label>
+              )
+            })}
+            {lines.length > visibles.length && (
+              <div style={{ fontSize: 11, color: '#8a7a70', padding: '2px 4px' }}>
+                … {lines.length - visibles.length} autres lignes — affine la recherche.
+              </div>
+            )}
           </div>
         )}
-        <button onClick={onClose} style={{ ...btnNormal, width: '100%' }}>Fermer</button>
+        <div style={{ fontSize: 13, padding: '8px 10px', borderRadius: 8, background: '#F4F0EA', marginBottom: 10 }}>
+          Coché : <b>{fmtMoney(totalCoche)}</b> ({sel.length}) · Caisse : {fmtMoney(montant)}
+          {Math.abs(reste) < 0.005
+            ? <span style={{ color: '#0a7d3d', fontWeight: 600 }}> · ça tombe juste ✓</span>
+            : <span style={{ color: '#99201E', fontWeight: 600 }}> · {reste > 0 ? `il manque ${fmtMoney(reste)}` : `${fmtMoney(-reste)} de trop`}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => onAttach(env, coche)} disabled={!coche.length}
+            style={{ ...btnNormal, flex: 1, opacity: coche.length ? 1 : 0.5, cursor: coche.length ? 'pointer' : 'default' }}>
+            Rattacher {coche.length > 1 ? `les ${coche.length} lignes` : 'la ligne'}
+          </button>
+          <button onClick={onClose} style={{ ...btnNormal, flex: 1 }}>Fermer</button>
+        </div>
       </div>
     </div>
   )
@@ -804,7 +878,7 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
             {candidates.map((c, i) => (
-              <button key={i} onClick={() => onPick(env.id, c)}
+              <button key={i} onClick={() => onPick(env, c)}
                 style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
                 <b>{c.d}</b> · {c.l}
               </button>
@@ -812,7 +886,7 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => onPick(env.id, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
+          <button onClick={() => onPick(env, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
           <button onClick={onClose} style={{ ...btnNormal, flex: 1 }}>Annuler</button>
         </div>
       </div>
@@ -821,7 +895,16 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
 }
 
 function LinkTwoModal({ from, list, onClose, onLink }) {
+  const [autre, setAutre] = useState(null)   // 2e virement choisi
+  const [lines, setLines] = useState(null)   // lignes du relevé du montant TOTAL
   const candidates = list.filter(e => e.id !== from.id && (e.payment_method || 'cash') === 'virement' && e.releve_status !== 'trouve')
+  const total = autre ? Number(from.amount_cash) + Number(autre.amount_cash) : 0
+  // 2e virement choisi -> on cherche les lignes du relevé du montant TOTAL des deux.
+  async function choisir(e) {
+    setAutre(e); setLines(null)
+    try { setLines(await loadFreeReleveLines(Number(from.amount_cash) + Number(e.amount_cash), 'virement')) }
+    catch { setLines([]) }
+  }
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -829,19 +912,50 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
           Virement 1 : <b>{fmtMoney(from.amount_cash)} dh</b>{from.virement_client ? ` · ${from.virement_client}` : ''}
         </div>
-        <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>Choisis le 2ᵉ virement (la banque les a reçus en un seul virement) :</div>
-        {candidates.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucun autre virement à lier.</div>
+        {!autre ? (
+          <>
+            <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>Choisis le 2ᵉ virement (la banque les a reçus en un seul virement) :</div>
+            {candidates.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucun autre virement à lier.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {candidates.map(e => (
+                  <button key={e.id} onClick={() => choisir(e)}
+                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
+                    <b>{fmtMoney(e.amount_cash)} dh</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
+                    <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))} dh</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-            {candidates.map(e => (
-              <button key={e.id} onClick={() => onLink(from, e)}
-                style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
-                <b>{fmtMoney(e.amount_cash)} dh</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
-                <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))} dh</span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
+              Virement 2 : <b>{fmtMoney(autre.amount_cash)} dh</b>{autre.virement_client ? ` · ${autre.virement_client}` : ''}
+            </div>
+            <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 10 }}>
+              Quelle ligne de <b>{fmtMoney(total)}</b> dans le relevé ? Sans elle, la ligne restera dans « Reçus banque non liés ».
+            </div>
+            {lines === null ? (
+              <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Chargement…</div>
+            ) : lines.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucune ligne libre de {fmtMoney(total)} dans les relevés importés.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {lines.map(l => (
+                  <button key={l.key} onClick={() => onLink(from, autre, l)}
+                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
+                    <b>{l.ligne_date}</b> · {l.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => onLink(from, autre, null)} style={{ ...btnNormal, width: '100%', marginBottom: 8, fontSize: 12 }}>
+              Je ne trouve pas la ligne — lier quand même
+            </button>
+            <button onClick={() => setAutre(null)} style={{ ...btnNormal, width: '100%', marginBottom: 8, fontSize: 12 }}>← Changer de virement</button>
+          </>
         )}
         <button onClick={onClose} style={{ ...btnNormal, width: '100%' }}>Annuler</button>
       </div>

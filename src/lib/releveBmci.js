@@ -410,18 +410,29 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
   // (sauf en mode « tout recalculer » où on repart de zéro).
   if (!recompute) for (const env of envelopes) {
     if (env.releve_status !== 'trouve' || !env.note_proof) continue
-    const sep = env.note_proof.indexOf(' · ')
-    if (sep < 0) continue
-    const npDate = env.note_proof.slice(0, sep)
-    const npLabel = env.note_proof.slice(sep + 3, sep + 33)
-    const amt = Number(env.amount_cash)
-    // Même date + même montant = c'est elle. Le libellé ne sert plus qu'à départager deux
-    // lignes identiques du même jour : deux relevés de formats différents écrivent la même
-    // opération autrement (« MLE SAMIA CHERKA » vs « MLE 2027184 000010999370 SAMIA
-    // CHERKAOUI »), et l'exiger renvoyait dans « à lier » des dépôts déjà rapprochés.
-    const memes = credits.filter(c => !used.has(c) && Math.abs(c.credit - amt) < 0.005 && c.dateIso === npDate)
-    const m = memes.find(c => c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30))) || memes[0]
-    if (m) used.add(m)
+    // Remise splittée par la banque : l'enveloppe est rattachée à PLUSIEURS lignes, listées
+    // séparées par «  |  ». Chacune doit être marquée prise.
+    const parts = env.note_proof.split('  |  ')
+    for (const part of parts) {
+      const sep = part.indexOf(' · ')
+      if (sep < 0) continue
+      const npDate = part.slice(0, sep)
+      const npLabel = part.slice(sep + 3, sep + 33)
+      const amt = Number(env.amount_cash)
+      // Même date + même montant = c'est elle. Le libellé ne sert plus qu'à départager deux
+      // lignes identiques du même jour : deux relevés de formats différents écrivent la même
+      // opération autrement (« MLE SAMIA CHERKA » vs « MLE 2027184 000010999370 SAMIA
+      // CHERKAOUI »), et l'exiger renvoyait dans « à lier » des dépôts déjà rapprochés.
+      // Sur une remise splittée — ou sur un « 🔗 2 virements = 1 ligne », où la ligne vaut
+      // la somme de DEUX caisses — aucune ligne ne fait le montant de l'enveloppe : on se
+      // repère sur la date + le libellé, et sans libellé reconnu on ne prend rien.
+      const split = parts.length > 1 || env.note_proof.includes('🔗')
+      const memes = credits.filter(c => !used.has(c) && c.dateIso === npDate
+        && (split || Math.abs(c.credit - amt) < 0.005))
+      const m = memes.find(c => c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30)))
+        || (split ? null : memes[0])
+      if (m) used.add(m)
+    }
   }
 
   // Réserver la ligne du relevé qui correspond à une PREUVE PHOTO manuelle (dans les 2
