@@ -64,6 +64,9 @@ function taille(nom) {
 // « Pr » seul devant le nom = l'entremets fini. « Praline », « Preparation »
 // ne doivent pas etre pris : on exige un espace derriere.
 const estPr = nom => /^Pr\s/i.test(propre(nom))
+// Un « cadre » sort 46, 88 ou 243 pièces d'un coup : il se compte en
+// cadres ENTIERS, on ne monte pas 1,8 cadre.
+const estCadre = nom => /\bcadres?\b/i.test(String(nom || ''))
 
 function courtNom(nom) {
   let t = propre(nom).replace(/^Pr\s+/i, '')
@@ -342,6 +345,8 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     // 0,43 ; 1,15…). 242 recettes sur 315 en pièces n'ont pas assez d'ordres
     // pour qu'une tournée soit détectée : sans cette règle, elles proposaient
     // un nombre à virgule.
+    // un cadre ne se coupe pas : on arrondit au cadre entier au-dessus
+    if (estCadre(nom)) return Math.max(1, Math.ceil(brut - 0.001))
     if (String(r.sortUnite || '').trim().toLowerCase() === 'u') {
       const pieces = Math.max(1, Math.ceil(b - 0.001))
       return Math.round((pieces / r.sortQty) * 1000) / 1000
@@ -727,11 +732,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             {!estMere && recettes[saisie] && recettes[saisie].sortQty > 0 && (() => {
               const r = recettes[saisie]
               const u = String(r.sortUnite || '').trim()
+              const cadre = estCadre(saisie)
               const brut = r.sortQty * fois
-              const qte = /^kg$/i.test(u) ? Math.round(brut * 100) / 100 : Math.round(brut)
-              // on avance par pas utiles : 100 g, 0,5 kg, 1 pièce
-              const pas = /^(g|gr)$/i.test(u) ? 100 : (/^kg$/i.test(u) ? 0.5 : 1)
-              const poser = v => setFois(Math.max(0.01, (Number(v) || 0) / r.sortQty))
+              const qte = cadre ? Math.max(1, Math.ceil(fois - 0.001))
+                : (/^kg$/i.test(u) ? Math.round(brut * 100) / 100 : Math.round(brut))
+              // on avance par pas utiles : 100 g, 0,5 kg, 1 pièce, 1 cadre
+              const pas = cadre ? 1 : (/^(g|gr)$/i.test(u) ? 100 : (/^kg$/i.test(u) ? 0.5 : 1))
+              const poser = v => setFois(cadre
+                ? Math.max(1, Math.ceil((Number(v) || 0) - 0.001))
+                : Math.max(0.01, (Number(v) || 0) / r.sortQty))
               return (
                 <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
                   <button onClick={() => poser(Math.max(pas, qte - pas))}
@@ -740,8 +749,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <input type="number" min="0" step={pas} value={qte}
                       onChange={e => poser(e.target.value)}
                       className="sans-fleches w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
-                    <span className="block text-[12px] text-ink-soft font-extrabold">{u} à produire</span>
-                    <span className="block text-[10.5px] text-ink-mute">≈ {nb(fois)} fois la recette</span>
+                    <span className="block text-[12px] text-ink-soft font-extrabold">
+                      {cadre ? (qte > 1 ? 'cadres à produire' : 'cadre à produire') : u + ' à produire'}
+                    </span>
+                    <span className="block text-[10.5px] text-ink-mute">
+                      {cadre
+                        ? '= ' + nbQ(r.sortQty * qte, u) + ' ' + u
+                        : '≈ ' + nb(fois) + ' fois la recette'}
+                    </span>
                   </div>
                   <button onClick={() => poser(qte + pas)}
                     className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">+</button>
