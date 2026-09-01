@@ -805,6 +805,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   // un ingrédient qui se fabrique lui-même : on peut entrer
                   // dans sa recette pour la faire à son tour
                   const ouvrable = l.fabrique && recettes[l.produit]
+                  // Ce qui est DÉJÀ couvert par le stock : le pâtissier n'a
+                  // plus à ouvrir l'article pour le vérifier. Il reste
+                  // ouvrable s'il veut en lire la recette.
+                  const stockLa = stocks[l.produit]
+                  const besoinLigne = versUnite(
+                    (l.tailles ? Math.max(...l.tailles) : l.qty) * fois, l.unite, uniteDe(l.produit))
+                  const couvert = stockLa !== undefined && besoinLigne > 0 && stockLa >= besoinLigne - 1e-9
                   const contenu = (
                     <>
                       <span className="text-[17px] font-extrabold min-w-[96px] text-right">
@@ -812,12 +819,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       </span>
                       <span className={'text-[14px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                         {courtNom(l.produit)}
-                        {stocks[l.produit] !== undefined && (
-                          <span className={'block text-[10.5px] font-normal '
-                            + ((stocks[l.produit] || 0) <= 0 ? 'text-danger' : 'text-ink-mute')}>
-                            {(stocks[l.produit] || 0) <= 0
-                              ? 'rupture'
-                              : 'il en reste ' + nbQ(stocks[l.produit], uniteDe(l.produit)) + ' ' + uniteDe(l.produit)}
+                        {stockLa !== undefined && (
+                          <span className={'block text-[10.5px] '
+                            + (couvert ? 'text-ok font-extrabold'
+                              : (stockLa || 0) <= 0 ? 'text-danger font-normal' : 'text-ink-mute font-normal')}>
+                            {couvert
+                              ? 'en stock · ' + nbQ(stockLa, uniteDe(l.produit)) + ' ' + uniteDe(l.produit)
+                              : (stockLa || 0) <= 0
+                                ? 'rupture'
+                                : 'il en reste ' + nbQ(stockLa, uniteDe(l.produit)) + ' ' + uniteDe(l.produit)}
                           </span>
                         )}
                       </span>
@@ -836,11 +846,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                         const besoin = versUniteDe(l.produit, q, l.unite)
                         ouvrirFiche(l.produit, saisie, Math.max(0, besoin - Math.max(0, stocks[l.produit] || 0)))
                       }}
-                      className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
+                      className={'w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm '
+                        + (couvert ? 'bg-[#F3F8EC]' : '')}>
                       {contenu}
                     </button>
                   ) : (
-                    <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
+                    <div key={i} className={'flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 '
+                      + (couvert ? 'bg-[#F3F8EC]' : '')}>
                       {contenu}
                     </div>
                   )
