@@ -169,7 +169,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return base
   }, [arbre, catalogue])
-  const tournees = (arbre && arbre.tournees) || {}
   const photoDe = n => (arbre && arbre.photos && arbre.photos[n]
     ? `/api/freezer-list?mode=photo&id=${arbre.photos[n]}` : '')
 
@@ -333,11 +332,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     const brut = b / r.sortQty
     // un article compté en tournées se fait par tournées entières
     if (poidsUnite(r.sortUnite)) return Math.max(1, Math.ceil(brut))
-    const pas = tournees[nom]
-    if (pas && r.sortQty) {
-      const parFois = pas / r.sortQty          // une tournée = tant de fois la recette
-      if (parFois > 0) return Math.max(parFois, Math.ceil(brut / parFois) * parFois)
-    }
+    // On ne remonte plus le besoin à la « tournée habituelle » : ça donnait
+    // 40 là où il en fallait 21, et trois chiffres différents à l'écran.
+    // Le pâtissier tape la quantité qu'il veut dans le compteur.
     // Ce qui se compte en PIÈCES ne se coupe pas en morceaux : on ne monte pas
     // 0,47 entremets. Vérifié sur un an d'ordres Odoo — les articles en « u »
     // sont toujours produits par nombres entiers (3, 4, 6, 20, 28…), alors que
@@ -437,7 +434,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     } catch (e) { toast.error('Impossible de remettre : ' + (e.message || e)) }
   }
 
-  const poser = (nom, v) => setBesoins(b => ({ ...b, [nom]: Math.max(0, Number(v) || 0) }))
 
   return (
     <div className="min-h-[100dvh] bg-cream">
@@ -716,45 +712,17 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               <div className={'rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3 border '
                 + ((stocks[saisie] || 0) <= 0 ? 'bg-[#FCEEE8] border-[#f0cfc5]' : 'bg-[#FFF7E0] border-[#e6d3a3]')}>
                 <b className={'text-[27px] font-extrabold leading-none '
-                  + ((stocks[saisie] || 0) <= 0 ? 'text-danger' : 'text-[#854F0B]')}>{nb(stocks[saisie] || 0)}</b>
+                  + ((stocks[saisie] || 0) <= 0 ? 'text-danger' : 'text-[#854F0B]')}>
+                  {nbQ(besoinDe(saisie), uniteDe(saisie))}
+                </b>
                 <span className={'text-[12.5px] leading-snug '
                   + ((stocks[saisie] || 0) <= 0 ? 'text-danger' : 'text-[#854F0B]')}>
-                  il en reste <b>{nbQ(stocks[saisie] || 0, recettes[saisie] && recettes[saisie].sortUnite)}</b><br />
-                  <b className="text-[15px]">{nbQ(besoinDe(saisie), recettes[saisie] && recettes[saisie].sortUnite)} à faire</b>
+                  <b className="text-[15px]">à faire</b><br />
+                  il en reste {nbQ(stocks[saisie] || 0, uniteDe(saisie))} {uniteDe(saisie)}
                 </span>
               </div>
             )}
 
-            {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie)
-              && recettes[saisie] && recettes[saisie].sortUnite !== 'u'
-              && !tournees[saisie] && !poidsUnite(recettes[saisie].sortUnite) && (() => {
-              const b = besoinDe(saisie)
-              const r = recettes[saisie]
-              const f2 = r && r.sortQty ? b / r.sortQty : 0
-              const rond = Math.ceil(f2 * 2) / 2
-              const collee = r && r.sortQty ? Math.round(rond * r.sortQty) : b
-              return (
-                <div className="bg-white border border-line rounded-2xl p-2.5 mb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11.5px] font-extrabold uppercase tracking-wide text-ink-mute flex-1">
-                      à faire
-                    </span>
-                    <button onClick={() => poser(saisie, b - 1)}
-                      className="w-9 h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">−</button>
-                    <input type="number" value={b} onChange={e => poser(saisie, e.target.value)}
-                      className="sans-fleches w-[76px] h-10 border border-line rounded-[10px] text-center text-[18px] font-extrabold bg-white outline-none focus:border-bordeaux" />
-                    <button onClick={() => poser(saisie, b + 1)}
-                      className="w-9 h-10 border border-line rounded-[10px] bg-white text-[20px] font-extrabold text-bordeaux leading-none">+</button>
-                  </div>
-                  {Math.abs(f2 - rond) > 0.01 && (
-                    <button onClick={() => { poser(saisie, collee); setFois(Math.max(0.5, rond)) }}
-                      className="w-full mt-2 border border-[#b58f3c] text-[#b58f3c] bg-white rounded-[10px] py-2 text-[12.5px] font-extrabold">
-                      arrondir à {nb(rond)} fois → {collee}
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
 
             {!estMere && recettes[saisie] && recettes[saisie].sortQty > 0 && (() => {
               const r = recettes[saisie]
@@ -866,30 +834,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               </p>
             )}
 
-            {!estMere && tournees[saisie] && !poidsUnite(recettes[saisie] && recettes[saisie].sortUnite)
-              && recettes[saisie] && recettes[saisie].sortQty > 0 && (() => {
-              const r = recettes[saisie]
-              // le BESOIN BRUT : passer par foisPour l'arrondissait a la tournee
-              // entiere, et « juste ce qu'il faut » affichait alors le meme
-              // chiffre que « tournee entiere ».
-              const juste = Math.round(besoinDe(saisie) * 100) / 100
-              const choix = (titre, qte, sous) => (
-                <button onClick={() => setFois(Math.max(0.01, qte / r.sortQty))}
-                  className={'flex-1 text-left rounded-2xl px-3 py-2.5 border-2 '
-                    + (Math.abs(r.sortQty * fois - qte) < 0.01
-                      ? 'border-bordeaux bg-[#FDF4F6]' : 'border-line bg-white')}>
-                  <span className="block text-[10px] font-extrabold uppercase tracking-wide text-ink-mute">{titre}</span>
-                  <b className="block text-[16px] font-extrabold">{nbQ(qte, r.sortUnite)} {r.sortUnite}</b>
-                  <span className="block text-[10.5px] text-ink-mute">{sous}</span>
-                </button>
-              )
-              return (
-                <div className="flex gap-2 mb-2.5">
-                  {juste > 0 && choix('Juste ce qu\'il faut', juste, 'pour couvrir le besoin')}
-                  {choix('Tournée entière', tournees[saisie], 'leur tournée habituelle')}
-                </div>
-              )
-            })()}
 
             {!estMere && recettes[saisie] && poidsUnite(recettes[saisie].sortUnite) && (
               <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 flex items-baseline gap-2.5">
