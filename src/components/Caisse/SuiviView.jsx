@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -168,13 +168,8 @@ function BanqueSection({ user }) {
   }
 
   // Confirmer une enveloppe orange en choisissant la bonne ligne du relevé
-  async function handlePickLine(envId, choice) {
-    await setEnveloppeReleve(envId, {
-      status: 'trouve',
-      proofDate: choice?.d || undefined,
-      libelle: choice ? `${choice.d} · ${choice.l}` : 'Confirmé manuellement',
-      candidates: null,
-    })
+  async function handlePickLine(env, choice) {
+    await confirmReleveLine(env, choice)
     setConfirmEnv(null)
     reload()
   }
@@ -875,7 +870,7 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
             {candidates.map((c, i) => (
-              <button key={i} onClick={() => onPick(env.id, c)}
+              <button key={i} onClick={() => onPick(env, c)}
                 style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
                 <b>{c.d}</b> · {c.l}
               </button>
@@ -883,7 +878,7 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => onPick(env.id, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
+          <button onClick={() => onPick(env, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
           <button onClick={onClose} style={{ ...btnNormal, flex: 1 }}>Annuler</button>
         </div>
       </div>

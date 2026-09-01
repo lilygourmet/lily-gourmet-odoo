@@ -526,6 +526,28 @@ export async function attachReleveLines(env, lines) {
   await supabase.from('caisse_releve_lignes').update({ used_by: env.id }).in('key', keys)
 }
 
+// Confirme une enveloppe « à confirmer » sur la ligne choisie. On rattache la VRAIE ligne
+// du relevé quand on la retrouve : sinon l'enveloppe passait verte mais la ligne restait
+// dans « Reçus banque non liés » pour toujours.
+export async function confirmReleveLine(env, choice) {
+  if (choice) {
+    const libres = await loadFreeReleveLines(env.amount_cash, env.payment_method)
+    const memeJour = libres.filter(l => l.ligne_date === choice.d)
+    // Plusieurs remises du même montant le même jour : le libellé (n° de remise) départage.
+    const ligne = memeJour.find(l => (l.label || '').startsWith(choice.l)
+      || choice.l.startsWith((l.label || '').slice(0, 40))) || memeJour[0]
+    if (ligne) return attachReleveLines(env, [ligne])
+  }
+  // Ligne pas mémorisée (vieil import) ou « confirmer sans choisir » : on ne peut que
+  // passer l'enveloppe verte.
+  await setEnveloppeReleve(env.id, {
+    status: 'trouve',
+    proofDate: choice?.d || undefined,
+    libelle: choice ? `${choice.d} · ${choice.l}` : 'Confirmé manuellement',
+    candidates: null,
+  })
+}
+
 // Retire la preuve manuelle d'une enveloppe (photo/PDF uploadée) -> repasse en attente.
 export async function clearEnveloppeProof(envId) {
   const { error } = await supabase.from('caisse_enveloppes')
