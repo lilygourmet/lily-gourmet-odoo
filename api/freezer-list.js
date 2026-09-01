@@ -6,6 +6,7 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
+import { versUnite } from '../src/lib/unites.js'
 
 // Ce que Check CD- a déjà contrôlé. Sans la base (SQL pas lancé, variables
 // absentes), on renvoie null : la chaîne stricte se met alors en veille plutôt
@@ -1738,7 +1739,7 @@ export default async function handler(req, res) {
           ['location_src_id', 'in', lieux.map(l => l.id)],
           ['state', '=', 'done'],
           ['date_planned_start', '>=', isoD(d0)],
-        ], ['product_id'], { limit: 3000 }),
+        ], ['product_id', 'product_qty'], { limit: 3000, order: 'id desc' }),
         memo('boms', () => odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 })),
         memo('bomlignes', () => odooSearchRead(uid, 'mrp.bom.line', [],
           ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
@@ -1748,9 +1749,9 @@ export default async function handler(req, res) {
           ['location_src_id', 'in', [...lieux.map(l => l.id), 52]],
           ['state', '=', 'done'],
           ['date_planned_start', '>=', isoD(dAn0)],
-        ], ['product_id', 'product_qty'], { limit: 12000 })),
+        ], ['product_id', 'product_qty'], { limit: 12000, order: 'id desc' })),
         odooSearchRead(uid, 'stock.quant', [['location_id', 'child_of', lieux.map(l => l.id)]],
-          ['product_id', 'quantity'], { limit: 3000 }),
+          ['product_id', 'quantity', 'product_uom_id'], { limit: 3000 }),
         // surtout pas `qty_on_hand` : Odoo le recalcule règle par règle et la
         // lecture passe de 1 à 13 secondes. Les stocks viennent des quants.
         memo('orderpoints', () => odooSearchRead(uid, 'stock.warehouse.orderpoint', [],
@@ -1780,8 +1781,13 @@ export default async function handler(req, res) {
 
       const tournees = {}
       for (const [n, qs] of Object.entries(qtesFaites)) {
-        if (qs.length < 4) continue
-        const vals = [...new Set(qs.map(x => Math.round(x * 100) / 100))].filter(x => x > 0).sort((a, b) => a - b)
+        // Il faut 4 vraies quantites : compter les lignes sans quantite (0)
+        // suffisait a franchir le seuil, et le seul chiffre qui restait
+        // devenait « la tournee » (le crunchy pistache annonçait 9 800 g
+        // alors que l'atelier le fait en 107, 258, 385, 774 g...).
+        const reels = qs.filter(x => x > 0)
+        if (reels.length < 4) continue
+        const vals = [...new Set(reels.map(x => Math.round(x * 100) / 100))].sort((a, b) => a - b)
         if (!vals.length) continue
         const pas = vals[0]
         const toutes = vals.every(x => Math.abs(x / pas - Math.round(x / pas)) < 0.02)
@@ -1942,7 +1948,14 @@ export default async function handler(req, res) {
       const stocks = {}
       for (const k of quants) {
         const n = net(Array.isArray(k.product_id) ? k.product_id[1] : '')
-        if (n) stocks[n] = (stocks[n] || 0) + (k.quantity || 0)
+        if (!n) continue
+        // Le quant est dans l'unité de STOCKAGE du produit, la recette dans
+        // celle de sa NOMENCLATURE : sans conversion on compare des grammes
+        // à des kilos. 8 articles étaient concernés le 01/09/2026.
+        const uStock = (Array.isArray(k.product_uom_id) ? k.product_uom_id[1] : '') || ''
+        const rec = aRendre[n] || aRendre[modele(n)]
+        const uRecette = (rec && rec.sortUnite) || uStock
+        stocks[n] = (stocks[n] || 0) + versUnite(k.quantity || 0, uStock, uRecette)
       }
       // La règle d'Odoo d'abord (choix de Layla) : celle posée ailleurs
       // qu'à l'annexe fait foi ; on ne retient celle de l'annexe que si

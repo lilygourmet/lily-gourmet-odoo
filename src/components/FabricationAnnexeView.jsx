@@ -7,12 +7,19 @@ import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '.
 import { loadArbreAnnexe, loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { loadStockProdCatalog } from '../lib/stockProd'
+import { poidsUnite, versUnite } from '../lib/unites'
 
 const ATELIER = 'annexe'
 const nb = v => Number(Number(v || 0).toFixed(2)).toLocaleString('fr-FR')
+// A l'atelier on ne pese pas 201,04 g et on ne monte pas 2,3 gateaux : les
+// grammes et les pieces s'affichent en nombres ENTIERS. Seuls les kg gardent
+// 2 decimales, sinon on perdrait 10 g de precision a chaque ligne.
+const nbQ = (v, u) => (/^kg$/i.test(String(u || '').trim())
+  ? nb(Math.round((Number(v) || 0) * 100) / 100)
+  : nb(Math.round(Number(v) || 0)))
 const propre = n => String(n || '')
   .replace(/^(E-|V-|MI-|N-|SM[.\- ]?|Sm[.\- ]?|SMT?[.\- ]?)\s*/i, '')
-  .replace(/\s*(finition|production)\s*$/i, '').trim()
+  .replace(/\s*(finition|production)\s*$/i, '').replace(/\s{2,}/g, ' ').trim()
 const jourLisible = j => new Date(j + 'T12:00:00')
   .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '')
@@ -32,30 +39,61 @@ const couleur = n => {
 // « 15 cm Vitrine (Praliné Amandes caramélisées) » se lit « 15 cm Vitrine ».
 // On garde en revanche les parenthèses qui sont un nombre de parts — « (10) »
 // est une taille, pas un parfum.
+// Deux informations sont noyees dans le nom Odoo et disparaissent dans les
+// « ... » des petites cases : la TAILLE (« ... 10 pers », « ... indiv ») et le
+// « Pr » qui distingue l'entremets FINI de son montage. On les sort en
+// etiquettes, avant la quantite, pour savoir exactement ce qui manque.
+// « buche » n'est une taille qu'en fin de nom : au milieu c'est le gateau
+// lui-meme (« Pr Buche chocolat 10 pers » est un 10 pers, pas une buche).
+const TAILLES = [
+  [/\bindiv\.?\b/i, () => 'INDIV'],
+  [/\b(\d+)\s*pers\.?\b/i, m => m[1] + ' PERS'],
+  [/\b(\d+)\s*cm\b/i, m => m[1] + ' CM'],
+  [/\b(\d+)\s*p\b/i, m => m[1] + ' PERS'],
+  [/\bunit[e\u00e9]\b/i, () => 'UNITE'],
+  [/\bbuche\s*$/i, () => 'BUCHE'],
+]
+function taille(nom) {
+  const t = String(nom || '')
+  for (const [re, lab] of TAILLES) {
+    const m = t.match(re)
+    if (m) return lab(m)
+  }
+  return null
+}
+// « Pr » seul devant le nom = l'entremets fini. « Praline », « Preparation »
+// ne doivent pas etre pris : on exige un espace derriere.
+const estPr = nom => /^Pr\s/i.test(propre(nom))
+
 function courtNom(nom) {
-  const t = propre(nom)
+  let t = propre(nom).replace(/^Pr\s+/i, '')
+  for (const [re] of TAILLES) {
+    if (re.test(t)) { t = t.replace(re, ' '); break }
+  }
+  t = t.replace(/\s{2,}/g, ' ').trim() || propre(nom)
   const fin = (t.match(/\(([^()]*)\)\s*$/) || [])[1]
   if (!fin || /^\s*\d+\s*$/.test(fin)) return t
   return t.replace(/\s*\([^()]*\)\s*$/, '').trim() || t
 }
 
+// Les deux etiquettes qui disent QUOI manque : « PR » (l'entremets fini,
+// glace) et la taille. Toujours avant la quantite, jamais tronquees.
+function Etiquettes({ nom, petit }) {
+  const t = taille(nom)
+  const pr = estPr(nom)
+  if (!pr && !t) return null
+  const base = 'shrink-0 font-extrabold uppercase tracking-wide rounded '
+    + (petit ? 'text-[9px] px-1' : 'text-[9.5px] px-1 py-px')
+  return (
+    <>
+      {pr && <b className={base + ' text-cream bg-bordeaux'}>PR</b>}
+      {t && <b className={base + ' text-bordeaux bg-cream-warm border border-line'}>{t}</b>}
+    </>
+  )
+}
+
 // Certaines unités d'Odoo portent leur poids dans leur nom : « Tournée (3 kg) ».
 // Sans le lire, un besoin de 5 250 g devient « 5 250 tournées » au lieu de 1,75.
-function poidsUnite(u) {
-  const m = String(u || '').match(/(\d+(?:[.,]\d+)?)\s*(kg|g)\b/i)
-  if (!m) return null
-  const v = Number(m[1].replace(',', '.'))
-  return /kg/i.test(m[2]) ? v * 1000 : v
-}
-
-// Combien pèse une quantité écrite dans une unité quelconque, en grammes.
-const enGrammes = (q, u) => {
-  if (/^kg$/i.test(u)) return q * 1000
-  if (/^g$/i.test(u)) return q
-  const p = poidsUnite(u)
-  return p ? q * p : null
-}
-
 function Vignette({ nom, photo, taille, rond, plein }) {
   // `plein` : la vignette prend toute la place du carré. Sans ça elle gardait
   // une taille fixe de 400 px dans une carte de 112 px, et l'on ne voyait que
@@ -151,14 +189,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return Math.max(0, (mm.max || mm.min) - st)
   }
   // convertit une quantité vers l'unité dans laquelle Odoo compte cet article
-  const versUniteDe = (nom, qty, uniteLigne) => {
-    const r = recettes[nom]
-    if (!r) return qty
-    const pSortie = poidsUnite(r.sortUnite)
-    if (!pSortie) return qty
-    const g = enGrammes(qty, uniteLigne)
-    return g === null ? qty : g / pSortie
-  }
+  const uniteDe = nom => String((recettes[nom] && recettes[nom].sortUnite) || '').trim()
+  // Un besoin s'arrondit dans SON unité : au centième pour des kilos, à
+  // l'entier pour des grammes ou des pièces. Math.round() écrasait à zéro
+  // tout besoin inférieur à un demi-kilo.
+  const arrondiBesoin = (nom, q) => (/^kg$/i.test(uniteDe(nom))
+    ? Math.round((Number(q) || 0) * 1000) / 1000
+    : Math.round(Number(q) || 0))
+  // toute la chaîne passe par src/lib/unites.js (testé)
+  const versUniteDe = (nom, qty, uniteLigne) => versUnite(qty, uniteLigne, uniteDe(nom))
   // une tournée ne se coupe pas en deux : on arrondit au-dessus
   const arrondiUtile = (nom, q) => {
     const r = recettes[nom]
@@ -255,6 +294,17 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         || b.lignes.length - a.lignes.length)
   }, [arbre, caches, besoins, stocks, minmax])
 
+  // Une case par ARTICLE a fabriquer, pas une case par gateau : les tailles
+  // d'un meme gateau ne doivent plus etre empilees au meme endroit. On garde
+  // la mere sur la case pour savoir de quel gateau il s'agit.
+  const casesAFaire = useMemo(() => {
+    const out = []
+    for (const { mere, lignes } of aFaire) {
+      for (const l of lignes.filter(x => x.tete === x.nom)) out.push({ mere, l })
+    }
+    return out.sort((a, b) => urgenceDe(b.l.nom) - urgenceDe(a.l.nom) || b.l.besoin - a.l.besoin)
+  }, [aFaire, stocks, minmax])
+
   // ===== ce qu'on a fait =====
   const liste = useMemo(() => {
     if (!arbre) return []
@@ -288,21 +338,57 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       const parFois = pas / r.sortQty          // une tournée = tant de fois la recette
       if (parFois > 0) return Math.max(parFois, Math.ceil(brut / parFois) * parFois)
     }
+    // Ce qui se compte en PIÈCES ne se coupe pas en morceaux : on ne monte pas
+    // 0,47 entremets. Vérifié sur un an d'ordres Odoo — les articles en « u »
+    // sont toujours produits par nombres entiers (3, 4, 6, 20, 28…), alors que
+    // les crèmes et glaçages en grammes se font à la quantité voulue (0,05 ;
+    // 0,43 ; 1,15…). 242 recettes sur 315 en pièces n'ont pas assez d'ordres
+    // pour qu'une tournée soit détectée : sans cette règle, elles proposaient
+    // un nombre à virgule.
+    if (String(r.sortUnite || '').trim().toLowerCase() === 'u') {
+      const pieces = Math.max(1, Math.ceil(b - 0.001))
+      return Math.round((pieces / r.sortQty) * 1000) / 1000
+    }
     return Math.max(0.01, Math.round(brut * 100) / 100)
   }
   // `besoinConnu` : la quantité calculée par la cascade (« il faut 5 040 g de
   // crème praliné »). Sans elle, la fiche repartait du minimum de l'article —
   // souvent absent — et proposait une fournée entière de 7 052 g.
-  const ouvrirFiche = (nom, depuis, besoinConnu) => {
-    setPile(p => (depuis ? [...p, depuis] : []))
-    setSaisie(nom)
-    const b = besoinConnu !== undefined && besoinConnu > 0
-      ? besoinConnu
-      : (besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom))
-    if (besoinConnu > 0 && besoins[nom] === undefined) {
-      setBesoins(x => ({ ...x, [nom]: Math.round(besoinConnu) }))
+  // Un article dont la recette tient en UNE seule ligne fabriquee n'est qu'une
+  // etape de decoupe : « Biscuit pistache 10 pers » = 0,86 plaque, 9 parts en
+  // sortie. Cette fiche-la n'apprend rien, on va droit a la vraie recette en
+  // convertissant le besoin au passage.
+  const sansEtapeInutile = (nom, besoin) => {
+    let n = nom
+    let b = (besoin !== undefined && besoin > 0)
+      ? besoin
+      : (besoins[n] !== undefined ? besoins[n] : besoinDeBase(n))
+    for (let i = 0; i < 4; i++) {
+      const r = recettes[n]
+      if (!r) break
+      const lg = regrouper(r.lignes || [])
+      if (lg.length !== 1) break
+      const l = lg[0]
+      if (!l.fabrique || !recettes[l.produit]) break
+      const fois = r.sortQty ? b / r.sortQty : 1
+      const q = (l.tailles ? Math.max(...l.tailles) : l.qty) * fois
+      b = versUniteDe(l.produit, q, l.unite)
+      n = l.produit
     }
-    setFois(foisPour(nom, b))
+    return { nom: n, besoin: b }
+  }
+
+  const ouvrirFiche = (nom, depuis, besoinConnu) => {
+    const cible = sansEtapeInutile(nom, besoinConnu)
+    setPile(p => (depuis ? [...p, depuis] : []))
+    setSaisie(cible.nom)
+    const b = cible.besoin > 0
+      ? cible.besoin
+      : (besoins[cible.nom] !== undefined ? besoins[cible.nom] : besoinDeBase(cible.nom))
+    if (cible.besoin > 0 && besoins[cible.nom] === undefined) {
+      setBesoins(x => ({ ...x, [cible.nom]: arrondiBesoin(cible.nom, cible.besoin) }))
+    }
+    setFois(foisPour(cible.nom, b))
   }
 
   const ouvrirFicheSimple = nom => {
@@ -364,9 +450,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               className={'flex-1 py-3 rounded-2xl text-[14.5px] font-extrabold border-2 flex items-center justify-center gap-2 ' +
                 (vue === v ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
               {t}
-              {v === 'besoins' && aFaire.length > 0 && (
+              {v === 'besoins' && casesAFaire.length > 0 && (
                 <span className={'rounded-full px-2 py-0.5 text-[12.5px] ' +
-                  (vue === v ? 'bg-white/25' : 'bg-danger text-white')}>{aFaire.length}</span>
+                  (vue === v ? 'bg-white/25' : 'bg-danger text-white')}>{casesAFaire.length}</span>
               )}
             </button>
           ))}
@@ -382,53 +468,36 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         {/* ===================== CE QU'IL FAUT FAIRE ===================== */}
         {vue === 'besoins' && arbre && (
           <div className="print:hidden">
-            {!aFaire.length && (
+            {!casesAFaire.length && (
               <p className="text-center text-ink-mute text-[14px] py-10">Rien à faire aujourd'hui.</p>
             )}
-            <div className="grid gap-2.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
-              {aFaire.map(({ mere, lignes }) => {
-                // Ce qu'on montre : les articles SUIVIS (les têtes de chaîne),
-                // pas leurs composants. Se fier à la profondeur laissait des
-                // cartes vides quand la tête était plus bas dans l'arbre.
-                const directs = lignes.filter(l => l.tete === l.nom)
-                // L'état de la carte parle de ces articles-là : dire « rupture »
-                // parce qu'un ingrédient profond est à zéro était trompeur.
-                const enRupture = directs.some(l => (stocks[l.nom] || 0) <= 0)
+            <div className="grid gap-2.5 items-start"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+              {casesAFaire.map(({ mere, l }) => {
+                const enRupture = (stocks[l.nom] || 0) <= 0
                 return (
-                  <button key={mere} onClick={() => ouvrirFiche(mere)}
+                  <button key={mere + '|' + l.nom} onClick={() => ouvrirFiche(l.nom)}
                     className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
                     <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
                     <span className="block w-full aspect-square overflow-hidden">
-                      <Vignette nom={mere} photo={photoDe(mere)} plein rond={0} />
+                      <Vignette nom={l.nom} photo={photoDe(l.nom) || photoDe(mere)} plein rond={0} />
                     </span>
                     <span className={'absolute top-3 left-2.5 right-2.5 rounded-full px-3 py-1.5 text-[11.5px] font-extrabold text-center text-white shadow-md '
                       + (enRupture ? 'bg-danger' : 'bg-[#854F0B]')}>
                       {enRupture ? 'rupture' : 'à remplir'}
                     </span>
-                    <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{propre(mere)}</span>
-                    <span className="block px-2 pb-2 pt-1">
-                      {directs.slice(0, 3).map(l => (
-                        <span key={l.nom} className="block text-[11.5px] leading-tight mb-1">
-                          <span className="flex items-baseline gap-1.5">
-                            <b className="text-danger font-extrabold">{nb(l.besoin)}</b>
-                            <span className="text-ink-soft truncate">{courtNom(l.nom)}</span>
-                          </span>
-                          {(stocks[l.nom] || 0) <= 0
-                            ? <span className="text-[10.5px] font-extrabold text-danger">rupture</span>
-                            : (
-                              <span className="text-[10.5px]">
-                                <b className="text-[#854F0B]">à remplir</b>
-                                {minmax[l.nom] && minmax[l.nom].min > 0 && (
-                                  <span className="text-ink-mute"> · il en reste {nb(stocks[l.nom])} sur {nb(minmax[l.nom].min)}</span>
-                                )}
-                              </span>
-                            )}
-                        </span>
-                      ))}
-                      {directs.length > 3 && (
-                        <span className="block text-[11px] text-ink-mute">+ {directs.length - 3} autres</span>
-                      )}
+                    {courtNom(mere).toLowerCase() !== courtNom(l.nom).toLowerCase() && (
+                      <span className="block px-2 pt-1.5 text-[10.5px] text-ink-mute leading-tight">
+                        pour {courtNom(mere)}
+                      </span>
+                    )}
+                    <span className="flex items-center flex-wrap gap-1 px-2 pt-1.5">
+                      <Etiquettes nom={l.nom} petit />
+                      <b className="text-[19px] font-extrabold text-danger leading-none">{nbQ(l.besoin, recettes[l.nom] && recettes[l.nom].sortUnite)}</b>
+                    </span>
+                    <span className="block px-2 pt-1 text-[12px] font-bold leading-tight">{courtNom(l.nom)}</span>
+                    <span className="block px-2 pb-2 pt-1 text-[10.5px] leading-tight text-ink-mute">
+                      il en reste {nbQ(stocks[l.nom] || 0, recettes[l.nom] && recettes[l.nom].sortUnite)}
                     </span>
                   </button>
                 )
@@ -562,7 +631,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       {nb(l.fois || 1)} fois{noms[l.fait_par] ? ' · ' + noms[l.fait_par] : ''} · {heure(l.fait_le)}
                     </span>
                   </span>
-                  <span className="text-[17px] font-extrabold text-ok whitespace-nowrap">{nb(l.qty)} {l.unite}</span>
+                  <span className="text-[17px] font-extrabold text-ok whitespace-nowrap">{nbQ(l.qty, l.unite)} {l.unite}</span>
                   <button onClick={() => retirerLigne(l.id)}
                     className="w-9 h-9 shrink-0 border border-line rounded-xl grid place-items-center">
                     <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-danger fill-none" strokeWidth="2.6"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -608,11 +677,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       {saisie && (() => {
         // le gâteau vendu n'est pas fabriqué à l'annexe : on n'y montre que ce
         // qui manque, pas sa recette de montage ni le compteur de fournées
-        const estMere = (arbre && (arbre.racines || []).includes(saisie))
+        // Cacher la recette d'un gateau vendu ne vaut que pour « ce qu'il faut
+        // faire » : dans « declarer ce qu'on a fait » la liste n'est FAITE que
+        // de racines, la regle y supprimait la nomenclature, le compteur et le
+        // bouton « C'est fait » — l'onglet devenait vide.
+        const estMere = vue === 'besoins' && (arbre && (arbre.racines || []).includes(saisie))
         return (
-        <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end justify-center print:hidden"
+        <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end sm:items-center justify-center p-0 sm:p-4 print:hidden"
           onPointerDown={e => { if (e.target === e.currentTarget) { setSaisie(null); setPile([]) } }}>
-          <div className="bg-cream w-full max-w-[540px] rounded-t-[22px] p-4 pb-6 h-[82dvh] overflow-y-auto">
+          <div className="bg-cream w-full max-w-[540px] rounded-t-[22px] sm:rounded-[22px] max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="flex-shrink-0 px-4 pt-4 pb-1">
             <div className="flex items-center gap-3 mb-3">
               {pile.length > 0 && (
                 <button onClick={() => { const p = [...pile]; const r = p.pop(); setPile(p); ouvrirFicheSimple(r) }}
@@ -622,13 +696,21 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 </button>
               )}
               <Vignette nom={saisie} photo={photoDe(saisie)} taille={58} rond={15} />
-              <b className="text-[18px] leading-tight flex-1 min-w-0">{courtNom(saisie)}</b>
+              <b className="text-[18px] leading-tight flex-1 min-w-0">
+                {courtNom(saisie)}
+                <span className="ml-2 inline-flex align-middle gap-1">
+                  <Etiquettes nom={saisie} />
+                </span>
+              </b>
             </div>
             {pile.length > 0 && (
-              <p className="text-[12px] text-ink-mute -mt-1 mb-3">
+              <p className="text-[12px] text-ink-mute -mt-1 mb-2">
                 pour faire <b>{courtNom(pile[pile.length - 1])}</b>
               </p>
             )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-2">
 
             {vue === 'besoins' && minmax[saisie] && minmax[saisie].min > 0 && (stocks[saisie] || 0) < minmax[saisie].min && (
               <div className={'rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3 border '
@@ -637,60 +719,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   + ((stocks[saisie] || 0) <= 0 ? 'text-danger' : 'text-[#854F0B]')}>{nb(stocks[saisie] || 0)}</b>
                 <span className={'text-[12.5px] leading-snug '
                   + ((stocks[saisie] || 0) <= 0 ? 'text-danger' : 'text-[#854F0B]')}>
-                  il en reste <b>{nb(stocks[saisie] || 0)}</b><br />
-                  il en faut au moins <b>{nb(minmax[saisie].min)}</b>, jusqu'à <b>{nb(minmax[saisie].max)}</b>
+                  il en reste <b>{nbQ(stocks[saisie] || 0, recettes[saisie] && recettes[saisie].sortUnite)}</b><br />
+                  <b className="text-[15px]">{nbQ(besoinDe(saisie), recettes[saisie] && recettes[saisie].sortUnite)} à faire</b>
                 </span>
               </div>
             )}
-
-            {vue === 'besoins' && (() => {
-              const travail = (aFaire.find(x => x.mere === saisie) || {}).lignes
-              if (!travail || !travail.length) return null
-              // Un panneau par chaîne : le « 10 pers » et l'« indiv » sont deux
-              // chantiers différents, ils ne doivent pas se lire à la suite.
-              const groupes = []
-              for (const l of travail) {
-                const g = groupes.find(x => x.tete === l.tete)
-                if (g) g.lignes.push(l)
-                else groupes.push({ tete: l.tete, lignes: [l] })
-              }
-              return groupes.map(g => (
-                <div key={g.tete} className="bg-white border-2 border-danger rounded-2xl overflow-hidden mb-3">
-                  <div className="bg-[#FCEEE8] px-3.5 py-2 border-b border-[#f0cfc5] flex items-baseline gap-2">
-                    <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-danger">
-                      Ce qu'il manque
-                    </span>
-                    <span className="text-[12px] font-bold text-danger truncate">— {courtNom(g.tete)}</span>
-                  </div>
-                  {g.lignes.map((l, i) => (
-                    <button key={l.nom + i} onClick={() => ouvrirFiche(l.nom, saisie, l.besoin)}
-                      className={'w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm '
-                        + (l.prof === 1 ? 'bg-[#fdf8f9]' : '')}
-                      style={{ paddingLeft: 14 + (l.prof - 1) * 16 }}>
-                      <b className="text-[19px] font-extrabold text-danger min-w-[62px] text-right">{nb(l.besoin)}</b>
-                      <span className={'flex-1 min-w-0 text-[14px] ' + (l.prof === 1 ? 'font-bold' : '')}>
-                        {courtNom(l.nom)}
-                        <span className="block text-[11px] mt-0.5">
-                          {(stocks[l.nom] || 0) <= 0
-                            ? <b className="text-danger">rupture</b>
-                            : (
-                              <>
-                                <b className="text-[#854F0B]">à remplir</b>
-                                {minmax[l.nom] && minmax[l.nom].min > 0
-                                  ? <span className="text-ink-mute"> · il en reste {nb(stocks[l.nom])} sur {nb(minmax[l.nom].min)}</span>
-                                  : <span className="text-ink-mute"> · il en reste {nb(stocks[l.nom])}</span>}
-                              </>
-                            )}
-                          {l.prof > 1 && <span className="text-[#b58f3c] font-bold"> · pour celui du dessus</span>}
-                        </span>
-                      </span>
-                      <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
-                        <path d="M9 5l7 7-7 7" /></svg>
-                    </button>
-                  ))}
-                </div>
-              ))
-            })()}
 
             {vue === 'besoins' && saisie && !aFaire.some(x => x.mere === saisie)
               && recettes[saisie] && recettes[saisie].sortUnite !== 'u'
@@ -723,7 +756,32 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )
             })()}
 
-            {!estMere && (
+            {!estMere && recettes[saisie] && recettes[saisie].sortQty > 0 && (() => {
+              const r = recettes[saisie]
+              const u = String(r.sortUnite || '').trim()
+              const brut = r.sortQty * fois
+              const qte = /^kg$/i.test(u) ? Math.round(brut * 100) / 100 : Math.round(brut)
+              // on avance par pas utiles : 100 g, 0,5 kg, 1 pièce
+              const pas = /^(g|gr)$/i.test(u) ? 100 : (/^kg$/i.test(u) ? 0.5 : 1)
+              const poser = v => setFois(Math.max(0.01, (Number(v) || 0) / r.sortQty))
+              return (
+                <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
+                  <button onClick={() => poser(Math.max(pas, qte - pas))}
+                    className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">−</button>
+                  <div className="flex-1 text-center min-w-0">
+                    <input type="number" min="0" step={pas} value={qte}
+                      onChange={e => poser(e.target.value)}
+                      className="sans-fleches w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
+                    <span className="block text-[12px] text-ink-soft font-extrabold">{u} à produire</span>
+                    <span className="block text-[10.5px] text-ink-mute">≈ {nb(fois)} fois la recette</span>
+                  </div>
+                  <button onClick={() => poser(qte + pas)}
+                    className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">+</button>
+                </div>
+              )
+            })()}
+
+            {!estMere && !(recettes[saisie] && recettes[saisie].sortQty > 0) && (
             <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
               <button onClick={() => setFois(f => Math.max(0.01, f > 1 ? f - 1 : Math.round((f - 0.25) * 100) / 100))}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">−</button>
@@ -731,7 +789,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 <input type="number" step="0.25" min="0.01" value={fois}
                   onChange={e => setFois(Math.max(0.01, Number(e.target.value) || 0.01))}
                   className="sans-fleches w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
-                <span className="text-[11.5px] text-ink-mute font-bold">fois la recette</span>
+                <span className="text-[11.5px] text-ink-mute font-bold">fournées</span>
               </div>
               <button onClick={() => setFois(f => (f < 1 ? Math.round((f + 0.25) * 100) / 100 : f + 1))}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">+</button>
@@ -750,10 +808,18 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   const contenu = (
                     <>
                       <span className="text-[17px] font-extrabold min-w-[96px] text-right">
-                        {l.tailles ? l.tailles.map(x => nb(x * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
+                        {l.tailles ? l.tailles.map(x => nbQ(x * fois, l.unite)).join(' / ') : nbQ(l.qty * fois, l.unite)} {l.unite}
                       </span>
                       <span className={'text-[14px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                         {courtNom(l.produit)}
+                        {stocks[l.produit] !== undefined && (
+                          <span className={'block text-[10.5px] font-normal '
+                            + ((stocks[l.produit] || 0) <= 0 ? 'text-danger' : 'text-ink-mute')}>
+                            {(stocks[l.produit] || 0) <= 0
+                              ? 'rupture'
+                              : 'il en reste ' + nbQ(stocks[l.produit], uniteDe(l.produit)) + ' ' + uniteDe(l.produit)}
+                          </span>
+                        )}
                       </span>
                       {ouvrable && (
                         <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
@@ -763,9 +829,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   )
                   return ouvrable ? (
                     <button key={i}
-                      onClick={() => ouvrirFiche(l.produit, saisie,
-                        Math.max(0, (l.tailles ? Math.max(...l.tailles) : l.qty) * fois
-                          - Math.max(0, stocks[l.produit] || 0)))}
+                      onClick={() => {
+                        // le stock est dans l'unité de l'article, la ligne dans
+                        // la sienne : on convertit avant de soustraire.
+                        const q = (l.tailles ? Math.max(...l.tailles) : l.qty) * fois
+                        const besoin = versUniteDe(l.produit, q, l.unite)
+                        ouvrirFiche(l.produit, saisie, Math.max(0, besoin - Math.max(0, stocks[l.produit] || 0)))
+                      }}
                       className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
                       {contenu}
                     </button>
@@ -784,23 +854,40 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               </p>
             )}
 
-            {!estMere && tournees[saisie] && !poidsUnite(recettes[saisie] && recettes[saisie].sortUnite) && recettes[saisie] && (
-              <button onClick={() => setFois(tournees[saisie] / recettes[saisie].sortQty)}
-                className="w-full mb-2.5 border border-[#b58f3c] text-[#b58f3c] bg-[#FBF3DF] rounded-2xl px-3.5 py-2.5 text-[12.5px] font-bold text-left">
-                Cet article se fait par tournée entière de {nb(tournees[saisie])} {recettes[saisie].sortUnite} —
-                <b> revenir à une tournée</b>
-              </button>
-            )}
+            {!estMere && tournees[saisie] && !poidsUnite(recettes[saisie] && recettes[saisie].sortUnite)
+              && recettes[saisie] && recettes[saisie].sortQty > 0 && (() => {
+              const r = recettes[saisie]
+              // le BESOIN BRUT : passer par foisPour l'arrondissait a la tournee
+              // entiere, et « juste ce qu'il faut » affichait alors le meme
+              // chiffre que « tournee entiere ».
+              const juste = Math.round(besoinDe(saisie) * 100) / 100
+              const choix = (titre, qte, sous) => (
+                <button onClick={() => setFois(Math.max(0.01, qte / r.sortQty))}
+                  className={'flex-1 text-left rounded-2xl px-3 py-2.5 border-2 '
+                    + (Math.abs(r.sortQty * fois - qte) < 0.01
+                      ? 'border-bordeaux bg-[#FDF4F6]' : 'border-line bg-white')}>
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wide text-ink-mute">{titre}</span>
+                  <b className="block text-[16px] font-extrabold">{nbQ(qte, r.sortUnite)} {r.sortUnite}</b>
+                  <span className="block text-[10.5px] text-ink-mute">{sous}</span>
+                </button>
+              )
+              return (
+                <div className="flex gap-2 mb-2.5">
+                  {juste > 0 && choix('Juste ce qu\'il faut', juste, 'pour couvrir le besoin')}
+                  {choix('Tournée entière', tournees[saisie], 'leur tournée habituelle')}
+                </div>
+              )
+            })()}
 
-            {!estMere && recettes[saisie] && (
+            {!estMere && recettes[saisie] && poidsUnite(recettes[saisie].sortUnite) && (
               <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 flex items-baseline gap-2.5">
                 <b className="text-[23px] font-extrabold text-ok">
-                  {nb(recettes[saisie].sortQty * fois)} {recettes[saisie].sortUnite}
+                  {nbQ(recettes[saisie].sortQty * fois, recettes[saisie].sortUnite)} {recettes[saisie].sortUnite}
                 </b>
                 <span className="text-[12.5px] text-ok">
                   en sortie
                   {poidsUnite(recettes[saisie].sortUnite) && (
-                    <> · {nb(recettes[saisie].sortQty * fois * poidsUnite(recettes[saisie].sortUnite))} g</>
+                    <> · {nbQ(recettes[saisie].sortQty * fois * poidsUnite(recettes[saisie].sortUnite), 'g')} g</>
                   )}
                 </span>
               </div>
@@ -809,9 +896,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               <p className="text-[12.5px] text-[#854F0B]">Pas de recette dans Odoo : on note seulement les fournées.</p>
             )}
 
+            </div>
+
+            <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-line">
             {!estMere && (
               <button onClick={() => noter(saisie, fois)}
-                className="w-full mt-3 py-4 rounded-2xl bg-ok text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5">
+                className="w-full py-4 rounded-2xl bg-ok text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5">
                 <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
                 C'est fait
               </button>
@@ -820,6 +910,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               className="w-full mt-2 py-3 rounded-2xl bg-white border border-line text-ink-mute text-[14.5px] font-bold">
               fermer
             </button>
+            </div>
           </div>
         </div>
         )
