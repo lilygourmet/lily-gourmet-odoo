@@ -27,7 +27,10 @@ const dt = q => new Date(String(q || '').replace(' ', 'T') + 'Z')
 const jourCourt = q => dt(q).toLocaleDateString('fr-FR', { ...CASA, day: '2-digit', month: '2-digit' })
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 // Layla veut tout en grammes, jamais en kilos (sauf les pièces : ×8 gâteaux).
-const qteLisible = (q, u) => (norm(u) === 'kg' ? `${nb(q * 1000)} g` : `${nb(q)} ${u}`)
+// A l'atelier on ne pese pas 1 234,56 g : les quantites s'affichent entieres.
+const qteLisible = (q, u) => (norm(u) === 'kg'
+  ? `${nb(Math.round(q * 1000))} g`
+  : `${nb(Math.round(q))} ${u}`)
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const enKg = (q, u) => (norm(u) === 'g' ? { q: q / 1000, u: 'kg' } : { q, u: norm(u) })
 const estPrepa = n => /^SM\b/i.test(String(n || ''))

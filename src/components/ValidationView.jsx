@@ -11,7 +11,10 @@ import { loadOrdres, loadFaits, loadManques, validerDansOdoo, chercherArticles, 
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
-const qte = (q, u) => (norm(u) === 'kg' ? `${nb(q * 1000)} g` : `${nb(q)} ${norm(u) === 'g' ? 'g' : u}`)
+// A l'atelier on ne pese pas 1 234,56 g : les quantites s'affichent entieres.
+const qte = (q, u) => (norm(u) === 'kg'
+  ? `${nb(Math.round(q * 1000))} g`
+  : `${nb(Math.round(q))} ${norm(u) === 'g' ? 'g' : u}`)
 const propre = n => String(n || '')
   .replace(/^SM\.?\s*/i, '').replace(/^CD\*\s*/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
   .replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\baccs\b/i, '').trim()
@@ -171,7 +174,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                 <b className="text-[14.5px]">{r.ok ? '✓' : '✗'} {r.name}</b>
                 <div className="text-[12.5px] text-ink-soft">
                   {r.ok ? 'validé dans Odoo' : r.message}
-                  {r.glacage > 0 && ` · ${nb(r.glacage)} g de glaçage royal consommés dedans`}
+                  {r.glacage > 0 && ` · ${nb(Math.round(r.glacage))} g de glaçage royal consommés dedans`}
                   {r.pour && ` · réservé aussitôt pour ${r.pour}`}
                 </div>
               </div>

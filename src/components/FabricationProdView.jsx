@@ -11,6 +11,11 @@ import {
 import { loadPrevisions } from '../lib/previsionsVitrine'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+// A l'atelier on ne pese pas 201,04 g : grammes et pieces en nombres entiers,
+// seuls les kg gardent 2 decimales (10 g pres).
+const nbQ = (v, u) => (/^kg$/i.test(String(u || '').trim())
+  ? nb(Math.round((Number(v) || 0) * 100) / 100)
+  : nb(Math.round(Number(v) || 0)))
 const propre = n => String(n).replace(/^SM[.-]?\s*/i, '').replace(/\s*finition\s*$/i, '').trim()
 const jourLisible = j => new Date(j + 'T12:00:00')
   .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -283,7 +288,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                     <td className="border-b border-[#ddd] py-1.5 px-1">
                       {propre(l.article)}{l.fois ? ' — ' + nb(l.fois) + ' fois' : ''}
                     </td>
-                    <td className="border-b border-[#ddd] py-1.5 px-1 text-right font-bold">{nb(l.qty)} {l.unite}</td>
+                    <td className="border-b border-[#ddd] py-1.5 px-1 text-right font-bold">{nbQ(l.qty, l.unite)} {l.unite}</td>
                     <td className="border-b border-[#ddd] py-1.5 px-1 text-[11.5px]">{noms[l.fait_par] || ''}</td>
                   </tr>
                 ))}
@@ -425,7 +430,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                       {propre(l.article)}
                       {l.fois ? <span className="block text-[11.5px] text-ink-mute">{nb(l.fois)} fois la recette</span> : null}
                     </span>
-                    <span className="text-[14px] font-extrabold text-ok whitespace-nowrap">{nb(l.qty)} {l.unite}</span>
+                    <span className="text-[14px] font-extrabold text-ok whitespace-nowrap">{nbQ(l.qty, l.unite)} {l.unite}</span>
                     {noms[l.fait_par] && (
                       <span className="text-[11.5px] text-ink-mute hidden sm:block max-w-[110px] truncate">{noms[l.fait_par]}</span>
                     )}
@@ -488,7 +493,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                     const contenu = (
                       <>
                         <span className="text-[19px] font-extrabold min-w-[104px] text-right">
-                          {l.tailles ? l.tailles.map(q => nb(q * fois)).join(' / ') : nb(l.qty * fois)} {l.unite}
+                          {l.tailles ? l.tailles.map(q => nbQ(q * fois, l.unite)).join(' / ') : nbQ(l.qty * fois, l.unite)} {l.unite}
                         </span>
                         <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                           {propre(l.produit)}
@@ -515,7 +520,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
               {r && (
                 <div className="bg-[#EAF3DE] border border-[#cfe0b8] rounded-2xl px-3.5 py-3 flex items-baseline gap-2.5">
-                  <b className="text-[26px] font-extrabold text-ok">{nb(r.sortQty * fois)} {r.sortUnite}</b>
+                  <b className="text-[26px] font-extrabold text-ok">{nbQ(r.sortQty * fois, r.sortUnite)} {r.sortUnite}</b>
                   <span className="text-[13.5px] text-ok">en sortie</span>
                 </div>
               )}
@@ -659,7 +664,7 @@ function CalculFournee({ article, recette, jour, onFermer, onUtiliser }) {
                   <label key={cle} className="flex items-center gap-2 bg-cream-warm border border-line rounded-xl px-2.5 py-2">
                     <span className="flex-1 min-w-0">
                       <span className="block text-[13px] font-bold truncate">{tailleLisible(d.label)}</span>
-                      <span className="block text-[11px] text-ink-mute">{nb(d.qty)} {d.unite} pièce</span>
+                      <span className="block text-[11px] text-ink-mute">{nbQ(d.qty, d.unite)} {d.unite} pièce</span>
                     </span>
                     <input type="number" min="0" inputMode="numeric"
                       value={qtes[cle] ?? 0}
