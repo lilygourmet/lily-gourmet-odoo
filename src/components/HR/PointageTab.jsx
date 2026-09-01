@@ -1515,7 +1515,7 @@ function CarteSalaire({ salaire, heuresSup, heuresManquantes = 0 }) {
       </p>
       {revealed && (heuresSup > 0 || heuresManquantes > 0) && (
         <p style={{ fontSize: 10, color: '#4a3a30', margin: '4px 0 0' }}>
-          base {salaire.toLocaleString('fr-FR')}
+          base {salaire.toLocaleString('fr-FR')} (salaire d'entrée)
           {heuresSup > 0 && <span style={{ color: '#27500A' }}> + {montantSup.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} (sup ×1,25)</span>}
           {heuresManquantes > 0 && <span style={{ color: '#A32D2D' }}> − {montantManq.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} (manq.)</span>}
         </p>
