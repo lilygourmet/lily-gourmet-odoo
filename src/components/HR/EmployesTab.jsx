@@ -274,7 +274,7 @@ export default function EmployesTab({ user, isAdmin }) {
                 <Th>CNSS</Th>
                 <Th>CIN</Th>
                 <Th>Entrée</Th>
-                {isAdmin && <Th>Salaire</Th>}
+                {isAdmin && <Th>Salaire d'entrée</Th>}
                 <Th>Aujourd'hui</Th>
                 <Th>Actions</Th>
               </tr>

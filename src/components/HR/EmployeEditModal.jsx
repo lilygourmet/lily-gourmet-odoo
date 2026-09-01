@@ -338,7 +338,12 @@ export default function EmployeEditModal({
                   {TYPES_CONTRAT.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
-              <Field label="Salaire net (DH)" type="number" value={form.salaire_net} onChange={v => setF('salaire_net', v)} placeholder="8500" />
+              <div>
+                <Field label="Salaire d'entrée (DH)" type="number" value={form.salaire_net} onChange={v => setF('salaire_net', v)} placeholder="8500" />
+                <div style={{ fontSize: 10, color: '#8a7a70', marginTop: 2 }}>
+                  le salaire d'embauche : il ne bouge pas. Le salaire du mois se voit dans l'onglet Salaires.
+                </div>
+              </div>
             </Row>
           )}
           <Row>
