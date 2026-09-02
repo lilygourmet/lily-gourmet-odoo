@@ -33,6 +33,7 @@ export default function OcpOrderView() {
   const [time, setTime] = useState('09:00')
   const [qty, setQty] = useState({})
   const [autre, setAutre] = useState('')
+  const [notes, setNotes] = useState({})   // article -> mot libre du client (« sans porc », « bien frais »…)
   const [recap, setRecap] = useState(false)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
@@ -169,7 +170,7 @@ export default function OcpOrderView() {
         <button onClick={() => setRecap(true)} style={{ flex: 1, background: GREEN, color: '#fff', border: 'none', borderRadius: 24, padding: 14, fontSize: 15, fontWeight: 800 }}>Vérifier & envoyer</button>
       </div>
 
-      {recap && <Recap cats={cats} qty={qty} chg={chg} setVal={setVal} autre={autre} zone={zone} date={date} time={time} entVar={entVar} onClose={() => setRecap(false)} busy={busy}
+      {recap && <Recap cats={cats} qty={qty} chg={chg} setVal={setVal} notes={notes} setNote={(b, v) => setNotes(n => ({ ...n, [b]: v }))} autre={autre} zone={zone} date={date} time={time} entVar={entVar} onClose={() => setRecap(false)} busy={busy}
         onConfirm={async () => {
           setBusy(true); setErr('')
           try {
@@ -178,10 +179,11 @@ export default function OcpOrderView() {
               const [base, sub] = key.split(':'); const i = base.lastIndexOf('-'); const ck = base.slice(0, i), ii = +base.slice(i + 1)
               const cc = findCat(ck); const it = cc && cc.items[ii]
               if (!cc || !it) continue
-              if (it.free) items.push({ free: true, group: ck === 'fru' ? 'fruits' : null, name: it.name, qty: qty[key], unit: it.unit || '' })
-              else if (it.variantId) items.push({ variantId: it.variantId, name: it.name, qty: qty[key] })   // ajouté avec variante précise
-              else if (isSizeItem(cc, it)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); items.push({ variantId: Number(sub), name: `${it.name}${v ? ' — ' + v.label : ''}`, qty: qty[key] }) }
-              else items.push({ tmplId: it.tmplId, kind: cc.kind, variantHint: it.variantHint || null, name: it.name, qty: qty[key] })
+              const note = (notes[base] || '').trim() || undefined   // le mot du client, porté par chaque ligne de l'article
+              if (it.free) items.push({ free: true, group: ck === 'fru' ? 'fruits' : null, name: it.name, qty: qty[key], unit: it.unit || '', note })
+              else if (it.variantId) items.push({ variantId: it.variantId, name: it.name, qty: qty[key], note })   // ajouté avec variante précise
+              else if (isSizeItem(cc, it)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); items.push({ variantId: Number(sub), name: `${it.name}${v ? ' — ' + v.label : ''}`, qty: qty[key], note }) }
+              else items.push({ tmplId: it.tmplId, kind: cc.kind, variantHint: it.variantHint || null, name: it.name, qty: qty[key], note })
             }
             if (autre.trim()) items.push({ autre: autre.trim() })
             const r = await createOcpDevis({ zone, date, time, items })
@@ -239,7 +241,7 @@ function Qbar({ k, n, chg, setVal, mini }) {
   </div>
 }
 
-function Recap({ cats, qty, chg, setVal, autre, zone, date, time, entVar, onClose, onConfirm, busy }) {
+function Recap({ cats, qty, chg, setVal, notes, setNote, autre, zone, date, time, entVar, onClose, onConfirm, busy }) {
   const findCat = k => cats.find(c => c.key === k)
   // Regroupé par article : chaque quantité est SOUS l'article (tailles d'entremets incluses).
   const groups = []; const byBase = {}
@@ -247,7 +249,7 @@ function Recap({ cats, qty, chg, setVal, autre, zone, date, time, entVar, onClos
     const [base, sub] = key.split(':'); const i = base.lastIndexOf('-'); const ck = base.slice(0, i), ii = +base.slice(i + 1)
     const c = findCat(ck); const it = c && c.items[ii]
     if (!c || !it) return
-    if (!byBase[base]) { byBase[base] = { name: it.name + (it.unit ? ` · ${it.unit}` : ''), rows: [] }; groups.push(byBase[base]) }
+    if (!byBase[base]) { byBase[base] = { base, name: it.name + (it.unit ? ` · ${it.unit}` : ''), rows: [] }; groups.push(byBase[base]) }
     let label = ''
     if (c.kind === 'size' || (it.tmplId && !it.variantId && entVar[it.tmplId]?.length > 0)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); label = v ? v.label : '' }
     byBase[base].rows.push({ key, label, n: qty[key] })
@@ -266,6 +268,7 @@ function Recap({ cats, qty, chg, setVal, autre, zone, date, time, entVar, onClos
               <Qbar k={r.key} n={r.n} chg={chg} setVal={setVal} mini />
             </div>
           ))}
+          <NoteArticle base={g.base} value={notes[g.base] || ''} onChange={setNote} />
         </div>
       ))}
       {autre.trim() && <div style={{ padding: '9px 16px', borderBottom: '1px solid #f0e9dc', fontSize: 13.5 }}>✍️ {autre}</div>}
@@ -276,6 +279,16 @@ function Recap({ cats, qty, chg, setVal, autre, zone, date, time, entVar, onClos
       </div>
     </div>
   )
+}
+
+// Mot libre sur UN article (« sans porc », « bien frais »…). Replié tant qu'il est vide,
+// pour ne pas alourdir l'écran quand la commande fait 20 articles.
+function NoteArticle({ base, value, onChange }) {
+  const [open, setOpen] = useState(!!value)
+  if (!open) return <button onClick={() => setOpen(true)} style={{ marginTop: 7, padding: 0, background: 'none', border: 'none', color: B, fontSize: 12.5, fontWeight: 700 }}>💬 Ajouter un mot</button>
+  return <textarea autoFocus value={value} onChange={e => onChange(base, e.target.value)}
+    placeholder="Ex. : sans porc · bien frais · écrire « Bon anniversaire »"
+    style={{ width: '100%', marginTop: 7, padding: 9, border: `1px solid ${LINE}`, borderRadius: 10, fontSize: 13.5, fontFamily: 'inherit', minHeight: 50 }} />
 }
 
 const inp = { flex: 1, padding: 9, border: `1px solid ${LINE}`, borderRadius: 10, fontSize: 14, background: '#fff' }

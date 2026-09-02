@@ -605,14 +605,19 @@ async function _loadOrdersWithFichesForBounds(start, end) {
 
   const itemIds = items.map(i => i.id)
   const lineIds = items.map(i => i.odoo_line_id).filter(Boolean)
-  const [{ data: fiches }, { data: dones }, { data: prefiches }] = await Promise.all([
+  const [{ data: fiches }, { data: dones }, { data: prefiches }, { data: lignes }] = await Promise.all([
     supabase.from('gm_fiches').select('*').in('order_item_id', itemIds),
     supabase.from('gm_done').select('*').in('order_item_id', itemIds),
     lineIds.length ? supabase.from('gm_prefiches').select('*').in('odoo_line_id', lineIds) : Promise.resolve({ data: [] }),
+    // Mot écrit sur l'article à la prise de commande (⚠️ dans la ligne Odoo → product_note).
+    // Sert au lien OCP : le client commente son article, l'atelier le voit ici comme en Prod.
+    lineIds.length ? supabase.from('sales_lines').select('odoo_line_id, product_note').in('odoo_line_id', lineIds) : Promise.resolve({ data: [] }),
   ])
 
   const fichesByItem = {}
   for (const f of fiches || []) fichesByItem[f.order_item_id] = f
+  const noteByLine = {}
+  for (const l of lignes || []) if (l.product_note) noteByLine[l.odoo_line_id] = l.product_note
   // Brouillons saisis par le commercial à la prise de commande (clé = odoo_line_id).
   const prefByLine = {}
   for (const p of prefiches || []) prefByLine[p.odoo_line_id] = p
@@ -625,6 +630,7 @@ async function _loadOrdersWithFichesForBounds(start, end) {
   const itemsByOrder = {}
   for (const it of items) {
     if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
+    it.note_ligne = noteByLine[it.odoo_line_id] || null
     let fiche = fichesByItem[it.id] || null
     // Pas de fiche validée mais un brouillon du commercial → on l'affiche directement
     // (marqué _fromPrefiche pour l'étiquette « à confirmer »).
@@ -740,7 +746,7 @@ export function aggregateByProduct(ordersWithFiches) {
         tree[typeGm][parfum][key] = {
           qty: getRealQuantity(item),
           lot: { parfum: 'Pas défini', qty: getRealQuantity(item) },
-          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, qty: getRealQuantity(item), title: item.title }],
+          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, qty: getRealQuantity(item), title: item.title, note: item.note_ligne || null }],
           doneCount: 0,
           totalSources: 1,
           notDefined: true,
@@ -765,7 +771,7 @@ export function aggregateByProduct(ordersWithFiches) {
           qty: getRealQuantity(item),
           taille,
           lot: { parfum: 'Parfum normal', qty: getRealQuantity(item) },
-          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, note: fiche.note_patissier || null }],
+          sources: [{ itemId: item.id, lotIdx: -1, orderNum: order.order_num, clientName: order.client_name, note: fiche.note_patissier || item.note_ligne || null }],
           doneCount: dones.length > 0 ? 1 : 0,
           totalSources: 1,
         }
@@ -800,7 +806,7 @@ export function aggregateByProduct(ordersWithFiches) {
           orderNum: order.order_num,
           clientName: order.client_name,
           qty: parseFloat(lot.qty) || 0,
-          note: fiche.note_patissier || null,
+          note: fiche.note_patissier || item.note_ligne || null,
         })
         if (isLotDone(dones, lotIdx)) entry.doneCount += 1
       })

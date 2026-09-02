@@ -3455,11 +3455,18 @@ async function handleCdDay(req, res) {
 
 // Notif « nouvelle commande OCP » aux admins + personnes ayant la permission « Notif devis OCP ».
 // detail = devis complet (articles + quantités), SANS les prix, sur une seule ligne.
+// Numéro qui reçoit TOUJOURS le récap d'une commande OCP, en plus des admins et des
+// personnes ayant « Notif devis OCP ». Demandé par Layla le 2026-08-31.
+const OCP_RECAP_WHATSAPP = '212661297354'
+
 async function notifyOcpOrder(orderName, date, detail) {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: users } = await supabase.from('profiles').select('whatsapp, active').or('role.eq.admin,perm_notif_ocp.eq.true')
     const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
+    // Le numéro fixe s'ajoute, sauf s'il est déjà dans la liste (comparaison sur les 9 derniers chiffres).
+    const dejaLa = new Set(recipients.map(u => String(u.whatsapp || '').replace(/\D/g, '').slice(-9)))
+    if (!dejaLa.has(OCP_RECAP_WHATSAPP.slice(-9))) recipients.push({ whatsapp: OCP_RECAP_WHATSAPP })
     if (!recipients.length) return { recipients: 0, sent: 0 }
     const text = `🍽️ Devis OCP ${orderName}${date ? ` (livraison ${date})` : ''} : ${detail || '—'}`
     let sent = 0
@@ -3631,22 +3638,26 @@ async function handleOrderCreateOcp(req, res) {
     const orderLines = []
     const fruits = []
     const autreOne = []
-    const addAutre = (txt) => { if (autreId) orderLines.push([0, 0, { product_id: autreId, product_uom_qty: 1, price_unit: 0, name: `À préciser : ${txt}` }]) }
+    // Le mot du client sur un article s'écrit SOUS le nom, préfixé ⚠️ : c'est le format que
+    // la synchro reconnaît déjà (→ colonne product_note) et que Prod / Salés affichent en orange.
+    const motClient = (note) => { const t = String(note || '').replace(/\s+/g, ' ').trim(); return t ? `\n⚠️ ${t}` : '' }
+    const addAutre = (txt, note) => { if (autreId) orderLines.push([0, 0, { product_id: autreId, product_uom_qty: 1, price_unit: 0, name: `À préciser : ${txt}${motClient(note)}` }]) }
     for (const it of items) {
       if (it.autre) { autreOne.push(it.autre); continue }
       if (it.free) {
-        if (it.group === 'fruits') fruits.push(`${it.name} × ${it.qty}${it.unit ? ' ' + it.unit : ''}`)
-        else addAutre(`${it.name} × ${it.qty}${it.unit ? ' ' + it.unit : ''}`)
+        // Les fruits finissent groupés sur UNE ligne : le mot du client y est mis à côté du fruit.
+        if (it.group === 'fruits') fruits.push(`${it.name} × ${it.qty}${it.unit ? ' ' + it.unit : ''}${it.note ? ` (${String(it.note).replace(/\s+/g, ' ').trim()})` : ''}`)
+        else addAutre(`${it.name} × ${it.qty}${it.unit ? ' ' + it.unit : ''}`, it.note)
         continue
       }
       // Article Odoo — PRIX RÉEL ; NOM = celui envoyé par le lien (recap = devis = prod).
-      if (it.variantId) { orderLines.push([0, 0, { product_id: it.variantId, product_uom_qty: it.qty || 1, price_unit: vPrice[it.variantId] || 0, name: it.name }]); continue }
+      if (it.variantId) { orderLines.push([0, 0, { product_id: it.variantId, product_uom_qty: it.qty || 1, price_unit: vPrice[it.variantId] || 0, name: it.name + motClient(it.note) }]); continue }
       const vs = it.tmplId ? (byTmpl[it.tmplId] || []) : []
-      if (!vs.length) { addAutre(`${it.name} × ${it.qty}`); continue }
+      if (!vs.length) { addAutre(`${it.name} × ${it.qty}`, it.note); continue }
       let v
       if (it.variantHint) { const h = String(it.variantHint).toLowerCase(); v = vs.find(x => (x.display_name || '').toLowerCase().includes(h)) || vs[0] }
       else v = vs[0]
-      orderLines.push([0, 0, { product_id: v.id, product_uom_qty: it.qty || 1, price_unit: v.lst_price || 0, name: it.name }])
+      orderLines.push([0, 0, { product_id: v.id, product_uom_qty: it.qty || 1, price_unit: v.lst_price || 0, name: it.name + motClient(it.note) }])
     }
     if (fruits.length) addAutre(`Fruits — ${fruits.join(', ')}`)
     autreOne.forEach(addAutre)
@@ -3661,11 +3672,16 @@ async function handleOrderCreateOcp(req, res) {
     const orderName = ord[0]?.name || ''
     console.log(`[ocp-devis] ${orderName} pour ${p[0].name} (${orderLines.length} lignes)`)
     // Détail du devis SANS prix (articles + quantités), sur une seule ligne pour le modèle WhatsApp.
+    const notesVues = new Set()   // un article en 2 tailles ne répète pas son commentaire
     const detailParts = items.map(it => {
       if (it.autre) return `À préciser: ${String(it.autre).replace(/\s+/g, ' ').trim()}`
       const q = Number(it.qty) || 1
       const nm = String(it.name || '').replace(/\s+/g, ' ').trim()
-      return nm ? `${nm} ×${q}${(it.free && it.unit) ? ` (${it.unit})` : ''}` : ''
+      if (!nm) return ''
+      const note = String(it.note || '').replace(/\s+/g, ' ').trim()
+      let mot = ''
+      if (note && !notesVues.has(note)) { notesVues.add(note); mot = ` 💬 ${note}` }
+      return `${nm} ×${q}${(it.free && it.unit) ? ` (${it.unit})` : ''}${mot}`
     }).filter(Boolean)
     if (zone) detailParts.push(`Livraison ${zone}`)
     // Puces en ligne (WhatsApp refuse les vrais retours à la ligne dans les modèles).

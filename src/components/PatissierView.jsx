@@ -551,8 +551,8 @@ function ItemCard({ item, fiche, dones, palette, currentUserId, onChange, onPhot
               <span className="text-[10px] text-ink-mute italic">{parfumsLabel}</span>
             )}
           </div>
-          {fiche.note_patissier && (
-            <div className="text-[10px] text-amber-700 italic mt-0.5">{fiche.note_patissier}</div>
+          {(fiche.note_patissier || item.note_ligne) && (
+            <div className="text-[10px] text-amber-700 italic mt-0.5">{fiche.note_patissier || item.note_ligne}</div>
           )}
 
           {!fiche.parfum_normal && (
