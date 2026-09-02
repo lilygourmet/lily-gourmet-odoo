@@ -66,6 +66,21 @@ function taille(nom) {
 const estPr = nom => /^Pr\s/i.test(propre(nom))
 // Un « cadre » sort 46, 88 ou 243 pièces d'un coup : il se compte en
 // cadres ENTIERS, on ne monte pas 1,8 cadre.
+// Le préfixe Odoo est déjà une catégorie : on s'en sert pour ranger la liste.
+const FAMILLES = [
+  ['E-', 'Entremets'], ['V-', 'Viennoiseries'], ['MI-', 'Mignardises & plateaux'],
+  ['N-', 'Noël'], ['GS-', 'Biscuits secs'], ['RA-', 'Coffrets'],
+  ['CD-', 'Cake design'], ['GM-', 'Boîtes garnies'], ['SM', 'Semi-finis'], ['Sm', 'Semi-finis'],
+]
+const familleDe = nom => {
+  for (const [p, lab] of FAMILLES) if (String(nom || '').startsWith(p)) return lab
+  return 'Autres'
+}
+// Un article mort : jamais fabriqué et sans recette, ou marqué « archive ».
+// Sans ça la liste gardait des doublons éteints (« Micro viennoiseries » à 0,
+// doublé par « Micro viennoiseries (18 pcs) » fait 30 fois).
+const estMort = (nom, recette, fois) => /archive/i.test(String(nom || '')) || (!recette && !fois)
+
 const estCadre = nom => /\bcadres?\b/i.test(String(nom || ''))
 // Le parfum est entre parenthèses en fin de nom — « Tartelettes (Chocolat) ».
 // courtNom l'enlevait : on le sort en étiquette, comme la taille.
@@ -348,9 +363,33 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       for (const l of (r.lignes || [])) if (tous.has(l.produit)) composant.add(l.produit)
     }
     return [...tous]
-      .filter(n => !caches.includes(n) && !composant.has(n))
+      .filter(n => !caches.includes(n) && !composant.has(n) && !estMort(n, recettes[n], combien[n]))
       .sort((x, y) => (combien[y] || 0) - (combien[x] || 0) || x.localeCompare(y))
   }, [arbre, caches, q])
+
+  // Les articles rangés par famille ; dans chaque famille, ceux dont le nom
+  // commence pareil se suivent (les 3 « Mini cakes », les 3 « Cookies »...).
+  const sections = useMemo(() => {
+    if (q.trim().length >= 2) return [{ label: 'Résultats', articles: liste }]
+    const fois = (arbre && arbre.combien) || {}
+    const base = n => courtNom(n).toLowerCase().split(/\s+/).slice(0, 2).join(' ')
+    const parFamille = new Map()
+    for (const n of liste) {
+      if (!parFamille.has(familleDe(n))) parFamille.set(familleDe(n), new Map())
+      const g = parFamille.get(familleDe(n))
+      if (!g.has(base(n))) g.set(base(n), [])
+      g.get(base(n)).push(n)
+    }
+    const ordre = [...new Set(FAMILLES.map(f => f[1])), 'Autres']
+    return ordre
+      .filter(lab => parFamille.has(lab))
+      .map(lab => {
+        const groupes = [...parFamille.get(lab).values()]
+        for (const g of groupes) g.sort((x, y) => (fois[y] || 0) - (fois[x] || 0))
+        groupes.sort((a, b) => Math.max(...b.map(n => fois[n] || 0)) - Math.max(...a.map(n => fois[n] || 0)))
+        return { label: lab, articles: groupes.flat() }
+      })
+  }, [liste, q, arbre])
 
   const combienDe = useMemo(() => {
     const m = {}
@@ -446,6 +485,42 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       setHisto(null)
       toast.success(propre(nom) + ' — ' + nb(f) + ' fois')
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
+  }
+
+  const carteArticle = nom => {
+    const fait = combienDe[nom] || 0
+    const st = stocks[nom]
+    return (
+      <button key={nom} onClick={() => ouvrirFiche(nom)}
+        className={'relative bg-white border rounded-[14px] overflow-hidden text-left ' +
+          (fait ? 'border-2 border-ok' : 'border-line')}>
+        <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
+        <span className="block w-full aspect-square overflow-hidden">
+          <Vignette nom={nom} photo={photoDe(nom)} plein rond={0} />
+        </span>
+        {fait > 0 && (
+          <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-ok grid place-items-center">
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-white fill-none" strokeWidth="3.4"><path d="M4 13l5 5L20 7" /></svg>
+          </span>
+        )}
+        {!q.trim() && (
+          <span onClick={ev => cacher(nom, ev)} title="ranger"
+            className="absolute bottom-8 right-1.5 w-7 h-7 rounded-full bg-white/90 border border-line grid place-items-center">
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-ink-mute fill-none" strokeWidth="2.4">
+              <path d="M6 6l12 12M18 6L6 18" /></svg>
+          </span>
+        )}
+        {(estPr(nom) || taille(nom)) && (
+          <span className="flex items-center flex-wrap gap-1 px-2 pt-1.5">
+            <Etiquettes nom={nom} petit />
+          </span>
+        )}
+        <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{courtNom(nom)}</span>
+        <span className="block px-2 pb-2 pt-1 text-[10.5px] leading-tight text-ink-mute">
+          {st === undefined ? '\u00a0' : 'il en reste ' + nbQ(st, uniteDe(nom)) + ' ' + uniteDe(nom)}
+        </span>
+      </button>
+    )
   }
 
   const retirerLigne = async id => {
@@ -656,45 +731,21 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )}
             </div>
 
-            <div className="grid gap-2.5 items-start print:hidden"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-              {liste.map(nom => {
-                const fait = combienDe[nom] || 0
-                const st = stocks[nom]
-                return (
-                  <button key={nom} onClick={() => ouvrirFiche(nom)}
-                    className={'relative bg-white border rounded-[14px] overflow-hidden text-left ' +
-                      (fait ? 'border-2 border-ok' : 'border-line')}>
-                    <span className="absolute top-0 left-0 right-0 h-1 z-10"
-                      style={{ background: NIVEAU[0] }} />
-                    <span className="block w-full aspect-square overflow-hidden">
-                      <Vignette nom={nom} photo={photoDe(nom)} plein rond={0} />
-                    </span>
-                    {fait > 0 && (
-                      <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-ok grid place-items-center">
-                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-white fill-none" strokeWidth="3.4"><path d="M4 13l5 5L20 7" /></svg>
-                      </span>
-                    )}
-                    {!q.trim() && (
-                      <span onClick={ev => cacher(nom, ev)} title="ranger"
-                        className="absolute bottom-8 right-1.5 w-7 h-7 rounded-full bg-white/90 border border-line grid place-items-center">
-                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-ink-mute fill-none" strokeWidth="2.4">
-                          <path d="M6 6l12 12M18 6L6 18" /></svg>
-                      </span>
-                    )}
-                    {(estPr(nom) || taille(nom)) && (
-                      <span className="flex items-center flex-wrap gap-1 px-2 pt-1.5">
-                        <Etiquettes nom={nom} petit />
-                      </span>
-                    )}
-                    <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{courtNom(nom)}</span>
-                    <span className="block px-2 pb-2 pt-1 text-[10.5px] leading-tight text-ink-mute">
-                      {st === undefined ? '\u00a0' : 'il en reste ' + nbQ(st, uniteDe(nom)) + ' ' + uniteDe(nom)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+            {sections.map(sec => (
+              <div key={sec.label} className="mb-5 print:hidden">
+                {sections.length > 1 && (
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <span className="text-[11px] font-extrabold uppercase tracking-[.1em] text-bordeaux">{sec.label}</span>
+                    <span className="flex-1 h-0.5 bg-line" />
+                    <span className="text-[11px] text-ink-mute">{sec.articles.length}</span>
+                  </div>
+                )}
+                <div className="grid gap-2.5 items-start"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                  {sec.articles.map(nom => carteArticle(nom))}
+                </div>
+              </div>
+            ))}
 
             {!q.trim() && arbre && (
               <button onClick={() => setVoirPlus(v => !v)}
