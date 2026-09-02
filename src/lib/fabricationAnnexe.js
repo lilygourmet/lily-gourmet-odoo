@@ -5,8 +5,10 @@ import { supabase } from './supabase'
  * (ordres terminés sur 90 jours) et de quoi chaque chose est faite.
  * → { racines: [nom], combien: {nom: nbFournées}, recettes: {nom: {...}} }
  */
-export async function loadArbreAnnexe() {
-  const r = await fetch('/api/freezer-list?mode=annexe')
+export async function loadArbreAnnexe(frais = false) {
+  // `frais` : on vient de créer un ordre dans Odoo, la réponse mise en cache
+  // 3 minutes ne le connaît pas encore et l'écran réclamerait de le recréer.
+  const r = await fetch('/api/freezer-list?mode=annexe' + (frais ? '&cb=' + Date.now() : ''))
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   return await r.json()
 }

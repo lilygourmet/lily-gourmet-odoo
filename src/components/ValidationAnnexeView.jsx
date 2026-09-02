@@ -40,7 +40,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     ;(async () => {
       try {
         const [arbre, journal] = await Promise.all([
-          loadArbreAnnexe(),
+          loadArbreAnnexe(tour > 0),   // après une création : sans le cache
           loadFabProd(todayISO(), 'annexe'),
         ])
         if (!vivant) return

@@ -247,6 +247,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // L'ordre de fabrication qu'Odoo tient déjà pour cet article, s'il existe.
   const ordreDe = nom => ordresLocaux[nom] || ((arbre && arbre.ordres) || {})[nom]
 
+  // Après une création, on relit Odoo SANS le cache : sinon l'écran continue
+  // d'annoncer « aucun ordre » pendant 3 minutes et on en crée un deuxième.
+  const relireOdoo = () => loadArbreAnnexe(true)
+    .then(a => { setArbre(a); garderEcran('annexe', a) }).catch(() => { })
+
   // Verrou d'écran : deux appuis rapprochés ne doivent pas créer deux ordres.
   const creerOrdre = async (nom, qte) => {
     if (creation) return
@@ -258,6 +263,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       else if (r && r.name) {
         setOrdresLocaux(o => ({ ...o, [nom]: { name: r.name, qty: qte, state: 'draft', origin: '' } }))
         toast.success('Ordre ' + r.name + ' créé' + (r.deja ? ' (déjà existant)' : ''))
+        relireOdoo()
       }
     } catch (e) { toast.error(e.message || String(e)) }
     setCreation(null)
@@ -583,6 +589,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             if (!of.test) { ordre = of.name; cree = true }
             setOrdresLocaux(o => ({ ...o, [nom]: { name: of.name, qty: qte, state: 'draft', origin: '' } }))
             msg += of.test ? ' · mode test, aucun ordre créé' : ' · ordre ' + of.name + ' créé'
+            if (!of.test) relireOdoo()
           } else if (of && of.error) {
             toast.error('Fabrication notée, mais ordre non créé : ' + of.error)
           }
