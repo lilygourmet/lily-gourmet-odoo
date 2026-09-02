@@ -619,10 +619,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )}
             </div>
 
-            <div className="grid gap-2.5 print:hidden"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+            <div className="grid gap-2.5 items-start print:hidden"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
               {liste.map(nom => {
                 const fait = combienDe[nom] || 0
+                const st = stocks[nom]
                 return (
                   <button key={nom} onClick={() => ouvrirFiche(nom)}
                     className={'relative bg-white border rounded-[14px] overflow-hidden text-left ' +
@@ -644,7 +645,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                           <path d="M6 6l12 12M18 6L6 18" /></svg>
                       </span>
                     )}
-                    <span className="block px-2 py-1.5 text-[12px] font-bold leading-tight">{propre(nom)}</span>
+                    {(estPr(nom) || taille(nom)) && (
+                      <span className="flex items-center flex-wrap gap-1 px-2 pt-1.5">
+                        <Etiquettes nom={nom} petit />
+                      </span>
+                    )}
+                    <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{courtNom(nom)}</span>
+                    <span className="block px-2 pb-2 pt-1 text-[10.5px] leading-tight text-ink-mute">
+                      {st === undefined ? '\u00a0' : 'il en reste ' + nbQ(st, uniteDe(nom)) + ' ' + uniteDe(nom)}
+                    </span>
                   </button>
                 )
               })}
