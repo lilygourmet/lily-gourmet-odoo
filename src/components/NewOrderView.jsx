@@ -35,6 +35,8 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
   const [confirming, setConfirming] = useState(false)
   const [waModal, setWaModal] = useState(null)          // { phone, name, order } pour envoyer devis/confirmation
   const [livreurs, setLivreurs] = useState([])
+  // Livreur par défaut (Hamid) : c'est lui qui récupère les livraisons non assignées.
+  const livreurDefaut = livreurs.find(l => l.livreur_defaut || l.perm_livreur_defaut) || null
   const [livreurId, setLivreurId] = useState(null)
   const [livraisonLoc, setLivraisonLoc] = useState('')   // adresse / localisation pour le livreur
   const [warehouses, setWarehouses] = useState([])
@@ -171,7 +173,6 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
       return
     }
     if (cart.length === 0) return
-    if (hasLivraison && !livreurId) { toast.error('Assigne un livreur avant de créer (ligne Livraison).'); return }
     if (!deliveryDate) { toast.error('La date de retrait/livraison est obligatoire (sinon la commande n\'apparaît pas au calendrier).'); return }
     if (deliveryDate < minOrderDate) { toast.error('La date de retrait/livraison ne peut pas être dans le passé.'); return }
     const missing = cart.find(l => !l.variantId)
@@ -196,8 +197,7 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
       // Assignation livreur si une ligne « Livraison » est présente et un livreur choisi.
       // Livreur par défaut (Hamid) : accepté d'office, sans tâche (comme l'écran Livraisons).
       if (hasLivraison && livreurId) {
-        const defaultLivreurId = livreurs.find(l => l.livreur_defaut || l.perm_livreur_defaut)?.id || null
-        const autoAccept = livreurId === defaultLivreurId
+        const autoAccept = livreurId === (livreurDefaut?.id || null)
         assignDelivery({ orderNum: r.name, livreurId, byUserId: user?.id, titre: `🚚 Livraison ${r.name}`, description: client.name || '', autoAccept }).catch(() => {})
       }
       // Adresse / localisation pour le livreur (champ dédié, table livraisons)
@@ -462,12 +462,16 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
         </div>
         <button
           onClick={handleCreate}
-          disabled={cart.length === 0 || !client || creating || !deliveryDate || (hasLivraison && !livreurId)}
+          disabled={cart.length === 0 || !client || creating || !deliveryDate}
           className="mt-3 w-full py-3 bg-bordeaux text-cream rounded-full text-[14px] font-medium disabled:opacity-50">
           {creating ? 'Création…' : 'Créer le devis (brouillon Odoo)'}
         </button>
         {!client && cart.length > 0 && <div className="text-[11px] text-bordeaux text-center mt-2">Choisis un client pour créer le devis.</div>}
-        {hasLivraison && !livreurId && cart.length > 0 && <div className="text-[11px] text-bordeaux text-center mt-2">Assigne un livreur (ligne Livraison) avant de créer.</div>}
+        {hasLivraison && !livreurId && cart.length > 0 && (
+          <div className="text-[11px] text-ink-mute text-center mt-2">
+            Sans livreur choisi, la livraison ira à <b>{livreurDefaut?.full_name || livreurDefaut?.username || 'le livreur par défaut'}</b> — tu pourras la réattribuer dans l'onglet Livraisons.
+          </div>
+        )}
         {!deliveryDate && cart.length > 0 && <div className="text-[11px] text-bordeaux text-center mt-2">Choisis une date de retrait/livraison (obligatoire).</div>}
         <div className="text-[11px] text-ink-mute text-center mt-1">Le devis est créé en brouillon dans Odoo (tu le confirmes/envoies comme d'habitude).</div>
 

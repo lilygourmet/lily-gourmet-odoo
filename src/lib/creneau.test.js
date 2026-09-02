@@ -9,6 +9,11 @@ describe('créneau de livraison', () => {
     expect(estLigneLivraison('Livraison')).toBe(true)
     expect(estLigneLivraison(' livraison ')).toBe(true)
     expect(estLigneLivraison('Livraison express')).toBe(false)   // autre article
+    // Le quartier est une variante du produit : c'est la forme RÉELLE des lignes.
+    expect(estLigneLivraison('Livraison (Hay Riad)')).toBe(true)
+    expect(estLigneLivraison('Livraison (Agdal)')).toBe(true)
+    expect(estLigneLivraison('Livraison (El Menzeh (Ain Aouda))')).toBe(true)
+    expect(estLigneLivraison('Livraison(Souissi)')).toBe(true)
     expect(estLigneLivraison('E- Citron meringué')).toBe(false)
   })
 

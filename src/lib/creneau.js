@@ -20,8 +20,18 @@ const toMin = (t) => {
 }
 const toHHMM = (mn) => `${String(Math.floor(mn / 60) % 24).padStart(2, '0')}:${String(mn % 60).padStart(2, '0')}`
 
-/** Nom d'article = la ligne « Livraison » ? (même règle que le panier) */
-export const estLigneLivraison = (name) => /^livraison$/i.test(String(name || '').trim())
+/**
+ * Nom d'article = la ligne « Livraison » ?
+ *
+ * ⚠️ Le quartier est une VARIANTE du produit : la ligne s'appelle en vrai
+ * « Livraison (Hay Riad) », « Livraison (Agdal) »… Une règle qui exigeait le mot
+ * seul ne reconnaissait donc AUCUNE livraison réelle — tout ce qui en dépend
+ * (créneau de 2 h, heure de préparation, livreur obligatoire) est resté éteint
+ * depuis l'écriture du module. On accepte la parenthèse, mais rien d'autre :
+ * « Livraison express » reste un article différent.
+ */
+export const estLigneLivraison = (name) =>
+  /^livraison\s*(\(.*\))?$/i.test(String(name || '').trim())
 
 /**
  * Heure saisie (= début du créneau, 13:00) → heure à enregistrer dans Odoo (12:30).
