@@ -3612,6 +3612,86 @@ function utcToMarocDate(s) {
   return { iso: `${g('year')}-${g('month')}-${g('day')}`, fr: `${g('day')}/${g('month')}/${g('year')}` }
 }
 
+// ============================================================
+// 2e DEVIS DANS LG TRAITEUR — une saisie sur le lien OCP = 2 devis brouillon.
+// L&N Gourmet : client « LG traiteur OCP » · LG Traiteur : client « OCP SA ».
+// ============================================================
+const LGT_CLIENT_OCP = 652   // res.partner « OCP SA ». ⚠️ 3 doublons existent (8593, 619, 1743) : ne pas s'y tromper.
+const LGT_AUTRE = 1715       // product.product « AUTRE », le générique — il n'a AUCUNE taxe par défaut.
+// Taxes de vente : mêmes noms des deux côtés, mais pas le même fonctionnement.
+// Chez L&N presque toutes sont « prix TTC inclus » ; chez LG Traiteur SEULE la 10 % l'est.
+// Pour les autres il faut repasser le prix en HT, sinon le total gonfle du montant de la TVA.
+const LGT_TAXES = {
+  1: { id: 14, taux: 0,  inc: false },   // Exonéré
+  3: { id: 16, taux: 20, inc: false },
+  4: { id: 17, taux: 14, inc: false },
+  5: { id: 18, taux: 10, inc: true },    // la seule qu'on rencontre en vrai sur OCP
+  6: { id: 19, taux: 7,  inc: false },
+}
+
+async function odoo2JsonRpc(service, method, args) {
+  const r = await fetchWithTimeout(`${process.env.ODOO2_URL}/jsonrpc`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { service, method, args }, id: Date.now() }),
+  })
+  if (!r.ok) throw new Error(`Odoo2 HTTP ${r.status}`)
+  const d = await r.json()
+  if (d.error) throw new Error(`Odoo2: ${d.error.data?.message || d.error.message}`)
+  return d.result
+}
+let _odoo2Uid = null
+async function odoo2Auth() {
+  if (_odoo2Uid) return _odoo2Uid
+  const uid = await odoo2JsonRpc('common', 'authenticate', [process.env.ODOO2_DB, process.env.ODOO2_USER, process.env.ODOO2_PASSWORD, {}])
+  if (!uid) throw new Error('Odoo2 authentication failed')
+  _odoo2Uid = uid
+  return uid
+}
+const exec2 = (uid, model, method, args, kw = {}) =>
+  odoo2JsonRpc('object', 'execute_kw', [process.env.ODOO2_DB, uid, process.env.ODOO2_PASSWORD, model, method, args, kw])
+
+// Nom d'article comparable entre les deux Odoo : sans le [code], sans accents ni ponctuation.
+const nomComparable = s => String(s || '').replace(/^\[[^\]]*\]\s*/, '').split('\n')[0]
+  .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+
+// Recopie le devis dans LG Traiteur. Le produit réel quand il existe là-bas, sinon
+// le générique AUTRE avec le nom de l'article — c'est la méthode validée par Layla
+// (le catalogue de LG Traiteur n'a pas de produits sucrés finis).
+async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
+  const uid = await odoo2Auth()
+  // Anti-doublon : le n° L&N vit dans client_order_ref. Relancer ne recrée rien.
+  const deja = await exec2(uid, 'sale.order', 'search_read', [[['client_order_ref', '=', orderName]]], { fields: ['id', 'name'], limit: 1 })
+  if (deja.length) return { name: deja[0].name, deja: true }
+  const cat = await exec2(uid, 'product.product', 'search_read', [[['sale_ok', '=', true]]], { fields: ['id', 'name'], limit: 2000 })
+  const parNom = new Map()
+  for (const pr of cat) { const k = nomComparable(pr.name); if (k && !parNom.has(k)) parNom.set(k, pr.id) }
+  let trouves = 0
+  const lignes = lignesLN.map(l => {
+    const pid = parNom.get(nomComparable(Array.isArray(l.product_id) ? l.product_id[1] : l.name))
+    if (pid) trouves++
+    const t = LGT_TAXES[(l.tax_id || [])[0]]
+    const pu = (t && !t.inc) ? (l.price_unit || 0) / (1 + t.taux / 100) : (l.price_unit || 0)
+    return [0, 0, {
+      product_id: pid || LGT_AUTRE,
+      name: l.name || '',
+      product_uom_qty: l.product_uom_qty || 1,
+      price_unit: Math.round(pu * 100) / 100,
+      discount: l.discount || 0,
+      ...(t ? { tax_id: [[6, 0, [t.id]]] } : {}),
+    }]
+  })
+  const vals = {
+    partner_id: LGT_CLIENT_OCP,
+    client_order_ref: orderName,
+    origin: `Lien OCP — ${orderName} (L&N Gourmet)`,
+    order_line: lignes,
+  }
+  if (commitmentUtc) vals.commitment_date = commitmentUtc
+  const id = await exec2(uid, 'sale.order', 'create', [vals])   // un seul dict : Odoo renvoie un id, pas une liste
+  const [o] = await exec2(uid, 'sale.order', 'search_read', [[['id', '=', id]]], { fields: ['name'] })
+  return { id, name: o?.name || '', trouves, total: lignes.length }
+}
+
 async function handleOrderCreateOcp(req, res) {
   const { zone, date, time, items } = req.body || {}
   if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'aucun article' })
@@ -3688,7 +3768,16 @@ async function handleOrderCreateOcp(req, res) {
     let detail = detailParts.map(p => `▪️ ${p}`).join(' ')
     if (detail.length > 950) detail = detail.slice(0, 950) + '…'
     notifyOcpOrder(orderName, date, detail).catch(() => {})
-    return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name })
+    // 2e devis dans LG Traiteur (client OCP SA). On relit les lignes TELLES QU'ODOO
+    // les a enregistrées (taxes et prix compris) pour recopier à l'identique.
+    let lgt = null
+    try {
+      const lignesLN = await odooSearchRead(uid, 'sale.order.line', [['order_id', '=', orderId]],
+        ['name', 'product_id', 'product_uom_qty', 'price_unit', 'discount', 'tax_id', 'display_type'])
+      lgt = await copieDevisLgTraiteur(orderName, lignesLN.filter(l => !l.display_type), vals.commitment_date)
+      console.log(`[ocp-devis] LG Traiteur ${lgt.name}${lgt.deja ? ' (deja la)' : ` (${lgt.trouves}/${lgt.total} vrais produits)`}`)
+    } catch (e) { console.warn('[ocp-devis] LG Traiteur echoue :', e?.message || e) }
+    return res.status(200).json({ ok: true, id: orderId, name: orderName, partner: p[0].name, lgt: lgt?.name || null })
   } catch (e) {
     console.error('[ocp-devis]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
