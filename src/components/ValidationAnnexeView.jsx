@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd } from '../lib/fabricationProd'
 import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
-import { loadManques, validerDansOdoo } from '../lib/fabrication'
+import { loadManques, validerDansOdoo, creerOfPrepa } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 
 // ====== « À valider Annexe » ======
@@ -32,6 +32,8 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   const [envoi, setEnvoi] = useState(false)
   const [resultats, setResultats] = useState(null)
   const [erreur, setErreur] = useState(null)
+  const [creation, setCreation] = useState(null)
+  const [tour, setTour] = useState(0)
 
   useEffect(() => {
     let vivant = true
@@ -43,30 +45,44 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         ])
         if (!vivant) return
         const ordres = arbre.ordres || {}
-        // un ordre par article déclaré, sans doublon
+        // un ordre par article déclaré, sans doublon ; et ce qui n'a PAS
+        // d'ordre reste visible, avec de quoi le créer sur place — sinon la
+        // déclaration disparaissait et rien ne pouvait être validé.
         const parOrdre = new Map()
+        const sans = new Map()
         for (const d of journal || []) {
           const o = ordres[d.article]
-          if (!o || parOrdre.has(o.name)) continue
-          parOrdre.set(o.name, { name: o.name, article: d.article, demande: o.qty, etat: o.state })
+          if (o) {
+            if (!parOrdre.has(o.name)) {
+              parOrdre.set(o.name, { name: o.name, article: d.article, demande: o.qty, etat: o.state })
+            }
+          } else {
+            const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite }
+            p.qty += Number(d.qty) || 0
+            sans.set(d.article, p)
+          }
         }
         const base = [...parOrdre.values()]
-        if (!base.length) { setLignes([]); return }
+        const orphelins = [...sans.values()].map(p => ({
+          name: 'sans-ordre:' + p.article, article: p.article, sansOrdre: true,
+          demande: Math.round(p.qty * 100) / 100, unite: p.unite, manques: [], lignes: [],
+        }))
+        if (!base.length) { setLignes(orphelins); return }
         const detail = await loadManques(base.map(x => x.name))
         if (!vivant) return
         const parNom = new Map(detail.map(d => [d.name, d]))
-        const out = base.map(b => ({ ...b, ...(parNom.get(b.name) || { manques: [], lignes: [] }) }))
+        const out = [...base.map(b => ({ ...b, ...(parNom.get(b.name) || { manques: [], lignes: [] }) })), ...orphelins]
         setLignes(out)
-        setSel(out.map(x => x.name))
+        setSel(out.filter(x => !x.sansOrdre).map(x => x.name))
         setFaites(Object.fromEntries(out.map(x => [x.name, x.demande])))
       } catch (e) { if (vivant) setErreur(e.message || String(e)) }
     })()
     return () => { vivant = false }
-  }, [])
+  }, [tour])
 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
-  const prets = choisis.filter(l => !l.manques.length)
-  const bloques = choisis.filter(l => l.manques.length)
+  const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
+  const bloques = choisis.filter(l => l.manques.length && !l.sansOrdre)
   const manquesCumules = [...new Map(bloques.flatMap(l => l.manques)
     .map(m => [m.produit, m])).values()]
 
@@ -83,6 +99,18 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   const basculer = n => setSel(s => (s.includes(n) ? s.filter(x => x !== n) : [...s, n]))
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
+
+  async function creer(l) {
+    if (creation) return
+    setCreation(l.name)
+    try {
+      const r = await creerOfPrepa(l.article, faites[l.name] ?? l.demande, user?.id, [], l.unite)
+      if (r && r.error) toast.error(r.error)
+      else if (r && r.test) toast.success('Mode test : aucun ordre créé dans Odoo')
+      else if (r && r.name) { toast.success('Ordre ' + r.name + ' créé'); setTour(t => t + 1) }
+    } catch (e) { toast.error(e.message || String(e)) }
+    setCreation(null)
+  }
 
   async function lancer(forcer) {
     const cibles = (forcer ? bloques : prets).map(l => l.name)
@@ -151,10 +179,38 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 className="text-bordeaux font-bold underline">tout cocher</button>
               <button onClick={() => setSel([])}
                 className="text-bordeaux font-bold underline">tout décocher</button>
-              <span className="ml-auto text-ink-mute">{prets.length} prêts · {bloques.length} bloqués</span>
+              <span className="ml-auto text-ink-mute">
+                {prets.length} prêts · {bloques.length} bloqués
+                {lignes.filter(l => l.sansOrdre).length > 0 && ' · ' + lignes.filter(l => l.sansOrdre).length + ' sans ordre'}
+              </span>
             </div>
 
             {lignes.map(l => {
+              if (l.sansOrdre) {
+                return (
+                  <div key={l.name}
+                    className="bg-white border border-line rounded-2xl mb-2.5 border-l-4 border-l-[#b58f3c] px-3.5 py-3">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <b className="text-[15px]">{propre(l.article)}</b>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wide rounded-full px-2 py-0.5 bg-[#FBF3DF] text-[#854F0B]">
+                        aucun ordre
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] text-ink-mute mt-1 leading-snug">
+                      Déclaré {nb(l.demande)} {l.unite} — Odoo n'a pas d'ordre ouvert pour cet article
+                      à l'annexe. Sans ordre, rien à valider.
+                    </p>
+                    <button onClick={() => creer(l)} disabled={!!creation}
+                      className={'w-full mt-2 rounded-xl px-3 py-2.5 text-[13px] font-extrabold border '
+                        + (creation === l.name
+                          ? 'border-line bg-cream-warm text-ink-mute'
+                          : 'border-[#b58f3c] text-[#854F0B] bg-[#FBF3DF]')}>
+                      {creation === l.name ? 'Création en cours…'
+                        : `Créer l'ordre de ${nb(l.demande)} ${l.unite || ''}`}
+                    </button>
+                  </div>
+                )
+              }
               const bloque = l.manques.length > 0
               const faite = faites[l.name] ?? l.demande
               const reste = Math.max(0, l.demande - faite)
