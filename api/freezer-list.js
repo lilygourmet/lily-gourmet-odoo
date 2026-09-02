@@ -578,7 +578,10 @@ async function reserverPourLeParent(uid, mo) {
   return pm.map(m => m.name).join(', ')
 }
 
-async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null) {
+// `produit` = ce qui a VRAIMENT été fabriqué. En dessous du demandé, Odoo
+// propose un reliquat : on le crée (action_backorder) au lieu de clôturer
+// l'ordre (action_close_mo), sinon le reste était perdu sans prévenir.
+async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, produit = null) {
   const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', name]],
     ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_id', 'location_src_id', 'company_id', 'origin']))[0]
   if (!mo) return { name, ok: false, message: 'ordre introuvable' }
@@ -586,8 +589,11 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null) 
   if (mo.state === 'cancel') return { name, ok: false, message: 'ordre annulé' }
   try {
     const glacage = await integrerGlacage(uid, mo)
-    if (!mo.qty_producing || mo.qty_producing !== mo.product_qty) {
-      await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: mo.product_qty }])
+    const voulu = Number(produit)
+    const faite = (voulu > 0 && voulu <= mo.product_qty) ? voulu : mo.product_qty
+    const partiel = faite < mo.product_qty
+    if (mo.qty_producing !== faite) {
+      await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: faite }])
     }
     // Un ingrédient que la recette ne prévoyait pas : on l'ajoute à l'ordre.
     // Passer par `write` sur la production (et non par un stock.move seul) est
@@ -648,7 +654,10 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null) 
       // action_close_mo. On essaie dans l'ordre le plus probable.
       const boutons = {
         'mrp.consumption.warning': ['action_confirm', 'action_set_qty'],
-        'mrp.production.backorder': ['action_close_mo', 'action_backorder'],
+        // production partielle => on veut le RELIQUAT, pas la clôture sèche
+        'mrp.production.backorder': partiel
+          ? ['action_backorder', 'action_close_mo']
+          : ['action_close_mo', 'action_backorder'],
       }[r.res_model] || ['process', 'action_confirm']
       let passe = false
       for (const bouton of boutons) {
@@ -1669,7 +1678,7 @@ export default async function handler(req, res) {
       }
       const uid = await odooAuth()
       const out = []
-      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true, (body.quantites || {})[n], (body.ajouts || {})[n]))
+      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true, (body.quantites || {})[n], (body.ajouts || {})[n], (body.produits || {})[n]))
       console.log(`[fabrication:valider] par ${body.actorId || '?'} · forcer=${body.forcer === true} · ${out.map(o => o.name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
       return res.status(200).json({ resultats: out })
     }
@@ -1734,7 +1743,7 @@ export default async function handler(req, res) {
       // on les garde en mémoire. Les stocks et les ordres, eux, sont relus.
       // Tout part en même temps : quatre vagues successives faisaient attendre
       // l'écran pour rien.
-      const [mos, boms, lignesBom, tmpl, anciens, quants, points] = await Promise.all([
+      const [mos, boms, lignesBom, tmpl, anciens, quants, points, ouverts] = await Promise.all([
         odooSearchRead(uid, 'mrp.production', [
           ['location_src_id', 'in', lieux.map(l => l.id)],
           ['state', '=', 'done'],
@@ -1756,6 +1765,13 @@ export default async function handler(req, res) {
         // lecture passe de 1 à 13 secondes. Les stocks viennent des quants.
         memo('orderpoints', () => odooSearchRead(uid, 'stock.warehouse.orderpoint', [],
           ['product_id', 'product_min_qty', 'product_max_qty', 'location_id'], { limit: 3000 })),
+        // Les ordres de fabrication DÉJÀ ouverts à l'annexe : Odoo les crée
+        // tout seul par le réapprovisionnement, aux mêmes quantités que
+        // l'écran calcule. On les relie à leur article au lieu d'en créer.
+        odooSearchRead(uid, 'mrp.production', [
+          ['location_src_id', 'in', lieux.map(l => l.id)],
+          ['state', 'not in', ['done', 'cancel']],
+        ], ['name', 'product_id', 'product_qty', 'state', 'origin'], { limit: 500, order: 'id desc' }),
       ])
 
       top('lectures principales')
@@ -1975,6 +1991,15 @@ export default async function handler(req, res) {
         if (!minmax[n]) minmax[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
       }
 
+      // Un article peut avoir plusieurs ordres ouverts : on garde le plus
+      // récent (la liste arrive triée par id décroissant).
+      const ordres = {}
+      for (const o of ouverts) {
+        const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
+        if (!n || ordres[n]) continue
+        ordres[n] = { name: o.name, qty: o.product_qty, state: o.state, origin: o.origin || '' }
+      }
+
       top('stocks et min/max')
       const photos = {}
       for (const t of tmplPhotos) if (t.image_128) photos[net(t.name)] = t.id
@@ -1983,7 +2008,7 @@ export default async function handler(req, res) {
       if (req.query.chrono) return res.status(200).json({ chrono })
       res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=1800')
       return res.status(200).json({
-        racines, ecartees, photos, stocks, minmax, tournees,
+        racines, ecartees, photos, stocks, minmax, tournees, ordres,
         combien: { ...combien, ...poids }, recettes: aRendre,
       })
     }

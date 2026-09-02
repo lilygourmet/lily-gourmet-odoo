@@ -16,6 +16,7 @@ export const PERMS = [
   { key: 'perm_fabrication_pate_sucre', group: 'Production & Calendrier', label: 'Fabrication Pâte à sucre', desc: 'Onglet « Fabrication Pâte à sucre » : lancer des tournées de pâte à sucre.' },
   { key: 'perm_fabrication_annexe', group: 'Production & Calendrier', label: 'Fabrication Annexe', desc: 'Onglet « Fabrication Annexe » : dire combien de fois une recette a été faite.' },
   { key: 'perm_fabrication_prod', group: 'Production & Calendrier', label: 'Fabrication Prod', desc: 'Onglet « Fabrication Prod » : noter ce que l\'équipe a fabriqué dans la journée.' },
+  { key: 'perm_valider_annexe', group: 'Production & Calendrier', label: 'Valider Annexe', desc: 'Confirmer dans Odoo les fabrications declarees a l\'annexe. Irreversible.' },
   { key: 'perm_valider_of', group: 'Production & Calendrier', label: 'Valider la fabrication dans Odoo', desc: 'Peut valider les ordres de fabrication : consomme les composants et entre le produit fini en stock. Action irréversible.' },
   { key: 'perm_polys', group: 'Production & Calendrier', label: 'Taille des polys', desc: 'Choisir la taille des boîtes/polys à l\'impression.' },
   { key: 'perm_delete', group: 'Production & Calendrier', label: 'Supprimer une commande', desc: 'Action sensible.' },

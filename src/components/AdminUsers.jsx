@@ -121,6 +121,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_check: formData.permCheck,
         perm_polys: formData.permPolys,
         perm_valider_of: formData.permValiderOf,
+        perm_valider_annexe: formData.permValiderAnnexe,
+        perm_valider_annexe: formData.permValiderAnnexe,
         perm_fabrication_cd: formData.permFabricationCd,
         perm_fabrication_glacage: formData.permFabricationGlacage,
         perm_fabrication_pate_sucre: formData.permFabricationPateSucre,
@@ -692,6 +694,7 @@ function UserCard({ user, isCurrentUser, onEdit, onResetPassword, onDelete, onHa
   if (user.perm_fabrication_prod) perms.push('Fabrication Prod')
   if (user.perm_fabrication_annexe) perms.push('Fabrication Annexe')
   if (user.perm_valider_of) perms.push('Valider fabrication Odoo')
+  if (user.perm_valider_annexe) perms.push('Valider Annexe')
   if (user.perm_recaps) perms.push('Recaps ventes')
   if (user.perm_define_gm) perms.push('Définir GM')
   if (user.perm_prod) perms.push('Vue Prod')
@@ -805,6 +808,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permCheck: initialData?.perm_check !== false,
     permPolys: initialData?.perm_polys !== false,
     permValiderOf: initialData?.perm_valider_of || false,
+    permValiderAnnexe: initialData?.perm_valider_annexe || false,
     permFabricationCd: initialData?.perm_fabrication_cd || false,
     permFabricationGlacage: initialData?.perm_fabrication_glacage || false,
     permFabricationPateSucre: initialData?.perm_fabrication_pate_sucre || false,
@@ -1053,6 +1057,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-fabrication-pate-sucre" label="Fabrication Pâte à sucre" desc="Onglet « Fabrication Pâte à sucre » : lancer des tournées de pâte à sucre." checked={isAdmin || formData.permFabricationPateSucre} onChange={v => update('permFabricationPateSucre', v)} />
             <PermCheckbox id="perm-fabrication-annexe" label="Fabrication Annexe" desc="Onglet « Fabrication Annexe » : dire combien de fois une recette a été faite." checked={isAdmin || formData.permFabricationAnnexe} onChange={v => update('permFabricationAnnexe', v)} />
             <PermCheckbox id="perm-fabrication-prod" label="Fabrication Prod" desc="Onglet « Fabrication Prod » : noter ce que l'équipe a fabriqué dans la journée." checked={isAdmin || formData.permFabricationProd} onChange={v => update('permFabricationProd', v)} />
+            <PermCheckbox id="perm-valider-annexe" label="Valider Annexe" desc="Confirmer dans Odoo les fabrications déclarées à l'annexe : consomme les composants et entre le produit fini en stock. Irréversible." checked={isAdmin || formData.permValiderAnnexe} onChange={v => update('permValiderAnnexe', v)} />
             <PermCheckbox id="perm-valider-of" label="Valider la fabrication dans Odoo" desc="Peut valider les ordres de fabrication : consomme les composants et entre le produit fini en stock. Action irréversible." checked={isAdmin || formData.permValiderOf} onChange={v => update('permValiderOf', v)} />
             <PermCheckbox id="perm-polys" label="Taille des polys" desc="Choisir la taille des boîtes/polys à l'impression." checked={isAdmin || formData.permPolys} onChange={v => update('permPolys', v)} />
             <PermCheckbox id="perm-delete" label="Supprimer une commande" desc="Action sensible." checked={isAdmin || formData.permDelete} onChange={v => update('permDelete', v)} />
