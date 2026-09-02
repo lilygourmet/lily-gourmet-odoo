@@ -24,6 +24,8 @@ const VERRINES = ['Coupe de fruits', 'Verrine sucrée', 'Verrine salée']
 const W = f => `https://commons.wikimedia.org/wiki/Special:FilePath/${f}?width=320`
 const DEFAULT_IMG = { 'Framboise': W('Raspberries05.jpg'), 'Prune': W('Plums.jpg'), 'Figue': W('Fig.jpg') }
 const today = () => new Date().toLocaleDateString('en-CA')
+// Les fruits vendus au kilo se commandent par demi-kilo (0,5 · 1 · 1,5…). Le reste reste entier.
+const pasDe = (it) => /^kg$/i.test(it?.unit || '') ? 0.5 : 1
 
 export default function OcpOrderView() {
   const [cats, setCats] = useState(null)
@@ -132,8 +134,9 @@ export default function OcpOrderView() {
     if (isSizeItem(c, c.items[ii])) { const base = `${c.key}-${ii}`; return Object.keys(qty).filter(k => k.startsWith(base + ':')).reduce((s, k) => s + qty[k], 0) }
     return qty[`${c.key}-${ii}`] || 0
   }
-  const chg = (key, d) => setQty(q => { const v = Math.max(0, (q[key] || 0) + d); const n = { ...q }; if (v <= 0) delete n[key]; else n[key] = v; return n })
-  const setVal = (key, val) => setQty(q => { const x = Math.max(0, Math.floor(Number(val) || 0)); const n = { ...q }; if (x <= 0) delete n[key]; else n[key] = x; return n })
+  // `pas` = incrément de l'article (0,5 au kilo, 1 sinon) ; on arrondit au demi pour ne jamais tomber sur 0,3333.
+  const chg = (key, d, pas = 1) => setQty(q => { const v = Math.max(0, Math.round(((q[key] || 0) + d * pas) * 2) / 2); const n = { ...q }; if (v <= 0) delete n[key]; else n[key] = v; return n })
+  const setVal = (key, val, pas = 1) => setQty(q => { const brut = Number(String(val).replace(',', '.')) || 0; const x = pas < 1 ? Math.max(0, Math.round(brut * 2) / 2) : Math.max(0, Math.floor(brut)); const n = { ...q }; if (x <= 0) delete n[key]; else n[key] = x; return n })
   const count = Object.keys(qty).length + (autre.trim() ? 1 : 0)
   const c = findCat(active) || cats[0]
   if (!c) return <Center>Catalogue indisponible.</Center>
@@ -198,7 +201,7 @@ export default function OcpOrderView() {
 }
 
 function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar }) {
-  const base = `${c.key}-${ii}`; const tot = totOf(c, ii); const sel = tot > 0
+  const base = `${c.key}-${ii}`; const tot = totOf(c, ii); const sel = tot > 0; const pas = pasDe(it)
   // Sélectionnable par taille = entremets OU produit ayant plusieurs tailles officielles.
   const isSize = c.kind === 'size' || (it.tmplId && !it.variantId && (entVar[it.tmplId]?.length > 0))
   const canTap = !isSize && (c.kind === 'unit' || c.kind === 'free')
@@ -220,7 +223,7 @@ function Tile({ c, ii, it, qty, chg, setVal, totOf, entVar }) {
       ) : sel && (
         <>
           {it.unit && <div style={{ fontSize: 10.5, color: SOFT, marginTop: 4 }}>{it.unit}</div>}
-          <Qbar k={base} n={qty[base] || 0} chg={chg} setVal={setVal} />
+          <Qbar k={base} n={qty[base] || 0} chg={chg} setVal={setVal} pas={pas} />
         </>
       )}
     </div>
@@ -231,13 +234,13 @@ function SizeRow({ label, k, qty, chg, setVal }) {
     <span>{label}</span><Qbar k={k} n={qty[k] || 0} chg={chg} setVal={setVal} mini />
   </div>
 }
-function Qbar({ k, n, chg, setVal, mini }) {
+function Qbar({ k, n, chg, setVal, mini, pas = 1 }) {
   const b = { width: mini ? 28 : 34, height: mini ? 28 : 34, borderRadius: '50%', border: `1.5px solid ${B}`, background: '#fff', color: B, fontSize: mini ? 17 : 21, fontWeight: 800, lineHeight: 1 }
   return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: mini ? 6 : 10, marginTop: mini ? 0 : 8 }}>
-    <button onClick={e => { e.stopPropagation(); chg(k, -1) }} style={b}>−</button>
-    <input type="number" inputMode="numeric" value={n} onClick={e => e.stopPropagation()} onChange={e => setVal(k, e.target.value)}
+    <button onClick={e => { e.stopPropagation(); chg(k, -1, pas) }} style={b}>−</button>
+    <input type="number" inputMode={pas < 1 ? 'decimal' : 'numeric'} step={pas} value={n} onClick={e => e.stopPropagation()} onChange={e => setVal(k, e.target.value, pas)}
       style={{ width: mini ? 40 : 50, height: mini ? 28 : 34, textAlign: 'center', fontSize: mini ? 14 : 16, fontWeight: 800, border: `1px solid ${LINE}`, borderRadius: 8, background: '#fff', color: '#2b2522' }} />
-    <button onClick={e => { e.stopPropagation(); chg(k, 1) }} style={b}>+</button>
+    <button onClick={e => { e.stopPropagation(); chg(k, 1, pas) }} style={b}>+</button>
   </div>
 }
 
@@ -249,7 +252,7 @@ function Recap({ cats, qty, chg, setVal, notes, setNote, autre, zone, date, time
     const [base, sub] = key.split(':'); const i = base.lastIndexOf('-'); const ck = base.slice(0, i), ii = +base.slice(i + 1)
     const c = findCat(ck); const it = c && c.items[ii]
     if (!c || !it) return
-    if (!byBase[base]) { byBase[base] = { base, name: it.name + (it.unit ? ` · ${it.unit}` : ''), rows: [] }; groups.push(byBase[base]) }
+    if (!byBase[base]) { byBase[base] = { base, pas: pasDe(it), name: it.name + (it.unit ? ` · ${it.unit}` : ''), rows: [] }; groups.push(byBase[base]) }
     let label = ''
     if (c.kind === 'size' || (it.tmplId && !it.variantId && entVar[it.tmplId]?.length > 0)) { const v = (entVar[it.tmplId] || []).find(x => String(x.id) === sub); label = v ? v.label : '' }
     byBase[base].rows.push({ key, label, n: qty[key] })
@@ -265,7 +268,7 @@ function Recap({ cats, qty, chg, setVal, notes, setNote, autre, zone, date, time
           {g.rows.map(r => (
             <div key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
               {r.label && <span style={{ fontSize: 12.5, color: SOFT, minWidth: 64 }}>{r.label}</span>}
-              <Qbar k={r.key} n={r.n} chg={chg} setVal={setVal} mini />
+              <Qbar k={r.key} n={r.n} chg={chg} setVal={setVal} mini pas={g.pas} />
             </div>
           ))}
           <NoteArticle base={g.base} value={notes[g.base] || ''} onChange={setNote} />
