@@ -70,6 +70,16 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   const manquesCumules = [...new Map(bloques.flatMap(l => l.manques)
     .map(m => [m.produit, m])).values()]
 
+  // Produire 20 sur 31 ne consomme pas la matière de 31 : chaque composant
+  // suit la proportion, sauf celui que l'utilisateur a corrigé à la main.
+  const aConsommer = (l, c) => {
+    const saisi = (notes[l.name] || {})[c.id]
+    if (saisi !== undefined && saisi !== '') return Number(saisi)
+    const faite = faites[l.name] ?? l.demande
+    const part = l.demande > 0 ? faite / l.demande : 1
+    return Math.round(c.besoin * part * 100) / 100
+  }
+
   const basculer = n => setSel(s => (s.includes(n) ? s.filter(x => x !== n) : [...s, n]))
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
@@ -82,9 +92,11 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     const quantites = {}
     for (const n of cibles) {
       produits[n] = faites[n]
+      const l = (lignes || []).find(x => x.name === n)
       const conv = {}
-      for (const [id, v] of Object.entries(notes[n] || {})) {
-        if (v !== '' && Number(v) >= 0) conv[id] = Number(v)
+      for (const c of (l?.lignes || [])) {
+        const q = aConsommer(l, c)
+        if (q >= 0) conv[c.id] = q
       }
       if (Object.keys(conv).length) quantites[n] = conv
     }
@@ -181,9 +193,14 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                         produits sur {nb(l.demande)}
                       </span>
                       {reste > 0 && (
-                        <span className="block text-[10.5px] font-extrabold text-[#854F0B]">
-                          reliquat : {nb(reste)}
-                        </span>
+                        <>
+                          <span className="block text-[10.5px] font-extrabold text-[#854F0B]">
+                            reliquat : {nb(reste)}
+                          </span>
+                          <span className="block text-[10px] text-ink-mute leading-tight mt-0.5">
+                            matière ajustée
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -200,10 +217,12 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                             <span className="block text-[10.5px] text-ink-mute">
                               recette : {nb(c.besoin)} {c.unite}
                               {c.dispo !== null && ' · en stock ' + nb(c.dispo)}
+                              {faite !== l.demande && (notes[l.name] || {})[c.id] === undefined
+                                && ' · ajusté pour ' + nb(faite)}
                             </span>
                           </span>
                           <input type="number" min="0"
-                            value={(notes[l.name] || {})[c.id] ?? c.consomme}
+                            value={aConsommer(l, c)}
                             onChange={e => setNotes(n => ({
                               ...n, [l.name]: { ...(n[l.name] || {}), [c.id]: e.target.value },
                             }))}
