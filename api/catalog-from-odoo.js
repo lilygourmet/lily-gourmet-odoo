@@ -95,6 +95,9 @@ export default async function handler(req, res) {
   // GET /api/catalog-from-odoo?stockProd=vitrine|annexe
   if (req.query.stockProd) return handleStockProd(req, res)
 
+  // Liste à compter pour l'onglet « Inventaire annexe » (?inventaire=1).
+  if (req.query.inventaire) return handleInventaire(req, res)
+
   try {
     if (!process.env.ODOO_URL || !process.env.ODOO_USERNAME) {
       return res.status(500).json({ error: 'Server misconfigured (Odoo env vars manquantes)' })
@@ -247,6 +250,57 @@ const STOCK_PROD_LIEUX = {
   vitrine: 'WHLVP/Stock/Stock Prod',
   annexe:  'WHPDX/Stock Prod annexe',
 }
+// Emplacement compté par l'onglet « Inventaire annexe » : WHPDX/Stock Prod annexe.
+const INVENTAIRE_LOCATION = 62
+
+// On part du stock RÉEL de l'emplacement (stock.quant), pas du catalogue : on ne
+// compte que ce qui est censé s'y trouver. On garde les matières premières (MP-)
+// et les semi-finis (SM…, écrit de 5 façons dans Odoo : SM- SM. SM SMT. SMSu-).
+// Les fiches archivées sortent d'elles-mêmes : product.product les ignore.
+async function handleInventaire(req, res) {
+  try {
+    const uid = await odooAuthenticate()
+    const quants = await odooSearchRead(uid, 'stock.quant',
+      [['location_id', 'child_of', INVENTAIRE_LOCATION]], ['product_id', 'quantity'], { limit: 5000 })
+
+    const qtyById = new Map()
+    for (const q of quants) {
+      const pid = Array.isArray(q.product_id) ? q.product_id[0] : null
+      if (pid) qtyById.set(pid, (qtyById.get(pid) || 0) + (parseFloat(q.quantity) || 0))
+    }
+
+    const ids = [...qtyById.keys()]
+    const prods = []
+    for (let i = 0; i < ids.length; i += 200) {
+      prods.push(...await odooSearchRead(uid, 'product.product',
+        [['id', 'in', ids.slice(i, i + 200)]], ['id', 'display_name', 'uom_id', 'categ_id']))
+    }
+
+    const articles = []
+    for (const p of prods) {
+      const nom = String(p.display_name || '').replace(/^\[\d+\]\s*/, '')
+      const fam = /^MP[-.]/.test(nom) ? 'Matières premières'
+        : /^SM/.test(nom) ? 'Semi-finis' : null
+      if (!fam) continue
+      articles.push({
+        id: p.id, nom, fam,
+        uom: (p.uom_id && p.uom_id[1]) || '',
+        cat: (p.categ_id && p.categ_id[1]) || 'Sans catégorie',
+        qty: Math.round((qtyById.get(p.id) || 0) * 100) / 100,
+      })
+    }
+    articles.sort((a, b) =>
+      (a.fam === b.fam ? 0 : a.fam === 'Matières premières' ? -1 : 1)
+      || a.cat.localeCompare(b.cat, 'fr')
+      || a.nom.localeCompare(b.nom, 'fr'))
+
+    return res.status(200).json({ location: 'WHPDX/Stock Prod annexe', articles })
+  } catch (e) {
+    console.error('[inventaire]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
 async function handleStockProd(req, res) {
   try {
     const lieu = String(req.query.stockProd || '').toLowerCase()
