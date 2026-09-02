@@ -6,6 +6,7 @@ import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
+import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
 import { poidsUnite, versUnite } from '../lib/unites'
 
@@ -196,6 +197,17 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       .catch(() => { if (vivant) setJournal([]) })
     return () => { vivant = false }
   }, [jour])
+
+  // La tablette reste ouverte toute la journée sur cet écran : sans ça, les
+  // stocks affichés restaient ceux du matin pendant qu'Odoo bougeait. On
+  // recharge quand la tablette se réveille ou qu'on revient sur l'onglet, plus
+  // un filet toutes les 15 minutes. Le cache de 3 min de l'API protège Odoo.
+  useEffect(() => refreshOnReturn(() => {
+    loadArbreAnnexe()
+      .then(a => { setArbre(a); garderEcran('annexe', a); setErreur(null) })
+      .catch(() => { })
+    loadFabProd(jour, ATELIER).then(setJournal).catch(() => { })
+  }), [jour])
 
   const recettes = (arbre && arbre.recettes) || {}
   const stocks = (arbre && arbre.stocks) || {}
