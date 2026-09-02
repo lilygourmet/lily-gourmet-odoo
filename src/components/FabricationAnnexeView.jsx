@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
-import { dernierEcran, garderEcran, creerOfPrepa } from '../lib/fabrication'
+import { dernierEcran, garderEcran, creerOfPrepa, annulerOfPrepa } from '../lib/fabrication'
 import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
 import { poidsUnite, versUnite } from '../lib/unites'
@@ -570,18 +570,17 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     const u = r ? r.sortUnite : 'u'
     setCreation(nom)                       // verrou : un seul envoi à la fois
     try {
-      const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER)
-      setJournal(l => [...(l || []), ligne])
-      setBesoins(b => ({ ...b, [nom]: 0 }))
-      setHisto(null)
       let msg = propre(nom) + ' — ' + nb(f) + ' fois'
       const deja = ordreDe(nom)
+      let ordre = deja ? deja.name : null
+      let cree = false
       if (deja) {
         msg += ' · ordre ' + deja.name
       } else {
         try {
           const of = await creerOfPrepa(nom, qte, user?.id, [], u)
           if (of && of.name && !of.error) {
+            if (!of.test) { ordre = of.name; cree = true }
             setOrdresLocaux(o => ({ ...o, [nom]: { name: of.name, qty: qte, state: 'draft', origin: '' } }))
             msg += of.test ? ' · mode test, aucun ordre créé' : ' · ordre ' + of.name + ' créé'
           } else if (of && of.error) {
@@ -591,6 +590,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
           toast.error('Fabrication notée, mais ordre non créé : ' + (e.message || e))
         }
       }
+      const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER, ordre, cree)
+      setJournal(l => [...(l || []), ligne])
+      setBesoins(b => ({ ...b, [nom]: 0 }))
+      setHisto(null)
       setSaisie(null)
       setPile([])
       toast.success(msg)
@@ -634,11 +637,23 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     )
   }
 
+  // Annuler une déclaration annule aussi l'ordre Odoo QUE L'APP AVAIT CRÉÉ.
+  // Un ordre qu'Odoo tenait déjà de lui-même n'est jamais touché.
   const retirerLigne = async id => {
     try {
-      await delFabProd(id)
+      const aAnnuler = await delFabProd(id)
       setJournal(l => (l || []).filter(x => x.id !== id))
       setHisto(null)
+      if (aAnnuler) {
+        const r = await annulerOfPrepa([aAnnuler])
+        if (r && r.test) toast.success('Mode test : ordre ' + aAnnuler + ' non annulé')
+        else toast.success('Ordre ' + aAnnuler + ' annulé dans Odoo')
+        setOrdresLocaux(o => {
+          const c = { ...o }
+          for (const k of Object.keys(c)) if (c[k].name === aAnnuler) delete c[k]
+          return c
+        })
+      }
     } catch (e) { toast.error('Impossible de retirer : ' + (e.message || e)) }
   }
 

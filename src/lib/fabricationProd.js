@@ -84,10 +84,21 @@ export async function loadFabProd(jour, atelier = 'prod') {
  * a été faite ; `qty` = ce que ça produit, pour garder une trace chiffrée même
  * si la recette change plus tard dans Odoo.
  */
-export async function addFabProd(jour, article, qty, unite, userId, fois = null, atelier = 'prod') {
+export async function addFabProd(jour, article, qty, unite, userId, fois = null, atelier = 'prod',
+  ordre = null, ordreCree = false) {
+  const base = { jour, article, qty, unite, fois, atelier, fait_par: userId || null, fait_le: new Date().toISOString() }
+  const champs = 'id, article, qty, unite, fois, fait_par, fait_le'
+  // Les colonnes `ordre` / `ordre_cree` peuvent ne pas exister encore (SQL à
+  // lancer) : on retente sans elles plutôt que de bloquer la déclaration.
+  if (ordre) {
+    const { data, error } = await supabase.from('prod_fabrications')
+      .insert({ ...base, ordre, ordre_cree: !!ordreCree })
+      .select(champs + ', ordre, ordre_cree').single()
+    if (!error) return data
+    if (!/ordre/.test(error.message || '')) throw error
+  }
   const { data, error } = await supabase.from('prod_fabrications')
-    .insert({ jour, article, qty, unite, fois, atelier, fait_par: userId || null, fait_le: new Date().toISOString() })
-    .select('id, article, qty, unite, fois, fait_par, fait_le').single()
+    .insert(base).select(champs).single()
   if (error) throw error
   return data
 }
@@ -112,9 +123,19 @@ export async function loadConsommateurs(article, jour) {
 }
 
 /** Retirer une ligne du journal : on doit toujours pouvoir défaire un clic. */
+/**
+ * Retire une déclaration. Renvoie l'ordre Odoo à annuler s'il avait été créé
+ * PAR L'APP — jamais un ordre qu'Odoo tenait déjà : celui-là ne nous
+ * appartient pas.
+ */
 export async function delFabProd(id) {
+  let aAnnuler = null
+  const { data } = await supabase.from('prod_fabrications')
+    .select('ordre, ordre_cree').eq('id', id).maybeSingle()
+  if (data && data.ordre && data.ordre_cree) aAnnuler = data.ordre
   const { error } = await supabase.from('prod_fabrications').delete().eq('id', id)
   if (error) throw error
+  return aAnnuler
 }
 
 /** Les articles ajoutés à la main depuis l'onglet, en plus de la liste de base. */
