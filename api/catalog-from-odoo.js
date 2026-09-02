@@ -40,6 +40,17 @@ async function odooAuthenticate() {
   return uid
 }
 
+// Regroupement Odoo : bien plus léger qu'un search_read quand on ne veut que la
+// LISTE des produits concernés (une ligne par produit au lieu de tous les mouvements).
+async function odooReadGroup(uid, model, domain, fields, groupby, opts = {}) {
+  return await odooJsonRpc('object', 'execute_kw', [
+    process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD,
+    model, 'read_group',
+    [domain, fields, groupby],
+    { lazy: false, ...opts },
+  ])
+}
+
 async function odooSearchRead(uid, model, domain, fields, opts = {}) {
   return await odooJsonRpc('object', 'execute_kw', [
     process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD,
@@ -252,6 +263,8 @@ const STOCK_PROD_LIEUX = {
 }
 // Emplacement compté par l'onglet « Inventaire annexe » : WHPDX/Stock Prod annexe.
 const INVENTAIRE_LOCATION = 62
+// 3e famille de la feuille : présents dans l'activité de l'annexe, mais qu'Odoo croit à zéro.
+const FAM_ZERO = 'À zéro chez Odoo'
 
 // On part du stock RÉEL de l'emplacement (stock.quant), pas du catalogue : on ne
 // compte que ce qui est censé s'y trouver. On garde les matières premières (MP-)
@@ -289,8 +302,41 @@ async function handleInventaire(req, res) {
         qty: Math.round((qtyById.get(p.id) || 0) * 100) / 100,
       })
     }
+    // ── Articles à ZÉRO qui appartiennent quand même à l'annexe ─────────────
+    // La liste ci-dessus part du stock : un article tombé à zéro en disparaît, et
+    // personne ne peut donc le compter (c'est ce qui a obligé à en rajouter 21 à
+    // la main au premier inventaire). On récupère donc aussi ceux qui ont
+    // réellement circulé dans ce lieu sur l'année — pas tout le catalogue Odoo,
+    // qui n'a rien à voir avec l'annexe.
+    const depuis = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString().slice(0, 10)
+    const bouges = new Set()
+    for (const champ of ['location_id', 'location_dest_id']) {
+      const g = await odooReadGroup(uid, 'stock.move.line',
+        [[champ, 'child_of', INVENTAIRE_LOCATION], ['date', '>=', depuis], ['state', '=', 'done']],
+        ['product_id'], ['product_id'])
+      for (const r of g) if (Array.isArray(r.product_id)) bouges.add(r.product_id[0])
+    }
+    const aZero = [...bouges].filter(id => !qtyById.has(id))
+    const infosZero = []
+    for (let i = 0; i < aZero.length; i += 200) {
+      infosZero.push(...await odooSearchRead(uid, 'product.product',
+        [['id', 'in', aZero.slice(i, i + 200)], ['active', '=', true]],
+        ['id', 'display_name', 'uom_id', 'categ_id']))
+    }
+    for (const p of infosZero) {
+      const nom = String(p.display_name || '').replace(/^\[\d+\]\s*/, '')
+      if (!/^MP[-.]/.test(nom) && !/^SM/i.test(nom)) continue
+      articles.push({
+        id: p.id, nom, fam: FAM_ZERO,
+        uom: (p.uom_id && p.uom_id[1]) || '',
+        cat: (p.categ_id && p.categ_id[1]) || 'Sans catégorie',
+        qty: 0,
+      })
+    }
+
+    const rang = f => f === 'Matières premières' ? 0 : f === 'Semi-finis' ? 1 : 2
     articles.sort((a, b) =>
-      (a.fam === b.fam ? 0 : a.fam === 'Matières premières' ? -1 : 1)
+      (rang(a.fam) - rang(b.fam))
       || a.cat.localeCompare(b.cat, 'fr')
       || a.nom.localeCompare(b.nom, 'fr'))
 

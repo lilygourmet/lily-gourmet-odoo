@@ -35,6 +35,7 @@ const TAB_DEFS = [
   { view: 'stock-prod-vitrine', emoji: '🛍️', label: 'Stock Prod Vitrine', can: u => !isLivreur(u) && canStockProdVitrine(u) },
   { view: 'stock-prod-annexe',  emoji: '🏭', label: 'Stock Prod Annexe',  can: u => !isLivreur(u) && canStockProdAnnexe(u) },
   { view: 'inventaire',        emoji: '📦', label: 'Inventaire annexe',  can: u => !isLivreur(u) && canSeeInventaire(u) },
+  { view: 'inventaire-zero',   emoji: '🔍', label: 'Inventaire — à zéro', can: u => !isLivreur(u) && canSeeInventaire(u) },
   { view: 'patissier',         emoji: '🧁', label: 'Accessoires',       can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_patissier) },
   { view: 'vitrine',           emoji: '🥐', label: 'Vitrine',           can: u => !isLivreur(u) && canStockPatissier(u) },
   { view: 'vitrine-previsions', emoji: '📈', label: 'Prévisions vitrine', can: u => !isLivreur(u) && canStockPatissier(u) },

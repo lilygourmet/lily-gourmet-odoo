@@ -14,9 +14,14 @@ import {
   loadAjouts, addAjout, updateAjout, deleteAjout, tableauInventaire, calculer,
 } from '../lib/inventaire'
 
+const FAM_ZERO = 'À zéro chez Odoo'
 const FAMILLES = ['Matières premières', 'Semi-finis']
 
-export default function InventaireView({ user, activeView, onNavigate, onLogout }) {
+// mode 'stock'  : ce qui a du stock dans l'annexe (l'inventaire d'origine)
+// mode 'zero'   : ce que l'annexe utilise mais qu'Odoo croit à zéro — volontairement
+//                 dans un onglet À PART pour ne pas se mélanger avec le premier comptage.
+export default function InventaireView({ user, activeView, onNavigate, onLogout, mode = 'stock' }) {
+  const estZero = mode === 'zero'
   const [loading, setLoading] = useState(true)
   const [articles, setArticles] = useState([])
   const [comptes, setComptes] = useState({})      // product_id -> ligne de comptage
@@ -30,12 +35,12 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout 
   const load = useCallback(async () => {
     try {
       const [arts, cpt, ajs] = await Promise.all([loadArticlesInventaire(), loadComptages(), loadAjouts()])
-      setArticles(arts)
+      setArticles(arts.filter(a => (a.fam === FAM_ZERO) === estZero))
       setComptes(Object.fromEntries(cpt.map(c => [c.product_id, c])))
       setAjouts(ajs)
     } catch (e) { toast.error('Chargement impossible : ' + e.message) }
     setLoading(false)
-  }, [])
+  }, [estZero])
   // load() ne touche à l'état qu'APRÈS son `await` : la règle ne sait pas le voir
   // et croit à un rendu en cascade. L'écran démarre déjà en « chargement ».
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -112,8 +117,14 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout 
 
         <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-[24px] font-semibold text-ink tracking-tight">📦 Inventaire annexe</h1>
-            <p className="text-[13px] text-ink-mute mt-1">Stock Prod annexe — matières premières et semi-finis</p>
+            <h1 className="text-[24px] font-semibold text-ink tracking-tight">
+              {estZero ? '🔍 Inventaire — articles à zéro' : '📦 Inventaire annexe'}
+            </h1>
+            <p className="text-[13px] text-ink-mute mt-1">
+              {estZero
+                ? "Utilisés à l'annexe cette année, mais qu'Odoo croit à zéro"
+                : 'Stock Prod annexe — matières premières et semi-finis'}
+            </p>
           </div>
           <button onClick={load} className="px-3 py-2 rounded-full bg-bordeaux text-cream text-[13px] flex items-center gap-1.5 hover:bg-bordeaux-deep">
             <RefreshCw size={14} strokeWidth={1.8} /> <span className="hidden sm:inline">Recharger</span>
@@ -149,7 +160,7 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout 
             <div className="flex gap-2 overflow-x-auto pb-1 mb-2" style={{ scrollbarWidth: 'none' }}>
               <Chip actif={famille === null} onClick={() => setFamille(null)}
                 label="Tout" compteur={`${totalFaits}/${articles.length}`} />
-              {FAMILLES.map(f => {
+              {!estZero && FAMILLES.map(f => {
                 const tot = articles.filter(a => a.fam === f).length
                 if (!tot) return null
                 const fait = articles.filter(a => a.fam === f && comptes[a.id]).length
