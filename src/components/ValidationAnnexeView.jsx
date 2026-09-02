@@ -50,7 +50,20 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         // déclaration disparaissait et rien ne pouvait être validé.
         const parOrdre = new Map()
         const sans = new Map()
+        const ouvertsParNom = new Map(Object.values(ordres).map(o => [o.name, o]))
         for (const d of journal || []) {
+          // La déclaration sait à quel ordre elle se rattache. S'il n'est plus
+          // ouvert, c'est qu'il a été validé (ou annulé) : il n'y a plus rien à
+          // faire — sans ça l'écran réclamait d'en créer un deuxième pour du
+          // travail déjà validé.
+          if (d.ordre) {
+            const vivant = ouvertsParNom.get(d.ordre)
+            if (!vivant) continue
+            if (!parOrdre.has(d.ordre)) {
+              parOrdre.set(d.ordre, { name: d.ordre, article: d.article, demande: vivant.qty, etat: vivant.state })
+            }
+            continue
+          }
           const o = ordres[d.article]
           if (o) {
             if (!parOrdre.has(o.name)) {

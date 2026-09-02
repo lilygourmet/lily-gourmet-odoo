@@ -69,12 +69,14 @@ export async function loadHistorique(jours = 60, atelier = 'prod') {
  * été notées. Le même article peut y revenir plusieurs fois — c'est le but.
  */
 export async function loadFabProd(jour, atelier = 'prod') {
-  const { data, error } = await supabase
-    .from('prod_fabrications')
-    .select('id, article, qty, unite, fois, fait_par, fait_le')
-    .eq('jour', jour)
-    .eq('atelier', atelier)
-    .order('fait_le', { ascending: true })
+  const lire = champs => supabase.from('prod_fabrications').select(champs)
+    .eq('jour', jour).eq('atelier', atelier).order('fait_le', { ascending: true })
+  const base = 'id, article, qty, unite, fois, fait_par, fait_le'
+  // `ordre` dit à quel ordre Odoo la déclaration se rattache. La colonne peut
+  // ne pas exister (SQL pas encore lancé) : on retombe sur l'ancienne lecture.
+  const avec = await lire(base + ', ordre, ordre_cree')
+  if (!avec.error) return avec.data || []
+  const { data, error } = await lire(base)
   if (error) throw error
   return data || []
 }
