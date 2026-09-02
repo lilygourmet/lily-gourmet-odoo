@@ -52,6 +52,8 @@ export default async function handler(req, res) {
 
   // Rappels quotidiens : déclenché par le cron Vercel (méthode GET autorisée).
   if (req.query?.action === 'task-reminders') return handleTaskReminders(req, res)
+  // Synchro OCP → LG Traiteur : déclenchée par le cron Vercel (GET autorisé).
+  if (req.query?.action === 'ocp-sync-lgt') return handleOcpSyncLgt(req, res)
 
   // Aiguillage selon ?action= ; sans action = réception entrante (appel de Wati)
   const action = req.query?.action
@@ -3654,17 +3656,21 @@ const exec2 = (uid, model, method, args, kw = {}) =>
 const nomComparable = s => String(s || '').replace(/^\[[^\]]*\]\s*/, '').split('\n')[0]
   .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
 
-// Recopie le devis dans LG Traiteur. Le produit réel quand il existe là-bas, sinon
-// le générique AUTRE avec le nom de l'article — c'est la méthode validée par Layla
-// (le catalogue de LG Traiteur n'a pas de produits sucrés finis).
-async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
-  const uid = await odoo2Auth()
-  // Anti-doublon : le n° L&N vit dans client_order_ref. Relancer ne recrée rien.
-  const deja = await exec2(uid, 'sale.order', 'search_read', [[['client_order_ref', '=', orderName]]], { fields: ['id', 'name'], limit: 1 })
-  if (deja.length) return { name: deja[0].name, deja: true }
+// Champs d'une ligne L&N nécessaires pour refaire la même ligne dans LG Traiteur.
+const CHAMPS_LIGNE = ['name', 'product_id', 'product_uom_qty', 'price_unit', 'discount', 'tax_id', 'display_type']
+
+// Index « nom comparable → id » du catalogue vendable de LG Traiteur (≈100 produits).
+async function catalogueLgTraiteur(uid) {
   const cat = await exec2(uid, 'product.product', 'search_read', [[['sale_ok', '=', true]]], { fields: ['id', 'name'], limit: 2000 })
   const parNom = new Map()
   for (const pr of cat) { const k = nomComparable(pr.name); if (k && !parNom.has(k)) parNom.set(k, pr.id) }
+  return parNom
+}
+
+// Lignes L&N → lignes LG Traiteur : le produit réel s'il existe là-bas, sinon le
+// générique AUTRE avec le nom de l'article (le catalogue de LG Traiteur n'a pas de
+// produits sucrés finis). Le prix repasse en HT quand la taxe LGT n'est pas incluse.
+function lignesPourLgTraiteur(lignesLN, parNom) {
   let trouves = 0
   const lignes = lignesLN.map(l => {
     const pid = parNom.get(nomComparable(Array.isArray(l.product_id) ? l.product_id[1] : l.name))
@@ -3680,6 +3686,15 @@ async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
       ...(t ? { tax_id: [[6, 0, [t.id]]] } : {}),
     }]
   })
+  return { lignes, trouves }
+}
+
+async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
+  const uid = await odoo2Auth()
+  // Anti-doublon : le n° L&N vit dans client_order_ref. Relancer ne recrée rien.
+  const deja = await exec2(uid, 'sale.order', 'search_read', [[['client_order_ref', '=', orderName]]], { fields: ['id', 'name'], limit: 1 })
+  if (deja.length) return { name: deja[0].name, deja: true }
+  const { lignes, trouves } = lignesPourLgTraiteur(lignesLN, await catalogueLgTraiteur(uid))
   const vals = {
     partner_id: LGT_CLIENT_OCP,
     client_order_ref: orderName,
@@ -3690,6 +3705,60 @@ async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
   const id = await exec2(uid, 'sale.order', 'create', [vals])   // un seul dict : Odoo renvoie un id, pas une liste
   const [o] = await exec2(uid, 'sale.order', 'search_read', [[['id', '=', id]]], { fields: ['name'] })
   return { id, name: o?.name || '', trouves, total: lignes.length }
+}
+
+// ============================================================
+// SYNCHRO OCP → LG TRAITEUR (cron toutes les 15 min)
+// La copie est faite à la création : si le devis L&N est ensuite modifié (date de
+// livraison, article, quantité), la copie ne bougeait pas. Vécu sur S52382 le
+// 2026-09-02 : date corrigée 3 min après, les deux devis ne disaient plus pareil.
+// Ici on refait les lignes de la copie à l'identique. Un devis LG Traiteur déjà
+// confirmé n'est JAMAIS touché.
+// ============================================================
+async function handleOcpSyncLgt(req, res) {
+  try {
+    const heures = Math.min(Number(req.query?.heures) || 48, 24 * 30)
+    const uid = await odooAuthenticate()
+    const partner = await odooSearchRead(uid, 'res.partner', [['name', '=ilike', 'LG traiteur OCP']], ['id'], { limit: 1 })
+    if (!partner.length) return res.status(200).json({ ok: true, vus: 0, majs: [], note: 'client OCP introuvable' })
+    const depuis = new Date(Date.now() - heures * 3600000).toISOString().slice(0, 19).replace('T', ' ')
+    const ordres = await odooSearchRead(uid, 'sale.order',
+      [['partner_id', '=', partner[0].id], ['write_date', '>=', depuis]],
+      ['id', 'name', 'commitment_date', 'amount_total'], { limit: 200 })
+    if (!ordres.length) return res.status(200).json({ ok: true, vus: 0, majs: [] })
+
+    const uid2 = await odoo2Auth()
+    const copies = await exec2(uid2, 'sale.order', 'search_read',
+      [[['client_order_ref', 'in', ordres.map(o => o.name)]]],
+      { fields: ['id', 'name', 'client_order_ref', 'commitment_date', 'amount_total', 'state'] })
+    if (!copies.length) return res.status(200).json({ ok: true, vus: ordres.length, majs: [] })
+    const parRef = new Map(copies.map(c => [c.client_order_ref, c]))
+
+    let parNom = null   // catalogue chargé seulement si une mise à jour est vraiment nécessaire
+    const majs = [], ignores = []
+    for (const o of ordres) {
+      const c = parRef.get(o.name)
+      if (!c) continue
+      // Le total de la copie est identique à celui de L&N par construction : si le
+      // total ET la date n'ont pas bougé, il n'y a rien à reporter.
+      if (String(c.commitment_date || '') === String(o.commitment_date || '')
+        && Math.abs((c.amount_total || 0) - (o.amount_total || 0)) < 0.01) continue
+      if (c.state !== 'draft') { ignores.push(`${c.name} (${c.state})`); continue }
+      if (!parNom) parNom = await catalogueLgTraiteur(uid2)
+      const lignesLN = (await odooSearchRead(uid, 'sale.order.line', [['order_id', '=', o.id]], CHAMPS_LIGNE)).filter(l => !l.display_type)
+      const { lignes } = lignesPourLgTraiteur(lignesLN, parNom)
+      await exec2(uid2, 'sale.order', 'write', [[c.id], {
+        commitment_date: o.commitment_date || false,
+        order_line: [[5, 0, 0], ...lignes],   // 5 = on vide les lignes, puis on les refait
+      }])
+      majs.push(`${o.name} → ${c.name}`)
+    }
+    console.log(`[ocp-sync-lgt] ${ordres.length} devis vus, ${majs.length} mis a jour${ignores.length ? `, ignores : ${ignores.join(', ')}` : ''}`)
+    return res.status(200).json({ ok: true, vus: ordres.length, majs, ignores })
+  } catch (e) {
+    console.error('[ocp-sync-lgt]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
 }
 
 async function handleOrderCreateOcp(req, res) {
@@ -3773,7 +3842,7 @@ async function handleOrderCreateOcp(req, res) {
     let lgt = null
     try {
       const lignesLN = await odooSearchRead(uid, 'sale.order.line', [['order_id', '=', orderId]],
-        ['name', 'product_id', 'product_uom_qty', 'price_unit', 'discount', 'tax_id', 'display_type'])
+        CHAMPS_LIGNE)
       lgt = await copieDevisLgTraiteur(orderName, lignesLN.filter(l => !l.display_type), vals.commitment_date)
       console.log(`[ocp-devis] LG Traiteur ${lgt.name}${lgt.deja ? ' (deja la)' : ` (${lgt.trouves}/${lgt.total} vrais produits)`}`)
     } catch (e) { console.warn('[ocp-devis] LG Traiteur echoue :', e?.message || e) }

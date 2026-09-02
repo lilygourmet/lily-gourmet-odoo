@@ -28,6 +28,10 @@
     {
       "source": "/api/check-cd-parents",
       "destination": "/api/freezer-list?mode=parents-pos"
+    },
+    {
+      "source": "/api/ocp-sync-lgt",
+      "destination": "/api/wati-webhook?action=ocp-sync-lgt"
     }
   ],
   "crons": [
@@ -46,6 +50,10 @@
     {
       "path": "/api/check-cd-parents",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/ocp-sync-lgt",
+      "schedule": "*/15 6-22 * * *"
     }
   ]
 }
