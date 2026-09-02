@@ -67,6 +67,14 @@ const estPr = nom => /^Pr\s/i.test(propre(nom))
 // Un « cadre » sort 46, 88 ou 243 pièces d'un coup : il se compte en
 // cadres ENTIERS, on ne monte pas 1,8 cadre.
 const estCadre = nom => /\bcadres?\b/i.test(String(nom || ''))
+// Le parfum est entre parenthèses en fin de nom — « Tartelettes (Chocolat) ».
+// courtNom l'enlevait : on le sort en étiquette, comme la taille.
+const parfum = nom => {
+  const m = String(nom || '').match(/\(([^()]*)\)\s*$/)
+  if (!m) return null
+  const t = m[1].trim()
+  return (!t || /^\d+$/.test(t)) ? null : t
+}
 
 function courtNom(nom) {
   let t = propre(nom).replace(/^Pr\s+/i, '')
@@ -84,13 +92,15 @@ function courtNom(nom) {
 function Etiquettes({ nom, petit }) {
   const t = taille(nom)
   const pr = estPr(nom)
-  if (!pr && !t) return null
+  const p = parfum(nom)
+  if (!pr && !t && !p) return null
   const base = 'shrink-0 font-extrabold uppercase tracking-wide rounded '
     + (petit ? 'text-[9px] px-1' : 'text-[9.5px] px-1 py-px')
   return (
     <>
       {pr && <b className={base + ' text-cream bg-bordeaux'}>PR</b>}
       {t && <b className={base + ' text-bordeaux bg-cream-warm border border-line'}>{t}</b>}
+      {p && <b className={base + ' text-[#854F0B] bg-[#FFF7E0] border border-[#e6d3a3] normal-case tracking-normal'}>{p}</b>}
     </>
   )
 }
@@ -329,8 +339,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     // réellement fabriqués ici (cookies, mignardises, cadres...), les plus
     // fabriqués en tête. La liste ne montrait que les 61 gâteaux.
     const combien = (arbre.combien || {})
-    return [...new Set([...(arbre.racines || []), ...Object.keys(combien)])]
-      .filter(n => !caches.includes(n))
+    const tous = new Set([...(arbre.racines || []), ...Object.keys(combien)])
+    // Un article qui entre dans la recette d'un autre reste DANS son dossier :
+    // « Voile mangue passion » se trouve sous « Cheesecake Exotique », on ne
+    // le sort pas de sa liste. 167 articles sur 274 sont dans ce cas.
+    const composant = new Set()
+    for (const r of Object.values(recettes)) {
+      for (const l of (r.lignes || [])) if (tous.has(l.produit)) composant.add(l.produit)
+    }
+    return [...tous]
+      .filter(n => !caches.includes(n) && !composant.has(n))
       .sort((x, y) => (combien[y] || 0) - (combien[x] || 0) || x.localeCompare(y))
   }, [arbre, caches, q])
 
