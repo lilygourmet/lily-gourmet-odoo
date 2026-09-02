@@ -2893,7 +2893,7 @@ async function handleDevisCancel(req, res) {
     }
 
     // Devis OCP annulé → notif aux mêmes destinataires (admins + « Notif devis OCP »).
-    if (/\bOCP\b/i.test(partnerName)) notifyOcpCancel(name).catch(() => {})
+    if (/\bOCP\b/i.test(partnerName)) runAfterResponse(notifyOcpCancel(name))
     return res.status(200).json({ ok: true, name, state: newState, mosRecap, mosPending })
   } catch (e) {
     console.error('[devis-cancel]', e?.message || e)
@@ -3469,11 +3469,13 @@ async function notifyOcpOrder(orderName, date, detail) {
     if (!dejaLa.has(OCP_RECAP_WHATSAPP.slice(-9))) recipients.push({ whatsapp: OCP_RECAP_WHATSAPP })
     if (!recipients.length) return { recipients: 0, sent: 0 }
     const text = `🍽️ Devis OCP ${orderName}${date ? ` (livraison ${date})` : ''} : ${detail || '—'}`
-    let sent = 0
-    for (const u of recipients) {
-      const ok = await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
-      if (ok) sent++
-    }
+    // ⚠️ EN PARALLÈLE, jamais l'un après l'autre. Un envoi peut attendre jusqu'à 25 s
+    // (2 appels Wati × 25 s de délai max) : à la file, 19 destinataires = jusqu'à 16 min,
+    // et Vercel gèle la fonction bien avant. Vécu sur S52382 le 2026-09-02 : les
+    // premiers de la liste ont reçu le récap, les autres jamais.
+    const sent = (await Promise.all(recipients.map(u =>
+      sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
+    ))).filter(Boolean).length
     console.log(`[ocp-notif] ${recipients.length} destinataire(s), ${sent} envoyé(s) pour ${orderName}`)
     return { recipients: recipients.length, sent }
   } catch (e) { console.warn('[ocp-notif]', e?.message || e); return { error: e?.message || String(e) } }
@@ -3487,11 +3489,9 @@ async function notifyOcpCancel(orderName) {
     const recipients = (users || []).filter(u => (u.active === undefined || u.active) && String(u.whatsapp || '').replace(/\D/g, '').length >= 8)
     if (!recipients.length) return { recipients: 0, sent: 0 }
     const text = `❌ Devis OCP ${orderName} ANNULÉ.`
-    let sent = 0
-    for (const u of recipients) {
-      const ok = await sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
-      if (ok) sent++
-    }
+    const sent = (await Promise.all(recipients.map(u =>
+      sendReminderWhatsapp(supabase, u.whatsapp, text, { name: 'wati_info', parameters: [{ name: '1', value: text }] })
+    ))).filter(Boolean).length
     console.log(`[ocp-cancel] ${recipients.length} destinataire(s), ${sent} envoyé(s) pour ${orderName}`)
     return { recipients: recipients.length, sent }
   } catch (e) { console.warn('[ocp-cancel]', e?.message || e); return { error: e?.message || String(e) } }
@@ -3767,7 +3767,7 @@ async function handleOrderCreateOcp(req, res) {
     // Puces en ligne (WhatsApp refuse les vrais retours à la ligne dans les modèles).
     let detail = detailParts.map(p => `▪️ ${p}`).join(' ')
     if (detail.length > 950) detail = detail.slice(0, 950) + '…'
-    notifyOcpOrder(orderName, date, detail).catch(() => {})
+    runAfterResponse(notifyOcpOrder(orderName, date, detail))
     // 2e devis dans LG Traiteur (client OCP SA). On relit les lignes TELLES QU'ODOO
     // les a enregistrées (taxes et prix compris) pour recopier à l'identique.
     let lgt = null
