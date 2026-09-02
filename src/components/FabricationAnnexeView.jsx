@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
-import { dernierEcran, garderEcran } from '../lib/fabrication'
+import { dernierEcran, garderEcran, creerOfPrepa } from '../lib/fabrication'
 import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
 import { poidsUnite, versUnite } from '../lib/unites'
@@ -176,6 +176,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
   const [q, setQ] = useState('')
+  // Les ordres Odoo créés depuis l'écran, en attendant le prochain chargement.
+  const [ordresLocaux, setOrdresLocaux] = useState({})
+  const [creation, setCreation] = useState(null)
 
   useEffect(() => {
     let vivant = true
@@ -241,6 +244,25 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return Math.max(0, (mm.max || mm.min) - st)
   }
   // convertit une quantité vers l'unité dans laquelle Odoo compte cet article
+  // L'ordre de fabrication qu'Odoo tient déjà pour cet article, s'il existe.
+  const ordreDe = nom => ordresLocaux[nom] || ((arbre && arbre.ordres) || {})[nom]
+
+  // Verrou d'écran : deux appuis rapprochés ne doivent pas créer deux ordres.
+  const creerOrdre = async (nom, qte) => {
+    if (creation) return
+    setCreation(nom)
+    try {
+      const r = await creerOfPrepa(nom, qte, user?.id, [], uniteDe(nom))
+      if (r && r.error) toast.error(r.error)
+      else if (r && r.test) toast.success('Mode test : aucun ordre créé dans Odoo')
+      else if (r && r.name) {
+        setOrdresLocaux(o => ({ ...o, [nom]: { name: r.name, qty: qte, state: 'draft', origin: '' } }))
+        toast.success('Ordre ' + r.name + ' créé' + (r.deja ? ' (déjà existant)' : ''))
+      }
+    } catch (e) { toast.error(e.message || String(e)) }
+    setCreation(null)
+  }
+
   const uniteDe = nom => String((recettes[nom] && recettes[nom].sortUnite) || '').trim()
   // Un besoin s'arrondit dans SON unité : au centième pour des kilos, à
   // l'entier pour des grammes ou des pièces. Math.round() écrasait à zéro
@@ -955,6 +977,32 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 </span>
               </b>
             </div>
+            {!estMere && (() => {
+              const o = ordreDe(saisie)
+              const r = recettes[saisie]
+              const qte = r && r.sortQty > 0 ? Math.round(r.sortQty * fois * 100) / 100 : fois
+              if (o) {
+                return (
+                  <p className="text-[11.5px] text-ink-mute mb-2 leading-snug">
+                    ordre Odoo <b className="font-mono text-ink-soft">{o.name}</b>
+                    {' · '}{o.state === 'draft' ? 'brouillon' : o.state === 'confirmed' ? 'confirmé' : o.state}
+                    {' · '}{nbQ(o.qty, uniteDe(saisie))} {uniteDe(saisie)}
+                  </p>
+                )
+              }
+              return (
+                <button onClick={() => creerOrdre(saisie, qte)} disabled={!!creation}
+                  className={'w-full mb-2.5 rounded-2xl px-3.5 py-2.5 text-[12.5px] font-bold text-left border '
+                    + (creation === saisie
+                      ? 'border-line bg-cream-warm text-ink-mute'
+                      : 'border-[#b58f3c] text-[#b58f3c] bg-[#FBF3DF]')}>
+                  {creation === saisie
+                    ? 'Création en cours…'
+                    : <>Aucun ordre dans Odoo — <b>en créer un de {nbQ(qte, uniteDe(saisie))} {uniteDe(saisie)}</b></>}
+                </button>
+              )
+            })()}
+
             {pile.length > 0 && (
               <p className="text-[12px] text-ink-mute -mt-1 mb-2">
                 pour faire <b>{courtNom(pile[pile.length - 1])}</b>

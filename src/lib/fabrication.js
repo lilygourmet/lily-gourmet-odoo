@@ -99,11 +99,11 @@ export async function reserverOrdres(ordres, on) {
  * Crée dans Odoo l'ordre de fabrication d'une préparation qu'Odoo ne demandait
  * pas (crème au beurre nature…). Renvoie { name } ou { error }.
  */
-export async function creerOfPrepa(produit, qty, actorId, parents = []) {
+export async function creerOfPrepa(produit, qty, actorId, parents = [], unite = null) {
   const r = await fetch('/api/freezer-list?mode=creer-of', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ produit, qty, actorId, parents, test: estModeTest() }),
+    body: JSON.stringify({ produit, qty, actorId, parents, unite, test: estModeTest() }),
   })
   return await r.json()
 }

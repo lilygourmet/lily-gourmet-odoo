@@ -789,7 +789,7 @@ const ORIGINE_APP = 'LG-APP'
  * faire alors qu'Odoo n'en demandait pas (une crème au beurre nature, par
  * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
  */
-async function creerOfPreparation(uid, nomProduit, qtyKg, parents = []) {
+async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null) {
   const prod = (await odooSearchRead(uid, 'product.product',
     [['name', '=', nomProduit]], ['id', 'display_name', 'uom_id', 'product_tmpl_id'], { limit: 1 }))[0]
   if (!prod) throw new Error('article introuvable dans Odoo : ' + nomProduit)
@@ -798,7 +798,12 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = []) {
   if (!bom) throw new Error('recette introuvable dans Odoo pour ' + prod.display_name)
 
   const uniteBom = Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'kg'
-  const qty = Math.round((/^kg$/i.test(uniteBom) ? qtyKg : qtyKg * 1000) * 1000) / 1000
+  // `unite` dit dans quelle unité la quantité est exprimée (annexe : pièces,
+  // grammes, kilos…). Sans elle on garde l'ancienne convention du CD, qui
+  // parle toujours en kilos — sinon 191 pièces devenaient 191 000.
+  const brut = unite ? versUnite(qtyKg, unite, uniteBom)
+    : (/^kg$/i.test(uniteBom) ? qtyKg : qtyKg * 1000)
+  const qty = Math.round(brut * 1000) / 1000
   if (!(qty > 0)) throw new Error('quantité invalide')
 
   const origine = [...parents, ORIGINE_APP].join(',')
@@ -1568,7 +1573,7 @@ export default async function handler(req, res) {
       if (body.test) return res.status(200).json({ name: 'TEST (rien créé dans Odoo)', test: true })
       const uid = await odooAuth()
       try {
-        const of = await creerOfPreparation(uid, produit, qtyKg, (body.parents || []).filter(Boolean))
+        const of = await creerOfPreparation(uid, produit, qtyKg, (body.parents || []).filter(Boolean), body.unite || null)
         console.log(`[creer-of] ${produit} ${qtyKg} kg par ${body.actorId || '?'} → ${of.name}`)
         return res.status(200).json(of)
       } catch (e) {
