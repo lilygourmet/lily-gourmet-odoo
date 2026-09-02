@@ -1961,20 +1961,18 @@ export default async function handler(req, res) {
       // qu'à l'annexe fait foi ; on ne retient celle de l'annexe que si
       // Odoo n'en a aucune autre. Dans les deux cas il faut un minimum
       // vraiment renseigné, sinon la règle ne dit rien.
+      // SEULES les règles posées à l'annexe comptent (choix de Layla, 02/09/2026).
+      // Avant, une règle posée à la boutique faisait foi : 29 articles sur 64
+      // — surtout les gâteaux CD — recevaient un seuil qui n'était pas celui de
+      // l'atelier qui les fabrique.
       const idsAnnexe = new Set(lieux.map(l => l.id))
-      const ailleurs = {}
-      const aLAnnexeMM = {}
+      const minmax = {}
       for (const o of points) {
         const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
         if (!n || !((o.product_min_qty || 0) > 0)) continue
-        const cible = idsAnnexe.has(Array.isArray(o.location_id) ? o.location_id[0] : o.location_id)
-          ? aLAnnexeMM : ailleurs
-        if (!cible[n]) cible[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
-      }
-      const minmax = {}
-      for (const n of new Set([...Object.keys(ailleurs), ...Object.keys(aLAnnexeMM)])) {
-        const r = ailleurs[n] || aLAnnexeMM[n]
-        minmax[n] = { min: r.min, max: r.max }
+        const loc = Array.isArray(o.location_id) ? o.location_id[0] : o.location_id
+        if (!idsAnnexe.has(loc)) continue
+        if (!minmax[n]) minmax[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
       }
 
       top('stocks et min/max')

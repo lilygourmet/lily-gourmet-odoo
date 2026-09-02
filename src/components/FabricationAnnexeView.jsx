@@ -544,6 +544,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     </span>
                   </span>
                   <span className="text-[17px] font-extrabold text-ok whitespace-nowrap">{nbQ(l.qty, l.unite)} {l.unite}</span>
+                  <button onClick={() => retirerLigne(l.id)} title="Annuler cette ligne"
+                    className="w-9 h-9 shrink-0 border border-line rounded-xl grid place-items-center">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-danger fill-none" strokeWidth="2.6"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                  </button>
                 </div>
               ))}
             </div>
