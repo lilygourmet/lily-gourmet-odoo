@@ -144,8 +144,22 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         qty: Number(a.qty) / (norm(a.unite) === 'kg' ? 1000 : 1),
       }))
     }
-    try { setResultats(await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer, enPlus)) }
-    catch (e) { toast.error(e.message || String(e)) }
+    try {
+      const res = await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer, enPlus)
+      setResultats(res)
+      // Ce qui est validé n'a plus rien à faire dans la liste. Ce qui a échoué
+      // y reste, avec son message : c'est encore à traiter.
+      const faits = new Set(res.filter(r => r.ok).map(r => r.name))
+      if (faits.size) {
+        setLignes(l => {
+          const reste = (l || []).filter(x => !faits.has(x.name))
+          garderEcran('valider', reste)
+          return reste
+        })
+        setSel(s2 => s2.filter(n => !faits.has(n)))
+        toast.success(faits.size + (faits.size > 1 ? ' ordres validés' : ' ordre validé') + ' dans Odoo')
+      }
+    } catch (e) { toast.error(e.message || String(e)) }
     setEnvoi(false)
   }
 
