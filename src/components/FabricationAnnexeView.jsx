@@ -301,11 +301,20 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // la mere sur la case pour savoir de quel gateau il s'agit.
   const casesAFaire = useMemo(() => {
     const out = []
+    const vus = new Set()
     for (const { mere, lignes } of aFaire) {
-      for (const l of lignes.filter(x => x.tete === x.nom)) out.push({ mere, l })
+      for (const l of lignes.filter(x => x.tete === x.nom)) { out.push({ mere, l }); vus.add(l.nom) }
+    }
+    // Un semi-fini sous son minimum qui n'entre dans AUCUN gâteau suivi
+    // n'apparaissait nulle part : « SM- Cookies ch B », 176 à faire, invisible.
+    // Ce qui compte c'est le SM-, la mère n'est qu'un repère.
+    for (const nom of Object.keys(minmax)) {
+      if (vus.has(nom) || caches.includes(nom) || !estSuivi(nom)) continue
+      const b = besoinDeBase(nom)
+      if (b > 0) out.push({ mere: null, l: { nom, besoin: arrondiUtile(nom, b), tete: nom, prof: 1 } })
     }
     return out.sort((a, b) => urgenceDe(b.l.nom) - urgenceDe(a.l.nom) || b.l.besoin - a.l.besoin)
-  }, [aFaire, stocks, minmax])
+  }, [aFaire, stocks, minmax, caches, suivis])
 
   // ===== ce qu'on a fait =====
   const liste = useMemo(() => {
@@ -480,17 +489,17 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               {casesAFaire.map(({ mere, l }) => {
                 const enRupture = (stocks[l.nom] || 0) <= 0
                 return (
-                  <button key={mere + '|' + l.nom} onClick={() => ouvrirFiche(l.nom)}
+                  <button key={(mere || '') + '|' + l.nom} onClick={() => ouvrirFiche(l.nom)}
                     className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
                     <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
                     <span className="block w-full aspect-square overflow-hidden">
-                      <Vignette nom={l.nom} photo={photoDe(l.nom) || photoDe(mere)} plein rond={0} />
+                      <Vignette nom={l.nom} photo={photoDe(l.nom) || (mere ? photoDe(mere) : '')} plein rond={0} />
                     </span>
                     <span className={'absolute top-3 left-2.5 right-2.5 rounded-full px-3 py-1.5 text-[11.5px] font-extrabold text-center text-white shadow-md '
                       + (enRupture ? 'bg-danger' : 'bg-[#854F0B]')}>
                       {enRupture ? 'rupture' : 'à remplir'}
                     </span>
-                    {courtNom(mere).toLowerCase() !== courtNom(l.nom).toLowerCase() && (
+                    {mere && courtNom(mere).toLowerCase() !== courtNom(l.nom).toLowerCase() && (
                       <span className="block px-2 pt-1.5 text-[10.5px] text-ink-mute leading-tight">
                         pour {courtNom(mere)}
                       </span>
