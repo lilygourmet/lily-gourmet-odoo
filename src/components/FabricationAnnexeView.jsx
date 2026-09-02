@@ -325,7 +325,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       return tous.filter(n => propre(n).toLowerCase().includes(cherche) || n.toLowerCase().includes(cherche))
         .slice(0, 40)
     }
-    return (arbre.racines || []).filter(n => !caches.includes(n))
+    // « tout ce qui se fait à l'annexe » : les gâteaux ET les semi-finis
+    // réellement fabriqués ici (cookies, mignardises, cadres...), les plus
+    // fabriqués en tête. La liste ne montrait que les 61 gâteaux.
+    const combien = (arbre.combien || {})
+    return [...new Set([...(arbre.racines || []), ...Object.keys(combien)])]
+      .filter(n => !caches.includes(n))
+      .sort((x, y) => (combien[y] || 0) - (combien[x] || 0) || x.localeCompare(y))
   }, [arbre, caches, q])
 
   const combienDe = useMemo(() => {
@@ -764,7 +770,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         // faire » : dans « declarer ce qu'on a fait » la liste n'est FAITE que
         // de racines, la regle y supprimait la nomenclature, le compteur et le
         // bouton « C'est fait » — l'onglet devenait vide.
-        const estMere = vue === 'besoins' && (arbre && (arbre.racines || []).includes(saisie))
+        const estRacine = !!(arbre && (arbre.racines || []).includes(saisie))
+        const tailles = estRacine
+          ? [...new Set(((recettes[saisie] || {}).lignes || [])
+              .filter(l => l.fabrique && recettes[l.produit] && /^SM\s*-/i.test(l.produit))
+              .map(l => l.produit))]
+          : []
+        const choisirTaille = vue === 'declarer' && tailles.length > 0
+        const estMere = (vue === 'besoins' || choisirTaille) && estRacine
         return (
         <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end sm:items-center justify-center p-0 sm:p-4 print:hidden"
           onPointerDown={e => { if (e.target === e.currentTarget) { setSaisie(null); setPile([]) } }}>
@@ -794,6 +807,32 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             </div>
 
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-2">
+
+            {choisirTaille && (
+              <div className="bg-white border border-line rounded-2xl overflow-hidden mb-2.5">
+                <div className="bg-cream-warm px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
+                  Quelle taille ?
+                </div>
+                {tailles.map(t => (
+                  <button key={t} onClick={() => ouvrirFiche(t, saisie)}
+                    className="w-full text-left flex items-center gap-3 px-3.5 py-3 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
+                    <span className="shrink-0 flex items-center gap-1">
+                      <Etiquettes nom={t} />
+                    </span>
+                    <span className="flex-1 min-w-0 text-[14.5px] font-bold text-bordeaux">
+                      {courtNom(t)}
+                      {stocks[t] !== undefined && (
+                        <span className="block text-[10.5px] font-normal text-ink-mute">
+                          il en reste {nbQ(stocks[t], uniteDe(t))} {uniteDe(t)}
+                        </span>
+                      )}
+                    </span>
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-bordeaux fill-none shrink-0" strokeWidth="2.6">
+                      <path d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {vue === 'besoins' && minmax[saisie] && minmax[saisie].min > 0 && (stocks[saisie] || 0) < minmax[saisie].min && (
               <div className={'rounded-2xl px-3.5 py-3 mb-2.5 flex items-center gap-3 border '
