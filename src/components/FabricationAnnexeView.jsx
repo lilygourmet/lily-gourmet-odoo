@@ -81,6 +81,19 @@ const familleDe = nom => {
 // doublé par « Micro viennoiseries (18 pcs) » fait 30 fois).
 const estMort = (nom, recette, fois) => /archive/i.test(String(nom || '')) || (!recette && !fois)
 
+// Le même article à une taille près : « Vitrine 35 cm (Praliné Amandes
+// caramélisées) » n'est pas dans la nomenclature du Suprême amande, alors que
+// ses 15, 20, 25 et 30 cm y sont. On le rattache au même parent — c'est sûr,
+// contrairement à un rapprochement par ressemblance de noms.
+const cleSansTaille = n => String(n || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/^sm\s*[-./]?\s*/, '')
+  .replace(/\bpr\b/g, '')
+  .replace(/\b\d+\s*(cm|pers|p)\b/g, '')
+  .replace(/\bindiv\w*\b/g, '')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+
 const estCadre = nom => /\bcadres?\b/i.test(String(nom || ''))
 // Le parfum est entre parenthèses en fin de nom — « Tartelettes (Chocolat) ».
 // courtNom l'enlevait : on le sort en étiquette, comme la taille.
@@ -324,6 +337,30 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // Une case par ARTICLE a fabriquer, pas une case par gateau : les tailles
   // d'un meme gateau ne doivent plus etre empilees au meme endroit. On garde
   // la mere sur la case pour savoir de quel gateau il s'agit.
+  // Les orphelins que leur recette parente a oubliés, rattachés au parent de
+  // leurs frères de taille.
+  const rattache = useMemo(() => {
+    if (!arbre) return {}
+    const tous = new Set([...(arbre.racines || []), ...Object.keys(arbre.combien || {})])
+    const dejaRange = new Set()
+    const parCle = {}
+    for (const [parent, r] of Object.entries(recettes)) {
+      for (const l of (r.lignes || [])) {
+        if (!tous.has(l.produit)) continue
+        dejaRange.add(l.produit)
+        const c = cleSansTaille(l.produit)
+        if (!parCle[c]) parCle[c] = parent
+      }
+    }
+    const out = {}
+    for (const n of tous) {
+      if (dejaRange.has(n)) continue
+      const p = parCle[cleSansTaille(n)]
+      if (p && p !== n) out[n] = p
+    }
+    return out
+  }, [recettes, arbre])
+
   const casesAFaire = useMemo(() => {
     const out = []
     const vus = new Set()
@@ -363,9 +400,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       for (const l of (r.lignes || [])) if (tous.has(l.produit)) composant.add(l.produit)
     }
     return [...tous]
-      .filter(n => !caches.includes(n) && !composant.has(n) && !estMort(n, recettes[n], combien[n]))
+      .filter(n => !caches.includes(n) && !composant.has(n) && !rattache[n]
+        && !estMort(n, recettes[n], combien[n]))
       .sort((x, y) => (combien[y] || 0) - (combien[x] || 0) || x.localeCompare(y))
-  }, [arbre, caches, q])
+  }, [arbre, caches, q, rattache])
 
   // Les articles rangés par famille ; dans chaque famille, ceux dont le nom
   // commence pareil se suivent (les 3 « Mini cakes », les 3 « Cookies »...).
@@ -860,6 +898,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             }
           }
           descendre(saisie, 0)
+          for (const [n, p] of Object.entries(rattache)) {
+            if (p === saisie && !out.includes(n)) out.push(n)
+          }
           const rang = n => (/^SM\s*-/i.test(n) ? 0 : 1)
           return out.sort((a, b) => rang(a) - rang(b))
         })() : []
