@@ -129,7 +129,16 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
       if (Object.keys(conv).length) quantites[n] = conv
     }
     try {
-      setResultats(await validerDansOdoo(cibles, forcer, user?.id, quantites, null, produits))
+      const res = await validerDansOdoo(cibles, forcer, user?.id, quantites, null, produits)
+      setResultats(res)
+      // Ce qui est validé n'a plus rien à faire dans la liste. Ce qui a échoué
+      // y reste, avec son message : c'est encore à traiter.
+      const faits = new Set(res.filter(r => r.ok).map(r => r.name))
+      if (faits.size) {
+        setLignes(l => (l || []).filter(x => !faits.has(x.name)))
+        setSel(s2 => s2.filter(n => !faits.has(n)))
+        toast.success(faits.size + (faits.size > 1 ? ' ordres validés' : ' ordre validé') + ' dans Odoo')
+      }
     } catch (e) { toast.error(e.message || String(e)) }
     setEnvoi(false)
   }
