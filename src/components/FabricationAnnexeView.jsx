@@ -339,6 +339,22 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // la mere sur la case pour savoir de quel gateau il s'agit.
   // Les orphelins que leur recette parente a oubliés, rattachés au parent de
   // leurs frères de taille.
+  // Odoo garde un article « modèle » à côté de ses variantes : « SM- 20 cm
+  // Vitrine » existe en plus de « … (Citron) » et « … (Praliné) ». Le modèle
+  // n'a ni stock ni mini/maxi : il s'affichait toujours en rupture, en double
+  // des vraies déclinaisons. 21 articles étaient dans ce cas.
+  const modelesDoubles = useMemo(() => {
+    if (!arbre) return new Set()
+    const tous = new Set([...(arbre.racines || []), ...Object.keys(arbre.combien || {}),
+      ...Object.keys(recettes), ...Object.keys(stocks)])
+    const out = new Set()
+    for (const n of tous) {
+      const m = String(n).replace(/\s*\([^()]*\)\s*$/, '').trim()
+      if (m !== n && tous.has(m)) out.add(m)
+    }
+    return out
+  }, [arbre, recettes, stocks])
+
   const rattache = useMemo(() => {
     if (!arbre) return {}
     const tous = new Set([...(arbre.racines || []), ...Object.keys(arbre.combien || {})])
@@ -365,18 +381,18 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     const out = []
     const vus = new Set()
     for (const { mere, lignes } of aFaire) {
-      for (const l of lignes.filter(x => x.tete === x.nom)) { out.push({ mere, l }); vus.add(l.nom) }
+      for (const l of lignes.filter(x => x.tete === x.nom && !modelesDoubles.has(x.nom))) { out.push({ mere, l }); vus.add(l.nom) }
     }
     // Un semi-fini sous son minimum qui n'entre dans AUCUN gâteau suivi
     // n'apparaissait nulle part : « SM- Cookies ch B », 176 à faire, invisible.
     // Ce qui compte c'est le SM-, la mère n'est qu'un repère.
     for (const nom of Object.keys(minmax)) {
-      if (vus.has(nom) || caches.includes(nom) || !estSuivi(nom)) continue
+      if (vus.has(nom) || caches.includes(nom) || !estSuivi(nom) || modelesDoubles.has(nom)) continue
       const b = besoinDeBase(nom)
       if (b > 0) out.push({ mere: null, l: { nom, besoin: arrondiUtile(nom, b), tete: nom, prof: 1 } })
     }
     return out.sort((a, b) => urgenceDe(b.l.nom) - urgenceDe(a.l.nom) || b.l.besoin - a.l.besoin)
-  }, [aFaire, stocks, minmax, caches, suivis])
+  }, [aFaire, stocks, minmax, caches, suivis, modelesDoubles])
 
   // ===== ce qu'on a fait =====
   const liste = useMemo(() => {
@@ -401,9 +417,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return [...tous]
       .filter(n => !caches.includes(n) && !composant.has(n) && !rattache[n]
-        && !estMort(n, recettes[n], combien[n]))
+        && !modelesDoubles.has(n) && !estMort(n, recettes[n], combien[n]))
       .sort((x, y) => (combien[y] || 0) - (combien[x] || 0) || x.localeCompare(y))
-  }, [arbre, caches, q, rattache])
+  }, [arbre, caches, q, rattache, modelesDoubles])
 
   // Les articles rangés par famille ; dans chaque famille, ceux dont le nom
   // commence pareil se suivent (les 3 « Mini cakes », les 3 « Cookies »...).
