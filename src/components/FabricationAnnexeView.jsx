@@ -446,8 +446,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 
       <div className="max-w-[860px] mx-auto px-3 py-4 pb-28 print:p-0 print:max-w-none">
         <div className="flex gap-2 mb-4 print:hidden">
-          {[['besoins', 'Ce qu\'il faut faire'], ['declarer', 'Déclarer ce qu\'on a fait']].map(([v, t]) => (
-            <button key={v} onClick={() => { setVue(v); setSaisie(null); setPile([]) }}
+          {[['besoins', 'Ce qu\'il faut faire'], ['declarer', 'Déclarer ce qu\'on a fait'], ['histo', 'Historique']].map(([v, t]) => (
+            <button key={v} onClick={() => {
+              setVue(v); setSaisie(null); setPile([])
+              if (v === 'histo' && !histo) loadHistorique(60, ATELIER).then(setHisto).catch(() => setHisto([]))
+            }}
               className={'flex-1 py-3 rounded-2xl text-[14.5px] font-extrabold border-2 flex items-center justify-center gap-2 ' +
                 (vue === v ? 'bg-bordeaux border-bordeaux text-cream' : 'bg-white border-line text-ink-mute')}>
               {t}
@@ -505,6 +508,63 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               })}
             </div>
           </div>
+        )}
+
+        {/* ===================== HISTORIQUE ===================== */}
+        {vue === 'histo' && (
+          <>
+            <div className="flex items-center gap-2 mb-3 print:hidden">
+              <div className="flex-1 bg-white border border-line rounded-2xl px-3.5 py-2.5">
+                <input type="date" value={jour}
+                  onChange={e => { setJournal(null); setJour(e.target.value) }}
+                  className="w-full bg-transparent border-0 outline-none text-[15px] font-extrabold text-ink" />
+              </div>
+              <button onClick={() => window.print()} title="Imprimer la feuille du jour"
+                className="h-[48px] shrink-0 border border-line bg-white rounded-2xl px-4 flex items-center gap-2 text-[13.5px] font-extrabold text-ink-soft">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-ink-soft fill-none" strokeWidth="1.7">
+                  <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z" /></svg>
+                Imprimer
+              </button>
+            </div>
+
+            <div className="print:hidden">
+              {!journal && <Skeleton rows={2} />}
+              {journal && !journal.length && (
+                <div className="bg-white border border-dashed border-line rounded-2xl py-6 text-center text-ink-mute text-[14px]">
+                  Rien n'a été fait ce jour-là.
+                </div>
+              )}
+              {journal && journal.map(l => (
+                <div key={l.id} className="flex items-center gap-3 bg-white border border-line rounded-2xl px-3 py-2.5 mb-2">
+                  <Vignette nom={l.article} photo={photoDe(l.article)} taille={46} rond={11} />
+                  <span className="flex-1 min-w-0 text-[14.5px] font-semibold leading-tight">
+                    {propre(l.article)}
+                    <span className="block text-[11.5px] text-ink-mute font-normal mt-0.5">
+                      {nb(l.fois || 1)} fois{noms[l.fait_par] ? ' · ' + noms[l.fait_par] : ''} · {heure(l.fait_le)}
+                    </span>
+                  </span>
+                  <span className="text-[17px] font-extrabold text-ok whitespace-nowrap">{nbQ(l.qty, l.unite)} {l.unite}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2.5 mt-7 mb-3 print:hidden">
+              <span className="text-[11px] font-extrabold uppercase tracking-[.1em] text-bordeaux">Les autres jours</span>
+              <span className="flex-1 h-0.5 bg-line" />
+            </div>
+            <div className="print:hidden">
+              {!histo && <Skeleton rows={3} />}
+              {histo && !histo.length && <p className="text-[13.5px] text-ink-mute">Rien encore.</p>}
+              {histo && histo.map(h => (
+                <button key={h.jour} onClick={() => { setJournal(null); setJour(h.jour) }}
+                  className={'w-full text-left bg-white border rounded-xl px-3.5 py-2.5 mb-1.5 flex items-baseline gap-3 ' +
+                    (h.jour === jour ? 'border-bordeaux' : 'border-line')}>
+                  <span className="text-[14px] font-bold flex-1">{jourLisible(h.jour)}</span>
+                  <span className="text-[12.5px] text-ink-soft">{h.lignes.length} fait{h.lignes.length > 1 ? 's' : ''}</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {/* ===================== DÉCLARER ===================== */}
