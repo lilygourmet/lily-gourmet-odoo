@@ -29,3 +29,31 @@ describe('buildPassword', () => {
     expect(buildPassword('Asmae El Abbadi', '')).toBe('asmae')
   })
 })
+
+// ============================================================
+// Garde-fou : une permission oubliée dans la signature de updateUser
+// ============================================================
+// Vécu le 2026-09-02 : `perm_check_cd` avait été ajouté à la liste des
+// « if (perm_x !== undefined) » mais PAS aux paramètres de la fonction.
+// Résultat : « Can't find variable: perm_check_cd » et TOUTE modification
+// d'utilisateur échouait, quelle que soit la permission touchée.
+// Ce test relit le fichier et compare les deux listes.
+describe('updateUser — toute permission testée doit être déclarée', () => {
+  it('aucune variable utilisée sans être un paramètre de la fonction', async () => {
+    const fs = await import('node:fs')
+    const url = await import('node:url')
+    const chemin = url.fileURLToPath(new URL('./users.js', import.meta.url))
+    const src = fs.readFileSync(chemin, 'utf8')
+
+    const debut = src.indexOf('export async function updateUser')
+    const corps = src.slice(debut, src.indexOf('\n}\n', debut))
+    const signature = corps.slice(corps.indexOf('{') + 1, corps.indexOf('})'))
+
+    const motif = /\b(perm_[a-z_]+|livreur_defaut|economat_profil|employe_id)\b/g
+    const declarees = new Set(signature.match(motif) || [])
+    const testees = [...corps.matchAll(/if \((perm_[a-z_]+|livreur_defaut|economat_profil|employe_id) !== undefined\)/g)].map(m => m[1])
+
+    const oubliees = [...new Set(testees)].filter(n => !declarees.has(n))
+    expect(oubliees).toEqual([])
+  })
+})
