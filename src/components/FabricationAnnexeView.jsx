@@ -559,20 +559,43 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     setFois(foisPour(nom, b))
   }
 
+  // « C'est fait » enregistre la fabrication ET crée l'ordre dans Odoo s'il
+  // n'y en a pas : sans ordre, rien n'est validable dans « À valider Annexe ».
+  // Si Odoo en tient déjà un, on n'y touche pas, on s'y raccroche.
   const noter = async (nom, combienFois) => {
+    if (creation) return
     const f = Number(combienFois) || 1
     const r = recettes[nom]
     const qte = r ? Math.round(r.sortQty * f * 100) / 100 : f
     const u = r ? r.sortUnite : 'u'
+    setCreation(nom)                       // verrou : un seul envoi à la fois
     try {
       const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER)
       setJournal(l => [...(l || []), ligne])
       setBesoins(b => ({ ...b, [nom]: 0 }))
+      setHisto(null)
+      let msg = propre(nom) + ' — ' + nb(f) + ' fois'
+      const deja = ordreDe(nom)
+      if (deja) {
+        msg += ' · ordre ' + deja.name
+      } else {
+        try {
+          const of = await creerOfPrepa(nom, qte, user?.id, [], u)
+          if (of && of.name && !of.error) {
+            setOrdresLocaux(o => ({ ...o, [nom]: { name: of.name, qty: qte, state: 'draft', origin: '' } }))
+            msg += of.test ? ' · mode test, aucun ordre créé' : ' · ordre ' + of.name + ' créé'
+          } else if (of && of.error) {
+            toast.error('Fabrication notée, mais ordre non créé : ' + of.error)
+          }
+        } catch (e) {
+          toast.error('Fabrication notée, mais ordre non créé : ' + (e.message || e))
+        }
+      }
       setSaisie(null)
       setPile([])
-      setHisto(null)
-      toast.success(propre(nom) + ' — ' + nb(f) + ' fois')
+      toast.success(msg)
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
+    setCreation(null)
   }
 
   const carteArticle = nom => {
@@ -1196,10 +1219,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 
             <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-line">
             {!estMere && (
-              <button onClick={() => noter(saisie, fois)}
-                className="w-full py-4 rounded-2xl bg-ok text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
-                C'est fait
+              <button onClick={() => noter(saisie, fois)} disabled={!!creation}
+                className={'w-full py-4 rounded-2xl text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5 '
+                  + (creation ? 'bg-[#b9c7ae]' : 'bg-ok')}>
+                {creation === saisie ? 'Enregistrement…' : (
+                  <>
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
+                    C'est fait
+                  </>
+                )}
               </button>
             )}
             <button onClick={() => { setSaisie(null); setPile([]) }}
