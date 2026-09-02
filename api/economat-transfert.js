@@ -237,15 +237,30 @@ export default async function handler(req, res) {
     const transferts = []
 
     // Anti-doublon : deux appuis rapprochés sur « envoyer » créaient deux
-    // transferts identiques dans Odoo. Deux minutes suffisent à séparer un
-    // double appui d'une vraie seconde demande du même économe.
+    // transferts identiques dans Odoo. On ne bloque que si le CONTENU est le
+    // même : la même personne peut envoyer une VRAIE seconde demande dans la
+    // minute (Mouhcine, le 31/08 : 5 articles puis 3 chocolats — les chocolats
+    // n'ont jamais eu de bon parce qu'on ne regardait que qui, et quand).
     const ilYaDeuxMin = new Date(Date.now() - 2 * 60000).toISOString().slice(0, 19).replace('T', ' ')
-    const dejaEnvoye = async (modele, ex, u) => {
+    const empreinte = ls => ls
+      .map(l => `${String(l.nom || '').trim().toLowerCase()}|${Number(l.qty) || 1}`)
+      .sort().join(';')
+    const dejaEnvoye = async (modele, ex, u, lot) => {
       try {
-        const l = await ex(u, modele, 'search_read', [
+        const cands = await ex(u, modele, 'search_read', [
           [['origin', '=', origine], ['state', 'not in', ['cancel']], ['create_date', '>=', ilYaDeuxMin]],
-          ['id', 'name']], { limit: 1, order: 'id desc' })
-        return l && l[0] ? l[0] : null
+          ['id', 'name']], { limit: 5, order: 'id desc' })
+        if (!cands || !cands.length) return null
+        const [modeleLigne, champLien, champQty] = modele === 'stock.picking'
+          ? ['stock.move', 'picking_id', 'product_uom_qty']
+          : ['purchase.order.line', 'order_id', 'product_qty']
+        const cible = empreinte(lot)
+        for (const c of cands) {
+          const ls = await ex(u, modeleLigne, 'search_read',
+            [[[champLien, '=', c.id]]], { fields: ['name', champQty] })
+          if (empreinte(ls.map(l => ({ nom: l.name, qty: l[champQty] }))) === cible) return c
+        }
+        return null
       } catch { return null }
     }
 
@@ -292,7 +307,7 @@ export default async function handler(req, res) {
 
     // 1) Odoo Lily Gourmet : le transfert interne habituel, vers le lieu du badge
     if (lignesLg.length) {
-      const vu = await dejaEnvoye('stock.picking', exec, uid)
+      const vu = await dejaEnvoye('stock.picking', exec, uid, lignesLg)
       if (vu) {
         transferts.push({ source: 'principal', id: vu.id, name: vu.name, deja: true, fournisseur: null })
         console.log('[economat] doublon evite :', vu.name)
@@ -336,8 +351,15 @@ export default async function handler(req, res) {
         transferts.push({ source: 'achat', erreur: 'sans fournisseur',
           articles: sansFournisseur.map(l => l.nom), fournisseur: null })
       }
-      const dejaAchat = await dejaEnvoye('purchase.order', exec, uid)
-      for (const [fid, lot] of dejaAchat ? [] : parFournisseur) {
+      for (const [fid, lot] of parFournisseur) {
+        // Le doublon se juge bon fournisseur par bon fournisseur : chaque
+        // demande de prix ne contient que les lignes de CE fournisseur.
+        const vu = await dejaEnvoye('purchase.order', exec, uid, lot.lignes)
+        if (vu) {
+          transferts.push({ source: 'achat', id: vu.id, name: vu.name, deja: true, fournisseur: lot.nom })
+          console.log('[economat] doublon achat evite :', vu.name)
+          continue
+        }
         const id = await exec(uid, 'purchase.order', 'create', [{
           partner_id: fid,
           picking_type_id: reception,
