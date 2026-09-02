@@ -43,7 +43,7 @@ async function fetchWithTimeout(url, opts = {}, ms = 25000) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'fetch-photo' && req.query?.action !== 'conges-notif' && req.query?.action !== 'nav-usage') {
+  if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'ocp-sync-lgt' && req.query?.action !== 'fetch-photo' && req.query?.action !== 'conges-notif' && req.query?.action !== 'nav-usage') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
   if (!supabaseUrl || !supabaseServiceKey) {
