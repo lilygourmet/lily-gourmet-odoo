@@ -789,11 +789,29 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         // de racines, la regle y supprimait la nomenclature, le compteur et le
         // bouton « C'est fait » — l'onglet devenait vide.
         const estRacine = !!(arbre && (arbre.racines || []).includes(saisie))
-        const tailles = estRacine
-          ? [...new Set(((recettes[saisie] || {}).lignes || [])
-              .filter(l => l.fabrique && recettes[l.produit] && /^SM\s*-/i.test(l.produit))
-              .map(l => l.produit))]
-          : []
+        // Ce que l'annexe fabrique POUR ce produit. On descend la recette
+        // jusqu'à trouver ce qui sort d'ici : le plateau de tartelettes ne
+        // contient que des tartelettes unitaires (faites ailleurs), mais leurs
+        // fonds de tarte, eux, sortent de l'annexe. Les déclinaisons « SM- »
+        // (tailles, cadres) passent devant les préparations.
+        const faitIci = (arbre && arbre.combien) || {}
+        const tailles = estRacine ? (() => {
+          const out = []
+          const vus = new Set()
+          const descendre = (n, prof) => {
+            if (prof > 4) return
+            for (const l of ((recettes[n] || {}).lignes || [])) {
+              const p = l.produit
+              if (vus.has(p)) continue
+              vus.add(p)
+              if (faitIci[p]) { if (!out.includes(p)) out.push(p) }
+              else if (recettes[p]) descendre(p, prof + 1)
+            }
+          }
+          descendre(saisie, 0)
+          const rang = n => (/^SM\s*-/i.test(n) ? 0 : 1)
+          return out.sort((a, b) => rang(a) - rang(b))
+        })() : []
         const choisirTaille = vue === 'declarer' && tailles.length > 0
         const estMere = (vue === 'besoins' || choisirTaille) && estRacine
         return (
@@ -829,7 +847,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             {choisirTaille && (
               <div className="bg-white border border-line rounded-2xl overflow-hidden mb-2.5">
                 <div className="bg-cream-warm px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
-                  Quelle taille ?
+                  Ce que fait l'annexe
                 </div>
                 {tailles.map(t => (
                   <button key={t} onClick={() => ouvrirFiche(t, saisie)}
