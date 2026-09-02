@@ -104,7 +104,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     if (creation) return
     setCreation(l.name)
     try {
-      const r = await creerOfPrepa(l.article, faites[l.name] ?? l.demande, user?.id, [], l.unite)
+      const r = await creerOfPrepa(l.article, faites[l.name] ?? l.demande, user?.id, [], l.unite, 'annexe')
       if (r && r.error) toast.error(r.error)
       else if (r && r.test) toast.success('Mode test : aucun ordre créé dans Odoo')
       else if (r && r.name) { toast.success('Ordre ' + r.name + ' créé'); setTour(t => t + 1) }

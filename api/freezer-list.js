@@ -731,10 +731,13 @@ async function _produitPrepa(uid, cle) {
   return { prod, bom, conf }
 }
 
-// L'ordre WHLVP le plus récent sert de gabarit (emplacements, société).
-const modeleWhlvp = uid => memo('modele', async () =>
-  (await odooSearchRead(uid, 'mrp.production', [['name', 'like', 'WHLVP/MO/']],
+// Le dernier ordre de CET atelier sert de gabarit (emplacements, société).
+// Sans le préfixe, un ordre de l'annexe naissait à WHLVP/Stock/Stock Prod — la
+// boutique — et l'écran de l'annexe ne le voyait jamais.
+const modeleOrdre = (uid, prefixe = 'WHLVP/MO/') => memo('modele:' + prefixe, async () =>
+  (await odooSearchRead(uid, 'mrp.production', [['name', 'like', prefixe]],
     ['picking_type_id', 'location_src_id', 'location_dest_id', 'company_id'], { limit: 1, order: 'id desc' }))[0])
+const modeleWhlvp = uid => modeleOrdre(uid)
 
 async function fetchPrepa(uid, cle) {
   const { prod, bom, conf } = await produitPrepa(uid, cle)
@@ -789,7 +792,7 @@ const ORIGINE_APP = 'LG-APP'
  * faire alors qu'Odoo n'en demandait pas (une crème au beurre nature, par
  * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
  */
-async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null) {
+async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/') {
   const prod = (await odooSearchRead(uid, 'product.product',
     [['name', '=', nomProduit]], ['id', 'display_name', 'uom_id', 'product_tmpl_id'], { limit: 1 }))[0]
   if (!prod) throw new Error('article introuvable dans Odoo : ' + nomProduit)
@@ -824,8 +827,8 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
     return { id: deja.id, name: deja.name, produit: prod.display_name, qty: deja.product_qty, etat: deja.state, deja: true }
   }
 
-  const modele = await modeleWhlvp(uid)
-  if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
+  const modele = await modeleOrdre(uid, prefixe)
+  if (!modele) throw new Error('aucun ordre ' + prefixe + ' pour servir de modèle')
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,
     product_qty: qty,
@@ -1573,7 +1576,9 @@ export default async function handler(req, res) {
       if (body.test) return res.status(200).json({ name: 'TEST (rien créé dans Odoo)', test: true })
       const uid = await odooAuth()
       try {
-        const of = await creerOfPreparation(uid, produit, qtyKg, (body.parents || []).filter(Boolean), body.unite || null)
+        // L'atelier décide où l'ordre naît : l'annexe chez elle, le reste à la boutique.
+        const prefixe = body.atelier === 'annexe' ? 'WHPDX/MO/' : 'WHLVP/MO/'
+        const of = await creerOfPreparation(uid, produit, qtyKg, (body.parents || []).filter(Boolean), body.unite || null, prefixe)
         console.log(`[creer-of] ${produit} ${qtyKg} kg par ${body.actorId || '?'} → ${of.name}`)
         return res.status(200).json(of)
       } catch (e) {

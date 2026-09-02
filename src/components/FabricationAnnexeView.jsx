@@ -252,7 +252,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     if (creation) return
     setCreation(nom)
     try {
-      const r = await creerOfPrepa(nom, qte, user?.id, [], uniteDe(nom))
+      const r = await creerOfPrepa(nom, qte, user?.id, [], uniteDe(nom), 'annexe')
       if (r && r.error) toast.error(r.error)
       else if (r && r.test) toast.success('Mode test : aucun ordre créé dans Odoo')
       else if (r && r.name) {
@@ -578,7 +578,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         msg += ' · ordre ' + deja.name
       } else {
         try {
-          const of = await creerOfPrepa(nom, qte, user?.id, [], u)
+          const of = await creerOfPrepa(nom, qte, user?.id, [], u, 'annexe')
           if (of && of.name && !of.error) {
             if (!of.test) { ordre = of.name; cree = true }
             setOrdresLocaux(o => ({ ...o, [nom]: { name: of.name, qty: qte, state: 'draft', origin: '' } }))
