@@ -3680,7 +3680,9 @@ function lignesPourLgTraiteur(lignesLN, parNom) {
     return [0, 0, {
       product_id: pid || LGT_AUTRE,
       name: l.name || '',
-      product_uom_qty: l.product_uom_qty || 1,
+      // ⚠️ `|| 1` transformait une ligne à 0 en ligne à 1 : Layla met parfois la
+      // quantité à zéro au lieu de supprimer la ligne, et la copie la facturait.
+      product_uom_qty: l.product_uom_qty == null ? 1 : l.product_uom_qty,
       price_unit: Math.round(pu * 100) / 100,
       discount: l.discount || 0,
       ...(t ? { tax_id: [[6, 0, [t.id]]] } : {}),
