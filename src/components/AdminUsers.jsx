@@ -168,6 +168,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
         perm_transfert_produits: formData.permTransfertProduits,
+        perm_inventaire: formData.permInventaire,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -251,6 +252,7 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_transfert_annexe: formData.permTransfertAnnexe,
         perm_transfert_boutique: formData.permTransfertBoutique,
         perm_transfert_produits: formData.permTransfertProduits,
+        perm_inventaire: formData.permInventaire,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -850,6 +852,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permTransfertAnnexe: initialData?.perm_transfert_annexe !== undefined ? initialData.perm_transfert_annexe : false,
     permTransfertBoutique: initialData?.perm_transfert_boutique !== undefined ? initialData.perm_transfert_boutique : false,
     permTransfertProduits: initialData?.perm_transfert_produits !== undefined ? initialData.perm_transfert_produits : false,
+    permInventaire: initialData?.perm_inventaire !== undefined ? initialData.perm_inventaire : false,
     permFactureOcp: initialData?.perm_facture_ocp !== undefined ? initialData.perm_facture_ocp : false,
     permAiTools: initialData?.perm_ai_tools !== undefined ? initialData.perm_ai_tools : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
@@ -1060,6 +1063,7 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-transfert-annexe" label="Transferts — atelier Prod annexe" desc="Travaille à l'annexe : envoie vers la boutique et confirme ce qui arrive à l'annexe." checked={isAdmin || formData.permTransfertAnnexe} onChange={v => update('permTransfertAnnexe', v)} />
             <PermCheckbox id="perm-transfert-boutique" label="Transferts — atelier Prod boutique" desc="Travaille à la boutique : envoie vers l'annexe et confirme ce qui arrive à la boutique." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
             <PermCheckbox id="perm-transfert-produits" label="Transferts Produits (SM)" desc="Accès à l'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus." checked={isAdmin || formData.permTransfertProduits} onChange={v => update('permTransfertProduits', v)} />
+            <PermCheckbox id="perm-inventaire" label="Inventaire annexe" desc="Compter le stock de l'annexe : saisir les quantités réelles, article par article." checked={isAdmin || formData.permInventaire} onChange={v => update('permInventaire', v)} />
           </PermGroup>
 
           <PermGroup emoji="🏬" title="Vitrine & Stock (boutique)">
