@@ -26,9 +26,12 @@ export async function loadPointeuseMapping() {
   return data || []
 }
 
-export async function savePointeuseUser(sn, pin, employe_odoo_id, employe_nom) {
+// ⚠️ `employe_odoo_id` porte mal son nom : depuis que la liste vient de l'app,
+// on y range l'id de l'employé de l'APP (la colonne est NOT NULL, on doit la
+// remplir). Le rattachement d'un badge à une personne se fait sur `employe_nom`.
+export async function savePointeuseUser(sn, pin, employe_id, employe_nom) {
   const { error } = await supabase.from('pointeuse_users')
-    .upsert({ sn, pin: String(pin).trim(), employe_odoo_id, employe_nom }, { onConflict: 'sn,pin' })
+    .upsert({ sn, pin: String(pin).trim(), employe_odoo_id: employe_id, employe_nom }, { onConflict: 'sn,pin' })
   if (error) throw error
 }
 
@@ -44,12 +47,18 @@ export async function loadRecentPunches(limit = 50) {
   return data || []
 }
 
-// Liste des employés Odoo (id + nom) pour le menu déroulant.
-export async function loadOdooEmployees() {
-  const resp = await fetch('/api/pointage-api?action=list-employees')
-  if (!resp.ok) throw new Error('HTTP ' + resp.status)
-  const j = await resp.json()
-  return (j.employees || []).map(e => ({ id: e.id, name: e.name })).sort((a, b) => a.name.localeCompare(b.name))
+// Liste des employés de l'APP pour le menu déroulant des correspondances.
+//
+// Avant, cette liste venait d'Odoo : une personne créée dans l'app mais pas dans
+// Odoo était introuvable, donc impossible à relier à son numéro de pointeuse —
+// ses badges s'empilaient en « non attribués » (vécu avec deux embauches d'août
+// 2026). Or le pointage n'écrit plus dans Odoo : il rattache les badges aux
+// employés de l'APP, en comparant les NOMS. La liste doit donc venir de l'app.
+export async function loadEmployesApp() {
+  const { data, error } = await supabase.from('employes')
+    .select('id, nom').eq('actif', true).eq('fantome', false).order('nom')
+  if (error) throw error
+  return (data || []).map(e => ({ id: e.id, name: e.nom }))
 }
 
 // Relance l'envoi vers Odoo des pointages en attente / non reliés / en erreur

@@ -5,7 +5,7 @@ import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 import {
   loadMachines, saveMachineName, loadPointeuseMapping, savePointeuseUser,
-  deletePointeuseUser, loadRecentPunches, loadOdooEmployees, flushPointeuseToOdoo, machineLabel,
+  deletePointeuseUser, loadRecentPunches, loadEmployesApp, flushPointeuseToOdoo, machineLabel,
 } from '../../lib/pointeuse'
 
 const STATUT = {
@@ -37,7 +37,7 @@ export default function PointeuseModal({ onClose }) {
     (async () => {
       try {
         const [mac, m, p, e] = await Promise.all([
-          loadMachines(), loadPointeuseMapping(), loadRecentPunches(50), loadOdooEmployees(),
+          loadMachines(), loadPointeuseMapping(), loadRecentPunches(50), loadEmployesApp(),
         ])
         setMachines(mac); setMapping(m); setPunches(p); setEmployes(e)
         if (mac.length) setNewSn(mac[0].sn)
@@ -55,9 +55,33 @@ export default function PointeuseModal({ onClose }) {
     if (!newSn) { toast.error('Choisis une machine.'); return }
     if (!newPin.trim() || !newEmp) { toast.error('Numéro et employé requis.'); return }
     const emp = employes.find(e => String(e.id) === String(newEmp))
+    const pin = newPin.trim()
+
+    // Un numéro déjà utilisé serait REMPLACÉ sans prévenir (enregistrement par
+    // machine + numéro) : la personne d'avant perdrait son badge en silence.
+    // On demande donc confirmation, et on signale aussi le même numéro sur
+    // l'AUTRE machine — c'est autorisé (2 personnes différentes), mais il vaut
+    // mieux le voir que le découvrir après coup.
+    const occupe = mapping.find(m => m.sn === newSn && String(m.pin) === pin)
+    const ailleurs = mapping.filter(m => m.sn !== newSn && String(m.pin) === pin)
+    if (occupe) {
+      const ok = await confirmDialog(
+        `Le numéro ${pin} de ${machineLabel(newSn, machines)} est déjà attribué à ${occupe.employe_nom || '(sans nom)'}.\n\n` +
+        `Le remplacer par ${emp?.name} ? ${occupe.employe_nom || 'La personne précédente'} n'aura plus de badge.`,
+        { confirmLabel: 'Remplacer', danger: true })
+      if (!ok) return
+    } else if (ailleurs.length) {
+      const ok = await confirmDialog(
+        `Le numéro ${pin} existe déjà sur ${ailleurs.map(m => machineLabel(m.sn, machines)).join(', ')} ` +
+        `pour ${ailleurs.map(m => m.employe_nom || '(sans nom)').join(', ')}.\n\n` +
+        `Sur ${machineLabel(newSn, machines)} il est libre : l'attribuer à ${emp?.name} ?`,
+        { confirmLabel: 'Attribuer' })
+      if (!ok) return
+    }
+
     setBusy(true)
     try {
-      await savePointeuseUser(newSn, newPin, Number(newEmp), emp?.name || null)
+      await savePointeuseUser(newSn, pin, Number(newEmp), emp?.name || null)
       setNewPin(''); setNewEmp('')
       await reload()
       toast.success('Correspondance enregistrée.')

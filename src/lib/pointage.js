@@ -55,31 +55,55 @@ export function suitRegimeCafe(employe, date) {
 // ============================================================
 
 /**
+ * Lit TOUTES les lignes d'une requête, page par page.
+ *
+ * ⚠️ Supabase renvoie au maximum 1000 lignes quand on ne lui demande rien de
+ * précis — et il ne prévient pas. Vécu le 2026-09-01 : août comptait 1210
+ * pointages, l'écran n'en recevait que 1000. Des journées entières paraissaient
+ * vides (le 30/08 : 28 lignes affichées sur 36 réelles), et les corriger à la
+ * main SUPPRIMAIT les lignes invisibles — `upsertPointagesDuJour` efface tout ce
+ * qui ne lui est pas renvoyé. Les totaux du mois étaient faux par-dessus le marché.
+ */
+async function lireTout(construireRequete) {
+  const PAGE = 1000
+  let tout = []
+  for (let debut = 0; ; debut += PAGE) {
+    const { data, error } = await construireRequete().range(debut, debut + PAGE - 1)
+    if (error) throw error
+    tout = tout.concat(data || [])
+    if (!data || data.length < PAGE) return tout
+  }
+}
+
+/**
  * Charge tout ce qu'il faut pour calculer le pointage du mois.
  */
 export async function loadMonthData(mois, annee) {
   const [
     { data: employes },
     { data: feries },
-    { data: pointages },
+    pointages,
     { data: conges },
-    { data: ajustements },
+    ajustements,
     { data: synthese },
     { data: allocationsRecup },
     { data: congesDemandes },
   ] = await Promise.all([
     supabase.from('employes').select('*').eq('actif', true).eq('fantome', false).order('nom'),
     supabase.from('jours_feries').select('*'),
-    supabase.from('pointages').select('*')
+    // Page par page : un mois dépasse les 1000 pointages dès ~40 employés.
+    lireTout(() => supabase.from('pointages').select('*')
       .gte('date_pointage', firstDay(mois, annee))
-      .lte('date_pointage', lastDay(mois, annee)),
+      .lte('date_pointage', lastDay(mois, annee))
+      .order('id', { ascending: true })),
     supabase.from('conges').select('*')
       .eq('statut', 'valide')
       .lte('date_debut', lastDay(mois, annee))
       .gte('date_fin', firstDay(mois, annee)),
-    supabase.from('pointages_ajustements').select('*')
+    lireTout(() => supabase.from('pointages_ajustements').select('*')
       .gte('date_jour', firstDay(mois, annee))
-      .lte('date_jour', lastDay(mois, annee)),
+      .lte('date_jour', lastDay(mois, annee))
+      .order('id', { ascending: true })),
     supabase.from('pointages_mois').select('*')
       .eq('mois', mois).eq('annee', annee),
     // Jours de récup DÉJÀ crédités (allocation 'autre' datée du jour travaillé)
@@ -116,9 +140,9 @@ export async function loadMonthData(mois, annee) {
   return {
     employes: employesAvecSalaire,
     feries: feries || [],
-    pointages: pointages || [],
+    pointages,
     conges: conges || [],
-    ajustements: ajustements || [],
+    ajustements,
     synthese: synthese || [],
     prevSynthese: prevSynthese || [],
     conversions: conversions || [],

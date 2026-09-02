@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS pointeuse_devices (
 CREATE TABLE IF NOT EXISTS pointeuse_users (
   sn               TEXT NOT NULL,        -- machine (n° de série)
   pin              TEXT NOT NULL,        -- User ID sur cette machine (1, 2, 3…)
-  employe_odoo_id  BIGINT NOT NULL,      -- id hr.employee dans Odoo
+  employe_odoo_id  BIGINT NOT NULL,      -- ⚠️ porte mal son nom : contient l'id de l'employé
+                                         -- dans l'APP (table employes). Le rattachement réel
+                                         -- d'un badge se fait sur employe_nom, pas sur cet id.
   employe_nom      TEXT,                 -- nom (affichage seulement)
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (sn, pin)
