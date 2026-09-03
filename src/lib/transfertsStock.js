@@ -162,30 +162,71 @@ export async function addTransfertsGroupes({ famille, sens, lignes, date, user }
 }
 
 /**
+ * Un nombre lisible, sans décimale inutile : 5,48 · 2 · 5 480 000.
+ * `toLocaleString` sépare les milliers par une espace insécable ÉTROITE
+ * (U+202F) : elle passe mal dans un message WhatsApp, on remet une espace
+ * ordinaire.
+ */
+const nbT = v => Number(Number(v) || 0)
+  .toLocaleString('fr-FR', { maximumFractionDigits: 3 })
+  .replace(/[\u202f\u00a0]/g, ' ')
+
+/**
+ * Le message envoyé à celui qui a préparé le transfert. Il doit dire tout de
+ * suite si la ligne a été REFUSÉE ou MODIFIÉE : c'est là-dessus qu'il vérifie.
+ * Une réception conforme se contente d'annoncer l'entrée en stock.
+ *
+ * Séparée du reste pour être testable — c'est la seule phrase que l'expéditeur
+ * lira, elle ne doit pas se tromper.
+ */
+export function messageReception(t, qty, { refuse = false, ref = null, par = null } = {}) {
+  const vers = SENS[t.sens]?.vers || '?'
+  const u = t.unite || ''
+  const q = n => `${nbT(n)} ${u}`.trim()
+  const qui = `envoyé par ${t.envoye_par || '?'}`
+  if (refuse) {
+    return `❌ REFUSÉ — ${vers} n'a pas pris ${t.matiere} (${q(t.qty_envoye)}, ${qui}`
+      + `${par ? `, refusé par ${par}` : ''}). Rien n'entre en stock, aucun bon Odoo. À vérifier.`
+  }
+  if (Number(qty) !== Number(t.qty_envoye)) {
+    return `✏️ MODIFIÉ — ${t.matiere} : ${q(t.qty_envoye)} envoyé, ${q(qty)} reçu par ${vers}`
+      + ` (${qui}). Bon Odoo ${ref || '—'}. À vérifier.`
+  }
+  return `${vers} a reçu ${q(qty)} de ${t.matiere} (${qui}) — bon Odoo ${ref || '—'}.`
+}
+
+/**
  * Confirme la réception avec la quantité réellement reçue, puis crée le
  * transfert Odoo EN BROUILLON. Si Odoo refuse, la confirmation reste
  * enregistrée et l'erreur est gardée (odoo_error) pour pouvoir réessayer.
+ *
+ * `refuse` : la ligne est écartée. Rien n'est créé dans Odoo — mais celui qui
+ * l'a préparée est prévenu, ce qui n'arrivait pas quand « refuser » voulait
+ * dire « taper 0 » : la fonction sortait avant le WhatsApp et personne ne
+ * savait que sa marchandise avait été rendue.
  */
-export async function confirmTransfert(t, qtyRecu, user) {
-  const qty = Number(qtyRecu)
+export async function confirmTransfert(t, qtyRecu, user, { refuse = false } = {}) {
+  const qty = refuse ? 0 : Number(qtyRecu)
   const { error } = await supabase.from('transferts_mp').update({
-    statut: 'recu',
+    statut: refuse ? 'refuse' : 'recu',
     qty_recu: qty,
     recu_par: user?.full_name || null,
     recu_par_id: user?.id || null,
     confirmed_at: new Date().toISOString(),
   }).eq('id', t.id)
   if (error) throw error
-  if (!(qty > 0) || !t.odoo_product_id) return null      // rien à passer dans Odoo
+
+  // Refusé, ou rien à passer : pas de bon Odoo, mais l'expéditeur est prévenu.
+  if (refuse || !(qty > 0) || !t.odoo_product_id) {
+    notifier(t.sens, t.famille,
+      messageReception(t, qty, { refuse: true, par: user?.full_name || null }), user).catch(() => {})
+    return null
+  }
   const ref = await envoyerVersOdoo(t, qty, user)
   // Le WhatsApp part une fois que c'est DANS Odoo : il annonce ce qui est
   // réellement entré en stock, avec le numéro du bon. Il ne doit jamais faire
   // échouer la confirmation elle-même.
-  notifier(
-    t.sens, t.famille,
-    `${SENS[t.sens]?.vers} a reçu ${qty} ${t.unite || ''} de ${t.matiere} (envoyé par ${t.envoye_par || '?'}) — bon Odoo ${ref || '—'}.`,
-    user,
-  ).catch(() => {})
+  notifier(t.sens, t.famille, messageReception(t, qty, { ref }), user).catch(() => {})
   return ref
 }
 

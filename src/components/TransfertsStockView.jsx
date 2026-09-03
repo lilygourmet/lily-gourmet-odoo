@@ -27,6 +27,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [reception, setReception] = useState(null)   // { t, txt } — la ligne en cours de réception
   const [groupe, setGroupe] = useState('')            // '' = tous les types
   const [filtreArticle, setFiltreArticle] = useState('')
   const [voirMasques, setVoirMasques] = useState(false)
@@ -118,18 +119,22 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     finally { setBusy(false) }
   }
 
-  async function confirmerRecu(t) {
-    const val = prompt(`Quantité reçue de « ${t.matiere} » ? (envoyé : ${fmt(t.qty_envoye)} ${t.unite || 'kg'})`, String(t.qty_envoye))
-    if (val === null) return
-    const n = Number(String(val).replace(',', '.'))
-    if (!(n >= 0)) { toast.error('Quantité invalide.'); return }
+  // La réception s'ouvre dans une fenêtre : on y corrige la quantité, ou on
+  // refuse la ligne. « Refuser » ne se disait qu'en tapant 0, et personne
+  // n'était prévenu — maintenant l'expéditeur reçoit le WhatsApp dans les
+  // deux cas.
+  async function confirmerRecu(t, n, refuse = false) {
     setBusy(true)
     try {
-      const ref = await confirmTransfert(t, n, user)
-      toast.success(ref ? `Reçu — transfert Odoo ${ref} créé en brouillon.` : 'Réception confirmée.')
+      const ref = await confirmTransfert(t, n, user, { refuse })
+      toast.success(refuse
+        ? 'Refusé — rien dans Odoo, l\'expéditeur est prévenu.'
+        : (ref ? `Reçu — transfert Odoo ${ref} créé en brouillon.` : 'Réception confirmée.'))
+      setReception(null)
       await refresh()
     } catch (e) {
       toast.error('Reçu enregistré, mais Odoo a refusé : ' + e.message)
+      setReception(null)
       await refresh()
     } finally { setBusy(false) }
   }
@@ -180,7 +185,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
     if (!w) { toast.error('Autorise les pop-ups pour imprimer.'); return }
     const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
     const titre = filterDate ? `Transferts du ${frDate(filterDate)}` : 'Journal complet'
-    const trs = journal.map(t => `<tr><td>${frDate(t.transfer_date)}</td><td>${esc(SENS[t.sens]?.label || '')}</td><td>${esc(t.matiere)}</td><td>${fmt(t.qty_envoye)} ${esc(t.unite || '')}</td><td>${t.statut === 'recu' ? `${fmt(t.qty_recu)} ${esc(t.unite || '')}` : '—'}</td><td>${esc(t.envoye_par || '—')}</td><td>${esc(t.odoo_picking_name || '')}</td></tr>`).join('')
+    const trs = journal.map(t => `<tr><td>${frDate(t.transfer_date)}</td><td>${esc(SENS[t.sens]?.label || '')}</td><td>${esc(t.matiere)}</td><td>${fmt(t.qty_envoye)} ${esc(t.unite || '')}</td><td>${t.statut === 'refuse' ? 'REFUSÉ' : t.statut === 'recu' ? `${fmt(t.qty_recu)} ${esc(t.unite || '')}` : '—'}</td><td>${esc(t.envoye_par || '—')}</td><td>${esc(t.odoo_picking_name || '')}</td></tr>`).join('')
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(fam.titre)}</title>
       <style>body{font-family:Arial,sans-serif;padding:24px;color:#1a0f0a}h1{font-size:20px;margin:0 0 4px}
       .sub{font-size:12px;color:#666;margin:0 0 16px}table{width:100%;border-collapse:collapse;font-size:13px}
@@ -249,7 +254,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                     <div className="text-[11px] text-ink-mute">{frDate(t.transfer_date)} · {SENS[t.sens]?.label} · envoyé par {t.envoye_par || '—'}</div>
                   </div>
                   <div className="text-[14px] font-medium">{fmt(t.qty_envoye)} {t.unite || 'kg'}</div>
-                  <button onClick={() => confirmerRecu(t)} disabled={busy}
+                  <button onClick={() => setReception({ t, txt: String(t.qty_envoye) })} disabled={busy}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-[12px] bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">
                     <Check size={13} /> Confirmer
                   </button>
@@ -393,17 +398,21 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                   </div>
                 </div>
                 <div className="text-[13px]">
-                  {fmt(t.qty_envoye)} {t.unite || 'kg'}
+                  <span className={t.statut === 'refuse' ? 'line-through opacity-60' : ''}>
+                    {fmt(t.qty_envoye)} {t.unite || 'kg'}
+                  </span>
                   {t.statut === 'recu' && Number(t.qty_recu) !== Number(t.qty_envoye) && (
                     <span className="text-amber-700"> → {fmt(t.qty_recu)}</span>
                   )}
                 </div>
                 <div className="w-24 text-right">
-                  {t.statut === 'recu'
-                    ? (t.odoo_error && peutConfirmer(user, t.sens)
-                      ? <button onClick={() => reessayerOdoo(t)} disabled={busy} className="text-[11px] px-2 py-1 border border-line rounded-lg hover:bg-cream">↻ Odoo</button>
-                      : <span className="text-[11px] text-emerald-700">✓ reçu</span>)
-                    : <span className="text-[11px] text-amber-700">en attente</span>}
+                  {t.statut === 'refuse'
+                    ? <span className="text-[11px] text-danger font-semibold">✕ refusé</span>
+                    : t.statut === 'recu'
+                      ? (t.odoo_error && peutConfirmer(user, t.sens)
+                        ? <button onClick={() => reessayerOdoo(t)} disabled={busy} className="text-[11px] px-2 py-1 border border-line rounded-lg hover:bg-cream">↻ Odoo</button>
+                        : <span className="text-[11px] text-emerald-700">✓ reçu</span>)
+                      : <span className="text-[11px] text-amber-700">en attente</span>}
                 </div>
               </div>
             ))}
@@ -533,6 +542,47 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
               <button onClick={() => setNumSm(null)} className="flex-1 px-3 py-2 text-[13px] border border-line rounded-lg bg-white">Annuler</button>
               <button onClick={enregistrerNumero} className="flex-1 px-3 py-2 text-[13px] bg-bordeaux text-cream rounded-lg">Enregistrer</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- RÉCEPTION : corriger la quantité, ou refuser ---- */}
+      {reception && (
+        <div onClick={() => setReception(null)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 w-full max-w-md border border-line">
+            <h3 className="text-[15px] font-medium mb-1">{reception.t.matiere}</h3>
+            <p className="text-[12px] text-ink-mute mb-4">
+              Envoyé par {reception.t.envoye_par || '—'} : <b>{fmt(reception.t.qty_envoye)} {reception.t.unite || 'kg'}</b>.
+              Corrige la quantité si tu n'as pas reçu ça.
+            </p>
+            <div className="flex items-center gap-2">
+              <input value={reception.txt} inputMode="decimal" autoFocus
+                onChange={e => setReception(r => ({ ...r, txt: e.target.value }))}
+                aria-label="Quantité reçue"
+                className="flex-1 px-3 py-2.5 border border-line rounded-lg text-[17px] font-semibold text-right tabular-nums" />
+              <span className="text-[13px] text-ink-mute font-semibold">{reception.t.unite || 'kg'}</span>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setReception(null)} disabled={busy}
+                className="px-3 py-2 text-[13px] border border-line rounded-lg bg-white disabled:opacity-50">Annuler</button>
+              <button onClick={() => confirmerRecu(reception.t, 0, true)} disabled={busy}
+                className="px-3 py-2 text-[13px] border border-danger text-danger rounded-lg bg-white disabled:opacity-50">
+                Refuser
+              </button>
+              <button disabled={busy}
+                onClick={() => {
+                  const n = Number(String(reception.txt).replace(',', '.').trim())
+                  if (!(n > 0)) { toast.error('Quantité invalide — pour ne rien prendre, utilise « Refuser ».'); return }
+                  confirmerRecu(reception.t, n)
+                }}
+                className="flex-1 px-3 py-2 text-[13px] bg-bordeaux text-cream rounded-lg disabled:opacity-50">
+                C'est reçu
+              </button>
+            </div>
+            <p className="text-[11px] text-ink-mute mt-3 leading-snug">
+              Refuser n'écrit rien dans Odoo. Dans les deux cas, celui qui a préparé
+              le transfert reçoit un WhatsApp disant ce qui a été refusé ou modifié.
+            </p>
           </div>
         </div>
       )}
