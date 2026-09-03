@@ -7,6 +7,7 @@ import {
   ARTICLES, loadFabProd, addFabProd, delFabProd,
   loadArticlesAjoutes, addArticle, delArticle, loadNoms, loadHistorique, loadRecettes,
   chercherArticlesOdoo,
+  photoArticleOdoo,
   loadConsommateurs,
 } from '../lib/fabricationProd'
 import { loadPrevisions } from '../lib/previsionsVitrine'
@@ -195,6 +196,21 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     }
     img.onerror = () => toast.error('Image illisible')
     img.src = URL.createObjectURL(fichier)
+  }
+
+  // Choisir un article d'Odoo : on récupère au passage SA photo, s'il en a une
+  // et qu'aucune n'a déjà été collée à la main. Plus besoin d'aller en chercher
+  // une sur internet pour les articles qu'Odoo illustre déjà.
+  const [photoOdoo, setPhotoOdoo] = useState(null)   // null | 'cherche' | 'prise' | 'aucune'
+  async function choisirArticle(a) {
+    setNouveau(n => ({ ...n, nom: a.nom, unite: a.unite, choisi: true }))
+    if (!a.id) return
+    setPhotoOdoo('cherche')
+    const photo = await photoArticleOdoo(a.id)
+    setPhotoOdoo(photo ? 'prise' : 'aucune')
+    // `n.photo` est relu ici : si quelqu'un a collé une image pendant l'appel,
+    // c'est la sienne qui gagne.
+    if (photo) setNouveau(n => (n && !n.photo ? { ...n, photo } : n))
   }
 
   // Coller une image copiée sur internet, tant que le formulaire est ouvert.
@@ -439,6 +455,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                         {nouveau.choisi ? (
                           <p className="mt-1.5 text-[11.5px] text-ok font-bold">
                             Relié à Odoo · unité {nouveau.unite}
+                            {photoOdoo === 'cherche' ? ' · photo…' : photoOdoo === 'prise' ? ' · photo prise dans Odoo' : ''}
                           </p>
                         ) : cherchant ? (
                           <p className="mt-1.5 text-[11.5px] text-ink-mute">Recherche dans Odoo…</p>
@@ -446,7 +463,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                           <div className="mt-1.5 border border-line rounded-xl bg-white max-h-[190px] overflow-y-auto">
                             {propositions.map(a => (
                               <button key={a.nom}
-                                onClick={() => { setNouveau(n => ({ ...n, nom: a.nom, unite: a.unite, choisi: true })) }}
+                                onClick={() => choisirArticle(a)}
                                 className="w-full text-left px-2.5 py-2 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
                                 <span className="block text-[12.5px] font-bold leading-tight">{a.nom}</span>
                                 <span className="block text-[10.5px] text-ink-mute">
@@ -483,7 +500,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => setNouveau({ nom: '', unite: 'g', photo: null })}
+                    <button onClick={() => { setPhotoOdoo(null); setNouveau({ nom: '', unite: 'g', photo: null }) }}
                       className="bg-white border border-dashed border-line rounded-xl aspect-[4/5] grid place-items-center text-center px-1">
                       <span>
                         <span className="block text-[16px] text-bordeaux leading-none mb-0.5">+</span>

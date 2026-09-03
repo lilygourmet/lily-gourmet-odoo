@@ -2330,6 +2330,22 @@ export default async function handler(req, res) {
     // savait plus quoi montrer (Layla, 2026-09-03 — « lier fabrication prod au
     // vrai article »). On ne filtre PAS sur le stock : une préparation à zéro
     // reste tout à fait fabricable.
+    // La photo d'un article, telle qu'elle est déjà dans Odoo : plus la peine
+    // d'aller en chercher une sur internet et de la coller à la main.
+    // Une seule à la fois (au moment du choix) : les mettre dans la recherche
+    // rechargerait 20 images à chaque lettre tapée.
+    if (req.query.mode === 'photo-article') {
+      const id = Number(req.query.id)
+      if (!id) return res.status(400).json({ error: 'id manquant' })
+      const uid = await odooAuth()
+      const [p] = await odooSearchRead(uid, 'product.product', [['id', '=', id]], ['image_512'], { limit: 1 })
+      const b64 = p && p.image_512
+      if (!b64) return res.status(200).json({ photo: null })
+      // Odoo ne dit pas le format : on le reconnaît aux premiers octets.
+      const type = String(b64).startsWith('iVBORw0KG') ? 'png' : String(b64).startsWith('R0lGOD') ? 'gif' : 'jpeg'
+      return res.status(200).json({ photo: `data:image/${type};base64,${b64}` })
+    }
+
     if (req.query.mode === 'fabricables') {
       const q = String(req.query.q || '').trim()
       if (q.length < 2) return res.status(200).json({ articles: [] })
@@ -2364,6 +2380,7 @@ export default async function handler(req, res) {
         const bom = surVariante[p.id] ?? surModele[p.product_tmpl_id[0]]
         if (bom === undefined) continue
         out.push({
+          id: p.id,   // sert à aller chercher la photo Odoo de l'article choisi
           nom: net(p.name),
           unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
           lignes: combien[bom] || 0,

@@ -125,6 +125,16 @@ export async function chercherArticlesOdoo(q) {
   return (await r.json()).articles || []
 }
 
+/** La photo que l'article a DÉJÀ dans Odoo, en data-URL. null s'il n'en a pas. */
+export async function photoArticleOdoo(id) {
+  if (!id) return null
+  try {
+    const r = await fetch('/api/freezer-list?mode=photo-article&id=' + encodeURIComponent(id))
+    if (!r.ok) return null
+    return (await r.json()).photo || null
+  } catch { return null }
+}
+
 /**
  * Les gâteaux qui utilisent ce semi-fini (lu dans Odoo à l'envers), avec la quantité
  * par taille et ce qui est déjà commandé pour la journée. Sert à calculer combien en
