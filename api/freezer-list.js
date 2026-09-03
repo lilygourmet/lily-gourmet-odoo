@@ -2120,7 +2120,11 @@ export default async function handler(req, res) {
 
       top('total')
       if (req.query.chrono) return res.status(200).json({ chrono })
-      res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=1800')
+      // Aucun cache : « le stock doit toujours etre a jour selon Odoo »
+      // (Layla, 2026-09-03). Les 3 minutes de cache faisaient croire que ses
+      // ajustements d'inventaire n'etaient pas passes. Une lecture fraiche
+      // coute ~1,7 s (5,9 s a froid) : l'ecran peut se le permettre.
+      res.setHeader('Cache-Control', 'no-store')
       return res.status(200).json({
         racines, ecartees, photos, stocks, minmax, tournees, ordres, doublons,
         combien: { ...combien, ...poids }, recettes: aRendre,

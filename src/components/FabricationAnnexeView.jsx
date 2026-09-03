@@ -166,6 +166,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [erreur, setErreur] = useState(null)
   const [journal, setJournal] = useState(null)
   const [saisie, setSaisie] = useState(null)
+  // Quand Odoo a-t-il ete lu pour de vrai ? L'ecran l'affiche : sans ca on ne
+  // sait pas si ce qu'on regarde date d'il y a dix secondes ou d'une heure.
+  const [majA, setMajA] = useState(null)
+  const [rechargement, setRechargement] = useState(false)
   const [pile, setPile] = useState([])        // d'où l'on vient dans les fiches
   const [fois, setFois] = useState(1)
   const [besoins, setBesoins] = useState({})      // besoins modifiés à la main
@@ -183,7 +187,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   useEffect(() => {
     let vivant = true
     loadArbreAnnexe()
-      .then(a => { if (vivant) { setArbre(a); garderEcran('annexe', a); setErreur(null) } })
+      .then(a => { if (vivant) { setArbre(a); garderEcran('annexe', a); setErreur(null); setMajA(new Date()) } })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     loadNoms().then(n => { if (vivant) setNoms(n) }).catch(() => { })
     loadMasques().then(m => { if (vivant) setCaches(m) }).catch(() => { })
@@ -207,7 +211,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // un filet toutes les 15 minutes. Le cache de 3 min de l'API protège Odoo.
   useEffect(() => refreshOnReturn(() => {
     loadArbreAnnexe()
-      .then(a => { setArbre(a); garderEcran('annexe', a); setErreur(null) })
+      .then(a => { setArbre(a); garderEcran('annexe', a); setErreur(null); setMajA(new Date()) })
       .catch(() => { })
     loadFabProd(jour, ATELIER).then(setJournal).catch(() => { })
   }), [jour])
@@ -247,10 +251,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // L'ordre de fabrication qu'Odoo tient déjà pour cet article, s'il existe.
   const ordreDe = nom => ordresLocaux[nom] || ((arbre && arbre.ordres) || {})[nom]
 
-  // Après une création, on relit Odoo SANS le cache : sinon l'écran continue
-  // d'annoncer « aucun ordre » pendant 3 minutes et on en crée un deuxième.
-  const relireOdoo = () => loadArbreAnnexe(true)
-    .then(a => { setArbre(a); garderEcran('annexe', a) }).catch(() => { })
+  // Relire Odoo : après une création d'ordre, et quand on appuie sur
+  // « mettre à jour ». Il n'y a plus de cache, la lecture est toujours vraie.
+  const relireOdoo = () => {
+    setRechargement(true)
+    return loadArbreAnnexe()
+      .then(a => { setArbre(a); garderEcran('annexe', a); setErreur(null); setMajA(new Date()) })
+      .catch(e => setErreur(e.message || String(e)))
+      .finally(() => setRechargement(false))
+  }
 
   // Doublons : quand Odoo a relancé plusieurs fois la même règle mini/maxi
   // pour un article, on garde le nombre le plus haut (jamais la somme) et les
@@ -728,6 +737,25 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               )}
             </button>
           ))}
+        </div>
+
+        {/* Quand Odoo a-t-il ete lu ? Sans ça, impossible de savoir si un
+            ajustement d'inventaire est deja pris en compte. Le bouton relit
+            pour de vrai — il n'y a plus de cache derriere. */}
+        <div className="flex items-center gap-2 mb-3 print:hidden">
+          <span className="text-[12px] text-ink-mute flex-1">
+            {majA
+              ? 'Stock lu dans Odoo à ' + majA.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+              : 'Lecture d\'Odoo…'}
+          </span>
+          <button onClick={relireOdoo} disabled={rechargement}
+            className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[12.5px] font-bold '
+              + (rechargement ? 'border-line text-ink-mute' : 'border-bordeaux text-bordeaux bg-white')}>
+            <svg viewBox="0 0 24 24" className={'w-3.5 h-3.5 stroke-current fill-none ' + (rechargement ? 'animate-spin' : '')} strokeWidth="2.6">
+              <path d="M20 11a8 8 0 10-1.6 5.6M20 5v6h-6" />
+            </svg>
+            {rechargement ? 'Lecture…' : 'Mettre à jour'}
+          </button>
         </div>
 
         {erreur && (
