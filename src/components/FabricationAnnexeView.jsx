@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer, enfantsARupture } from '../lib/fabricationAnnexe'
-import { dernierEcran, garderEcran, creerOfPrepa, annulerOfPrepa, annulerDoublons } from '../lib/fabrication'
+import { dernierEcran, garderEcran, creerOfPrepa, ajusterOf, annulerOfPrepa, annulerDoublons } from '../lib/fabrication'
 import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
 import { poidsUnite, versUnite } from '../lib/unites'
@@ -650,6 +650,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       let cree = false
       if (deja) {
         msg += ' · ordre ' + deja.name
+        // Odoo tenait déjà cet ordre (règle du matin) : on ne le recrée pas,
+        // mais ce qui a été pesé doit quand même y entrer, sinon il garde la
+        // règle de trois et « À valider Annexe » propose autre chose.
+        if (Object.keys(ajuste).length) {
+          try {
+            const a = await ajusterOf(deja.name, ajuste, user?.id)
+            if (a && a.error) toast.error('Ordre non ajusté : ' + a.error)
+            else if (a && a.ajustes) { msg += ' · ' + a.ajustes + ' ligne' + (a.ajustes > 1 ? 's' : '') + ' ajustée' + (a.ajustes > 1 ? 's' : ''); relireOdoo() }
+          } catch (e) { toast.error('Ordre non ajusté : ' + (e.message || e)) }
+        }
       } else {
         try {
           const of = await creerOfPrepa(nom, qte, user?.id, [], u, 'annexe', ajuste)

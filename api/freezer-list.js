@@ -1666,6 +1666,53 @@ export default async function handler(req, res) {
       }
     }
 
+    // Pousser dans un ordre DÉJÀ existant ce que l'atelier a réellement pesé.
+    // Odoo lance ses propres ordres chaque matin (OP/…) ; l'app s'y raccroche au
+    // lieu d'en créer un second. Sans ceci, les ajustements de l'atelier
+    // restaient dans l'écran et l'ordre gardait la règle de trois. (POST)
+    // On ne touche JAMAIS à la quantité produite : le reste à faire se règle au
+    // moment de valider, avec son reliquat.
+    if (req.method === 'POST' && req.query.mode === 'ajuster-of') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const nomOrdre = String(body.ordre || '')
+      const mesures = Object.entries(body.ajustements || {}).filter(([, v]) => Number(v) > 0)
+      if (!nomOrdre || !mesures.length) return res.status(400).json({ error: 'ordre ou quantités manquants' })
+      if (body.test) return res.status(200).json({ test: true, ajustes: 0 })
+      const uid = await odooAuth()
+      try {
+        const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', nomOrdre]],
+          ['id', 'name', 'state', 'move_raw_ids'], { limit: 1 }))[0]
+        if (!mo) return res.status(200).json({ error: 'ordre introuvable : ' + nomOrdre })
+        if (!['draft', 'confirmed', 'progress'].includes(mo.state)) {
+          return res.status(200).json({ error: 'ordre ' + mo.state + ' : on n\'y touche plus' })
+        }
+        const moves = mo.move_raw_ids.length
+          ? await odooCall(uid, 'stock.move', 'read', [mo.move_raw_ids, ['product_id', 'product_uom_qty', 'product_uom']])
+          : []
+        const cleNom = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+        const voulu = new Map(mesures.map(([k, v]) => [cleNom(k), Number(v)]))
+        const faits = []
+        const ignores = []
+        for (const mv of moves) {
+          const q = voulu.get(cleNom(Array.isArray(mv.product_id) ? mv.product_id[1] : ''))
+          if (q === undefined) continue
+          const arrondi = Math.round(q * 1000) / 1000
+          if (Math.abs(arrondi - mv.product_uom_qty) < 0.0005) continue
+          await odooCall(uid, 'stock.move', 'write', [[mv.id], { product_uom_qty: arrondi }])
+          faits.push({ produit: mv.product_id[1], de: mv.product_uom_qty, a: arrondi })
+        }
+        for (const [nomC] of mesures) {
+          if (!moves.some(mv => cleNom(mv.product_id[1]) === cleNom(nomC))) ignores.push(nomC)
+        }
+        // les composants étaient réservés sur les anciennes quantités
+        await odooCall(uid, 'mrp.production', 'action_assign', [[mo.id]]).catch(() => { })
+        console.log(`[ajuster-of] ${nomOrdre} : ${faits.length} ligne(s) alignee(s) par ${body.actorId || '?'}`)
+        return res.status(200).json({ ordre: nomOrdre, ajustes: faits.length, lignes: faits, ignores })
+      } catch (e) {
+        return res.status(200).json({ error: (e.message || String(e)).slice(0, 300) })
+      }
+    }
+
     // On décoche : l'ordre que l'app avait créé n'a plus lieu d'être. (POST)
     if (req.method === 'POST' && req.query.mode === 'annuler-of') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})

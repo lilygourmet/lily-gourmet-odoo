@@ -109,6 +109,19 @@ export async function creerOfPrepa(produit, qty, actorId, parents = [], unite = 
 }
 
 /**
+ * Aligne un ordre qui existait DÉJÀ sur ce que l'atelier a pesé. La quantité
+ * produite n'est pas touchée : le reste à faire se règle en validant.
+ */
+export async function ajusterOf(ordre, ajustements, actorId) {
+  const r = await fetch('/api/freezer-list?mode=ajuster-of', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ordre, ajustements, actorId, test: estModeTest() }),
+  })
+  return await r.json()
+}
+
+/**
  * Annule dans Odoo les ordres d'une coche qu'on retire — y compris ceux venus
  * d'Odoo, tant qu'ils ne sont pas validés. Renvoie les noms annulés.
  */
