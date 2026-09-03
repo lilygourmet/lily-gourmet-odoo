@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import {
   ARTICLES, loadFabProd, addFabProd, delFabProd,
-  loadArticlesAjoutes, addArticle, delArticle, loadNoms, loadHistorique, loadRecettes,
+  loadArticlesAjoutes, addArticle, delArticle, majArticle, RETIRE, loadNoms, loadHistorique, loadRecettes,
   chercherArticlesOdoo,
   photoArticleOdoo,
   loadConsommateurs,
@@ -111,6 +111,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const [suggestions, setSuggestions] = useState({ q: '', liste: [] })
   const [noms, setNoms] = useState({})
   const [histo, setHisto] = useState(null)
+  const [voirRetires, setVoirRetires] = useState(false)
   const [voirHisto, setVoirHisto] = useState(false)
   const [q, setQ] = useState('')            // recherche rapide
   const [calcul, setCalcul] = useState(null)      // l'article dont on calcule la quantité
@@ -135,7 +136,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   // Les recettes viennent d'Odoo : si elles y changent, l'écran suit tout seul.
   useEffect(() => {
     let vivant = true
-    const noms = [...ARTICLES, ...ajoutes].map(a => a.article)
+    const noms = ARTICLES.concat(ajoutes).map(a => a.article)
     loadRecettes(noms).then(r => { if (vivant) setRecettes(r) }).catch(() => { })
     return () => { vivant = false }
   }, [ajoutes])
@@ -156,7 +157,26 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   }, [ouvert])
 
   // La liste complète : celle du fichier, plus ce que l'équipe a ajouté.
-  const tous = useMemo(() => [...ARTICLES, ...ajoutes], [ajoutes])
+  // Une ligne enregistrée au nom d'un article de base le PERSONNALISE (photo
+  // remplacée, ou retiré de l'écran) au lieu de le doubler.
+  const tous = useMemo(() => {
+    const perso = new Map(ajoutes.map(a => [a.article, a]))
+    const base = ARTICLES.map(a => {
+      const p = perso.get(a.article)
+      if (!p) return a
+      return {
+        ...a,
+        photo: p.photo && p.photo !== RETIRE ? p.photo : a.photo,
+        retire: p.photo === RETIRE,
+        perso: p.ajoute,
+      }
+    })
+    const enPlus = ajoutes.filter(a => !ARTICLES.some(b => b.article === a.article))
+      .map(a => ({ ...a, retire: a.photo === RETIRE }))
+    return [...base, ...enPlus]
+  }, [ajoutes])
+  const visibles = useMemo(() => tous.filter(a => !a.retire), [tous])
+  const retires = useMemo(() => tous.filter(a => a.retire), [tous])
 
   // Combien de fois chaque article a déjà été noté ce jour-là.
   const combienDe = useMemo(() => {
@@ -287,13 +307,51 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     } catch (e) { toast.error('Impossible d\'ajouter : ' + (e.message || e)) }
   }
 
-  const supprimer = async (a, ev) => {
-    ev.stopPropagation()
+  // Retirer un article de l'écran. Un article ajouté à la main disparaît pour de
+  // bon ; un article de la liste de base est seulement masqué — on peut le
+  // remettre, et ce qui a été déclaré dessus n'est jamais touché.
+  const retirer = async (a) => {
     try {
-      await delArticle(a.ajoute)
-      setAjoutes(l => l.filter(x => x.ajoute !== a.ajoute))
+      // Un article ajouté à la main sur lequel rien n'a été déclaré aujourd'hui
+      // s'efface vraiment ; tout le reste est masqué, donc récupérable.
+      if (a.ajoute && !a.perso && !combienDe[a.article]) {
+        await delArticle(a.ajoute)
+        setAjoutes(l => l.filter(x => x.ajoute !== a.ajoute))
+      } else {
+        const id = await majArticle(a.article, a.unite, RETIRE, user?.id)
+        setAjoutes(l => [...l.filter(x => x.ajoute !== id),
+          { article: a.article, famille: 'Autres', unite: a.unite, photo: RETIRE, ajoute: id }])
+      }
       if (ouvert === a.article) setOuvert(null)
-    } catch (e) { toast.error('Impossible de supprimer : ' + (e.message || e)) }
+      toast.success('Article retiré de la liste')
+    } catch (e) { toast.error('Impossible de retirer : ' + (e.message || e)) }
+  }
+
+  const remettre = async (a) => {
+    try {
+      if (a.perso) {
+        // Article de base : sa ligne n'existait que pour le masquer.
+        await delArticle(a.perso)
+        setAjoutes(l => l.filter(x => x.ajoute !== a.perso))
+      } else {
+        // Article ajouté à la main : sa ligne EST l'article, on lui rend sa photo.
+        const id = await majArticle(a.article, a.unite, null, user?.id)
+        setAjoutes(l => l.map(x => (x.ajoute === id ? { ...x, photo: null } : x)))
+      }
+      toast.success('Article remis dans la liste')
+    } catch (e) { toast.error('Impossible de remettre : ' + (e.message || e)) }
+  }
+
+  // Changer la photo d'un article, qu'il vienne de la liste de base ou non.
+  const changerPhoto = async (a, fichier) => {
+    if (!fichier || !/^image\//.test(fichier.type)) { toast.error('Ce fichier n\'est pas une image'); return }
+    try {
+      const photo = await reduireImage(URL.createObjectURL(fichier))
+      const id = await majArticle(a.article, a.unite, photo, user?.id)
+      setAjoutes(l => [...l.filter(x => x.ajoute !== id),
+        { article: a.article, famille: a.famille === 'Autres' ? 'Autres' : a.famille, unite: a.unite, photo, ajoute: id }])
+      toast.success('Photo changée')
+    } catch (e) { toast.error('Photo : ' + (e.message || e)) }
   }
 
   return (
@@ -340,6 +398,27 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
             </button>
           )}
         </div>
+
+        {retires.length > 0 && !q.trim() && (
+          <div className="mb-4 print:hidden">
+            <button onClick={() => setVoirRetires(v => !v)}
+              className="text-[12px] text-ink-mute underline underline-offset-2">
+              {retires.length} article{retires.length > 1 ? 's' : ''} retiré{retires.length > 1 ? 's' : ''} de la liste
+            </button>
+            {voirRetires && (
+              <div className="mt-2 space-y-1.5">
+                {retires.map(a => (
+                  <div key={a.article}
+                    className="flex items-center gap-3 bg-white border border-line rounded-xl px-3 py-2">
+                    <span className="flex-1 min-w-0 truncate text-[13px]">{propre(a.article)}</span>
+                    <button onClick={() => remettre(a)}
+                      className="text-[12.5px] font-bold text-bordeaux whitespace-nowrap">remettre</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {voirHisto && (
           <div className="mb-5 print:hidden">
@@ -422,7 +501,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
         {journal && FAMILLES.map(fam => {
           const cherche = q.trim().toLowerCase()
-          const liste = tous.filter(a => a.famille === fam)
+          const liste = visibles.filter(a => a.famille === fam)
             .filter(a => !cherche || propre(a.article).toLowerCase().includes(cherche)
               || a.article.toLowerCase().includes(cherche))
           return (
@@ -691,12 +770,17 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                 <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
                 C'est fait
               </button>
-              {a.ajoute && !combienDe[a.article] && (
-                <button onClick={ev => supprimer(a, ev)}
-                  className="w-full mt-2 py-3 rounded-2xl bg-white border border-line text-danger text-[14px] font-bold">
-                  supprimer cet article
+              <div className="flex gap-2 mt-2">
+                <label className="flex-1 py-3 rounded-2xl bg-white border border-line text-ink-soft text-[14px] font-bold text-center cursor-pointer">
+                  changer la photo
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={e => { changerPhoto(a, e.target.files[0]); e.target.value = '' }} />
+                </label>
+                <button onClick={() => retirer(a)}
+                  className="flex-1 py-3 rounded-2xl bg-white border border-line text-danger text-[14px] font-bold">
+                  retirer de la liste
                 </button>
-              )}
+              </div>
               <button onClick={() => setOuvert(null)}
                 className="w-full mt-2 py-3.5 rounded-2xl bg-white border border-line text-ink-mute text-[15px] font-bold">
                 fermer

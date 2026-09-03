@@ -162,6 +162,12 @@ export async function delFabProd(id) {
   return aAnnuler
 }
 
+// Un article de la liste de base ne vit pas en base de données : pour le retirer
+// de l'écran ou lui changer sa photo, on pose une ligne `prod_articles` à SON nom.
+// Cette ligne est une PERSONNALISATION, pas un nouvel article — la photo
+// `RETIRE` veut dire « ne plus l'afficher ». Remettre = supprimer la ligne.
+export const RETIRE = '::retire::'
+
 /** Les articles ajoutés à la main depuis l'onglet, en plus de la liste de base. */
 export async function loadArticlesAjoutes() {
   const { data, error } = await supabase
@@ -179,6 +185,24 @@ export async function addArticle(nom, unite, photo, userId) {
     .select('id').single()
   if (error) throw error
   return data.id
+}
+
+/** Pose la photo d'un article — ou son retrait (photo = RETIRE). Une seule ligne
+ *  par nom : on modifie celle qui existe, sinon on la crée. */
+export async function majArticle(nom, unite, photo, userId) {
+  const { data, error: lu } = await supabase
+    .from('prod_articles').select('id').eq('nom', nom).limit(1)
+  if (lu) throw lu
+  if (data && data.length) {
+    const { error } = await supabase.from('prod_articles').update({ photo }).eq('id', data[0].id)
+    if (error) throw error
+    return data[0].id
+  }
+  const { data: cree, error } = await supabase.from('prod_articles')
+    .insert({ nom, unite: unite || 'g', photo, cree_par: userId || null })
+    .select('id').single()
+  if (error) throw error
+  return cree.id
 }
 
 /** Retirer un article ajouté à la main. Ce qui a déjà été déclaré dessus reste. */
