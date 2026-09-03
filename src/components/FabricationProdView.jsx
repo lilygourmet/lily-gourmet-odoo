@@ -340,7 +340,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                 <span className="flex-1 h-0.5 bg-line" />
               </div>
 
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              <div className="grid gap-2 grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
                 {liste.map(a => {
                   const actif = ouvert === a.article
                   return (
@@ -351,14 +351,14 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                         <div className="relative aspect-[4/3] bg-cream-warm">
                           <img src={a.photo} alt="" className="absolute inset-0 w-full h-full object-cover" />
                           {combienDe[a.article] > 0 && (
-                            <span className="absolute top-2 left-2 bg-ok text-cream text-[12px] font-extrabold px-2.5 py-1 rounded-full">
+                            <span className="absolute top-1 left-1 bg-ok text-cream text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
                               {combienDe[a.article]} fois
                             </span>
                           )}
                         </div>
-                        <div className="px-3 py-2.5">
-                          <div className="text-[13.5px] font-semibold leading-tight">{propre(a.article)}</div>
-                          <div className="text-[11px] text-ink-mute mt-0.5">
+                        <div className="px-1.5 py-1.5">
+                          <div className="text-[11px] font-semibold leading-tight">{propre(a.article)}</div>
+                          <div className="text-[9.5px] text-ink-mute mt-0.5 leading-tight">
                             {recettes[a.article]
                               ? `1 fois = ${nb(recettes[a.article].sortQty)} ${recettes[a.article].sortUnite}`
                               : 'pas de recette'}
@@ -372,7 +372,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
                 {fam === 'Autres' && !q.trim() && (
                   nouveau ? (
-                    <div className="bg-white border border-bordeaux ring-2 ring-bordeaux/15 rounded-2xl overflow-hidden">
+                    <div className="col-span-2 sm:col-span-2 bg-white border border-bordeaux ring-2 ring-bordeaux/15 rounded-2xl overflow-hidden">
                       <label
                         onDragOver={e => e.preventDefault()}
                         onDrop={e => { e.preventDefault(); poserPhoto(e.dataTransfer.files[0]) }}
