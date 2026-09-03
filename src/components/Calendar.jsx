@@ -9,9 +9,8 @@ import {
   loadBurnAwaysForWeek,
 } from '../lib/orders'
 import { loadOrderPhotosByNum } from '../lib/conversations'
-import { logout, canSync, canManageUsers, canPatissier, isPatissierOnly, canPrintBatch, canPrintLabels, canRecaps, isAdmin } from '../lib/auth'
+import { logout, canSync, canManageUsers, canPatissier, isPatissierOnly, canPrintBatch, canRecaps, isAdmin } from '../lib/auth'
 import { toast } from '../lib/toast'
-import LabelsButton from './LabelsButton'
 import AdminUsers from './AdminUsers'
 import ChangePasswordModal from './ChangePasswordModal'
 import OrderModal from './OrderModal'
@@ -730,8 +729,6 @@ export default function Calendar({ user, onLogout, activeView, onNavigate, openO
               <span>↻ {lastBatchInfo.count}</span>
             </button>
           )}
-          {/* Bouton Étiquettes CD (impression Zebra) — dans le calendrier */}
-          {canPrintLabels(user) && !isPatissierMode && <LabelsButton />}
         </div>
 
       </header>
