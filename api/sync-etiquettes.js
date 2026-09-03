@@ -1,6 +1,6 @@
 // Serverless function Vercel - Sync catalogue Etiquettes Odoo -> Supabase
 // Endpoint: POST /api/sync-etiquettes
-// Sync les product.template avec prefixes E-, GS-, SU- et leurs images
+// Sync les product.template avec prefixes E-, GS-, SU- et les cakes V-, avec leurs images
 // Auth: header "Authorization: Bearer <SYNC_SECRET_TOKEN>" OU ?token=...
 
 import { createClient } from '@supabase/supabase-js'
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
 
     console.log('[sync-etiquettes] Recuperation product.template Odoo...')
     const articles = await fetchEtiquettesArticles(uid)
-    console.log(`[sync-etiquettes] ${articles.length} articles E-/GS-/SU- trouves`)
+    console.log(`[sync-etiquettes] ${articles.length} articles E-/GS-/SU-/V- Cake trouves`)
 
     // === DEBUG TEMPORAIRE : afficher les 5 premiers articles avec leur prix ===
     console.log('[sync-etiquettes][DEBUG] echantillon de 5 articles avec leur prix Odoo :')
@@ -135,6 +135,10 @@ function detectCategory(name) {
   if (/^E-/i.test(clean)) return 'cd'
   if (/^GS-/i.test(clean)) return 'gs'
   if (/^SU-/i.test(clean)) return 'su'
+  // Les CAKES V- (pas les croissants ni les pains) : ils ont des tailles comme
+  // les entremets — « V- Cake Citron (6) » — et doivent sortir leur étiquette
+  // au rangement dans la Checklist. Demandé par Layla le 2026-09-03.
+  if (/^V-/i.test(clean) && /\bcake/i.test(clean)) return 'vcake'
   return null
 }
 
@@ -196,10 +200,23 @@ async function fetchEtiquettesArticles(uid) {
     }
   }
 
+  // 2 bis. Les cakes V- ont aussi des tailles (1, 6…) — mais PAS de repli sur
+  // 5/10/15/20 : « V- Cake Individuel » n'a que des parfums, il n'a pas de taille
+  // et n'a aucune raison d'hériter de celles des entremets.
+  const cakeIds = filtered.filter(a => a.category === 'vcake').map(a => a.odoo_template_id)
+  if (cakeIds.length > 0) {
+    const taillesParTemplate = await fetchEntremetsSizes(uid, cakeIds)
+    for (const article of filtered) {
+      if (article.category !== 'vcake') continue
+      const sizes = taillesParTemplate.get(article.odoo_template_id)
+      article.sizes = sizes && sizes.length > 0 ? sizes : null
+    }
+  }
+
   // 3. Tri par categorie puis alphabetique sur le nom (sans le prefixe [123])
   filtered.sort((a, b) => {
     if (a.category !== b.category) {
-      const order = { cd: 0, gs: 1, su: 2 }
+      const order = { cd: 0, gs: 1, su: 2, vcake: 3 }
       return order[a.category] - order[b.category]
     }
     const cleanA = a.name.replace(/^\[\d+\]\s*/, '').trim()
