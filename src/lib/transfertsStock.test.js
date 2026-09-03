@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('./supabase', () => ({ supabase: {} }))
 vi.mock('./watiInfo', () => ({ sendWatiInfo: vi.fn() }))
 
-const { unitesPour, versUniteOdoo, messageReception } = await import('./transfertsStock')
+const { unitesPour, versUniteOdoo, messageReception, habitude, FACTEUR_ALERTE } = await import('./transfertsStock')
 
 describe('unités proposées à la saisie', () => {
   it('propose grammes et kilos pour ce qui se pèse', () => {
@@ -69,5 +69,35 @@ describe('le message envoyé à celui qui a préparé le transfert', () => {
 
   it('ne confond pas 5 et « 5.0 » : la comparaison porte sur les nombres', () => {
     expect(messageReception({ ...ligne, qty_envoye: '5' }, 5, {})).not.toContain('MODIFIÉ')
+  })
+})
+
+describe('le garde-fou des quantites aberrantes', () => {
+  // Le 28/08, 2 500 kg de mascarpone sont partis pour 2,5 : le bon Odoo a ete
+  // cree avec 2,5 tonnes, et personne ne l'a vu.
+  const passes = [
+    { odoo_product_id: 7, qty_envoye: 2 },
+    { odoo_product_id: 7, qty_envoye: 5 },
+    { odoo_product_id: 7, qty_envoye: 3 },
+    { odoo_product_id: 9, qty_envoye: 900 },
+  ]
+
+  it('retient le plus gros envoi deja fait de CET article', () => {
+    expect(habitude(passes, 7)).toBe(5)
+    expect(habitude(passes, 9)).toBe(900)
+  })
+
+  it('ne dit rien pour un article jamais transfere', () => {
+    expect(habitude(passes, 42)).toBe(null)
+  })
+
+  it('declenche sur le mascarpone a 2 500, pas sur un envoi deux fois plus gros', () => {
+    const record = habitude(passes, 7)
+    expect(2500 > record * FACTEUR_ALERTE).toBe(true)
+    expect(10 > record * FACTEUR_ALERTE).toBe(false)
+  })
+
+  it('ignore les envois a zero, qui ecraseraient le repere', () => {
+    expect(habitude([{ odoo_product_id: 7, qty_envoye: 0 }], 7)).toBe(null)
   })
 })

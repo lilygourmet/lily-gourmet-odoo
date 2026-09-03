@@ -18,6 +18,7 @@ import { navTabsForUser } from '../lib/navTabs'
 import { saveMyNavbarConfig } from '../lib/users'
 import LabelsButton from './LabelsButton'
 import NewConversationModal from './Conversations/NewConversationModal'
+import RappelTransferts from './RappelTransferts'
 import WhatsAppLogo from './WhatsAppLogo'
 import {
   Calendar, BarChart3, ListTodo, Cake, Croissant, Sandwich, Boxes, Store,
@@ -1092,6 +1093,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
           onClose={() => setShowNavConfig(false)}
         />
       )}
+      {/* Le rappel des transferts à réceptionner, sur toutes les pages : c'est
+          le seul moyen que l'atelier destinataire l'apprenne sans ouvrir
+          l'onglet. Il se retire tout seul quand il n'y a rien à prendre. */}
+      <RappelTransferts user={user} onNavigate={onNavigate} />
     </>
   )
 }

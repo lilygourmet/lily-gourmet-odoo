@@ -117,15 +117,66 @@ export async function removeArticle(odooProductId) {
 
 // ---- Transferts ----
 
+// ⚠️ Sans .limit(), Supabase s'arrête à 1000 lignes SANS PRÉVENIR : le journal
+// se serait tronqué en silence le jour où l'atelier aurait dépassé ce chiffre
+// (244 aujourd'hui). Le même piège a déjà mangé des journées de Pointage.
 export async function loadTransferts(famille) {
   const { data, error } = await supabase
     .from('transferts_mp').select('*')
     .eq('famille', famille)
     .order('transfer_date', { ascending: false })
     .order('created_at', { ascending: false })
+    .limit(5000)
   if (error) throw error
   return data || []
 }
+
+/**
+ * Ce qui attend d'être réceptionné, dans les deux familles — pour le rappel
+ * affiché en haut de l'app. On ne rapporte que ce que CET utilisateur peut
+ * confirmer : inutile de rappeler à l'annexe ce que la boutique doit prendre.
+ */
+export async function loadEnAttentePour(user) {
+  if (!lieuxDe(user).length) return []
+  const { data, error } = await supabase
+    .from('transferts_mp').select('id, matiere, qty_envoye, unite, sens, famille, transfer_date, envoye_par')
+    .eq('statut', 'en_attente')
+    .order('transfer_date', { ascending: true })
+    .limit(200)
+  if (error) throw error
+  return (data || []).filter(t => peutConfirmer(user, t.sens))
+}
+
+/**
+ * Retire un envoi que personne n'a encore reçu. Réservé à celui qui l'a saisi
+ * (ou à un admin) : une erreur de frappe se corrige sans attendre que l'autre
+ * atelier la refuse. Une ligne déjà reçue ou refusée n'est jamais touchée —
+ * elle a un bon Odoo derrière elle.
+ */
+export async function retirerEnvoi(t, user) {
+  if (t.statut !== 'en_attente') throw new Error('déjà traité — trop tard pour le retirer')
+  const sien = t.envoye_par_id && user?.id && t.envoye_par_id === user.id
+  if (!sien && user?.role !== 'admin') throw new Error('seul celui qui l\'a envoyé peut le retirer')
+  const { error } = await supabase.from('transferts_mp')
+    .delete().eq('id', t.id).eq('statut', 'en_attente')
+  if (error) throw error
+}
+
+/**
+ * L'habitude, pour cet article : la plus grosse quantité déjà envoyée.
+ * Sert à repérer une faute de frappe AVANT l'envoi — le 28/08, 2 500 kg de
+ * mascarpone sont partis pour 2,5, et personne ne les a rattrapés : le bon
+ * Odoo a été créé avec 2,5 tonnes.
+ */
+export function habitude(rows, odooProductId) {
+  const passes = rows
+    .filter(r => r.odoo_product_id === odooProductId && Number(r.qty_envoye) > 0)
+    .map(r => Number(r.qty_envoye))
+  return passes.length ? Math.max(...passes) : null
+}
+
+/** Le facteur au-delà duquel on demande confirmation (20 × l'habitude). */
+export const FACTEUR_ALERTE = 20
 
 // Enregistre un envoi (en attente de confirmation) puis prévient l'autre atelier.
 export async function addTransfert({ famille, sens, article, qty, date, user }) {

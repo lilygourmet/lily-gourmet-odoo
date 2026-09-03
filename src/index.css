@@ -225,3 +225,13 @@ html, body {
     break-inside: avoid;
   }
 }
+
+/* Le rappel des transferts : la ligne suivante monte à la place de la précédente.
+   Immobile pour qui a demandé moins d'animations. */
+@keyframes lg-monte {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes lg-monte { from { opacity: 1; } to { opacity: 1; } }
+}

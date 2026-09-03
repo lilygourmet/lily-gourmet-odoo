@@ -4,11 +4,13 @@ import { Plus, Check, Printer, Search, Settings, X, Trash2, Eye, EyeOff, Send, C
 import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { canSeeTransfertsProduits } from '../lib/auth'
+import { confirmDialog } from '../lib/confirmDialog'
 import {
   SENS, FAMILLES, GROUPES, lieuxDe, peutEnvoyer, peutConfirmer,
   loadArticles, searchOdooProducts, addArticle, setArticleActif,
   loadTransferts, addTransfertsGroupes, confirmTransfert, envoyerVersOdoo,
   loadWaSm, saveWaSm, unitesPour, versUniteOdoo,
+  retirerEnvoi, habitude, FACTEUR_ALERTE,
 } from '../lib/transfertsStock'
 
 // 3,8 plutôt que 3.8 ; masque les décimales inutiles (5 kg, pas 5,0).
@@ -89,13 +91,28 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
       return { ...c, saisie: v }
     })
   }
-  function validerCalc() {
+  async function validerCalc() {
     const n = Number((calc.saisie || '').replace(',', '.'))
     if (!calc.unite) { toast.error("Choisis d'abord l'unité."); return }
     if (!(n > 0)) { toast.error('Quantité invalide.'); return }
     const a = calc.article
     // On enregistre dans l'unité d'Odoo, en gardant ce qui a été tapé pour l'affichage.
     const qty = versUniteOdoo(n, calc.unite, a.unite)
+
+    // GARDE-FOU. Le 28/08, 2 500 kg de mascarpone sont partis pour 2,5 et le bon
+    // Odoo a été créé avec 2,5 tonnes ; le 22/08, 5 480 000 g de glaçage n'ont
+    // été rattrapés qu'à la réception. On compare à ce qui est déjà parti de cet
+    // article : au-delà de 20 fois le record, on demande confirmation.
+    const record = habitude(rows, a.odoo_product_id)
+    if (record && qty > record * FACTEUR_ALERTE) {
+      const ok = await confirmDialog(
+        `${fmt(qty)} ${a.unite} de « ${a.nom} » ?\n\n`
+        + `Le plus gros transfert déjà fait de cet article était de ${fmt(record)} ${a.unite}.\n`
+        + `Là c'est ${Math.round(qty / record)} fois plus.\n\n`
+        + 'Vérifie l\'unité : une erreur ici part directement dans Odoo.',
+        { confirmLabel: 'Oui, c\'est bien ça', danger: true })
+      if (!ok) return
+    }
     setPanier(p => {
       const ligne = {
         odoo_product_id: a.odoo_product_id, nom: a.nom, unite: a.unite, image_url: a.image_url,
@@ -138,6 +155,20 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
       setReception(null)
       await refresh()
     } finally { setBusy(false) }
+  }
+
+  // Retirer son propre envoi tant qu'il est en attente : une faute de frappe se
+  // corrige sans attendre que l'autre atelier la refuse.
+  async function retirer(t) {
+    const ok = await confirmDialog(
+      `Retirer « ${t.matiere} » (${fmt(t.qty_envoye)} ${t.unite || 'kg'}) ?\n\n`
+      + "La ligne disparaît, rien n'a été créé dans Odoo.",
+      { confirmLabel: 'Retirer', danger: true })
+    if (!ok) return
+    setBusy(true)
+    try { await retirerEnvoi(t, user); toast.success('Envoi retiré.'); await refresh() }
+    catch (e) { toast.error(e.message) }
+    finally { setBusy(false) }
   }
 
   async function reessayerOdoo(t) {
@@ -589,7 +620,10 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                             ? (t.odoo_error && peutConfirmer(user, t.sens)
                               ? <button onClick={() => reessayerOdoo(t)} disabled={busy} className="text-[11px] px-2 py-1 border border-line rounded-lg hover:bg-cream">↻ Odoo</button>
                               : <span className="text-[11px] text-emerald-700">✓ reçu</span>)
-                            : <span className="text-[11px] text-amber-700">en attente</span>}
+                            : (t.envoye_par_id === user?.id || isAdmin)
+                              ? <button onClick={() => retirer(t)} disabled={busy}
+                                className="text-[11px] px-2 py-1 border border-line rounded-lg text-danger hover:bg-cream">retirer</button>
+                              : <span className="text-[11px] text-amber-700">en attente</span>}
                       </div>
                     </div>
                   ))}
