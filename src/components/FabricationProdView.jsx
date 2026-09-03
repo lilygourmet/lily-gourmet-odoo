@@ -542,7 +542,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
         return (
           <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end justify-center print:hidden"
             onPointerDown={e => { if (e.target === e.currentTarget) setOuvert(null) }}>
-            <div className="bg-cream w-full max-w-[560px] rounded-t-[24px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
+            <div className="bg-cream w-full max-w-[560px] rounded-t-[24px] p-4 pb-6 max-h-[92vh] overflow-y-auto">
               <div className="flex items-center gap-3 mb-3">
                 <img src={a.photo} alt="" className="w-[62px] h-[62px] rounded-2xl object-cover shrink-0" />
                 <b className="text-[19px] leading-tight">{propre(a.article)}</b>
@@ -551,8 +551,12 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
               <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
                 <button onClick={() => setFois(f => Math.max(0.5, f > 1 ? f - 1 : f - 0.5))}
                   className="w-16 h-16 shrink-0 border-2 border-line rounded-2xl text-[32px] font-extrabold text-bordeaux leading-none">−</button>
-                <div className="flex-1 text-center">
-                  <b className="block text-[44px] font-extrabold leading-none">{nb(fois)}</b>
+                <div className="flex-1 text-center min-w-0">
+                  {/* un chiffre qui se TAPE : douze fournées, c'était onze appuis sur + */}
+                  <input type="number" step="0.5" min="0.5" value={fois}
+                    onChange={e => setFois(Math.max(0.5, Number(e.target.value) || 0.5))}
+                    aria-label="Combien de fois la recette"
+                    className="sans-fleches w-full bg-transparent border-0 outline-none text-center text-[44px] font-extrabold leading-none text-ink p-0" />
                   <span className="text-[12.5px] text-ink-mute font-bold">fois la recette</span>
                 </div>
                 <button onClick={() => setFois(f => (f < 1 ? f + 0.5 : f + 1))}
@@ -726,7 +730,7 @@ function CalculFournee({ article, recette, jour, onFermer, onUtiliser }) {
   return (
     <div className="fixed inset-0 z-[80] bg-ink/55 flex items-end justify-center print:hidden"
       onPointerDown={e => { if (e.target === e.currentTarget) onFermer() }}>
-      <div className="bg-cream w-full max-w-[640px] rounded-t-[24px] p-4 pb-6 max-h-[92dvh] overflow-y-auto">
+      <div className="bg-cream w-full max-w-[640px] rounded-t-[24px] p-4 pb-6 max-h-[92vh] overflow-y-auto">
         <div className="flex items-baseline gap-2 mb-1">
           <b className="text-[19px] leading-tight">{propre(article.article)}</b>
           <span className="text-[13px] text-ink-mute">— combien en faire ?</span>
