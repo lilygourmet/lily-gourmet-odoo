@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
-import { dernierEcran, garderEcran, creerOfPrepa, annulerOfPrepa } from '../lib/fabrication'
+import { dernierEcran, garderEcran, creerOfPrepa, annulerOfPrepa, annulerDoublons } from '../lib/fabrication'
 import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
 import { poidsUnite, versUnite } from '../lib/unites'
@@ -251,6 +251,26 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // d'annoncer « aucun ordre » pendant 3 minutes et on en crée un deuxième.
   const relireOdoo = () => loadArbreAnnexe(true)
     .then(a => { setArbre(a); garderEcran('annexe', a) }).catch(() => { })
+
+  // Doublons : quand Odoo a relancé plusieurs fois la même règle mini/maxi
+  // pour un article, on garde le nombre le plus haut (jamais la somme) et les
+  // autres s'annulent TOUT SEULS dans Odoo, avec leurs ordres enfants — sans
+  // rien demander (Layla, 2026-09-03). Le serveur revérifie : une commande
+  // client n'est jamais touchée. `doublonsTraites` évite de redemander la
+  // même annulation à chaque rechargement.
+  const doublonsTraites = useRef(new Set())
+  const doublons = (arbre && arbre.doublons) || []
+  useEffect(() => {
+    const aFaire = doublons.filter(n => !doublonsTraites.current.has(n))
+    if (!aFaire.length) return
+    aFaire.forEach(n => doublonsTraites.current.add(n))
+    annulerDoublons(aFaire)
+      .then(r => {
+        if (r.annules) { toast.success(`${r.annules} ordre(s) en double annulé(s) dans Odoo`); relireOdoo() }
+      })
+      .catch(e => toast.error(e.message || String(e)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doublons.join(',')])
 
   // Verrou d'écran : deux appuis rapprochés ne doivent pas créer deux ordres.
   const creerOrdre = async (nom, qte) => {

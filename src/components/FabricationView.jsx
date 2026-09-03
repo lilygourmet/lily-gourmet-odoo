@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies } from '../lib/fabrication'
 import { buildZplInfo } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
@@ -458,6 +458,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [data, setData] = useState(() => dernierEcran('fabrication'))
   const [erreur, setErreur] = useState(null)
   const [sel, setSel] = useState([])                      // noms d'OF cochés
+  const [histoireOuverte, setHistoireOuverte] = useState(false)   // case « déjà déclaré », repliée par défaut
+  const [soldeEnCours, setSoldeEnCours] = useState(false)
   const [ouvertes, setOuvertes] = useState({})
   const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base
   const [pageRecette, setPageRecette] = useState(false)   // téléphone : recette en page à part
@@ -843,14 +845,76 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     if (cle) marquer(cle, faits[cle].produit, faits[cle].qty)
   }
 
+  // Deux ordres pour le même produit : ça dépend d'OÙ ILS VIENNENT.
+  //
+  // • Règle mini/maxi d'Odoo (origine « OP/… ») : Odoo relance la règle chaque
+  //   matin tant que le stock est bas. Les ordres ne s'additionnent PAS, c'est
+  //   le MÊME besoin recalculé → une seule ligne, avec le nombre le PLUS ÉLEVÉ
+  //   (48 puis 69 = 69 à faire, pas 117).
+  //
+  // • Commande client (origine « S… ») : chaque ordre appartient à un client
+  //   différent → ils s'ADDITIONNENT et restent séparés. 3 plaques pour S52294
+  //   + 1 pour S51550 = 4 plaques. Les regrouper ferait rater une commande.
+  //   (Règle rappelée par Layla le 2026-09-02.)
   const aFaire = useMemo(
-    () => ((data && data.ofs) || []).filter(o => !dejaDeclares.has(o.name)).map(o => {
-      const dispo = stockDeProduit(o.produit)
-      return { ...o, stockApp: dispo, stockAssez: dispo >= enKg(o.qty, o.unite).q - 0.001 }
-    }),
+    () => {
+      const brut = ((data && data.ofs) || []).filter(o => !dejaDeclares.has(o.name)).map(o => {
+        const dispo = stockDeProduit(o.produit)
+        return { ...o, stockApp: dispo, stockAssez: dispo >= enKg(o.qty, o.unite).q - 0.001 }
+      })
+      // Un ordre né d'une règle mini/maxi, et d'elle seule : pas de n° de commande
+      // dans son origine (elle peut être composée : « OP/00422,WHPDX/MO/20804 »).
+      const vientDUneRegle = o => {
+        const orig = String(o.origine || '').trim()
+        return /^OP\//.test(orig) && !/\bS\d{4,}\b/.test(orig)
+      }
+      const parProduit = new Map()
+      for (const o of brut) {
+        if (!vientDUneRegle(o)) continue
+        if (!parProduit.has(o.produit)) parProduit.set(o.produit, [])
+        parProduit.get(o.produit).push(o)
+      }
+      const garde = new Map()          // ordre gardé -> les autres du même produit
+      const ecartes = new Set()
+      for (const liste of parProduit.values()) {
+        if (liste.length < 2) continue
+        const trie = [...liste].sort((a, b) => enKg(b.qty, b.unite).q - enKg(a.qty, a.unite).q)
+        garde.set(trie[0].name, trie.slice(1).map(x => x.name))
+        for (const x of trie.slice(1)) ecartes.add(x.name)
+      }
+      return brut.filter(o => !ecartes.has(o.name))
+        .map(o => (garde.has(o.name) ? { ...o, aAnnuler: garde.get(o.name) } : o))
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data, dejaDeclares, stocks])
   const gateaux = useMemo(() => aFaire.filter(o => o.taille), [aFaire])
+
+  // Les ordres écartés du regroupement : uniquement ceux d'une règle mini/maxi.
+  const doublonsStock = useMemo(
+    () => [...new Set(aFaire.flatMap(o => o.aAnnuler || []))], [aFaire])
+
+  // Les doublons partent TOUT SEULS (demande de Layla, 2026-09-03 : « fais le
+  // toi meme systematiquement, ne me demande pas de cliquer »). Le serveur
+  // revérifie tout : jamais une commande client, jamais un ordre déjà produit,
+  // et il descend jusqu'aux sous-sous-enfants.
+  // `doublonsTraites` évite de redemander la même annulation à chaque
+  // rechargement — un ordre refusé par sécurité ne doit pas boucler.
+  const doublonsTraites = useRef(new Set())
+  useEffect(() => {
+    const aFaireIci = doublonsStock.filter(n => !doublonsTraites.current.has(n))
+    if (!aFaireIci.length || soldeEnCours) return
+    aFaireIci.forEach(n => doublonsTraites.current.add(n))
+    setSoldeEnCours(true)
+    annulerDoublons(aFaireIci)
+      .then(r => {
+        if (r.annules) toast.success(`${r.annules} ordre(s) en double annulé(s) dans Odoo`)
+        setSoldeEnCours(false)
+        relire()
+      })
+      .catch(e => { toast.error(e.message || String(e)); setSoldeEnCours(false) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doublonsStock])
+
   // Tout ce qui est coché alimente la recette de droite — les gâteaux comme les
   // préparations demandées par Odoo (sirop, crème STK), qui n'ont pas de taille.
   const choisis = useMemo(() => aFaire.filter(o => sel.includes(o.name)), [aFaire, sel])
@@ -1340,28 +1404,50 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
               <Titre n={demandeOdoo.length ? 3 : 2}>Gâteaux à faire</Titre>
               {gateaux.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Aucun gâteau à faire.</p>}
+              {/* Rien à cliquer : les doublons relancés par une règle mini/maxi
+                  s'annulent tout seuls dans Odoo. On le dit pendant que ça se
+                  fait, puis la ligne disparaît. */}
+              {soldeEnCours && (
+                <div className="mb-3 px-3.5 py-2.5 rounded-xl border border-[#e8cfa6] bg-[#FFF7E0] text-[12.5px] text-[#854F0B]">
+                  Odoo avait relancé la même fabrication — annulation des doublons en cours…
+                </div>
+              )}
+
               <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
  />
               <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
  />
 
+              {/* Historique du jour : une case À PART, repliée, hors du travail à
+                  faire. Ce qui est déclaré n'est plus à produire — il ne doit
+                  plus encombrer la liste — mais on doit pouvoir se corriger. */}
               {declaresAujourdhui.length > 0 && (
-                <>
-                  <Titre n={demandeOdoo.length ? 4 : 3}>Déjà déclaré aujourd'hui</Titre>
-                  <p className="text-[12px] text-ink-mute -mt-1 mb-2">
-                    à retirer si c'est une erreur — sauf ce qui est déjà validé
-                  </p>
-                  {declaresAujourdhui.map(o => (
-                    <div key={o.name} className="border border-[#cfe0b8] bg-[#EAF3DE] rounded-xl px-3.5 py-2.5 mb-1.5">
-                      <LigneDeclaree o={o} onRetirer={() => retirer(o)} />
-                      {o.enfants.map(e => (
-                        <div key={e.name} className="ml-4 pl-3 mt-1.5 border-l-2 border-[#cfe0b8]">
-                          <LigneDeclaree o={e} petit onRetirer={() => retirer(e)} />
+                <div className="mt-6 pt-4 border-t border-line">
+                  <button onClick={() => setHistoireOuverte(v => !v)}
+                    aria-expanded={histoireOuverte}
+                    className="w-full flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-[#cfe0b8] bg-[#EAF3DE] text-left">
+                    <span className="text-[13px] font-semibold text-ok">✓ Déjà déclaré aujourd'hui</span>
+                    <span className="text-[12px] text-ink-mute tabular-nums">{declaresAujourdhui.length}</span>
+                    <span className="ml-auto text-[12px] text-ink-mute">{histoireOuverte ? 'masquer' : 'voir'}</span>
+                  </button>
+                  {histoireOuverte && (
+                    <div className="mt-2">
+                      <p className="text-[12px] text-ink-mute mb-2">
+                        à retirer si c'est une erreur — sauf ce qui est déjà validé
+                      </p>
+                      {declaresAujourdhui.map(o => (
+                        <div key={o.name} className="border border-[#cfe0b8] bg-[#EAF3DE] rounded-xl px-3.5 py-2.5 mb-1.5">
+                          <LigneDeclaree o={o} onRetirer={() => retirer(o)} />
+                          {o.enfants.map(e => (
+                            <div key={e.name} className="ml-4 pl-3 mt-1.5 border-l-2 border-[#cfe0b8]">
+                              <LigneDeclaree o={e} petit onRetirer={() => retirer(e)} />
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
-                  ))}
-                </>
+                  )}
+                </div>
               )}
             </>
           )}

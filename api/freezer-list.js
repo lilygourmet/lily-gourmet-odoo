@@ -916,10 +916,13 @@ async function annulerDoublonsStock(uid, names) {
   // stricte n'en trouve aucun (vécu le 2026-09-03 : le parent soldé, l'enfant
   // laissé orphelin). On cherche donc « contient », puis on recoupe le nom
   // exact parmi les morceaux, pour ne pas attraper un homonyme au passage.
+  // On descend TANT QU'ON TROUVE : un enfant peut avoir un enfant, qui en a un
+  // autre... (demande de Layla le 2026-09-03 : « meme les sous sous sous
+  // orphelins »). La limite de 20 n'est qu'un filet anti-boucle.
   const morceaux = o => String(o || '').split(/[,\s]+/).map(x => x.trim()).filter(Boolean)
   const tous = new Map(gardes.map(m => [m.name, m]))
   let front = gardes.map(m => m.name)
-  for (let profondeur = 0; profondeur < 5 && front.length; profondeur++) {
+  for (let profondeur = 0; profondeur < 20 && front.length; profondeur++) {
     const suivant = []
     for (const parent of front) {
       // ⚠️ Ne PAS demander « qty_producing = 0 » à Odoo : le champ est vide (NULL)
@@ -2079,13 +2082,36 @@ export default async function handler(req, res) {
         if (!minmax[n]) minmax[n] = { min: o.product_min_qty || 0, max: o.product_max_qty || 0 }
       }
 
-      // Un article peut avoir plusieurs ordres ouverts : on garde le plus
-      // récent (la liste arrive triée par id décroissant).
-      const ordres = {}
+      // Un article peut avoir plusieurs ordres ouverts. DEUX CAS, à ne jamais
+      // confondre (règle de Layla, 2026-09-02) :
+      // • nés d'une règle mini/maxi (origine « OP/… » sans n° de commande) :
+      //   Odoo relance la même règle chaque matin tant que le stock est bas →
+      //   c'est un DOUBLON. On garde le nombre le PLUS HAUT, jamais la somme,
+      //   et l'écran fait annuler les autres dans Odoo.
+      // • nés d'une commande client (« S12345 ») : ils appartiennent à des
+      //   clients différents, ils s'ADDITIONNENT. On n'y touche JAMAIS.
+      const estRegle = o => {
+        const orig = String(o.origin || '').trim()
+        return /^OP\//.test(orig) && !/\bS\d{4,}\b/.test(orig)
+      }
+      const parProduit = {}
       for (const o of ouverts) {
         const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
-        if (!n || ordres[n]) continue
-        ordres[n] = { name: o.name, qty: o.product_qty, state: o.state, origin: o.origin || '' }
+        if (n) (parProduit[n] ||= []).push(o)
+      }
+      const ordres = {}
+      const doublons = []
+      for (const [n, liste] of Object.entries(parProduit)) {
+        const regles = liste.filter(estRegle)
+        let jetes = new Set()
+        if (regles.length > 1) {
+          const trie = [...regles].sort((a, b) => (b.product_qty || 0) - (a.product_qty || 0))
+          jetes = new Set(trie.slice(1).map(o => o.name))
+          doublons.push(...jetes)
+        }
+        // l'ordre montré : le plus récent qui reste (liste triée par id décroissant)
+        const montre = liste.find(o => !jetes.has(o.name)) || liste[0]
+        ordres[n] = { name: montre.name, qty: montre.product_qty, state: montre.state, origin: montre.origin || '' }
       }
 
       top('stocks et min/max')
@@ -2096,7 +2122,7 @@ export default async function handler(req, res) {
       if (req.query.chrono) return res.status(200).json({ chrono })
       res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=1800')
       return res.status(200).json({
-        racines, ecartees, photos, stocks, minmax, tournees, ordres,
+        racines, ecartees, photos, stocks, minmax, tournees, ordres, doublons,
         combien: { ...combien, ...poids }, recettes: aRendre,
       })
     }
