@@ -792,7 +792,7 @@ const ORIGINE_APP = 'LG-APP'
  * faire alors qu'Odoo n'en demandait pas (une crème au beurre nature, par
  * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
  */
-async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/') {
+async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/', ajustements = null) {
   const prod = (await odooSearchRead(uid, 'product.product',
     [['name', '=', nomProduit]], ['id', 'display_name', 'uom_id', 'product_tmpl_id'], { limit: 1 }))[0]
   if (!prod) throw new Error('article introuvable dans Odoo : ' + nomProduit)
@@ -850,11 +850,19 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
     lieuProduction(uid),
   ])
   const facteur = bom.product_qty ? qty / bom.product_qty : 1
+  // Ce que l'atelier a RÉELLEMENT pesé prime sur la règle de trois : quand
+  // l'écran envoie une quantité pour un composant, c'est elle qui part dans
+  // l'ordre. Sinon l'ordre dirait 1 361 g de crème là où 1 400 ont été mis.
+  const cleNom = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const mesure = new Map(Object.entries(ajustements || {})
+    .filter(([, v]) => Number(v) > 0).map(([k, v]) => [cleNom(k), Number(v)]))
   for (const l of lignes) {
+    const pesee = mesure.get(cleNom(Array.isArray(l.product_id) ? l.product_id[1] : ''))
     await odooCall(uid, 'stock.move', 'create', [{
       name: prod.display_name,
       product_id: l.product_id[0],
-      product_uom_qty: Math.round(l.product_qty * facteur * 1000) / 1000,
+      product_uom_qty: pesee !== undefined ? Math.round(pesee * 1000) / 1000
+        : Math.round(l.product_qty * facteur * 1000) / 1000,
       product_uom: l.product_uom_id[0],
       location_id: modele.location_src_id[0],
       location_dest_id: lieuProd ? lieuProd.id : modele.location_dest_id[0],
@@ -1650,7 +1658,7 @@ export default async function handler(req, res) {
       try {
         // L'atelier décide où l'ordre naît : l'annexe chez elle, le reste à la boutique.
         const prefixe = body.atelier === 'annexe' ? 'WHPDX/MO/' : 'WHLVP/MO/'
-        const of = await creerOfPreparation(uid, produit, qtyKg, (body.parents || []).filter(Boolean), body.unite || null, prefixe)
+        const of = await creerOfPreparation(uid, produit, qtyKg, (body.parents || []).filter(Boolean), body.unite || null, prefixe, body.ajustements || null)
         console.log(`[creer-of] ${produit} ${qtyKg} kg par ${body.actorId || '?'} → ${of.name}`)
         return res.status(200).json(of)
       } catch (e) {

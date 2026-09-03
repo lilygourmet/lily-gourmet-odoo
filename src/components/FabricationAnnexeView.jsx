@@ -172,6 +172,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const [rechargement, setRechargement] = useState(false)
   const [pile, setPile] = useState([])        // d'où l'on vient dans les fiches
   const [fois, setFois] = useState(1)
+  // Les quantités qu'elle a tapées elle-même, par ingrédient. Elles ne bougent
+  // plus quand une AUTRE ligne recale la recette : le 03/09, avoir tapé 1 400 g
+  // de crème puis 14 g de gélatine avait ramené la crème à 1 361 g, et c'est ce
+  // chiffre-là qui est parti dans WHPDX/MO/21193. Ce qui est mesuré est mesuré.
+  const [ajuste, setAjuste] = useState({})
+  // le compteur, lui, repart d'une recette propre
+  const changerFois = v => { setAjuste({}); setFois(v) }
   const [besoins, setBesoins] = useState({})      // besoins modifiés à la main
   const [noms, setNoms] = useState({})
   const [caches, setCaches] = useState([])
@@ -608,12 +615,14 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     if (cible.besoin > 0 && besoins[cible.nom] === undefined) {
       setBesoins(x => ({ ...x, [cible.nom]: arrondiBesoin(cible.nom, cible.besoin) }))
     }
+    setAjuste({})
     setFois(foisPour(cible.nom, b))
   }
 
   const ouvrirFicheSimple = nom => {
     setSaisie(nom)
     const b = besoins[nom] !== undefined ? besoins[nom] : besoinDeBase(nom)
+    setAjuste({})
     setFois(foisPour(nom, b))
   }
 
@@ -643,7 +652,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         msg += ' · ordre ' + deja.name
       } else {
         try {
-          const of = await creerOfPrepa(nom, qte, user?.id, [], u, 'annexe')
+          const of = await creerOfPrepa(nom, qte, user?.id, [], u, 'annexe', ajuste)
           if (of && of.name && !of.error) {
             if (!of.test) { ordre = of.name; cree = true }
             setOrdresLocaux(o => ({ ...o, [nom]: { name: of.name, qty: qte, state: 'draft', origin: '' } }))
@@ -1188,7 +1197,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 : (/^kg$/i.test(u) ? Math.round(brut * 100) / 100 : Math.round(brut))
               // on avance par pas utiles : 100 g, 0,5 kg, 1 pièce, 1 cadre
               const pas = cadre ? 1 : (/^(g|gr)$/i.test(u) ? 100 : (/^kg$/i.test(u) ? 0.5 : 1))
-              const poser = v => setFois(cadre
+              const poser = v => changerFois(cadre
                 ? Math.max(1, Math.ceil((Number(v) || 0) - 0.001))
                 : Math.max(0.01, (Number(v) || 0) / r.sortQty))
               return (
@@ -1216,15 +1225,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 
             {!estMere && !(recettes[saisie] && recettes[saisie].sortQty > 0) && (
             <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
-              <button onClick={() => setFois(f => Math.max(0.01, f > 1 ? f - 1 : Math.round((f - 0.25) * 100) / 100))}
+              <button onClick={() => changerFois(Math.max(0.01, fois > 1 ? fois - 1 : Math.round((fois - 0.25) * 100) / 100))}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">−</button>
               <div className="flex-1 text-center">
                 <input type="number" step="0.25" min="0.01" value={fois}
-                  onChange={e => setFois(Math.max(0.01, Number(e.target.value) || 0.01))}
+                  onChange={e => changerFois(Math.max(0.01, Number(e.target.value) || 0.01))}
                   className="sans-fleches w-full bg-transparent border-0 outline-none text-center text-[36px] font-extrabold text-ink p-0" />
                 <span className="text-[11.5px] text-ink-mute font-bold">fournées</span>
               </div>
-              <button onClick={() => setFois(f => (f < 1 ? Math.round((f + 0.25) * 100) / 100 : f + 1))}
+              <button onClick={() => changerFois(fois < 1 ? Math.round((fois + 0.25) * 100) / 100 : fois + 1)}
                 className="w-14 h-14 shrink-0 border-2 border-line rounded-2xl text-[27px] font-extrabold text-bordeaux leading-none">+</button>
             </div>
             )}
@@ -1280,7 +1289,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   return (
                     <div key={i} className={'flex items-center gap-3 px-3.5 border-b border-[#f4eee2] last:border-0 '
                       + (couvert ? 'bg-[#F3F8EC]' : '')}>
-                      <QteLigne l={l} fois={fois} onFois={setFois} />
+                      <QteLigne l={l} fois={fois} ajuste={ajuste[l.produit]}
+                        onSaisie={v => {
+                          setAjuste(a => ({ ...a, [l.produit]: v }))
+                          setFois(Math.round((v / l.qty) * 10000) / 10000)
+                        }}
+                        onLacher={() => setAjuste(a => { const n = { ...a }; delete n[l.produit]; return n })} />
                       {ouvrable ? (
                         <button
                           onClick={() => {
@@ -1347,6 +1361,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                 </p>
               </div>
             )}
+            {!estMere && Object.keys(ajuste).length > 0 && (
+              <p className="mb-2.5 border border-[#b58f3c] text-[#854F0B] bg-[#FBF3DF] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-snug">
+                <b>Recette ajustée.</b> C'est ce qui partira dans l'ordre Odoo, et
+                donc dans « À valider Annexe » :<br />
+                {Object.entries(ajuste).map(([n, v]) => {
+                  const li = regrouper(recettes[saisie].lignes).find(x => x.produit === n)
+                  return courtNom(n) + ' ' + nbQ(v, li && li.unite) + ' ' + ((li && li.unite) || '')
+                }).join(' · ')}
+              </p>
+            )}
             {!estMere && (
               <button onClick={() => noter(saisie, fois)} disabled={!!creation || bloquants.length > 0}
                 className={'w-full py-4 rounded-2xl text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5 '
@@ -1377,10 +1401,11 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 // TOUT le reste suit — les autres ingrédients, la sortie, et ce qui sera
 // validé dans « À valider Annexe ». Une ligne qui porte plusieurs tailles
 // (« 20 / 80 / 120 g ») ne se tape pas : on ne saurait pas laquelle bouge.
-function QteLigne({ l, fois, onFois }) {
-  const affiche = l.tailles
+function QteLigne({ l, fois, ajuste, onSaisie, onLacher }) {
+  const calcule = l.tailles
     ? l.tailles.map(x => nbQ(x * fois, l.unite)).join(' / ')
     : nbQ(l.qty * fois, l.unite)
+  const affiche = ajuste !== undefined ? nbQ(ajuste, l.unite) : calcule
   const [txt, setTxt] = useState(affiche)
   const [vu, setVu] = useState(affiche)
   // la valeur a changé ailleurs (compteur, autre ligne) : on la reprend
@@ -1397,17 +1422,26 @@ function QteLigne({ l, fois, onFois }) {
     // « 1 400 » arrive avec l'espace des milliers et la virgule française
     const v = Number(String(txt).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'))
     if (!(v > 0)) { setTxt(affiche); return }
-    onFois(Math.round((v / l.qty) * 10000) / 10000)
+    onSaisie(v)
   }
   return (
-    <span className="min-w-[96px] shrink-0 flex items-baseline justify-end gap-1">
-      <input value={txt} inputMode="decimal"
-        onChange={e => setTxt(e.target.value)} onBlur={valider}
-        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-        aria-label={'Quantité de ' + courtNom(l.produit)}
-        className="w-[66px] text-right text-[17px] font-extrabold bg-transparent text-ink
-                   border-b border-dashed border-bordeaux/45 focus:outline-none focus:border-bordeaux" />
-      <span className="text-[13px] font-bold text-ink-mute">{l.unite}</span>
+    <span className="min-w-[96px] shrink-0 flex flex-col items-end">
+      <span className="flex items-baseline gap-1">
+        <input value={txt} inputMode="decimal"
+          onChange={e => setTxt(e.target.value)} onBlur={valider}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+          aria-label={'Quantité de ' + courtNom(l.produit)}
+          className={'w-[66px] text-right text-[17px] font-extrabold bg-transparent border-b '
+            + (ajuste !== undefined
+              ? 'text-bordeaux border-solid border-bordeaux'
+              : 'text-ink border-dashed border-bordeaux/45') + ' focus:outline-none focus:border-bordeaux'} />
+        <span className="text-[13px] font-bold text-ink-mute">{l.unite}</span>
+      </span>
+      {ajuste !== undefined && (
+        <button onClick={onLacher} className="text-[10px] text-bordeaux/80 underline underline-offset-2">
+          ajusté · remettre {calcule}
+        </button>
+      )}
     </span>
   )
 }
