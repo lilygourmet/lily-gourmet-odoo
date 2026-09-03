@@ -5,7 +5,11 @@ import { countConversationBadges, countDevisInternetNonTraites } from './convers
 import { countModificationsATraiter } from './modifications'
 import { countLivraisonsARelancer } from './deliveries'
 import { compterCheckCd } from './checkCd'
-import { canCheckCd } from './auth'
+import { canCheckCd, canValiderAnnexe } from './auth'
+import { loadEnAttentePour, lieuxDe } from './transfertsStock'
+import { loadFabProd } from './fabricationProd'
+import { loadManques } from './fabrication'
+import { todayISO } from './dates'
 
 // Compteurs de notif pour le mini-rail de la bande gauche (desktop).
 // Rafraîchis au montage + toutes les 180 s + au retour sur la fenêtre.
@@ -28,6 +32,23 @@ export function useNavBadges(user) {
         // vérifiés. Seulement pour qui en a la charge — la lecture passe par
         // Odoo, inutile de la faire tourner pour tout le monde.
         canCheckCd(user) ? compterCheckCd().then(n => set('check-cd', n)).catch(() => {}) : Promise.resolve(),
+        // Ce que l'annexe a déclaré aujourd'hui et qui attend sa validation :
+        // on ne compte que les déclarations rattachées à un ordre ENCORE ouvert
+        // dans Odoo, sinon le chiffre resterait allumé après la validation.
+        canValiderAnnexe(user) ? (async () => {
+          const journal = await loadFabProd(todayISO(), 'annexe')
+          const noms = [...new Set((journal || []).map(d => d.ordre).filter(Boolean))]
+          if (!noms.length) { set('valider-annexe', 0); return }
+          // On lit CES ordres-là seulement : l'arbre complet de l'annexe est
+          // volontairement sans cache, bien trop lourd pour une pastille.
+          const det = await loadManques(noms)
+          set('valider-annexe', det.filter(x => x.etat !== 'done' && x.etat !== 'cancel').length)
+        })().catch(() => {}) : Promise.resolve(),
+        // Les transferts qui attendent d'être réceptionnés PAR CET utilisateur.
+        lieuxDe(user).length ? loadEnAttentePour(user).then(l => {
+          set('transferts-mp', l.filter(t => t.famille === 'mp').length)
+          set('transferts-sm', l.filter(t => t.famille !== 'mp').length)
+        }).catch(() => {}) : Promise.resolve(),
         (async () => {
           const [{ count: c1 }, { count: c2 }] = await Promise.all([
             supabase.from('conges').select('id', { count: 'exact', head: true }).eq('statut', 'demande'),

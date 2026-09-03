@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd } from '../lib/fabricationProd'
 import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
-import { loadManques, validerDansOdoo, creerOfPrepa, loadSaisies, saveSaisies } from '../lib/fabrication'
+import { loadManques, validerDansOdoo, loadSaisies, saveSaisies } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { AjoutIngredient } from './ValidationView'
 
@@ -17,7 +17,8 @@ import { AjoutIngredient } from './ValidationView'
 // page, mêmes mots, mêmes gestes — seuls changent le titre, les articles, et
 // deux choses propres à l'annexe :
 //   - la quantité RÉELLEMENT produite, le reste repartant en reliquat ;
-//   - un article déclaré sans ordre dans Odoo, qu'on peut créer sur place.
+//   - un article déclaré dont l'ordre n'a pas pu être créé, signalé sans être
+//     effaçable : ici on valide, on ne lance jamais de fabrication.
 
 // Quantités produites et consommations corrigées : gardées côté serveur, donc
 // retrouvées sur un autre appareil, et effacées à la validation.
@@ -49,7 +50,6 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   const [faites, setFaites] = useState({})        // ordre -> quantité vraiment produite
   const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
   const [ajouts, setAjouts] = useState({})        // { ordre: [ingrédients ajoutés à la main] }
-  const [creation, setCreation] = useState(null)
 
   useEffect(() => {
     let vivant = true
@@ -63,8 +63,8 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         if (!vivant) return
         const ordres = arbre.ordres || {}
         // un ordre par article déclaré, sans doublon ; et ce qui n'a PAS
-        // d'ordre reste visible, avec de quoi le créer sur place — sinon la
-        // déclaration disparaissait et rien ne pouvait être validé.
+        // d'ordre reste visible et signalé — sinon du travail déclaré
+        // disparaîtrait sans que personne le sache.
         const parOrdre = new Map()
         const sans = new Map()
         const ouvertsParNom = new Map(Object.values(ordres).map(o => [o.name, o]))
@@ -153,18 +153,6 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
 
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
-
-  async function creer(l) {
-    if (creation) return
-    setCreation(l.name)
-    try {
-      const r = await creerOfPrepa(l.article, faites[l.name] ?? l.demande, user?.id, [], l.unite, 'annexe')
-      if (r && r.error) toast.error(r.error)
-      else if (r && r.test) toast.success('Mode test : aucun ordre créé dans Odoo')
-      else if (r && r.name) { toast.success('Ordre ' + r.name + ' créé'); setTour(t => t + 1) }
-    } catch (e) { toast.error(e.message || String(e)) }
-    setCreation(null)
-  }
 
   async function lancer(forcer) {
     const cibles = (forcer ? bloques : prets).map(l => l.name)
@@ -260,24 +248,23 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         )}
 
         {lignes && !resultats && !envoi && lignes.map(l => {
-          // Déclaré, mais Odoo n'a pas d'ordre ouvert : sans ordre, rien à valider.
+          // Déclaré, mais aucun ordre ouvert dans Odoo. L'ordre se crée au moment
+          // du « c'est fait » dans Fabrication Annexe, jamais ici : cet écran
+          // valide, il ne lance pas de fabrication. On le signale quand même —
+          // sans ça, du travail déclaré disparaîtrait sans que personne le sache.
           if (l.sansOrdre) {
             return (
               <div key={l.name} className="border border-line rounded-xl mb-2 overflow-hidden border-l-4 border-l-[#d9a441]">
                 <div className="flex items-center gap-3 px-3.5 py-3 bg-white">
                   <div className="flex-1 min-w-0">
                     <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
-                    <div className="text-[11.5px] text-ink-mute">Odoo n'a pas d'ordre ouvert pour cet article à l'annexe.</div>
+                    <div className="text-[11.5px] text-ink-mute">
+                      L'ordre n'a pas pu être créé au moment du « c'est fait ». Refais-le dans Fabrication Annexe.
+                    </div>
                   </div>
                   <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap bg-[#FFF7E0] text-[#854F0B]">
-                    aucun ordre
+                    sans ordre
                   </span>
-                </div>
-                <div className="border-t border-line px-3.5 py-2">
-                  <button onClick={() => creer(l)} disabled={!!creation}
-                    className="w-full rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-bordeaux">
-                    {creation === l.name ? 'Création en cours…' : `créer l'ordre de ${qte(l.demande, l.unite)}`}
-                  </button>
                 </div>
               </div>
             )
