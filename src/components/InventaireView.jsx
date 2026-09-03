@@ -14,11 +14,11 @@ import {
   loadAjouts, addAjout, updateAjout, deleteAjout, tableauInventaire, calculer,
 } from '../lib/inventaire'
 
-const FAM_ZERO = 'À zéro chez Odoo'
+const FAM_ZERO = 'À zéro ou en négatif'
 const FAMILLES = ['Matières premières', 'Semi-finis']
 
 // mode 'stock'  : ce qui a du stock dans l'annexe (l'inventaire d'origine)
-// mode 'zero'   : ce que l'annexe utilise mais qu'Odoo croit à zéro — volontairement
+// mode 'zero'   : ce dont le stock Odoo est faux — à zéro, ou négatif — volontairement
 //                 dans un onglet À PART pour ne pas se mélanger avec le premier comptage.
 export default function InventaireView({ user, activeView, onNavigate, onLogout, mode = 'stock', lieu = 'annexe' }) {
   const estZero = mode === 'zero'
@@ -120,11 +120,11 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
         <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-[24px] font-semibold text-ink tracking-tight">
-              {estZero ? `🔍 ${nomLieu} — articles à zéro` : `📦 Inventaire ${nomLieu}`}
+              {estZero ? `🔍 ${nomLieu} — à zéro ou en négatif` : `📦 Inventaire ${nomLieu}`}
             </h1>
             <p className="text-[13px] text-ink-mute mt-1">
               {estZero
-                ? `Utilisés ${lieu === 'prod' ? 'en prod' : "à l'annexe"} cette année, mais qu'Odoo croit à zéro`
+                ? `Utilisés ${lieu === 'prod' ? 'en prod' : "à l'annexe"} cette année, mais qu'Odoo compte mal : à zéro, ou en négatif`
                 : `${lieu === 'prod' ? 'WHLVP/Stock/Stock Prod' : 'WHPDX/Stock Prod annexe'} — matières premières et semi-finis`}
             </p>
           </div>
@@ -320,7 +320,14 @@ function Ligne({ a, compte, onSaisie, selectable, selectionne, onSelect }) {
         <input type="checkbox" checked={selectionne} onChange={e => onSelect(e.target.checked)}
           aria-label={'Sélectionner ' + a.nom} className="w-5 h-5 shrink-0 accent-[#7a1f3d]" />
       )}
-      <div className="flex-1 min-w-0 text-[14px] text-ink break-words">{a.nom}</div>
+      <div className="flex-1 min-w-0 text-[14px] text-ink break-words">
+        {a.nom}
+        {a.qty < 0 && (
+          <span className="ml-2 align-middle inline-block px-1.5 py-0.5 rounded-md bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700 tabular-nums whitespace-nowrap">
+            Odoo : {String(a.qty).replace('-', '\u2212').replace('.', ',')}
+          </span>
+        )}
+      </div>
       <div className="w-24 shrink-0">
         <input type="text" inputMode="text" placeholder="—"
           value={txt} onChange={e => setTxt(e.target.value)} onBlur={valider}

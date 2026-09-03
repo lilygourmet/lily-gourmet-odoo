@@ -263,8 +263,8 @@ const STOCK_PROD_LIEUX = {
 }
 // Emplacements comptés par les onglets Inventaire.
 const INVENTAIRE_LIEUX = { annexe: 62, prod: 52 }
-// 3e famille de la feuille : présents dans l'activité de l'annexe, mais qu'Odoo croit à zéro.
-const FAM_ZERO = 'À zéro chez Odoo'
+// 3e famille de la feuille : ce dont le stock Odoo est faux — à zéro, ou négatif.
+const FAM_ZERO = 'À zéro ou en négatif'
 
 // On part du stock RÉEL de l'emplacement (stock.quant), pas du catalogue : on ne
 // compte que ce qui est censé s'y trouver. On garde les matières premières (MP-)
@@ -299,11 +299,16 @@ async function handleInventaire(req, res) {
         // drapeau i, 14 articles de l'annexe et 9 de Prod étaient invisibles.
         : /^SM/i.test(nom) ? 'Semi-finis' : null
       if (!fam) continue
+      const qty = Math.round((qtyById.get(p.id) || 0) * 100) / 100
       articles.push({
-        id: p.id, nom, fam,
+        id: p.id, nom,
+        // Un stock négatif est aussi faux qu'un stock à zéro : il part avec les
+        // anomalies (45 articles à l'annexe, 77 à Stock Prod), pas dans la liste
+        // à compter — Layla les cherchait justement dans cet onglet-là.
+        fam: qty < 0 ? FAM_ZERO : fam,
         uom: (p.uom_id && p.uom_id[1]) || '',
         cat: (p.categ_id && p.categ_id[1]) || 'Sans catégorie',
-        qty: Math.round((qtyById.get(p.id) || 0) * 100) / 100,
+        qty,
       })
     }
     // ── Articles à ZÉRO qui appartiennent quand même à l'annexe ─────────────
