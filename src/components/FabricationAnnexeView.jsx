@@ -4,7 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
-import { loadArbreAnnexe, loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
+import { loadArbreAnnexe, loadMasques, masquer, demasquer, enfantsARupture } from '../lib/fabricationAnnexe'
 import { dernierEcran, garderEcran, creerOfPrepa, annulerOfPrepa, annulerDoublons } from '../lib/fabrication'
 import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
@@ -590,6 +590,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // Si Odoo en tient déjà un, on n'y touche pas, on s'y raccroche.
   const noter = async (nom, combienFois) => {
     if (creation) return
+    const bloquants = enfantsARupture(recettes, stocks, nom)
+    if (bloquants.length) {
+      toast.error('Impossible : ' + bloquants.map(propre).join(', ')
+        + (bloquants.length > 1 ? ' sont à zéro' : ' est à zéro')
+        + '. Comptez-les ou déclarez-les faits d\'abord.')
+      return
+    }
     const f = Number(combienFois) || 1
     const r = recettes[nom]
     const qte = r ? Math.round(r.sortQty * f * 100) / 100 : f
@@ -1021,6 +1028,8 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         })() : []
         const choisirTaille = vue === 'declarer' && tailles.length > 0
         const estMere = (vue === 'besoins' || choisirTaille) && estRacine
+        // Ce qui interdit de dire « c'est fait » tant que ce n'est pas compté.
+        const bloquants = estMere ? [] : enfantsARupture(recettes, stocks, saisie)
         return (
         <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end sm:items-center justify-center p-0 sm:p-4 print:hidden"
           onPointerDown={e => { if (e.target === e.currentTarget) { setSaisie(null); setPile([]) } }}>
@@ -1260,10 +1269,28 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             </div>
 
             <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-line">
+            {!estMere && bloquants.length > 0 && (
+              <div className="mb-2 rounded-2xl border border-[#f0cfc5] bg-[#FCEEE8] px-3.5 py-3">
+                <p className="text-[13px] font-extrabold text-danger mb-1.5">
+                  {bloquants.length > 1 ? 'Ces ingrédients sont à zéro' : 'Cet ingrédient est à zéro'} :
+                </p>
+                {bloquants.map(n => (
+                  <button key={n} onClick={() => ouvrirFiche(n, saisie)}
+                    className="w-full flex items-center gap-2 text-left py-1.5 border-b border-[#f0dcd4] last:border-0">
+                    <span className="flex-1 text-[13.5px] font-bold text-danger">{courtNom(n)}</span>
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 stroke-danger fill-none shrink-0" strokeWidth="2.6">
+                      <path d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                ))}
+                <p className="text-[12px] text-danger mt-1.5 leading-snug">
+                  Comptez-les dans l'inventaire, ou déclarez-les faits, avant de noter celui-ci.
+                </p>
+              </div>
+            )}
             {!estMere && (
-              <button onClick={() => noter(saisie, fois)} disabled={!!creation}
+              <button onClick={() => noter(saisie, fois)} disabled={!!creation || bloquants.length > 0}
                 className={'w-full py-4 rounded-2xl text-white text-[17px] font-extrabold flex items-center justify-center gap-2.5 '
-                  + (creation ? 'bg-[#b9c7ae]' : 'bg-ok')}>
+                  + (creation || bloquants.length ? 'bg-[#b9c7ae]' : 'bg-ok')}>
                 {creation === saisie ? 'Enregistrement…' : (
                   <>
                     <svg viewBox="0 0 24 24" className="w-5 h-5 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>

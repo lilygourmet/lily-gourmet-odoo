@@ -30,3 +30,29 @@ export async function demasquer(nom, atelier = 'annexe') {
   const { error } = await supabase.from('prod_masques').delete().eq('atelier', atelier).eq('nom', nom)
   if (error) throw error
 }
+
+/**
+ * Les enfants qui empêchent de dire « c'est fait » : un ingrédient QU'ON
+ * FABRIQUE, dont l'annexe connaît le stock, et qui est à zéro. On ne peut pas
+ * avoir fabriqué quelque chose avec un composant qu'Odoo dit absent — c'est
+ * que le composant n'a pas été déclaré ou pas compté. Le pâtissier se débloque
+ * en ouvrant l'enfant : il le déclare fait, ou il le compte.
+ * (Demande de Layla, 2026-09-03.)
+ *
+ * ⚠️ Un stock INCONNU ne bloque pas : ces articles-là (génoise CD, sirop
+ * imbibage…) sont fabriqués et rangés à la BOUTIQUE, jamais à l'annexe — le
+ * pâtissier d'ici ne pourrait pas les compter, ce serait un mur définitif.
+ * ⚠️ Un ingrédient ACHETÉ ne bloque pas non plus : la farine ou le sucre à zéro
+ * chez Odoo n'empêche pas l'atelier de tourner.
+ */
+export function enfantsARupture(recettes, stocks, nom) {
+  const r = (recettes || {})[nom]
+  if (!r || !r.lignes) return []
+  const bloquants = new Set()
+  for (const l of r.lignes) {
+    if (!l.fabrique || bloquants.has(l.produit)) continue
+    const st = (stocks || {})[l.produit]
+    if (st !== undefined && (st || 0) <= 0) bloquants.add(l.produit)
+  }
+  return [...bloquants]
+}
