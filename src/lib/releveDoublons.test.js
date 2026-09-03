@@ -126,3 +126,17 @@ describe('signatureDepot — un dépôt vu deux fois', () => {
     expect(signatureDepot(400, 'VIRT RECU MME SELMA BENOMAR')).toBeNull()
   })
 })
+
+// Rapprochement d'avant le marquage automatique : aucune ligne n'est mémorisée, le seul
+// souvenir du dépôt est le libellé gardé sur la caisse (« date · libellé »). Il doit
+// suffire à reconnaître la jumelle restée libre.
+describe('signatureDepot — depuis le libellé gardé sur la caisse', () => {
+  it('donne la même signature que la ligne du relevé', () => {
+    expect(signatureDepot(9946, '2026-05-26 · VERSEMENT ESPECE N 1694192637'))
+      .toBe(signatureDepot('9946.00', 'VERSEMENT ESPECE N° 1694192637'))
+  })
+
+  it("ne prend pas la date pour un n° d'opération", () => {
+    expect(signatureDepot(9946, '2026-05-26 · VERSEMENT ESPECE N 1694192637')).toBe('994600|1694192637')
+  })
+})
