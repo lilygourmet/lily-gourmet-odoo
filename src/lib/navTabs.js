@@ -27,7 +27,6 @@ const TAB_DEFS = [
   { view: 'fabrication-pate-sucre', emoji: '🎂', label: 'Fabrication Pâte à sucre', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_pate_sucre) },
   { view: 'fabrication-annexe', emoji: '🥧', label: 'Fabrication Annexe', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
   { view: 'fabrication-prod', emoji: '🥣', label: 'Fabrication Prod', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_prod) },
-  { view: 'mini-maxi',         emoji: '⚖️', label: 'Mini-maxi',         can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_prod || !!u?.perm_fabrication_annexe) },
   { view: 'valider-annexe',      emoji: '🏭', label: 'À valider Annexe',   can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_annexe) },
   { view: 'fabrication-valider', emoji: '✅', label: 'À valider',           can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_of) },
   { view: 'sales',             emoji: '🥪', label: 'Salés',             can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_sales) },

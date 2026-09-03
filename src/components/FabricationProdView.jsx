@@ -340,7 +340,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                 <span className="flex-1 h-0.5 bg-line" />
               </div>
 
-              <div className="grid gap-2 grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+              <div className="grid gap-1.5 grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
                 {liste.map(a => {
                   const actif = ouvert === a.article
                   return (
@@ -351,16 +351,16 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                         <div className="relative aspect-[4/3] bg-cream-warm">
                           <img src={a.photo} alt="" className="absolute inset-0 w-full h-full object-cover" />
                           {combienDe[a.article] > 0 && (
-                            <span className="absolute top-1 left-1 bg-ok text-cream text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
-                              {combienDe[a.article]} fois
+                            <span className="absolute top-0.5 left-0.5 bg-ok text-cream text-[8.5px] font-extrabold px-1 py-0 rounded-full">
+                              {combienDe[a.article]}
                             </span>
                           )}
                         </div>
-                        <div className="px-1.5 py-1.5">
-                          <div className="text-[11px] font-semibold leading-tight">{propre(a.article)}</div>
-                          <div className="text-[9.5px] text-ink-mute mt-0.5 leading-tight">
+                        <div className="px-1 py-1">
+                          <div className="text-[9px] font-semibold leading-[1.15]">{propre(a.article)}</div>
+                          <div className="text-[8px] text-ink-mute leading-[1.15]">
                             {recettes[a.article]
-                              ? `1 fois = ${nb(recettes[a.article].sortQty)} ${recettes[a.article].sortUnite}`
+                              ? `${nb(recettes[a.article].sortQty)} ${recettes[a.article].sortUnite}`
                               : 'pas de recette'}
                           </div>
                         </div>
@@ -372,7 +372,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
                 {fam === 'Autres' && !q.trim() && (
                   nouveau ? (
-                    <div className="col-span-2 sm:col-span-2 bg-white border border-bordeaux ring-2 ring-bordeaux/15 rounded-2xl overflow-hidden">
+                    <div className="col-span-4 sm:col-span-3 bg-white border border-bordeaux ring-2 ring-bordeaux/15 rounded-2xl overflow-hidden">
                       <label
                         onDragOver={e => e.preventDefault()}
                         onDrop={e => { e.preventDefault(); poserPhoto(e.dataTransfer.files[0]) }}
@@ -447,11 +447,10 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                     </div>
                   ) : (
                     <button onClick={() => setNouveau({ nom: '', unite: 'g', photo: null })}
-                      className="bg-white border border-dashed border-line rounded-2xl min-h-[190px] grid place-items-center text-center px-4">
+                      className="bg-white border border-dashed border-line rounded-xl aspect-[4/5] grid place-items-center text-center px-1">
                       <span>
-                        <span className="block text-[22px] text-bordeaux leading-none mb-1.5">+</span>
-                        <span className="block text-[13.5px] font-bold">Autre article</span>
-                        <span className="block text-[11.5px] text-ink-mute mt-0.5">avec sa photo</span>
+                        <span className="block text-[16px] text-bordeaux leading-none mb-0.5">+</span>
+                        <span className="block text-[8.5px] font-bold leading-[1.15]">Autre article</span>
                       </span>
                     </button>
                   )
