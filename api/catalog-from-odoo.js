@@ -261,8 +261,8 @@ const STOCK_PROD_LIEUX = {
   vitrine: 'WHLVP/Stock/Stock Prod',
   annexe:  'WHPDX/Stock Prod annexe',
 }
-// Emplacement compté par l'onglet « Inventaire annexe » : WHPDX/Stock Prod annexe.
-const INVENTAIRE_LOCATION = 62
+// Emplacements comptés par les onglets Inventaire.
+const INVENTAIRE_LIEUX = { annexe: 62, prod: 52 }
 // 3e famille de la feuille : présents dans l'activité de l'annexe, mais qu'Odoo croit à zéro.
 const FAM_ZERO = 'À zéro chez Odoo'
 
@@ -272,9 +272,11 @@ const FAM_ZERO = 'À zéro chez Odoo'
 // Les fiches archivées sortent d'elles-mêmes : product.product les ignore.
 async function handleInventaire(req, res) {
   try {
+    const lieu = String(req.query.inventaire || '').toLowerCase() === 'prod' ? 'prod' : 'annexe'
+    const LOC = INVENTAIRE_LIEUX[lieu]
     const uid = await odooAuthenticate()
     const quants = await odooSearchRead(uid, 'stock.quant',
-      [['location_id', 'child_of', INVENTAIRE_LOCATION]], ['product_id', 'quantity'], { limit: 5000 })
+      [['location_id', 'child_of', LOC]], ['product_id', 'quantity'], { limit: 5000 })
 
     const qtyById = new Map()
     for (const q of quants) {
@@ -293,7 +295,9 @@ async function handleInventaire(req, res) {
     for (const p of prods) {
       const nom = String(p.display_name || '').replace(/^\[\d+\]\s*/, '')
       const fam = /^MP[-.]/.test(nom) ? 'Matières premières'
-        : /^SM/.test(nom) ? 'Semi-finis' : null
+        // « Sm- Le Citron Framboise » s'écrit avec un m minuscule : sans le
+        // drapeau i, 14 articles de l'annexe et 9 de Prod étaient invisibles.
+        : /^SM/i.test(nom) ? 'Semi-finis' : null
       if (!fam) continue
       articles.push({
         id: p.id, nom, fam,
@@ -312,7 +316,7 @@ async function handleInventaire(req, res) {
     const bouges = new Set()
     for (const champ of ['location_id', 'location_dest_id']) {
       const g = await odooReadGroup(uid, 'stock.move.line',
-        [[champ, 'child_of', INVENTAIRE_LOCATION], ['date', '>=', depuis], ['state', '=', 'done']],
+        [[champ, 'child_of', LOC], ['date', '>=', depuis], ['state', '=', 'done']],
         ['product_id'], ['product_id'])
       for (const r of g) if (Array.isArray(r.product_id)) bouges.add(r.product_id[0])
     }
@@ -340,7 +344,7 @@ async function handleInventaire(req, res) {
       || a.cat.localeCompare(b.cat, 'fr')
       || a.nom.localeCompare(b.nom, 'fr'))
 
-    return res.status(200).json({ location: 'WHPDX/Stock Prod annexe', articles })
+    return res.status(200).json({ lieu, articles })
   } catch (e) {
     console.error('[inventaire]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })

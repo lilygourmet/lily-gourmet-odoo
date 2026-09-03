@@ -9,8 +9,8 @@ import { supabase } from './supabase'
 
 // Articles à compter : matières premières (MP-) et semi-finis (SM…) présents
 // dans l'emplacement. Les fiches archivées ne remontent pas.
-export async function loadArticlesInventaire() {
-  const r = await fetch('/api/catalog-from-odoo?inventaire=1')
+export async function loadArticlesInventaire(lieu = 'annexe') {
+  const r = await fetch(`/api/catalog-from-odoo?inventaire=${encodeURIComponent(lieu)}`)
   if (!r.ok) throw new Error('HTTP ' + r.status)
   const j = await r.json()
   if (j.error) throw new Error(j.error)
@@ -18,38 +18,38 @@ export async function loadArticlesInventaire() {
 }
 
 // ⚠️ Sans .limit(), Supabase s'arrête à 1000 lignes sans prévenir.
-export async function loadComptages() {
+export async function loadComptages(lieu = 'annexe') {
   const { data, error } = await supabase
-    .from('inventaire_comptages').select('*').limit(5000)
+    .from('inventaire_comptages').select('*').eq('lieu', lieu).limit(5000)
   if (error) throw error
   return data || []
 }
 
-export async function saveComptage(row) {
+export async function saveComptage(lieu, row) {
   const { error } = await supabase
     .from('inventaire_comptages')
-    .upsert({ ...row, compte_le: new Date().toISOString() }, { onConflict: 'product_id' })
+    .upsert({ ...row, lieu, compte_le: new Date().toISOString() }, { onConflict: 'lieu,product_id' })
   if (error) throw error
 }
 
-export async function deleteComptages(productIds) {
+export async function deleteComptages(lieu, productIds) {
   if (!productIds.length) return
   const { error } = await supabase
-    .from('inventaire_comptages').delete().in('product_id', productIds)
+    .from('inventaire_comptages').delete().eq('lieu', lieu).in('product_id', productIds)
   if (error) throw error
 }
 
 // Ce qui est en stock mais absent du catalogue Odoo.
-export async function loadAjouts() {
+export async function loadAjouts(lieu = 'annexe') {
   const { data, error } = await supabase
-    .from('inventaire_ajouts').select('*').order('id').limit(2000)
+    .from('inventaire_ajouts').select('*').eq('lieu', lieu).order('id').limit(2000)
   if (error) throw error
   return data || []
 }
 
-export async function addAjout(row) {
+export async function addAjout(lieu, row) {
   const { data, error } = await supabase
-    .from('inventaire_ajouts').insert(row).select().single()
+    .from('inventaire_ajouts').insert({ ...row, lieu }).select().single()
   if (error) throw error
   return data
 }

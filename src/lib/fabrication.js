@@ -112,6 +112,21 @@ export async function creerOfPrepa(produit, qty, actorId, parents = [], unite = 
  * Annule dans Odoo les ordres d'une coche qu'on retire — y compris ceux venus
  * d'Odoo, tant qu'ils ne sont pas validés. Renvoie les noms annulés.
  */
+/**
+ * Solde dans Odoo les ordres en double d'une règle mini/maxi (et leurs enfants).
+ * Le serveur revérifie tout : il refuse tout ordre venu d'une commande client.
+ */
+export async function annulerDoublons(ordres) {
+  const r = await fetch('/api/freezer-list?mode=annuler-doublons', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ordres, test: estModeTest() }),
+  })
+  const data = await r.json()
+  if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
+  return data
+}
+
 export async function annulerOfPrepa(ordres) {
   if (!ordres || !ordres.length) return null
   try {
