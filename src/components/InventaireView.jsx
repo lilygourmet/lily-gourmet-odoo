@@ -16,14 +16,12 @@ import {
   envoyerVersOdoo,
 } from '../lib/inventaire'
 
-const FAM_ZERO = 'À zéro ou en négatif'
 const FAMILLES = ['Matières premières', 'Semi-finis']
 
-// mode 'stock'  : ce qui a du stock dans l'annexe (l'inventaire d'origine)
-// mode 'zero'   : ce dont le stock Odoo est faux — à zéro, ou négatif — volontairement
-//                 dans un onglet À PART pour ne pas se mélanger avec le premier comptage.
-export default function InventaireView({ user, activeView, onNavigate, onLogout, mode = 'stock', lieu = 'annexe' }) {
-  const estZero = mode === 'zero'
+// UN SEUL inventaire par lieu : le stock positif, le négatif et les articles à
+// zéro dans la même liste. Séparer les anomalies obligeait à compter dans deux
+// écrans, et un article sautait de l'un à l'autre au gré du stock Odoo.
+export default function InventaireView({ user, activeView, onNavigate, onLogout, lieu = 'annexe' }) {
   const nomLieu = lieu === 'prod' ? 'Prod' : 'annexe'
   const [loading, setLoading] = useState(true)
   const [articles, setArticles] = useState([])
@@ -40,12 +38,12 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
     try {
       const [arts, cpt, ajs] = await Promise.all([
         loadArticlesInventaire(lieu), loadComptages(lieu), loadAjouts(lieu)])
-      setArticles(arts.filter(a => (a.fam === FAM_ZERO) === estZero))
+      setArticles(arts)
       setComptes(Object.fromEntries(cpt.map(c => [c.product_id, c])))
       setAjouts(ajs)
     } catch (e) { toast.error('Chargement impossible : ' + e.message) }
     setLoading(false)
-  }, [estZero, lieu])
+  }, [lieu])
   // load() ne touche à l'état qu'APRÈS son `await` : la règle ne sait pas le voir
   // et croit à un rendu en cascade. L'écran démarre déjà en « chargement ».
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -67,19 +65,24 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
     saveComptage(lieu, ligne).catch(e => toast.error('Non enregistré : ' + e.message))
   }
 
+  // « faux » n'est pas une famille d'articles mais un état du stock Odoo :
+  // tout ce qui est à zéro ou en négatif, quelle que soit sa famille.
+  const dansLeFiltre = a => !famille || (famille === 'faux' ? a.qty <= 0 : a.fam === famille)
+
   const visibles = useMemo(() => {
     const q = search.trim().toLowerCase()
     return articles.filter(a => {
-      if (famille && a.fam !== famille) return false
+      if (!dansLeFiltre(a)) return false
       if (vue === 'reste' && comptes[a.id]) return false
       if (vue === 'faits' && !comptes[a.id]) return false
       if (q && !(a.nom.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q))) return false
       return true
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articles, comptes, famille, vue, search])
 
-  const dansFamille = useMemo(
-    () => articles.filter(a => !famille || a.fam === famille), [articles, famille])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dansFamille = useMemo(() => articles.filter(dansLeFiltre), [articles, famille])
   const faitsFamille = dansFamille.filter(a => comptes[a.id]).length
   const totalFaits = Object.keys(comptes).length
   const pct = articles.length ? Math.round(totalFaits / articles.length * 100) : 0
@@ -163,12 +166,11 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
         <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-[24px] font-semibold text-ink tracking-tight">
-              {estZero ? `🔍 ${nomLieu} — à zéro ou en négatif` : `📦 Inventaire ${nomLieu}`}
+              {`📦 Inventaire ${nomLieu}`}
             </h1>
             <p className="text-[13px] text-ink-mute mt-1">
-              {estZero
-                ? `Utilisés ${lieu === 'prod' ? 'en prod' : "à l'annexe"} cette année, mais qu'Odoo compte mal : à zéro, ou en négatif`
-                : `${lieu === 'prod' ? 'WHLVP/Stock/Stock Prod' : 'WHPDX/Stock Prod annexe'} — matières premières et semi-finis`}
+              {`${lieu === 'prod' ? 'WHLVP/Stock/Stock Prod' : 'WHPDX/Stock Prod annexe'} — tout : `}
+              {`ce qui est en stock, ce qui est en négatif, ce qui est à zéro`}
             </p>
           </div>
           <button onClick={load} className="px-3 py-2 rounded-full bg-bordeaux text-cream text-[13px] flex items-center gap-1.5 hover:bg-bordeaux-deep">
@@ -205,13 +207,21 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
             <div className="flex gap-2 overflow-x-auto pb-1 mb-2" style={{ scrollbarWidth: 'none' }}>
               <Chip actif={famille === null} onClick={() => setFamille(null)}
                 label="Tout" compteur={`${totalFaits}/${articles.length}`} />
-              {!estZero && FAMILLES.map(f => {
+              {FAMILLES.map(f => {
                 const tot = articles.filter(a => a.fam === f).length
                 if (!tot) return null
                 const fait = articles.filter(a => a.fam === f && comptes[a.id]).length
                 return <Chip key={f} actif={famille === f} onClick={() => setFamille(famille === f ? null : f)}
                   label={f} compteur={`${fait}/${tot}`} />
               })}
+              {/* le stock faux, là où il se cache : négatif ou zéro */}
+              {(() => {
+                const faux = articles.filter(a => a.qty <= 0)
+                if (!faux.length) return null
+                const fait = faux.filter(a => comptes[a.id]).length
+                return <Chip actif={famille === 'faux'} onClick={() => setFamille(famille === 'faux' ? null : 'faux')}
+                  label="Zéro ou négatif" compteur={`${fait}/${faux.length}`} />
+              })()}
             </div>
 
             <div className="flex gap-1 bg-line/50 rounded-xl p-1 mb-4">

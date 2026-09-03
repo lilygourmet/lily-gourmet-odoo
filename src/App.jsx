@@ -392,9 +392,7 @@ function App() {
     if (activeView === 'stock-prod-vitrine') return <StockProd {...navProps} lieu="vitrine" />
     if (activeView === 'stock-prod-annexe') return <StockProd {...navProps} lieu="annexe" />
     if (activeView === 'inventaire') return <InventaireView {...navProps} />
-    if (activeView === 'inventaire-zero') return <InventaireView {...navProps} mode="zero" />
     if (activeView === 'inventaire-prod') return <InventaireView {...navProps} lieu="prod" />
-    if (activeView === 'inventaire-prod-zero') return <InventaireView {...navProps} lieu="prod" mode="zero" />
     if (activeView === 'tasks') return <TasksWrapper {...navProps} taskDeep={deepLinkTask} />
     if (activeView === 'hr') return isAdmin(user)
       ? <TabLockGate label="RH"><HRWrapper {...navProps} hrDeep={hrDeep} /></TabLockGate>

@@ -12,7 +12,7 @@ const EXTERNAL_URLS = {
   'ai-chatgpt': 'https://chatgpt.com',
 }
 const GROUPS = [
-  { id: 'prod',   label: 'Production',     emoji: '🥐', views: ['prod', 'fabrication', 'fabrication-glacage', 'fabrication-pate-sucre', 'fabrication-prod', 'fabrication-annexe', 'fabrication-valider', 'valider-annexe', 'sales', 'stock-gs', 'stock-prod-vitrine', 'stock-prod-annexe', 'inventaire', 'inventaire-zero', 'inventaire-prod', 'inventaire-prod-zero', 'patissier', 'stock-poly', 'transferts-mp', 'transferts-sm'] },
+  { id: 'prod',   label: 'Production',     emoji: '🥐', views: ['prod', 'fabrication', 'fabrication-glacage', 'fabrication-pate-sucre', 'fabrication-prod', 'fabrication-annexe', 'fabrication-valider', 'valider-annexe', 'sales', 'stock-gs', 'stock-prod-vitrine', 'stock-prod-annexe', 'inventaire', 'inventaire-prod', 'patissier', 'stock-poly', 'transferts-mp', 'transferts-sm'] },
   { id: 'cafe',   label: 'Café / Vitrine', emoji: '☕', views: ['vitrine', 'vitrine-previsions', 'vitrine-sale', 'reception-vitrine', 'fin-journee', 'reglements-livraisons', 'stock'] },
   { id: 'outils', label: 'Outils',         emoji: '🧰', views: ['etiquettes', 'etiquettes-prix', 'etiquettes-boites', 'messages', 'devis', 'modifications', 'livraisons', 'paiements', 'freezer', 'check-cd', 'economat', 'supports', 'simu-gateaux', 'ocp-link', 'facture-ocp', 'cake-vision-link', 'cake-vision-edit', 'ai-gemini', 'ai-chatgpt'] },
 ]

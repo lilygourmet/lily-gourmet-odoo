@@ -35,10 +35,10 @@ const TAB_DEFS = [
   // latérale, et introuvables sur téléphone depuis que ce menu a été retiré.
   { view: 'stock-prod-vitrine', emoji: '🛍️', label: 'Stock Prod Vitrine', can: u => !isLivreur(u) && canStockProdVitrine(u) },
   { view: 'stock-prod-annexe',  emoji: '🏭', label: 'Stock Prod Annexe',  can: u => !isLivreur(u) && canStockProdAnnexe(u) },
+  // Un seul inventaire par lieu : les onglets « zéro / négatif » ont été
+  // fondus dedans (le filtre « Zéro ou négatif » y remplace l'écran séparé).
   { view: 'inventaire',        emoji: '📦', label: 'Inventaire annexe',  can: u => !isLivreur(u) && canSeeInventaire(u) },
-  { view: 'inventaire-zero',   emoji: '🔍', label: 'Annexe — zéro / négatif',    can: u => !isLivreur(u) && canSeeInventaire(u) },
   { view: 'inventaire-prod',   emoji: '📦', label: 'Inventaire Prod',     can: u => !isLivreur(u) && canSeeInventaire(u) },
-  { view: 'inventaire-prod-zero', emoji: '🔍', label: 'Prod — zéro / négatif',    can: u => !isLivreur(u) && canSeeInventaire(u) },
   { view: 'patissier',         emoji: '🧁', label: 'Accessoires',       can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_patissier) },
   { view: 'vitrine',           emoji: '🥐', label: 'Vitrine',           can: u => !isLivreur(u) && canStockPatissier(u) },
   { view: 'vitrine-previsions', emoji: '📈', label: 'Prévisions vitrine', can: u => !isLivreur(u) && canStockPatissier(u) },

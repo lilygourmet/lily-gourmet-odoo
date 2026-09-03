@@ -325,8 +325,9 @@ async function handleInventaireOdoo(req, res) {
   }
 }
 
-// 3e famille de la feuille : ce dont le stock Odoo est faux — à zéro, ou négatif.
-const FAM_ZERO = 'À zéro ou en négatif'
+// Un seul inventaire par lieu : le stock positif, le négatif ET les articles à
+// zéro y vivent ensemble. Deux listes séparées obligeaient à compter deux fois,
+// et un article changeait de liste selon l'humeur du stock Odoo.
 
 // On part du stock RÉEL de l'emplacement (stock.quant), pas du catalogue : on ne
 // compte que ce qui est censé s'y trouver. On garde les matières premières (MP-)
@@ -363,11 +364,7 @@ async function handleInventaire(req, res) {
       if (!fam) continue
       const qty = Math.round((qtyById.get(p.id) || 0) * 100) / 100
       articles.push({
-        id: p.id, nom,
-        // Un stock négatif est aussi faux qu'un stock à zéro : il part avec les
-        // anomalies (45 articles à l'annexe, 77 à Stock Prod), pas dans la liste
-        // à compter — Layla les cherchait justement dans cet onglet-là.
-        fam: qty < 0 ? FAM_ZERO : fam,
+        id: p.id, nom, fam,
         uom: (p.uom_id && p.uom_id[1]) || '',
         cat: (p.categ_id && p.categ_id[1]) || 'Sans catégorie',
         qty,
@@ -396,9 +393,11 @@ async function handleInventaire(req, res) {
     }
     for (const p of infosZero) {
       const nom = String(p.display_name || '').replace(/^\[\d+\]\s*/, '')
-      if (!/^MP[-.]/.test(nom) && !/^SM/i.test(nom)) continue
+      const fam = /^MP[-.]/.test(nom) ? 'Matières premières'
+        : /^SM/i.test(nom) ? 'Semi-finis' : null
+      if (!fam) continue
       articles.push({
-        id: p.id, nom, fam: FAM_ZERO,
+        id: p.id, nom, fam,
         uom: (p.uom_id && p.uom_id[1]) || '',
         cat: (p.categ_id && p.categ_id[1]) || 'Sans catégorie',
         qty: 0,
