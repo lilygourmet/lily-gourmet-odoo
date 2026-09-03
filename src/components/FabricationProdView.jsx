@@ -679,8 +679,21 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
             onPointerDown={e => { if (e.target === e.currentTarget) setOuvert(null) }}>
             <div className="bg-cream w-full max-w-[560px] rounded-t-[24px] p-4 pb-6 max-h-[92vh] overflow-y-auto">
               <div className="flex items-center gap-3 mb-3">
-                <img src={a.photo} alt="" className="w-[62px] h-[62px] rounded-2xl object-cover shrink-0" />
-                <b className="text-[19px] leading-tight">{propre(a.article)}</b>
+                {/* La photo elle-même ouvre le choix d'image : c'est le geste
+                    qu'on cherche instinctivement quand elle ne va pas. */}
+                <label className="relative w-[62px] h-[62px] shrink-0 cursor-pointer">
+                  <img src={a.photo} alt="" className="w-full h-full rounded-2xl object-cover" />
+                  <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-bordeaux text-cream grid place-items-center text-[12px]">✎</span>
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={e => { changerPhoto(a, e.target.files[0]); e.target.value = '' }} />
+                </label>
+                <div className="flex-1 min-w-0">
+                  <b className="block text-[19px] leading-tight">{propre(a.article)}</b>
+                  <button onClick={() => retirer(a)}
+                    className="mt-0.5 text-[12px] text-danger font-bold underline underline-offset-2">
+                    retirer de la liste
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-2.5 bg-white border border-line rounded-2xl p-2.5 mb-2.5">
@@ -770,17 +783,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                 <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-white fill-none" strokeWidth="3"><path d="M4 13l5 5L20 7" /></svg>
                 C'est fait
               </button>
-              <div className="flex gap-2 mt-2">
-                <label className="flex-1 py-3 rounded-2xl bg-white border border-line text-ink-soft text-[14px] font-bold text-center cursor-pointer">
-                  changer la photo
-                  <input type="file" accept="image/*" className="hidden"
-                    onChange={e => { changerPhoto(a, e.target.files[0]); e.target.value = '' }} />
-                </label>
-                <button onClick={() => retirer(a)}
-                  className="flex-1 py-3 rounded-2xl bg-white border border-line text-danger text-[14px] font-bold">
-                  retirer de la liste
-                </button>
-              </div>
+
               <button onClick={() => setOuvert(null)}
                 className="w-full mt-2 py-3.5 rounded-2xl bg-white border border-line text-ink-mute text-[15px] font-bold">
                 fermer
