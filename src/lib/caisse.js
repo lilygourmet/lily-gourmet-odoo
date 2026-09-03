@@ -421,6 +421,20 @@ export async function loadAllFreeReleveLines() {
     const sig = signatureDepot(p.amount, p.label)
     if (sig) dejaPrises.add(sig)
   }
+  // 2e source : les caisses VERTES dont la ligne n'a jamais été mémorisée (rapprochements
+  // d'avant le marquage auto — voir clearEnveloppeReleve). Il n'y a alors aucune ligne
+  // « prise » à comparer, mais le libellé gardé sur la caisse porte le n° d'opération :
+  // il suffit à reconnaître la jumelle restée libre.
+  const { data: vertes } = await supabase
+    .from('caisse_enveloppes')
+    .select('amount_cash, amount_proof, note_proof')
+    .eq('releve_status', 'trouve')
+    .not('note_proof', 'is', null)
+    .limit(5000)
+  for (const v of (vertes || [])) {
+    const sig = signatureDepot(v.amount_proof ?? v.amount_cash, v.note_proof)
+    if (sig) dejaPrises.add(sig)
+  }
   // Dédoublonnage : un même dépôt vu sous 2 dates (opération vs valeur) ou 2 libellés
   // (« N » / « N° ») → même MONTANT + même n° de versement (unique) → on garde 1 ligne.
   const seen = new Set()
