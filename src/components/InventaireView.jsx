@@ -65,9 +65,10 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
     saveComptage(lieu, ligne).catch(e => toast.error('Non enregistré : ' + e.message))
   }
 
-  // « faux » n'est pas une famille d'articles mais un état du stock Odoo :
-  // tout ce qui est à zéro ou en négatif, quelle que soit sa famille.
-  const dansLeFiltre = a => !famille || (famille === 'faux' ? a.qty <= 0 : a.fam === famille)
+  // Les articles à zéro et en négatif ne forment pas un groupe à part : ils
+  // vivent dans leur famille, avec les autres. Un filtre « zéro ou négatif »
+  // les affichait une deuxième fois et faisait douter du compte.
+  const dansLeFiltre = a => !famille || a.fam === famille
 
   // Un comptage déjà porté chez Odoo n'est plus « fait » : il redevient une
   // simple référence en gris, et l'article repasse à compter. C'est ce qui
@@ -239,14 +240,6 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
                 return <Chip key={f} actif={famille === f} onClick={() => setFamille(famille === f ? null : f)}
                   label={f} compteur={`${fait}/${tot}`} />
               })}
-              {/* le stock faux, là où il se cache : négatif ou zéro */}
-              {(() => {
-                const faux = articles.filter(a => a.qty <= 0)
-                if (!faux.length) return null
-                const fait = faux.filter(a => neufs[a.id]).length
-                return <Chip actif={famille === 'faux'} onClick={() => setFamille(famille === 'faux' ? null : 'faux')}
-                  label="Zéro ou négatif" compteur={`${fait}/${faux.length}`} />
-              })()}
             </div>
 
             <div className="flex gap-1 bg-line/50 rounded-xl p-1 mb-4">
