@@ -30,7 +30,7 @@ const aujourdhui = (() => {
 
 export default function CheckCdView({ user, onLogout, onNavigate, activeView }) {
   const [etages, setEtages] = useState([])
-  const [tousEtages, setTousEtages] = useState([])   // y compris les déjà envoyés : c'est la source des réimpressions
+  const [tousEtages, setTousEtages] = useState([])   // y compris les déjà contrôlés : source de la réimpression
   const [sortis, setSortis] = useState({})
   const [envoyes, setEnvoyes] = useState({})
   const [choisis, setChoisis] = useState(() => new Set())
@@ -38,8 +38,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [tour, setTour] = useState(0)
-  const [vue, setVue] = useState('controle')   // 'controle' | 'attente' | 'etiquettes'
-  const [choisisEtiq, setChoisisEtiq] = useState(() => new Set())   // sélection propre à la réimpression
+  const [vue, setVue] = useState('controle')   // 'controle' | 'attente'
   const [enAttente, setEnAttente] = useState([])
   const rafraichir = () => { setChargement(true); setTour(t => t + 1) }
 
@@ -102,15 +101,17 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   // Chaque etage valide sort son etiquette, a coller sur le gateau : le nom avec
   // son parfum, le jour, et le numero de commande — c'est lui qui dit a qui il
   // est. Une etiquette par piece.
+  const etiquetteDe = e => buildZplInfo({
+    // D'abord POUR QUAND le gateau est attendu (pas quand on l'a sorti),
+    // puis la taille et le parfum, puis le numero de commande en bas.
+    entete: e.rdv || e.date || null,
+    titre: String(e.produit || '').replace(/^\[\d+\]\s*/, '').trim(),
+    code: e.scode || null,
+    qty: Math.min(20, Math.max(1, Math.round(Number(e.qty) || 1))),
+  })
+
   async function imprimerEtiquettes(liste) {
-    const zpl = liste.map(e => buildZplInfo({
-      // D'abord POUR QUAND le gateau est attendu (pas quand on l'a sorti),
-      // puis la taille et le parfum, puis le numero de commande en bas.
-      entete: e.rdv || e.date || null,
-      titre: String(e.produit || '').replace(/^\[\d+\]\s*/, '').trim(),
-      code: e.scode || null,
-      qty: Math.min(20, Math.max(1, Math.round(Number(e.qty) || 1))),
-    })).join('\n')
+    const zpl = liste.map(etiquetteDe).join('\n')
     try {
       const [r] = await sendEtiquettes([zpl])
       if (!r?.ok) toast.error(r?.error || 'Étiquettes non imprimées')
@@ -139,27 +140,26 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     setEnvoi(false)
   }
 
-  // Ce qui a déjà été contrôlé ces 7 derniers jours, rangé par jour d'envoi.
-  // Sert quand l'étiquette n'est pas sortie (imprimante en panne, papier fini) :
-  // le contrôle est fait, on ne le refait pas — on réimprime juste l'étiquette.
-  const jourLocal = iso => new Date(iso).toLocaleDateString('en-CA')
-  const joursEtiq = useMemo(() => {
-    const limite = Date.now() - 7 * 86400000
-    const g = {}
-    for (const e of tousEtages) {
-      const env = envoyes[e.mo_id]
-      if (!env?.odoo_ok || new Date(env.checked_at).getTime() < limite) continue
-      ;(g[jourLocal(env.checked_at)] ||= []).push(e)
-    }
-    return Object.entries(g).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [tousEtages, envoyes])
+  // La dernière fournée contrôlée : l'étiquette part à l'imprimante au moment du
+  // contrôle, donc si l'imprimante bugue elle est perdue — et le contrôle, lui,
+  // est déjà enregistré, impossible de le refaire pour la ravoir.
+  // On repart de `check_cd_done` (pas d'une trace locale) : ça marche depuis
+  // n'importe quel appareil, et pour une fournée envoyée avant ce bouton.
+  const derniere = useMemo(() => {
+    const env = Object.entries(envoyes).filter(([, v]) => v.odoo_ok && v.checked_at)
+    if (!env.length) return null
+    const fin = Math.max(...env.map(([, v]) => new Date(v.checked_at).getTime()))
+    // Une fournée = un seul envoi : toutes ses lignes sont écrites à la suite.
+    const ids = new Set(env.filter(([, v]) => fin - new Date(v.checked_at).getTime() < 120000).map(([k]) => Number(k)))
+    const liste = tousEtages.filter(e => ids.has(e.mo_id))
+    return liste.length ? { liste, quand: new Date(fin), manquants: ids.size - liste.length } : null
+  }, [envoyes, tousEtages])
 
-  async function reimprimer() {
-    const liste = tousEtages.filter(e => choisisEtiq.has(e.mo_id))
-    if (!liste.length) return
-    await imprimerEtiquettes(liste)
-    toast.success(`${nbPieces(liste)} étiquette${nbPieces(liste) > 1 ? 's' : ''} renvoyée${nbPieces(liste) > 1 ? 's' : ''} à l'imprimante`)
-    setChoisisEtiq(new Set())
+  async function reimprimerDerniere() {
+    if (!derniere) return
+    await imprimerEtiquettes(derniere.liste)
+    const n = nbPieces(derniere.liste)
+    toast.success(`${n} étiquette${n > 1 ? 's' : ''} renvoyée${n > 1 ? 's' : ''} à l'imprimante`)
   }
 
   const jours = useMemo(() => {
@@ -195,10 +195,6 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
             className={`px-3.5 py-1.5 text-[12px] font-bold rounded-full ${vue === 'attente' ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>
             En attente{enAttente.length ? ` (${enAttente.length})` : ''}
           </button>
-          <button onClick={() => setVue('etiquettes')}
-            className={`px-3.5 py-1.5 text-[12px] font-bold rounded-full ${vue === 'etiquettes' ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>
-            Réimprimer
-          </button>
         </div>
 
         <div className="flex items-center gap-3 mb-4 flex-wrap text-[11px]">
@@ -208,12 +204,19 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
               {nbPieces(etages.filter(e => e.dispo !== 'hors' && !estSorti(e)))} à marquer sortis dans CD Négatif
             </span>
           )}
+          {derniere && (
+            <button onClick={reimprimerDerniere}
+              title={`Contrôlées le ${derniere.quand.toLocaleString('fr-FR')}${derniere.manquants ? ` · ${derniere.manquants} gâteau(x) déjà clôturé(s), étiquette non retrouvée` : ''}`}
+              className="px-2.5 py-1 rounded-full border border-amber-500 text-amber-700 font-bold hover:bg-amber-500 hover:text-cream transition-all">
+              ↻ Réimprimer les {nbPieces(derniere.liste)} dernières
+            </button>
+          )}
           <button onClick={rafraichir} className="text-ink-mute underline underline-offset-2">rafraîchir</button>
         </div>
 
         {erreur && <div className="bg-[#fdecec] text-[#8c2020] rounded-xl px-3.5 py-3 text-[13px] mb-3">{erreur}</div>}
         {chargement && <div className="text-center py-10 text-[13px] text-ink-mute">Lecture d'Odoo…</div>}
-        {!chargement && vue === 'controle' && !etages.length && (
+        {!chargement && !etages.length && (
           <div className="text-center py-10 text-[13px] text-ink-mute">
             Rien à contrôler : tous les gâteaux sont marqués faits.
           </div>
@@ -283,59 +286,6 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
           })}
         </div>}
 
-        {/* Réimpression : l'étiquette n'est pas sortie, le contrôle est déjà fait. */}
-        {vue === 'etiquettes' && <div className="space-y-4">
-          <p className="text-[12px] text-ink-mute">
-            Les étages déjà contrôlés ces 7 derniers jours. Coche ce dont l'étiquette
-            n'est pas sortie, puis renvoie-la à l'imprimante — rien n'est revalidé.
-          </p>
-          {!joursEtiq.length && (
-            <div className="text-center py-10 text-[13px] text-ink-mute">Rien de contrôlé ces 7 derniers jours.</div>
-          )}
-          {joursEtiq.map(([jour, list]) => {
-            const tous = list.every(e => choisisEtiq.has(e.mo_id))
-            return (
-              <div key={jour}>
-                <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
-                  <button onClick={() => setChoisisEtiq(prev => {
-                    const s = new Set(prev)
-                    list.forEach(e => tous ? s.delete(e.mo_id) : s.add(e.mo_id))
-                    return s
-                  })}
-                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center text-[12px] font-bold ${tous ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream-warm text-transparent'}`}>✓</button>
-                  <h2 className="font-fraunces italic text-[17px] text-ink">contrôlés {fmtDayLabel(jour, new Date())}</h2>
-                  <span className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-full bg-cream-warm text-ink-soft border border-line">
-                    {nbPieces(list)} étiquette{nbPieces(list) > 1 ? 's' : ''}
-                  </span>
-                  <span className="flex-1 h-px bg-line min-w-[20px]" />
-                </div>
-                <div className="space-y-1.5">
-                  {list.map(e => {
-                    const on = choisisEtiq.has(e.mo_id)
-                    return (
-                      <div key={e.mo_id} onClick={() => setChoisisEtiq(prev => {
-                        const s = new Set(prev)
-                        s.has(e.mo_id) ? s.delete(e.mo_id) : s.add(e.mo_id)
-                        return s
-                      })}
-                        className={`rounded-2xl border px-3.5 py-3 flex items-start gap-2.5 cursor-pointer ${on ? 'border-bordeaux bg-bordeaux/5' : 'border-line bg-cream-warm'}`}>
-                        <span className={`flex-shrink-0 w-6 h-6 mt-0.5 rounded-lg border-2 flex items-center justify-center text-[12px] font-bold ${on ? 'bg-bordeaux border-bordeaux text-cream' : 'border-line bg-cream text-transparent'}`}>✓</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[14px] font-bold text-ink leading-tight">
-                            {e.produit}{e.qty > 1 ? ` ×${e.qty}` : ''}
-                          </div>
-                          <div className="text-[11.5px] text-ink-soft mt-0.5 truncate">pour {e.parent_produit || e.parent}</div>
-                          <div className="font-mono text-[9.5px] text-ink-mute mt-0.5">{e.scode || '—'} · {e.mo_name}</div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>}
-
         {/* Ce qui est parti chez le client sans être marqué fait dans Odoo. */}
         {vue === 'attente' && (
           <div className="space-y-1.5">
@@ -377,22 +327,6 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
             <button onClick={envoyer} disabled={!nb || envoi}
               className={`flex-1 rounded-xl py-3.5 text-[15px] font-extrabold ${nb && !envoi ? 'bg-bordeaux text-cream' : 'bg-cream-deep text-ink-mute'}`}>
               {envoi ? 'Envoi en cours…' : nb ? `Marquer comme vérifié (${nb})` : 'Marquer comme vérifié'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {vue === 'etiquettes' && choisisEtiq.size > 0 && (
-        <div className="lg-bottom-bar fixed left-0 right-0 bottom-0 z-40 bg-cream-warm border-t border-line px-4 py-3"
-          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-          <div className="max-w-3xl mx-auto flex items-center gap-3">
-            <span className="text-[12px] text-ink-soft leading-tight">
-              <b className="block text-[17px] text-ink">{choisisEtiq.size}</b>
-              sélectionné{choisisEtiq.size > 1 ? 's' : ''}
-            </span>
-            <button onClick={reimprimer}
-              className="flex-1 rounded-xl py-3.5 text-[15px] font-extrabold bg-bordeaux text-cream">
-              Réimprimer les étiquettes
             </button>
           </div>
         </div>
