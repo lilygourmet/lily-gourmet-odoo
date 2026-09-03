@@ -28,6 +28,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [reception, setReception] = useState(null)   // { t, txt } — la ligne en cours de réception
+  const [voirJournal, setVoirJournal] = useState(false)
   const [groupe, setGroupe] = useState('')            // '' = tous les types
   const [filtreArticle, setFiltreArticle] = useState('')
   const [voirMasques, setVoirMasques] = useState(false)
@@ -180,12 +181,27 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   const journal = filterDate ? rows.filter(r => (r.transfer_date || '').slice(0, 10) === filterDate) : rows
   const nbMasques = articles.filter(a => !a.actif).length
 
-  function printTransferts() {
+  // Le journal se lit par journée : c'est comme ça qu'on cherche un transfert
+  // (« qu'est-ce qui est parti mardi ? »), et c'est ce qui s'imprime.
+  const parJour = useMemo(() => {
+    const g = []
+    for (const t of journal) {
+      const j = (t.transfer_date || '').slice(0, 10)
+      if (!g.length || g[g.length - 1].jour !== j) g.push({ jour: j, lignes: [] })
+      g[g.length - 1].lignes.push(t)
+    }
+    return g
+  }, [journal])
+
+  // `jour` non vide : une seule journée part à l'impression.
+  function printTransferts(jour = null) {
     const w = window.open('', '_blank')
     if (!w) { toast.error('Autorise les pop-ups pour imprimer.'); return }
     const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
-    const titre = filterDate ? `Transferts du ${frDate(filterDate)}` : 'Journal complet'
-    const trs = journal.map(t => `<tr><td>${frDate(t.transfer_date)}</td><td>${esc(SENS[t.sens]?.label || '')}</td><td>${esc(t.matiere)}</td><td>${fmt(t.qty_envoye)} ${esc(t.unite || '')}</td><td>${t.statut === 'refuse' ? 'REFUSÉ' : t.statut === 'recu' ? `${fmt(t.qty_recu)} ${esc(t.unite || '')}` : '—'}</td><td>${esc(t.envoye_par || '—')}</td><td>${esc(t.odoo_picking_name || '')}</td></tr>`).join('')
+    const lignes = jour ? journal.filter(t => (t.transfer_date || '').slice(0, 10) === jour) : journal
+    const titre = jour ? `Transferts du ${frDate(jour)}`
+      : filterDate ? `Transferts du ${frDate(filterDate)}` : 'Journal complet'
+    const trs = lignes.map(t => `<tr><td>${frDate(t.transfer_date)}</td><td>${esc(SENS[t.sens]?.label || '')}</td><td>${esc(t.matiere)}</td><td>${fmt(t.qty_envoye)} ${esc(t.unite || '')}</td><td>${t.statut === 'refuse' ? 'REFUSÉ' : t.statut === 'recu' ? `${fmt(t.qty_recu)} ${esc(t.unite || '')}` : '—'}</td><td>${esc(t.envoye_par || '—')}</td><td>${esc(t.odoo_picking_name || '')}</td></tr>`).join('')
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(fam.titre)}</title>
       <style>body{font-family:Arial,sans-serif;padding:24px;color:#1a0f0a}h1{font-size:20px;margin:0 0 4px}
       .sub{font-size:12px;color:#666;margin:0 0 16px}table{width:100%;border-collapse:collapse;font-size:13px}
@@ -224,11 +240,17 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
       <div className="max-w-3xl mx-auto p-4 pb-44 sm:pb-28">
         <div className="flex items-center justify-between mb-1">
           <h1 className="font-fraunces italic text-[26px] text-ink">{fam.titre}</h1>
-          {isAdmin && famille === 'sm' && (
-            <button onClick={ouvrirNumero} className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 border border-line rounded-lg bg-white hover:bg-cream-warm">
-              <Settings size={13} /> Numéro WhatsApp
+          <div className="flex items-center gap-2">
+            <button onClick={() => setVoirJournal(true)}
+              className="inline-flex items-center gap-1 text-[12.5px] px-3 py-1.5 border border-line rounded-lg bg-white hover:bg-cream-warm">
+              <Printer size={13} /> Historique
             </button>
-          )}
+            {isAdmin && famille === 'sm' && (
+              <button onClick={ouvrirNumero} className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 border border-line rounded-lg bg-white hover:bg-cream-warm">
+                <Settings size={13} /> Numéro WhatsApp
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-[13px] text-ink-mute mb-4">{fam.label} — entre la <b>prod annexe</b> et la <b>prod boutique</b>.</p>
 
@@ -381,51 +403,6 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
             </div>
           )}
 
-          {/* ---- JOURNAL ---- */}
-          <div className="bg-white border border-line rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute">Journal ({journal.length})</h2>
-              <div className="flex items-center gap-2">
-                <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
-                  className="px-2 py-1 border border-line rounded-lg text-[12px] bg-white" />
-                {filterDate && <button onClick={() => setFilterDate('')} className="text-[12px] text-ink-mute underline">tout</button>}
-                <button onClick={printTransferts} className="inline-flex items-center gap-1 px-2.5 py-1 text-[12px] border border-line rounded-lg bg-white hover:bg-cream">
-                  <Printer size={13} /> Imprimer
-                </button>
-              </div>
-            </div>
-            {journal.length === 0 && <div className="text-center text-[12.5px] text-ink-mute py-6">Aucun transfert.</div>}
-            {journal.map(t => (
-              <div key={t.id} className="flex items-center gap-3 py-2 border-b border-line last:border-0">
-                <div className="w-12 text-[11px] text-ink-mute">{frDate(t.transfer_date)}</div>
-                <div className="flex-1">
-                  <div className="text-[13px] text-ink">{t.matiere}</div>
-                  <div className="text-[11px] text-ink-mute">
-                    {SENS[t.sens]?.label || ''} · {t.envoye_par || '—'}
-                    {t.odoo_picking_name && <span className="text-emerald-700"> · Odoo {t.odoo_picking_name}</span>}
-                    {t.odoo_error && <span className="text-red-700"> · Odoo : {t.odoo_error}</span>}
-                  </div>
-                </div>
-                <div className="text-[13px]">
-                  <span className={t.statut === 'refuse' ? 'line-through opacity-60' : ''}>
-                    {fmt(t.qty_envoye)} {t.unite || 'kg'}
-                  </span>
-                  {t.statut === 'recu' && Number(t.qty_recu) !== Number(t.qty_envoye) && (
-                    <span className="text-amber-700"> → {fmt(t.qty_recu)}</span>
-                  )}
-                </div>
-                <div className="w-24 text-right">
-                  {t.statut === 'refuse'
-                    ? <span className="text-[11px] text-danger font-semibold">✕ refusé</span>
-                    : t.statut === 'recu'
-                      ? (t.odoo_error && peutConfirmer(user, t.sens)
-                        ? <button onClick={() => reessayerOdoo(t)} disabled={busy} className="text-[11px] px-2 py-1 border border-line rounded-lg hover:bg-cream">↻ Odoo</button>
-                        : <span className="text-[11px] text-emerald-700">✓ reçu</span>)
-                      : <span className="text-[11px] text-amber-700">en attente</span>}
-                </div>
-              </div>
-            ))}
-          </div>
         </>)}
       </div>
 
@@ -550,6 +527,80 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
             <div className="flex gap-2 mt-5">
               <button onClick={() => setNumSm(null)} className="flex-1 px-3 py-2 text-[13px] border border-line rounded-lg bg-white">Annuler</button>
               <button onClick={enregistrerNumero} className="flex-1 px-3 py-2 text-[13px] bg-bordeaux text-cream rounded-lg">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- HISTORIQUE : une journée par bloc, imprimable journée par journée ----
+          Il vivait tout en bas de la page, sous les vignettes : pour retrouver
+          un transfert il fallait traverser tout l'écran. Il s'ouvre maintenant
+          par le bouton du haut. Fenêtre en `vh` et en trois zones (titre figé,
+          liste qui défile) — la tablette déborde avec `dvh`. */}
+      {voirJournal && (
+        <div onClick={() => setVoirJournal(false)} className="fixed inset-0 bg-black/45 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div onClick={e => e.stopPropagation()}
+            className="bg-cream w-full max-w-2xl sm:rounded-2xl rounded-t-2xl border border-line flex flex-col max-h-[88vh]">
+
+            <div className="flex items-center gap-2 p-4 border-b border-line shrink-0">
+              <h2 className="text-[15px] font-medium flex-1">Historique — {fam.titre}</h2>
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="px-2 py-1 border border-line rounded-lg text-[12px] bg-white" />
+              {filterDate && <button onClick={() => setFilterDate('')} className="text-[12px] text-ink-mute underline">tout</button>}
+              <button onClick={() => setVoirJournal(false)} aria-label="Fermer"
+                className="p-1.5 rounded-lg border border-line bg-white text-ink-mute"><X size={15} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4">
+              {parJour.length === 0 && <div className="text-center text-[12.5px] text-ink-mute py-8">Aucun transfert.</div>}
+              {parJour.map(g => (
+                <div key={g.jour} className="mb-4 bg-white border border-line rounded-2xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-3.5 py-2 bg-cream-warm border-b border-line">
+                    <div className="flex-1 text-[12.5px] font-semibold text-ink">
+                      {frDate(g.jour)} <span className="font-normal text-ink-mute">· {g.lignes.length} transfert{g.lignes.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <button onClick={() => printTransferts(g.jour)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11.5px] border border-line rounded-lg bg-white hover:bg-cream">
+                      <Printer size={12} /> Imprimer ce jour
+                    </button>
+                  </div>
+                  {g.lignes.map(t => (
+                    <div key={t.id} className="flex items-center gap-3 px-3.5 py-2 border-b border-[#f2ebdd] last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] text-ink break-words">{t.matiere}</div>
+                        <div className="text-[11px] text-ink-mute">
+                          {SENS[t.sens]?.label || ''} · {t.envoye_par || '—'}
+                          {t.odoo_picking_name && <span className="text-emerald-700"> · Odoo {t.odoo_picking_name}</span>}
+                          {t.odoo_error && <span className="text-red-700"> · Odoo : {t.odoo_error}</span>}
+                        </div>
+                      </div>
+                      <div className="text-[13px] shrink-0">
+                        <span className={t.statut === 'refuse' ? 'line-through opacity-60' : ''}>
+                          {fmt(t.qty_envoye)} {t.unite || 'kg'}
+                        </span>
+                        {t.statut === 'recu' && Number(t.qty_recu) !== Number(t.qty_envoye) && (
+                          <span className="text-amber-700"> → {fmt(t.qty_recu)}</span>
+                        )}
+                      </div>
+                      <div className="w-20 text-right shrink-0">
+                        {t.statut === 'refuse'
+                          ? <span className="text-[11px] text-danger font-semibold">✕ refusé</span>
+                          : t.statut === 'recu'
+                            ? (t.odoo_error && peutConfirmer(user, t.sens)
+                              ? <button onClick={() => reessayerOdoo(t)} disabled={busy} className="text-[11px] px-2 py-1 border border-line rounded-lg hover:bg-cream">↻ Odoo</button>
+                              : <span className="text-[11px] text-emerald-700">✓ reçu</span>)
+                            : <span className="text-[11px] text-amber-700">en attente</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {parJour.length > 1 && (
+                <button onClick={() => printTransferts()}
+                  className="w-full py-2.5 text-[12.5px] border border-line rounded-xl bg-white hover:bg-cream-warm">
+                  Imprimer tout ({journal.length} transferts)
+                </button>
+              )}
             </div>
           </div>
         </div>
