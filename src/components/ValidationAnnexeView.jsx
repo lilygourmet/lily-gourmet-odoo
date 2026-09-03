@@ -23,11 +23,22 @@ const propre = n => String(n || '')
   .replace(/^(E-|V-|MI-|N-|SM[.\- ]?|Sm[.\- ]?|SMT?[.\- ]?)\s*/i, '')
   .replace(/\s*(finition|production)\s*$/i, '').replace(/\s{2,}/g, ' ').trim()
 
+// Ce qui est tapé ici (quantité produite, quantité consommée par ingrédient) ne
+// vivait que dans l'écran : sortir de l'onglet, ou n'importe quel rechargement,
+// remettait tout ce que dit la recette. On le garde sur l'appareil jusqu'à ce
+// que l'ordre soit validé dans Odoo.
+const CLE_SAISIES = 'valider-annexe-saisies'
+const saisiesGardees = () => {
+  try { return JSON.parse(localStorage.getItem(CLE_SAISIES)) || {} } catch { return {} }
+}
+const sansLesNoms = (obj, noms) =>
+  Object.fromEntries(Object.entries(obj).filter(([n]) => !noms.has(n)))
+
 export default function ValidationAnnexeView({ user, onLogout, onNavigate, activeView }) {
   const [lignes, setLignes] = useState(null)
   const [sel, setSel] = useState([])
-  const [faites, setFaites] = useState({})     // ordre -> quantité vraiment produite
-  const [notes, setNotes] = useState({})       // ordre -> { idLigne: consommé }
+  const [faites, setFaites] = useState(() => saisiesGardees().faites || {})   // ordre -> quantité vraiment produite
+  const [notes, setNotes] = useState(() => saisiesGardees().notes || {})     // ordre -> { idLigne: consommé }
   const [ouvert, setOuvert] = useState(null)
   const [envoi, setEnvoi] = useState(false)
   const [resultats, setResultats] = useState(null)
@@ -87,11 +98,22 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         const out = [...base.map(b => ({ ...b, ...(parNom.get(b.name) || { manques: [], lignes: [] }) })), ...orphelins]
         setLignes(out)
         setSel(out.filter(x => !x.sansOrdre).map(x => x.name))
-        setFaites(Object.fromEntries(out.map(x => [x.name, x.demande])))
+        // On garde ce qui a déjà été tapé (plafonné à la demande, qui a pu
+        // baisser dans Odoo) et on ne remplit par la recette que le reste.
+        const vivants = new Set(out.map(x => x.name))
+        setFaites(f => Object.fromEntries(out.map(x =>
+          [x.name, f[x.name] === undefined ? x.demande : Math.min(x.demande, f[x.name])])))
+        // Les ordres partis de la liste (validés ailleurs, annulés) n'ont plus
+        // de saisie à garder : sinon elle ressortirait des mois plus tard.
+        setNotes(n => Object.fromEntries(Object.entries(n).filter(([nom]) => vivants.has(nom))))
       } catch (e) { if (vivant) setErreur(e.message || String(e)) }
     })()
     return () => { vivant = false }
   }, [tour])
+
+  useEffect(() => {
+    try { localStorage.setItem(CLE_SAISIES, JSON.stringify({ faites, notes })) } catch { /* ignore */ }
+  }, [faites, notes])
 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
   const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
@@ -150,6 +172,8 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
       if (faits.size) {
         setLignes(l => (l || []).filter(x => !faits.has(x.name)))
         setSel(s2 => s2.filter(n => !faits.has(n)))
+        setFaites(f => sansLesNoms(f, faits))
+        setNotes(n => sansLesNoms(n, faits))
         toast.success(faits.size + (faits.size > 1 ? ' ordres validés' : ' ordre validé') + ' dans Odoo')
       }
     } catch (e) { toast.error(e.message || String(e)) }
