@@ -119,7 +119,7 @@ describe('signatureDepot — un dépôt vu deux fois', () => {
   })
 
   it('retient le n° le plus long, pas un code court', () => {
-    expect(signatureDepot(200, 'VIR INST RECU 22334 1630293611')).toBe('20000|1630293611')
+    expect(signatureDepot(200, 'VIR INST RECU 22334 1630293611')).toBe('200|1630293611')
   })
 
   it('rend null sans numéro dans le libellé — on ne peut rien affirmer', () => {
@@ -137,7 +137,7 @@ describe('signatureDepot — depuis le libellé gardé sur la caisse', () => {
   })
 
   it("ne prend pas la date pour un n° d'opération", () => {
-    expect(signatureDepot(9946, '2026-05-26 · VERSEMENT ESPECE N 1694192637')).toBe('994600|1694192637')
+    expect(signatureDepot(9946, '2026-05-26 · VERSEMENT ESPECE N 1694192637')).toBe('9946|1694192637')
   })
 })
 
@@ -167,5 +167,32 @@ describe('memeDepotSansNumero — caisse justifiée par une preuve manuelle', ()
   it('utilise le montant du relevé quand il est renseigné', () => {
     const c = { amount_cash: 9000, amount_proof: 10333, proof_date: '2026-04-07' }
     expect(memeDepotSansNumero(ligne, c)).toBe(true)
+  })
+})
+
+// Odoo compte les centimes, la banque arrondit. Une caisse à 10 333,20 dh et le versement
+// bancaire de 10 333 dh sont le MÊME dépôt : au centime près ils ne se reconnaissaient pas,
+// et le dépôt restait dans « Reçus banque non liés ».
+describe('centimes Odoo face au montant rond de la banque', () => {
+  it('même signature malgré les centimes', () => {
+    expect(signatureDepot(10333.20, 'VERSEMENT ESPECE N 1569672365'))
+      .toBe(signatureDepot(10333, 'VERSEMENT ESPECE N 1569672365'))
+  })
+
+  it('sépare toujours deux montants vraiment différents', () => {
+    expect(signatureDepot(10333, 'VERSEMENT ESPECE N 1569672365'))
+      .not.toBe(signatureDepot(10334, 'VERSEMENT ESPECE N 1569672365'))
+  })
+
+  it('reconnaît le dépôt d\'une caisse à preuve manuelle malgré les centimes', () => {
+    const caisse = { amount_cash: 10333.20, amount_proof: 10333.20, proof_date: '2026-04-07' }
+    const ligne = { amount: 10333, ligne_date: '2026-04-08', label: 'VERSEMENT ESPECE N 1569672365' }
+    expect(memeDepotSansNumero(ligne, caisse)).toBe(true)
+  })
+
+  it('refuse encore un dirham entier d\'écart', () => {
+    const caisse = { amount_cash: 10333, amount_proof: 10333, proof_date: '2026-04-07' }
+    const ligne = { amount: 10334, ligne_date: '2026-04-08', label: 'VERSEMENT ESPECE N 1569672365' }
+    expect(memeDepotSansNumero(ligne, caisse)).toBe(false)
   })
 })

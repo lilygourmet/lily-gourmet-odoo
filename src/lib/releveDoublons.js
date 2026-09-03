@@ -20,15 +20,21 @@ export function nomDeLigne(label) {
     .join(' ')
 }
 
+// Odoo compte les centimes, la banque arrondit au dirham : en dessous d'un demi-dirham,
+// deux montants sont le MÊME montant. (L'app affiche de toute façon des dirhams entiers.)
+export const ECART_MINI = 0.5
+
 // Signature d'un dépôt : montant + n° d'opération (le PLUS LONG nombre du libellé — un
 // court serait un code, pas un numéro). Deux lignes de même signature sont la MÊME
 // opération, même écrites autrement : la banque sort la date d'opération sur un document
 // et la date de valeur sur l'autre, et « N » / « N° » selon le format.
+// Montant arrondi au DIRHAM : une caisse Odoo à 10 333,20 et le versement bancaire de
+// 10 333,00 sont le même dépôt — au centime près, ils ne se reconnaissaient pas.
 // null quand le libellé ne porte aucun numéro : on ne peut alors rien affirmer.
 export function signatureDepot(amount, label) {
   const nums = (label || '').match(/\d{5,}/g) || []
   const ref = nums.sort((a, b) => b.length - a.length || (a < b ? 1 : -1))[0]
-  return ref ? `${Math.round(Number(amount) * 100)}|${ref}` : null
+  return ref ? `${Math.round(Number(amount))}|${ref}` : null
 }
 
 // Une caisse justifiée par une PREUVE MANUELLE (photo du bordereau) ne porte aucun n°
@@ -38,7 +44,7 @@ export function signatureDepot(amount, label) {
 export function memeDepotSansNumero(ligne, caisse, joursMax = 7) {
   const montant = Number(caisse.amount_proof ?? caisse.amount_cash)
   if (!(montant > 0)) return false
-  if (Math.abs(Number(ligne.amount) - montant) >= 0.005) return false
+  if (Math.abs(Number(ligne.amount) - montant) >= ECART_MINI) return false
   if (!caisse.proof_date || !ligne.ligne_date) return true
   const jours = Math.abs((new Date(ligne.ligne_date) - new Date(caisse.proof_date)) / 86400000)
   return jours <= joursMax

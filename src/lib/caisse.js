@@ -1,7 +1,8 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
-import { marquerDoublons, signatureDepot, memeDepotSansNumero } from './releveDoublons'
+import { marquerDoublons, signatureDepot, memeDepotSansNumero, ECART_MINI } from './releveDoublons'
+export { ECART_MINI }
 
 // ============================================================
 // AUDIT LOG (helper - silencieux, ne fait jamais planter l'appel parent)
@@ -625,11 +626,6 @@ export async function loadPendingBanqueEnvelopes() {
     .filter(e => e.destinataire?.type === 'banque' && !e.releve_ignore)
     .map(e => ({ ...e, deja_rapprochee: !!(e.proof_url || e.releve_status) }))
 }
-
-// Seuil d'écart signalé. L'app affiche les montants en dirhams ENTIERS : en dessous d'un
-// demi-dirham, un « écart » n'est que l'arrondi des centimes d'Odoo face au montant rond
-// de la banque, et il s'affichait « ⚠️ Écart (−0 dh) ». On ne le signale plus.
-export const ECART_MINI = 0.5
 
 // Enveloppes Banque ayant un ÉCART de montant (amount_proof ≠ amount_cash),
 // PAS encore validé. Les écarts validés partent dans « Validés » (loadBanqueEcartsValides).
