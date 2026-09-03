@@ -1251,9 +1251,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     : null
                   const contenu = (
                     <>
-                      <span className="text-[17px] font-extrabold min-w-[96px] text-right">
-                        {l.tailles ? l.tailles.map(x => nbQ(x * fois, l.unite)).join(' / ') : nbQ(l.qty * fois, l.unite)} {l.unite}
-                      </span>
                       <span className={'text-[14px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                         {courtNom(l.produit)}
                         {stockLa !== undefined && (
@@ -1277,23 +1274,28 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                       )}
                     </>
                   )
-                  return ouvrable ? (
-                    <button key={i}
-                      onClick={() => {
-                        // le stock est dans l'unité de l'article, la ligne dans
-                        // la sienne : on convertit avant de soustraire.
-                        const q = (l.tailles ? Math.max(...l.tailles) : l.qty) * fois
-                        const besoin = versUniteDe(l.produit, q, l.unite)
-                        ouvrirFiche(l.produit, saisie, Math.max(0, besoin - Math.max(0, stocks[l.produit] || 0)))
-                      }}
-                      className={'w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm '
-                        + (couvert ? 'bg-[#F3F8EC]' : '')}>
-                      {contenu}
-                    </button>
-                  ) : (
-                    <div key={i} className={'flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 '
+                  // La quantité est un champ : elle ne peut plus vivre DANS le
+                  // bouton qui ouvre la sous-recette (on taperait dedans en
+                  // ouvrant la fiche). Elle se pose donc à côté.
+                  return (
+                    <div key={i} className={'flex items-center gap-3 px-3.5 border-b border-[#f4eee2] last:border-0 '
                       + (couvert ? 'bg-[#F3F8EC]' : '')}>
-                      {contenu}
+                      <QteLigne l={l} fois={fois} onFois={setFois} />
+                      {ouvrable ? (
+                        <button
+                          onClick={() => {
+                            // le stock est dans l'unité de l'article, la ligne dans
+                            // la sienne : on convertit avant de soustraire.
+                            const q = (l.tailles ? Math.max(...l.tailles) : l.qty) * fois
+                            const besoin = versUniteDe(l.produit, q, l.unite)
+                            ouvrirFiche(l.produit, saisie, Math.max(0, besoin - Math.max(0, stocks[l.produit] || 0)))
+                          }}
+                          className="flex-1 min-w-0 text-left flex items-center gap-3 py-2.5 active:bg-cream-warm">
+                          {contenu}
+                        </button>
+                      ) : (
+                        <div className="flex-1 min-w-0 flex items-center gap-3 py-2.5">{contenu}</div>
+                      )}
                     </div>
                   )
                 })}
@@ -1367,6 +1369,46 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         )
       })()}
     </div>
+  )
+}
+
+// La quantité d'un ingrédient se tape directement : « je pars de 1 400 g de
+// crème whipping ». On en déduit combien de fois la recette est faite, et
+// TOUT le reste suit — les autres ingrédients, la sortie, et ce qui sera
+// validé dans « À valider Annexe ». Une ligne qui porte plusieurs tailles
+// (« 20 / 80 / 120 g ») ne se tape pas : on ne saurait pas laquelle bouge.
+function QteLigne({ l, fois, onFois }) {
+  const affiche = l.tailles
+    ? l.tailles.map(x => nbQ(x * fois, l.unite)).join(' / ')
+    : nbQ(l.qty * fois, l.unite)
+  const [txt, setTxt] = useState(affiche)
+  const [vu, setVu] = useState(affiche)
+  // la valeur a changé ailleurs (compteur, autre ligne) : on la reprend
+  if (affiche !== vu) { setVu(affiche); setTxt(affiche) }
+
+  if (l.tailles || !(l.qty > 0)) {
+    return (
+      <span className="text-[17px] font-extrabold min-w-[96px] text-right shrink-0">
+        {affiche} {l.unite}
+      </span>
+    )
+  }
+  const valider = () => {
+    // « 1 400 » arrive avec l'espace des milliers et la virgule française
+    const v = Number(String(txt).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'))
+    if (!(v > 0)) { setTxt(affiche); return }
+    onFois(Math.round((v / l.qty) * 10000) / 10000)
+  }
+  return (
+    <span className="min-w-[96px] shrink-0 flex items-baseline justify-end gap-1">
+      <input value={txt} inputMode="decimal"
+        onChange={e => setTxt(e.target.value)} onBlur={valider}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        aria-label={'Quantité de ' + courtNom(l.produit)}
+        className="w-[66px] text-right text-[17px] font-extrabold bg-transparent text-ink
+                   border-b border-dashed border-bordeaux/45 focus:outline-none focus:border-bordeaux" />
+      <span className="text-[13px] font-bold text-ink-mute">{l.unite}</span>
+    </span>
   )
 }
 

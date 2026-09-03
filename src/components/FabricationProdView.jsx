@@ -18,6 +18,43 @@ const nbQ = (v, u) => (/^kg$/i.test(String(u || '').trim())
   ? nb(Math.round((Number(v) || 0) * 100) / 100)
   : nb(Math.round(Number(v) || 0)))
 const propre = n => String(n).replace(/^SM[.-]?\s*/i, '').replace(/\s*finition\s*$/i, '').trim()
+
+// Jumelle de celle de Fabrication Annexe : on tape la quantité d'un ingrédient
+// et la recette entière se recalcule autour. Les tailles multiples
+// (« 20 / 80 / 120 g ») ne se tapent pas : on ne saurait pas laquelle bouge.
+function QteLigne({ l, fois, onFois }) {
+  const affiche = l.tailles
+    ? l.tailles.map(q => nbQ(q * fois, l.unite)).join(' / ')
+    : nbQ(l.qty * fois, l.unite)
+  const [txt, setTxt] = useState(affiche)
+  const [vu, setVu] = useState(affiche)
+  if (affiche !== vu) { setVu(affiche); setTxt(affiche) }
+
+  if (l.tailles || !(l.qty > 0)) {
+    return (
+      <span className="text-[19px] font-extrabold min-w-[104px] text-right shrink-0">
+        {affiche} {l.unite}
+      </span>
+    )
+  }
+  const valider = () => {
+    const v = Number(String(txt).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'))
+    if (!(v > 0)) { setTxt(affiche); return }
+    onFois(Math.round((v / l.qty) * 10000) / 10000)
+  }
+  return (
+    <span className="min-w-[104px] shrink-0 flex items-baseline justify-end gap-1">
+      <input value={txt} inputMode="decimal"
+        onChange={e => setTxt(e.target.value)} onBlur={valider}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        aria-label={'Quantité de ' + propre(l.produit)}
+        className="w-[72px] text-right text-[19px] font-extrabold bg-transparent text-ink
+                   border-b border-dashed border-bordeaux/45 focus:outline-none focus:border-bordeaux" />
+      <span className="text-[13px] font-bold text-ink-mute">{l.unite}</span>
+    </span>
+  )
+}
+
 const jourLisible = j => new Date(j + 'T12:00:00')
   .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '')
@@ -544,9 +581,6 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                     const ouvrable = l.fabrique && cible && recettes[l.produit]
                     const contenu = (
                       <>
-                        <span className="text-[19px] font-extrabold min-w-[104px] text-right">
-                          {l.tailles ? l.tailles.map(q => nbQ(q * fois, l.unite)).join(' / ') : nbQ(l.qty * fois, l.unite)} {l.unite}
-                        </span>
                         <span className={'text-[15px] flex-1 min-w-0 ' + (l.fabrique ? 'text-bordeaux font-bold' : '')}>
                           {propre(l.produit)}
                         </span>
@@ -556,14 +590,19 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                         )}
                       </>
                     )
-                    return ouvrable ? (
-                      <button key={i} onClick={() => ouvrir(cible, l.tailles ? null : l.qty * fois)}
-                        className="w-full text-left flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
-                        {contenu}
-                      </button>
-                    ) : (
-                      <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 border-b border-[#f4eee2] last:border-0">
-                        {contenu}
+                    // la quantité devient un champ : elle sort du bouton qui
+                    // ouvre la sous-recette, sinon on taperait en ouvrant
+                    return (
+                      <div key={i} className="flex items-center gap-3 px-3.5 border-b border-[#f4eee2] last:border-0">
+                        <QteLigne l={l} fois={fois} onFois={setFois} />
+                        {ouvrable ? (
+                          <button onClick={() => ouvrir(cible, l.tailles ? null : l.qty * fois)}
+                            className="flex-1 min-w-0 text-left flex items-center gap-3 py-2.5 active:bg-cream-warm">
+                            {contenu}
+                          </button>
+                        ) : (
+                          <div className="flex-1 min-w-0 flex items-center gap-3 py-2.5">{contenu}</div>
+                        )}
                       </div>
                     )
                   })}
