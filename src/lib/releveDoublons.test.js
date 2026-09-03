@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nomDeLigne, similarite, marquerDoublons } from './releveDoublons'
+import { nomDeLigne, similarite, marquerDoublons, signatureDepot } from './releveDoublons'
 
 const L = (key, date, amount, label, created_at) => ({ key, ligne_date: date, amount, label, created_at })
 
@@ -95,5 +95,34 @@ describe('doublons — le libellé n\'est pas une identité', () => {
       L('b', '2026-06-06', 400, 'VIRT RECU MR OMAR TAZI', '2026-08-07T11:50:00'),
     ])
     expect(out).toHaveLength(2)
+  })
+})
+
+// Cas vécu (versement de 5 834 dh, compte Attijariwafa) : le même dépôt sort sur le relevé
+// à la date d'opération (30/04, « N° ») et sur le relevé de mouvements à la date de valeur
+// (04/05, « N »). Deux lignes en base, un seul dépôt — c'est le n° qui les réunit.
+describe('signatureDepot — un dépôt vu deux fois', () => {
+  it('donne la même signature malgré la date et le « N° » / « N »', () => {
+    const a = signatureDepot(5834, 'VERSEMENT ESPECE N° 1630293611')
+    const b = signatureDepot('5834.00', 'VERSEMENT ESPECE N 1630293611')
+    expect(a).toBe(b)
+  })
+
+  it('sépare deux versements de montants différents', () => {
+    expect(signatureDepot(5834, 'VERSEMENT ESPECE N 1630293611'))
+      .not.toBe(signatureDepot(5830, 'VERSEMENT ESPECE N 1630293611'))
+  })
+
+  it('sépare deux versements de n° différents', () => {
+    expect(signatureDepot(5834, 'VERSEMENT ESPECE N 1630293611'))
+      .not.toBe(signatureDepot(5834, 'VERSEMENT ESPECE N 1630293612'))
+  })
+
+  it('retient le n° le plus long, pas un code court', () => {
+    expect(signatureDepot(200, 'VIR INST RECU 22334 1630293611')).toBe('20000|1630293611')
+  })
+
+  it('rend null sans numéro dans le libellé — on ne peut rien affirmer', () => {
+    expect(signatureDepot(400, 'VIRT RECU MME SELMA BENOMAR')).toBeNull()
   })
 })

@@ -1,7 +1,7 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
-import { marquerDoublons } from './releveDoublons'
+import { marquerDoublons, signatureDepot } from './releveDoublons'
 
 // ============================================================
 // AUDIT LOG (helper - silencieux, ne fait jamais planter l'appel parent)
@@ -406,15 +406,29 @@ export async function loadAllFreeReleveLines() {
     .not('label', 'ilike', '%TPE%')
     .order('ligne_date', { ascending: false })
   if (error) throw error
+  // Une opération DÉJÀ rattachée à une caisse n'a plus rien à faire ici, même écrite
+  // autrement : le même versement figure dans deux documents de la banque (relevé et
+  // relevé de mouvements) sous 2 dates (opération / valeur) et 2 libellés (« N » / « N° »)
+  // → 2 lignes en base, 1 seul dépôt réel. On ne comparait que les lignes LIBRES entre
+  // elles : la jumelle d'une ligne déjà prise restait « non liée » pour toujours.
+  const { data: prises } = await supabase
+    .from('caisse_releve_lignes')
+    .select('amount, label')
+    .not('used_by', 'is', null)
+    .limit(5000)
+  const dejaPrises = new Set()
+  for (const p of (prises || [])) {
+    const sig = signatureDepot(p.amount, p.label)
+    if (sig) dejaPrises.add(sig)
+  }
   // Dédoublonnage : un même dépôt vu sous 2 dates (opération vs valeur) ou 2 libellés
   // (« N » / « N° ») → même MONTANT + même n° de versement (unique) → on garde 1 ligne.
   const seen = new Set()
   const out = []
   for (const r of (data || [])) {
-    // n° de versement = le PLUS LONG nombre du libellé (évite de confondre avec un code court).
-    const nums = (r.label || '').match(/\d{5,}/g) || []
-    const ref = nums.sort((a, b) => b.length - a.length || (a < b ? 1 : -1))[0]
-    const k = ref ? `${Math.round(Number(r.amount) * 100)}|${ref}` : `row|${r.key || r.id}`
+    const sig = signatureDepot(r.amount, r.label)
+    if (sig && dejaPrises.has(sig)) continue          // jumelle déjà rattachée à une caisse
+    const k = sig || `row|${r.key || r.id}`
     if (seen.has(k)) continue
     seen.add(k); out.push(r)
   }
