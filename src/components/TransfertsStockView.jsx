@@ -298,8 +298,17 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                 )}
               </div>
 
-              {/* vignettes : photo + nom ; un clic ouvre la calculatrice */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[380px] overflow-y-auto">
+            </div>
+          )}
+
+          {/* ---- LES VIGNETTES, HORS DU CADRE ----
+              Elles vivaient dans une boîte de 380 px qui défilait à l'intérieur
+              du cadre beige, lui-même dans la page : sur la tablette de Layla
+              ça faisait une lucarne de deux rangées. Elles occupent maintenant
+              toute la largeur et suivent le défilement de la page. */}
+          {peutEnvoyer(user, sens) && (
+            <div className="mb-6">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {listeArticles.map(a => {
                   const dansPanier = panier.find(p => p.odoo_product_id === a.odoo_product_id)
                   return (
@@ -310,12 +319,12 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                           ? <img src={a.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
                           : <span className="text-[10px] text-ink-mute px-2 text-center">pas de photo</span>}
                       </div>
-                      <div className="p-1.5">
-                        <div className="text-[10.5px] leading-tight text-ink line-clamp-2">{a.nom}</div>
-                        <div className="text-[9.5px] text-ink-mute mt-0.5">{a.unite}</div>
+                      <div className="p-2">
+                        <div className="text-[12px] leading-tight text-ink line-clamp-2">{a.nom}</div>
+                        <div className="text-[10.5px] text-ink-mute mt-0.5">{a.unite}</div>
                       </div>
                       {dansPanier && (
-                        <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-bordeaux text-cream text-[10px] font-medium">
+                        <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-bordeaux text-cream text-[11.5px] font-semibold">
                           {fmt(dansPanier.qty)}
                         </span>
                       )}
@@ -338,12 +347,12 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
 
               {panier.length === 0 && (
                 <p className="mt-3 text-[12px] text-ink-mute">
-                  Touche un article ci-dessus pour saisir la quantité : le bouton <b>Envoyer la liste</b> apparaîtra en bas de l'écran.
+                  Touche un article pour saisir la quantité : le bouton <b>Envoyer la liste</b> apparaîtra en bas de l'écran.
                 </p>
               )}
 
               {/* ajouter un article absent */}
-              <div className="mt-4 pt-4 border-t border-line">
+              <div className="mt-4 bg-cream-warm border border-line rounded-2xl p-4">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-2">Ajouter un article</div>
                 <div className="flex gap-2">
                   <input value={rechercheOdoo} onChange={e => setRechercheOdoo(e.target.value)}
@@ -433,7 +442,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
                   <input type="date" value={date} onChange={e => setDate(e.target.value)}
                     className="px-2 py-1 border border-line rounded-lg text-[12px]" />
                 </div>
-                <div className="max-h-[28dvh] overflow-y-auto mb-2">
+                <div className="max-h-[28vh] overflow-y-auto mb-2">
                   {panier.map(p => (
                     <div key={p.odoo_product_id} className="flex items-center gap-2 py-1 text-[12.5px]">
                       <div className="flex-1 truncate">{p.nom}</div>
@@ -470,7 +479,7 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
       {calc && (
         <div onClick={() => setCalc(null)} className="fixed inset-0 bg-black/45 z-50 flex items-end sm:items-center justify-center p-3 overflow-y-auto">
           <div onClick={e => e.stopPropagation()}
-            className="bg-white rounded-2xl p-4 w-full max-w-xs border border-line max-h-[92dvh] overflow-y-auto"
+            className="bg-white rounded-2xl p-4 w-full max-w-xs border border-line max-h-[86vh] overflow-y-auto"
             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
             <div className="flex items-start gap-2 mb-3">
               {calc.article.image_url && <img src={calc.article.image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
