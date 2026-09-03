@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadOrdres, loadFaits, loadManques, validerDansOdoo, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies } from '../lib/fabrication'
+import { confirmDialog } from '../lib/confirmDialog'
+import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies } from '../lib/fabrication'
 
 // ====== « À valider » : la page dédiée ======
 // Tout ce que l'équipe a marqué « fait » (montages, préparations, tournées de
@@ -139,6 +140,25 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const prets = choisis.filter(l => !l.manques.length)
   const bloques = choisis.filter(l => l.manques.length)
   const manquesCumules = [...new Map(bloques.flatMap(l => l.manques).map(m => [m.produit, m])).values()]
+
+  // Annuler l'ordre dans Odoo. Demande délibérée, donc on va au-delà du
+  // décochage : même un ordre lancé par Odoo lui-même part. Il n'est pas
+  // effacé, il passe en « annulé » — la trace reste là-bas.
+  async function annuler(l) {
+    const ok = await confirmDialog(
+      `Annuler l'ordre ${l.name} — ${propre(l.produit)} ?\n\n`
+      + "Il passera en « annulé » dans Odoo et sortira de cette liste. Rien ne sera fabriqué.",
+      { confirmLabel: "Annuler l'ordre", danger: true })
+    if (!ok) return
+    try {
+      const r = await annulerOrdre([l.name], user?.id)
+      if (r && r.annules) {
+        setLignes(v => { const reste = (v || []).filter(x => x.name !== l.name); garderEcran('valider', reste); return reste })
+        setSel(v => v.filter(n => n !== l.name))
+        toast.success(l.name + ' annulé dans Odoo')
+      } else toast.error((r && r.refuses && r.refuses[0]) || "Odoo a refusé l'annulation")
+    } catch (e) { toast.error(e.message || String(e)) }
+  }
 
   async function lancer(forcer) {
     const cibles = (forcer ? bloques : prets).map(l => l.name)
@@ -311,10 +331,14 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                         [l.name]: [...(m[l.name] || []), { produit: a.id, nom: a.nom, uom: a.uom, unite: a.unite, qty: '' }],
                       }))} />
 
-                      <div className="flex gap-2 mt-2.5">
+                      <div className="flex gap-2 mt-2.5 flex-wrap">
                         <button onClick={() => setOuvert(null)}
                           className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
                           fermer sans changer
+                        </button>
+                        <button onClick={() => annuler(l)}
+                          className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
+                          annuler l'ordre
                         </button>
                         {(notes[l.name] || ajouts[l.name]) && (
                           <button onClick={() => {

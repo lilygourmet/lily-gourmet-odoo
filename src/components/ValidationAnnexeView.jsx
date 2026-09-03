@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 import { todayISO } from '../lib/dates'
-import { loadFabProd } from '../lib/fabricationProd'
+import { loadFabProd, delFabProd } from '../lib/fabricationProd'
 import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
-import { loadManques, validerDansOdoo, loadSaisies, saveSaisies } from '../lib/fabrication'
+import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { AjoutIngredient } from './ValidationView'
 
@@ -87,14 +88,15 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
               parOrdre.set(o.name, { name: o.name, article: d.article, demande: o.qty, etat: o.state })
             }
           } else {
-            const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite }
+            const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite, ids: [] }
             p.qty += Number(d.qty) || 0
+            p.ids.push(d.id)
             sans.set(d.article, p)
           }
         }
         const base = [...parOrdre.values()]
         const orphelins = [...sans.values()].map(p => ({
-          name: 'sans-ordre:' + p.article, article: p.article, sansOrdre: true,
+          name: 'sans-ordre:' + p.article, article: p.article, sansOrdre: true, ids: p.ids,
           demande: Math.round(p.qty * 100) / 100, unite: p.unite, manques: [], lignes: [],
         }))
         if (!base.length) { setLignes(orphelins); return }
@@ -153,6 +155,39 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
 
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
+
+  // Annuler l'ordre dans Odoo. Demande délibérée : même un ordre lancé par
+  // Odoo lui-même part. Il n'est pas effacé, il passe en « annulé ».
+  async function annuler(l) {
+    const ok = await confirmDialog(
+      `Annuler l'ordre ${l.name} — ${propre(l.article)} ?\n\n`
+      + "Il passera en « annulé » dans Odoo et sortira de cette liste. Rien ne sera fabriqué.",
+      { confirmLabel: "Annuler l'ordre", danger: true })
+    if (!ok) return
+    try {
+      const r = await annulerOrdre([l.name], user?.id)
+      if (r && r.annules) {
+        setLignes(v => (v || []).filter(x => x.name !== l.name))
+        setSel(v => v.filter(n => n !== l.name))
+        toast.success(l.name + ' annulé dans Odoo')
+      } else toast.error((r && r.refuses && r.refuses[0]) || "Odoo a refusé l'annulation")
+    } catch (e) { toast.error(e.message || String(e)) }
+  }
+
+  // Une déclaration dont l'ordre n'a jamais pu être créé : elle ne mène nulle
+  // part. On la retire, sans rien toucher dans Odoo (il n'y a rien à toucher).
+  async function retirerDeclaration(l) {
+    const ok = await confirmDialog(
+      `Retirer la déclaration « ${propre(l.article)} » (${qte(l.demande, l.unite)}) ?\n\n`
+      + "Rien n'existe dans Odoo pour elle. Elle disparaîtra simplement de cette liste.",
+      { confirmLabel: 'Retirer', danger: true })
+    if (!ok) return
+    try {
+      for (const id of l.ids || []) await delFabProd(id)
+      setLignes(v => (v || []).filter(x => x.name !== l.name))
+      toast.success('Déclaration retirée.')
+    } catch (e) { toast.error(e.message || String(e)) }
+  }
 
   async function lancer(forcer) {
     const cibles = (forcer ? bloques : prets).map(l => l.name)
@@ -266,6 +301,12 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                     sans ordre
                   </span>
                 </div>
+                <div className="border-t border-line px-3.5 py-2 flex">
+                  <button onClick={() => retirerDeclaration(l)}
+                    className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
+                    retirer cette déclaration
+                  </button>
+                </div>
               </div>
             )
           }
@@ -363,10 +404,14 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                         [l.name]: [...(m[l.name] || []), { produit: a.id, nom: a.nom, uom: a.uom, unite: a.unite, qty: '' }],
                       }))} />
 
-                      <div className="flex gap-2 mt-2.5">
+                      <div className="flex gap-2 mt-2.5 flex-wrap">
                         <button onClick={() => setOuvert(null)}
                           className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
                           fermer sans changer
+                        </button>
+                        <button onClick={() => annuler(l)}
+                          className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
+                          annuler l'ordre
                         </button>
                         {(notes[l.name] || ajouts[l.name]) && (
                           <button onClick={() => {

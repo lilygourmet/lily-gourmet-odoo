@@ -1722,6 +1722,39 @@ export default async function handler(req, res) {
       return res.status(200).json(await annulerOfApp(uid, names))
     }
 
+    // ANNULER UN ORDRE, à la demande explicite de quelqu'un devant l'écran de
+    // validation (POST). Différent de `annuler-of`, qui ne touche qu'aux ordres
+    // créés par l'app quand on décoche : ici on annule aussi ceux qu'Odoo a
+    // lancés lui-même, parce que la demande est délibérée.
+    //
+    // Deux garde-fous : un ordre TERMINÉ n'est jamais touché (sa production est
+    // entrée en stock), et on `action_cancel` sans supprimer — la trace reste
+    // dans Odoo, contrairement au décochage qui efface ce que l'app a créé.
+    if (req.method === 'POST' && req.query.mode === 'annuler-ordre') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const names = (body.ordres || []).filter(Boolean)
+      if (!names.length) return res.status(400).json({ error: 'aucun ordre' })
+      if (body.test) return res.status(200).json({ test: true, annules: 0, noms: [], refuses: [] })
+      const uid = await odooAuth()
+      try {
+        const mos = await odooSearchRead(uid, 'mrp.production',
+          [['name', 'in', names]], ['id', 'name', 'state'], { limit: 50 })
+        const ouverts = mos.filter(m => ['draft', 'confirmed', 'progress'].includes(m.state))
+        const refuses = mos.filter(m => !ouverts.includes(m)).map(m => `${m.name} (${m.state})`)
+        const noms = []
+        for (const m of ouverts) {
+          try {
+            await odooCall(uid, 'mrp.production', 'action_cancel', [[m.id]])
+            noms.push(m.name)
+          } catch (e) { refuses.push(`${m.name} : ${(e.message || e).toString().slice(0, 80)}`) }
+        }
+        console.log(`[annuler-ordre] ${noms.length} annule(s) par ${body.actorId || '?'} : ${noms.join(', ')}`)
+        return res.status(200).json({ annules: noms.length, noms, refuses })
+      } catch (e) {
+        return res.status(200).json({ error: (e.message || String(e)).slice(0, 300) })
+      }
+    }
+
     // Solder les ordres en double d'une règle mini/maxi (POST). Jamais une commande.
     if (req.method === 'POST' && req.query.mode === 'annuler-doublons') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})

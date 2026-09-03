@@ -169,6 +169,24 @@ export async function annulerOfPrepa(ordres) {
   } catch { return null }
 }
 
+/**
+ * Annule un ordre dans Odoo, à la demande explicite de l'écran de validation.
+ * Contrairement à `annulerOfPrepa` (le décochage), celui-ci touche AUSSI les
+ * ordres qu'Odoo a lancés lui-même — et il n'efface rien : l'ordre reste,
+ * marqué annulé. Un ordre terminé est refusé.
+ */
+export async function annulerOrdre(ordres, actorId) {
+  if (!ordres || !ordres.length) return null
+  const r = await fetch('/api/freezer-list?mode=annuler-ordre', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ordres, actorId, test: estModeTest() }),
+  })
+  const j = await r.json()
+  if (j.error) throw new Error(j.error)
+  return j
+}
+
 /** Ce qui manque pour fabriquer ces ordres Odoo (lecture seule, génoise ignorée). */
 export async function loadManques(ordres) {
   if (!ordres.length) return []
