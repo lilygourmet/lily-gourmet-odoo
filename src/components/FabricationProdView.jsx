@@ -60,6 +60,21 @@ const jourLisible = j => new Date(j + 'T12:00:00')
   .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '')
 
+// Les fournées d'une journée, regroupées par article : le même article peut être
+// fait plusieurs fois dans la journée, on additionne. Ordre alphabétique — c'est
+// ce qui se relit le mieux quand on cherche un article précis.
+function resumeJournee(lignes) {
+  const par = new Map()
+  for (const l of lignes || []) {
+    const cle = `${l.article}|${l.unite || ''}`
+    const e = par.get(cle) || { cle, nom: propre(l.article), unite: l.unite || '', qty: 0, fois: 0 }
+    e.qty += Number(l.qty) || 0
+    e.fois += Number(l.fois) || 0
+    par.set(cle, e)
+  }
+  return [...par.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+}
+
 const FAMILLES = ['Finitions', 'Autres']
 
 // Une fiche Odoo peut lister le même ingrédient une fois par taille de gâteau.
@@ -336,15 +351,29 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
               const qui = [...new Set(h.lignes.map(l => noms[l.fait_par]).filter(Boolean))]
               return (
                 <button key={h.jour} onClick={() => { setJournal(null); setOuvert(null); setJour(h.jour) }}
-                  className={'w-full text-left bg-white border rounded-xl px-3.5 py-2.5 mb-1.5 flex items-baseline gap-3 ' +
+                  className={'w-full text-left bg-white border rounded-xl px-3.5 py-2.5 mb-1.5 ' +
                     (h.jour === jour ? 'border-bordeaux' : 'border-line')}>
-                  <span className="text-[13.5px] font-bold flex-1 min-w-0">{jourLisible(h.jour)}</span>
-                  <span className="text-[12.5px] text-ink-soft whitespace-nowrap">
-                    {h.lignes.length} ligne{h.lignes.length > 1 ? 's' : ''}
-                  </span>
-                  {qui.length > 0 && (
-                    <span className="text-[11.5px] text-ink-mute truncate max-w-[45%]">par {qui.join(', ')}</span>
-                  )}
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-[13.5px] font-bold flex-1 min-w-0">{jourLisible(h.jour)}</span>
+                    {qui.length > 0 && (
+                      <span className="text-[11.5px] text-ink-mute truncate max-w-[55%]">par {qui.join(', ')}</span>
+                    )}
+                  </div>
+                  {/* Ce qui a été fabriqué ce jour-là, regroupé par article : une
+                      journée peut porter plusieurs fournées du même article. */}
+                  <div className="mt-1.5 space-y-0.5">
+                    {resumeJournee(h.lignes).map(r => (
+                      <div key={r.cle} className="flex items-baseline gap-2 text-[12.5px]">
+                        <span className="flex-1 min-w-0 truncate text-ink-soft">{r.nom}</span>
+                        <span className="font-bold whitespace-nowrap">{nbQ(r.qty, r.unite)} {r.unite}</span>
+                        {r.fois > 0 && (
+                          <span className="text-[11px] text-ink-mute whitespace-nowrap w-[62px] text-right">
+                            {nb(r.fois)} fois
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </button>
               )
             })}
