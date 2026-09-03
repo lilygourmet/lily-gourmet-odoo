@@ -48,19 +48,27 @@ export async function demasquer(nom, atelier = 'annexe') {
  * ⚠️ Les GÉNOISES et les SIROPS ne bloquent jamais (Layla, 2026-09-03) : il y en
  * a treize dans les recettes, faits des deux côtés et rarement à jour chez
  * Odoo. Ils bloquaient à eux seuls 17 articles sur 30.
+ * ⚠️ Un enfant DÉJÀ PRIS EN CHARGE ne bloque plus — déclaré aujourd'hui, ou
+ * avec un ordre ouvert dans Odoo. Sans ça, c'est un cul-de-sac : déclarer
+ * l'enfant crée un ORDRE, et le stock ne remonte qu'à la validation. Le
+ * 2026-09-03 la pâte à croissant à −2265 a bloqué TOUTE la viennoiserie
+ * (croissants, pains au chocolat, pains suisses, babka, pains aux raisins) et
+ * l'atelier ne pouvait plus rien déclarer de la matinée.
  */
 const SANS_BLOCAGE = /genoise|sirop/
 
 const sansAccent = (n) => String(n || '')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
-export function enfantsARupture(recettes, stocks, nom) {
+export function enfantsARupture(recettes, stocks, nom, enCours) {
   const r = (recettes || {})[nom]
   if (!r || !r.lignes) return []
+  const pris = enCours instanceof Set ? enCours : new Set(enCours || [])
   const bloquants = new Set()
   for (const l of r.lignes) {
     if (!l.fabrique || bloquants.has(l.produit)) continue
     if (SANS_BLOCAGE.test(sansAccent(l.produit))) continue
+    if (pris.has(l.produit)) continue                    // déjà déclaré ou en cours
     const st = (stocks || {})[l.produit]
     if (st !== undefined && (st || 0) <= 0) bloquants.add(l.produit)
   }

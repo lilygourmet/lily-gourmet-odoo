@@ -54,6 +54,22 @@ describe('enfantsARupture', () => {
     expect(enfantsARupture(r, zero, 'X')).toEqual(['SM Craquant'])
   })
 
+  it('ne bloque PLUS un enfant deja pris en charge', () => {
+    // Vécu le 2026-09-03 : la pâte à croissant à −2265 bloquait TOUTE la
+    // viennoiserie. Déclarer la pâte crée un ORDRE, et le stock ne remonte
+    // qu'à la validation — sans cette porte de sortie, l'atelier reste bloqué
+    // toute la matinée.
+    const r = { 'Croissant': { lignes: [{ produit: 'SM. Pate a Croissant', fabrique: true }] } }
+    const stockNegatif = { 'SM. Pate a Croissant': -2265 }
+    expect(enfantsARupture(r, stockNegatif, 'Croissant')).toEqual(['SM. Pate a Croissant'])
+    expect(enfantsARupture(r, stockNegatif, 'Croissant', new Set(['SM. Pate a Croissant']))).toEqual([])
+    // une simple liste marche aussi
+    expect(enfantsARupture(r, stockNegatif, 'Croissant', ['SM. Pate a Croissant'])).toEqual([])
+    // mais un AUTRE article pris en charge ne débloque rien
+    expect(enfantsARupture(r, stockNegatif, 'Croissant', new Set(['SM Autre'])))
+      .toEqual(['SM. Pate a Croissant'])
+  })
+
   it('ne bloque pas un stock négatif ignoré ni un article sans recette', () => {
     expect(enfantsARupture(recettes, { 'SM Craquant': -3, 'SM Creme': 1 }, 'Gateau'))
       .toEqual(['SM Craquant'])

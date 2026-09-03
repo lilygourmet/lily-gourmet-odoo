@@ -527,6 +527,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return m
   }, [journal])
 
+  // Ce dont quelqu'un s'est déjà occupé : déclaré aujourd'hui, ou avec un ordre
+  // ouvert dans Odoo. Ces articles-là ne doivent plus bloquer leurs parents —
+  // sinon on ne peut jamais sortir d'un stock négatif, l'ordre créé en
+  // déclarant ne remontant le stock qu'à la validation.
+  const enCours = useMemo(() => new Set([
+    ...Object.keys(combienDe),
+    ...Object.keys((arbre && arbre.ordres) || {}),
+    ...Object.keys(ordresLocaux),
+  ]), [combienDe, arbre, ordresLocaux])
+
   // Ce qu'il faut vraiment : la recette POUR le besoin, pas arrondie à la
   // fournée entière. Sauf si l'article se fait par tournée — l'app le sait en
   // regardant ce que l'atelier a produit sur un an.
@@ -631,7 +641,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // Si Odoo en tient déjà un, on n'y touche pas, on s'y raccroche.
   const noter = async (nom, combienFois) => {
     if (creation) return
-    const bloquants = enfantsARupture(recettes, stocks, nom)
+    const bloquants = enfantsARupture(recettes, stocks, nom, enCours)
     if (bloquants.length) {
       toast.error('Impossible : ' + bloquants.map(propre).join(', ')
         + (bloquants.length > 1 ? ' sont à zéro' : ' est à zéro')
@@ -1099,7 +1109,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         const choisirTaille = vue === 'declarer' && tailles.length > 0
         const estMere = (vue === 'besoins' || choisirTaille) && estRacine
         // Ce qui interdit de dire « c'est fait » tant que ce n'est pas compté.
-        const bloquants = estMere ? [] : enfantsARupture(recettes, stocks, saisie)
+        const bloquants = estMere ? [] : enfantsARupture(recettes, stocks, saisie, enCours)
         return (
         <div className="fixed inset-0 z-[70] bg-ink/55 flex items-end sm:items-center justify-center p-0 sm:p-4 print:hidden"
           onPointerDown={e => { if (e.target === e.currentTarget) { setSaisie(null); setPile([]) } }}>
