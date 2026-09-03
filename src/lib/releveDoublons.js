@@ -20,6 +20,17 @@ export function nomDeLigne(label) {
     .join(' ')
 }
 
+// Signature d'un dépôt : montant + n° d'opération (le PLUS LONG nombre du libellé — un
+// court serait un code, pas un numéro). Deux lignes de même signature sont la MÊME
+// opération, même écrites autrement : la banque sort la date d'opération sur un document
+// et la date de valeur sur l'autre, et « N » / « N° » selon le format.
+// null quand le libellé ne porte aucun numéro : on ne peut alors rien affirmer.
+export function signatureDepot(amount, label) {
+  const nums = (label || '').match(/\d{5,}/g) || []
+  const ref = nums.sort((a, b) => b.length - a.length || (a < b ? 1 : -1))[0]
+  return ref ? `${Math.round(Number(amount) * 100)}|${ref}` : null
+}
+
 // Ressemblance entre deux textes, de 0 (rien à voir) à 1 (identiques) — distance de Levenshtein.
 export function similarite(a, b) {
   if (!a || !b) return 0
