@@ -65,6 +65,24 @@ export async function deleteAjout(id) {
   if (error) throw error
 }
 
+// Un comptage est « à envoyer » tant que personne ne l'a porté chez Odoo, et il
+// le redevient dès qu'on le recompte. C'est ce qui évite de renvoyer un chiffre
+// périmé au comptage suivant.
+export const aEnvoyer = c => !!c && (!c.envoye_le || String(c.compte_le || '') > String(c.envoye_le))
+
+// Marque comme partis les comptages qu'Odoo vient d'accepter, en gardant le
+// chiffre envoyé : il reste affiché en gris pendant qu'on recompte.
+export async function marquerEnvoyes(lieu, lignes) {
+  const quand = new Date().toISOString()
+  for (const l of lignes) {
+    const { error } = await supabase.from('inventaire_comptages')
+      .update({ envoye_le: quand, quantite_envoyee: l.quantite })
+      .eq('lieu', lieu).eq('product_id', l.product_id)
+    if (error) throw error
+  }
+  return quand
+}
+
 // Porte le comptage dans Odoo, dans la colonne « quantité comptée ». Le stock
 // ne bouge pas ici : Odoo garde l'écart en attente et c'est Layla qui applique,
 // depuis « Ajustements d'inventaire ».

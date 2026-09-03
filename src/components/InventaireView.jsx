@@ -13,7 +13,7 @@ import { todayISO } from '../lib/dates'
 import {
   loadArticlesInventaire, loadComptages, saveComptage, deleteComptages,
   loadAjouts, addAjout, updateAjout, deleteAjout, tableauInventaire, calculer,
-  envoyerVersOdoo,
+  envoyerVersOdoo, marquerEnvoyes, aEnvoyer,
 } from '../lib/inventaire'
 
 const FAMILLES = ['Matières premières', 'Semi-finis']
@@ -69,22 +69,31 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
   // tout ce qui est à zéro ou en négatif, quelle que soit sa famille.
   const dansLeFiltre = a => !famille || (famille === 'faux' ? a.qty <= 0 : a.fam === famille)
 
+  // Un comptage déjà porté chez Odoo n'est plus « fait » : il redevient une
+  // simple référence en gris, et l'article repasse à compter. C'est ce qui
+  // permet de recompter et de renvoyer sans traîner les vieux chiffres.
+  const neufs = useMemo(() => {
+    const m = {}
+    for (const [id, c] of Object.entries(comptes)) if (aEnvoyer(c)) m[id] = c
+    return m
+  }, [comptes])
+
   const visibles = useMemo(() => {
     const q = search.trim().toLowerCase()
     return articles.filter(a => {
       if (!dansLeFiltre(a)) return false
-      if (vue === 'reste' && comptes[a.id]) return false
-      if (vue === 'faits' && !comptes[a.id]) return false
+      if (vue === 'reste' && neufs[a.id]) return false
+      if (vue === 'faits' && !neufs[a.id]) return false
       if (q && !(a.nom.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q))) return false
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [articles, comptes, famille, vue, search])
+  }, [articles, neufs, famille, vue, search])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dansFamille = useMemo(() => articles.filter(dansLeFiltre), [articles, famille])
-  const faitsFamille = dansFamille.filter(a => comptes[a.id]).length
-  const totalFaits = Object.keys(comptes).length
+  const faitsFamille = dansFamille.filter(a => neufs[a.id]).length
+  const totalFaits = Object.keys(neufs).length
   const pct = articles.length ? Math.round(totalFaits / articles.length * 100) : 0
 
   async function effacerSelection() {
@@ -107,27 +116,43 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
   // articles de CET onglet partent — on n'envoie pas un comptage qu'elle n'a
   // pas sous les yeux.
   async function versOdoo() {
-    // Le comptage du JOUR seulement. Un comptage d'hier a été fait avant les
-    // fabrications d'aujourd'hui : l'appliquer effacerait ce qui est sorti
-    // depuis. Ceux-là restent de côté, et l'écran dit combien.
-    const dujour = articles.filter(a => comptes[a.id] && String(comptes[a.id].compte_le || '').slice(0, 10) === todayISO())
-    const vieux = articles.filter(a => comptes[a.id]).length - dujour.length
-    const aEnvoyer = dujour.map(a => ({ product_id: a.id, quantite: comptes[a.id].quantite }))
-    if (!aEnvoyer.length) {
-      toast.error(vieux ? `Rien compté aujourd'hui ici (${vieux} comptage${vieux > 1 ? 's' : ''} plus ancien${vieux > 1 ? 's' : ''}).`
-        : "Rien de compté dans cet onglet.")
+    // Ne partent que les comptages PAS ENCORE envoyés, et faits aujourd'hui :
+    // un comptage d'hier précède les fabrications du jour, l'appliquer
+    // effacerait ce qui est sorti depuis.
+    const dujour = articles.filter(a => neufs[a.id] && String(neufs[a.id].compte_le || '').slice(0, 10) === todayISO())
+    const vieux = Object.keys(neufs).length - dujour.length
+    const lignes = dujour.map(a => ({ product_id: a.id, quantite: neufs[a.id].quantite }))
+    if (!lignes.length) {
+      toast.error(vieux ? `Rien de neuf aujourd'hui ici (${vieux} comptage${vieux > 1 ? 's' : ''} plus ancien${vieux > 1 ? 's' : ''}).`
+        : "Rien de nouveau à envoyer : tout est déjà parti chez Odoo.")
       return
     }
     const ok = await confirmDialog(
-      `Envoyer les ${aEnvoyer.length} comptage${aEnvoyer.length > 1 ? 's' : ''} d'aujourd'hui dans Odoo ?\n\n`
+      `Envoyer les ${lignes.length} comptage${lignes.length > 1 ? 's' : ''} d'aujourd'hui dans Odoo ?\n\n`
       + (vieux ? `${vieux} comptage${vieux > 1 ? 's' : ''} d'un autre jour reste${vieux > 1 ? 'nt' : ''} de côté.\n\n` : '')
       + "Le stock ne bougera PAS : Odoo les met en attente dans « Ajustements "
-      + "d'inventaire ». C'est toi qui appliques là-bas, après avoir relu les écarts.",
+      + "d'inventaire ». C'est toi qui appliques là-bas, après avoir relu les écarts.\n\n"
+      + "Après l'envoi ils passeront en gris, comme référence — l'article repasse "
+      + "à compter, et rien ne repartira deux fois.",
       { confirmLabel: 'Envoyer' })
     if (!ok) return
     setEnvoi(true)
     try {
-      const r = await envoyerVersOdoo(lieu, aEnvoyer)
+      const r = await envoyerVersOdoo(lieu, lignes)
+      // partis chez Odoo : on s'en souvient, sinon le prochain envoi les reprend
+      try {
+        const quand = await marquerEnvoyes(lieu, lignes)
+        setComptes(c => {
+          const n = { ...c }
+          for (const l of lignes) {
+            if (n[l.product_id]) n[l.product_id] = { ...n[l.product_id], envoye_le: quand, quantite_envoyee: l.quantite }
+          }
+          return n
+        })
+      } catch (e) {
+        toast.error('Envoyé, mais non marqué comme parti : ' + e.message
+          + ' — lance supabase/inventaire_envoi.sql')
+      }
       const bouts = []
       if (r.ecrits) bouts.push(r.ecrits + ' à corriger')
       if (r.crees) bouts.push(r.crees + ' nouvelle' + (r.crees > 1 ? 's' : '') + ' ligne' + (r.crees > 1 ? 's' : ''))
@@ -210,7 +235,7 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
               {FAMILLES.map(f => {
                 const tot = articles.filter(a => a.fam === f).length
                 if (!tot) return null
-                const fait = articles.filter(a => a.fam === f && comptes[a.id]).length
+                const fait = articles.filter(a => a.fam === f && neufs[a.id]).length
                 return <Chip key={f} actif={famille === f} onClick={() => setFamille(famille === f ? null : f)}
                   label={f} compteur={`${fait}/${tot}`} />
               })}
@@ -218,7 +243,7 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
               {(() => {
                 const faux = articles.filter(a => a.qty <= 0)
                 if (!faux.length) return null
-                const fait = faux.filter(a => comptes[a.id]).length
+                const fait = faux.filter(a => neufs[a.id]).length
                 return <Chip actif={famille === 'faux'} onClick={() => setFamille(famille === 'faux' ? null : 'faux')}
                   label="Zéro ou négatif" compteur={`${fait}/${faux.length}`} />
               })()}
@@ -350,7 +375,13 @@ function Chip({ actif, onClick, label, compteur }) {
 }
 
 function Ligne({ a, compte, onSaisie, selectable, selectionne, onSelect }) {
-  const enregistre = compte ? String(compte.quantite) : ''
+  // Un comptage déjà parti chez Odoo ne remplit plus la case : il descend en
+  // gris sous le nom, et la case redevient vide pour le nouveau comptage.
+  const neuf = aEnvoyer(compte)
+  const parti = compte && compte.envoye_le
+    ? { qte: compte.quantite_envoyee ?? compte.quantite, le: String(compte.envoye_le).slice(0, 10) }
+    : null
+  const enregistre = neuf ? String(compte.quantite) : ''
   // Le texte tapé vit ici tant qu'on écrit (« 2500+1800 » n'est pas un nombre).
   // Quand la valeur enregistrée change AILLEURS (chargement, effacement groupé),
   // on la reprend — motif React « ajuster l'état pendant le rendu ».
@@ -372,7 +403,7 @@ function Ligne({ a, compte, onSaisie, selectable, selectionne, onSelect }) {
   }
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 border-b border-line/60 last:border-0 ${compte ? 'bg-emerald-50/40' : ''}`}>
+    <div className={`flex items-center gap-3 px-4 py-3 border-b border-line/60 last:border-0 ${neuf ? 'bg-emerald-50/40' : ''}`}>
       {selectable && (
         <input type="checkbox" checked={selectionne} onChange={e => onSelect(e.target.checked)}
           aria-label={'Sélectionner ' + a.nom} className="w-5 h-5 shrink-0 accent-[#7a1f3d]" />
@@ -384,13 +415,18 @@ function Ligne({ a, compte, onSaisie, selectable, selectionne, onSelect }) {
             Odoo : {String(a.qty).replace('-', '\u2212').replace('.', ',')}
           </span>
         )}
+        {parti && (
+          <span className="block text-[11px] text-ink-mute tabular-nums">
+            envoy\u00e9 le {parti.le.slice(8, 10)}/{parti.le.slice(5, 7)} : {String(parti.qte).replace('.', ',')} {a.uom}
+          </span>
+        )}
       </div>
       <div className="w-24 shrink-0">
         <input type="text" inputMode="text" placeholder="—"
           value={txt} onChange={e => setTxt(e.target.value)} onBlur={valider}
           onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
           aria-label={'Quantité comptée pour ' + a.nom}
-          className={`w-full px-2 py-2 text-right text-[15px] font-semibold tabular-nums bg-cream border rounded-lg focus:outline-none focus:border-bordeaux/60 ${compte ? 'border-emerald-500' : 'border-line'}`} />
+          className={`w-full px-2 py-2 text-right text-[15px] font-semibold tabular-nums bg-cream border rounded-lg focus:outline-none focus:border-bordeaux/60 ${neuf ? 'border-emerald-500' : 'border-line'}`} />
         {apercu !== null && (
           <div className="text-[11.5px] text-bordeaux font-bold tabular-nums text-right mt-0.5">= {apercu}</div>
         )}
