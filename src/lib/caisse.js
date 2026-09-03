@@ -1,7 +1,8 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
-import { marquerDoublons, signatureDepot } from './releveDoublons'
+import { marquerDoublons, signatureDepot, memeDepotSansNumero, ECART_MINI } from './releveDoublons'
+export { ECART_MINI }
 
 // ============================================================
 // AUDIT LOG (helper - silencieux, ne fait jamais planter l'appel parent)
@@ -446,6 +447,20 @@ export async function loadAllFreeReleveLines() {
     if (seen.has(k)) continue
     seen.add(k); out.push(r)
   }
+  // 3e source : caisses justifiées par une PREUVE MANUELLE (photo du bordereau), sans
+  // rapprochement relevé — étiquette « Versée ». Aucun n° d'opération à comparer : on
+  // reconnaît le dépôt comme le fait le rapprochement auto, au montant et à 7 jours près
+  // de la date du versement. Une caisse ne masque qu'UNE ligne.
+  const { data: preuves } = await supabase
+    .from('caisse_enveloppes')
+    .select('amount_cash, amount_proof, proof_date')
+    .not('proof_url', 'is', null)
+    .is('releve_status', null)
+    .limit(5000)
+  for (const caisse of (preuves || [])) {
+    const i = out.findIndex(l => memeDepotSansNumero(l, caisse))
+    if (i >= 0) out.splice(i, 1)
+  }
   // Doublons sans n° d'opération : même montant + même nom vu sous 2 dates (opération /
   // valeur) dans 2 imports → on n'en garde qu'une ; orthographe proche → on la signale.
   return marquerDoublons(out)
@@ -625,7 +640,7 @@ export async function loadBanqueEnvelopesWithEcart() {
   if (error) throw error
   return (data || []).filter(e =>
     e.destinataire?.type === 'banque' &&
-    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= 0.005)
+    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= ECART_MINI)
 }
 
 // Écarts déjà VALIDÉS (vérifiés) : rangés à part, plus dans la liste « Écart ».
@@ -640,7 +655,7 @@ export async function loadBanqueEcartsValides() {
   if (error) throw error
   return (data || []).filter(e =>
     e.destinataire?.type === 'banque' &&
-    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= 0.005)
+    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= ECART_MINI)
 }
 
 // Valide un écart (le sort de la liste « Écart ») / annule la validation.
