@@ -43,6 +43,23 @@ export async function loadBasesChoisies() {
   try { return JSON.parse((data && data.value) || '[]') } catch { return [] }
 }
 
+/**
+ * Les quantités en cours de saisie d'un écran « À valider », rangées dans
+ * app_config : commencées sur la tablette, retrouvées sur le téléphone.
+ * Elles sont effacées dès que l'ordre est validé dans Odoo.
+ */
+export async function loadSaisies(cle) {
+  const { data } = await supabase.from('app_config').select('value').eq('key', cle).maybeSingle()
+  try { return JSON.parse((data && data.value) || '{}') } catch { return {} }
+}
+
+export async function saveSaisies(cle, valeurs) {
+  const { error } = await supabase.from('app_config')
+    .upsert({ key: cle, value: JSON.stringify(valeurs || {}), updated_at: new Date().toISOString() },
+      { onConflict: 'key' })
+  if (error) throw error
+}
+
 export async function saveBasesChoisies(liste) {
   const { error } = await supabase.from('app_config')
     .upsert({ key: 'fabrication_bases', value: JSON.stringify(liste || []), updated_at: new Date().toISOString() },

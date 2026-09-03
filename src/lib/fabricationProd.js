@@ -162,11 +162,10 @@ export async function delFabProd(id) {
   return aAnnuler
 }
 
-// Un article de la liste de base ne vit pas en base de données : pour le retirer
-// de l'écran ou lui changer sa photo, on pose une ligne `prod_articles` à SON nom.
-// Cette ligne est une PERSONNALISATION, pas un nouvel article — la photo
-// `RETIRE` veut dire « ne plus l'afficher ». Remettre = supprimer la ligne.
-export const RETIRE = '::retire::'
+// Un article de la liste de base ne vit pas en base de données : pour lui changer
+// sa photo, on pose une ligne `prod_articles` à SON nom. Cette ligne est une
+// PERSONNALISATION, pas un nouvel article. Le RETRAIT, lui, passe par la table
+// `prod_masques` (atelier 'prod'), la même que Fabrication Annexe.
 
 /** Les articles ajoutés à la main depuis l'onglet, en plus de la liste de base. */
 export async function loadArticlesAjoutes() {

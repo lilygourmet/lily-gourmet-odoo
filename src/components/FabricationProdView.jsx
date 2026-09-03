@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
+import { loadMasques, masquer, demasquer } from '../lib/fabricationAnnexe'
 import { todayISO } from '../lib/dates'
 import {
   ARTICLES, loadFabProd, addFabProd, delFabProd,
-  loadArticlesAjoutes, addArticle, delArticle, majArticle, RETIRE, loadNoms, loadHistorique, loadRecettes,
+  loadArticlesAjoutes, addArticle, delArticle, majArticle, loadNoms, loadHistorique, loadRecettes,
   chercherArticlesOdoo,
   photoArticleOdoo,
   loadConsommateurs,
@@ -111,6 +112,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const [suggestions, setSuggestions] = useState({ q: '', liste: [] })
   const [noms, setNoms] = useState({})
   const [histo, setHisto] = useState(null)
+  const [masques, setMasques] = useState([])   // articles rangés hors de l'écran (table partagée)
   const [voirRetires, setVoirRetires] = useState(false)
   const [voirHisto, setVoirHisto] = useState(false)
   const [q, setQ] = useState('')            // recherche rapide
@@ -127,6 +129,7 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   useEffect(() => {
     let vivant = true
     loadArticlesAjoutes().then(l => { if (vivant) setAjoutes(l) }).catch(() => { })
+    loadMasques('prod').then(m => { if (vivant) setMasques(m) }).catch(() => { })
     loadNoms().then(n => { if (vivant) setNoms(n) }).catch(() => { })
     return () => { vivant = false }
   }, [])
@@ -163,18 +166,11 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     const perso = new Map(ajoutes.map(a => [a.article, a]))
     const base = ARTICLES.map(a => {
       const p = perso.get(a.article)
-      if (!p) return a
-      return {
-        ...a,
-        photo: p.photo && p.photo !== RETIRE ? p.photo : a.photo,
-        retire: p.photo === RETIRE,
-        perso: p.ajoute,
-      }
+      return p ? { ...a, photo: p.photo || a.photo, perso: p.ajoute } : a
     })
     const enPlus = ajoutes.filter(a => !ARTICLES.some(b => b.article === a.article))
-      .map(a => ({ ...a, retire: a.photo === RETIRE }))
-    return [...base, ...enPlus]
-  }, [ajoutes])
+    return [...base, ...enPlus].map(a => ({ ...a, retire: masques.includes(a.article) }))
+  }, [ajoutes, masques])
   const visibles = useMemo(() => tous.filter(a => !a.retire), [tous])
   const retires = useMemo(() => tous.filter(a => a.retire), [tous])
 
@@ -313,14 +309,14 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const retirer = async (a) => {
     try {
       // Un article ajouté à la main sur lequel rien n'a été déclaré aujourd'hui
-      // s'efface vraiment ; tout le reste est masqué, donc récupérable.
+      // s'efface vraiment ; tout le reste est masqué, donc récupérable — et le
+      // masque est partagé, comme dans Fabrication Annexe.
       if (a.ajoute && !a.perso && !combienDe[a.article]) {
         await delArticle(a.ajoute)
         setAjoutes(l => l.filter(x => x.ajoute !== a.ajoute))
       } else {
-        const id = await majArticle(a.article, a.unite, RETIRE, user?.id)
-        setAjoutes(l => [...l.filter(x => x.ajoute !== id),
-          { article: a.article, famille: 'Autres', unite: a.unite, photo: RETIRE, ajoute: id }])
+        await masquer(a.article, user?.id, 'prod')
+        setMasques(m => [...m, a.article])
       }
       if (ouvert === a.article) setOuvert(null)
       toast.success('Article retiré de la liste')
@@ -329,15 +325,8 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
 
   const remettre = async (a) => {
     try {
-      if (a.perso) {
-        // Article de base : sa ligne n'existait que pour le masquer.
-        await delArticle(a.perso)
-        setAjoutes(l => l.filter(x => x.ajoute !== a.perso))
-      } else {
-        // Article ajouté à la main : sa ligne EST l'article, on lui rend sa photo.
-        const id = await majArticle(a.article, a.unite, null, user?.id)
-        setAjoutes(l => l.map(x => (x.ajoute === id ? { ...x, photo: null } : x)))
-      }
+      await demasquer(a.article, 'prod')
+      setMasques(m => m.filter(n => n !== a.article))
       toast.success('Article remis dans la liste')
     } catch (e) { toast.error('Impossible de remettre : ' + (e.message || e)) }
   }

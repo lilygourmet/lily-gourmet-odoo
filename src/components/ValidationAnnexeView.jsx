@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd } from '../lib/fabricationProd'
 import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
-import { loadManques, validerDansOdoo, creerOfPrepa } from '../lib/fabrication'
+import { loadManques, validerDansOdoo, creerOfPrepa, loadSaisies, saveSaisies } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 
 // ====== « À valider Annexe » ======
@@ -25,20 +25,17 @@ const propre = n => String(n || '')
 
 // Ce qui est tapé ici (quantité produite, quantité consommée par ingrédient) ne
 // vivait que dans l'écran : sortir de l'onglet, ou n'importe quel rechargement,
-// remettait tout ce que dit la recette. On le garde sur l'appareil jusqu'à ce
-// que l'ordre soit validé dans Odoo.
-const CLE_SAISIES = 'valider-annexe-saisies'
-const saisiesGardees = () => {
-  try { return JSON.parse(localStorage.getItem(CLE_SAISIES)) || {} } catch { return {} }
-}
+// remettait tout ce que dit la recette. C'est gardé côté serveur, donc partagé :
+// commencé sur la tablette, retrouvé sur le téléphone. Effacé à la validation.
+const CLE_SAISIES = 'valider_annexe_saisies'
 const sansLesNoms = (obj, noms) =>
   Object.fromEntries(Object.entries(obj).filter(([n]) => !noms.has(n)))
 
 export default function ValidationAnnexeView({ user, onLogout, onNavigate, activeView }) {
   const [lignes, setLignes] = useState(null)
   const [sel, setSel] = useState([])
-  const [faites, setFaites] = useState(() => saisiesGardees().faites || {})   // ordre -> quantité vraiment produite
-  const [notes, setNotes] = useState(() => saisiesGardees().notes || {})     // ordre -> { idLigne: consommé }
+  const [faites, setFaites] = useState({})     // ordre -> quantité vraiment produite
+  const [notes, setNotes] = useState({})       // ordre -> { idLigne: consommé }
   const [ouvert, setOuvert] = useState(null)
   const [envoi, setEnvoi] = useState(false)
   const [resultats, setResultats] = useState(null)
@@ -50,9 +47,10 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     let vivant = true
     ;(async () => {
       try {
-        const [arbre, journal] = await Promise.all([
+        const [arbre, journal, gardees] = await Promise.all([
           loadArbreAnnexe(tour > 0),   // après une création : sans le cache
           loadFabProd(todayISO(), 'annexe'),
+          loadSaisies(CLE_SAISIES).catch(() => ({})),
         ])
         if (!vivant) return
         const ordres = arbre.ordres || {}
@@ -101,19 +99,30 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         // On garde ce qui a déjà été tapé (plafonné à la demande, qui a pu
         // baisser dans Odoo) et on ne remplit par la recette que le reste.
         const vivants = new Set(out.map(x => x.name))
-        setFaites(f => Object.fromEntries(out.map(x =>
-          [x.name, f[x.name] === undefined ? x.demande : Math.min(x.demande, f[x.name])])))
+        // Ce qui est tapé à l'instant l'emporte sur ce qui vient du serveur.
+        setFaites(f => {
+          const base = { ...(gardees.faites || {}), ...f }
+          return Object.fromEntries(out.map(x =>
+            [x.name, base[x.name] === undefined ? x.demande : Math.min(x.demande, base[x.name])]))
+        })
         // Les ordres partis de la liste (validés ailleurs, annulés) n'ont plus
         // de saisie à garder : sinon elle ressortirait des mois plus tard.
-        setNotes(n => Object.fromEntries(Object.entries(n).filter(([nom]) => vivants.has(nom))))
+        setNotes(n => {
+          const base = { ...(gardees.notes || {}), ...n }
+          return Object.fromEntries(Object.entries(base).filter(([nom]) => vivants.has(nom)))
+        })
       } catch (e) { if (vivant) setErreur(e.message || String(e)) }
     })()
     return () => { vivant = false }
   }, [tour])
 
+  // Enregistrement retardé : on ne part pas au serveur à chaque touche du clavier,
+  // et jamais avant d'avoir lu la liste (sinon on écraserait avec du vide).
   useEffect(() => {
-    try { localStorage.setItem(CLE_SAISIES, JSON.stringify({ faites, notes })) } catch { /* ignore */ }
-  }, [faites, notes])
+    if (!lignes) return undefined
+    const t = setTimeout(() => { saveSaisies(CLE_SAISIES, { faites, notes }).catch(() => {}) }, 900)
+    return () => clearTimeout(t)
+  }, [lignes, faites, notes])
 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
   const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
