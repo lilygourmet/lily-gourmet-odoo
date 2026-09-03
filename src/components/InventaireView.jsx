@@ -9,6 +9,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
+import { todayISO } from '../lib/dates'
 import {
   loadArticlesInventaire, loadComptages, saveComptage, deleteComptages,
   loadAjouts, addAjout, updateAjout, deleteAjout, tableauInventaire, calculer,
@@ -103,11 +104,20 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
   // articles de CET onglet partent — on n'envoie pas un comptage qu'elle n'a
   // pas sous les yeux.
   async function versOdoo() {
-    const aEnvoyer = articles.filter(a => comptes[a.id])
-      .map(a => ({ product_id: a.id, quantite: comptes[a.id].quantite }))
-    if (!aEnvoyer.length) { toast.error("Rien de compté dans cet onglet."); return }
+    // Le comptage du JOUR seulement. Un comptage d'hier a été fait avant les
+    // fabrications d'aujourd'hui : l'appliquer effacerait ce qui est sorti
+    // depuis. Ceux-là restent de côté, et l'écran dit combien.
+    const dujour = articles.filter(a => comptes[a.id] && String(comptes[a.id].compte_le || '').slice(0, 10) === todayISO())
+    const vieux = articles.filter(a => comptes[a.id]).length - dujour.length
+    const aEnvoyer = dujour.map(a => ({ product_id: a.id, quantite: comptes[a.id].quantite }))
+    if (!aEnvoyer.length) {
+      toast.error(vieux ? `Rien compté aujourd'hui ici (${vieux} comptage${vieux > 1 ? 's' : ''} plus ancien${vieux > 1 ? 's' : ''}).`
+        : "Rien de compté dans cet onglet.")
+      return
+    }
     const ok = await confirmDialog(
-      `Envoyer ${aEnvoyer.length} comptage${aEnvoyer.length > 1 ? 's' : ''} dans Odoo ?\n\n`
+      `Envoyer les ${aEnvoyer.length} comptage${aEnvoyer.length > 1 ? 's' : ''} d'aujourd'hui dans Odoo ?\n\n`
+      + (vieux ? `${vieux} comptage${vieux > 1 ? 's' : ''} d'un autre jour reste${vieux > 1 ? 'nt' : ''} de côté.\n\n` : '')
       + "Le stock ne bougera PAS : Odoo les met en attente dans « Ajustements "
       + "d'inventaire ». C'est toi qui appliques là-bas, après avoir relu les écarts.",
       { confirmLabel: 'Envoyer' })
