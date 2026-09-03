@@ -125,10 +125,21 @@ function App() {
     } catch (e) { /* ignore */ }
   }
 
+  // Un ecran supprime reste memorise dans le navigateur : au Cmd+R l'app le
+  // reclame, aucune ligne ne repond, et la page s'affiche VIDE. Vecu le
+  // 03/09/2026 avec les deux inventaires « zero / negatif » fondus dans
+  // l inventaire du lieu. Toute vue retiree se renvoie donc vers son
+  // remplacante ici.
+  const REMPLACEES = {
+    'inventaire-zero': 'inventaire',
+    'inventaire-prod-zero': 'inventaire-prod',
+  }
+
   // Recupere la derniere vue sauvegardee (ou null)
   function getStoredActiveView() {
     try {
-      return localStorage.getItem('lily.activeView') || null
+      const v = localStorage.getItem('lily.activeView')
+      return v ? (REMPLACEES[v] || v) : null
     } catch (e) {
       return null
     }
@@ -187,8 +198,9 @@ function App() {
       setDeepLinkTask(sp.get('task'))
       try { window.history.replaceState({}, '', window.location.pathname) } catch (e) { /* ignore */ }
     } else if (sp.get('view')) {
-      // Favori / lien direct vers un onglet précis (ex. ?view=caisse)
-      setActiveView(sp.get('view'))
+      // Favori / lien direct vers un onglet précis (ex. ?view=caisse) — un
+      // favori vers un écran supprimé mène à sa remplaçante, pas au vide.
+      setActiveView(REMPLACEES[sp.get('view')] || sp.get('view'))
     } else if (persisted) {
       setActiveView(persisted)
     } else {
