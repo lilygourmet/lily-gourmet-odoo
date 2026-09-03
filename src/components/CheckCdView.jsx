@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import { loadFreezerDoneIds } from '../lib/freezerDone'
-import { loadEtagesEnAttente, envoyerEnValidation, loadDejaEnvoyes, loadEnAttente } from '../lib/checkCd'
+import { loadEtagesEnAttente, envoyerEnValidation, loadDejaEnvoyes, loadEnAttente, partiraTouSeul } from '../lib/checkCd'
 import { fmtDayLabel } from '../lib/jourLisible'
 import { toast } from '../lib/toast'
 import { buildZplInfo } from '../lib/etiquettes'
@@ -173,6 +173,10 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
     return [...passees, ...aVenir]
   }, [etages])
 
+  // Ce qui ne partira PAS tout seul demain à 8h : c'est le seul chiffre qui
+  // appelle une action, et c'est lui que porte le badge de la barre.
+  const bloques = useMemo(() => enAttente.filter(g => !partiraTouSeul(g)), [enAttente])
+
   const nb = choisis.size
 
   return (
@@ -193,7 +197,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
           </button>
           <button onClick={() => setVue('attente')}
             className={`px-3.5 py-1.5 text-[12px] font-bold rounded-full ${vue === 'attente' ? 'bg-bordeaux text-cream' : 'text-ink-mute'}`}>
-            En attente{enAttente.length ? ` (${enAttente.length})` : ''}
+            En attente{bloques.length ? ` (${bloques.length})` : ''}
           </button>
         </div>
 
@@ -295,7 +299,7 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
               </div>
             )}
             {enAttente.map(g => {
-              const pret = g.message === 'prêt à valider'
+              const pret = partiraTouSeul(g)
               return (
                 <div key={g.mo_id} className={`rounded-2xl border px-3.5 py-3 ${pret ? 'border-[#cfe0b8] bg-[#EAF3DE]' : 'border-line bg-cream-warm'}`}>
                   <div className="text-[14px] font-bold text-ink leading-tight">{g.produit}</div>

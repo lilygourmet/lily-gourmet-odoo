@@ -62,12 +62,16 @@ export async function loadEnAttente(jours = 7) {
   return { gateaux: d.parents || [], chaineStricte: d.chaine_stricte === 'active' }
 }
 
-/** Le chiffre du badge : les gâteaux déjà partis chez le client et toujours pas
- *  marqués faits dans Odoo. C'est ce qui appelle une action — le travail courant
- *  de contrôle, lui, n'a pas besoin d'un compteur qui clignote. */
+/** Un gâteau que le rendez-vous de 8h validera tout seul demain matin : il n'y a
+ *  rien à faire dessus. Tous les autres messages disent ce qui bloque. */
+export const partiraTouSeul = g => g.message === 'prêt à valider'
+
+/** Le chiffre du badge : les gâteaux entiers qui NE SERONT PAS marqués faits —
+ *  étage manquant, contrôle pas fait, recette sans étage. Ceux qui partiront
+ *  d'eux-mêmes à 8h n'appellent aucune action et ne doivent pas clignoter. */
 export async function compterCheckCd() {
   try {
     const { gateaux } = await loadEnAttente(7)
-    return gateaux.length
+    return gateaux.filter(g => !partiraTouSeul(g)).length
   } catch { return 0 }
 }
