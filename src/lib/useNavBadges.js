@@ -5,10 +5,10 @@ import { countConversationBadges, countDevisInternetNonTraites } from './convers
 import { countModificationsATraiter } from './modifications'
 import { countLivraisonsARelancer } from './deliveries'
 import { compterCheckCd } from './checkCd'
-import { canCheckCd, canValiderAnnexe } from './auth'
+import { canCheckCd, canValiderAnnexe, isAdmin } from './auth'
 import { loadEnAttentePour, lieuxDe } from './transfertsStock'
 import { loadFabProd } from './fabricationProd'
-import { loadManques } from './fabrication'
+import { loadManques, loadOrdres, loadFaits } from './fabrication'
 import { todayISO } from './dates'
 
 // Compteurs de notif pour le mini-rail de la bande gauche (desktop).
@@ -43,6 +43,21 @@ export function useNavBadges(user) {
           // volontairement sans cache, bien trop lourd pour une pastille.
           const det = await loadManques(noms)
           set('valider-annexe', det.filter(x => x.etat !== 'done' && x.etat !== 'cancel').length)
+        })().catch(() => {}) : Promise.resolve(),
+        // Le cake design : ce que l'équipe a marqué « fait » et qui attend sa
+        // confirmation. Même lecture que l'écran, mais on s'arrête aux ordres
+        // encore ouverts chez Odoo — inutile d'aller lire leurs composants pour
+        // afficher un chiffre.
+        (isAdmin(user) || user?.perm_valider_of) ? (async () => {
+          const [tous, f] = await Promise.all([loadOrdres(), loadFaits()])
+          const ouverts = new Set((tous || []).map(o => o.name))
+          const noms = new Set()
+          for (const [c, info] of Object.entries(f || {})) {
+            if (/^WH.*\/MO\//i.test(c)) { if (ouverts.has(c)) noms.add(c); continue }
+            if (!c.startsWith('PREP:')) continue
+            for (const n of (info && info.ordres) || []) if (ouverts.has(n)) noms.add(n)
+          }
+          set('fabrication-valider', noms.size)
         })().catch(() => {}) : Promise.resolve(),
         // Les transferts qui attendent d'être réceptionnés PAR CET utilisateur.
         lieuxDe(user).length ? loadEnAttentePour(user).then(l => {
