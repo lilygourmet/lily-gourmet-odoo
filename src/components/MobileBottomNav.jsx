@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Calendar, BarChart3, ListTodo, MessageCircle, Banknote, Truck, Scissors, LayoutGrid } from 'lucide-react'
 import { isLivreur, isLivreurDefaut, canSeeCalendar, canRecaps, canSeeConversations, canSeeCaisse, canSeeLivraisons, canSeeStockPoly } from '../lib/auth'
 import { navTabsForUser } from '../lib/navTabs'
@@ -6,14 +6,24 @@ import { countConversationBadges } from '../lib/conversations'
 import { countUnreadTasks } from '../lib/tasks'
 import { countLivraisonsARelancer } from '../lib/deliveries'
 
-// Barre de navigation en bas, visible UNIQUEMENT sur téléphone (sm:hidden).
+// Barre de navigation en bas, sur téléphone ET tablette (lg:hidden). Au-delà,
+// c'est la barre latérale qui prend le relais — avoir les deux en même temps sur
+// la tablette n'avait pas de sens (demandé par Layla le 2026-09-04).
 // Additive : ne remplace pas le menu du haut. Montée une fois dans App.
+// Ces deux « onglets » ouvrent un site, ils n'ont pas d'écran dans l'app : depuis
+// ce tiroir ils ne menaient nulle part.
+const LIENS_EXTERNES = {
+  'ai-gemini': 'https://gemini.google.com/app',
+  'ai-chatgpt': 'https://chatgpt.com',
+}
+
 export default function MobileBottomNav({ user, activeView, onNavigate }) {
   // Chiffres rouges de notification (comme le menu du haut).
   const [convCount, setConvCount] = useState(0)
   const [tasksCount, setTasksCount] = useState(0)
   const [livrCount, setLivrCount] = useState(0)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [cherche, setCherche] = useState('')
   // La barre se retire quand on descend dans la page (elle mangeait le bas de
   // l'ecran, signale plusieurs fois) et revient des qu'on remonte, ou en haut
   // de page. Tiroir ouvert = elle reste, sinon il flotterait tout seul.
@@ -62,8 +72,17 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
   if (canSeeCaisse(user)) dest.push({ view: 'caisse', label: 'Caisse', Icon: Banknote })
   if (!isLivreur(user)) dest.push({ view: 'tasks', label: 'Tâches', Icon: ListTodo })
 
-  // Tous les onglets autorisés (pour le tiroir « Plus »).
-  const allTabs = navTabsForUser(user)
+  // Tous les onglets autorisés, RANGÉS PAR NOM : avec 55 onglets, l'ordre du
+  // code ne veut plus rien dire — on cherche un nom, on le trouve à sa lettre.
+  const allTabs = useMemo(
+    () => [...navTabsForUser(user)].sort((a, b) => a.label.localeCompare(b.label, 'fr')),
+    [user],
+  )
+  const sansAccents = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const trouves = useMemo(() => {
+    const q = sansAccents(cherche.trim())
+    return q ? allTabs.filter(t => sansAccents(t.label).includes(q)) : allTabs
+  }, [allTabs, cherche])
   // On garde 4 raccourcis + un bouton « Plus » dès qu'il existe d'autres onglets.
   const primary = dest.slice(0, 4)
   const showMore = allTabs.length > primary.length
@@ -72,7 +91,7 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
 
   return (
     <>
-      <nav className={`sm:hidden fixed bottom-0 inset-x-0 z-40 bg-cream border-t border-line flex shadow-[0_-2px_8px_rgba(0,0,0,0.06)] transition-transform duration-200 ${
+      <nav className={`lg:hidden fixed bottom-0 inset-x-0 z-40 bg-cream border-t border-line flex shadow-[0_-2px_8px_rgba(0,0,0,0.06)] transition-transform duration-200 ${
         (barreVisible || moreOpen) ? 'translate-y-0' : 'translate-y-full'}`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {items.map(it => {
@@ -107,22 +126,37 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
           derniers onglets étaient inatteignables. Le défilement porte sur la
           grille elle-même, pas sur le tiroir entier. */}
       {moreOpen && (
-        <div className="sm:hidden fixed inset-0 h-[100dvh] z-50 bg-black/40 flex items-end" onClick={() => setMoreOpen(false)}>
+        <div className="lg:hidden fixed inset-0 h-[100dvh] z-50 bg-black/40 flex items-end" onClick={() => setMoreOpen(false)}>
           <div className="w-full bg-cream rounded-t-2xl max-h-[85dvh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-cream flex-shrink-0">
-              <span className="text-[14px] font-medium text-ink">Tous les onglets <span className="text-ink-mute">({allTabs.length})</span></span>
-              <button onClick={() => setMoreOpen(false)} className="text-[13px] text-ink-mute px-2 py-1">Fermer</button>
+            <div className="px-4 py-3 border-b border-line bg-cream flex-shrink-0">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[14px] font-medium text-ink">Tous les onglets <span className="text-ink-mute">({allTabs.length})</span></span>
+                <button onClick={() => setMoreOpen(false)} className="text-[13px] text-ink-mute px-2 py-1">Fermer</button>
+              </div>
+              <input value={cherche} onChange={e => setCherche(e.target.value)} autoFocus
+                type="search" inputMode="search" placeholder="Tape les premières lettres…"
+                className="w-full bg-white border border-line rounded-xl px-3.5 py-2.5 text-[15px] text-ink outline-none focus:border-bordeaux" />
             </div>
-            <div className="grid grid-cols-3 gap-2 p-3 flex-1 overflow-y-auto overscroll-contain"
+            <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2"
               style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-              {allTabs.map(t => {
+              {!trouves.length && (
+                <p className="text-center text-[13px] text-ink-mute py-8">Aucun onglet ne porte ce nom.</p>
+              )}
+              {trouves.map(t => {
                 const active = activeView === t.view
+                const url = LIENS_EXTERNES[t.view]
                 return (
-                  <button key={t.view} onClick={() => { onNavigate(t.view); setMoreOpen(false) }}
-                    className={`flex flex-col items-center justify-center gap-1 py-3 px-1 rounded-xl border text-[11px] font-medium text-center ${active ? 'bg-bordeaux text-white border-bordeaux' : 'bg-white border-line text-ink'}`}>
-                    <span className="text-[20px] leading-none">{t.emoji}</span>
-                    {t.label}
+                  <button key={t.view}
+                    onClick={() => {
+                      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+                      else onNavigate(t.view)
+                      setMoreOpen(false); setCherche('')
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border mb-1.5 text-left text-[15px] ${active ? 'bg-bordeaux text-white border-bordeaux font-bold' : 'bg-white border-line text-ink'}`}>
+                    <span className="text-[19px] leading-none w-6 text-center flex-shrink-0">{t.emoji}</span>
+                    <span className="flex-1 min-w-0 truncate">{t.label}</span>
+                    {url && <span className={`text-[11px] ${active ? 'text-white/70' : 'text-ink-mute'}`}>↗</span>}
                   </button>
                 )
               })}

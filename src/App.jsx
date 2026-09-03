@@ -104,9 +104,12 @@ function App() {
   const [showSearch, setShowSearch] = useState(false)
   const [deepLinkOrder, setDeepLinkOrder] = useState(null)
   // Menu de gauche (ordi + tablette ≥ 768px). En dessous : navigation actuelle (haut/bas).
-  const [isWide, setIsWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches)
+  // La barre latérale n'apparaît qu'à partir de 1024 px, donc sur ORDINATEUR.
+  // En dessous — téléphone et tablette — c'est la barre du bas qui navigue :
+  // avoir les deux en même temps sur la tablette n'avait pas de sens.
+  const [isWide, setIsWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)')
+    const mq = window.matchMedia('(min-width: 1024px)')   // même seuil que ci-dessus, sinon la barre revient au premier pivotement
     const h = e => setIsWide(e.matches)
     mq.addEventListener?.('change', h)
     return () => mq.removeEventListener?.('change', h)
