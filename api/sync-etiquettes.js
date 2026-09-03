@@ -174,6 +174,7 @@ async function fetchEtiquettesArticles(uid) {
     if (/paris\s*brest/i.test(t.name)) continue     // exclu
     if (/maatouk/i.test(t.name)) continue           // exclu (Supreme amande/pistache Maatouk)
     if (/\btatin\b/i.test(t.name)) continue         // exclu
+    if (/cake\s*individuel/i.test(t.name)) continue // exclu (pas d'étiquette, demandé le 2026-09-03)
 
     filtered.push({
       odoo_template_id: t.id,
