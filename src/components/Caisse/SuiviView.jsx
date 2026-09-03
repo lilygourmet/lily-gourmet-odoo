@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, ECART_MINI } from '../../lib/caisse'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -135,7 +135,7 @@ function BanqueSection({ user }) {
   const totalEcart = useMemo(() => filteredList.reduce((s, e) => {
     if (e.amount_proof == null) return s
     const dd = Number(e.amount_proof) - Number(e.amount_cash)
-    return Math.abs(dd) >= 0.005 ? s + dd : s
+    return Math.abs(dd) >= ECART_MINI ? s + dd : s
   }, 0), [filteredList])
 
   // Comptage par méthode (pour afficher dans le filtre)
@@ -322,7 +322,7 @@ function BanqueSection({ user }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 16px', borderRadius: 8, marginBottom: 14, background: '#E6F1FB', color: '#0C447C' }}>
         <div style={{ fontSize: 15, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Landmark size={16} /> Versements bancaires</div>
-        <div style={{ fontSize: 13 }}>{filteredList.length} {statusFilter === 'pending' ? 'en attente' : ''} · {fmtMoney(total)}{Math.abs(totalEcart) >= 0.005 ? <span style={{ color: '#99201E', fontWeight: 600 }}> · écart {totalEcart > 0 ? '+' : ''}{fmtMoney(totalEcart)}</span> : ''}</div>
+        <div style={{ fontSize: 13 }}>{filteredList.length} {statusFilter === 'pending' ? 'en attente' : ''} · {fmtMoney(total)}{Math.abs(totalEcart) >= ECART_MINI ? <span style={{ color: '#99201E', fontWeight: 600 }}> · écart {totalEcart > 0 ? '+' : ''}{fmtMoney(totalEcart)}</span> : ''}</div>
       </div>
 
       {filteredList.length === 0 && (
@@ -345,7 +345,7 @@ function BanqueSection({ user }) {
                 {env.releve_status === 'a_confirmer' ? 'Lignes possibles : ' : 'Relevé : '}{env.note_proof}
               </div>
             )}
-            {env.amount_proof != null && Math.abs(Number(env.amount_proof) - Number(env.amount_cash)) >= 0.005 && (
+            {env.amount_proof != null && Math.abs(Number(env.amount_proof) - Number(env.amount_cash)) >= ECART_MINI && (
               <div style={{ fontSize: 11, color: '#99201E', fontWeight: 600, marginTop: 4 }}>
                 ⚠️ Écart : relevé {fmtMoney(env.amount_proof)} ({Number(env.amount_proof) - Number(env.amount_cash) > 0 ? '+' : ''}{fmtMoney(Number(env.amount_proof) - Number(env.amount_cash))})
               </div>
@@ -734,7 +734,7 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
             {list.slice(0, 60).map(e => {
               const diff = Number(line.amount) - Number(e.amount_cash)
-              const hasGap = Math.abs(diff) >= 0.005
+              const hasGap = Math.abs(diff) >= ECART_MINI
               return (
                 <button key={e.id} onClick={() => onLink(e, line)}
                   style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: `1px solid ${e.deja_rapprochee ? '#f0d9b8' : '#e5d8c3'}`, background: e.deja_rapprochee ? '#FDF7EE' : '#F9F6F1', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -839,7 +839,7 @@ function SuggestModal({ env, onClose, onAttach }) {
         )}
         <div style={{ fontSize: 13, padding: '8px 10px', borderRadius: 8, background: '#F4F0EA', marginBottom: 10 }}>
           Coché : <b>{fmtMoney(totalCoche)}</b> ({sel.length}) · Caisse : {fmtMoney(montant)}
-          {Math.abs(reste) < 0.005
+          {Math.abs(reste) < ECART_MINI
             ? <span style={{ color: '#0a7d3d', fontWeight: 600 }}> · ça tombe juste ✓</span>
             : <span style={{ color: '#99201E', fontWeight: 600 }}> · {reste > 0 ? `il manque ${fmtMoney(reste)}` : `${fmtMoney(-reste)} de trop`}</span>}
         </div>

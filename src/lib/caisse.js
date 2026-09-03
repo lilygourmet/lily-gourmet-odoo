@@ -626,6 +626,11 @@ export async function loadPendingBanqueEnvelopes() {
     .map(e => ({ ...e, deja_rapprochee: !!(e.proof_url || e.releve_status) }))
 }
 
+// Seuil d'écart signalé. L'app affiche les montants en dirhams ENTIERS : en dessous d'un
+// demi-dirham, un « écart » n'est que l'arrondi des centimes d'Odoo face au montant rond
+// de la banque, et il s'affichait « ⚠️ Écart (−0 dh) ». On ne le signale plus.
+export const ECART_MINI = 0.5
+
 // Enveloppes Banque ayant un ÉCART de montant (amount_proof ≠ amount_cash),
 // PAS encore validé. Les écarts validés partent dans « Validés » (loadBanqueEcartsValides).
 export async function loadBanqueEnvelopesWithEcart() {
@@ -639,7 +644,7 @@ export async function loadBanqueEnvelopesWithEcart() {
   if (error) throw error
   return (data || []).filter(e =>
     e.destinataire?.type === 'banque' &&
-    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= 0.005)
+    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= ECART_MINI)
 }
 
 // Écarts déjà VALIDÉS (vérifiés) : rangés à part, plus dans la liste « Écart ».
@@ -654,7 +659,7 @@ export async function loadBanqueEcartsValides() {
   if (error) throw error
   return (data || []).filter(e =>
     e.destinataire?.type === 'banque' &&
-    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= 0.005)
+    Math.abs(Number(e.amount_proof) - Number(e.amount_cash)) >= ECART_MINI)
 }
 
 // Valide un écart (le sort de la liste « Écart ») / annule la validation.
