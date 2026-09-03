@@ -182,20 +182,28 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     } catch (e) { toast.error('Impossible de retirer : ' + (e.message || e)) }
   }
 
-  // Une photo de téléphone fait plusieurs Mo : on la réduit avant de la garder.
-  const poserPhoto = fichier => {
-    if (!fichier || !/^image\//.test(fichier.type)) { toast.error('Ce fichier n\'est pas une image'); return }
+  // Une photo de téléphone fait plusieurs Mo, celle d'Odoo ~175 Ko : dans les
+  // deux cas on réduit avant de garder — la photo vit en base, dans la ligne
+  // de l'article, et elle est relue à chaque ouverture de l'écran.
+  const reduireImage = src => new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
       const e = Math.min(1, 700 / Math.max(img.width, img.height))
       const c = document.createElement('canvas')
       c.width = Math.round(img.width * e); c.height = Math.round(img.height * e)
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
-      setNouveau(n => ({ ...n, photo: c.toDataURL('image/jpeg', 0.82) }))
-      URL.revokeObjectURL(img.src)
+      resolve(c.toDataURL('image/jpeg', 0.82))
+      if (src.startsWith('blob:')) URL.revokeObjectURL(src)
     }
-    img.onerror = () => toast.error('Image illisible')
-    img.src = URL.createObjectURL(fichier)
+    img.onerror = () => reject(new Error('Image illisible'))
+    img.src = src
+  })
+
+  const poserPhoto = fichier => {
+    if (!fichier || !/^image\//.test(fichier.type)) { toast.error('Ce fichier n\'est pas une image'); return }
+    reduireImage(URL.createObjectURL(fichier))
+      .then(photo => setNouveau(n => ({ ...n, photo })))
+      .catch(e => toast.error(e.message))
   }
 
   // Choisir un article d'Odoo : on récupère au passage SA photo, s'il en a une
@@ -210,7 +218,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     setPhotoOdoo(photo ? 'prise' : 'aucune')
     // `n.photo` est relu ici : si quelqu'un a collé une image pendant l'appel,
     // c'est la sienne qui gagne.
-    if (photo) setNouveau(n => (n && !n.photo ? { ...n, photo } : n))
+    if (!photo) return
+    const legere = await reduireImage(photo).catch(() => photo)
+    setNouveau(n => (n && !n.photo ? { ...n, photo: legere } : n))
   }
 
   // Coller une image copiée sur internet, tant que le formulaire est ouvert.
