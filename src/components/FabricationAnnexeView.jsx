@@ -548,6 +548,29 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return Math.max(0.01, Math.round(brut * 100) / 100)
   }
+
+  // Une étape qui ne se stocke jamais (« SM- base flan vanille 20 cm ») n'a
+  // aucune ligne de stock chez Odoo : sa ligne reste muette, et rien ne dit
+  // que le sablé crispy qu'elle consomme, lui, est déjà au congélateur.
+  // On regarde donc un cran plus bas et on remonte la bonne nouvelle.
+  // Uniquement les semi-finis : les matières premières sont là par principe,
+  // les annoncer noierait l'information.
+  const dejaSousLaMain = (nom, besoin) => {
+    const r = recettes[nom]
+    if (!r) return null
+    const f = foisPour(nom, besoin)
+    const dedans = regrouper(r.lignes).filter(l => l.fabrique)
+    const couverts = dedans.filter(l => {
+      const st = stocks[l.produit]
+      const b = versUnite((l.tailles ? Math.max(...l.tailles) : l.qty) * f, l.unite, uniteDe(l.produit))
+      return st !== undefined && b > 0 && st >= b - 1e-9
+    })
+    if (!couverts.length) return null
+    if (couverts.length === 1) return courtNom(couverts[0].produit) + ' en stock'
+    return couverts.length === dedans.length
+      ? 'tout est en stock dessous'
+      : couverts.length + ' en stock dessous'
+  }
   // `besoinConnu` : la quantité calculée par la cascade (« il faut 5 040 g de
   // crème praliné »). Sans elle, la fiche repartait du minimum de l'article —
   // souvent absent — et proposait une fournée entière de 7 052 g.
@@ -1222,6 +1245,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   const besoinLigne = versUnite(
                     (l.tailles ? Math.max(...l.tailles) : l.qty) * fois, l.unite, uniteDe(l.produit))
                   const couvert = stockLa !== undefined && besoinLigne > 0 && stockLa >= besoinLigne - 1e-9
+                  // à fabriquer : ce que sa propre recette a déjà sous la main
+                  const sousMain = !couvert && ouvrable
+                    ? dejaSousLaMain(l.produit, Math.max(0, besoinLigne - Math.max(0, stockLa || 0)))
+                    : null
                   const contenu = (
                     <>
                       <span className="text-[17px] font-extrabold min-w-[96px] text-right">
@@ -1239,6 +1266,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                                 ? 'rupture'
                                 : 'il en reste ' + nbQ(stockLa, uniteDe(l.produit)) + ' ' + uniteDe(l.produit)}
                           </span>
+                        )}
+                        {sousMain && (
+                          <span className="block text-[10.5px] text-ok">à faire · {sousMain}</span>
                         )}
                       </span>
                       {ouvrable && (
