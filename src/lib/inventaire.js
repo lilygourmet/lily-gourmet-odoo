@@ -65,6 +65,20 @@ export async function deleteAjout(id) {
   if (error) throw error
 }
 
+// Porte le comptage dans Odoo, dans la colonne « quantité comptée ». Le stock
+// ne bouge pas ici : Odoo garde l'écart en attente et c'est Layla qui applique,
+// depuis « Ajustements d'inventaire ».
+export async function envoyerVersOdoo(lieu, comptages) {
+  const r = await fetch(`/api/catalog-from-odoo?inventaireOdoo=${encodeURIComponent(lieu)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comptages }),
+  })
+  const j = await r.json()
+  if (j.error) throw new Error(j.error)
+  return j
+}
+
 // La case de saisie accepte un petit calcul : « 2500+1800+400 » pour trois sacs,
 // « 3*500 » pour trois boîtes de 500 g. On ne se sert PAS de eval() (qui
 // exécuterait n'importe quoi) : on découpe et on calcule à la main.

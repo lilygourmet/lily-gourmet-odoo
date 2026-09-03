@@ -51,6 +51,12 @@ async function odooReadGroup(uid, model, domain, fields, groupby, opts = {}) {
   ])
 }
 
+async function odooEcrire(uid, model, method, args, kwargs = {}) {
+  return await odooJsonRpc('object', 'execute_kw', [
+    process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, method, args, kwargs,
+  ])
+}
+
 async function odooSearchRead(uid, model, domain, fields, opts = {}) {
   return await odooJsonRpc('object', 'execute_kw', [
     process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD,
@@ -105,6 +111,9 @@ export default async function handler(req, res) {
   // Mode stock prod : articles SM- + stock à un lieu donné (vitrine/annexe).
   // GET /api/catalog-from-odoo?stockProd=vitrine|annexe
   if (req.query.stockProd) return handleStockProd(req, res)
+
+  // Porte le comptage dans Odoo, en inventaire À APPLIQUER (POST).
+  if (req.query.inventaireOdoo) return handleInventaireOdoo(req, res)
 
   // Liste à compter pour l'onglet « Inventaire annexe » (?inventaire=1).
   if (req.query.inventaire) return handleInventaire(req, res)
@@ -263,6 +272,59 @@ const STOCK_PROD_LIEUX = {
 }
 // Emplacements comptés par les onglets Inventaire.
 const INVENTAIRE_LIEUX = { annexe: 62, prod: 52 }
+// Porte le comptage de l'app dans Odoo, dans la colonne « quantité comptée ».
+// Rien ne bouge en stock ici : Odoo garde l'écart en attente, et c'est Layla
+// qui applique depuis Odoo — d'où le nom de l'écran là-bas, « Ajustements
+// d'inventaire ». Un comptage égal au stock n'est pas écrit : il n'ajouterait
+// qu'une ligne à zéro dans une liste déjà longue.
+async function handleInventaireOdoo(req, res) {
+  res.setHeader('Cache-Control', 'no-store')
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST attendu' })
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+    const lieu = String(req.query.inventaireOdoo || '').toLowerCase() === 'prod' ? 'prod' : 'annexe'
+    const LOC = INVENTAIRE_LIEUX[lieu]
+    const comptages = (body.comptages || [])
+      .map(c => ({ id: Number(c.product_id), qty: Number(c.quantite) }))
+      .filter(c => c.id > 0 && Number.isFinite(c.qty))
+    if (!comptages.length) return res.status(400).json({ error: 'aucun comptage' })
+    if (body.test) return res.status(200).json({ test: true, ecrits: 0, crees: 0, pareils: 0, sautes: [] })
+
+    const uid = await odooAuthenticate()
+    const quants = await odooSearchRead(uid, 'stock.quant',
+      [['location_id', 'child_of', LOC], ['product_id', 'in', comptages.map(c => c.id)]],
+      ['id', 'product_id', 'location_id', 'quantity'], { limit: 2000 })
+    const parProduit = {}
+    for (const q of quants) (parProduit[q.product_id[0]] = parProduit[q.product_id[0]] || []).push(q)
+
+    let ecrits = 0, crees = 0, pareils = 0
+    const sautes = []
+    for (const c of comptages) {
+      const liste = parProduit[c.id] || []
+      if (liste.length > 1) {
+        // le même article à deux emplacements : on ne choisit pas à sa place
+        sautes.push((liste[0].product_id[1] || '') + ' — ' + liste.length + ' emplacements')
+        continue
+      }
+      if (liste.length === 1) {
+        if (Math.abs((liste[0].quantity || 0) - c.qty) < 0.001) { pareils++; continue }
+        await odooEcrire(uid, 'stock.quant', 'write',
+          [[liste[0].id], { inventory_quantity: c.qty, inventory_quantity_set: true }])
+        ecrits++
+      } else {
+        if (Math.abs(c.qty) < 0.001) { pareils++; continue }   // rien chez Odoo, rien compté
+        await odooEcrire(uid, 'stock.quant', 'create',
+          [{ product_id: c.id, location_id: LOC, inventory_quantity: c.qty, inventory_quantity_set: true }])
+        crees++
+      }
+    }
+    console.log(`[inventaire-odoo] ${lieu} : ${ecrits} ecrits, ${crees} crees, ${pareils} identiques, ${sautes.length} sautes`)
+    return res.status(200).json({ ecrits, crees, pareils, sautes })
+  } catch (e) {
+    return res.status(200).json({ error: (e.message || String(e)).slice(0, 300) })
+  }
+}
+
 // 3e famille de la feuille : ce dont le stock Odoo est faux — à zéro, ou négatif.
 const FAM_ZERO = 'À zéro ou en négatif'
 

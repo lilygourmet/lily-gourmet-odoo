@@ -4,7 +4,7 @@
 // - Le stock théorique n'est PAS affiché pendant le comptage : le voir fausse
 //   le comptage. Il apparaît dans l'export, avec l'écart.
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { RefreshCw, Plus, Clipboard, Trash2 } from 'lucide-react'
+import { RefreshCw, Plus, Clipboard, Trash2, Upload } from 'lucide-react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
@@ -12,6 +12,7 @@ import { confirmDialog } from '../lib/confirmDialog'
 import {
   loadArticlesInventaire, loadComptages, saveComptage, deleteComptages,
   loadAjouts, addAjout, updateAjout, deleteAjout, tableauInventaire, calculer,
+  envoyerVersOdoo,
 } from '../lib/inventaire'
 
 const FAM_ZERO = 'À zéro ou en négatif'
@@ -32,6 +33,7 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
   const [vue, setVue] = useState('tout')          // tout | reste | faits
   const [selection, setSelection] = useState(() => new Set())
   const [ajoutOuvert, setAjoutOuvert] = useState(false)
+  const [envoi, setEnvoi] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -94,6 +96,37 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
       setSelection(new Set()); setVue('tout')
       toast.success('Comptages effacés.')
     } catch (e) { toast.error('Erreur : ' + e.message) }
+  }
+
+  // Le comptage part dans Odoo en « quantité comptée ». Rien n'est appliqué
+  // ici : Layla relit l'écart dans Odoo et applique elle-même. Seuls les
+  // articles de CET onglet partent — on n'envoie pas un comptage qu'elle n'a
+  // pas sous les yeux.
+  async function versOdoo() {
+    const aEnvoyer = articles.filter(a => comptes[a.id])
+      .map(a => ({ product_id: a.id, quantite: comptes[a.id].quantite }))
+    if (!aEnvoyer.length) { toast.error("Rien de compté dans cet onglet."); return }
+    const ok = await confirmDialog(
+      `Envoyer ${aEnvoyer.length} comptage${aEnvoyer.length > 1 ? 's' : ''} dans Odoo ?\n\n`
+      + "Le stock ne bougera PAS : Odoo les met en attente dans « Ajustements "
+      + "d'inventaire ». C'est toi qui appliques là-bas, après avoir relu les écarts.",
+      { confirmLabel: 'Envoyer' })
+    if (!ok) return
+    setEnvoi(true)
+    try {
+      const r = await envoyerVersOdoo(lieu, aEnvoyer)
+      const bouts = []
+      if (r.ecrits) bouts.push(r.ecrits + ' à corriger')
+      if (r.crees) bouts.push(r.crees + ' nouvelle' + (r.crees > 1 ? 's' : '') + ' ligne' + (r.crees > 1 ? 's' : ''))
+      if (r.pareils) bouts.push(r.pareils + ' déjà juste' + (r.pareils > 1 ? 's' : ''))
+      toast.success(bouts.length
+        ? 'Dans Odoo : ' + bouts.join(', ') + '. À appliquer là-bas.'
+        : 'Odoo était déjà à jour.')
+      if (r.sautes && r.sautes.length) {
+        toast.error('Sautés (plusieurs emplacements) : ' + r.sautes.slice(0, 3).join(' · '))
+      }
+    } catch (e) { toast.error('Envoi impossible : ' + e.message) }
+    setEnvoi(false)
   }
 
   async function copier() {
@@ -268,8 +301,12 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
             <Plus size={14} strokeWidth={2} /> Article
           </button>
           <button onClick={copier}
-            className="px-3 py-2 rounded-xl bg-bordeaux text-cream text-[13px] font-semibold flex items-center gap-1.5">
+            className="px-3 py-2 rounded-xl border border-line bg-white text-[13px] font-semibold text-ink flex items-center gap-1.5">
             <Clipboard size={14} strokeWidth={1.8} /> Résultat
+          </button>
+          <button onClick={versOdoo} disabled={envoi || !totalFaits}
+            className="px-3 py-2 rounded-xl bg-bordeaux text-cream text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-50">
+            <Upload size={14} strokeWidth={1.8} /> {envoi ? 'Envoi…' : 'Vers Odoo'}
           </button>
         </div>
       </div>
