@@ -875,6 +875,75 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
  * défaire d'un clic. Les ordres créés par l'app sont supprimés, ceux venus
  * d'Odoo sont annulés (ils gardent une trace là-bas).
  */
+/**
+ * Solde les ordres EN DOUBLE nés d'une règle mini/maxi d'Odoo, et leurs enfants.
+ *
+ * Odoo relance ses règles chaque matin tant que le stock est bas : le même
+ * besoin se retrouve sur plusieurs ordres. L'écran n'en garde qu'un (le plus
+ * élevé) ; celui-ci solde les autres pour qu'ils cessent de revenir.
+ *
+ * ⚠️ GARDE-FOUS, vérifiés ICI et pas seulement dans l'écran — un ordre annulé
+ * par erreur, c'est une commande client ratée :
+ *   1. l'origine doit commencer par « OP/ » (une règle mini/maxi) ;
+ *   2. elle ne doit contenir AUCUN numéro de commande (« S12345 ») : une
+ *      commande appartient à un client, ses ordres s'additionnent et ne sont
+ *      JAMAIS des doublons ;
+ *   3. l'ordre doit être encore « brouillon » ou « confirmé » — jamais un ordre
+ *      dont la production est déclarée ou validée ;
+ *   4. les enfants (ordres nés de celui-ci) sont soldés avec lui, sinon ils
+ *      restent orphelins.
+ */
+async function annulerDoublonsStock(uid, names) {
+  const demandes = await odooSearchRead(uid, 'mrp.production',
+    [['name', 'in', names]], ['id', 'name', 'origin', 'state', 'qty_producing'], { limit: 100 })
+
+  const estRegleStock = (o) => {
+    const orig = String(o || '').trim()
+    return /^OP\//.test(orig) && !/\bS\d{4,}\b/.test(orig)
+  }
+  const gardes = [], refuses = []
+  for (const m of demandes) {
+    if (!estRegleStock(m.origin)) { refuses.push({ name: m.name, raison: 'vient d\'une commande client' }); continue }
+    if (!['draft', 'confirmed'].includes(m.state)) { refuses.push({ name: m.name, raison: `état ${m.state}` }); continue }
+    if (m.qty_producing > 0) { refuses.push({ name: m.name, raison: 'production déjà déclarée' }); continue }
+    gardes.push(m)
+  }
+  if (!gardes.length) return { annules: 0, noms: [], refuses }
+
+  // Les enfants : ordres dont l'origine CITE un de ceux qu'on solde.
+  // ⚠️ L'origine est souvent COMPOSÉE — « OP/00410,WHLVP/MO/201043 », parfois
+  // avec des tirets : « OP/00584 - OP/00410,WHLVP/MO/201043 ». Une égalité
+  // stricte n'en trouve aucun (vécu le 2026-09-03 : le parent soldé, l'enfant
+  // laissé orphelin). On cherche donc « contient », puis on recoupe le nom
+  // exact parmi les morceaux, pour ne pas attraper un homonyme au passage.
+  const morceaux = o => String(o || '').split(/[,\s]+/).map(x => x.trim()).filter(Boolean)
+  const tous = new Map(gardes.map(m => [m.name, m]))
+  let front = gardes.map(m => m.name)
+  for (let profondeur = 0; profondeur < 5 && front.length; profondeur++) {
+    const suivant = []
+    for (const parent of front) {
+      // ⚠️ Ne PAS demander « qty_producing = 0 » à Odoo : le champ est vide (NULL)
+      // en base tant que rien n'est déclaré, et « vide » n'est pas « égal à 0 »
+      // pour la base → le filtre rejetait TOUS les enfants (vécu le 2026-09-03).
+      // On le lit et on tranche ici, où le vide se lit bien 0.
+      const candidats = await odooSearchRead(uid, 'mrp.production',
+        [['origin', 'like', parent], ['state', 'in', ['draft', 'confirmed']]],
+        ['id', 'name', 'origin', 'state', 'qty_producing'], { limit: 200 })
+      for (const e of candidats) {
+        if (tous.has(e.name)) continue
+        if (Number(e.qty_producing) > 0) continue            // production déjà déclarée
+        if (!morceaux(e.origin).includes(parent)) continue   // « 17427 » ≠ « 174278 »
+        tous.set(e.name, e); suivant.push(e.name)
+      }
+    }
+    front = suivant
+  }
+
+  const ids = [...tous.values()].map(m => m.id)
+  await odooCall(uid, 'mrp.production', 'action_cancel', [ids])
+  return { annules: ids.length, noms: [...tous.keys()], refuses }
+}
+
 async function annulerOfApp(uid, names) {
   // Choix de Layla : décocher ne touche PAS aux ordres d'Odoo. Ils sortent
   // simplement de la liste et restent disponibles pour un re-cochage — sinon
@@ -1593,6 +1662,15 @@ export default async function handler(req, res) {
       if (!names.length || body.test) return res.status(200).json({ annules: 0 })
       const uid = await odooAuth()
       return res.status(200).json(await annulerOfApp(uid, names))
+    }
+
+    // Solder les ordres en double d'une règle mini/maxi (POST). Jamais une commande.
+    if (req.method === 'POST' && req.query.mode === 'annuler-doublons') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const names = (body.ordres || []).filter(Boolean)
+      if (!names.length || body.test) return res.status(200).json({ annules: 0, noms: [], refuses: [] })
+      const uid = await odooAuth()
+      return res.status(200).json(await annulerDoublonsStock(uid, names))
     }
 
     // Réservation des composants dans Odoo (POST). Quand l'équipe coche « fait »,
