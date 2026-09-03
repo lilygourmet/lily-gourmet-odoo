@@ -2,12 +2,16 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadOrdres, loadFaits, loadManques, validerDansOdoo, chercherArticles, dernierEcran, garderEcran } from '../lib/fabrication'
+import { loadOrdres, loadFaits, loadManques, validerDansOdoo, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies } from '../lib/fabrication'
 
 // ====== « À valider » : la page dédiée ======
 // Tout ce que l'équipe a marqué « fait » (montages, préparations, tournées de
 // glaçage) attend ici sa confirmation dans Odoo. On ne force jamais sans une
 // demande explicite. Réservée à perm_valider_of.
+
+// Quantités consommées corrigées et ingrédients ajoutés à la main : gardés côté
+// serveur, donc retrouvés sur un autre appareil, et effacés à la validation.
+const CLE_SAISIES = 'valider_saisies'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
@@ -109,10 +113,25 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         const jour = new Date().toISOString().slice(0, 10)
         setSel(ouverts.filter(x => !x.quand || String(x.quand).slice(0, 10) <= jour).map(x => x.name))
         garderEcran('valider', ouverts)
+        // Ce qui avait été corrigé ailleurs, sans écraser ce qu'on tape ici.
+        const vivants = new Set(ouverts.map(x => x.name))
+        const gardees = await loadSaisies(CLE_SAISIES).catch(() => ({}))
+        const garder = (recu, actuel) => Object.fromEntries(
+          Object.entries({ ...(recu || {}), ...actuel }).filter(([n]) => vivants.has(n)))
+        setNotes(n => garder(gardees.notes, n))
+        setAjouts(a => garder(gardees.ajouts, a))
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
     return () => { vivant = false }
   }, [tour])
+
+  // Enregistrement retardé : pas un appel par touche du clavier, et jamais avant
+  // d'avoir la liste (on écraserait avec du vide).
+  useEffect(() => {
+    if (!lignes) return undefined
+    const t = setTimeout(() => { saveSaisies(CLE_SAISIES, { notes, ajouts }).catch(() => {}) }, 900)
+    return () => clearTimeout(t)
+  }, [lignes, notes, ajouts])
 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
   const prets = choisis.filter(l => !l.manques.length)
@@ -157,6 +176,9 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
           return reste
         })
         setSel(s2 => s2.filter(n => !faits.has(n)))
+        const sansFaits = o => Object.fromEntries(Object.entries(o).filter(([n]) => !faits.has(n)))
+        setNotes(sansFaits)
+        setAjouts(sansFaits)
         toast.success(faits.size + (faits.size > 1 ? ' ordres validés' : ' ordre validé') + ' dans Odoo')
       }
     } catch (e) { toast.error(e.message || String(e)) }
@@ -168,7 +190,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
       <div className="max-w-[660px] mx-auto px-4 py-5">
         <div className="flex items-center gap-3 flex-wrap mb-1">
-          <h1 className="font-fraunces italic text-[26px] font-medium">À valider</h1>
+          <h1 className="font-fraunces italic text-[26px] font-medium">À valider CD-</h1>
           <button onClick={() => { setLignes(null); setResultats(null); setTour(v => v + 1) }}
             className="ml-auto bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">↻ Actualiser</button>
         </div>

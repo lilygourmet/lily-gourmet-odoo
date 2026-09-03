@@ -28,7 +28,7 @@ const TAB_DEFS = [
   { view: 'fabrication-annexe', emoji: '🥧', label: 'Fabrication Annexe', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
   { view: 'fabrication-prod', emoji: '🥣', label: 'Fabrication Prod', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_prod) },
   { view: 'valider-annexe',      emoji: '🏭', label: 'À valider Annexe',   can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_annexe) },
-  { view: 'fabrication-valider', emoji: '✅', label: 'À valider',           can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_of) },
+  { view: 'fabrication-valider', emoji: '✅', label: 'À valider CD-',       can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_of) },
   { view: 'sales',             emoji: '🥪', label: 'Salés',             can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_sales) },
   { view: 'stock-gs',          emoji: '🥪', label: 'Stock GS-',         can: u => !isLivreur(u) && canStockGS(u) },
   // Ces deux-là n'existaient que dans le menu du haut : invisibles dans la barre
