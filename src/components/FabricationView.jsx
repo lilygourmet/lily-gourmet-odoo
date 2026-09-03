@@ -144,7 +144,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
 }
 
 // « Ma recette » : les besoins cumulés des gâteaux cochés.
-function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour, couvert, estDeclare }) {
+function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, onRetour, faits, onFait, bloquants, manquePour, dejaLa, couvert, estDeclare }) {
   const cle = p => 'sc:' + p
   return (
     <div className={onRetour ? '' : 'bg-white border border-line rounded-2xl sticky top-4 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden'}>
@@ -201,6 +201,14 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             && manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).length > 0 && (
             <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
               il manque : {manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).map(m => `${qteLisible(m.manque, m.unite)} de ${propre(m.produit)}`).join(' · ')}
+            </div>
+          )}
+          {/* la bonne nouvelle que la ligne repliée cachait : une préparation
+              de sa recette dort déjà au congélateur, inutile de la refaire */}
+          {dejaLa && estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
+            && dejaLa(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).length > 0 && (
+            <div className="text-[12px] text-ok pl-[96px] -mt-1 mb-1.5">
+              déjà en stock : {dejaLa(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).map(propre).join(' · ')}
             </div>
           )}
           {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
@@ -1103,6 +1111,27 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     return out
   }
 
+  // L'inverse de `manquePour` : ce que la recette d'une préparation trouve déjà
+  // tout prêt, sans avoir à la déplier. Seules les préparations comptent — dire
+  // que la farine est en stock n'apprendrait rien et noierait le reste.
+  const dejaLaPour = (produit, qty, usage = '', lot = null) => {
+    const r = recettes[produit]
+    if (!r) return []
+    const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
+    if (!base) return []
+    const f = qty / base
+    const out = []
+    for (const l of r.lignes) {
+      if (!peutEtreFait(l.produit) || toujoursLa(l.produit)) continue
+      if (lot ? estDeclare(lot, l.produit, usage) : faits[clePrepa(l.produit, usage)]) continue
+      const besoin = enKg(l.qty * f, l.unite)
+      const st = stocks[l.produit]
+      const dispo = (st ? Math.max(0, enKg(st.qty, st.unite).q) : 0) + reservePour(lot, l.produit)
+      if (dispo >= besoin.q - 0.0001) out.push(l.produit)
+    }
+    return out
+  }
+
   const toggle = name => setSel(s => (s.includes(name) ? s.filter(x => x !== name) : [...s, name]))
   // Les ordres Odoo derrière une coche. Pour un ordre, c'est lui-même. Pour une
   // préparation cochée par son nom, ce sont les ordres de cet article RATTACHÉS
@@ -1276,7 +1305,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="max-w-[620px] mx-auto px-4 py-5">
           <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
             setOuvertes={setOuvertes} onEffacer={effacer} onRetour={() => setPageRecette(false)}
-            faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} estDeclare={estDeclare} />
+            faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} dejaLa={dejaLaPour} couvert={couvert} estDeclare={estDeclare} />
         </div>
       </div>
     )
@@ -1457,7 +1486,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className="hidden lg:block lg:mt-[70px]">
           {deuxColonnes ? (
             <PanneauRecette recettes={recettes} recette={recetteParParfum} ouvertes={ouvertes}
-              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} couvert={couvert} estDeclare={estDeclare} />
+              setOuvertes={setOuvertes} onEffacer={effacer} onRetour={null} faits={faits} onFait={marquer} bloquants={bloquants} manquePour={manquePour} dejaLa={dejaLaPour} couvert={couvert} estDeclare={estDeclare} />
           ) : (
             <div className="bg-white border border-dashed border-line rounded-2xl p-6 text-center text-ink-mute text-[13.5px] sticky top-4">
               Coche des gâteaux à gauche :<br />leur recette s'affichera ici, additionnée.
