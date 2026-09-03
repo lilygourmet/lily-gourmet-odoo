@@ -31,6 +31,19 @@ export function signatureDepot(amount, label) {
   return ref ? `${Math.round(Number(amount) * 100)}|${ref}` : null
 }
 
+// Une caisse justifiée par une PREUVE MANUELLE (photo du bordereau) ne porte aucun n°
+// d'opération : impossible de la relier par signature. On reconnaît son dépôt comme le
+// fait le rapprochement auto (reconcileEnvelopes) — même montant, à `joursMax` près de la
+// date du versement. Sans date de versement, le montant suffit.
+export function memeDepotSansNumero(ligne, caisse, joursMax = 7) {
+  const montant = Number(caisse.amount_proof ?? caisse.amount_cash)
+  if (!(montant > 0)) return false
+  if (Math.abs(Number(ligne.amount) - montant) >= 0.005) return false
+  if (!caisse.proof_date || !ligne.ligne_date) return true
+  const jours = Math.abs((new Date(ligne.ligne_date) - new Date(caisse.proof_date)) / 86400000)
+  return jours <= joursMax
+}
+
 // Ressemblance entre deux textes, de 0 (rien à voir) à 1 (identiques) — distance de Levenshtein.
 export function similarite(a, b) {
   if (!a || !b) return 0
