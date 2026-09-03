@@ -2269,6 +2269,56 @@ export default async function handler(req, res) {
       return res.status(200).json({ recettes: out })
     }
 
+    // Chercher un VRAI article d'Odoo pour l'ajouter à Fabrication Prod.
+    // On ne propose QUE ceux qui ont une nomenclature : un article ajouté à la
+    // main sous un nom approchant ne retrouvait aucune recette, et l'écran ne
+    // savait plus quoi montrer (Layla, 2026-09-03 — « lier fabrication prod au
+    // vrai article »). On ne filtre PAS sur le stock : une préparation à zéro
+    // reste tout à fait fabricable.
+    if (req.query.mode === 'fabricables') {
+      const q = String(req.query.q || '').trim()
+      if (q.length < 2) return res.status(200).json({ articles: [] })
+      const uid = await odooAuth()
+      const prods = await odooSearchRead(uid, 'product.product', [['name', 'ilike', q]],
+        ['id', 'name', 'product_tmpl_id', 'uom_id'], { limit: 80 })
+      if (!prods.length) return res.status(200).json({ articles: [] })
+
+      const boms = await odooSearchRead(uid, 'mrp.bom', [
+        '|', ['product_id', 'in', prods.map(p => p.id)],
+        ['product_tmpl_id', 'in', prods.map(p => p.product_tmpl_id[0])],
+      ], ['id', 'product_id', 'product_tmpl_id'], { limit: 200 })
+      if (!boms.length) return res.status(200).json({ articles: [] })
+
+      const lignes = await odooSearchRead(uid, 'mrp.bom.line',
+        [['bom_id', 'in', boms.map(b => b.id)]], ['bom_id'], { limit: 3000 })
+      const combien = {}
+      for (const l of lignes) {
+        const id = Array.isArray(l.bom_id) ? l.bom_id[0] : l.bom_id
+        combien[id] = (combien[id] || 0) + 1
+      }
+      // une nomenclature posée sur la VARIANTE l'emporte sur celle du modèle
+      const surVariante = {}, surModele = {}
+      for (const b of boms) {
+        if (b.product_id) surVariante[b.product_id[0]] = b.id
+        const t = Array.isArray(b.product_tmpl_id) ? b.product_tmpl_id[0] : b.product_tmpl_id
+        if (t && surModele[t] === undefined) surModele[t] = b.id
+      }
+      const net = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').trim()
+      const out = []
+      for (const p of prods) {
+        const bom = surVariante[p.id] ?? surModele[p.product_tmpl_id[0]]
+        if (bom === undefined) continue
+        out.push({
+          nom: net(p.name),
+          unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : '') || 'u').replace(/^units?$/i, 'u'),
+          lignes: combien[bom] || 0,
+        })
+      }
+      return res.status(200).json({
+        articles: out.sort((a, b) => a.nom.localeCompare(b.nom)).slice(0, 20),
+      })
+    }
+
     // suggestions d'articles quand on ajoute un ingrédient à la main.
     // On ne propose QUE ce qui est rangé dans le lieu de l'ordre
     // (WHLVP/Stock/Stock Prod) : ailleurs, l'article n'est pas sous la main.

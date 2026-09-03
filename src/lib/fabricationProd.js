@@ -114,6 +114,18 @@ export async function loadRecettes(articles) {
 }
 
 /**
+ * Les vrais articles d'Odoo qui ont une nomenclature, pour en ajouter un à
+ * l'écran. On passe par eux plutôt que par un nom tapé à la main : sans le nom
+ * exact d'Odoo, l'article n'a aucune recette.
+ */
+export async function chercherArticlesOdoo(q) {
+  if (!q || q.trim().length < 2) return []
+  const r = await fetch('/api/freezer-list?mode=fabricables&q=' + encodeURIComponent(q.trim()))
+  if (!r.ok) return []
+  return (await r.json()).articles || []
+}
+
+/**
  * Les gâteaux qui utilisent ce semi-fini (lu dans Odoo à l'envers), avec la quantité
  * par taille et ce qui est déjà commandé pour la journée. Sert à calculer combien en
  * fabriquer : les recettes archivées dans Odoo n'y sont pas.

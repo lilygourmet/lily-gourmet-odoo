@@ -6,6 +6,7 @@ import { todayISO } from '../lib/dates'
 import {
   ARTICLES, loadFabProd, addFabProd, delFabProd,
   loadArticlesAjoutes, addArticle, delArticle, loadNoms, loadHistorique, loadRecettes,
+  chercherArticlesOdoo,
   loadConsommateurs,
 } from '../lib/fabricationProd'
 import { loadPrevisions } from '../lib/previsionsVitrine'
@@ -51,7 +52,10 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
   const [fois, setFois] = useState(1)             // combien de fois la recette
   const [recettes, setRecettes] = useState({})
   const [ajoutes, setAjoutes] = useState([])      // articles ajoutés à la main
-  const [nouveau, setNouveau] = useState(null)    // { nom, unite, photo } en cours de création
+  const [nouveau, setNouveau] = useState(null)    // { nom, unite, photo, choisi } en création
+  // Ce qu'Odoo a répondu, et pour quelle recherche : garder la question avec la
+  // réponse évite d'afficher les propositions d'un mot déjà effacé.
+  const [suggestions, setSuggestions] = useState({ q: '', liste: [] })
   const [noms, setNoms] = useState({})
   const [histo, setHisto] = useState(null)
   const [voirHisto, setVoirHisto] = useState(false)
@@ -171,9 +175,29 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
     return () => document.removeEventListener('paste', coller)
   }, [nouveau])
 
+  // On cherche le VRAI article dans Odoo pendant qu'elle tape. Sans ce lien,
+  // l'article ajouté n'a aucune recette : l'écran ne sait plus quoi montrer.
+  const requete = nouveau && !nouveau.choisi ? (nouveau.nom || '').trim() : ''
+  useEffect(() => {
+    if (requete.length < 2) return undefined
+    const t = setTimeout(() => {
+      chercherArticlesOdoo(requete)
+        .then(liste => setSuggestions({ q: requete, liste }))
+        .catch(() => setSuggestions({ q: requete, liste: [] }))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [requete])
+  // déduits au rendu : pas d'état de plus, et jamais un résultat périmé
+  const propositions = suggestions.q === requete ? suggestions.liste : []
+  const cherchant = requete.length >= 2 && suggestions.q !== requete
+
   const creer = async () => {
     const nom = (nouveau.nom || '').trim()
     if (!nom) { toast.error('Donne un nom à l\'article'); return }
+    if (!nouveau.choisi) {
+      toast.error('Choisis l\'article dans la liste d\'Odoo : sans lui, il n\'aurait pas de recette')
+      return
+    }
     if (tous.some(a => a.article.toLowerCase() === nom.toLowerCase())) {
       toast.error('Cet article est déjà dans la liste'); return
     }
@@ -368,9 +392,38 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
                       </label>
                       <div className="px-3 py-3 bg-cream-warm border-t border-line">
                         <input autoFocus value={nouveau.nom}
-                          onChange={e => setNouveau(n => ({ ...n, nom: e.target.value }))}
-                          placeholder="Nom de l'article"
-                          className="w-full border border-line rounded-xl px-2.5 py-2 text-[13.5px] bg-white outline-none focus:border-bordeaux" />
+                          onChange={e => setNouveau(n => ({ ...n, nom: e.target.value, choisi: false }))}
+                          placeholder="Chercher l'article dans Odoo"
+                          className={'w-full border rounded-xl px-2.5 py-2 text-[13.5px] bg-white outline-none focus:border-bordeaux '
+                            + (nouveau.choisi ? 'border-ok' : 'border-line')} />
+
+                        {/* On ne propose que les articles d'Odoo qui ont une
+                            nomenclature : c'est elle qui donne la recette. */}
+                        {nouveau.choisi ? (
+                          <p className="mt-1.5 text-[11.5px] text-ok font-bold">
+                            Relié à Odoo · unité {nouveau.unite}
+                          </p>
+                        ) : cherchant ? (
+                          <p className="mt-1.5 text-[11.5px] text-ink-mute">Recherche dans Odoo…</p>
+                        ) : propositions.length > 0 ? (
+                          <div className="mt-1.5 border border-line rounded-xl bg-white max-h-[190px] overflow-y-auto">
+                            {propositions.map(a => (
+                              <button key={a.nom}
+                                onClick={() => { setNouveau(n => ({ ...n, nom: a.nom, unite: a.unite, choisi: true })) }}
+                                className="w-full text-left px-2.5 py-2 border-b border-[#f4eee2] last:border-0 active:bg-cream-warm">
+                                <span className="block text-[12.5px] font-bold leading-tight">{a.nom}</span>
+                                <span className="block text-[10.5px] text-ink-mute">
+                                  recette : {a.lignes} ingrédient{a.lignes > 1 ? 's' : ''} · en {a.unite}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (nouveau.nom || '').trim().length >= 2 ? (
+                          <p className="mt-1.5 text-[11.5px] text-danger">
+                            Aucun article avec une nomenclature ne porte ce nom dans Odoo.
+                          </p>
+                        ) : null}
+
                         <div className="flex border border-line rounded-xl overflow-hidden bg-white mt-2">
                           {['g', 'kg', 'u'].map(u => (
                             <button key={u} onClick={() => setNouveau(n => ({ ...n, unite: u }))}
