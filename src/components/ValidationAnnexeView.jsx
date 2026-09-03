@@ -7,41 +7,49 @@ import { loadFabProd } from '../lib/fabricationProd'
 import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
 import { loadManques, validerDansOdoo, creerOfPrepa, loadSaisies, saveSaisies } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
+import { AjoutIngredient } from './ValidationView'
 
-// ====== « À valider Annexe » ======
-// Ce que l'équipe a déclaré « c'est fait » dans Fabrication Annexe, rapproché
-// de l'ordre de fabrication qu'Odoo tient déjà pour cet article. On confirme
-// ici, une fois, en connaissance de cause. Réservé à perm_valider_annexe.
+// ====== « À valider Annexe » : la page dédiée ======
+// Ce que l'annexe a marqué « c'est fait » attend ici sa confirmation dans Odoo.
+// On ne force jamais sans une demande explicite. Réservée à perm_valider_annexe.
 //
-// Deux libertés demandées par Layla :
-//  - corriger ce qui a VRAIMENT été consommé, ligne par ligne ;
-//  - déclarer une production PARTIELLE : le reste repart en reliquat et
-//    l'article revient tout seul dans « ce qu'il faut faire ».
+// L'écran est le JUMEAU de « À valider CD- » (ValidationView.jsx) : même mise en
+// page, mêmes mots, mêmes gestes — seuls changent le titre, les articles, et
+// deux choses propres à l'annexe :
+//   - la quantité RÉELLEMENT produite, le reste repartant en reliquat ;
+//   - un article déclaré sans ordre dans Odoo, qu'on peut créer sur place.
 
-const nb = v => Number(Number(v || 0).toFixed(2)).toLocaleString('fr-FR')
+// Quantités produites et consommations corrigées : gardées côté serveur, donc
+// retrouvées sur un autre appareil, et effacées à la validation.
+const CLE_SAISIES = 'valider_annexe_saisies'
+
+const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
+// A l'atelier on ne pese pas 1 234,56 g : les quantites s'affichent entieres.
+const qte = (q, u) => (norm(u) === 'kg'
+  ? `${nb(Math.round(q * 1000))} g`
+  : `${nb(Math.round(q))} ${norm(u) === 'g' ? 'g' : u}`)
+// Les articles de l'annexe portent d'autres préfixes que ceux du cake design.
 const propre = n => String(n || '')
   .replace(/^(E-|V-|MI-|N-|SM[.\- ]?|Sm[.\- ]?|SMT?[.\- ]?)\s*/i, '')
   .replace(/\s*(finition|production)\s*$/i, '').replace(/\s{2,}/g, ' ').trim()
 
-// Ce qui est tapé ici (quantité produite, quantité consommée par ingrédient) ne
-// vivait que dans l'écran : sortir de l'onglet, ou n'importe quel rechargement,
-// remettait tout ce que dit la recette. C'est gardé côté serveur, donc partagé :
-// commencé sur la tablette, retrouvé sur le téléphone. Effacé à la validation.
-const CLE_SAISIES = 'valider_annexe_saisies'
 const sansLesNoms = (obj, noms) =>
   Object.fromEntries(Object.entries(obj).filter(([n]) => !noms.has(n)))
 
 export default function ValidationAnnexeView({ user, onLogout, onNavigate, activeView }) {
   const [lignes, setLignes] = useState(null)
   const [sel, setSel] = useState([])
-  const [faites, setFaites] = useState({})     // ordre -> quantité vraiment produite
-  const [notes, setNotes] = useState({})       // ordre -> { idLigne: consommé }
-  const [ouvert, setOuvert] = useState(null)
+  const [erreur, setErreur] = useState(null)
   const [envoi, setEnvoi] = useState(false)
   const [resultats, setResultats] = useState(null)
-  const [erreur, setErreur] = useState(null)
-  const [creation, setCreation] = useState(null)
+  const [confirmer, setConfirmer] = useState(false)
   const [tour, setTour] = useState(0)
+  const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
+  const [faites, setFaites] = useState({})        // ordre -> quantité vraiment produite
+  const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
+  const [ajouts, setAjouts] = useState({})        // { ordre: [ingrédients ajoutés à la main] }
+  const [creation, setCreation] = useState(null)
 
   useEffect(() => {
     let vivant = true
@@ -66,10 +74,10 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           // faire — sans ça l'écran réclamait d'en créer un deuxième pour du
           // travail déjà validé.
           if (d.ordre) {
-            const vivant = ouvertsParNom.get(d.ordre)
-            if (!vivant) continue
+            const encoreLa = ouvertsParNom.get(d.ordre)
+            if (!encoreLa) continue
             if (!parOrdre.has(d.ordre)) {
-              parOrdre.set(d.ordre, { name: d.ordre, article: d.article, demande: vivant.qty, etat: vivant.state })
+              parOrdre.set(d.ordre, { name: d.ordre, article: d.article, demande: encoreLa.qty, etat: encoreLa.state })
             }
             continue
           }
@@ -101,37 +109,40 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         const vivants = new Set(out.map(x => x.name))
         // Ce qui est tapé à l'instant l'emporte sur ce qui vient du serveur.
         setFaites(f => {
-          const base = { ...(gardees.faites || {}), ...f }
+          const dep = { ...(gardees.faites || {}), ...f }
           return Object.fromEntries(out.map(x =>
-            [x.name, base[x.name] === undefined ? x.demande : Math.min(x.demande, base[x.name])]))
+            [x.name, dep[x.name] === undefined ? x.demande : Math.min(x.demande, dep[x.name])]))
         })
         // Les ordres partis de la liste (validés ailleurs, annulés) n'ont plus
         // de saisie à garder : sinon elle ressortirait des mois plus tard.
         setNotes(n => {
-          const base = { ...(gardees.notes || {}), ...n }
-          return Object.fromEntries(Object.entries(base).filter(([nom]) => vivants.has(nom)))
+          const dep = { ...(gardees.notes || {}), ...n }
+          return Object.fromEntries(Object.entries(dep).filter(([nom]) => vivants.has(nom)))
+        })
+        setAjouts(a => {
+          const dep = { ...(gardees.ajouts || {}), ...a }
+          return Object.fromEntries(Object.entries(dep).filter(([nom]) => vivants.has(nom)))
         })
       } catch (e) { if (vivant) setErreur(e.message || String(e)) }
     })()
     return () => { vivant = false }
   }, [tour])
 
-  // Enregistrement retardé : on ne part pas au serveur à chaque touche du clavier,
-  // et jamais avant d'avoir lu la liste (sinon on écraserait avec du vide).
+  // Enregistrement retardé : pas un appel par touche du clavier, et jamais avant
+  // d'avoir la liste (on écraserait avec du vide).
   useEffect(() => {
     if (!lignes) return undefined
-    const t = setTimeout(() => { saveSaisies(CLE_SAISIES, { faites, notes }).catch(() => {}) }, 900)
+    const t = setTimeout(() => { saveSaisies(CLE_SAISIES, { faites, notes, ajouts }).catch(() => {}) }, 900)
     return () => clearTimeout(t)
-  }, [lignes, faites, notes])
+  }, [lignes, faites, notes, ajouts])
 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
   const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
   const bloques = choisis.filter(l => l.manques.length && !l.sansOrdre)
-  const manquesCumules = [...new Map(bloques.flatMap(l => l.manques)
-    .map(m => [m.produit, m])).values()]
+  const manquesCumules = [...new Map(bloques.flatMap(l => l.manques).map(m => [m.produit, m])).values()]
 
   // Produire 20 sur 31 ne consomme pas la matière de 31 : chaque composant
-  // suit la proportion, sauf celui que l'utilisateur a corrigé à la main.
+  // suit la proportion, sauf celui qui a été corrigé à la main.
   const aConsommer = (l, c) => {
     const saisi = (notes[l.name] || {})[c.id]
     if (saisi !== undefined && saisi !== '') return Number(saisi)
@@ -140,7 +151,6 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     return Math.round(c.besoin * part * 100) / 100
   }
 
-  const basculer = n => setSel(s => (s.includes(n) ? s.filter(x => x !== n) : [...s, n]))
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
 
@@ -172,8 +182,14 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
       }
       if (Object.keys(conv).length) quantites[n] = conv
     }
+    // Ce que la recette ne prévoyait pas, et qui a pourtant été utilisé.
+    const enPlus = {}
+    for (const n of cibles) {
+      const liste = (ajouts[n] || []).filter(a => Number(a.qty) > 0)
+      if (liste.length) enPlus[n] = liste.map(a => ({ produit: a.produit, uom: a.uom, qty: Number(a.qty) }))
+    }
     try {
-      const res = await validerDansOdoo(cibles, forcer, user?.id, quantites, null, produits)
+      const res = await validerDansOdoo(cibles, forcer, user?.id, quantites, enPlus, produits)
       setResultats(res)
       // Ce qui est validé n'a plus rien à faire dans la liste. Ce qui a échoué
       // y reste, avec son message : c'est encore à traiter.
@@ -183,6 +199,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         setSel(s2 => s2.filter(n => !faits.has(n)))
         setFaites(f => sansLesNoms(f, faits))
         setNotes(n => sansLesNoms(n, faits))
+        setAjouts(a => sansLesNoms(a, faits))
         toast.success(faits.size + (faits.size > 1 ? ' ordres validés' : ' ordre validé') + ' dans Odoo')
       }
     } catch (e) { toast.error(e.message || String(e)) }
@@ -204,190 +221,226 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
-      <div className="max-w-[720px] mx-auto px-4 py-5 pb-28">
-
-        <h1 className="font-fraunces italic text-[26px] font-medium">À valider — Annexe</h1>
-        <p className="text-[13px] text-ink-mute mb-4 leading-snug">
-          Ce que l'annexe a marqué « c'est fait » aujourd'hui et qui attend sa confirmation dans
-          Odoo. Ce qui n'a pas été produit repart en reliquat.
+      <div className="max-w-[660px] mx-auto px-4 py-5">
+        <div className="flex items-center gap-3 flex-wrap mb-1">
+          <h1 className="font-fraunces italic text-[26px] font-medium">À valider Annexe</h1>
+          <button onClick={() => { setLignes(null); setResultats(null); setTour(v => v + 1) }}
+            className="ml-auto bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">↻ Actualiser</button>
+        </div>
+        <p className="text-[12.5px] text-ink-mute mb-3">
+          Ce que l'annexe a marqué « c'est fait » et qui attend sa confirmation dans Odoo. Ce qui n'a pas été produit repart en reliquat.
         </p>
 
-        {erreur && (
-          <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] mb-3">
-            Impossible de lire Odoo : {erreur}
-          </div>
-        )}
+        {erreur && <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] mb-3">{erreur}</div>}
         {!lignes && !erreur && <Skeleton rows={4} />}
+        {envoi && <p className="text-center text-ink-mute py-8">Validation en cours dans Odoo…</p>}
 
-        {lignes && !lignes.length && (
-          <div className="bg-white border border-dashed border-line rounded-2xl py-8 text-center text-ink-mute text-[14px]">
+        {resultats && !envoi && (
+          <>
+            {resultats.map(r => (
+              <div key={r.name} className={'rounded-xl px-3.5 py-3 mb-2 ' +
+                (r.ok ? 'bg-[#EAF3DE] border border-[#cfe0b8]' : 'bg-[#FCEEE8] border border-[#f0c9c9]')}>
+                <b className="text-[14.5px]">{r.ok ? '✓' : '✗'} {r.name}</b>
+                <div className="text-[12.5px] text-ink-soft">
+                  {r.ok ? 'validé dans Odoo' : r.message}
+                  {r.reliquat && ` · reste ${nb(r.reliquat)} en reliquat`}
+                </div>
+              </div>
+            ))}
+            <button onClick={() => { setLignes(null); setResultats(null); setTour(v => v + 1) }}
+              className="w-full bg-bordeaux text-cream rounded-2xl py-3.5 text-[15px] font-bold mt-2">Terminer</button>
+          </>
+        )}
+
+        {lignes && !resultats && !envoi && lignes.length === 0 && (
+          <div className="py-14 text-center text-ink-mute text-[14px] bg-cream-warm rounded-xl">
             Rien à valider pour le moment.<br />
-            <span className="text-[12.5px]">L'équipe n'a rien déclaré aujourd'hui, ou aucun article déclaré n'a d'ordre ouvert dans Odoo.</span>
+            <span className="text-[12.5px]">Ce que l'équipe marque « c'est fait » dans Fabrication Annexe arrive ici.</span>
           </div>
         )}
 
-        {lignes && lignes.length > 0 && (
-          <>
-            <div className="flex items-center gap-3 text-[12.5px] mb-3">
-              <span><b>{choisis.length}</b> sélectionnés sur <b>{lignes.length}</b></span>
-              <button onClick={() => setSel(lignes.map(l => l.name))}
-                className="text-bordeaux font-bold underline">tout cocher</button>
-              <button onClick={() => setSel([])}
-                className="text-bordeaux font-bold underline">tout décocher</button>
-              <span className="ml-auto text-ink-mute">
-                {prets.length} prêts · {bloques.length} bloqués
-                {lignes.filter(l => l.sansOrdre).length > 0 && ' · ' + lignes.filter(l => l.sansOrdre).length + ' sans ordre'}
-              </span>
-            </div>
-
-            {lignes.map(l => {
-              if (l.sansOrdre) {
-                return (
-                  <div key={l.name}
-                    className="bg-white border border-line rounded-2xl mb-2.5 border-l-4 border-l-[#b58f3c] px-3.5 py-3">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <b className="text-[15px]">{propre(l.article)}</b>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wide rounded-full px-2 py-0.5 bg-[#FBF3DF] text-[#854F0B]">
-                        aucun ordre
-                      </span>
-                    </div>
-                    <p className="text-[11.5px] text-ink-mute mt-1 leading-snug">
-                      Déclaré {nb(l.demande)} {l.unite} — Odoo n'a pas d'ordre ouvert pour cet article
-                      à l'annexe. Sans ordre, rien à valider.
-                    </p>
-                    <button onClick={() => creer(l)} disabled={!!creation}
-                      className={'w-full mt-2 rounded-xl px-3 py-2.5 text-[13px] font-extrabold border '
-                        + (creation === l.name
-                          ? 'border-line bg-cream-warm text-ink-mute'
-                          : 'border-[#b58f3c] text-[#854F0B] bg-[#FBF3DF]')}>
-                      {creation === l.name ? 'Création en cours…'
-                        : `Créer l'ordre de ${nb(l.demande)} ${l.unite || ''}`}
-                    </button>
+        {lignes && !resultats && !envoi && lignes.map(l => {
+          // Déclaré, mais Odoo n'a pas d'ordre ouvert : sans ordre, rien à valider.
+          if (l.sansOrdre) {
+            return (
+              <div key={l.name} className="border border-line rounded-xl mb-2 overflow-hidden border-l-4 border-l-[#d9a441]">
+                <div className="flex items-center gap-3 px-3.5 py-3 bg-white">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
+                    <div className="text-[11.5px] text-ink-mute">Odoo n'a pas d'ordre ouvert pour cet article à l'annexe.</div>
                   </div>
-                )
-              }
-              const bloque = l.manques.length > 0
-              const faite = faites[l.name] ?? l.demande
-              const reste = Math.max(0, l.demande - faite)
-              return (
-                <div key={l.name}
-                  className={'bg-white border border-line rounded-2xl mb-2.5 border-l-4 '
-                    + (bloque ? 'border-l-[#d9a441]' : 'border-l-[#7ba05b]')}>
-                  <div className="flex items-start gap-3 px-3.5 py-3">
-                    <input type="checkbox" checked={sel.includes(l.name)}
-                      onChange={() => basculer(l.name)}
-                      className="w-[22px] h-[22px] shrink-0 mt-0.5 accent-bordeaux" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <b className="text-[15px]">{propre(l.article)}</b>
-                        <span className="text-[11px] font-mono text-ink-mute bg-cream-warm rounded px-1.5">{l.name}</span>
-                        <span className={'text-[10px] font-extrabold uppercase tracking-wide rounded-full px-2 py-0.5 '
-                          + (bloque ? 'bg-[#FFF7E0] text-[#854F0B]' : 'bg-[#EAF3DE] text-ok')}>
-                          {bloque ? 'il manque' : 'prêt'}
-                        </span>
-                      </div>
-                      {bloque && (
-                        <p className="text-[11.5px] text-danger mt-1 leading-snug">
-                          {l.manques.map(m => propre(m.produit) + ' — ' + nb(m.manque) + ' ' + m.unite).join(' · ')}
-                        </p>
-                      )}
-                      <button onClick={() => setOuvert(o => (o === l.name ? null : l.name))}
-                        className="text-[11.5px] text-bordeaux font-bold underline mt-1">
-                        {ouvert === l.name ? 'masquer' : 'corriger'} ce qui a été consommé
-                      </button>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <input type="number" min="0" max={l.demande} value={faite}
-                        onChange={e => poser(l.name, e.target.value, l.demande)}
-                        className="sans-fleches w-[72px] border-2 border-line rounded-[10px] py-1 text-center text-[19px] font-extrabold bg-white outline-none focus:border-bordeaux" />
-                      <span className="block text-[10.5px] text-ink-mute font-bold mt-0.5">
-                        produits sur {nb(l.demande)}
-                      </span>
-                      {reste > 0 && (
-                        <>
-                          <span className="block text-[10.5px] font-extrabold text-[#854F0B]">
-                            reliquat : {nb(reste)}
-                          </span>
-                          <span className="block text-[10px] text-ink-mute leading-tight mt-0.5">
-                            matière ajustée
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                  <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap bg-[#FFF7E0] text-[#854F0B]">
+                    aucun ordre
+                  </span>
+                </div>
+                <div className="border-t border-line px-3.5 py-2">
+                  <button onClick={() => creer(l)} disabled={!!creation}
+                    className="w-full rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-bordeaux">
+                    {creation === l.name ? 'Création en cours…' : `créer l'ordre de ${qte(l.demande, l.unite)}`}
+                  </button>
+                </div>
+              </div>
+            )
+          }
 
+          const on = sel.includes(l.name)
+          const faite = faites[l.name] ?? l.demande
+          const reste = Math.max(0, l.demande - faite)
+          return (
+            <div key={l.name} className={'border border-line rounded-xl mb-2 overflow-hidden border-l-4 ' +
+              (l.manques.length ? 'border-l-[#d9a441]' : 'border-l-[#7ba05b]')}>
+              <div className="flex items-center gap-3 px-3.5 py-3 bg-white">
+                <input type="checkbox" checked={on} className="w-6 h-6 accent-[#993556] flex-shrink-0"
+                  onChange={e => setSel(v => (e.target.checked ? [...v, l.name] : v.filter(x => x !== l.name)))} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
+                  <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
+                  {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > new Date().toISOString().slice(0, 10) ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
+                    prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+                  </div>}
+                </div>
+                <span className={'text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ' +
+                  (l.manques.length ? 'bg-[#FFF7E0] text-[#854F0B]' : 'bg-[#EAF3DE] text-ok')}>
+                  {l.manques.length ? 'il manque' : 'prêt'}
+                </span>
+              </div>
+              {l.manques.length > 0 && (
+                <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 text-[12.5px]">
+                  {l.manques.map((m, i) => (
+                    <div key={i}>• <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Ce qui a vraiment été produit : le reste repart en reliquat */}
+              <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 flex items-center gap-2.5">
+                <span className="flex-1 text-[12.5px] text-ink-soft">produit sur {nb(l.demande)}</span>
+                <input type="number" min="0" max={l.demande} step="any" inputMode="decimal" value={faite}
+                  onChange={e => poser(l.name, e.target.value, l.demande)}
+                  className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                {reste > 0 && (
+                  <span className="text-[11.5px] font-bold text-[#854F0B] whitespace-nowrap">reliquat {nb(reste)}</span>
+                )}
+              </div>
+
+              {/* Noter ce qui a vraiment été consommé, avant de valider */}
+              {(l.lignes || []).length > 0 && (
+                <div className="border-t border-line">
+                  <button onClick={() => setOuvert(ouvert === l.name ? null : l.name)}
+                    className="w-full text-left px-3.5 py-2 text-[12.5px] text-bordeaux font-semibold">
+                    {ouvert === l.name ? '▾' : '▸'} noter ce qui a été consommé
+                  </button>
                   {ouvert === l.name && (
-                    <div className="border-t border-[#f4eee2] px-3.5 py-2">
-                      {!(l.lignes || []).length && (
-                        <p className="text-[12px] text-ink-mute py-1">Odoo ne donne aucun composant pour cet ordre.</p>
-                      )}
-                      {(l.lignes || []).map(c => (
-                        <div key={c.id} className="flex items-center gap-2.5 py-1.5 border-b border-[#f7f2e8] last:border-0">
-                          <span className="flex-1 min-w-0 text-[13px]">
+                    <div className="px-3.5 pb-3">
+                      <p className="text-[12px] text-ink-mute mb-2">
+                        Corrige les quantités si tu n'as pas utilisé exactement la recette.
+                        Ferme sans rien changer pour garder ce qui est prévu.
+                      </p>
+                      {l.lignes.map(c => (
+                        <div key={c.id} className="flex items-center gap-2.5 py-1.5 border-b border-dashed border-[#f0e8db] last:border-0">
+                          <span className="flex-1 text-[13.5px] min-w-0">
                             {propre(c.produit)}
-                            <span className="block text-[10.5px] text-ink-mute">
+                            <span className="block text-[11px] text-ink-mute">
                               recette : {nb(c.besoin)} {c.unite}
-                              {c.dispo !== null && ' · en stock ' + nb(c.dispo)}
                               {faite !== l.demande && (notes[l.name] || {})[c.id] === undefined
                                 && ' · ajusté pour ' + nb(faite)}
                             </span>
                           </span>
-                          <input type="number" min="0"
-                            value={aConsommer(l, c)}
+                          <input type="number" min="0" step="any" inputMode="decimal" value={aConsommer(l, c)}
                             onChange={e => setNotes(n => ({
                               ...n, [l.name]: { ...(n[l.name] || {}), [c.id]: e.target.value },
                             }))}
-                            className="sans-fleches w-[82px] border border-line rounded-lg py-1 text-center text-[14px] font-bold bg-white outline-none focus:border-bordeaux" />
-                          <span className="text-[11px] text-ink-mute w-[26px]">{c.unite}</span>
+                            className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                          <span className="text-[12px] text-ink-mute w-[26px]">{c.unite}</span>
                         </div>
                       ))}
+
+                      {(ajouts[l.name] || []).map((a, i) => (
+                        <div key={'a' + i} className="flex items-center gap-2.5 py-1.5 border-b border-dashed border-[#f0e8db]">
+                          <span className="flex-1 text-[13.5px] min-w-0 text-bordeaux">{propre(a.nom)}</span>
+                          <input type="number" min="0" step="any" inputMode="decimal" value={a.qty}
+                            onChange={e => setAjouts(m => ({
+                              ...m,
+                              [l.name]: (m[l.name] || []).map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)),
+                            }))}
+                            className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                          <span className="text-[12px] text-ink-mute w-[26px]">{a.unite}</span>
+                          <button onClick={() => setAjouts(m => ({
+                            ...m, [l.name]: (m[l.name] || []).filter((_, j) => j !== i),
+                          }))} className="text-ink-mute text-[15px] px-1" title="retirer">✕</button>
+                        </div>
+                      ))}
+
+                      <AjoutIngredient onChoisir={a => setAjouts(m => ({
+                        ...m,
+                        [l.name]: [...(m[l.name] || []), { produit: a.id, nom: a.nom, uom: a.uom, unite: a.unite, qty: '' }],
+                      }))} />
+
+                      <div className="flex gap-2 mt-2.5">
+                        <button onClick={() => setOuvert(null)}
+                          className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
+                          fermer sans changer
+                        </button>
+                        {(notes[l.name] || ajouts[l.name]) && (
+                          <button onClick={() => {
+                            setNotes(n => { const s2 = { ...n }; delete s2[l.name]; return s2 })
+                            setAjouts(m => { const s2 = { ...m }; delete s2[l.name]; return s2 })
+                          }}
+                            className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-mute">
+                            revenir à la recette
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              )
-            })}
+              )}
+            </div>
+          )
+        })}
 
-            {manquesCumules.length > 0 && (
-              <div className="bg-[#FFF7E0] border border-[#e6d3a3] rounded-2xl px-3.5 py-3 mb-3 text-[12.5px] text-[#854F0B]">
-                <b className="block text-[10.5px] uppercase tracking-wide mb-1">Ce qui manque en tout</b>
-                {manquesCumules.map(m => propre(m.produit) + ' — ' + nb(m.manque) + ' ' + m.unite).join(' · ')}
-              </div>
-            )}
-
-            <button onClick={() => lancer(false)} disabled={envoi || !prets.length}
-              className={'w-full py-4 rounded-2xl text-[16px] font-extrabold text-white mb-2 '
-                + (envoi || !prets.length ? 'bg-[#b9c7ae]' : 'bg-ok')}>
-              {envoi ? 'Envoi…' : `✓ Valider dans Odoo — ${prets.length} ordre${prets.length > 1 ? 's' : ''} prêt${prets.length > 1 ? 's' : ''}`}
-            </button>
-            <p className="text-[11.5px] text-ink-mute text-center mb-3 leading-snug">
-              Ce qui n'a pas été produit repart en <b className="text-[#854F0B]">reliquat</b> :
-              l'ordre reste ouvert et l'article revient dans « ce qu'il faut faire ».
-            </p>
-
-            {bloques.length > 0 && (
-              <button onClick={() => lancer(true)} disabled={envoi}
-                className="w-full py-3 rounded-2xl border-2 border-[#e6d3a3] bg-white text-[#854F0B] text-[14px] font-extrabold">
-                Forcer les {bloques.length} bloqués malgré les manques
+        {lignes && lignes.length > 0 && !resultats && !envoi && (
+          <>
+            <div className="text-[12.5px] text-ink-soft my-3">
+              {choisis.length} sélectionné(s) · {prets.length} prêt(s), {bloques.length} à forcer
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => lancer(false)} disabled={!prets.length}
+                className={'flex-1 min-w-[200px] rounded-2xl py-3.5 text-[15px] font-bold ' +
+                  (prets.length ? 'bg-bordeaux text-cream' : 'bg-white border border-line text-ink-mute')}>
+                Valider la sélection{prets.length ? ` (${prets.length})` : ''}
               </button>
-            )}
+              <button onClick={() => setConfirmer(true)} disabled={!bloques.length}
+                className={'rounded-2xl py-3.5 px-4 text-[13.5px] font-bold border bg-white ' +
+                  (bloques.length ? 'border-danger text-danger' : 'border-line text-ink-mute')}>
+                Forcer la sélection{bloques.length ? ` (${bloques.length})` : ''}
+              </button>
+            </div>
+            <p className="text-[11.5px] text-ink-mute text-center mt-3">
+              Ce qui n'a pas été produit repart en <b className="text-[#854F0B]">reliquat</b> : l'ordre reste ouvert et l'article revient dans « ce qu'il faut faire ».
+            </p>
           </>
         )}
-
-        {resultats && (
-          <div className="mt-4 bg-white border border-line rounded-2xl overflow-hidden">
-            <div className="bg-cream-warm px-3.5 py-2 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-soft border-b border-line">
-              Résultat
-            </div>
-            {resultats.map(r => (
-              <div key={r.name} className="flex items-baseline gap-2 px-3.5 py-2 border-b border-[#f4eee2] last:border-0 text-[13px]">
-                <span className={'font-extrabold ' + (r.ok ? 'text-ok' : 'text-danger')}>{r.ok ? '✓' : '✕'}</span>
-                <span className="font-mono text-[11.5px]">{r.name}</span>
-                <span className="text-ink-mute">{r.message}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
+
+      {confirmer && (
+        <div className="fixed inset-0 z-[80] bg-ink/50 flex items-center justify-center p-4"
+          onPointerDown={e => { if (e.target === e.currentTarget) setConfirmer(false) }}>
+          <div className="bg-white rounded-2xl p-4 max-w-[420px]">
+            <b className="text-[16px]">Forcer la validation ?</b>
+            <p className="text-[13px] text-ink-soft mt-1 mb-2">Odoo enregistrera la fabrication même si le stock ne suit pas. Il manque :</p>
+            {manquesCumules.map((m, i) => (
+              <div key={i} className="text-[13.5px]">• <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}</div>
+            ))}
+            <p className="text-[12px] text-ink-mute mt-2">Le stock de ces articles deviendra négatif dans Odoo.</p>
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => { setConfirmer(false); lancer(true) }}
+                className="flex-1 bg-danger text-cream rounded-xl py-3 text-[14px] font-bold">Forcer</button>
+              <button onClick={() => setConfirmer(false)} className="rounded-xl py-3 px-4 text-[14px] border border-line">Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -26,8 +26,10 @@ const propre = n => String(n || '')
 /**
  * Champ de recherche d'un article Odoo : on tape, il propose.
  * Sert à noter un ingrédient que la recette ne prévoyait pas.
+ * Exporté : « À valider Annexe » est le jumeau de cet écran et s'en sert tel
+ * quel — deux copies auraient fini par diverger.
  */
-function AjoutIngredient({ onChoisir }) {
+export function AjoutIngredient({ onChoisir }) {
   const [q, setQ] = useState('')
   const [res, setRes] = useState([])
   const [cherche, setCherche] = useState(false)
