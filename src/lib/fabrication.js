@@ -48,16 +48,25 @@ export async function loadBasesChoisies() {
  * app_config : commencées sur la tablette, retrouvées sur le téléphone.
  * Elles sont effacées dès que l'ordre est validé dans Odoo.
  */
+// ⚠️ PAS d'accès direct à `app_config` : sa RLS est fermée exprès (elle garde le
+// code du verrou Caisse/RH), le navigateur s'y casse les dents en silence — ce
+// qui a fait perdre les quantités corrigées pendant une demi-journée. On passe
+// par le serveur, qui a la clé de service et n'accepte que ces deux clés-là.
 export async function loadSaisies(cle) {
-  const { data } = await supabase.from('app_config').select('value').eq('key', cle).maybeSingle()
-  try { return JSON.parse((data && data.value) || '{}') } catch { return {} }
+  const r = await fetch('/api/wati-webhook?action=saisies', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cle }),
+  })
+  if (!r.ok) return {}
+  return (await r.json()).valeurs || {}
 }
 
 export async function saveSaisies(cle, valeurs) {
-  const { error } = await supabase.from('app_config')
-    .upsert({ key: cle, value: JSON.stringify(valeurs || {}), updated_at: new Date().toISOString() },
-      { onConflict: 'key' })
-  if (error) throw error
+  const r = await fetch('/api/wati-webhook?action=saisies', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cle, valeurs: valeurs || {} }),
+  })
+  if (!r.ok) throw new Error('saisies non enregistrées (' + r.status + ')')
 }
 
 export async function saveBasesChoisies(liste) {

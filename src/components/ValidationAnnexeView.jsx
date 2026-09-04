@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
@@ -167,9 +167,20 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
 
   // Enregistrement retardé : pas un appel par touche du clavier, et jamais avant
   // d'avoir la liste (on écraserait avec du vide).
+  const perdu = useRef(false)
   useEffect(() => {
     if (!lignes) return undefined
-    const t = setTimeout(() => { saveSaisies(CLE_SAISIES, { faites, notes, ajouts }).catch(() => {}) }, 900)
+    const t = setTimeout(() => {
+      saveSaisies(CLE_SAISIES, { faites, notes, ajouts })
+        .then(() => { perdu.current = false })
+        // Le silence a coûté une demi-journée : quand ça ne s'enregistre pas,
+        // il faut le dire. Une seule fois, pas à chaque frappe.
+        .catch(() => {
+          if (perdu.current) return
+          perdu.current = true
+          toast.error('Tes quantités ne sont PAS enregistrées : elles seront perdues en quittant l\'écran.')
+        })
+    }, 900)
     return () => clearTimeout(t)
   }, [lignes, faites, notes, ajouts])
 

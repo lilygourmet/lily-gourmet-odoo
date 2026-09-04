@@ -57,6 +57,7 @@ export default async function handler(req, res) {
 
   // Aiguillage selon ?action= ; sans action = réception entrante (appel de Wati)
   const action = req.query?.action
+  if (action === 'saisies') return handleSaisies(req, res)
   if (action === 'login') return handleLogin(req, res)
   if (action === 'save-navbar') return handleSaveNavbar(req, res)
   if (action === 'tab-lock') return handleTabLock(req, res)
@@ -3717,6 +3718,41 @@ async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
 // Ici on refait les lignes de la copie à l'identique. Un devis LG Traiteur déjà
 // confirmé n'est JAMAIS touché.
 // ============================================================
+// ============================================================
+// SAISIES EN COURS DES ÉCRANS « À VALIDER »
+// Elles vivent dans `app_config`, une table dont la RLS est FERMÉE exprès (elle
+// contient le code du verrou Caisse/RH) : le navigateur ne peut donc ni la lire
+// ni l'écrire. C'est pour ça que les quantités corrigées ne se gardaient pas —
+// l'échec était silencieux. On passe par le serveur, qui a la clé de service.
+//
+// ⚠️ LISTE BLANCHE OBLIGATOIRE : sans elle, n'importe qui pourrait écraser
+// `tab_lock_code` par cet endpoint.
+// ============================================================
+const CLES_SAISIES = new Set(['valider_annexe_saisies', 'valider_saisies'])
+
+async function handleSaisies(req, res) {
+  const cle = String(req.body?.cle || '')
+  if (!CLES_SAISIES.has(cle)) return res.status(400).json({ error: 'clé non autorisée' })
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  try {
+    if (req.body?.valeurs === undefined) {
+      const { data } = await supabase.from('app_config').select('value').eq('key', cle).maybeSingle()
+      let valeurs = {}
+      try { valeurs = JSON.parse((data && data.value) || '{}') } catch { valeurs = {} }
+      return res.status(200).json({ valeurs })
+    }
+    const { error } = await supabase.from('app_config').upsert({
+      key: cle,
+      value: JSON.stringify(req.body.valeurs || {}),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' })
+    if (error) throw error
+    return res.status(200).json({ ok: true })
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
 async function handleOcpSyncLgt(req, res) {
   try {
     const heures = Math.min(Number(req.query?.heures) || 48, 24 * 30)
