@@ -207,7 +207,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   useEffect(() => {
     let vivant = true
     loadFabProd(jour, ATELIER)
-      .then(l => { if (vivant) setJournal(l) })
+      // Une ligne relue de la base et toujours sans ordre date forcément d'avant :
+      // ce n'est pas un travail en cours, c'est une création qui a raté.
+      .then(l => { if (vivant) setJournal((l || []).map(x => ({ ...x, etatOrdre: x.ordre ? 'ok' : 'absent' }))) })
       .catch(() => { if (vivant) setJournal([]) })
     return () => { vivant = false }
   }, [jour])
@@ -690,7 +692,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       // qu'il existe. Layla, le 2026-09-04 : « c'est très lent avant qu'elle
       // enregistre ».
       const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER, null, false)
-      setJournal(l => [...(l || []), ligne])
+      setJournal(l => [...(l || []), { ...ligne, etatOrdre: 'encours' }])
       setBesoins(b => ({ ...b, [nom]: 0 }))
       setHisto(null)
       setSaisie(null)
@@ -718,13 +720,15 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         if (of.test) { toast.success('Mode test : aucun ordre créé'); return }
         toast.success('Ordre ' + of.name + ' créé')
         rattacherOrdre(ligne?.id, of.name, true).catch(() => { })
-        setJournal(l => (l || []).map(x => (x.id === ligne?.id ? { ...x, ordre: of.name, ordre_cree: true } : x)))
+        setJournal(l => (l || []).map(x => (x.id === ligne?.id ? { ...x, ordre: of.name, ordre_cree: true, etatOrdre: 'ok' } : x)))
         relireOdoo()
       } else if (of && of.error) {
         toast.error('Fabrication notée, mais ordre non créé : ' + of.error)
+        setJournal(l => (l || []).map(x => (x.id === ligne?.id ? { ...x, etatOrdre: 'absent' } : x)))
       }
     } catch (e) {
       toast.error('Fabrication notée, mais ordre non créé : ' + (e.message || e))
+      setJournal(l => (l || []).map(x => (x.id === ligne?.id ? { ...x, etatOrdre: 'absent' } : x)))
     }
   }
 
@@ -922,6 +926,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <span className="block text-[11.5px] text-ink-mute font-normal mt-0.5">
                       {nb(l.fois || 1)} fois{noms[l.fait_par] ? ' · ' + noms[l.fait_par] : ''} · {heure(l.fait_le)}
                     </span>
+                    {/* L'ordre part dans Odoo APRÈS l'enregistrement : tant qu'il
+                        n'est pas là, dire s'il ARRIVE ou s'il a RATÉ — jamais
+                        laisser croire à un échec quand c'est en cours. Une ligne
+                        qui a son ordre n'affiche rien : il n'y a rien à faire. */}
+                    {l.etatOrdre === 'encours' && (
+                      <span className="block text-[11px] text-ink-mute font-normal">ordre en cours de création…</span>
+                    )}
+                    {l.etatOrdre === 'absent' && (
+                      <span className="block text-[11px] text-[#854F0B] font-bold">sans ordre dans Odoo — à refaire</span>
+                    )}
                   </span>
                   <span className="text-[17px] font-extrabold text-ok whitespace-nowrap">{nbQ(l.qty, l.unite)} {l.unite}</span>
                   <button onClick={() => retirerLigne(l.id)} title="Annuler cette ligne"
@@ -1060,6 +1074,16 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                     <span className="block text-[11.5px] text-ink-mute font-normal mt-0.5">
                       {nb(l.fois || 1)} fois{noms[l.fait_par] ? ' · ' + noms[l.fait_par] : ''} · {heure(l.fait_le)}
                     </span>
+                    {/* L'ordre part dans Odoo APRÈS l'enregistrement : tant qu'il
+                        n'est pas là, dire s'il ARRIVE ou s'il a RATÉ — jamais
+                        laisser croire à un échec quand c'est en cours. Une ligne
+                        qui a son ordre n'affiche rien : il n'y a rien à faire. */}
+                    {l.etatOrdre === 'encours' && (
+                      <span className="block text-[11px] text-ink-mute font-normal">ordre en cours de création…</span>
+                    )}
+                    {l.etatOrdre === 'absent' && (
+                      <span className="block text-[11px] text-[#854F0B] font-bold">sans ordre dans Odoo — à refaire</span>
+                    )}
                   </span>
                   <span className="text-[17px] font-extrabold text-ok whitespace-nowrap">{nbQ(l.qty, l.unite)} {l.unite}</span>
                   <button onClick={() => retirerLigne(l.id)}
