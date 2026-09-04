@@ -810,8 +810,22 @@ const ORIGINE_APP = 'LG-APP'
  * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
  */
 async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/', ajustements = null) {
-  const prod = (await odooSearchRead(uid, 'product.product',
-    [['name', '=', nomProduit]], ['id', 'display_name', 'uom_id', 'product_tmpl_id'], { limit: 1 }))[0]
+  const champs = ['id', 'display_name', 'uom_id', 'product_tmpl_id']
+  let prod = (await odooSearchRead(uid, 'product.product',
+    [['name', '=', nomProduit]], champs, { limit: 1 }))[0]
+  // ⚠️ Un article À PARFUMS porte le MÊME `name` pour tous ses parfums : les
+  // trois « SM. mini cheese cake aromatisé » s'appellent pareil, seul leur
+  // display_name dit (Ananas) / (Fruits Rouges) / (Mangue/Passion). Chercher le
+  // nom complet dans `name` ne trouvait donc RIEN, et l'ordre n'était pas créé
+  // (vécu le 2026-09-04 sur les 135 mini cheese cake Fruits Rouges).
+  if (!prod) {
+    const base = String(nomProduit).replace(/\s*\([^()]*\)\s*$/, '').trim()
+    if (base && base !== nomProduit) {
+      const net = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+      const freres = await odooSearchRead(uid, 'product.product', [['name', '=', base]], champs, { limit: 40 })
+      prod = freres.find(x => net(x.display_name) === net(nomProduit)) || null
+    }
+  }
   if (!prod) throw new Error('article introuvable dans Odoo : ' + nomProduit)
   const bom = (await odooSearchRead(uid, 'mrp.bom',
     [['product_tmpl_id', '=', prod.product_tmpl_id[0]]], ['id', 'product_qty', 'product_uom_id'], { limit: 1 }))[0]

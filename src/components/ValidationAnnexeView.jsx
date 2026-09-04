@@ -114,20 +114,15 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
             e.demande = e.declare > 0 ? e.declare : e.prevu
             continue
           }
-          const o = ordres[d.article]
-          if (o) {
-            if (!parOrdre.has(o.name)) {
-              parOrdre.set(o.name, { name: o.name, article: d.article, prevu: o.qty, declare: 0, demande: o.qty, etat: o.state })
-            }
-            const e2 = parOrdre.get(o.name)
-            e2.declare = Math.round((e2.declare + (Number(d.qty) || 0)) * 100) / 100
-            e2.demande = e2.declare > 0 ? e2.declare : e2.prevu
-          } else {
-            const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite, ids: [] }
-            p.qty += Number(d.qty) || 0
-            p.ids.push(d.id)
-            sans.set(d.article, p)
-          }
+          // ⚠️ On NE RACCROCHE PLUS une déclaration à un ordre d'Odoo qui
+          // traînerait pour le même article. « Je ne veux plus qu'il cherche des
+          // ordres ou qu'il lie à des ordres dans Odoo : l'app crée ses propres
+          // ordres » — Layla, le 2026-09-04. Une déclaration sans ordre reste
+          // sans ordre, et se voit comme telle.
+          const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite, ids: [] }
+          p.qty += Number(d.qty) || 0
+          p.ids.push(d.id)
+          sans.set(d.article, p)
         }
         const base = [...parOrdre.values()]
         const orphelins = [...sans.values()].map(p => ({
