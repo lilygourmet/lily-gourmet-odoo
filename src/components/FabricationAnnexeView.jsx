@@ -645,6 +645,30 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // « C'est fait » enregistre la fabrication ET crée l'ordre dans Odoo s'il
   // n'y en a pas : sans ordre, rien n'est validable dans « À valider Annexe ».
   // Si Odoo en tient déjà un, on n'y touche pas, on s'y raccroche.
+  // Le chiffre que l'écran MONTRE dans « à produire », et la quantité qui doit
+  // être déclarée puis partir dans Odoo. UN SEUL calcul pour les deux : ils
+  // étaient faits à trois endroits avec des arrondis différents, et le poids
+  // enregistré n'était donc pas celui affiché. Demande de Layla, 2026-09-04 :
+  // « ce que je vois quand je marque comme fait, c'est ce qui sort dans Odoo
+  // et dans la validation ».
+  //   montre = ce qu'on lit dans le grand champ (des cadres, ou un poids)
+  //   qte    = ce qu'on déclare et qu'on envoie à Odoo, dans l'unité de l'article
+  const aProduire = (nom, f) => {
+    const r = recettes[nom]
+    const n = Number(f) || 1
+    if (!r || !(r.sortQty > 0)) return { montre: n, qte: n, unite: 'u' }
+    const unite = String(r.sortUnite || '').trim()
+    if (estCadre(nom)) {
+      const cadres = Math.max(1, Math.ceil(n - 0.001))
+      return { montre: cadres, qte: Math.round(r.sortQty * cadres * 100) / 100, unite }
+    }
+    // Un poids en grammes ne se déclare pas au centigramme : l'écran affiche un
+    // entier, on déclare le même entier.
+    const brut = r.sortQty * n
+    const qte = /^kg$/i.test(unite) ? Math.round(brut * 100) / 100 : Math.round(brut)
+    return { montre: qte, qte, unite }
+  }
+
   const noter = async (nom, combienFois) => {
     if (creation) return
     const bloquants = enfantsARupture(recettes, stocks, nom, enCours)
@@ -655,9 +679,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       return
     }
     const f = Number(combienFois) || 1
-    const r = recettes[nom]
-    const qte = r ? Math.round(r.sortQty * f * 100) / 100 : f
-    const u = r ? r.sortUnite : 'u'
+    const { qte, unite: u } = aProduire(nom, f)
     setCreation(nom)                       // verrou : un seul envoi à la fois
     try {
       let msg = propre(nom) + ' — ' + nb(f) + ' fois'
@@ -1139,8 +1161,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
             </div>
             {!estMere && (() => {
               const o = ordreDe(saisie)
-              const r = recettes[saisie]
-              const qte = r && r.sortQty > 0 ? Math.round(r.sortQty * fois * 100) / 100 : fois
+              const qte = aProduire(saisie, fois).qte
               if (o) {
                 return (
                   <p className="text-[11.5px] text-ink-mute mb-2 leading-snug">
@@ -1216,11 +1237,8 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
 
             {!estMere && recettes[saisie] && recettes[saisie].sortQty > 0 && (() => {
               const r = recettes[saisie]
-              const u = String(r.sortUnite || '').trim()
               const cadre = estCadre(saisie)
-              const brut = r.sortQty * fois
-              const qte = cadre ? Math.max(1, Math.ceil(fois - 0.001))
-                : (/^kg$/i.test(u) ? Math.round(brut * 100) / 100 : Math.round(brut))
+              const { montre: qte, unite: u } = aProduire(saisie, fois)
               // on avance par pas utiles : 100 g, 0,5 kg, 1 pièce, 1 cadre
               const pas = cadre ? 1 : (/^(g|gr)$/i.test(u) ? 100 : (/^kg$/i.test(u) ? 0.5 : 1))
               const poser = v => changerFois(cadre

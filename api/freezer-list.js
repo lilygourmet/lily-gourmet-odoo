@@ -591,7 +591,6 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
     const glacage = await integrerGlacage(uid, mo)
     const voulu = Number(produit)
     const faite = (voulu > 0 && voulu <= mo.product_qty) ? voulu : mo.product_qty
-    const partiel = faite < mo.product_qty
     if (mo.qty_producing !== faite) {
       await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: faite }])
     }
@@ -654,10 +653,12 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
       // action_close_mo. On essaie dans l'ordre le plus probable.
       const boutons = {
         'mrp.consumption.warning': ['action_confirm', 'action_set_qty'],
-        // production partielle => on veut le RELIQUAT, pas la clôture sèche
-        'mrp.production.backorder': partiel
-          ? ['action_backorder', 'action_close_mo']
-          : ['action_close_mo', 'action_backorder'],
+        // Produire moins que prévu CLÔTURE l'ordre sur ce qui a été fait. Odoo
+        // ne fabrique plus d'ordre pour le reste : demande de Layla, le
+        // 2026-09-04, « ne me crée plus le reliquat à faire ». C'est aussi ce
+        // qui coupait l'ordre en deux (WHPDX/MO/21178 → -001 + -002) et faisait
+        // perdre sa trace à l'app.
+        'mrp.production.backorder': ['action_close_mo', 'action_backorder'],
       }[r.res_model] || ['process', 'action_confirm']
       let passe = false
       for (const bouton of boutons) {

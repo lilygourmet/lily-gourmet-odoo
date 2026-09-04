@@ -17,7 +17,7 @@ import { AjoutIngredient } from './ValidationView'
 // L'écran est le JUMEAU de « À valider CD- » (ValidationView.jsx) : même mise en
 // page, mêmes mots, mêmes gestes — seuls changent le titre, les articles, et
 // deux choses propres à l'annexe :
-//   - la quantité RÉELLEMENT produite, le reste repartant en reliquat ;
+//   - la quantité RÉELLEMENT produite ; l'ordre est clôturé dessus, sans reliquat ;
 //   - un article déclaré dont l'ordre n'a pas pu être créé, signalé sans être
 //     effaçable : ici on valide, on ne lance jamais de fabrication.
 
@@ -265,7 +265,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
             className="ml-auto bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">↻ Actualiser</button>
         </div>
         <p className="text-[12.5px] text-ink-mute mb-3">
-          Ce que l'annexe a marqué « c'est fait » et qui attend sa confirmation dans Odoo. Ce qui n'a pas été produit repart en reliquat.
+          Ce que l'annexe a marqué « c'est fait » et qui attend sa confirmation dans Odoo. L'ordre est clôturé sur la quantité produite : ce qui n'a pas été fait n'est pas reporté.
         </p>
 
         {erreur && <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] mb-3">{erreur}</div>}
@@ -354,14 +354,14 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 </div>
               )}
 
-              {/* Ce qui a vraiment été produit : le reste repart en reliquat */}
+              {/* Ce qui a vraiment été produit : l'ordre est clôturé là-dessus */}
               <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 flex items-center gap-2.5">
                 <span className="flex-1 text-[12.5px] text-ink-soft">produit sur {nb(l.demande)}</span>
                 <input type="number" min="0" max={l.demande} step="any" inputMode="decimal" value={faite}
                   onChange={e => poser(l.name, e.target.value, l.demande)}
                   className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
                 {reste > 0 && (
-                  <span className="text-[11.5px] font-bold text-[#854F0B] whitespace-nowrap">reliquat {nb(reste)}</span>
+                  <span className="text-[11.5px] font-bold text-[#854F0B] whitespace-nowrap">{nb(reste)} non fait{reste > 1 ? 's' : ''}</span>
                 )}
               </div>
 
@@ -463,7 +463,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
               </button>
             </div>
             <p className="text-[11.5px] text-ink-mute text-center mt-3">
-              Ce qui n'a pas été produit repart en <b className="text-[#854F0B]">reliquat</b> : l'ordre reste ouvert et l'article revient dans « ce qu'il faut faire ».
+              L'ordre est <b className="text-[#854F0B]">clôturé sur la quantité produite</b>. Ce qui n'a pas été fait n'est pas reporté : à refaire, on le redéclare depuis Fabrication Annexe.
             </p>
           </>
         )}
