@@ -164,6 +164,35 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   }, [lignes, faites, notes, ajouts])
 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
+  // Un ingrédient qui manque est parfois fabriqué par un AUTRE ordre de la même
+  // liste : il ne manque pas, il attend juste sa validation. Vécu le 04/09 :
+  // « il manque 7 680 g de crème au beurre citron » alors que les 9 425 g
+  // venaient d'être faits, dans un ordre encore à valider juste au-dessus.
+  const cleArticle = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const producteurDe = useMemo(() => {
+    const m = new Map()
+    for (const l of lignes || []) if (l.article && !l.sansOrdre) m.set(cleArticle(l.article), l.name)
+    return m
+  }, [lignes])
+  // L'ordre dans lequel envoyer : ce qui FABRIQUE avant ce qui CONSOMME.
+  // Sans ça, valider les deux d'un coup échouait sur le second.
+  const rangerParDependance = (liste) => {
+    const parNom = new Map(liste.map(l => [l.name, l]))
+    const vus = new Set(); const sortie = []
+    const poser = (l, chemin) => {
+      if (!l || vus.has(l.name) || chemin.has(l.name)) return
+      chemin.add(l.name)
+      for (const c of l.lignes || []) {
+        const four = producteurDe.get(cleArticle(c.produit))
+        if (four && four !== l.name) poser(parNom.get(four), chemin)
+      }
+      chemin.delete(l.name)
+      if (!vus.has(l.name)) { vus.add(l.name); sortie.push(l) }
+    }
+    for (const l of liste) poser(l, new Set())
+    return sortie
+  }
+
   const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
   const bloques = choisis.filter(l => l.manques.length && !l.sansOrdre)
   const manquesCumules = [...new Map(bloques.flatMap(l => l.manques).map(m => [m.produit, m])).values()]
@@ -215,7 +244,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   }
 
   async function lancer(forcer) {
-    const cibles = (forcer ? bloques : prets).map(l => l.name)
+    const cibles = rangerParDependance(forcer ? bloques : prets).map(l => l.name)
     if (!cibles.length || envoi) return
     setEnvoi(true)
     const produits = {}
@@ -359,9 +388,19 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
               </div>
               {l.manques.length > 0 && (
                 <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 text-[12.5px]">
-                  {l.manques.map((m, i) => (
-                    <div key={i}>• <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}</div>
-                  ))}
+                  {l.manques.map((m, i) => {
+                    const four = producteurDe.get(cleArticle(m.produit))
+                    return (
+                      <div key={i}>
+                        • <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}
+                        {four && four !== l.name && (
+                          <span className="block text-[11px] text-[#3d6f8e] ml-3">
+                            attend la validation de <b className="font-mono">{four}</b> — juste au-dessus dans cette liste
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 
