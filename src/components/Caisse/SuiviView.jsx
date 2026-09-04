@@ -745,6 +745,11 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
                         ⚠ déjà rapprochée{e.note_proof ? ` au ${e.note_proof.slice(0, 10)}` : ''} — cliquer pour remplacer
                       </span>
                     )}
+                    {e.preuve_manuelle && (
+                      <span style={{ display: 'block', fontSize: 10.5, color: '#0a7d3d', marginTop: 2 }}>
+                        🧾 preuve photo déposée — le rapprochement s'ajoute, la photo est gardée
+                      </span>
+                    )}
                   </span>
                   <span style={{ fontWeight: 600 }}>{fmtMoney(e.amount_cash)}{hasGap ? <span style={{ color: '#99201E', fontWeight: 600 }}> · écart {diff > 0 ? '+' : ''}{fmtMoney(diff)}</span> : ''}</span>
                 </button>
