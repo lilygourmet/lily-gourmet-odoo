@@ -58,6 +58,20 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
     return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); clearInterval(iv) }
   }, [user?.id, user?.last_visited_conversations])
 
+  // ⚠️ Ces deux calculs sont des hooks : ils doivent être appelés AVANT tout
+  // `return`, sinon React change leur ordre d'un rendu à l'autre et casse.
+  // Tous les onglets autorisés, RANGÉS PAR NOM : avec 55 onglets, l'ordre du
+  // code ne veut plus rien dire — on cherche un nom, on le trouve à sa lettre.
+  const allTabs = useMemo(
+    () => (user ? [...navTabsForUser(user)].sort((a, b) => a.label.localeCompare(b.label, 'fr')) : []),
+    [user],
+  )
+  const trouves = useMemo(() => {
+    const sansAccents = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const q = sansAccents(cherche.trim())
+    return q ? allTabs.filter(t => sansAccents(t.label).includes(q)) : allTabs
+  }, [allTabs, cherche])
+
   if (!user) return null
 
   const badgeFor = { conversations: convCount, tasks: tasksCount, livraisons: livrCount }
@@ -72,17 +86,6 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
   if (canSeeCaisse(user)) dest.push({ view: 'caisse', label: 'Caisse', Icon: Banknote })
   if (!isLivreur(user)) dest.push({ view: 'tasks', label: 'Tâches', Icon: ListTodo })
 
-  // Tous les onglets autorisés, RANGÉS PAR NOM : avec 55 onglets, l'ordre du
-  // code ne veut plus rien dire — on cherche un nom, on le trouve à sa lettre.
-  const allTabs = useMemo(
-    () => [...navTabsForUser(user)].sort((a, b) => a.label.localeCompare(b.label, 'fr')),
-    [user],
-  )
-  const sansAccents = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  const trouves = useMemo(() => {
-    const q = sansAccents(cherche.trim())
-    return q ? allTabs.filter(t => sansAccents(t.label).includes(q)) : allTabs
-  }, [allTabs, cherche])
   // On garde 4 raccourcis + un bouton « Plus » dès qu'il existe d'autres onglets.
   const primary = dest.slice(0, 4)
   const showMore = allTabs.length > primary.length
@@ -121,21 +124,26 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
         )}
       </nav>
 
-      {/* Hauteur en dvh et non vh : sur téléphone, vh compte la barre d'adresse
-          du navigateur, donc le bas du tiroir tombait hors de l'écran et les
-          derniers onglets étaient inatteignables. Le défilement porte sur la
-          grille elle-même, pas sur le tiroir entier. */}
+      {/* ⚠️ Hauteur en VH, jamais en dvh : la tablette 11" de l'annexe ignore
+          `dvh`, la fenêtre déborde alors en haut ET en bas et PLUS RIEN NE
+          DÉFILE — piège déjà vécu trois fois (Économat, fiche Fabrication
+          Annexe, et ici le 2026-09-04). Structure en 3 zones : en-tête figé,
+          liste qui défile, rien en dessous. Le défilement porte sur la LISTE,
+          pas sur le tiroir entier. */}
       {moreOpen && (
-        <div className="lg:hidden fixed inset-0 h-[100dvh] z-50 bg-black/40 flex items-end" onClick={() => setMoreOpen(false)}>
-          <div className="w-full bg-cream rounded-t-2xl max-h-[85dvh] flex flex-col overflow-hidden"
+        <div className="lg:hidden fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setMoreOpen(false)}>
+          <div className="w-full bg-cream rounded-t-2xl max-h-[85vh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-line bg-cream flex-shrink-0">
               <div className="flex items-center justify-between mb-2.5">
                 <span className="text-[14px] font-medium text-ink">Tous les onglets <span className="text-ink-mute">({allTabs.length})</span></span>
                 <button onClick={() => setMoreOpen(false)} className="text-[13px] text-ink-mute px-2 py-1">Fermer</button>
               </div>
-              <input value={cherche} onChange={e => setCherche(e.target.value)} autoFocus
-                type="search" inputMode="search" placeholder="Tape les premières lettres…"
+              {/* Pas d'autoFocus : sur tablette le clavier sortait aussitôt,
+                  recouvrait la liste et empêchait de la faire défiler. On tape
+                  dans le champ quand on VEUT chercher. */}
+              <input value={cherche} onChange={e => setCherche(e.target.value)}
+                type="search" inputMode="search" placeholder="Chercher un onglet…"
                 className="w-full bg-white border border-line rounded-xl px-3.5 py-2.5 text-[15px] text-ink outline-none focus:border-bordeaux" />
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2"
