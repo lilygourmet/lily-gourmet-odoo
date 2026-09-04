@@ -119,14 +119,17 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           // ordres ou qu'il lie à des ordres dans Odoo : l'app crée ses propres
           // ordres » — Layla, le 2026-09-04. Une déclaration sans ordre reste
           // sans ordre, et se voit comme telle.
-          const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite, ids: [] }
+          const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite, ids: [], quand: 0 }
           p.qty += Number(d.qty) || 0
           p.ids.push(d.id)
+          p.quand = Math.max(p.quand, new Date(d.fait_le || 0).getTime() || 0)
           sans.set(d.article, p)
         }
         const base = [...parOrdre.values()]
         const orphelins = [...sans.values()].map(p => ({
           name: 'sans-ordre:' + p.article, article: p.article, sansOrdre: true, ids: p.ids,
+          // « tout juste déclaré » : calculé ICI, au chargement, pas au rendu.
+          toutRecent: Date.now() - p.quand < 120000,
           demande: Math.round(p.qty * 100) / 100, unite: p.unite, manques: [], lignes: [],
         }))
         if (!base.length) { setLignes(orphelins); return }
@@ -363,8 +366,15 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 <div className="flex items-center gap-3 px-3.5 py-3 bg-white">
                   <div className="flex-1 min-w-0">
                     <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
+                    {/* La déclaration s'enregistre AVANT que l'ordre parte dans
+                        Odoo : pendant quelques secondes elle est légitimement
+                        « sans ordre ». Accuser tout de suite était faux — vécu
+                        le 2026-09-04 sur le Voile mangue passion, dont l'ordre
+                        existait bel et bien. */}
                     <div className="text-[11.5px] text-ink-mute">
-                      L'ordre n'a pas pu être créé au moment du « c'est fait ». Refais-le dans Fabrication Annexe.
+                      {l.toutRecent
+                        ? 'Son ordre est en train de partir dans Odoo. Rafraîchis dans quelques secondes.'
+                        : "Pas d'ordre dans Odoo. Rafraîchis ; s'il ne vient pas, refais-le dans Fabrication Annexe."}
                     </div>
                   </div>
                   <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap bg-[#FFF7E0] text-[#854F0B]">
