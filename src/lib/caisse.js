@@ -555,7 +555,9 @@ export async function attachReleveLines(env, lines) {
     ? `${ordered[0].ligne_date} · ${ordered[0].label}`.slice(0, 220)
     : ordered.map(l => `${l.ligne_date} · ${l.label}`.slice(0, 70)).join('  |  ').slice(0, 300)
   await setEnveloppeReleve(env.id, {
-    proofUrl: ordered[0].releve_url || undefined,
+    // Preuve déjà déposée (photo du bordereau) : on la garde. Le rapprochement s'ajoute
+    // à la preuve, il ne la remplace pas.
+    proofUrl: env.proof_url ? undefined : (ordered[0].releve_url || undefined),
     proofDate: ordered[0].ligne_date || undefined,
     status: 'trouve',
     libelle,
@@ -613,6 +615,8 @@ export async function clearEnveloppeProof(envId) {
 // trompé de remise (relevés importés mois par mois -> l'app valide la seule ligne du
 // fichier en cours). Sans elles, la bonne enveloppe est introuvable et la ligne reste
 // « non liée » pour toujours. `deja_rapprochee` sert à prévenir avant de remplacer.
+// Une PHOTO du bordereau (« Versée ») n'est PAS un rapprochement : la compter comme tel
+// faisait passer la liaison par le chemin « remplacer », qui efface la preuve photo.
 // limit explicite : sans elle Supabase s'arrête à 1000 lignes en silence.
 export async function loadPendingBanqueEnvelopes() {
   const { data, error } = await supabase
@@ -624,7 +628,10 @@ export async function loadPendingBanqueEnvelopes() {
   if (error) throw error
   return (data || [])
     .filter(e => e.destinataire?.type === 'banque' && !e.releve_ignore)
-    .map(e => ({ ...e, deja_rapprochee: !!(e.proof_url || e.releve_status) }))
+    .map(e => ({ ...e,
+      deja_rapprochee: !!e.releve_status,
+      preuve_manuelle: !!e.proof_url && !e.releve_status,
+    }))
 }
 
 // Enveloppes Banque ayant un ÉCART de montant (amount_proof ≠ amount_cash),
