@@ -847,7 +847,12 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
 
   return (
     <>
-      <div id="app-header" className="sticky top-0 z-30 bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-2 flex-wrap">
+      {/* ⚠️ z-45 et non z-30 : la barre du haut est « sticky », donc tout ce
+          qu'elle contient — le menu de la roue compris — reste enfermé dans SON
+          plan. Plusieurs écrans posent des barres en z-40, qui passaient donc
+          PAR-DESSUS le menu et le coupaient en deux (vu sur tablette le
+          2026-09-04). Reste sous le tiroir des onglets (z-50) et les fenêtres. */}
+      <div id="app-header" className="sticky top-0 z-[45] bg-cream/95 backdrop-blur-sm border-b border-line px-4 py-2.5 flex items-center gap-2 flex-wrap">
         {/* Logo cliquable -> calendrier */}
         <button
           onClick={() => !isLivreur(user) && canSeeCalendar(user) && onNavigate && onNavigate('calendar')}
@@ -1056,8 +1061,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
             >
               <Ico name="settings" size={17} />
             </button>
+            {/* Hauteur limitée en vh (jamais dvh) + défilement : sur tablette un
+                menu plus haut que l'écran était tronqué, sans moyen de voir le bas. */}
             {showCog && (
-              <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
+              <div className="absolute left-0 mt-1 sm:left-auto sm:right-0 z-50 bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1 max-h-[70vh] overflow-y-auto overscroll-contain">
                 <CogItem name="nav_config" label="Mes onglets" onClick={() => { setShowNavConfig(true); setShowCog(false) }} />
                 <CogItem name="password" label="Mot de passe" onClick={() => { setShowChangePwd(true); setShowCog(false) }} />
                 {(admin || user?.perm_admin_users) && <CogItem name="users" label="Utilisateurs" onClick={() => { setShowAdminUsers(true); setShowCog(false) }} />}
