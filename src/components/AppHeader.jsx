@@ -56,6 +56,119 @@ function Ico({ name, size = 16, className = '' }) {
 // 3 boutons fixes en 1 clic : Calendrier + Recap + onglet principal du role
 // 3 menus deroulants : Production / Vitrine / Outils
 // ============================================================
+// ⚠️ NavButton et DropdownMenu vivaient DANS AppHeader : React recréait leur
+// type à chaque rendu, donc chaque bouton et chaque menu étaient démontés puis
+// remontés — un menu ouvert pouvait se refermer tout seul. Ils sont au niveau du
+// fichier, créés une fois pour toutes. DropdownMenu lisait l'état du composant
+// (menu ouvert, onglet actif, navigation) : il le reçoit maintenant dans `nav`.
+
+function NavButton({ view, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={`group relative flex items-center h-[30px] rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
+        isActive
+          ? 'bg-bordeaux text-cream border border-bordeaux'
+          : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
+      }`}
+    >
+      <span className="w-[28px] h-[28px] flex items-center justify-center flex-shrink-0">
+        {view === 'conversations' ? <WhatsAppLogo size={15} /> : <Ico name={view} size={15} />}
+      </span>
+      <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${
+        isActive
+          ? 'max-w-[170px] opacity-100 pr-3'
+          : 'max-w-0 opacity-0 pr-0'
+      }`}>{label}</span>
+      {convBadge ? (
+        <span className="pr-2 flex-shrink-0"><ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} /></span>
+      ) : badgeCount > 0 && (
+        <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center text-[12px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
+          {badgeCount > 99 ? '99+' : badgeCount}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function DropdownMenu({ id, label, items, footerSlot = null, emoji = null, nav }) {
+  const { openMenu, setOpenMenu, activeView, onNavigate } = nav
+  const open = openMenu === id
+  const menuRef = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    function onDown(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenu(null) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+  const hasActive = items.some(it => it.view === activeView)
+  const totalBadge = items.reduce((s, it) => s + (it.badge || 0), 0)
+
+  if (items.length === 0 && !footerSlot) return null
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpenMenu(open ? null : id)}
+        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
+          hasActive
+            ? 'bg-bordeaux text-cream border border-bordeaux'
+            : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
+        }`}
+      >
+        {emoji ? <span className="text-[15px] leading-none">{emoji}</span> : <Ico name={`menu_${id}`} size={15} />}
+        <span>{label}</span>
+        <ChevronDown size={13} strokeWidth={1.8} className="opacity-70" />
+        {totalBadge > 0 && (
+          <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
+            {totalBadge > 99 ? '99+' : totalBadge}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="absolute left-0 top-full mt-1 z-[70] bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
+            {items.map(item => {
+              const isActive = item.view === activeView
+              const handleClick = () => {
+                setOpenMenu(null)
+                if (item.externalUrl) {
+                  window.open(item.externalUrl, '_blank', 'noopener,noreferrer')
+                } else {
+                  onNavigate(item.view)
+                }
+              }
+              return (
+                <button
+                  key={item.view}
+                  onClick={handleClick}
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-[12px] transition-colors ${
+                    isActive ? 'bg-bordeaux text-cream' : 'hover:bg-cream-warm text-ink'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Ico name={item.view} size={15} />
+                    <span>{item.label}</span>
+                  </span>
+                  {item.badge > 0 ? (
+                    <span className="min-w-[20px] h-[20px] px-1.5 flex items-center justify-center text-[11px] font-bold bg-red-600 text-white rounded-full">
+                      {item.badge > 99 ? '99+' : item.badge}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+            {footerSlot && (
+              <div className="px-3 py-2 mt-1 border-t border-line">{footerSlot}</div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function AppHeader({ user, activeView, onNavigate, onLogout, onSyncSuccess }) {
   const admin = isAdmin(user)
   const isProdUser = !admin && (user?.perm_prod || user?.perm_sales)
@@ -113,11 +226,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   const [navCfg, setNavCfg] = useState(user?.navbar_config || null)
   useEffect(() => { setNavCfg(user?.navbar_config || null) }, [user?.id, user?.navbar_config])
   const [syncing, setSyncing] = useState(false)
-  const [syncStatus, setSyncStatus] = useState('')
-  const [lastSyncAt, setLastSyncAt] = useState(() => {
-    const v = localStorage.getItem('lastSyncAt')
-    return v ? new Date(v) : null
-  })
+  // Il y avait ici deux états, `syncStatus` et `lastSyncAt`, écrits à chaque
+  // synchro mais que RIEN n'affichait : l'app n'a jamais montré cet état.
+  // Retirés. L'heure de la dernière synchro continue de vivre dans
+  // localStorage — c'est elle, et elle seule, qui est relue plus bas.
   const [, setNow] = useState(0)
   // Badge "articles non termines" sur le bouton Reception Vitrine
   const [receptionBadge, setReceptionBadge] = useState(0)
@@ -548,7 +660,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       if (last && (Date.now() - last.getTime()) < MIN_INTERVAL_MS) return
       try {
         await handleSync()
-      } catch (_) { /* handleSync gere deja l'erreur */ }
+      } catch { /* handleSync gere deja l'erreur */ }
     }
 
     tryAutoSync()
@@ -561,7 +673,6 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   async function handleSync() {
     if (syncing) return
     setSyncing(true)
-    setSyncStatus('Synchro...')
     try {
       const res = await fetch('/api/sync-now', {
         method: 'POST',
@@ -570,17 +681,12 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`)
-      setSyncStatus('Synchronisé')
       const now = new Date()
-      setLastSyncAt(now)
       localStorage.setItem('lastSyncAt', now.toISOString())
       if (onSyncSuccess) onSyncSuccess()
-      setTimeout(() => setSyncStatus(''), 2500)
     } catch (e) {
       console.error('[sync]', e)
-      setSyncStatus('Erreur')
       toast.error(`Erreur sync : ${e.message}`)
-      setTimeout(() => setSyncStatus(''), 2500)
     } finally {
       setSyncing(false)
     }
@@ -593,7 +699,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
     try {
       const raw = localStorage.getItem('lily_user')
       if (raw) { const u = JSON.parse(raw); u.navbar_config = cfg; localStorage.setItem('lily_user', JSON.stringify(u)) }
-    } catch (_) { /* cache best-effort */ }
+    } catch { /* cache best-effort */ }
   }
 
   // ============================================================
@@ -739,111 +845,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
   // Composants helper
   // ============================================================
   // Onglet = icône seule ; au survol le nom se déploie (l'onglet actif reste ouvert).
-  function NavButton({ view, label, isActive, badgeCount = 0, convBadge = null, onClick }) {
-    return (
-      <button
-        onClick={onClick}
-        title={label}
-        className={`group relative flex items-center h-[30px] rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
-          isActive
-            ? 'bg-bordeaux text-cream border border-bordeaux'
-            : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
-        }`}
-      >
-        <span className="w-[28px] h-[28px] flex items-center justify-center flex-shrink-0">
-          {view === 'conversations' ? <WhatsAppLogo size={15} /> : <Ico name={view} size={15} />}
-        </span>
-        <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${
-          isActive
-            ? 'max-w-[170px] opacity-100 pr-3'
-            : 'max-w-0 opacity-0 pr-0'
-        }`}>{label}</span>
-        {convBadge ? (
-          <span className="pr-2 flex-shrink-0"><ConvBadgePills unassigned={convBadge.unassigned} unread={convBadge.unread} /></span>
-        ) : badgeCount > 0 && (
-          <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center text-[12px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
-            {badgeCount > 99 ? '99+' : badgeCount}
-          </span>
-        )}
-      </button>
-    )
-  }
 
-  function DropdownMenu({ id, label, items, footerSlot = null, emoji = null }) {
-    const open = openMenu === id
-    const menuRef = useRef(null)
-    useEffect(() => {
-      if (!open) return
-      function onDown(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenu(null) }
-      document.addEventListener('mousedown', onDown)
-      return () => document.removeEventListener('mousedown', onDown)
-    }, [open])
-    const hasActive = items.some(it => it.view === activeView)
-    const totalBadge = items.reduce((s, it) => s + (it.badge || 0), 0)
 
-    if (items.length === 0 && !footerSlot) return null
-
-    return (
-      <div className="relative" ref={menuRef}>
-        <button
-          onClick={() => setOpenMenu(open ? null : id)}
-          className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wider transition-all flex-shrink-0 ${
-            hasActive
-              ? 'bg-bordeaux text-cream border border-bordeaux'
-              : 'border border-bordeaux/40 text-bordeaux hover:bg-bordeaux hover:text-cream hover:border-bordeaux'
-          }`}
-        >
-          {emoji ? <span className="text-[15px] leading-none">{emoji}</span> : <Ico name={`menu_${id}`} size={15} />}
-          <span>{label}</span>
-          <ChevronDown size={13} strokeWidth={1.8} className="opacity-70" />
-          {totalBadge > 0 && (
-            <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold bg-red-600 text-white rounded-full border-2 border-cream shadow-md animate-pulse">
-              {totalBadge > 99 ? '99+' : totalBadge}
-            </span>
-          )}
-        </button>
-        {open && (
-          <>
-            <div className="absolute left-0 top-full mt-1 z-[70] bg-cream rounded-lg shadow-xl border border-line min-w-[200px] py-1">
-              {items.map(item => {
-                const isActive = item.view === activeView
-                const handleClick = () => {
-                  setOpenMenu(null)
-                  if (item.externalUrl) {
-                    window.open(item.externalUrl, '_blank', 'noopener,noreferrer')
-                  } else {
-                    onNavigate(item.view)
-                  }
-                }
-                return (
-                  <button
-                    key={item.view}
-                    onClick={handleClick}
-                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-[12px] transition-colors ${
-                      isActive ? 'bg-bordeaux text-cream' : 'hover:bg-cream-warm text-ink'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Ico name={item.view} size={15} />
-                      <span>{item.label}</span>
-                    </span>
-                    {item.badge > 0 ? (
-                      <span className="min-w-[20px] h-[20px] px-1.5 flex items-center justify-center text-[11px] font-bold bg-red-600 text-white rounded-full">
-                        {item.badge > 99 ? '99+' : item.badge}
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })}
-              {footerSlot && (
-                <div className="px-3 py-2 mt-1 border-t border-line">{footerSlot}</div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    )
-  }
+  // Ce dont les menus déroulants ont besoin, en un seul prop.
+  const nav = { openMenu, setOpenMenu, activeView, onNavigate }
 
   return (
     <>
@@ -889,10 +894,10 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                   }}
                 />
               ) : (
-                <DropdownMenu key={'g-' + en.id} id={'grp-' + en.id} label={en.label} emoji={en.emoji} items={en.tabs} />
+                <DropdownMenu nav={nav} key={'g-' + en.id} id={'grp-' + en.id} label={en.label} emoji={en.emoji} items={en.tabs} />
               ))}
               {plusTabs.length > 0 && (
-                <DropdownMenu id="more" label="Plus" items={plusTabs} />
+                <DropdownMenu nav={nav} id="more" label="Plus" items={plusTabs} />
               )}
             </>
           ) : (
@@ -947,9 +952,9 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                 <>
                   {/* Admin, et tout le monde sur téléphone : 3 menus deroulants.
                       Pour un non-admin, l'onglet "primary" est deja un bouton fixe au-dessus. */}
-                  <DropdownMenu id="prod" label="Production" items={dropItems(menuProduction)} />
-                  <DropdownMenu id="vitrine" label="Vitrine" items={dropItems(menuVitrine)} />
-                  <DropdownMenu id="outils" label="Outils" items={dropItems(menuOutils)} footerSlot={admin && showHeaderLabels ? <LabelsButton /> : null} />
+                  <DropdownMenu nav={nav} id="prod" label="Production" items={dropItems(menuProduction)} />
+                  <DropdownMenu nav={nav} id="vitrine" label="Vitrine" items={dropItems(menuVitrine)} />
+                  <DropdownMenu nav={nav} id="outils" label="Outils" items={dropItems(menuOutils)} footerSlot={admin && showHeaderLabels ? <LabelsButton /> : null} />
                 </>
               ) : (
                 <>
@@ -1041,7 +1046,7 @@ export default function AppHeader({ user, activeView, onNavigate, onLogout, onSy
                     {items.length === 0 ? (
                       <div className="px-4 py-3 text-[13px] text-ink-mute">Rien à signaler 🎉</div>
                     ) : items.map((it, i) => (
-                      <button key={i} onClick={() => { if (it.tab) { try { localStorage.setItem('lily.hr.tab', it.tab) } catch (e) { /* ignore */ } } onNavigate(it.view); setShowBell(false) }} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-bordeaux/5 flex items-center gap-2">
+                      <button key={i} onClick={() => { if (it.tab) { try { localStorage.setItem('lily.hr.tab', it.tab) } catch { /* ignore */ } } onNavigate(it.view); setShowBell(false) }} className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-bordeaux/5 flex items-center gap-2">
                         <span>{it.emoji}</span> {it.label}
                       </button>
                     ))}
