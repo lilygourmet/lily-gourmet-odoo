@@ -69,16 +69,30 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         const parOrdre = new Map()
         const sans = new Map()
         const ouvertsParNom = new Map(Object.values(ordres).map(o => [o.name, o]))
+        // ⚠️ Odoo COUPE un ordre en deux dès qu'on valide moins que prévu :
+        // WHPDX/MO/21178 devient 21178-001 (ce qui est fait) + 21178-002 (le
+        // reste), et le numéro d'origine n'existe plus. L'app le cherchait sous
+        // son ancien nom, ne le trouvait pas, en concluait qu'il était validé —
+        // et le reliquat disparaissait de l'écran. Vécu le 2026-09-03 :
+        // 93 « SM- cadre citron meringuée » perdus de vue.
+        const morceauOuvert = new Map()
+        for (const o of Object.values(ordres)) {
+          const coupe = String(o.name || '').match(/^(.+)-\d+$/)
+          if (coupe && !morceauOuvert.has(coupe[1])) morceauOuvert.set(coupe[1], o)
+        }
         for (const d of journal || []) {
           // La déclaration sait à quel ordre elle se rattache. S'il n'est plus
           // ouvert, c'est qu'il a été validé (ou annulé) : il n'y a plus rien à
           // faire — sans ça l'écran réclamait d'en créer un deuxième pour du
           // travail déjà validé.
           if (d.ordre) {
-            const encoreLa = ouvertsParNom.get(d.ordre)
+            // On accepte le morceau resté ouvert quand Odoo a coupé l'ordre.
+            const encoreLa = ouvertsParNom.get(d.ordre) || morceauOuvert.get(d.ordre)
             if (!encoreLa) continue
-            if (!parOrdre.has(d.ordre)) {
-              parOrdre.set(d.ordre, { name: d.ordre, article: d.article, demande: encoreLa.qty, etat: encoreLa.state })
+            // La clé est le nom RÉEL d'aujourd'hui : c'est lui qu'on enverra à
+            // Odoo, l'ancien numéro n'existe plus.
+            if (!parOrdre.has(encoreLa.name)) {
+              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, demande: encoreLa.qty, etat: encoreLa.state })
             }
             continue
           }
