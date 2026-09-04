@@ -596,6 +596,12 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
     // 9 425 g faits). Odoo accepte de produire plus ; l'écart de consommation
     // passe par la fenêtre `mrp.consumption.warning`, à laquelle on sait répondre.
     const faite = voulu > 0 ? voulu : mo.product_qty
+    // On redemande à Odoo de réserver AVANT de valider. Un ingrédient fabriqué
+    // il y a une minute par l'ordre du dessus reste « en attente » tant que
+    // personne ne relance la réservation : l'ordre partait alors « en cours »
+    // sans jamais se terminer. Vécu le 04/09 sur WHPDX/MO/21175, dont la crème
+    // au beurre citron venait d'être produite par WHPDX/MO/21208.
+    await odooCall(uid, 'mrp.production', 'action_assign', [[mo.id]]).catch(() => { })
     if (mo.qty_producing !== faite) {
       await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: faite }])
     }

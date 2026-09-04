@@ -26,6 +26,16 @@ import { AjoutIngredient } from './ValidationView'
 const CLE_SAISIES = 'valider_annexe_saisies'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+
+// Odoo répond avec l'état de l'ordre, en anglais : « progress » ne dit rien à
+// personne. On traduit, et surtout on dit quoi faire.
+const enClair = m => ({
+  progress: "commencé, mais pas terminé : un ingrédient n'était pas réservé. Refais « Valider » — s'il insiste, c'est qu'il en manque vraiment.",
+  confirmed: "Odoo n'a pas pu le terminer : regarde ce qui manque, plus haut.",
+  cancel: 'cet ordre a été annulé dans Odoo',
+  draft: 'cet ordre est encore en brouillon dans Odoo',
+  to_close: "Odoo le dit prêt à clôturer, mais ne l'a pas clôturé",
+}[m] || m)
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 // A l'atelier on ne pese pas 1 234,56 g : les quantites s'affichent entieres.
 const qte = (q, u) => (norm(u) === 'kg'
@@ -319,7 +329,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 (r.ok ? 'bg-[#EAF3DE] border border-[#cfe0b8]' : 'bg-[#FCEEE8] border border-[#f0c9c9]')}>
                 <b className="text-[14.5px]">{r.ok ? '✓' : '✗'} {r.name}</b>
                 <div className="text-[12.5px] text-ink-soft">
-                  {r.ok ? 'validé dans Odoo' : r.message}
+                  {r.ok ? 'validé dans Odoo' : enClair(r.message)}
                   {r.reliquat && ` · reste ${nb(r.reliquat)} en reliquat`}
                 </div>
               </div>
