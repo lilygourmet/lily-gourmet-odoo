@@ -563,7 +563,13 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       const pieces = Math.max(1, Math.ceil(b - 0.001))
       return Math.round((pieces / r.sortQty) * 1000) / 1000
     }
-    return Math.max(0.01, Math.round(brut * 100) / 100)
+    // ⚠️ NE PAS arrondir le nombre de fois à 2 décimales : c'est le POIDS qui
+    // est affiché et déclaré (poids = sortie de recette × fois), pas ce nombre.
+    // Sur une recette qui sort 9 425 g, deux décimales font un pas de 94 g :
+    // pour 1 700 g demandés l'écran affichait 1 696,5 et c'est ce poids-là qui
+    // partait dans Odoo. Layla, le 2026-09-04 : « je déclare un poids, il m'en
+    // met un autre ». On garde donc la précision ; l'affichage, lui, arrondit.
+    return Math.max(0.01, Math.round(brut * 1e6) / 1e6)
   }
 
   // Une étape qui ne se stocke jamais (« SM- base flan vanille 20 cm ») n'a

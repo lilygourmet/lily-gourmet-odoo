@@ -817,10 +817,15 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // au lieu de 2,24. Si le meme article, pour le meme gateau, a deja ete lance
   // dans les cinq dernieres minutes et n'est pas termine, on rend cet ordre-la
   // au lieu d'en creer un second.
-  const cinqMin = new Date(Date.now() - 5 * 60000).toISOString().slice(0, 19).replace('T', ' ')
+  // ⚠️ Fenêtre COURTE. À cinq minutes, une VRAIE deuxième fournée du même
+  // article ne partait pas dans Odoo : l'app rendait l'ordre précédent sans le
+  // dire. Layla, le 2026-09-04 : « je crée des ordres, il ne les met pas dans
+  // Odoo ». L'écran a déjà son propre verrou contre le double appui ; 45 s ne
+  // couvrent plus qu'un renvoi après coupure réseau.
+  const recemment = new Date(Date.now() - 45000).toISOString().slice(0, 19).replace('T', ' ')
   const deja = (await odooSearchRead(uid, 'mrp.production',
     [['product_id', '=', prod.id], ['origin', '=', origine],
-     ['state', 'in', ['draft', 'confirmed', 'progress']], ['create_date', '>=', cinqMin]],
+     ['state', 'in', ['draft', 'confirmed', 'progress']], ["create_date", ">=", recemment]],
     ['id', 'name', 'product_qty', 'state'], { limit: 1, order: 'id desc' }))[0]
   if (deja) {
     console.log(`[creer-of] doublon evite : ${deja.name} vient d'etre cree pour ${prod.display_name}`)
