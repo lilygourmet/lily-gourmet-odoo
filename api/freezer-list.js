@@ -810,7 +810,7 @@ const ORIGINE_APP = 'LG-APP'
  * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
  */
 async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/', ajustements = null) {
-  const champs = ['id', 'display_name', 'uom_id', 'product_tmpl_id']
+  const champs = ['id', 'display_name', 'uom_id', 'product_tmpl_id', 'product_template_attribute_value_ids']
   let prod = (await odooSearchRead(uid, 'product.product',
     [['name', '=', nomProduit]], champs, { limit: 1 }))[0]
   // ⚠️ Un article À PARFUMS porte le MÊME `name` pour tous ses parfums : les
@@ -880,11 +880,21 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
     company_id: modele.company_id[0],
   }])
   // Odoo ne déroule pas la nomenclature quand l'ordre est créé par programme
-  const [lignes, lieuProd] = await Promise.all([
-    memo('bomlines:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
-      ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })),
+  const [toutesLignes, lieuProd] = await Promise.all([
+    memo('bomlignes:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+      ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'], { limit: 50 })),
     lieuProduction(uid),
   ])
+  // ⚠️ UNE SEULE RECETTE : celle du parfum demandé. La recette est posée sur le
+  // MODÈLE et porte les lignes de TOUS les parfums, chacune marquée « pour
+  // Fruits Rouges », « pour Ananas »… Sans filtrer, l'ordre embarquait la purée
+  // d'ananas ET celle de mangue en plus de la framboise — vécu le 2026-09-04 sur
+  // 135 mini cheese cake. Une ligne sans marque sert à tous les parfums.
+  const parfumsDuProduit = new Set(prod.product_template_attribute_value_ids || [])
+  const lignes = toutesLignes.filter(l => {
+    const pour = l.bom_product_template_attribute_value_ids || []
+    return !pour.length || pour.some(v => parfumsDuProduit.has(v))
+  })
   const facteur = bom.product_qty ? qty / bom.product_qty : 1
   // Ce que l'atelier a RÉELLEMENT pesé prime sur la règle de trois : quand
   // l'écran envoie une quantité pour un composant, c'est elle qui part dans
