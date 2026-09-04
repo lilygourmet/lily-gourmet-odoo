@@ -91,16 +91,27 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
             if (!encoreLa) continue
             // La clé est le nom RÉEL d'aujourd'hui : c'est lui qu'on enverra à
             // Odoo, l'ancien numéro n'existe plus.
+            // `prevu` = ce qu'Odoo avait programmé ; `declare` = ce que
+            // l'annexe dit avoir fait. C'est le DÉCLARÉ qui fait foi : Odoo
+            // programme souvent tout seul (règle de réapprovisionnement) une
+            // quantité qui n'a rien à voir. Vécu le 04/09 : 9 425 g déclarés,
+            // l'écran proposait les 7 680 g de l'ordre WHPDX/MO/21184.
             if (!parOrdre.has(encoreLa.name)) {
-              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, demande: encoreLa.qty, etat: encoreLa.state })
+              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, prevu: encoreLa.qty, declare: 0, demande: encoreLa.qty, etat: encoreLa.state })
             }
+            const e = parOrdre.get(encoreLa.name)
+            e.declare = Math.round((e.declare + (Number(d.qty) || 0)) * 100) / 100
+            e.demande = e.declare > 0 ? e.declare : e.prevu
             continue
           }
           const o = ordres[d.article]
           if (o) {
             if (!parOrdre.has(o.name)) {
-              parOrdre.set(o.name, { name: o.name, article: d.article, demande: o.qty, etat: o.state })
+              parOrdre.set(o.name, { name: o.name, article: d.article, prevu: o.qty, declare: 0, demande: o.qty, etat: o.state })
             }
+            const e2 = parOrdre.get(o.name)
+            e2.declare = Math.round((e2.declare + (Number(d.qty) || 0)) * 100) / 100
+            e2.demande = e2.declare > 0 ? e2.declare : e2.prevu
           } else {
             const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite, ids: [] }
             p.qty += Number(d.qty) || 0
@@ -356,7 +367,14 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
 
               {/* Ce qui a vraiment été produit : l'ordre est clôturé là-dessus */}
               <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 flex items-center gap-2.5">
-                <span className="flex-1 text-[12.5px] text-ink-soft">produit sur {nb(l.demande)}</span>
+                <span className="flex-1 text-[12.5px] text-ink-soft">
+                  produit sur {nb(l.demande)}
+                  {l.prevu !== undefined && l.declare > 0 && Math.abs(l.prevu - l.declare) > 0.01 && (
+                    <span className="block text-[10.5px] text-ink-mute">
+                      déclaré à l'annexe · Odoo en avait programmé {nb(l.prevu)}
+                    </span>
+                  )}
+                </span>
                 <input type="number" min="0" max={l.demande} step="any" inputMode="decimal" value={faite}
                   onChange={e => poser(l.name, e.target.value, l.demande)}
                   className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />

@@ -590,7 +590,12 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
   try {
     const glacage = await integrerGlacage(uid, mo)
     const voulu = Number(produit)
-    const faite = (voulu > 0 && voulu <= mo.product_qty) ? voulu : mo.product_qty
+    // Ce que l'atelier dit avoir produit fait foi, MÊME au-dessus de ce qu'Odoo
+    // avait programmé : ses ordres de réapprovisionnement sortent des quantités
+    // qui n'ont rien à voir avec la fournée réelle (04/09 : 7 680 g programmés,
+    // 9 425 g faits). Odoo accepte de produire plus ; l'écart de consommation
+    // passe par la fenêtre `mrp.consumption.warning`, à laquelle on sait répondre.
+    const faite = voulu > 0 ? voulu : mo.product_qty
     if (mo.qty_producing !== faite) {
       await odooCall(uid, 'mrp.production', 'write', [[mo.id], { qty_producing: faite }])
     }
