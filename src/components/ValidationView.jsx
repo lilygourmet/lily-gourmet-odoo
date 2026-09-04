@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
@@ -15,6 +15,16 @@ import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, cher
 const CLE_SAISIES = 'valider_saisies'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+
+// Odoo répond avec l'état de l'ordre, en anglais : « progress » ne dit rien à
+// personne. On traduit, et surtout on dit quoi faire.
+const enClair = m => ({
+  progress: "commencé, mais pas terminé : un ingrédient n'était pas réservé. Refais « Valider » — s'il insiste, c'est qu'il en manque vraiment.",
+  confirmed: "Odoo n'a pas pu le terminer : regarde ce qui manque, plus haut.",
+  cancel: 'cet ordre a été annulé dans Odoo',
+  draft: 'cet ordre est encore en brouillon dans Odoo',
+  to_close: "Odoo le dit prêt à clôturer, mais ne l'a pas clôturé",
+}[m] || m)
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 // A l'atelier on ne pese pas 1 234,56 g : les quantites s'affichent entieres.
 const qte = (q, u) => (norm(u) === 'kg'
@@ -128,13 +138,50 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     return () => { vivant = false }
   }, [tour])
 
+  const perdu = useRef(false)
   // Enregistrement retardé : pas un appel par touche du clavier, et jamais avant
   // d'avoir la liste (on écraserait avec du vide).
   useEffect(() => {
     if (!lignes) return undefined
-    const t = setTimeout(() => { saveSaisies(CLE_SAISIES, { notes, ajouts }).catch(() => {}) }, 900)
+    const t = setTimeout(() => {
+      saveSaisies(CLE_SAISIES, { notes, ajouts })
+        .then(() => { perdu.current = false })
+        // Un échec silencieux a fait perdre une demi-journée de saisies le 04/09.
+        .catch(() => {
+          if (perdu.current) return
+          perdu.current = true
+          toast.error('Tes quantités ne sont PAS enregistrées : elles seront perdues en quittant l\'écran.')
+        })
+    }, 900)
     return () => clearTimeout(t)
   }, [lignes, notes, ajouts])
+
+  // Un ingrédient qui manque est parfois fabriqué par un AUTRE ordre de la même
+  // liste : il ne manque pas, il attend sa validation. Même règle que « À
+  // valider Annexe », posée le 2026-09-04.
+  const cleArticle = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const producteurDe = useMemo(() => {
+    const m = new Map()
+    for (const l of lignes || []) if (l.produit) m.set(cleArticle(l.produit), l.name)
+    return m
+  }, [lignes])
+  // Ce qui FABRIQUE part avant ce qui CONSOMME, sinon le second échoue.
+  const rangerParDependance = (liste) => {
+    const parNom = new Map(liste.map(l => [l.name, l]))
+    const vus = new Set(); const sortie = []
+    const poser = (l, chemin) => {
+      if (!l || vus.has(l.name) || chemin.has(l.name)) return
+      chemin.add(l.name)
+      for (const c of l.lignes || []) {
+        const four = producteurDe.get(cleArticle(c.produit))
+        if (four && four !== l.name) poser(parNom.get(four), chemin)
+      }
+      chemin.delete(l.name)
+      if (!vus.has(l.name)) { vus.add(l.name); sortie.push(l) }
+    }
+    for (const l of liste) poser(l, new Set())
+    return sortie
+  }
 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
   const prets = choisis.filter(l => !l.manques.length)
@@ -161,7 +208,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   }
 
   async function lancer(forcer) {
-    const cibles = (forcer ? bloques : prets).map(l => l.name)
+    const cibles = rangerParDependance(forcer ? bloques : prets).map(l => l.name)
     if (!cibles.length) return
     setEnvoi(true)
     const aEnvoyer = {}
@@ -231,7 +278,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                 (r.ok ? 'bg-[#EAF3DE] border border-[#cfe0b8]' : 'bg-[#FCEEE8] border border-[#f0c9c9]')}>
                 <b className="text-[14.5px]">{r.ok ? '✓' : '✗'} {r.name}</b>
                 <div className="text-[12.5px] text-ink-soft">
-                  {r.ok ? 'validé dans Odoo' : r.message}
+                  {r.ok ? 'validé dans Odoo' : enClair(r.message)}
                   {r.glacage > 0 && ` · ${nb(Math.round(r.glacage))} g de glaçage royal consommés dedans`}
                   {r.pour && ` · réservé aussitôt pour ${r.pour}`}
                 </div>
@@ -271,9 +318,19 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
               </div>
               {l.manques.length > 0 && (
                 <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 text-[12.5px]">
-                  {l.manques.map((m, i) => (
-                    <div key={i}>• <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}</div>
-                  ))}
+                  {l.manques.map((m, i) => {
+                    const four = producteurDe.get(cleArticle(m.produit))
+                    return (
+                      <div key={i}>
+                        • <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}
+                        {four && four !== l.name && (
+                          <span className="block text-[11px] text-[#3d6f8e] ml-3">
+                            attend la validation de <b className="font-mono">{four}</b> — dans cette liste
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 

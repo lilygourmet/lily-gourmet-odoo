@@ -1029,11 +1029,14 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
 
   // Anti-doublon, comme pour les crèmes : deux appuis rapprochés sur « C'est
-  // fait » ne doivent pas lancer deux tournées identiques.
-  const cinqMinP = new Date(Date.now() - 5 * 60000).toISOString().slice(0, 19).replace('T', ' ')
+  // fait » ne doivent pas lancer deux tournées identiques. ⚠️ Fenêtre COURTE :
+  // à cinq minutes, une VRAIE deuxième tournée ne partait pas dans Odoo, et
+  // rien ne le disait (même piège que l'Économat le 02/09 et les crèmes le
+  // 04/09). L'écran a déjà son verrou contre le double appui.
+  const recemmentP = new Date(Date.now() - 45000).toISOString().slice(0, 19).replace('T', ' ')
   const dejaP = (await odooSearchRead(uid, 'mrp.production',
     [['product_id', '=', prod.id], ['product_qty', '=', qty],
-     ['state', 'in', ['draft', 'confirmed', 'progress']], ['create_date', '>=', cinqMinP]],
+     ['state', 'in', ['draft', 'confirmed', 'progress']], ['create_date', '>=', recemmentP]],
     ['id', 'name'], { limit: 1, order: 'id desc' }))[0]
   if (dejaP) {
     console.log(`[creer-of-prepa] doublon evite : ${dejaP.name} vient d'etre cree pour ${prod.display_name}`)

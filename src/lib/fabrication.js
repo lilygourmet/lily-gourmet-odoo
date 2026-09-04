@@ -39,8 +39,9 @@ export async function loadOrdres() {
  * Rangées dans app_config pour qu'on puisse en ajouter sans toucher au code.
  */
 export async function loadBasesChoisies() {
-  const { data } = await supabase.from('app_config').select('value').eq('key', 'fabrication_bases').maybeSingle()
-  try { return JSON.parse((data && data.value) || '[]') } catch { return [] }
+  // Même piège que les saisies : `app_config` est fermée au navigateur.
+  const v = await loadSaisies('fabrication_bases')
+  return Array.isArray(v) ? v : (Array.isArray(v?.liste) ? v.liste : [])
 }
 
 /**
@@ -70,10 +71,7 @@ export async function saveSaisies(cle, valeurs) {
 }
 
 export async function saveBasesChoisies(liste) {
-  const { error } = await supabase.from('app_config')
-    .upsert({ key: 'fabrication_bases', value: JSON.stringify(liste || []), updated_at: new Date().toISOString() },
-      { onConflict: 'key' })
-  if (error) throw error
+  await saveSaisies('fabrication_bases', { liste: liste || [] })
 }
 
 /** Les OF déjà cochés « fait » (clé = nom de l'OF). */

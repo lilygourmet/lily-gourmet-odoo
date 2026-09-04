@@ -3728,7 +3728,7 @@ async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
 // ⚠️ LISTE BLANCHE OBLIGATOIRE : sans elle, n'importe qui pourrait écraser
 // `tab_lock_code` par cet endpoint.
 // ============================================================
-const CLES_SAISIES = new Set(['valider_annexe_saisies', 'valider_saisies'])
+const CLES_SAISIES = new Set(['valider_annexe_saisies', 'valider_saisies', 'fabrication_bases'])
 
 async function handleSaisies(req, res) {
   const cle = String(req.body?.cle || '')
