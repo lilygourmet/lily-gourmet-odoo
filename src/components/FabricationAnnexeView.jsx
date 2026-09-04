@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
-import { loadFabProd, addFabProd, delFabProd, loadNoms, loadHistorique } from '../lib/fabricationProd'
+import { loadFabProd, addFabProd, delFabProd, rattacherOrdre, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer, enfantsARupture } from '../lib/fabricationAnnexe'
 import { dernierEcran, garderEcran, creerOfPrepa, ajusterOf, annulerOfPrepa, annulerDoublons } from '../lib/fabrication'
 import { refreshOnReturn } from '../lib/autoRefresh'
@@ -681,47 +681,63 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     const f = Number(combienFois) || 1
     const { qte, unite: u } = aProduire(nom, f)
     setCreation(nom)                       // verrou : un seul envoi à la fois
+    const deja = ordreDe(nom)
+    const pesees = { ...ajuste }
     try {
-      let msg = propre(nom) + ' — ' + nb(f) + ' fois'
-      const deja = ordreDe(nom)
-      let ordre = deja ? deja.name : null
-      let cree = false
-      if (deja) {
-        msg += ' · ordre ' + deja.name
-        // Odoo tenait déjà cet ordre (règle du matin) : on ne le recrée pas,
-        // mais ce qui a été pesé doit quand même y entrer, sinon il garde la
-        // règle de trois et « À valider Annexe » propose autre chose.
-        if (Object.keys(ajuste).length) {
-          try {
-            const a = await ajusterOf(deja.name, ajuste, user?.id)
-            if (a && a.error) toast.error('Ordre non ajusté : ' + a.error)
-            else if (a && a.ajustes) { msg += ' · ' + a.ajustes + ' ligne' + (a.ajustes > 1 ? 's' : '') + ' ajustée' + (a.ajustes > 1 ? 's' : ''); relireOdoo() }
-          } catch (e) { toast.error('Ordre non ajusté : ' + (e.message || e)) }
-        }
-      } else {
-        try {
-          const of = await creerOfPrepa(nom, qte, user?.id, [], u, 'annexe', ajuste)
-          if (of && of.name && !of.error) {
-            if (!of.test) { ordre = of.name; cree = true }
-            setOrdresLocaux(o => ({ ...o, [nom]: { name: of.name, qty: qte, state: 'draft', origin: '' } }))
-            msg += of.test ? ' · mode test, aucun ordre créé' : ' · ordre ' + of.name + ' créé'
-            if (!of.test) relireOdoo()
-          } else if (of && of.error) {
-            toast.error('Fabrication notée, mais ordre non créé : ' + of.error)
-          }
-        } catch (e) {
-          toast.error('Fabrication notée, mais ordre non créé : ' + (e.message || e))
-        }
-      }
-      const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER, ordre, cree)
+      // ⚠️ ON ENREGISTRE D'ABORD, ON REND LA MAIN, ET ODOO SUIT.
+      // Créer l'ordre demande une dizaine d'allers-retours vers Odoo — 2 à 8
+      // secondes pendant lesquelles l'écran restait figé. La déclaration, elle,
+      // part en une fraction de seconde. L'ordre se rattache à la ligne dès
+      // qu'il existe. Layla, le 2026-09-04 : « c'est très lent avant qu'elle
+      // enregistre ».
+      const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER,
+        deja ? deja.name : null, false)
       setJournal(l => [...(l || []), ligne])
       setBesoins(b => ({ ...b, [nom]: 0 }))
       setHisto(null)
       setSaisie(null)
       setPile([])
-      toast.success(msg)
+      toast.success(propre(nom) + ' — ' + nb(f) + ' fois'
+        + (deja ? ' · ordre ' + deja.name : ''))
+      travailOdoo(nom, qte, u, deja, pesees, ligne)
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
     setCreation(null)
+  }
+
+  // Ce qui part vers Odoo APRÈS que la déclaration est enregistrée : créer
+  // l'ordre s'il n'en existe pas, ou y reporter ce qui a été pesé. Rien ici ne
+  // doit faire attendre l'atelier — les ennuis se disent par un message.
+  const travailOdoo = async (nom, qte, u, deja, pesees, ligne) => {
+    if (deja) {
+      // Odoo tenait déjà cet ordre (règle du matin) : on ne le recrée pas, mais
+      // ce qui a été pesé doit quand même y entrer, sinon il garde la règle de
+      // trois et « À valider Annexe » propose autre chose.
+      if (!Object.keys(pesees).length) return
+      try {
+        const a = await ajusterOf(deja.name, pesees, user?.id)
+        if (a && a.error) toast.error('Ordre non ajusté : ' + a.error)
+        else if (a && a.ajustes) {
+          toast.success(a.ajustes + ' ligne' + (a.ajustes > 1 ? 's' : '') + ' ajustée' + (a.ajustes > 1 ? 's' : '') + ' dans ' + deja.name)
+          relireOdoo()
+        }
+      } catch (e) { toast.error('Ordre non ajusté : ' + (e.message || e)) }
+      return
+    }
+    try {
+      const of = await creerOfPrepa(nom, qte, user?.id, [], u, 'annexe', pesees)
+      if (of && of.name && !of.error) {
+        setOrdresLocaux(o => ({ ...o, [nom]: { name: of.name, qty: qte, state: 'draft', origin: '' } }))
+        if (of.test) { toast.success('Mode test : aucun ordre créé'); return }
+        toast.success('Ordre ' + of.name + ' créé')
+        rattacherOrdre(ligne?.id, of.name, true).catch(() => { })
+        setJournal(l => (l || []).map(x => (x.id === ligne?.id ? { ...x, ordre: of.name, ordre_cree: true } : x)))
+        relireOdoo()
+      } else if (of && of.error) {
+        toast.error('Fabrication notée, mais ordre non créé : ' + of.error)
+      }
+    } catch (e) {
+      toast.error('Fabrication notée, mais ordre non créé : ' + (e.message || e))
+    }
   }
 
   const carteArticle = nom => {

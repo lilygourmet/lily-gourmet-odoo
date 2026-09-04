@@ -862,9 +862,13 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   const cleNom = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
   const mesure = new Map(Object.entries(ajustements || {})
     .filter(([, v]) => Number(v) > 0).map(([k, v]) => [cleNom(k), Number(v)]))
-  for (const l of lignes) {
+  // ⚠️ TOUS les ingrédients en UN SEUL appel. Un par un, c'était un aller-retour
+  // vers Odoo par ligne de recette : sur une recette de 13 ingrédients, l'écran
+  // restait bloqué plusieurs secondes avant d'enregistrer. Odoo accepte une
+  // liste et rend la liste des identifiants.
+  const valsLignes = lignes.map(l => {
     const pesee = mesure.get(cleNom(Array.isArray(l.product_id) ? l.product_id[1] : ''))
-    await odooCall(uid, 'stock.move', 'create', [{
+    return {
       name: prod.display_name,
       product_id: l.product_id[0],
       product_uom_qty: pesee !== undefined ? Math.round(pesee * 1000) / 1000
@@ -874,9 +878,14 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
       location_dest_id: lieuProd ? lieuProd.id : modele.location_dest_id[0],
       raw_material_production_id: id,
       company_id: modele.company_id[0],
-    }])
-  }
-  await moveDuFini(uid, id, prod, qty, Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined, modele)
+    }
+  })
+  // Le mouvement du produit fini ne dépend pas des ingrédients : les deux
+  // partent ensemble.
+  await Promise.all([
+    valsLignes.length ? odooCall(uid, 'stock.move', 'create', [valsLignes]) : Promise.resolve(),
+    moveDuFini(uid, id, prod, qty, Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined, modele),
+  ])
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   await odooCall(uid, 'mrp.production', 'action_assign', [[id]]).catch(() => { })
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]

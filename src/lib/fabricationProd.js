@@ -105,6 +105,15 @@ export async function addFabProd(jour, article, qty, unite, userId, fois = null,
   return data
 }
 
+/** Rattache après coup l'ordre Odoo à une déclaration déjà enregistrée : la
+ *  création prend plusieurs secondes, on ne fait plus attendre l'atelier. */
+export async function rattacherOrdre(id, ordre, ordreCree) {
+  if (!id || !ordre) return
+  const { error } = await supabase.from('prod_fabrications')
+    .update({ ordre, ordre_cree: !!ordreCree }).eq('id', id)
+  if (error && !/ordre/.test(error.message || '')) throw error
+}
+
 /** Les recettes Odoo des articles de l'écran (ce qu'il faut, et ce que ça sort). */
 export async function loadRecettes(articles) {
   if (!articles.length) return {}
