@@ -644,39 +644,44 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
       await odooCall(uid, 'stock.move', 'write', [[r.id], { quantity_done: r.product_uom_qty }]).catch(() => { })
     }
     const r = await odooCall(uid, 'mrp.production', 'button_mark_done', [[mo.id]])
-    // Odoo renvoie une fenêtre de confirmation quand quelque chose cloche.
-    if (r && typeof r === 'object' && r.res_model) {
-      // Souvent, ce qui cloche n'est QUE la génoise ou l'eau du robinet, dont
-      // le stock reste négatif : on ne bloque pas pour ça. On regarde ce qui
-      // manque vraiment (ces deux-là exclus) et on passe outre si c'est vide.
-      let manqueVrai = true
-      try {
-        const ctrl = (await manquesDesOrdres(uid, [name]))[0]
-        manqueVrai = !ctrl || ctrl.manques.length > 0
-      } catch { manqueVrai = true }
-      if (!forcer && manqueVrai) {
-        return { name, ok: false, message: 'Odoo demande une confirmation (stock insuffisant ?)' }
+    // Odoo renvoie une fenêtre de confirmation quand quelque chose cloche —
+    // et il en ENCHAÎNE plusieurs : l'écart de consommation d'abord, la
+    // question du reliquat ensuite. On n'en traitait qu'une, et l'ordre restait
+    // « commencé » sans jamais se terminer (WHPDX/MO/21175, le 2026-09-04 :
+    // 3 534 g de crème citron au lieu de 2 880, et 23 produits sur 24).
+    let reponse = r
+    for (let tour = 0; tour < 4; tour++) {
+      if (!reponse || typeof reponse !== 'object' || !reponse.res_model) break
+      if (tour === 0) {
+        // Souvent, ce qui cloche n'est QUE la génoise ou l'eau du robinet, dont
+        // le stock reste négatif : on ne bloque pas pour ça. On regarde ce qui
+        // manque vraiment (ces deux-là exclus) et on passe outre si c'est vide.
+        let manqueVrai = true
+        try {
+          const ctrl = (await manquesDesOrdres(uid, [name]))[0]
+          manqueVrai = !ctrl || ctrl.manques.length > 0
+        } catch { manqueVrai = true }
+        if (!forcer && manqueVrai) {
+          return { name, ok: false, message: 'Odoo demande une confirmation (stock insuffisant ?)' }
+        }
       }
-      const ctx = r.context || {}
-      const wiz = await odooCall(uid, r.res_model, 'create', [{}], { context: ctx })
-      // Chaque fenêtre d'Odoo a son propre bouton : « mrp.consumption.warning »
-      // (écart de consommation) se valide par action_confirm, le reliquat par
-      // action_close_mo. On essaie dans l'ordre le plus probable.
+      const modele = reponse.res_model
+      const ctx = reponse.context || {}
+      const wiz = await odooCall(uid, modele, 'create', [{}], { context: ctx })
+      // Chaque fenêtre a son bouton : « mrp.consumption.warning » (écart de
+      // consommation) se valide par action_confirm, le reliquat par
+      // action_close_mo — produire moins CLÔTURE l'ordre sur ce qui a été fait,
+      // Odoo ne fabrique plus d'ordre pour le reste (demande de Layla).
       const boutons = {
         'mrp.consumption.warning': ['action_confirm', 'action_set_qty'],
-        // Produire moins que prévu CLÔTURE l'ordre sur ce qui a été fait. Odoo
-        // ne fabrique plus d'ordre pour le reste : demande de Layla, le
-        // 2026-09-04, « ne me crée plus le reliquat à faire ». C'est aussi ce
-        // qui coupait l'ordre en deux (WHPDX/MO/21178 → -001 + -002) et faisait
-        // perdre sa trace à l'app.
         'mrp.production.backorder': ['action_close_mo', 'action_backorder'],
-      }[r.res_model] || ['process', 'action_confirm']
+      }[modele] || ['process', 'action_confirm']
       let passe = false
       for (const bouton of boutons) {
-        try { await odooCall(uid, r.res_model, bouton, [[wiz]], { context: ctx }); passe = true; break }
+        try { reponse = await odooCall(uid, modele, bouton, [[wiz]], { context: ctx }); passe = true; break }
         catch { /* on tente le bouton suivant */ }
       }
-      if (!passe) return { name, ok: false, message: `Odoo demande une confirmation (${r.res_model}) qu'on ne sait pas donner` }
+      if (!passe) return { name, ok: false, message: `Odoo demande une confirmation (${modele}) qu'on ne sait pas donner` }
     }
     const apres = (await odooSearchRead(uid, 'mrp.production', [['id', '=', mo.id]], ['state']))[0]
     const fini = apres && apres.state === 'done'
