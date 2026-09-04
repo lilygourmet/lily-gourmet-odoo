@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { todayISO } from '../lib/dates'
 import { loadFabProd, addFabProd, delFabProd, rattacherOrdre, loadNoms, loadHistorique } from '../lib/fabricationProd'
 import { loadArbreAnnexe, loadMasques, masquer, demasquer, enfantsARupture } from '../lib/fabricationAnnexe'
-import { dernierEcran, garderEcran, creerOfPrepa, ajusterOf, annulerOfPrepa, annulerDoublons } from '../lib/fabrication'
+import { dernierEcran, garderEcran, creerOfPrepa, annulerOfPrepa, annulerDoublons } from '../lib/fabrication'
 import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
 import { poidsUnite, versUnite } from '../lib/unites'
@@ -681,7 +681,6 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     const f = Number(combienFois) || 1
     const { qte, unite: u } = aProduire(nom, f)
     setCreation(nom)                       // verrou : un seul envoi à la fois
-    const deja = ordreDe(nom)
     const pesees = { ...ajuste }
     try {
       // ⚠️ ON ENREGISTRE D'ABORD, ON REND LA MAIN, ET ODOO SUIT.
@@ -690,39 +689,28 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
       // part en une fraction de seconde. L'ordre se rattache à la ligne dès
       // qu'il existe. Layla, le 2026-09-04 : « c'est très lent avant qu'elle
       // enregistre ».
-      const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER,
-        deja ? deja.name : null, false)
+      const ligne = await addFabProd(jour, nom, qte, u, user?.id, f, ATELIER, null, false)
       setJournal(l => [...(l || []), ligne])
       setBesoins(b => ({ ...b, [nom]: 0 }))
       setHisto(null)
       setSaisie(null)
       setPile([])
-      toast.success(propre(nom) + ' — ' + nb(f) + ' fois'
-        + (deja ? ' · ordre ' + deja.name : ''))
-      travailOdoo(nom, qte, u, deja, pesees, ligne)
+      toast.success(propre(nom) + ' — ' + nb(f) + ' fois')
+      travailOdoo(nom, qte, u, pesees, ligne)
     } catch (e) { toast.error('Impossible d\'enregistrer : ' + (e.message || e)) }
     setCreation(null)
   }
 
-  // Ce qui part vers Odoo APRÈS que la déclaration est enregistrée : créer
-  // l'ordre s'il n'en existe pas, ou y reporter ce qui a été pesé. Rien ici ne
+  // Ce qui part vers Odoo APRÈS que la déclaration est enregistrée. Rien ici ne
   // doit faire attendre l'atelier — les ennuis se disent par un message.
-  const travailOdoo = async (nom, qte, u, deja, pesees, ligne) => {
-    if (deja) {
-      // Odoo tenait déjà cet ordre (règle du matin) : on ne le recrée pas, mais
-      // ce qui a été pesé doit quand même y entrer, sinon il garde la règle de
-      // trois et « À valider Annexe » propose autre chose.
-      if (!Object.keys(pesees).length) return
-      try {
-        const a = await ajusterOf(deja.name, pesees, user?.id)
-        if (a && a.error) toast.error('Ordre non ajusté : ' + a.error)
-        else if (a && a.ajustes) {
-          toast.success(a.ajustes + ' ligne' + (a.ajustes > 1 ? 's' : '') + ' ajustée' + (a.ajustes > 1 ? 's' : '') + ' dans ' + deja.name)
-          relireOdoo()
-        }
-      } catch (e) { toast.error('Ordre non ajusté : ' + (e.message || e)) }
-      return
-    }
+  //
+  // CHAQUE déclaration crée SON ordre. On ne se raccroche plus à ceux qu'Odoo
+  // s'est programmés tout seul (règle de réapprovisionnement) : leurs quantités
+  // n'ont rien à voir avec la fournée réelle — 7 680 g programmés pour 9 425 g
+  // faits, le 04/09 — et l'écran de validation proposait la mauvaise. Décision
+  // de Layla, le 2026-09-04 : « oublie les rapprochements avec Odoo, on va
+  // commencer à créer pour tout des ordres ».
+  const travailOdoo = async (nom, qte, u, pesees, ligne) => {
     try {
       const of = await creerOfPrepa(nom, qte, user?.id, [], u, 'annexe', pesees)
       if (of && of.name && !of.error) {
@@ -1181,9 +1169,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               if (o) {
                 return (
                   <p className="text-[11.5px] text-ink-mute mb-2 leading-snug">
-                    ordre Odoo <b className="font-mono text-ink-soft">{o.name}</b>
+                    Odoo a déjà l'ordre <b className="font-mono text-ink-soft">{o.name}</b>
                     {' · '}{o.state === 'draft' ? 'brouillon' : o.state === 'confirmed' ? 'confirmé' : o.state}
                     {' · '}{nbQ(o.qty, uniteDe(saisie))} {uniteDe(saisie)}
+                    <span className="block">
+                      « C'est fait » créera <b>son propre ordre</b> de {nbQ(qte, uniteDe(saisie))} {uniteDe(saisie)} — celui-ci n'est pas touché.
+                    </span>
                   </p>
                 )
               }
