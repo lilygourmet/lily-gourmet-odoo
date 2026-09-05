@@ -128,7 +128,9 @@ function basculerFavori(id) {
   dessiner()
 }
 
-let filtre = 'tous'
+// À l'ouverture : on arrive direct sur les favoris (sauf s'il n'y en a aucun,
+// sinon on tomberait sur une page vide → on affiche tout).
+let filtre = favoris.size ? 'favoris' : 'tous'
 let recherche = ''
 
 const GROUPES = [...new Set(GENS.map(g => g.groupe))]
