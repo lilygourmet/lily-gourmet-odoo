@@ -113,9 +113,14 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         if (retirees.has(a.key) || retirees.has(b.key)) continue
         const na = noms.get(a.key), nb = noms.get(b.key)
         const ecart = jours(a.ligne_date, b.ligne_date)
-        // Deux lignes du MÊME relevé sont deux opérations réelles : on n'y touche jamais.
-        const memeImport = String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
-        if (memeImport) continue
+        // Deux lignes du MÊME document sont deux opérations réelles : on n'y touche jamais.
+        // C'est le PDF qui fait foi (releve_url), pas l'instant de l'import : le relevé et
+        // l'extrait choisis ensemble arrivent dans le même import, à la même seconde — s'y
+        // fier laissait passer TOUS les doublons entre ces deux documents.
+        const memeDoc = (a.releve_url && b.releve_url)
+          ? a.releve_url === b.releve_url
+          : String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
+        if (memeDoc) continue
         // Même montant + dates proches + imports différents = la MÊME opération, même si
         // les deux relevés l'écrivent autrement (« VIRT RECU MLLE MERIAM MALEK » vs
         // « VIR INST RECU 2203444 3751003105 ») — le libellé n'est pas une identité.
@@ -124,8 +129,16 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         // Deux noms de clients lisibles restent départagés par Layla (bloc « probable »
         // ci-dessous) : c'est le seul cas où le libellé garde le dernier mot.
         const deuxNoms = nomFiable(na) && nomFiable(nb)
+        // L'extrait TRONQUE le libellé du relevé (« ...ASS.SPORTIVE DES FAR » vs
+        // « ...ASS.SPORTIVE DES FAR RABA »). Un libellé préfixe de l'autre — l'égalité
+        // comprise — c'est la même opération écrite plus court, même quand les deux
+        // portent un nom lisible. Longueur minimale : un libellé quasi vide serait le
+        // préfixe de n'importe quoi.
+        const la = libelleNorm(a.label), lb = libelleNorm(b.label)
+        const court = la.length <= lb.length ? la : lb
+        const tronque = court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))
         if (ecart <= ecartCertain && !numerosContraires(a.label, b.label) &&
-            (libelleNorm(a.label) === libelleNorm(b.label) || !deuxNoms)) {
+            (tronque || !deuxNoms)) {
           retirees.add(b.key)                       // on garde la plus ancienne (a)
         } else if (ecart <= ecartProbable && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
           probables.set(a.key, { date: b.ligne_date, label: b.label })
