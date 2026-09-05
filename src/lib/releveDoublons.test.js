@@ -196,3 +196,35 @@ describe('centimes Odoo face au montant rond de la banque', () => {
     expect(memeDepotSansNumero(ligne, caisse)).toBe(false)
   })
 })
+
+// Cas vécu (juillet) : le relevé et l'extrait BMCI, choisis ENSEMBLE dans le même import,
+// portent le même instant d'import. Le garde-fou « même relevé » les croyait issus du même
+// document et refusait de les comparer — tous les doublons entre les deux passaient.
+describe('marquerDoublons — relevé et extrait importés ensemble', () => {
+  const D = (key, date, amount, label, releve_url) =>
+    ({ key, ligne_date: date, amount, label, releve_url, created_at: '2026-08-01T10:00:00' })
+
+  it('fusionne la même opération vue dans le relevé et dans l\'extrait', () => {
+    const out = marquerDoublons([
+      D('a', '2026-07-15', 1500, 'VIRT RECU ASS.SPORTIVE DES FAR RABA', 'releves/1.pdf'),
+      D('b', '2026-07-15', 1500, 'VIRT RECU ASS.SPORTIVE DES FAR', 'releves/2.pdf'),
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('garde deux opérations réelles du MÊME document', () => {
+    const out = marquerDoublons([
+      D('a', '2026-07-15', 1500, 'VIRT RECU ASS.SPORTIVE DES FAR RABA', 'releves/1.pdf'),
+      D('b', '2026-07-15', 1500, 'VIRT RECU ASS.SPORTIVE DES FAR', 'releves/1.pdf'),
+    ])
+    expect(out).toHaveLength(2)
+  })
+
+  it('sans PDF connu, garde le repli sur l\'instant d\'import', () => {
+    const out = marquerDoublons([
+      D('a', '2026-07-15', 1500, 'VIRT RECU ASS.SPORTIVE DES FAR RABA', null),
+      D('b', '2026-07-15', 1500, 'VIRT RECU ASS.SPORTIVE DES FAR', null),
+    ])
+    expect(out).toHaveLength(2)
+  })
+})
