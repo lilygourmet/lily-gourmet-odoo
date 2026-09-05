@@ -161,3 +161,24 @@ describe('reconcileEnvelopes — 2 virements = 1 ligne', () => {
     expect(results.find(r => r.env.id === 'C700').status).toBe('absent')
   })
 })
+
+// Cas vécu (juillet : 86 caisses « pas trouvées ») : une session Odoo à 14 795,60 dh face
+// au versement bancaire de 14 796 dh. Au demi-centime près, le rapprochement automatique
+// ne les reconnaissait pas — et la caisse restait grise, la ligne « non liée ».
+describe('reconcileEnvelopes — centimes Odoo face au montant rond de la banque', () => {
+  const versement = { credit: 14796, dateIso: '2026-07-31', type: 'versement', label: 'VERSEMENT ESPECE N 1866575621' }
+  const envCentimes = {
+    id: 'J1', amount_cash: 14795.60, payment_method: 'cash',
+    releve_status: null, proof_url: null, session_date: '2026-07-11',
+  }
+
+  it('rapproche malgré les centimes', () => {
+    const { results } = reconcileEnvelopes([envCentimes], [versement], {})
+    expect(results.find(r => r.env.id === 'J1').status).toBe('trouve')
+  })
+
+  it('ne rapproche toujours pas un écart d\'un dirham entier', () => {
+    const { results } = reconcileEnvelopes([{ ...envCentimes, amount_cash: 14795 }], [versement], {})
+    expect(results.find(r => r.env.id === 'J1').status).toBe('absent')
+  })
+})
