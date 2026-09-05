@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Annuaire du personnel — maquette</title>
+<style>
+  :root {
+    --bordeaux:#993556; --bordeaux-deep:#7a2a44; --cream:#fcfbf8; --cream-deep:#f1eadd;
+    --ink:#1a0f0a; --soft:#4a3a30; --mute:#8a7a70; --line:#e5d8c3;
+    --green:#2f6b2f; --green-bg:#eaf3de; --gold:#b8893c;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--cream-deep); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+
+  /* cadre "téléphone" pour la maquette (dans la vraie page, c'est plein écran) */
+  .phone { max-width:440px; margin:0 auto; background:var(--cream); min-height:100vh; box-shadow:0 0 40px rgba(80,40,30,.10); }
+
+  .demo { background:#fef4d0; color:#5c4418; font-size:11px; text-align:center; padding:6px 10px; font-weight:600; }
+
+  /* ---------- en-tête collant ---------- */
+  header { position:sticky; top:0; z-index:5; background:var(--cream); padding:14px 16px 10px; border-bottom:1px solid var(--line); }
+  .title { display:flex; align-items:center; gap:11px; }
+  .title .logo { width:40px; height:40px; border-radius:13px; background:var(--bordeaux); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex:0 0 auto; }
+  .title h1 { margin:0; font-size:20px; font-weight:800; letter-spacing:-.01em; }
+  .title .sub { font-size:12px; color:var(--mute); margin-top:1px; }
+
+  .search { position:relative; margin-top:12px; }
+  .search input { width:100%; padding:12px 14px 12px 40px; font-size:16px; border-radius:14px; border:1px solid var(--line); background:#fff; outline:none; color:var(--ink); }
+  .search input:focus { border-color:var(--bordeaux); box-shadow:0 0 0 3px rgba(153,53,86,.10); }
+  .search .ico { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:15px; opacity:.5; }
+  .search .clear { position:absolute; right:10px; top:50%; transform:translateY(-50%); border:none; background:transparent; font-size:18px; color:var(--mute); cursor:pointer; display:none; }
+
+  .chips { display:flex; gap:7px; overflow-x:auto; padding:11px 0 2px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { flex:0 0 auto; padding:7px 13px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:13px; font-weight:600; color:var(--soft); cursor:pointer; white-space:nowrap; }
+  .chip.on { background:var(--bordeaux); border-color:var(--bordeaux); color:#fff; }
+
+  /* ---------- liste ---------- */
+  main { padding:14px 16px 40px; }
+  .section-title { font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--mute); font-weight:800; margin:18px 4px 9px; display:flex; align-items:center; gap:8px; }
+  .section-title:first-child { margin-top:2px; }
+  .section-title .n { margin-left:auto; letter-spacing:0; font-weight:700; }
+
+  .card { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--line); border-radius:18px; padding:11px 12px; margin-bottom:10px; box-shadow:0 2px 8px rgba(80,40,30,.05); }
+  .card .ph { width:58px; height:58px; border-radius:50%; flex:0 0 auto; object-fit:cover; background:var(--cream-deep); }
+  .card .who { flex:1 1 auto; min-width:0; }
+  .card .nm { font-size:16px; font-weight:700; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card .job { font-size:12px; color:var(--mute); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .call { display:inline-flex; align-items:center; gap:7px; margin-top:8px; padding:9px 14px; border-radius:999px; background:var(--green-bg); color:var(--green); font-weight:800; font-size:15px; text-decoration:none; border:1px solid #cfe3bd; letter-spacing:.01em; }
+  .call:active { background:var(--green); color:#fff; }
+  .nonum { display:inline-block; margin-top:8px; font-size:12px; color:var(--mute); font-style:italic; }
+  .fav { flex:0 0 auto; align-self:flex-start; border:none; background:transparent; font-size:23px; line-height:1; cursor:pointer; padding:2px 2px 6px 6px; filter:grayscale(1); opacity:.35; }
+  .fav.on { filter:none; opacity:1; }
+
+  .empty { text-align:center; color:var(--mute); font-size:14px; padding:40px 20px; }
+
+  .tip { margin-top:22px; background:#fff; border:1px dashed var(--line); border-radius:16px; padding:13px 15px; font-size:12.5px; color:var(--soft); line-height:1.5; }
+  .tip b { color:var(--bordeaux); }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="demo">Maquette — noms et numéros inventés</div>
+
+  <header>
+    <div class="title">
+      <div class="logo">📇</div>
+      <div>
+        <h1>Annuaire</h1>
+        <div class="sub" id="sub">Lily Gourmet · 12 personnes</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <span class="ico">🔍</span>
+      <input id="q" type="search" placeholder="Chercher un nom, un poste…" autocomplete="off" />
+      <button class="clear" id="clear">✕</button>
+    </div>
+
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <main id="list"></main>
+</div>
+
+<script>
+// ============================================================
+// Fausses données (dans la vraie page : table "employes",
+// uniquement les actifs → nom, poste, groupe, téléphone, photo)
+// ============================================================
+const GENS = [
+  { id:1,  nom:'Layla Bennani',    poste:'Direction',        groupe:'RH / Admin',           tel:'0661234567' },
+  { id:2,  nom:'Hamza El Idrissi', poste:'Chef pâtissier',   groupe:'Pâtisserie',           tel:'0662345678' },
+  { id:3,  nom:'Youssef Amrani',   poste:'Pâtissier',        groupe:'Pâtisserie',           tel:'0663456789' },
+  { id:4,  nom:'Salma Ouarzazi',   poste:'Pâtissière',       groupe:'Pâtisserie',           tel:'0664567890' },
+  { id:5,  nom:'Meriem Tazi',      poste:'Caissière',        groupe:'Caisse',               tel:'0665678901' },
+  { id:6,  nom:'Nadia Cherkaoui',  poste:'Vendeuse',         groupe:'Café / Boutique',      tel:'0666789012' },
+  { id:7,  nom:'Imane Rachidi',    poste:'Vendeuse',         groupe:'Café / Boutique',      tel:'' },
+  { id:8,  nom:'Karim Belhaj',     poste:'Livreur',          groupe:'Livreur',              tel:'0667890123' },
+  { id:9,  nom:'Rachid Naciri',    poste:'Livreur',          groupe:'Livreur',              tel:'0668901234' },
+  { id:10, nom:'Bilal Saadi',      poste:'Production',       groupe:'Production',           tel:'0669012345' },
+  { id:11, nom:'Sanaa Mekouar',    poste:'Commerciale',      groupe:'Commercial / WhatsApp', tel:'0660123456' },
+  { id:12, nom:'Omar Fassi',       poste:'Économe',          groupe:'RH / Admin',           tel:'0661112233' },
+]
+
+// Fausse "photo" : rond de couleur + silhouette (dans la vraie page = photo_url de l'employé)
+const COULEURS = ['#993556','#b8893c','#4a7a3a','#2980b9','#7a2a44','#b07d10','#3d2418','#a32d2d']
+function photo(g) {
+  const c = COULEURS[g.id % COULEURS.length]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="${c}"/>
+    <circle cx="50" cy="38" r="18" fill="rgba(255,255,255,.85)"/>
+    <path d="M12 100c0-22 17-34 38-34s38 12 38 34z" fill="rgba(255,255,255,.85)"/>
+  </svg>`
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+}
+
+// Numéro lisible : 06 61 23 45 67
+const joli = t => (t || '').replace(/\D/g, '').replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+
+// ---- Favoris : gardés sur CE téléphone ----
+const CLE = 'lily.annuaire.favoris'
+let favoris = new Set(JSON.parse(localStorage.getItem(CLE) || '[]'))
+function basculerFavori(id) {
+  favoris.has(id) ? favoris.delete(id) : favoris.add(id)
+  localStorage.setItem(CLE, JSON.stringify([...favoris]))
+  dessiner()
+}
+
+let filtre = 'tous'
+let recherche = ''
+
+const GROUPES = [...new Set(GENS.map(g => g.groupe))]
+
+function dessinerChips() {
+  const chips = [
+    { id:'tous',    label:'Tous' },
+    { id:'favoris', label:'⭐ Favoris' },
+    ...GROUPES.map(g => ({ id:g, label:g })),
+  ]
+  document.getElementById('chips').innerHTML = chips
+    .map(c => `<button class="chip ${filtre === c.id ? 'on' : ''}" data-f="${c.id}">${c.label}</button>`).join('')
+  document.querySelectorAll('.chip').forEach(b => b.onclick = () => { filtre = b.dataset.f; dessiner() })
+}
+
+function carte(g) {
+  const fav = favoris.has(g.id)
+  const bouton = g.tel
+    ? `<a class="call" href="tel:${g.tel}">📞 ${joli(g.tel)}</a>`
+    : `<span class="nonum">pas encore de numéro</span>`
+  return `<div class="card">
+    <img class="ph" src="${photo(g)}" alt="" />
+    <div class="who">
+      <div class="nm">${g.nom}</div>
+      <div class="job">${g.poste} · ${g.groupe}</div>
+      ${bouton}
+    </div>
+    <button class="fav ${fav ? 'on' : ''}" data-id="${g.id}" title="Favori">⭐</button>
+  </div>`
+}
+
+function dessiner() {
+  dessinerChips()
+  const q = recherche.trim().toLowerCase()
+  let gens = GENS.filter(g =>
+    (!q || (g.nom + ' ' + g.poste + ' ' + g.groupe).toLowerCase().includes(q)) &&
+    (filtre === 'tous' || filtre === 'favoris' || g.groupe === filtre) &&
+    (filtre !== 'favoris' || favoris.has(g.id))
+  )
+  gens.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+
+  const list = document.getElementById('list')
+  if (!gens.length) {
+    list.innerHTML = `<div class="empty">${filtre === 'favoris' ? 'Aucun favori pour l’instant.<br>Touche l’étoile ⭐ d’une personne.' : 'Personne ne correspond.'}</div>`
+    return
+  }
+
+  let html = ''
+  const enFavori = gens.filter(g => favoris.has(g.id))
+  const reste = gens.filter(g => !favoris.has(g.id))
+
+  // En vue "Tous" (sans recherche) : les favoris remontent en haut, puis les groupes.
+  if (filtre === 'tous' && !q) {
+    if (enFavori.length) html += `<div class="section-title">⭐ Favoris <span class="n">${enFavori.length}</span></div>` + enFavori.map(carte).join('')
+    GROUPES.forEach(gr => {
+      const dedans = reste.filter(g => g.groupe === gr)
+      if (dedans.length) html += `<div class="section-title">${gr} <span class="n">${dedans.length}</span></div>` + dedans.map(carte).join('')
+    })
+  } else {
+    html = gens.map(carte).join('')
+  }
+
+  html += `<div class="tip">💡 <b>Sur ton téléphone :</b> menu du navigateur → « Ajouter à l’écran d’accueil ». L’icône ouvre directement cet annuaire, sans passer par l’app.</div>`
+  list.innerHTML = html
+  document.querySelectorAll('.fav').forEach(b => b.onclick = () => basculerFavori(Number(b.dataset.id)))
+  document.getElementById('sub').textContent = `Lily Gourmet · ${GENS.length} personnes`
+}
+
+const q = document.getElementById('q')
+q.oninput = () => {
+  recherche = q.value
+  document.getElementById('clear').style.display = recherche ? 'block' : 'none'
+  dessiner()
+}
+document.getElementById('clear').onclick = () => { q.value = ''; recherche = ''; document.getElementById('clear').style.display = 'none'; dessiner() }
+
+dessiner()
+</script>
+</body>
+</html>
