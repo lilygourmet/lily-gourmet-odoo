@@ -232,10 +232,6 @@ async function handleAnnuaire(req, res) {
       const { data } = await supabase.from('app_config').select('value').eq('key', 'annuaire_key').maybeSingle()
       return data?.value || null
     }
-    const lireMasques = async () => {
-      const { data } = await supabase.from('app_config').select('value').eq('key', 'annuaire_masques').maybeSingle()
-      try { return JSON.parse(data?.value || '[]') } catch { return [] }
-    }
     const nouvelleCle = async () => {
       const cle = crypto.randomBytes(16).toString('hex')
       const { error } = await supabase.from('app_config')
@@ -244,27 +240,15 @@ async function handleAnnuaire(req, res) {
       return cle
     }
 
-    // --- Admin : le lien, son renouvellement, et qui apparaît dans l'annuaire ---
-    if (op === 'link' || op === 'reset' || op === 'hide') {
+    // --- Admin : obtenir le lien (créé à la volée) ou le renouveler ---
+    if (op === 'link' || op === 'reset') {
       const secret = process.env.SUPABASE_JWT_SECRET
       const auth = req.headers.authorization || ''
       const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
       const payload = secret && token ? verifyJwt(token, secret) : null
       if (payload?.app_role !== 'admin') return res.status(403).json({ error: 'réservé à l\'admin' })
-
-      if (op === 'hide') {
-        const id = String(req.body?.id || '')
-        if (!id) return res.status(400).json({ error: 'employé manquant' })
-        const avant = await lireMasques()
-        const apres = req.body?.masque ? [...new Set([...avant, id])] : avant.filter(x => x !== id)
-        const { error } = await supabase.from('app_config')
-          .upsert({ key: 'annuaire_masques', value: JSON.stringify(apres), updated_at: new Date().toISOString() }, { onConflict: 'key' })
-        if (error) throw error
-        return res.status(200).json({ masques: apres })
-      }
-
       const cle = op === 'reset' ? await nouvelleCle() : (await lireCle()) || await nouvelleCle()
-      return res.status(200).json({ key: cle, masques: await lireMasques() })
+      return res.status(200).json({ key: cle })
     }
 
     // --- Public : la liste, uniquement avec la bonne clé ---
@@ -283,12 +267,9 @@ async function handleAnnuaire(req, res) {
       .order('nom', { ascending: true })
     if (error) throw error
 
-    // Retirés de l'annuaire : ceux écrits en dur (estMasqueEnDur) + ceux que
-    // l'admin a décochés dans l'onglet.
-    const masques = new Set((await lireMasques()).map(String))
+    // Employés retirés de l'annuaire (liste écrite en dur, voir estMasqueEnDur).
     res.setHeader('Cache-Control', 'no-store')
-    const contacts = (data || []).filter(c => !masques.has(String(c.id)) && !estMasqueEnDur(c.nom))
-    return res.status(200).json({ contacts })
+    return res.status(200).json({ contacts: (data || []).filter(c => !estMasqueEnDur(c.nom)) })
   } catch (e) {
     console.error('[annuaire]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
