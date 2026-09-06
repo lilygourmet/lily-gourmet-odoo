@@ -42,7 +42,8 @@ describe('retraits écrits en dur', () => {
     expect(estMasqueEnDur('Badiaa Alaoui')).toBe(true)
     expect(estMasqueEnDur('Fatima BAHRI')).toBe(true)
     expect(estMasqueEnDur('Râchida Naciri')).toBe(true)
-    expect(estMasqueEnDur('Nezha')).toBe(true)
+    expect(estMasqueEnDur('Nezha Aouad')).toBe(true)
+    expect(estMasqueEnDur('Nezha Bennis')).toBe(false)   // nom complet : seule Nezha Aouad sort
     expect(estMasqueEnDur('Layla Bennani')).toBe(true)
     expect(estMasqueEnDur('Hamza El Idrissi')).toBe(false)
     expect(estMasqueEnDur('')).toBe(false)

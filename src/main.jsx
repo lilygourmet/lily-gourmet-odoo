@@ -7,7 +7,6 @@ import './lib/autoUpdate'   // recharge l'app toute seule quand une nouvelle ver
 const App = lazy(() => import('./App.jsx'))
 const ClientOrderView = lazy(() => import('./components/ClientOrder/ClientOrderView.jsx'))
 const OcpOrderView = lazy(() => import('./components/ClientOrder/OcpOrderView.jsx'))
-const AnnuairePublic = lazy(() => import('./components/Annuaire/AnnuairePublic.jsx'))
 
 // Page CLIENT publique (sans login).
 // - Sur l'adresse « commande… » (commande-lily-gourmet.vercel.app, commande.lily-gourmet.com),
@@ -17,8 +16,6 @@ const params = new URLSearchParams(window.location.search)
 const isClientSite = window.location.hostname.includes('commande')
 const isPublicOrder = isClientSite || params.has('commande') || window.location.pathname.startsWith('/commander')
 const isOcp = params.get('client') === 'ocp'   // lien dédié OCP
-// Annuaire du personnel : page publique (photo + appel), raccourci de l'écran d'accueil.
-const isAnnuaire = window.location.pathname.startsWith('/annuaire')
 
 // Filet : affiche l'erreur au lieu d'une page blanche (pour diagnostiquer le lien OCP).
 class ErrBoundary extends Component {
@@ -41,7 +38,7 @@ const Loading = () => <div style={{ minHeight: '100vh', display: 'flex', alignIt
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Suspense fallback={<Loading />}>
-      {isAnnuaire ? <AnnuairePublic /> : isOcp ? <ErrBoundary><OcpOrderView /></ErrBoundary> : isPublicOrder ? <ClientOrderView /> : <App />}
+      {isOcp ? <ErrBoundary><OcpOrderView /></ErrBoundary> : isPublicOrder ? <ClientOrderView /> : <App />}
     </Suspense>
   </StrictMode>,
 )

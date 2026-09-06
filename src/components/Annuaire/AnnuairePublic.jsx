@@ -8,24 +8,12 @@ export default function AnnuairePublic() {
   const [contacts, setContacts] = useState(null)
   const [echec, setEchec] = useState(null)
   const cle = useMemo(() => cleAnnuaire(), [])
-  const erreur = echec || (cle ? null : 'Lien incomplet. Redemande le lien complet de l’annuaire.')
+  const erreur = echec || (cle ? null : 'Lien incomplet. Rouvre le lien complet de l’annuaire (celui qui finit par ?k=…).')
 
+  // La clé reste DANS l'adresse : sur iPhone, le raccourci de l'écran d'accueil
+  // garde l'adresse ouverte, mais pas forcément la mémoire du navigateur.
+  // (Le manifeste et les icônes sont dans annuaire.html, pas posés ici.)
   useEffect(() => {
-    document.title = 'Annuaire — Lily Gourmet'
-    // Manifeste dédié : le raccourci rouvre l'annuaire, pas l'app.
-    const lien = document.querySelector('link[rel="manifest"]')
-    if (lien) lien.href = '/annuaire.webmanifest'
-    // Icône du raccourci : un combiné vert (Android la lit dans le manifeste,
-    // l'iPhone dans apple-touch-icon → on met les deux).
-    const iosIcone = document.querySelector('link[rel="apple-touch-icon"]')
-    if (iosIcone) iosIcone.href = '/annuaire-icon-180.png'
-    const favicone = document.querySelector('link[rel="icon"]')
-    if (favicone) favicone.href = '/annuaire-icon-180.png'
-
-    // La clé est gardée sur l'appareil : on la retire de l'adresse (captures d'écran).
-    if (new URLSearchParams(window.location.search).get('k')) {
-      try { window.history.replaceState({}, '', '/annuaire') } catch { /* ignore */ }
-    }
     if (cle) chargerContacts(cle).then(setContacts).catch(e => setEchec(e.message))
   }, [cle])
 

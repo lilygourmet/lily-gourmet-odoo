@@ -35,7 +35,7 @@
     },
     {
       "source": "/annuaire",
-      "destination": "/index.html"
+      "destination": "/annuaire.html"
     }
   ],
   "crons": [
