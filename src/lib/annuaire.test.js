@@ -37,13 +37,21 @@ describe('annuaire', () => {
 })
 
 describe('retraits écrits en dur', () => {
-  it('retire les employés nommés, quels que soient accents et casse', async () => {
+  it('retire les personnes nommées, accents, casse et ordre indifférents', async () => {
     const { estMasqueEnDur } = await import('./annuaire')
-    expect(estMasqueEnDur('Badiaa Alaoui')).toBe(true)
-    expect(estMasqueEnDur('Fatima BAHRI')).toBe(true)
-    expect(estMasqueEnDur('Râchida Naciri')).toBe(true)
-    expect(estMasqueEnDur('Nezha')).toBe(true)
-    expect(estMasqueEnDur('Layla Bennani')).toBe(true)
+    expect(estMasqueEnDur('Badiaa Bahri')).toBe(true)
+    expect(estMasqueEnDur('BAHRI BADIAA')).toBe(true)
+    expect(estMasqueEnDur('Râchida Haimer')).toBe(true)
+    expect(estMasqueEnDur('Layla El Amrani')).toBe(true)
+    expect(estMasqueEnDur('Layla Amrani')).toBe(true)      // « el » facultatif
+    expect(estMasqueEnDur('Nezha Aouad')).toBe(true)
+  })
+
+  it('garde les homonymes qui ne sont pas visés', async () => {
+    const { estMasqueEnDur } = await import('./annuaire')
+    expect(estMasqueEnDur('Fatima Bahri')).toBe(false)     // autre Bahri
+    expect(estMasqueEnDur('Nezha Bennis')).toBe(false)     // autre Nezha
+    expect(estMasqueEnDur('Rachida Naciri')).toBe(false)
     expect(estMasqueEnDur('Hamza El Idrissi')).toBe(false)
     expect(estMasqueEnDur('')).toBe(false)
   })

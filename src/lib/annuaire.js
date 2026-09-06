@@ -79,13 +79,30 @@ export function lienWhatsApp(tel) {
 }
 
 // ---- Employés retirés de l'annuaire, écrits en dur (demande de Layla) ----
-// Un employé est retiré si un mot de son nom figure ici. Le serveur s'en sert
-// pour la page publique, l'onglet admin pour les afficher barrés.
-export const MASQUES_EN_DUR = ['badiaa', 'bahri', 'rachida', 'nezha', 'layla']
+// Noms complets : une homonyme (autre Nezha, autre Bahri) reste dans l'annuaire.
+export const MASQUES_EN_DUR = [
+  'badiaa bahri',
+  'rachida haimer',
+  'layla el amrani',
+  'nezha aouad',
+]
 
+// Minuscules, sans accents, mot par mot. « el » est ignoré : la fiche RH peut
+// écrire « Layla El Amrani » comme « Layla Amrani ».
+function motsDuNom(nom) {
+  return String(nom || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().split(/[^a-z]+/)
+    .filter(m => m && m !== 'el')
+}
+
+// Retiré si TOUS les mots de l'entrée se retrouvent dans le nom de l'employé
+// (l'ordre n'importe pas : « Bahri Badiaa » sort aussi).
 export function estMasqueEnDur(nom) {
-  const mots = String(nom || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // enlève les accents
-    .toLowerCase().split(/[^a-z]+/).filter(Boolean)
-  return mots.some(m => MASQUES_EN_DUR.includes(m))
+  const mots = motsDuNom(nom)
+  if (!mots.length) return false
+  return MASQUES_EN_DUR.some(entree => {
+    const cibles = motsDuNom(entree)
+    return cibles.length > 0 && cibles.every(c => mots.includes(c))
+  })
 }
