@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import AppHeader from '../AppHeader'
 import AnnuaireListe from './AnnuaireListe'
 import Avatar from '../Avatar'
-import { lienAnnuaire, changerLienAnnuaire, masquerEmploye, urlAnnuaire } from '../../lib/annuaire'
+import { lienAnnuaire, changerLienAnnuaire, masquerEmploye, urlAnnuaire, estMasqueEnDur } from '../../lib/annuaire'
 import { loadEmployes } from '../../lib/hr'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
@@ -62,7 +62,7 @@ export default function AnnuaireAdmin(navProps) {
     } catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
-  const visibles = employes.filter(e => !masques.has(String(e.id)))
+  const visibles = employes.filter(e => !masques.has(String(e.id)) && !estMasqueEnDur(e.nom))
 
   return (
     <div className="min-h-screen bg-cream">
@@ -110,14 +110,17 @@ export default function AnnuaireAdmin(navProps) {
                 Décoche quelqu’un : il disparaît du lien tout de suite. Sa fiche RH n’est pas touchée.
               </p>
               {employes.map(e => {
-                const affiche = !masques.has(String(e.id))
+                // Retiré dans le code (MASQUES_EN_DUR) : la case ne peut rien y changer.
+                const enDur = estMasqueEnDur(e.nom)
+                const affiche = !enDur && !masques.has(String(e.id))
                 return (
-                  <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', cursor: 'pointer', borderBottom: '1px solid #f1eadd' }}>
-                    <input type="checkbox" checked={affiche} onChange={() => basculer(e)} style={{ width: 20, height: 20, accentColor: '#993556', flex: '0 0 auto' }} />
+                  <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', cursor: enDur ? 'default' : 'pointer', borderBottom: '1px solid #f1eadd' }}>
+                    <input type="checkbox" checked={affiche} disabled={enDur} onChange={() => basculer(e)} style={{ width: 20, height: 20, accentColor: '#993556', flex: '0 0 auto' }} />
                     <Avatar emp={e} size={32} zoom={false} />
                     <span style={{ fontSize: 14, fontWeight: affiche ? 600 : 400, color: affiche ? '#1a0f0a' : '#8a7a70', textDecoration: affiche ? 'none' : 'line-through' }}>
                       {e.nom}
                     </span>
+                    {enDur && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8a7a70', fontStyle: 'italic' }}>retiré dans le code</span>}
                   </label>
                 )
               })}

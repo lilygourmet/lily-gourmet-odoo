@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import Avatar from '../Avatar'
-import { lireFavoris, basculerFavori, joliNumero, lienTel } from '../../lib/annuaire'
+import WhatsAppLogo from '../WhatsAppLogo'
+import { lireFavoris, basculerFavori, joliNumero, lienTel, lienWhatsApp } from '../../lib/annuaire'
 
 // Couleurs de l'app (mêmes valeurs que tailwind.config.js).
 const C = {
@@ -32,40 +33,51 @@ export default function AnnuaireListe({ contacts }) {
 
   function carte(c) {
     const tel = lienTel(c.telephone)
+    const wa = lienWhatsApp(c.telephone)
+    // Nom en haut, boutons d'appel en dessous sur toute la largeur : sur un
+    // téléphone étroit, le bouton WhatsApp passait sinon à la ligne tout seul.
     return (
       <div key={c.id} style={{
-        display: 'flex', alignItems: 'flex-start', gap: 12, background: '#fff',
+        display: 'flex', flexDirection: 'column', gap: 10, background: '#fff',
         border: `1px solid ${C.line}`, borderRadius: 18, padding: '11px 12px',
         boxShadow: '0 2px 8px rgba(80,40,30,.05)',
       }}>
-        <Avatar emp={c} size={58} />
-        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.2 }}>{c.nom}</div>
-          <div style={{ fontSize: 12, color: C.mute, marginTop: 1 }}>
-            {[c.poste, c.groupe].filter(Boolean).join(' · ') || '—'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Avatar emp={c} size={52} />
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.2 }}>{c.nom}</div>
+            <div style={{ fontSize: 12, color: C.mute, marginTop: 1 }}>
+              {[c.poste, c.groupe].filter(Boolean).join(' · ') || '—'}
+            </div>
           </div>
-          {tel ? (
-            <a href={tel} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 8,
-              padding: '9px 14px', borderRadius: 999, background: C.greenBg, color: C.green,
-              fontWeight: 800, fontSize: 15, textDecoration: 'none', border: '1px solid #cfe3bd',
-              fontVariantNumeric: 'tabular-nums',
-            }}>📞 {joliNumero(c.telephone)}</a>
-          ) : (
-            <span style={{ display: 'inline-block', marginTop: 8, fontSize: 12, color: C.mute, fontStyle: 'italic' }}>
-              pas encore de numéro
-            </span>
-          )}
+          <button
+            onClick={() => setFavoris(f => basculerFavori(c.id, f))}
+            aria-label={favoris.has(c.id) ? 'Retirer des favoris' : 'Mettre en favori'}
+            style={{
+              flex: '0 0 auto', border: 'none', background: 'transparent', fontSize: 23, lineHeight: 1,
+              cursor: 'pointer', padding: 4,
+              filter: favoris.has(c.id) ? 'none' : 'grayscale(1)', opacity: favoris.has(c.id) ? 1 : 0.32,
+            }}
+          >⭐</button>
         </div>
-        <button
-          onClick={() => setFavoris(f => basculerFavori(c.id, f))}
-          aria-label={favoris.has(c.id) ? 'Retirer des favoris' : 'Mettre en favori'}
-          style={{
-            flex: '0 0 auto', border: 'none', background: 'transparent', fontSize: 23, lineHeight: 1,
-            cursor: 'pointer', padding: '2px 2px 6px 6px',
-            filter: favoris.has(c.id) ? 'none' : 'grayscale(1)', opacity: favoris.has(c.id) ? 1 : 0.32,
-          }}
-        >⭐</button>
+
+        {tel ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <a href={tel} style={{
+              flex: '1 1 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              padding: '11px 12px', borderRadius: 999, background: C.greenBg, color: C.green,
+              fontWeight: 800, fontSize: 15, textDecoration: 'none', border: '1px solid #cfe3bd',
+              fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+            }}>📞 {joliNumero(c.telephone)}</a>
+            <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${c.nom}`} title="WhatsApp" style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 44, height: 44, borderRadius: 999, background: '#25D366', color: '#fff',
+              textDecoration: 'none', flex: '0 0 auto',
+            }}><WhatsAppLogo size={23} /></a>
+          </div>
+        ) : (
+          <span style={{ fontSize: 12, color: C.mute, fontStyle: 'italic' }}>pas encore de numéro</span>
+        )}
       </div>
     )
   }

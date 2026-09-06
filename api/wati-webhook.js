@@ -20,6 +20,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { estLigneLivraison, heurePreparation, creneauClient, heureLisible, texteCreneau, texteCreneauClient } from '../src/lib/creneau.js'
+import { estMasqueEnDur } from '../src/lib/annuaire.js'
 import { sendPushToTargets } from './push.js'
 import { generateText } from 'ai'
 import crypto from 'crypto'
@@ -282,10 +283,12 @@ async function handleAnnuaire(req, res) {
       .order('nom', { ascending: true })
     if (error) throw error
 
-    // Employés que l'admin a retirés de l'annuaire (case décochée).
+    // Retirés de l'annuaire : ceux écrits en dur (estMasqueEnDur) + ceux que
+    // l'admin a décochés dans l'onglet.
     const masques = new Set((await lireMasques()).map(String))
     res.setHeader('Cache-Control', 'no-store')
-    return res.status(200).json({ contacts: (data || []).filter(c => !masques.has(String(c.id))) })
+    const contacts = (data || []).filter(c => !masques.has(String(c.id)) && !estMasqueEnDur(c.nom))
+    return res.status(200).json({ contacts })
   } catch (e) {
     console.error('[annuaire]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
