@@ -10,8 +10,14 @@
   "theme_color": "#993556",
   "icons": [
     {
-      "src": "/logo.png",
-      "sizes": "any",
+      "src": "/annuaire-icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/annuaire-icon.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }

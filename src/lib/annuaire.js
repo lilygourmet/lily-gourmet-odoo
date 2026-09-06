@@ -67,3 +67,25 @@ export function lienTel(tel) {
   const propre = String(tel || '').replace(/[^\d+]/g, '')
   return propre ? 'tel:' + propre : null
 }
+
+// Lien WhatsApp. wa.me exige l'indicatif pays : 06… → 2126…
+export function lienWhatsApp(tel) {
+  const chiffres = String(tel || '').replace(/\D/g, '')
+  if (!chiffres) return null
+  const international = chiffres.startsWith('212') ? chiffres
+    : chiffres.startsWith('0') ? '212' + chiffres.slice(1)
+    : chiffres
+  return 'https://wa.me/' + international
+}
+
+// ---- Employés retirés de l'annuaire, écrits en dur (demande de Layla) ----
+// Un employé est retiré si un mot de son nom figure ici. Le serveur s'en sert
+// pour la page publique, l'onglet admin pour les afficher barrés.
+export const MASQUES_EN_DUR = ['badiaa', 'bahri', 'rachida', 'nezha', 'layla']
+
+export function estMasqueEnDur(nom) {
+  const mots = String(nom || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // enlève les accents
+    .toLowerCase().split(/[^a-z]+/).filter(Boolean)
+  return mots.some(m => MASQUES_EN_DUR.includes(m))
+}

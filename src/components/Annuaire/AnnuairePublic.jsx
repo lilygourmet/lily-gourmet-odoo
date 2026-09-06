@@ -15,6 +15,12 @@ export default function AnnuairePublic() {
     // Manifeste dédié : le raccourci rouvre l'annuaire, pas l'app.
     const lien = document.querySelector('link[rel="manifest"]')
     if (lien) lien.href = '/annuaire.webmanifest'
+    // Icône du raccourci : un combiné vert (Android la lit dans le manifeste,
+    // l'iPhone dans apple-touch-icon → on met les deux).
+    const iosIcone = document.querySelector('link[rel="apple-touch-icon"]')
+    if (iosIcone) iosIcone.href = '/annuaire-icon-180.png'
+    const favicone = document.querySelector('link[rel="icon"]')
+    if (favicone) favicone.href = '/annuaire-icon-180.png'
 
     // La clé est gardée sur l'appareil : on la retire de l'adresse (captures d'écran).
     if (new URLSearchParams(window.location.search).get('k')) {

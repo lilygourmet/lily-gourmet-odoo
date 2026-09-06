@@ -35,3 +35,25 @@ describe('annuaire', () => {
     expect(avec.size).toBe(1)   // l'ancien Set n'est pas modifié
   })
 })
+
+describe('retraits écrits en dur', () => {
+  it('retire les employés nommés, quels que soient accents et casse', async () => {
+    const { estMasqueEnDur } = await import('./annuaire')
+    expect(estMasqueEnDur('Badiaa Alaoui')).toBe(true)
+    expect(estMasqueEnDur('Fatima BAHRI')).toBe(true)
+    expect(estMasqueEnDur('Râchida Naciri')).toBe(true)
+    expect(estMasqueEnDur('Nezha')).toBe(true)
+    expect(estMasqueEnDur('Layla Bennani')).toBe(true)
+    expect(estMasqueEnDur('Hamza El Idrissi')).toBe(false)
+    expect(estMasqueEnDur('')).toBe(false)
+  })
+})
+
+describe('appel WhatsApp', () => {
+  it('met l\'indicatif marocain', async () => {
+    const { lienWhatsApp } = await import('./annuaire')
+    expect(lienWhatsApp('0661234567')).toBe('https://wa.me/212661234567')
+    expect(lienWhatsApp('+212 661 23 45 67')).toBe('https://wa.me/212661234567')
+    expect(lienWhatsApp('')).toBe(null)
+  })
+})
