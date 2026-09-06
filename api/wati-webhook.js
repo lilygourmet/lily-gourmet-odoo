@@ -43,7 +43,7 @@ async function fetchWithTimeout(url, opts = {}, ms = 25000) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'ocp-sync-lgt' && req.query?.action !== 'fetch-photo' && req.query?.action !== 'conges-notif' && req.query?.action !== 'nav-usage') {
+  if (req.method !== 'POST' && req.query?.action !== 'task-reminders' && req.query?.action !== 'ocp-sync-lgt' && req.query?.action !== 'fetch-photo' && req.query?.action !== 'conges-notif' && req.query?.action !== 'nav-usage' && req.query?.action !== 'annuaire') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -61,6 +61,7 @@ export default async function handler(req, res) {
   if (action === 'login') return handleLogin(req, res)
   if (action === 'save-navbar') return handleSaveNavbar(req, res)
   if (action === 'tab-lock') return handleTabLock(req, res)
+  if (action === 'annuaire') return handleAnnuaire(req, res)
   if (action === 'send') return handleSend(req, res)
   if (action === 'templates') return handleTemplates(req, res)
   if (action === 'send-template') return handleSendTemplate(req, res)
@@ -210,6 +211,65 @@ async function handleTabLock(req, res) {
     return res.status(400).json({ error: 'op invalide' })
   } catch (e) {
     console.error('[tab-lock]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// ============================================================
+// ANNUAIRE DU PERSONNEL — page publique /annuaire
+// Photo + numéro de chaque employé actif, pour appeler d'un doigt.
+// Le lien porte une clé secrète rangée dans `app_config` (RLS fermée : seule
+// la clé service la lit). Mauvaise clé → 403. L'admin peut la renouveler,
+// ce qui tue instantanément l'ancien lien.
+// ============================================================
+async function handleAnnuaire(req, res) {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
+    const op = req.query?.op || req.body?.op || 'list'
+
+    const lireCle = async () => {
+      const { data } = await supabase.from('app_config').select('value').eq('key', 'annuaire_key').maybeSingle()
+      return data?.value || null
+    }
+    const nouvelleCle = async () => {
+      const cle = crypto.randomBytes(16).toString('hex')
+      const { error } = await supabase.from('app_config')
+        .upsert({ key: 'annuaire_key', value: cle, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+      if (error) throw error
+      return cle
+    }
+
+    // --- Admin : obtenir le lien (créé à la volée) ou le renouveler ---
+    if (op === 'link' || op === 'reset') {
+      const secret = process.env.SUPABASE_JWT_SECRET
+      const auth = req.headers.authorization || ''
+      const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
+      const payload = secret && token ? verifyJwt(token, secret) : null
+      if (payload?.app_role !== 'admin') return res.status(403).json({ error: 'réservé à l\'admin' })
+      const cle = op === 'reset' ? await nouvelleCle() : (await lireCle()) || await nouvelleCle()
+      return res.status(200).json({ key: cle })
+    }
+
+    // --- Public : la liste, uniquement avec la bonne clé ---
+    const fournie = String(req.query?.k || '')
+    const attendue = await lireCle()
+    if (!attendue || fournie.length !== attendue.length ||
+        !crypto.timingSafeEqual(Buffer.from(fournie), Buffer.from(attendue))) {
+      return res.status(403).json({ error: 'Lien invalide ou périmé.' })
+    }
+
+    // Rien d'autre que ce qu'il faut pour appeler : ni salaire, ni CIN, ni adresse.
+    const { data, error } = await supabase
+      .from('employes')
+      .select('id, nom, poste, groupe, telephone, photo_url')
+      .eq('actif', true)
+      .order('nom', { ascending: true })
+    if (error) throw error
+
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({ contacts: data || [] })
+  } catch (e) {
+    console.error('[annuaire]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }

@@ -32,6 +32,10 @@
     {
       "source": "/api/ocp-sync-lgt",
       "destination": "/api/wati-webhook?action=ocp-sync-lgt"
+    },
+    {
+      "source": "/annuaire",
+      "destination": "/index.html"
     }
   ],
   "crons": [

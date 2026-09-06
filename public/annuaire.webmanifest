@@ -1,0 +1,19 @@
+{
+  "name": "Annuaire Lily Gourmet",
+  "short_name": "Annuaire",
+  "description": "Le personnel de Lily Gourmet : photo, poste et appel direct.",
+  "lang": "fr",
+  "start_url": "/annuaire",
+  "scope": "/annuaire",
+  "display": "standalone",
+  "background_color": "#fcfbf8",
+  "theme_color": "#993556",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
