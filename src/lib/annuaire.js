@@ -25,20 +25,22 @@ export async function chargerContacts(cle) {
   return d.contacts || []
 }
 
-// Réservé à l'admin (jeton de connexion) : obtenir le lien, ou en changer.
-async function appelAdmin(op) {
+// Réservé à l'admin (jeton de connexion) : le lien, et qui apparaît dedans.
+async function appelAdmin(op, corps = {}) {
   const headers = { 'Content-Type': 'application/json' }
   try {
     const t = localStorage.getItem('lily_jwt')
     if (t) headers.Authorization = 'Bearer ' + t
   } catch { /* ignore */ }
-  const res = await fetch(`${API}&op=${op}`, { method: 'POST', headers, body: '{}' })
+  const res = await fetch(`${API}&op=${op}`, { method: 'POST', headers, body: JSON.stringify(corps) })
   const d = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(d.error || `Erreur ${res.status}`)
-  return d.key
+  return d
 }
+// { key, masques } : le lien + les employés retirés de l'annuaire.
 export const lienAnnuaire = () => appelAdmin('link')
 export const changerLienAnnuaire = () => appelAdmin('reset')
+export const masquerEmploye = (id, masque) => appelAdmin('hide', { id, masque })
 
 export const urlAnnuaire = cle => `${window.location.origin}/annuaire?k=${cle}`
 
