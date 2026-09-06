@@ -25,10 +25,13 @@ export default function AnnuaireListe({ contacts }) {
   )
 
   const recherche = q.trim().toLowerCase()
+  // Dès qu'on tape, on cherche dans TOUT le personnel : sinon, l'annuaire
+  // s'ouvrant sur « Favoris », une recherche ne trouvait que les favoris —
+  // on tapait un nom et rien n'apparaissait.
   const visibles = contacts
     .filter(c => !recherche || `${c.nom} ${c.poste || ''} ${groupeDe(c)}`.toLowerCase().includes(recherche))
-    .filter(c => filtre === 'tous' || filtre === 'favoris' || groupeDe(c) === filtre)
-    .filter(c => filtre !== 'favoris' || favoris.has(c.id))
+    .filter(c => recherche || filtre === 'tous' || filtre === 'favoris' || groupeDe(c) === filtre)
+    .filter(c => recherche || filtre !== 'favoris' || favoris.has(c.id))
     .sort((a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr'))
 
   function carte(c) {
@@ -98,7 +101,7 @@ export default function AnnuaireListe({ contacts }) {
       <div style={{ textAlign: 'center', color: C.mute, fontSize: 14, padding: '36px 20px', lineHeight: 1.5 }}>
         {filtre === 'favoris'
           ? <>Aucun favori pour l’instant.<br />Touche l’étoile ⭐ d’une personne.</>
-          : 'Personne ne correspond.'}
+          : <>Personne ne correspond à « {q.trim()} ».</>}
       </div>
     )
   } else if (filtre === 'tous' && !recherche) {
@@ -129,15 +132,18 @@ export default function AnnuaireListe({ contacts }) {
         }}
       />
       <div style={{ display: 'flex', gap: 7, overflowX: 'auto', padding: '11px 0 2px' }}>
-        {chips.map(c => (
-          <button key={c.id} onClick={() => setFiltre(c.id)} style={{
-            flex: '0 0 auto', padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
-            cursor: 'pointer', whiteSpace: 'nowrap',
-            border: `1px solid ${filtre === c.id ? C.bordeaux : C.line}`,
-            background: filtre === c.id ? C.bordeaux : '#fff',
-            color: filtre === c.id ? '#fff' : C.soft,
-          }}>{c.label}</button>
-        ))}
+        {chips.map(c => {
+          const actif = !recherche && filtre === c.id
+          return (
+            <button key={c.id} onClick={() => { setQ(''); setFiltre(c.id) }} style={{
+              flex: '0 0 auto', padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+              border: `1px solid ${actif ? C.bordeaux : C.line}`,
+              background: actif ? C.bordeaux : '#fff',
+              color: actif ? '#fff' : C.soft,
+            }}>{c.label}</button>
+          )
+        })}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>{corps}</div>
     </div>
