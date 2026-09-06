@@ -41,7 +41,7 @@ export default function AnnuairePublic() {
         {!erreur && !contacts && (
           <div style={{ color: '#8a7a70', fontSize: 14, padding: '30px 0', textAlign: 'center' }}>Chargement…</div>
         )}
-        {contacts && <AnnuaireListe contacts={contacts} />}
+        {contacts && <AnnuaireListe contacts={contacts} colleEnHaut />}
       </div>
     </div>
   )
