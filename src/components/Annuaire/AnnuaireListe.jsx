@@ -13,7 +13,10 @@ const groupeDe = c => c.groupe || 'Autres'
 
 // Liste visuelle : recherche, filtres par équipe, favoris, bouton d'appel.
 // Sert à la fois à la page publique et à l'onglet admin.
-export default function AnnuaireListe({ contacts }) {
+// `colleEnHaut` : garde la recherche et les pastilles visibles pendant qu'on
+// fait défiler la liste. Réservé à la page publique : dans l'app, c'est déjà
+// la barre du haut (AppHeader) qui est collée, deux barres se chevaucheraient.
+export default function AnnuaireListe({ contacts, colleEnHaut = false }) {
   const [favoris, setFavoris] = useState(lireFavoris)
   // On ouvre sur les favoris… sauf s'il n'y en a aucun (sinon page vide).
   const [filtre, setFiltre] = useState(() => (lireFavoris().size ? 'favoris' : 'tous'))
@@ -121,8 +124,15 @@ export default function AnnuaireListe({ contacts }) {
   const chips = [{ id: 'tous', label: 'Tous' }, { id: 'favoris', label: '⭐ Favoris' },
     ...groupes.map(g => ({ id: g, label: g }))]
 
+  const barre = colleEnHaut ? {
+    position: 'sticky', top: 0, zIndex: 5, background: C.cream,
+    paddingTop: 10, marginTop: -10, paddingBottom: 8,
+    borderBottom: `1px solid ${C.line}`,
+  } : undefined
+
   return (
     <div>
+      <div style={barre}>
       <input
         value={q} onChange={e => setQ(e.target.value)} type="search"
         placeholder="🔍  Chercher un nom, un poste…" aria-label="Chercher"
@@ -144,6 +154,7 @@ export default function AnnuaireListe({ contacts }) {
             }}>{c.label}</button>
           )
         })}
+      </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>{corps}</div>
     </div>
