@@ -79,30 +79,30 @@ export function lienWhatsApp(tel) {
 }
 
 // ---- Employés retirés de l'annuaire, écrits en dur (demande de Layla) ----
-// Un NOM COMPLET (avec espace) ne retire que cette personne-là.
-// Un prénom seul retire tous ceux qui le portent : à remplacer par le nom
-// complet dès qu'on le connaît, sinon une homonyme disparaît aussi.
+// Noms complets : une homonyme (autre Nezha, autre Bahri) reste dans l'annuaire.
 export const MASQUES_EN_DUR = [
+  'badiaa bahri',
+  'rachida haimer',
+  'layla el amrani',
   'nezha aouad',
-  'badiaa',    // TODO nom complet
-  'bahri',     // TODO nom complet
-  'rachida',   // TODO nom complet
-  'layla',     // TODO nom complet
 ]
 
-// Minuscules, sans accents, espaces resserrés : « Râchida  BAHRI » → « rachida bahri ».
-function normaliser(nom) {
+// Minuscules, sans accents, mot par mot. « el » est ignoré : la fiche RH peut
+// écrire « Layla El Amrani » comme « Layla Amrani ».
+function motsDuNom(nom) {
   return String(nom || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z]+/g, ' ').trim()
+    .toLowerCase().split(/[^a-z]+/)
+    .filter(m => m && m !== 'el')
 }
 
+// Retiré si TOUS les mots de l'entrée se retrouvent dans le nom de l'employé
+// (l'ordre n'importe pas : « Bahri Badiaa » sort aussi).
 export function estMasqueEnDur(nom) {
-  const complet = normaliser(nom)
-  if (!complet) return false
-  const mots = complet.split(' ')
+  const mots = motsDuNom(nom)
+  if (!mots.length) return false
   return MASQUES_EN_DUR.some(entree => {
-    const cible = normaliser(entree)
-    return cible.includes(' ') ? complet === cible : mots.includes(cible)
+    const cibles = motsDuNom(entree)
+    return cibles.length > 0 && cibles.every(c => mots.includes(c))
   })
 }
