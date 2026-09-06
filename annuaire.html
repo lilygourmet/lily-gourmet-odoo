@@ -4,16 +4,16 @@
     <meta charset="UTF-8" />
     <!-- ============================================================
          PAGE À PART (pas l'app interne).
-         Le raccourci de l'écran d'accueil doit rouvrir l'ANNUAIRE.
-         C'est pour ça que le manifeste et les icônes sont écrits ICI,
-         dans le HTML : l'iPhone les lit au chargement de la page et
-         ignore un manifeste remplacé après coup par du JavaScript.
-         Avant ça, le raccourci enregistrait l'app (mot de passe, puis
-         l'écran Tâches) au lieu de l'annuaire.
+         VOLONTAIREMENT SANS MANIFESTE. Un manifeste impose au raccourci
+         une adresse fixe (start_url), forcément SANS la clé du lien —
+         et l'iPhone ne partage pas la mémoire du navigateur avec l'icône
+         de l'écran d'accueil : le raccourci s'ouvrait donc sur
+         « Lien incomplet ».
+         Sans manifeste, l'iPhone enregistre l'ADRESSE OUVERTE (clé
+         comprise) et l'icône ci-dessous. C'est ce qu'on veut.
          ============================================================ -->
     <link rel="icon" type="image/png" href="/annuaire-icon-180.png" />
     <link rel="apple-touch-icon" href="/annuaire-icon-180.png" />
-    <link rel="manifest" href="/annuaire.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
