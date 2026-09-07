@@ -4,7 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import * as pdfjsLib from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { saveAs } from 'file-saver'
-import { loadBulletins, addBulletinPage, prunePeriods, relabelBulletin, getBulletinSignedUrl, downloadBulletinBytes, deletePeriod } from '../../lib/bulletins'
+import { loadBulletins, addBulletinPage, prunePeriods, relabelBulletin, getBulletinSignedUrl, downloadBulletinBytes, deletePeriod, setBulletinSociete, SOCIETES, nomSociete } from '../../lib/bulletins'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
 
@@ -12,6 +12,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
 // Mots à ignorer pour deviner le nom de l'employé (en-têtes du bulletin)
 const STOP = new Set(['BULLETIN', 'DE', 'PAIE', 'GOURMET', 'RUE', 'SOUMAYA', 'AGDAL', 'RABAT', 'CNS', 'IF', 'MATRICULE', 'NOM', 'PRENOM', 'PRÉNOM', 'DATE', 'NAISSANCE', 'SITUATION', 'FAMILLE', 'ENFANTS', 'DEDUCTIONS', 'DÉDUCTIONS', 'FONCTION', 'EMBAUCHE', 'MUTUELLE', 'NOMBRE', 'COMPTE', 'BANCAIRE', 'RUBRIQUE', 'DESIGNATION', 'DÉSIGNATION', 'BASE', 'TAUX', 'GAINS', 'RETENUES', 'PERIODE', 'PÉRIODE', 'CIMR', 'CIN', 'CNSS', 'SALAIRE', 'NET', 'PAYER', 'BRUT', 'JOURS', 'TRAVAILLES', 'TRAVAILLÉS', 'COTISATION', 'AMO', 'RETENUE', 'TOTAL', 'PAYÉ', 'PAYE', 'CONGE', 'CONGÉ', 'IMPOSABLE', 'GAIN', 'ARRONDI', 'INDEMNITE', 'INDEMNITÉ', 'TRANSPORT', 'PANIER', 'PRIME', 'ANCIENNETE', 'ANCIENNETÉ', 'FRAIS', 'PROFESSIONELS', 'AFFILIATION', 'CELIBATAIRE', 'CÉLIBATAIRE', 'MARIE', 'MARIÉ', 'MARIÉE'])
+
+// Quel employeur a édité ce bulletin ? Le comptable envoie un PDF par société.
+// On reconnaît le nom imprimé en tête ; à défaut, l'ICE de la société, qui y
+// figure aussi et ne peut appartenir qu'à une seule des deux.
+function parseSociete(t) {
+  if (/LG\s*TRAITEUR/i.test(t) || /002\s?724\s?671\s?000\s?041/.test(t)) return 'LG'
+  if (/L\s*[&E]\s*(?:T\s*)?N\b/i.test(t) || /001\s?701\s?634\s?000\s?029/.test(t)) return 'LN'
+  return null
+}
 
 function parsePage(text) {
   const t = text.replace(/\s+/g, ' ')
@@ -45,7 +54,7 @@ function parsePage(text) {
     nm.push(w)
     if (nm.length >= 4) break
   }
-  return { matricule, cnss, net, period, label: nm.join(' ') }
+  return { matricule, cnss, net, period, societe: parseSociete(t), label: nm.join(' ') }
 }
 
 export default function BulletinsTab() {
@@ -71,42 +80,62 @@ export default function BulletinsTab() {
   }
   useEffect(() => { refresh() }, [])
 
+  // Le comptable envoie un PDF par société : on les prend tous en une fois.
   async function handleFile(e) {
-    const file = e.target.files?.[0]
+    const files = [...(e.target.files || [])]
     e.target.value = ''
-    if (!file) return
-    if (file.type !== 'application/pdf') { setError('Choisis un fichier PDF.'); return }
+    if (!files.length) return
+    if (files.some(f => f.type !== 'application/pdf')) { setError('Choisis seulement des fichiers PDF.'); return }
     if (!period) { setError('Choisis le mois.'); return }
     setBusy(true); setError(''); setProgress({ done: 0, total: 0 })
     try {
-      const buf = await file.arrayBuffer()
-      const pdfjsDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buf).slice() }).promise
-      const srcDoc = await PDFDocument.load(buf.slice(0), { ignoreEncryption: true })
-      const n = pdfjsDoc.numPages
-      setProgress({ done: 0, total: n })
+      const docs = []
+      for (const file of files) {
+        const buf = await file.arrayBuffer()
+        docs.push({
+          pdfjsDoc: await pdfjsLib.getDocument({ data: new Uint8Array(buf).slice() }).promise,
+          srcDoc: await PDFDocument.load(buf.slice(0), { ignoreEncryption: true }),
+        })
+      }
+      const total = docs.reduce((n, d) => n + d.pdfjsDoc.numPages, 0)
+      setProgress({ done: 0, total })
       const detected = new Set()   // mois réellement lus dans le PDF
-      for (let i = 0; i < n; i++) {
-        const pg = await pdfjsDoc.getPage(i + 1)
-        const tc = await pg.getTextContent()
-        const text = tc.items.map(it => it.str).join(' ')
-        const parsed = parsePage(text)
-        const usedPeriod = parsed.period || period   // date lue dans le PDF, sinon le sélecteur
-        detected.add(parsed.period ? parsed.period : `${period} (non détecté)`)
-        const out = await PDFDocument.create()
-        const [cp] = await out.copyPages(srcDoc, [i])
-        out.addPage(cp)
-        const bytes = await out.save()
-        await addBulletinPage(usedPeriod, parsed, bytes)
-        setProgress({ done: i + 1, total: n })
+      let sansSociete = 0
+      let done = 0
+      for (const { pdfjsDoc, srcDoc } of docs) {
+        for (let i = 0; i < pdfjsDoc.numPages; i++) {
+          const pg = await pdfjsDoc.getPage(i + 1)
+          const tc = await pg.getTextContent()
+          const text = tc.items.map(it => it.str).join(' ')
+          const parsed = parsePage(text)
+          const usedPeriod = parsed.period || period   // date lue dans le PDF, sinon le sélecteur
+          detected.add(parsed.period ? parsed.period : `${period} (non détecté)`)
+          if (!parsed.societe) sansSociete++
+          const out = await PDFDocument.create()
+          const [cp] = await out.copyPages(srcDoc, [i])
+          out.addPage(cp)
+          const bytes = await out.save()
+          await addBulletinPage(usedPeriod, parsed, bytes)
+          setProgress({ done: ++done, total })
+        }
       }
       await prunePeriods(3)
       await refresh()
-      toast.success(`Importé ✓ Mois détecté(s) dans le PDF : ${[...detected].join(', ')}`)
+      toast.success(`${total} bulletin(s) importé(s) ✓ Mois lu(s) dans les PDF : ${[...detected].join(', ')}`)
+      if (sansSociete) {
+        setError(`${sansSociete} bulletin(s) sans société reconnue : choisis-la dans la liste ci-dessous (cadre orange).`)
+      }
     } catch (e2) {
       setError('Erreur import : ' + e2.message)
     } finally {
       setBusy(false); setProgress(null)
     }
+  }
+
+  async function handleSetSociete(g, societe) {
+    setBusy(true)
+    try { await setBulletinSociete(g.rows.map(r => r.id), societe); await refresh() }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
 
   async function handleView(path) {
@@ -127,7 +156,7 @@ export default function BulletinsTab() {
   async function handleRelabel(g) {
     const val = prompt('Nom de l\'employé pour ce bulletin :', g.label)
     if (val === null || !val.trim()) return
-    try { await relabelBulletin({ matricule: g.matricule, id: g.rows[0].id, label: val }); await refresh() }
+    try { await relabelBulletin({ matricule: g.matricule, societe: g.societe, id: g.rows[0].id, label: val }); await refresh() }
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
@@ -145,7 +174,7 @@ export default function BulletinsTab() {
         }
       }
       const outBytes = await merged.save()
-      saveAs(new Blob([outBytes], { type: 'application/pdf' }), `Bulletins_${g.label}_${periods.join('_')}.pdf`)
+      saveAs(new Blob([outBytes], { type: 'application/pdf' }), `Bulletins_${g.label}${g.societe ? '_' + g.societe : ''}_${periods.join('_')}.pdf`)
     } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setBusy(false) }
   }
@@ -156,11 +185,12 @@ export default function BulletinsTab() {
     catch (e) { toast.error('Erreur : ' + e.message) }
   }
 
-  // Regroupement par employé (matricule, sinon par id)
+  // Regroupement par employé : le matricule SEUL ne suffit pas, les deux sociétés
+  // peuvent utiliser les mêmes numéros pour deux personnes différentes.
   const groups = {}
   for (const r of items) {
-    const key = r.matricule || ('id-' + r.id)
-    if (!groups[key]) groups[key] = { matricule: r.matricule, label: r.label, rows: [] }
+    const key = r.matricule ? `${r.societe || '?'}-${r.matricule}` : ('id-' + r.id)
+    if (!groups[key]) groups[key] = { matricule: r.matricule, societe: r.societe, label: r.label, rows: [] }
     groups[key].rows.push(r)
     if (r.label && r.label !== 'À identifier') groups[key].label = r.label
   }
@@ -173,12 +203,13 @@ export default function BulletinsTab() {
     }
     g.rows = Object.values(byPeriod)
   }
-  const employes = Object.values(groups).sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+  const employes = Object.values(groups).sort((a, b) =>
+    (a.societe ? 1 : 0) - (b.societe ? 1 : 0) || (a.label || '').localeCompare(b.label || ''))
   const periodsAll = [...new Set(items.map(r => r.period))].sort().reverse()
 
   return (
     <div>
-      <p className="text-[12px] text-ink-mute mb-3">Le comptable t'envoie le PDF du mois (1 page par employé). Importe-le ici : il est découpé par employé et <b>le mois est lu automatiquement dans le bulletin</b> (le sélecteur ci-dessous ne sert que si la date n'est pas trouvée). On garde les 3 derniers mois.</p>
+      <p className="text-[12px] text-ink-mute mb-3">Le comptable t'envoie un PDF du mois par société (1 page par employé). <b>Tu peux les importer tous en même temps</b> : chaque PDF est découpé par employé, et <b>le mois comme la société sont lus dans le bulletin</b> (le sélecteur ci-dessous ne sert que si la date n'est pas trouvée). On garde les 3 derniers mois.</p>
 
       {/* Import */}
       <div className="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl bg-cream-warm border border-line">
@@ -188,8 +219,8 @@ export default function BulletinsTab() {
             className="px-3 py-2 text-[13px] bg-cream border border-line rounded-lg focus:outline-none focus:border-bordeaux" />
         </div>
         <label className={`px-4 py-2 text-[12px] font-medium rounded-lg cursor-pointer inline-flex items-center gap-2 ${busy ? 'bg-line text-ink-mute' : 'bg-bordeaux text-cream hover:bg-bordeaux-deep'}`}>
-          {busy ? (progress ? `Import… ${progress.done}/${progress.total}` : 'Import…') : (<><Download size={14} /> Importer le PDF du mois</>)}
-          <input type="file" accept="application/pdf" onChange={handleFile} disabled={busy} className="hidden" />
+          {busy ? (progress ? `Import… ${progress.done}/${progress.total}` : 'Import…') : (<><Download size={14} /> Importer le(s) PDF du mois</>)}
+          <input type="file" accept="application/pdf" multiple onChange={handleFile} disabled={busy} className="hidden" />
         </label>
         {periodsAll.length > 0 && (
           <div className="text-[11px] text-ink-mute">Mois en mémoire : {periodsAll.join(', ')}</div>
@@ -208,8 +239,17 @@ export default function BulletinsTab() {
         {employes.map(g => (
           <div key={g.matricule || g.rows[0].id} className="rounded-xl border border-line bg-cream-warm p-3 flex items-center gap-3 flex-wrap">
             <div className="flex-1 min-w-[160px]">
-              <div className="text-[14px] font-medium text-ink">
-                {g.label}{g.matricule ? <span className="text-[11px] text-ink-mute font-normal"> · {g.matricule}</span> : ''}
+              <div className="text-[14px] font-medium text-ink flex items-center gap-2 flex-wrap">
+                <span>{g.label}{g.matricule ? <span className="text-[11px] text-ink-mute font-normal"> · {g.matricule}</span> : ''}</span>
+                {g.societe ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cream border border-line text-ink-soft font-normal">{nomSociete(g.societe) || g.societe}</span>
+                ) : (
+                  <select value="" disabled={busy} onChange={e => handleSetSociete(g, e.target.value)}
+                          className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500 text-amber-700 bg-white font-normal outline-none">
+                    <option value="" disabled>⚠️ quelle société ?</option>
+                    {SOCIETES.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
+                  </select>
+                )}
               </div>
               <div className="flex flex-wrap gap-1 mt-1">
                 {g.rows.sort((a, b) => b.period.localeCompare(a.period)).map(r => (
