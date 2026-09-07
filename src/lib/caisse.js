@@ -414,7 +414,7 @@ export async function loadAllFreeReleveLines() {
   // elles : la jumelle d'une ligne déjà prise restait « non liée » pour toujours.
   const { data: prises } = await supabase
     .from('caisse_releve_lignes')
-    .select('amount, label, ligne_date')
+    .select('amount, label, ligne_date, releve_url')
     .not('used_by', 'is', null)
     .limit(5000)
   // Références de ce qui est DÉJÀ pris en compte, rangées par montant arrondi (une
@@ -433,7 +433,7 @@ export async function loadAllFreeReleveLines() {
   // il suffit à reconnaître la jumelle restée libre.
   const { data: vertes } = await supabase
     .from('caisse_enveloppes')
-    .select('amount_cash, amount_proof, note_proof')
+    .select('amount_cash, amount_proof, note_proof, proof_url')
     .eq('releve_status', 'trouve')
     .not('note_proof', 'is', null)
     .limit(5000)
@@ -447,6 +447,7 @@ export async function loadAllFreeReleveLines() {
       amount: v.amount_proof ?? v.amount_cash,
       label: np.slice(sep + 3),
       ligne_date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null,
+      releve_url: v.proof_url,        // le document d'où vient ce rapprochement
     })
   }
   // Une opération déjà prise en compte, même écrite autrement dans l'autre document.

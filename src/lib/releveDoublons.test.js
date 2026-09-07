@@ -306,3 +306,21 @@ describe('remise de chèques — le n° change d\'un document à l\'autre', () =
     expect(out).toHaveLength(1)
   })
 })
+
+// Deux remises du même montant le même jour dans le MÊME fichier sont deux remises réelles :
+// la tolérance ne vaut qu'ENTRE l'extrait et le relevé.
+describe('remise de chèques — seulement entre deux fichiers', () => {
+  const a = { amount: 3776, ligne_date: '2026-08-24', label: 'REMISE CHEQUE A ENC 47729339', releve_url: 'releves/1.pdf' }
+
+  it('fusionne entre deux documents différents', () => {
+    expect(memeOperation(a, { ...a, label: 'REMISE CHEQUE A ENC 47729338', releve_url: 'releves/2.pdf' })).toBe(true)
+  })
+
+  it('garde deux remises du MÊME document', () => {
+    expect(memeOperation(a, { ...a, label: 'REMISE CHEQUE A ENC 47729338', releve_url: 'releves/1.pdf' })).toBe(false)
+  })
+
+  it('fusionne quand le document est inconnu d\'un côté', () => {
+    expect(memeOperation(a, { ...a, label: 'REMISE CHEQUE A ENC 47729338', releve_url: null })).toBe(true)
+  })
+})
