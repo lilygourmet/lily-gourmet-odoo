@@ -272,6 +272,11 @@ const STOCK_PROD_LIEUX = {
 }
 // Emplacements comptés par les onglets Inventaire.
 const INVENTAIRE_LIEUX = { annexe: 62, prod: 52 }
+// Ce qu'on compte à chaque endroit. L'annexe ne compte QUE ses semi-finis :
+// ses matières premières sont suivies par l'économat, les mélanger allongeait
+// la liste de 166 articles sans que personne ne les pèse (choix de Layla,
+// 07/09/2026). Prod continue de compter les deux.
+const INVENTAIRE_FAMILLES = { annexe: ['Semi-finis'], prod: ['Matières premières', 'Semi-finis'] }
 // Porte le comptage de l'app dans Odoo, dans la colonne « quantité comptée ».
 // Rien ne bouge en stock ici : Odoo garde l'écart en attente, et c'est Layla
 // qui applique depuis Odoo — d'où le nom de l'écran là-bas, « Ajustements
@@ -354,6 +359,7 @@ async function handleInventaire(req, res) {
         [['id', 'in', ids.slice(i, i + 200)]], ['id', 'display_name', 'uom_id', 'categ_id']))
     }
 
+    const gardees = INVENTAIRE_FAMILLES[lieu] || INVENTAIRE_FAMILLES.prod
     const articles = []
     for (const p of prods) {
       const nom = String(p.display_name || '').replace(/^\[\d+\]\s*/, '')
@@ -361,7 +367,7 @@ async function handleInventaire(req, res) {
         // « Sm- Le Citron Framboise » s'écrit avec un m minuscule : sans le
         // drapeau i, 14 articles de l'annexe et 9 de Prod étaient invisibles.
         : /^SM/i.test(nom) ? 'Semi-finis' : null
-      if (!fam) continue
+      if (!fam || !gardees.includes(fam)) continue
       const qty = Math.round((qtyById.get(p.id) || 0) * 100) / 100
       articles.push({
         id: p.id, nom, fam,
@@ -395,7 +401,7 @@ async function handleInventaire(req, res) {
       const nom = String(p.display_name || '').replace(/^\[\d+\]\s*/, '')
       const fam = /^MP[-.]/.test(nom) ? 'Matières premières'
         : /^SM/i.test(nom) ? 'Semi-finis' : null
-      if (!fam) continue
+      if (!fam || !gardees.includes(fam)) continue
       articles.push({
         id: p.id, nom, fam,
         uom: (p.uom_id && p.uom_id[1]) || '',

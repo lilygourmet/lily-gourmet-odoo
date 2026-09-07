@@ -195,8 +195,10 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
               {`📦 Inventaire ${nomLieu}`}
             </h1>
             <p className="text-[13px] text-ink-mute mt-1">
-              {`${lieu === 'prod' ? 'WHLVP/Stock/Stock Prod' : 'WHPDX/Stock Prod annexe'} — tout : `}
-              {`ce qui est en stock, ce qui est en négatif, ce qui est à zéro`}
+              {lieu === 'prod'
+                ? 'WHLVP/Stock/Stock Prod — matières premières et semi-finis'
+                : 'WHPDX/Stock Prod annexe — semi-finis seulement'}
+              {' — en stock, en négatif et à zéro.'}
             </p>
           </div>
           <button onClick={load} className="px-3 py-2 rounded-full bg-bordeaux text-cream text-[13px] flex items-center gap-1.5 hover:bg-bordeaux-deep">
@@ -209,7 +211,9 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
             <div className="bg-white rounded-2xl border border-line shadow-sm p-4 mb-4">
               <div className="flex items-baseline gap-2">
                 <span className="text-[26px] font-semibold text-ink tabular-nums">{totalFaits}</span>
-                <span className="text-[13px] text-ink-mute">comptés sur {articles.length}</span>
+                <span className="text-[13px] text-ink-mute">
+                  comptés sur {articles.length} · <b className="text-ink">{articles.length - totalFaits}</b> à faire
+                </span>
                 <span className="ml-auto text-[13px] font-semibold text-bordeaux tabular-nums">{pct} %</span>
               </div>
               <div className="h-1.5 bg-line rounded-full overflow-hidden mt-2">
@@ -403,11 +407,15 @@ function Ligne({ a, compte, onSaisie, selectable, selectionne, onSelect }) {
       )}
       <div className="flex-1 min-w-0 text-[14px] text-ink break-words">
         {a.nom}
-        {a.qty < 0 && (
-          <span className="ml-2 align-middle inline-block px-1.5 py-0.5 rounded-md bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700 tabular-nums whitespace-nowrap">
-            Odoo : {String(a.qty).replace('-', '\u2212').replace('.', ',')}
-          </span>
-        )}
+        {/* Le stock Odoo, sur TOUTES les lignes : Layla le veut sous les yeux
+            pour savoir où elle en est (07/09/2026). Rouge s'il est négatif,
+            gris s'il est à zéro — ce sont les deux qu'elle vient vérifier. */}
+        <span className={'ml-2 align-middle inline-block px-1.5 py-0.5 rounded-md text-[11px] font-semibold tabular-nums whitespace-nowrap '
+          + (a.qty < 0 ? 'bg-red-50 border border-red-200 text-red-700'
+            : a.qty === 0 ? 'bg-cream border border-line text-ink-mute'
+              : 'bg-emerald-50 border border-emerald-200 text-emerald-800')}>
+          Odoo : {String(a.qty).replace('-', '\u2212').replace('.', ',')} {a.uom}
+        </span>
         {parti && (
           <span className="block text-[11px] text-ink-mute tabular-nums">
             envoy\u00e9 le {parti.le.slice(8, 10)}/{parti.le.slice(5, 7)} : {String(parti.qte).replace('.', ',')} {a.uom}
