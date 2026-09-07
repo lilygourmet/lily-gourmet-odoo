@@ -712,7 +712,7 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
     if (s) l = l.filter(e => String(e.amount_cash).includes(s) || (e.virement_client || '').toLowerCase().includes(s) || (e.source || '').toLowerCase().includes(s))
     // Les enveloppes encore libres d'abord ; les déjà rapprochées à la fin (dépannage).
     return l.sort((a, b) =>
-      (a.deja_rapprochee ? 1 : 0) - (b.deja_rapprochee ? 1 : 0) ||
+      ((a.deja_rapprochee || a.a_confirmer) ? 1 : 0) - ((b.deja_rapprochee || b.a_confirmer) ? 1 : 0) ||
       Math.abs(Number(a.amount_cash) - Number(line.amount)) - Math.abs(Number(b.amount_cash) - Number(line.amount)))
   }, [envs, q, method, line.amount])
   return (
@@ -742,7 +742,12 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
                     {(e.virement_client || e.source || 'Enveloppe').trim()} · {fmtDateCourte(e.session_date)}
                     {e.deja_rapprochee && (
                       <span style={{ display: 'block', fontSize: 10.5, color: '#a9620a', marginTop: 2 }}>
-                        ⚠ déjà rapprochée{e.note_proof ? ` au ${e.note_proof.slice(0, 10)}` : ''} — cliquer pour remplacer
+                        ⚠ déjà rapprochée à{e.note_proof ? ` « ${e.note_proof.slice(0, 90)}${e.note_proof.length > 90 ? '…' : ''} »` : ' une autre ligne'} — cliquer pour remplacer
+                      </span>
+                    )}
+                    {e.a_confirmer && (
+                      <span style={{ display: 'block', fontSize: 10.5, color: '#a9620a', marginTop: 2 }}>
+                        ⏳ à confirmer — pas encore rapprochée{e.note_proof ? ` · lignes possibles : ${e.note_proof.slice(0, 90)}${e.note_proof.length > 90 ? '…' : ''}` : ''}
                       </span>
                     )}
                     {e.preuve_manuelle && (

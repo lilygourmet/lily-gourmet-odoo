@@ -83,6 +83,11 @@ const numerosContraires = (a, b) => {
 // Sinon (« REMISE CHEQUE A ENC 47106191 » → rien d'utile) on comparerait du bruit.
 const nomFiable = n => !!n && n.split(' ').length >= 2 && n.replace(/ /g, '').length >= 6
 
+// Une remise de chèques, écrite « REMISE CHEQUE A ENC <n°> » par les deux banques.
+export function estRemiseCheque(label) {
+  return /REMISE\s+CHEQUE/i.test(label || '')
+}
+
 // Est-ce la MÊME opération bancaire, vue dans deux documents ?
 //   1. Même n° d'opération → oui, QUELLE QUE SOIT LA DATE : les documents ne datent pas
 //      une opération pareil (jour d'opération / jour de valeur), et le numéro tranche.
@@ -91,11 +96,18 @@ const nomFiable = n => !!n && n.split(' ').length >= 2 && n.replace(/ /g, '').le
 //      tronqué de l'autre, comme l'écrit l'extrait.
 // Deux numéros qui se contredisent = deux opérations réelles, jamais fusionnées.
 export function memeOperation(a, b) {
+  const memeMontant = Math.abs(Number(a.amount) - Number(b.amount)) < ECART_MINI
+  const memeJour = !!a.ligne_date && a.ligne_date === b.ligne_date
+  // Une REMISE DE CHÈQUES ne s'identifie que par son montant et son jour : le n° imprimé
+  // après « A ENC » n'est pas le même d'un document à l'autre pour la MÊME remise
+  // (l'extrait et le relevé n'impriment pas la même référence). Deux remises du même
+  // montant le même jour, ça n'existe pas en pratique.
+  if (estRemiseCheque(a.label) && estRemiseCheque(b.label)) return memeMontant && memeJour
   const sa = signatureDepot(a.amount, a.label)
   const sb = signatureDepot(b.amount, b.label)
   if (sa && sb) return sa === sb
-  if (Math.abs(Number(a.amount) - Number(b.amount)) >= ECART_MINI) return false
-  if (!a.ligne_date || !b.ligne_date || a.ligne_date !== b.ligne_date) return false
+  if (!memeMontant) return false
+  if (!memeJour) return false
   const la = libelleNorm(a.label), lb = libelleNorm(b.label)
   const court = la.length <= lb.length ? la : lb
   if (court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))) return true
@@ -141,6 +153,12 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
           ? a.releve_url === b.releve_url
           : String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
         if (memeDoc) continue
+        // Remise de chèques du même jour et du même montant : la même remise, vue dans
+        // deux documents (voir memeOperation). Le n° ne les départage pas.
+        if (ecart === 0 && estRemiseCheque(a.label) && estRemiseCheque(b.label)) {
+          retirees.add(b.key)                       // on garde la plus ancienne (a)
+          continue
+        }
         // Même montant + dates proches + imports différents = la MÊME opération, même si
         // les deux relevés l'écrivent autrement (« VIRT RECU MLLE MERIAM MALEK » vs
         // « VIR INST RECU 2203444 3751003105 ») — le libellé n'est pas une identité.

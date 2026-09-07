@@ -650,7 +650,8 @@ export async function loadPendingBanqueEnvelopes() {
   return (data || [])
     .filter(e => e.destinataire?.type === 'banque' && !e.releve_ignore)
     .map(e => ({ ...e,
-      deja_rapprochee: !!e.releve_status,
+      deja_rapprochee: e.releve_status === 'trouve',
+      a_confirmer: e.releve_status === 'a_confirmer',
       preuve_manuelle: !!e.proof_url && !e.releve_status,
     }))
 }
