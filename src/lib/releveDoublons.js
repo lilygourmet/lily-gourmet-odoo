@@ -83,6 +83,26 @@ const numerosContraires = (a, b) => {
 // Sinon (« REMISE CHEQUE A ENC 47106191 » → rien d'utile) on comparerait du bruit.
 const nomFiable = n => !!n && n.split(' ').length >= 2 && n.replace(/ /g, '').length >= 6
 
+// Est-ce la MÊME opération bancaire, vue dans deux documents ?
+//   1. Même n° d'opération → oui, QUELLE QUE SOIT LA DATE : les documents ne datent pas
+//      une opération pareil (jour d'opération / jour de valeur), et le numéro tranche.
+//   2. Sans numéro des deux côtés, on n'a que le nom du client : on exige alors le MÊME
+//      JOUR et le même montant, plus un nom identique à l'orthographe près — ou un libellé
+//      tronqué de l'autre, comme l'écrit l'extrait.
+// Deux numéros qui se contredisent = deux opérations réelles, jamais fusionnées.
+export function memeOperation(a, b) {
+  const sa = signatureDepot(a.amount, a.label)
+  const sb = signatureDepot(b.amount, b.label)
+  if (sa && sb) return sa === sb
+  if (Math.abs(Number(a.amount) - Number(b.amount)) >= ECART_MINI) return false
+  if (!a.ligne_date || !b.ligne_date || a.ligne_date !== b.ligne_date) return false
+  const la = libelleNorm(a.label), lb = libelleNorm(b.label)
+  const court = la.length <= lb.length ? la : lb
+  if (court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))) return true
+  const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
+  return nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= 0.85
+}
+
 /**
  * Retire les doublons CERTAINS et signale les doublons PROBABLES.
  *

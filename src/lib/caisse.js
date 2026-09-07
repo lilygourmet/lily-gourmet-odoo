@@ -1,7 +1,7 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
-import { marquerDoublons, signatureDepot, memeDepotSansNumero, ECART_MINI } from './releveDoublons'
+import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, ECART_MINI } from './releveDoublons'
 export { ECART_MINI }
 
 // ============================================================
@@ -414,14 +414,19 @@ export async function loadAllFreeReleveLines() {
   // elles : la jumelle d'une ligne déjà prise restait « non liée » pour toujours.
   const { data: prises } = await supabase
     .from('caisse_releve_lignes')
-    .select('amount, label')
+    .select('amount, label, ligne_date')
     .not('used_by', 'is', null)
     .limit(5000)
-  const dejaPrises = new Set()
-  for (const p of (prises || [])) {
-    const sig = signatureDepot(p.amount, p.label)
-    if (sig) dejaPrises.add(sig)
+  // Références de ce qui est DÉJÀ pris en compte, rangées par montant arrondi (une
+  // comparaison par montant, pas toutes contre toutes).
+  const refsParMontant = new Map()
+  const ajouterRef = (r) => {
+    if (!(Number(r.amount) > 0)) return
+    const k = Math.round(Number(r.amount))
+    if (!refsParMontant.has(k)) refsParMontant.set(k, [])
+    refsParMontant.get(k).push(r)
   }
+  for (const p of (prises || [])) ajouterRef(p)
   // 2e source : les caisses VERTES dont la ligne n'a jamais été mémorisée (rapprochements
   // d'avant le marquage auto — voir clearEnveloppeReleve). Il n'y a alors aucune ligne
   // « prise » à comparer, mais le libellé gardé sur la caisse porte le n° d'opération :
@@ -432,17 +437,33 @@ export async function loadAllFreeReleveLines() {
     .eq('releve_status', 'trouve')
     .not('note_proof', 'is', null)
     .limit(5000)
+  // Le libellé gardé sur la caisse s'écrit « date · libellé » : on le relit comme une ligne.
   for (const v of (vertes || [])) {
-    const sig = signatureDepot(v.amount_proof ?? v.amount_cash, v.note_proof)
-    if (sig) dejaPrises.add(sig)
+    const np = v.note_proof || ''
+    const sep = np.indexOf(' · ')
+    if (sep < 0) continue
+    const d = np.slice(0, sep)
+    ajouterRef({
+      amount: v.amount_proof ?? v.amount_cash,
+      label: np.slice(sep + 3),
+      ligne_date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null,
+    })
+  }
+  // Une opération déjà prise en compte, même écrite autrement dans l'autre document.
+  const dejaPrise = (l) => {
+    const k = Math.round(Number(l.amount))
+    for (const dk of [k - 1, k, k + 1]) {
+      for (const r of (refsParMontant.get(dk) || [])) if (memeOperation(r, l)) return true
+    }
+    return false
   }
   // Dédoublonnage : un même dépôt vu sous 2 dates (opération vs valeur) ou 2 libellés
   // (« N » / « N° ») → même MONTANT + même n° de versement (unique) → on garde 1 ligne.
   const seen = new Set()
   const out = []
   for (const r of (data || [])) {
+    if (dejaPrise(r)) continue                        // jumelle déjà rattachée à une caisse
     const sig = signatureDepot(r.amount, r.label)
-    if (sig && dejaPrises.has(sig)) continue          // jumelle déjà rattachée à une caisse
     const k = sig || `row|${r.key || r.id}`
     if (seen.has(k)) continue
     seen.add(k); out.push(r)

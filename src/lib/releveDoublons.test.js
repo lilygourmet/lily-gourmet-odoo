@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nomDeLigne, similarite, marquerDoublons, signatureDepot, memeDepotSansNumero } from './releveDoublons'
+import { nomDeLigne, similarite, marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation } from './releveDoublons'
 
 const L = (key, date, amount, label, created_at) => ({ key, ligne_date: date, amount, label, created_at })
 
@@ -226,5 +226,50 @@ describe('marquerDoublons — relevé et extrait importés ensemble', () => {
       D('b', '2026-07-15', 1500, 'VIRT RECU ASS.SPORTIVE DES FAR', null),
     ])
     expect(out).toHaveLength(2)
+  })
+})
+
+// Une même opération s'écrit différemment selon le document : avec ou sans n°, tronquée,
+// à la date d'opération ou de valeur. memeOperation tranche pour les deux comparaisons
+// (lignes libres entre elles, et ligne libre contre ce qui est déjà rapproché).
+describe('memeOperation', () => {
+  // Cas vécu : la caisse est rapprochée au libellé court, l'autre document l'écrit en long.
+  const court = { amount: 1320, ligne_date: '2026-07-26', label: 'VIR INST RECU BENGELLOUN MIA' }
+  const long = { amount: 1320, ligne_date: '2026-07-26',
+    label: 'VIR INST RECU 2359145 894406175674 02220260726894406175674 BENGELLOUN MIA 022013MAD00000120260727894406175674' }
+
+  it('reconnaît le même client quand un seul libellé porte un n°', () => {
+    expect(memeOperation(court, long)).toBe(true)
+  })
+
+  it('exige le même jour quand il n\'y a pas de n° à comparer', () => {
+    expect(memeOperation(court, { ...long, ligne_date: '2026-07-27' })).toBe(false)
+  })
+
+  it('refuse deux clients différents du même montant le même jour', () => {
+    expect(memeOperation(court, { ...long, label: 'VIR INST RECU 2359145 OUKHADDA AYA' })).toBe(false)
+  })
+
+  // Le n° prime : les deux documents datent la même opération différemment.
+  it('reconnaît le même n° malgré des dates différentes', () => {
+    const a = { amount: 5834, ligne_date: '2026-04-30', label: 'VERSEMENT ESPECE N° 1630293611' }
+    const b = { amount: 5834, ligne_date: '2026-05-04', label: 'VERSEMENT ESPECE N 1630293611' }
+    expect(memeOperation(a, b)).toBe(true)
+  })
+
+  it('refuse deux n° d\'opération qui se contredisent', () => {
+    const a = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 215469570 FARHANE HAJAR' }
+    const b = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2324371 706376617404 FARHANE HAJAR' }
+    expect(memeOperation(a, b)).toBe(false)
+  })
+
+  it('reconnaît le libellé tronqué par l\'extrait', () => {
+    const a = { amount: 1500, ligne_date: '2026-07-15', label: 'VIRT RECU ASS.SPORTIVE DES FAR RABA' }
+    const b = { amount: 1500, ligne_date: '2026-07-15', label: 'VIRT RECU ASS.SPORTIVE DES FAR' }
+    expect(memeOperation(a, b)).toBe(true)
+  })
+
+  it('refuse un montant différent d\'un dirham', () => {
+    expect(memeOperation(court, { ...long, amount: 1321 })).toBe(false)
   })
 })
