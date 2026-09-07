@@ -273,3 +273,36 @@ describe('memeOperation', () => {
     expect(memeOperation(court, { ...long, amount: 1321 })).toBe(false)
   })
 })
+
+// Cas vécu (3 776 dh du 24/08) : la même remise de chèques, vue dans l'extrait et dans le
+// relevé, ne porte PAS le même n° après « A ENC ». Seuls le montant et le jour l'identifient.
+describe('remise de chèques — le n° change d\'un document à l\'autre', () => {
+  const a = { amount: 3776, ligne_date: '2026-08-24', label: 'REMISE CHEQUE A ENC 47729339' }
+  const b = { amount: 3776, ligne_date: '2026-08-24', label: 'REMISE CHEQUE A ENC 47729338' }
+
+  it('reconnaît la même remise malgré deux n° différents', () => {
+    expect(memeOperation(a, b)).toBe(true)
+  })
+
+  it('sépare deux remises de jours différents', () => {
+    expect(memeOperation(a, { ...b, ligne_date: '2026-08-25' })).toBe(false)
+  })
+
+  it('sépare deux remises de montants différents', () => {
+    expect(memeOperation(a, { ...b, amount: 3780 })).toBe(false)
+  })
+
+  it('ne touche pas aux virements : deux n° différents restent deux opérations', () => {
+    const v1 = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 215469570 FARHANE HAJAR' }
+    const v2 = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2324371 706376617404 FARHANE HAJAR' }
+    expect(memeOperation(v1, v2)).toBe(false)
+  })
+
+  it('fusionne aussi les deux lignes libres correspondantes', () => {
+    const out = marquerDoublons([
+      { key: 'x', ligne_date: '2026-08-24', amount: 3776, label: 'REMISE CHEQUE A ENC 47729339', releve_url: 'releves/1.pdf' },
+      { key: 'y', ligne_date: '2026-08-24', amount: 3776, label: 'REMISE CHEQUE A ENC 47729338', releve_url: 'releves/2.pdf' },
+    ])
+    expect(out).toHaveLength(1)
+  })
+})
