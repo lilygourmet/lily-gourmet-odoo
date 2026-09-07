@@ -9,6 +9,7 @@ import { dernierEcran, garderEcran, creerOfPrepa, annulerOfPrepa, annulerDoublon
 import { refreshOnReturn } from '../lib/autoRefresh'
 import { loadStockProdCatalog } from '../lib/stockProd'
 import { poidsUnite, versUnite } from '../lib/unites'
+import { chercher } from '../lib/recherche'
 
 const ATELIER = 'annexe'
 const nb = v => Number(Number(v || 0).toFixed(2)).toLocaleString('fr-FR')
