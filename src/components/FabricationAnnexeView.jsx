@@ -477,11 +477,10 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   // ===== ce qu'on a fait =====
   const liste = useMemo(() => {
     if (!arbre) return []
-    const cherche = q.trim().toLowerCase()
+    const cherche = q.trim()
     if (cherche.length >= 2) {
       const tous = [...new Set([...Object.keys(recettes), ...Object.keys(arbre.combien || {})])]
-      return tous.filter(n => propre(n).toLowerCase().includes(cherche) || n.toLowerCase().includes(cherche))
-        .slice(0, 40)
+      return chercher(tous, cherche, n => propre(n) + ' ' + n).slice(0, 40)
     }
     // « tout ce qui se fait à l'annexe » : les gâteaux ET les semi-finis
     // réellement fabriqués ici (cookies, mignardises, cadres...), les plus

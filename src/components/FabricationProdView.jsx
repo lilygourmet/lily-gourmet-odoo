@@ -12,6 +12,7 @@ import {
   loadConsommateurs,
 } from '../lib/fabricationProd'
 import { loadPrevisions } from '../lib/previsionsVitrine'
+import { chercher } from '../lib/recherche'
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 // A l'atelier on ne pese pas 201,04 g : grammes et pieces en nombres entiers,
@@ -489,10 +490,9 @@ export default function FabricationProdView({ user, onLogout, onNavigate, active
         {!journal && <Skeleton rows={4} />}
 
         {journal && FAMILLES.map(fam => {
-          const cherche = q.trim().toLowerCase()
-          const liste = visibles.filter(a => a.famille === fam)
-            .filter(a => !cherche || propre(a.article).toLowerCase().includes(cherche)
-              || a.article.toLowerCase().includes(cherche))
+          const cherche = q.trim()
+          const liste = chercher(visibles.filter(a => a.famille === fam), cherche,
+            a => propre(a.article) + ' ' + a.article)
           return (
             <div key={fam} className="print:hidden">
               <div className="flex items-center gap-2.5 mt-6 mb-2.5">

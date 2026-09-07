@@ -10,6 +10,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { todayISO } from '../lib/dates'
+import { correspond } from '../lib/recherche'
 import {
   loadArticlesInventaire, loadComptages, saveComptage, deleteComptages,
   loadAjouts, addAjout, updateAjout, deleteAjout, tableauInventaire, calculer,
@@ -80,12 +81,12 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
   }, [comptes])
 
   const visibles = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim()
     return articles.filter(a => {
       if (!dansLeFiltre(a)) return false
       if (vue === 'reste' && neufs[a.id]) return false
       if (vue === 'faits' && !neufs[a.id]) return false
-      if (q && !(a.nom.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q))) return false
+      if (q && !correspond(a.nom + ' ' + a.cat, q)) return false
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

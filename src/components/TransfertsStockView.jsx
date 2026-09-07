@@ -5,6 +5,7 @@ import AppHeader from './AppHeader'
 import { toast } from '../lib/toast'
 import { canSeeTransfertsProduits } from '../lib/auth'
 import { confirmDialog } from '../lib/confirmDialog'
+import { correspond } from '../lib/recherche'
 import {
   SENS, FAMILLES, GROUPES, lieuxDe, peutEnvoyer, peutConfirmer,
   loadArticles, searchOdooProducts, addArticle, setArticleActif,
@@ -60,11 +61,11 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   }, [articles])
 
   const listeArticles = useMemo(() => {
-    const q = filtreArticle.trim().toLowerCase()
+    const q = filtreArticle.trim()
     return articles.filter(a => {
       if (!a.actif && !voirMasques) return false
       if (groupe && (a.groupe || 'autre') !== groupe) return false
-      if (q && !a.nom.toLowerCase().includes(q)) return false
+      if (q && !correspond(a.nom, q)) return false
       return true
     })
   }, [articles, filtreArticle, groupe, voirMasques])
