@@ -38,6 +38,7 @@ const DESTINATIONS = {
   menage_boutique:          { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
   prod_annex:               { type: 74, src: 8, dest: 62 },  // → WHPDX/Stock Prod annexe
   chocolat_cuisine_menage:  { type: 74, src: 8, dest: 62 },  // badge « Chocolat » (ancien code)
+  chocolat:                 { type: 74, src: 8, dest: 62 },
   cuisine:                  { type: 74, src: 8, dest: 62 },
   menage_annex:             { type: 74, src: 8, dest: 62 },
 }
@@ -58,6 +59,7 @@ const RECEPTIONS_ACHAT = {
   menage_boutique:          41,
   prod_annex:               64,
   chocolat_cuisine_menage:  64,
+  chocolat:                 64,
   menage_annex:             64,
   // pas de « cuisine » : ses frais passent par LG traiteur (voir plus bas)
 }
