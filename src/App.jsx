@@ -51,6 +51,7 @@ const PolyDecoupeView = lazy(() => import('./components/PolyDecoupeView'))
 const SimulationGateauxView = lazy(() => import('./components/SimulationGateauxView'))
 const TransfertsStockView = lazy(() => import('./components/TransfertsStockView'))
 const ReglementsLivraisonsView = lazy(() => import('./components/ReglementsLivraisonsView'))
+const AnnuaireAdmin = lazy(() => import('./components/Annuaire/AnnuaireAdmin'))
 import ConversationNotifier from './components/Conversations/ConversationNotifier'
 import AppHeader from './components/AppHeader'
 import UpdateBanner from './components/UpdateBanner'
@@ -437,6 +438,7 @@ function App() {
     if (activeView === 'transferts-sm') return <TransfertsStockView {...navProps} famille="sm" />
     if (activeView === 'reglements-livraisons') return <ReglementsLivraisonsView {...navProps} />
     if (activeView === 'photoshop') return <PhotoshopView {...navProps} />
+    if (activeView === 'annuaire') return <AnnuaireAdmin {...navProps} />
     // Catch-all : Calendrier UNIQUEMENT si l'utilisateur en a la permission.
     // Sinon repli sûr (livreur -> Livraisons, autres -> Tâches) pour ne jamais
     // exposer le calendrier à un user sans perm_calendar.

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- ============================================================
+         PAGE À PART (pas l'app interne).
+         VOLONTAIREMENT SANS MANIFESTE. Un manifeste impose au raccourci
+         une adresse fixe (start_url), forcément SANS la clé du lien —
+         et l'iPhone ne partage pas la mémoire du navigateur avec l'icône
+         de l'écran d'accueil : le raccourci s'ouvrait donc sur
+         « Lien incomplet ».
+         Sans manifeste, l'iPhone enregistre l'ADRESSE OUVERTE (clé
+         comprise) et l'icône ci-dessous. C'est ce qu'on veut.
+         ============================================================ -->
+    <link rel="icon" type="image/png" href="/annuaire-icon-180.png" />
+    <link rel="apple-touch-icon" href="/annuaire-icon-180.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Annuaire" />
+    <meta name="application-name" content="Annuaire" />
+    <meta name="theme-color" content="#16A34A" />
+    <title>Annuaire — Lily Gourmet</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/annuaire.jsx"></script>
+  </body>
+</html>

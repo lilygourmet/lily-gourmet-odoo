@@ -6,6 +6,9 @@
 //   - Attijariwafa « Relevés de compte »  (espèces + chèques + virements)
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+// Odoo compte les centimes, la banque arrondit : même seuil que partout ailleurs pour
+// décider que deux montants sont LE MÊME montant.
+import { ECART_MINI } from './releveDoublons'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -428,7 +431,7 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       // repère sur la date + le libellé, et sans libellé reconnu on ne prend rien.
       const split = parts.length > 1 || env.note_proof.includes('🔗')
       const memes = credits.filter(c => !used.has(c) && c.dateIso === npDate
-        && (split || Math.abs(c.credit - amt) < 0.005))
+        && (split || Math.abs(c.credit - amt) < ECART_MINI))
       const m = memes.find(c => c.label.startsWith(npLabel) || npLabel.startsWith(c.label.slice(0, 30)))
         || (split ? null : memes[0])
       if (m) used.add(m)
@@ -441,7 +444,7 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     if (!isManualProof(env)) continue
     const amt = Number(env.amount_proof ?? env.amount_cash)
     if (!(amt > 0)) continue
-    const m = credits.find(c => !used.has(c) && Math.abs(c.credit - amt) < 0.005 &&
+    const m = credits.find(c => !used.has(c) && Math.abs(c.credit - amt) < ECART_MINI &&
       (!env.proof_date || Math.abs(signedDays(c.dateIso, env.proof_date)) <= 7))
     if (m) used.add(m)
   }
@@ -453,7 +456,7 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     const amt = Number(env.amount_cash)
     const w = windowFor(method)
     let c = candidatesFor(method, credits).filter(x =>
-      !used.has(x) && Math.abs(x.credit - amt) < 0.005 &&
+      !used.has(x) && Math.abs(x.credit - amt) < ECART_MINI &&
       signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
     c.sort((a, b) => Math.abs(signedDays(a.dateIso, env.session_date)) - Math.abs(signedDays(b.dateIso, env.session_date)))
     // Virement : priorité au NOM du client. Si aucune ligne ne porte le nom, repli sur un
@@ -513,7 +516,7 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       const inWin = c => (signedDays(c.dateIso, a.session_date) >= w.min && signedDays(c.dateIso, a.session_date) <= w.max)
         || (signedDays(c.dateIso, b.session_date) >= w.min && signedDays(c.dateIso, b.session_date) <= w.max)
       const line = credits.find(x => !used.has(x) && (x.type === 'virement_recu' || x.type === 'autre')
-        && Math.abs(x.credit - sum) < 0.005 && inWin(x) && ta.some(t => norm(x.label).includes(t)))
+        && Math.abs(x.credit - sum) < ECART_MINI && inWin(x) && ta.some(t => norm(x.label).includes(t)))
       if (line) {
         used.add(line)
         decided.set(a.id, { status: 'a_confirmer', line: null, candidates: [line], combined: true })
@@ -535,7 +538,7 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     const amt = Number(env.amount_cash)
     const w = windowFor(other)
     const c = candidatesFor(other, credits).filter(x =>
-      !used.has(x) && Math.abs(x.credit - amt) < 0.005 &&
+      !used.has(x) && Math.abs(x.credit - amt) < ECART_MINI &&
       signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
     if (c.length) decided.set(env.id, { status: 'a_confirmer', line: null, candidates: c, crossMethod: true })
   }

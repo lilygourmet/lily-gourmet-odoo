@@ -67,6 +67,7 @@ const TAB_DEFS = [
   { view: 'economat',          emoji: '🧾', label: 'Économat',          can: u => !isLivreur(u) && (isAdmin(u) || !!u?.economat_profil || !!u?.perm_econome) },
   { view: 'supports',          emoji: '🥂', label: 'Supports',          can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_supports) },
   { view: 'photoshop',         emoji: '🎨', label: 'Studio photos',     can: u => !isLivreur(u) && canSeePhotoshop(u) },
+  { view: 'annuaire',          emoji: '📇', label: 'Annuaire',          can: u => isAdmin(u) },
   { view: 'stock-poly',        emoji: '🧊', label: 'Stock poly',        can: u => !isLivreur(u) && canSeeStockPoly(u) },
   { view: 'simu-gateaux',      emoji: '🍰', label: 'Simulation gâteaux', can: u => !isLivreur(u) && canSeeSimuGateaux(u) },
   { view: 'transferts-mp',     emoji: '🔄', label: 'Transferts MP',      can: u => !isLivreur(u) && canSeeTransferts(u) },

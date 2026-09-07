@@ -83,6 +83,40 @@ const numerosContraires = (a, b) => {
 // Sinon (« REMISE CHEQUE A ENC 47106191 » → rien d'utile) on comparerait du bruit.
 const nomFiable = n => !!n && n.split(' ').length >= 2 && n.replace(/ /g, '').length >= 6
 
+// Une remise de chèques, écrite « REMISE CHEQUE A ENC <n°> » par les deux banques.
+export function estRemiseCheque(label) {
+  return /REMISE\s+CHEQUE/i.test(label || '')
+}
+
+// Est-ce la MÊME opération bancaire, vue dans deux documents ?
+//   1. Même n° d'opération → oui, QUELLE QUE SOIT LA DATE : les documents ne datent pas
+//      une opération pareil (jour d'opération / jour de valeur), et le numéro tranche.
+//   2. Sans numéro des deux côtés, on n'a que le nom du client : on exige alors le MÊME
+//      JOUR et le même montant, plus un nom identique à l'orthographe près — ou un libellé
+//      tronqué de l'autre, comme l'écrit l'extrait.
+// Deux numéros qui se contredisent = deux opérations réelles, jamais fusionnées.
+export function memeOperation(a, b) {
+  const memeMontant = Math.abs(Number(a.amount) - Number(b.amount)) < ECART_MINI
+  const memeJour = !!a.ligne_date && a.ligne_date === b.ligne_date
+  // Une REMISE DE CHÈQUES ne s'identifie que par son montant et son jour : le n° imprimé
+  // après « A ENC » n'est pas le même d'un document à l'autre pour la MÊME remise
+  // (l'extrait et le relevé n'impriment pas la même référence).
+  // Mais SEULEMENT entre deux documents différents : deux remises du même montant le même
+  // jour dans le MÊME fichier sont deux remises réelles.
+  const memeFichier = !!a.releve_url && a.releve_url === b.releve_url
+  if (estRemiseCheque(a.label) && estRemiseCheque(b.label)) return !memeFichier && memeMontant && memeJour
+  const sa = signatureDepot(a.amount, a.label)
+  const sb = signatureDepot(b.amount, b.label)
+  if (sa && sb) return sa === sb
+  if (!memeMontant) return false
+  if (!memeJour) return false
+  const la = libelleNorm(a.label), lb = libelleNorm(b.label)
+  const court = la.length <= lb.length ? la : lb
+  if (court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))) return true
+  const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
+  return nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= 0.85
+}
+
 /**
  * Retire les doublons CERTAINS et signale les doublons PROBABLES.
  *
@@ -113,9 +147,20 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         if (retirees.has(a.key) || retirees.has(b.key)) continue
         const na = noms.get(a.key), nb = noms.get(b.key)
         const ecart = jours(a.ligne_date, b.ligne_date)
-        // Deux lignes du MÊME relevé sont deux opérations réelles : on n'y touche jamais.
-        const memeImport = String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
-        if (memeImport) continue
+        // Deux lignes du MÊME document sont deux opérations réelles : on n'y touche jamais.
+        // C'est le PDF qui fait foi (releve_url), pas l'instant de l'import : le relevé et
+        // l'extrait choisis ensemble arrivent dans le même import, à la même seconde — s'y
+        // fier laissait passer TOUS les doublons entre ces deux documents.
+        const memeDoc = (a.releve_url && b.releve_url)
+          ? a.releve_url === b.releve_url
+          : String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
+        if (memeDoc) continue
+        // Remise de chèques du même jour et du même montant : la même remise, vue dans
+        // deux documents (voir memeOperation). Le n° ne les départage pas.
+        if (ecart === 0 && estRemiseCheque(a.label) && estRemiseCheque(b.label)) {
+          retirees.add(b.key)                       // on garde la plus ancienne (a)
+          continue
+        }
         // Même montant + dates proches + imports différents = la MÊME opération, même si
         // les deux relevés l'écrivent autrement (« VIRT RECU MLLE MERIAM MALEK » vs
         // « VIR INST RECU 2203444 3751003105 ») — le libellé n'est pas une identité.
@@ -124,8 +169,16 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         // Deux noms de clients lisibles restent départagés par Layla (bloc « probable »
         // ci-dessous) : c'est le seul cas où le libellé garde le dernier mot.
         const deuxNoms = nomFiable(na) && nomFiable(nb)
+        // L'extrait TRONQUE le libellé du relevé (« ...ASS.SPORTIVE DES FAR » vs
+        // « ...ASS.SPORTIVE DES FAR RABA »). Un libellé préfixe de l'autre — l'égalité
+        // comprise — c'est la même opération écrite plus court, même quand les deux
+        // portent un nom lisible. Longueur minimale : un libellé quasi vide serait le
+        // préfixe de n'importe quoi.
+        const la = libelleNorm(a.label), lb = libelleNorm(b.label)
+        const court = la.length <= lb.length ? la : lb
+        const tronque = court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))
         if (ecart <= ecartCertain && !numerosContraires(a.label, b.label) &&
-            (libelleNorm(a.label) === libelleNorm(b.label) || !deuxNoms)) {
+            (tronque || !deuxNoms)) {
           retirees.add(b.key)                       // on garde la plus ancienne (a)
         } else if (ecart <= ecartProbable && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
           probables.set(a.key, { date: b.ligne_date, label: b.label })

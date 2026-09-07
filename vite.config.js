@@ -22,6 +22,13 @@ function emitVersion() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), emitVersion()],
+  // Deux pages : l'app interne, et l'annuaire public (page à part, avec son
+  // propre manifeste pour que le raccourci du téléphone rouvre l'annuaire).
+  build: {
+    rollupOptions: {
+      input: { main: './index.html', annuaire: './annuaire.html' },
+    },
+  },
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
