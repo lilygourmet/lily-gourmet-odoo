@@ -324,3 +324,16 @@ describe('remise de chèques — seulement entre deux fichiers', () => {
     expect(memeOperation(a, { ...a, label: 'REMISE CHEQUE A ENC 47729338', releve_url: null })).toBe(true)
   })
 })
+
+// Le n° identique prime sur tout : c'est la même opération, même dans un seul fichier.
+describe('remise de chèques — le même n° reste décisif', () => {
+  const a = { amount: 3776, ligne_date: '2026-08-24', label: 'REMISE CHEQUE A ENC 47729339', releve_url: 'releves/1.pdf' }
+
+  it('fusionne deux remises au MÊME n°, même document', () => {
+    expect(memeOperation(a, { ...a })).toBe(true)
+  })
+
+  it('fusionne deux remises au MÊME n° malgré des dates différentes', () => {
+    expect(memeOperation(a, { ...a, ligne_date: '2026-08-26', releve_url: 'releves/2.pdf' })).toBe(true)
+  })
+})
