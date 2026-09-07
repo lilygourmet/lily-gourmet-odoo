@@ -401,7 +401,7 @@ function BanqueSection({ user }) {
                 🔗 Lier 2
               </button>
             )}
-            {!env.releve_status && !env.proof_url && !env.releve_ignore && (
+            {env.releve_status !== 'trouve' && !env.releve_ignore && (
               <button onClick={() => setSuggestEnv(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: `1px solid ${hasSuggestion(env) ? '#D6C3EA' : '#e5d8c3'}` }}>
                 {hasSuggestion(env) ? '💡 Suggérer' : '🔍 Chercher'}
               </button>

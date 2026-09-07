@@ -370,7 +370,11 @@ function windowFor(method) {
 // pas encore importé. Vécu : un chèque du 15/01 collé à la remise du 17/03 alors que la
 // bonne (05/02) est arrivée à l'import suivant — l'app ne retouchant jamais une enveloppe
 // déjà verte, l'erreur devenait définitive.
-const CHEQUE_AUTO_MAX_DAYS = 45
+// 90 jours et non 45 : ici les chèques sont couramment encaissés bien après la vente
+// (vécu : vente du 08/07, remise du 24/08 = 47 jours), et chaque chèque au-delà du seuil
+// demandait une confirmation à la main. La fenêtre de recherche s'arrête de toute façon
+// à 100 jours, et deux remises possibles laissent toujours choisir.
+const CHEQUE_AUTO_MAX_DAYS = 90
 
 // Rapproche les enveloppes Banque avec les lignes du relevé.
 // Ne touche pas aux enveloppes déjà 'trouve'. status: 'trouve' | 'a_confirmer' | 'absent'
