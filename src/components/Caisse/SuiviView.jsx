@@ -541,6 +541,32 @@ function NonLieSection() {
       reload()
     } catch (e) { alert('Erreur : ' + (e?.message || e)) }
   }
+  // Caisses rangées par montant arrondi : pour dire, sous chaque ligne, s'il existe une
+  // caisse de ce montant et dans quel état elle est. C'est la question qu'on se pose
+  // devant une ligne qui reste là — sans ça il faut aller fouiller la base.
+  const envsParMontant = useMemo(() => {
+    const m = new Map()
+    for (const e of pendingEnvs) {
+      const k = Math.round(Number(e.amount_cash))
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(e)
+    }
+    return m
+  }, [pendingEnvs])
+  const caissesDeCeMontant = (amount) => {
+    const k = Math.round(Number(amount))
+    const out = []
+    for (const dk of [k - 1, k, k + 1]) {
+      for (const e of (envsParMontant.get(dk) || [])) {
+        if (Math.abs(Number(e.amount_cash) - Number(amount)) < ECART_MINI) out.push(e)
+      }
+    }
+    return out
+  }
+  const etatCaisse = (e) => e.deja_rapprochee ? '✓ rapprochée'
+    : e.a_confirmer ? '⏳ à confirmer'
+    : e.preuve_manuelle ? '🧾 versée'
+    : 'à verser'
   const TYPE_GROUP = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
   const count = useMemo(() => {
     const c = { cash: 0, cheque: 0, virement: 0 }
@@ -593,6 +619,21 @@ function NonLieSection() {
                 )}
               </div>
             )}
+            {view === 'free' && (() => {
+              const cs = caissesDeCeMontant(l.amount)
+              if (!cs.length) return (
+                <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2 }}>
+                  Aucune caisse de ce montant — ce reçu n'a peut-être pas d'enveloppe Odoo.
+                </div>
+              )
+              return (
+                <div style={{ fontSize: 11, color: '#5b2a86', marginTop: 2 }}>
+                  {cs.length} caisse{cs.length > 1 ? 's' : ''} de ce montant :{' '}
+                  {cs.slice(0, 3).map(e => `${fmtDateCourte(e.session_date)} (${etatCaisse(e)})`).join(' · ')}
+                  {cs.length > 3 ? ` … +${cs.length - 3}` : ''}
+                </div>
+              )
+            })()}
             {view === 'linked' && l.env && (
               <div style={{ fontSize: 11, color: '#0a7d3d', marginTop: 2 }}>
                 → {l.env.destinataire?.name || l.env.source || 'enveloppe'} · {l.env.session_date}{l.env.amount_cash != null ? ` · ${fmtMoney(l.env.amount_cash)}` : ''}
