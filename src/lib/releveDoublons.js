@@ -98,6 +98,10 @@ export function estRemiseCheque(label) {
 export function memeOperation(a, b) {
   const memeMontant = Math.abs(Number(a.amount) - Number(b.amount)) < ECART_MINI
   const memeJour = !!a.ligne_date && a.ligne_date === b.ligne_date
+  const sa = signatureDepot(a.amount, a.label)
+  const sb = signatureDepot(b.amount, b.label)
+  // MÊME n° d'opération : la même opération, quels que soient la date et le document.
+  if (sa && sb && sa === sb) return true
   // Une REMISE DE CHÈQUES ne s'identifie que par son montant et son jour : le n° imprimé
   // après « A ENC » n'est pas le même d'un document à l'autre pour la MÊME remise
   // (l'extrait et le relevé n'impriment pas la même référence).
@@ -105,9 +109,8 @@ export function memeOperation(a, b) {
   // jour dans le MÊME fichier sont deux remises réelles.
   const memeFichier = !!a.releve_url && a.releve_url === b.releve_url
   if (estRemiseCheque(a.label) && estRemiseCheque(b.label)) return !memeFichier && memeMontant && memeJour
-  const sa = signatureDepot(a.amount, a.label)
-  const sb = signatureDepot(b.amount, b.label)
-  if (sa && sb) return sa === sb
+  // Deux n° d'opération qui se contredisent = deux opérations réelles.
+  if (sa && sb) return false
   if (!memeMontant) return false
   if (!memeJour) return false
   const la = libelleNorm(a.label), lb = libelleNorm(b.label)
