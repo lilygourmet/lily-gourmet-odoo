@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  loadProfils, createProfil, renameProfil, deleteProfil,
+  loadProfils, createProfil, renameProfil, deleteProfil, setProfilLieu, LIEUX_BADGE,
   loadAllCategories, createCategory, deleteCategory,
   loadCategoryProfils, setCategoryProfils, createGroup, deleteGroup,
   loadCategoryManage, addArticleFromOdoo, setArticleActive, setArticleAchat, deleteArticle, linkArticleToOdoo,
@@ -77,6 +77,13 @@ export default function EconomatManageModal({ isAdmin = false, onClose, onChange
     if (!label?.trim()) return
     setBusy(true)
     try { await createProfil(label); await reloadProfils(); notifyChanged() }
+    catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
+  }
+  // Où part le stock demandé par ce badge. Sans lieu, l'employé ne peut rien
+  // envoyer : le serveur ne sait pas vers quel stock Odoo faire le transfert.
+  async function changeBadgeLieu(p, lieu) {
+    setBusy(true)
+    try { await setProfilLieu(p.value, lieu); await reloadProfils(); notifyChanged() }
     catch (e) { toast.error('Erreur : ' + e.message) } finally { setBusy(false) }
   }
   async function renameBadge(p) {
@@ -201,12 +208,19 @@ export default function EconomatManageModal({ isAdmin = false, onClose, onChange
               {showBadges && (
                 <div className="mt-2 space-y-2">
                   <div className="text-[11px] text-ink-mute italic">
-                    Le badge donné à un employé décide des catégories qu'il peut demander.
+                    Le badge donné à un employé décide des catégories qu'il peut demander,
+                    et vers quel stock part ce qu'il demande.
                   </div>
                   <div className="space-y-1">
                     {allProfils.map(p => (
                       <div key={p.value} className="flex items-center gap-2 bg-white border border-line rounded-lg px-3 py-1.5">
                         <span className="flex-1 text-[12px] text-ink truncate">{p.label}</span>
+                        <select value={p.lieu || ''} disabled={busy} title="Où part le stock demandé"
+                                onChange={e => changeBadgeLieu(p, e.target.value)}
+                                className={`text-[11px] px-2 py-1 rounded-md border outline-none bg-white ${p.lieu ? 'border-line text-ink-soft' : 'border-amber-500 text-amber-700'}`}>
+                          <option value="" disabled>⚠️ le stock part vers…</option>
+                          {LIEUX_BADGE.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                        </select>
                         <button onClick={() => renameBadge(p)} disabled={busy} title="Renommer"
                                 className="text-ink-mute hover:text-bordeaux"><Pencil size={13} strokeWidth={1.8} /></button>
                         <button onClick={() => removeBadge(p)} disabled={busy} title="Supprimer"

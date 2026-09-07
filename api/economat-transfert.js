@@ -30,39 +30,60 @@ const exec = (uid, model, method, args, kw = {}) =>
 // Où va le stock, selon le BADGE de l'employé — pas la catégorie d'articles :
 // le stock part vers son lieu de travail, quel que soit l'onglet où il commande.
 // src/dest sont repris explicitement pour que le transfert ne dépende pas d'un
-// réglage Odoo modifié plus tard. Les 8 badges de la table economat_profils.
-const DESTINATIONS = {
-  boutique:                 { type: 52, src: 8, dest: 51 },  // → WHLVP/Stock/Stock Vente
-  cake_design:              { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
-  prod_finition_cd:         { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
-  menage_boutique:          { type: 51, src: 8, dest: 52 },  // → WHLVP/Stock/Stock Prod
-  prod_annex:               { type: 74, src: 8, dest: 62 },  // → WHPDX/Stock Prod annexe
-  chocolat_cuisine_menage:  { type: 74, src: 8, dest: 62 },  // badge « Chocolat » (ancien code)
-  chocolat:                 { type: 74, src: 8, dest: 62 },
-  cuisine:                  { type: 74, src: 8, dest: 62 },
-  menage_annex:             { type: 74, src: 8, dest: 62 },
+// réglage Odoo modifié plus tard.
+//
+// Le LIEU de chaque badge est choisi par Layla dans Économat → Gérer → Badges
+// (colonne `lieu` de economat_profils) : un badge créé depuis l'app marche
+// tout de suite. Ces trois lieux sont les seules destinations possibles.
+// Réceptions Odoo : 76 = Lily VP vers stock de vente, 41 = vers stock de
+// prod, 64 = prod annexe.
+const LIEUX = {
+  boutique: { type: 52, src: 8, dest: 51, reception: 76 },  // → WHLVP/Stock/Stock Vente
+  prod:     { type: 51, src: 8, dest: 52, reception: 41 },  // → WHLVP/Stock/Stock Prod
+  annexe:   { type: 74, src: 8, dest: 62, reception: 64 },  // → WHPDX/Stock Prod annexe
 }
+
+// Les articles marqués `achat` ne sont pas en stock au magasin : on les
+// COMMANDE. Leur ligne part en demande de prix (bon fournisseur en brouillon)
+// dans l'Odoo principal, une par fournisseur — comme pour LG traiteur. La
+// marchandise arrive au même endroit que celle du transfert interne : au lieu
+// de travail du badge (`reception` ci-dessus).
+
+// Repli si la colonne `lieu` n'est pas encore remplie (SQL pas lancé, base
+// injoignable) : les badges d'origine, tels qu'ils étaient écrits ici.
+const LIEU_PAR_DEFAUT = {
+  boutique:                 'boutique',
+  cake_design:              'prod',
+  prod_finition_cd:         'prod',
+  menage_boutique:          'prod',
+  prod_annex:               'annexe',
+  menage_annex:             'annexe',
+  cuisine:                  'annexe',
+  chocolat:                 'annexe',
+  chocolat_cuisine_menage:  'annexe',  // badge « Chocolat » (ancien code)
+}
+
+// Le lieu choisi pour ce badge dans Économat → Gérer → Badges.
+async function lieuDuBadge(badge) {
+  if (!badge) return null
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  let lieu = null
+  if (url && key) {
+    try {
+      const r = await fetch(`${url}/rest/v1/economat_profils?select=lieu&value=eq.${encodeURIComponent(badge)}`,
+        { headers: { apikey: key, Authorization: `Bearer ${key}` } })
+      const [row] = await r.json()
+      lieu = row?.lieu || null
+    } catch { /* base injoignable : on retombe sur la liste ci-dessous */ }
+  }
+  return LIEUX[lieu || LIEU_PAR_DEFAUT[badge]] || null
+}
+
 // Article fourre-tout pour ce qui n'est pas au catalogue Odoo (consommable :
 // n'affecte aucun stock). Le nom réel est porté par la description de la ligne.
 const AUTRE_ACHAT = 3159
 
-// Les articles marqués `achat` ne sont pas en stock au magasin : on les
-// COMMANDE. Leur ligne part en demande de prix (bon fournisseur en brouillon)
-// dans l'Odoo principal, une par fournisseur — comme pour LG traiteur.
-// La marchandise arrive au même endroit que celle du transfert interne : au
-// lieu de travail du badge. Réceptions Odoo : 76 = Lily VP vers stock de vente
-// (boutique), 41 = Lily VP vers stock de prod, 64 = Prod annexe.
-const RECEPTIONS_ACHAT = {
-  boutique:                 76,
-  cake_design:              41,
-  prod_finition_cd:         41,
-  menage_boutique:          41,
-  prod_annex:               64,
-  chocolat_cuisine_menage:  64,
-  chocolat:                 64,
-  menage_annex:             64,
-  // pas de « cuisine » : ses frais passent par LG traiteur (voir plus bas)
-}
 
 /**
  * Le fournisseur chez qui on prend HABITUELLEMENT cet article : le plus
@@ -226,11 +247,11 @@ export default async function handler(req, res) {
       : lignes.filter(l => l.source !== 'lgt' && l.achat && l.odooProductId)
     const lignesLg = lignes.filter(l => l.source !== 'lgt' && !lignesAchat.includes(l))
 
-    const dest = DESTINATIONS[badge]
+    const dest = await lieuDuBadge(badge)
     if (lignesLg.length && !dest) {
       return res.status(400).json({
         error: badge
-          ? `Le badge « ${badgeLabel || badge} » n'a pas de destination de stock définie.`
+          ? `Le badge « ${badgeLabel || badge} » ne dit pas où envoyer le stock. À régler dans Économat → Gérer → Badges.`
           : "Aucun badge sur ce compte : impossible de savoir où envoyer le stock.",
       })
     }
@@ -331,11 +352,11 @@ export default async function handler(req, res) {
     // 1bis) Odoo Lily Gourmet : les articles qu'on COMMANDE (les frais) partent
     //       en demande de prix, une par fournisseur, au lieu du transfert.
     if (lignesAchat.length) {
-      const reception = RECEPTIONS_ACHAT[badge]
+      const reception = dest?.reception
       if (!reception) {
         return res.status(400).json({
           error: badge
-            ? `Le badge « ${badgeLabel || badge} » n'a pas de lieu de réception défini : impossible de commander.`
+            ? `Le badge « ${badgeLabel || badge} » ne dit pas où livrer l'achat. À régler dans Économat → Gérer → Badges.`
             : "Aucun badge sur ce compte : impossible de savoir où livrer l'achat.",
         })
       }

@@ -339,13 +339,27 @@ export async function setCategoryProfils(categoryId, profils) {
 // Badges (profils) — gérés depuis Économat → Gérer
 // ============================================================
 
+// Les trois lieux où le stock demandé peut partir. Le code serveur
+// (api/economat-transfert.js) traduit ces noms en emplacements Odoo.
+export const LIEUX_BADGE = [
+  { value: 'boutique', label: 'Stock Vente (boutique)' },
+  { value: 'prod',     label: 'Stock Prod (Lily VP)' },
+  { value: 'annexe',   label: 'Stock Prod annexe' },
+]
+
 export async function loadProfils() {
   const { data, error } = await supabase
     .from('economat_profils')
-    .select('value, label, display_order')
+    .select('value, label, display_order, lieu')
     .order('display_order')
   if (error) throw error
   return data || []
+}
+
+// Où part le stock demandé par les porteurs de ce badge.
+export async function setProfilLieu(value, lieu) {
+  const { error } = await supabase.from('economat_profils').update({ lieu }).eq('value', value)
+  if (error) throw error
 }
 
 // Code technique garde en base, derive du nom saisi (« Ménage » -> « menage »).
