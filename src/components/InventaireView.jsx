@@ -9,7 +9,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { todayISO } from '../lib/dates'
+import { todayISO, jourLocal } from '../lib/dates'
 import { correspond } from '../lib/recherche'
 import {
   loadArticlesInventaire, loadComptages, saveComptage, deleteComptages,
@@ -58,9 +58,14 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
       deleteComptages(lieu, [a.id]).catch(e => toast.error('Non enregistré : ' + e.message))
       return
     }
+    // `compte_le` DOIT être ici : sans lui, la ligne gardée en mémoire n'a pas
+    // de date, « Vers Odoo » la croit d'un autre jour et refuse de l'envoyer
+    // tant qu'on n'a pas rechargé l'écran (vécu le 07/09/2026 : 18 comptages
+    // restés à quai). `saveComptage` réécrit la sienne, les deux concordent.
     const ligne = {
       product_id: a.id, nom: a.nom, uom: a.uom, quantite,
       qty_odoo: a.qty, compte_par: user?.full_name || user?.username || null,
+      compte_le: new Date().toISOString(),
     }
     setComptes(c => ({ ...c, [a.id]: ligne }))
     saveComptage(lieu, ligne).catch(e => toast.error('Non enregistré : ' + e.message))
@@ -121,7 +126,7 @@ export default function InventaireView({ user, activeView, onNavigate, onLogout,
     // Ne partent que les comptages PAS ENCORE envoyés, et faits aujourd'hui :
     // un comptage d'hier précède les fabrications du jour, l'appliquer
     // effacerait ce qui est sorti depuis.
-    const dujour = articles.filter(a => neufs[a.id] && String(neufs[a.id].compte_le || '').slice(0, 10) === todayISO())
+    const dujour = articles.filter(a => neufs[a.id] && jourLocal(neufs[a.id].compte_le) === todayISO())
     const vieux = Object.keys(neufs).length - dujour.length
     const lignes = dujour.map(a => ({ product_id: a.id, quantite: neufs[a.id].quantite }))
     if (!lignes.length) {
