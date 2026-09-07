@@ -3,6 +3,7 @@ import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, ECART_MINI } from '../../lib/caisse'
+import { windowFor } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -553,15 +554,23 @@ function NonLieSection() {
     }
     return m
   }, [pendingEnvs])
-  const caissesDeCeMontant = (amount) => {
-    const k = Math.round(Number(amount))
+  // Caisses PLAUSIBLES pour une ligne : même montant, même moyen de paiement, et une date
+  // compatible (un dépôt suit la vente ; un virement tombe à quelques jours). Sans la date
+  // et le moyen, un montant courant comme 175 dh renvoyait des dizaines de caisses.
+  const caissesPossibles = (l) => {
+    const methode = TYPE_GROUP[l.type] || 'virement'
+    const w = windowFor(methode)
+    const k = Math.round(Number(l.amount))
     const out = []
     for (const dk of [k - 1, k, k + 1]) {
       for (const e of (envsParMontant.get(dk) || [])) {
-        if (Math.abs(Number(e.amount_cash) - Number(amount)) < ECART_MINI) out.push(e)
+        if (Math.abs(Number(e.amount_cash) - Number(l.amount)) >= ECART_MINI) continue
+        if ((e.payment_method || 'cash') !== methode) continue
+        const j = (new Date(l.ligne_date) - new Date(e.session_date)) / 86400000
+        if (j >= w.min && j <= w.max) out.push(e)
       }
     }
-    return out
+    return out.sort((a, b) => String(b.session_date).localeCompare(String(a.session_date)))
   }
   const etatCaisse = (e) => e.deja_rapprochee ? '✓ rapprochée'
     : e.a_confirmer ? '⏳ à confirmer'
@@ -620,17 +629,20 @@ function NonLieSection() {
               </div>
             )}
             {view === 'free' && (() => {
-              const cs = caissesDeCeMontant(l.amount)
+              const cs = caissesPossibles(l)
               if (!cs.length) return (
                 <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2 }}>
-                  Aucune caisse de ce montant — ce reçu n'a peut-être pas d'enveloppe Odoo.
+                  Aucune caisse possible — ce reçu n'a pas d'enveloppe Odoo du même montant à une date compatible.
+                </div>
+              )
+              if (cs.length === 1) return (
+                <div style={{ fontSize: 11, color: '#5b2a86', marginTop: 2 }}>
+                  1 caisse possible : {fmtDateCourte(cs[0].session_date)} ({etatCaisse(cs[0])})
                 </div>
               )
               return (
                 <div style={{ fontSize: 11, color: '#5b2a86', marginTop: 2 }}>
-                  {cs.length} caisse{cs.length > 1 ? 's' : ''} de ce montant :{' '}
-                  {cs.slice(0, 3).map(e => `${fmtDateCourte(e.session_date)} (${etatCaisse(e)})`).join(' · ')}
-                  {cs.length > 3 ? ` … +${cs.length - 3}` : ''}
+                  {cs.length} caisses possibles — ouvre « Lier » pour choisir
                 </div>
               )
             })()}
