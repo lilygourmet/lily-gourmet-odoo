@@ -80,10 +80,10 @@ describe('reconcileEnvelopes — chèque encaissé longtemps après', () => {
     id: 283, amount_cash: 364, payment_method: 'cheque',
     releve_status: null, proof_url: null, session_date: '2026-01-15',
   }
-  const remiseMars = { credit: 364, dateIso: '2026-03-17', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 46264440' }
+  const remiseMars = { credit: 364, dateIso: '2026-04-20', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 46264440' }
   const remiseFev  = { credit: 364, dateIso: '2026-02-05', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 45888840' }
 
-  it('ne valide plus tout seul une remise à plus de 45 jours', () => {
+  it('ne valide plus tout seul une remise à plus de 90 jours', () => {
     const { results } = reconcileEnvelopes([envCheque], [remiseMars], {})
     const r = results.find(x => x.env.id === 283)
     expect(r.status).toBe('a_confirmer')
@@ -180,5 +180,20 @@ describe('reconcileEnvelopes — centimes Odoo face au montant rond de la banque
   it('ne rapproche toujours pas un écart d\'un dirham entier', () => {
     const { results } = reconcileEnvelopes([{ ...envCentimes, amount_cash: 14795 }], [versement], {})
     expect(results.find(r => r.env.id === 'J1').status).toBe('absent')
+  })
+})
+
+// Ici les chèques sont couramment encaissés bien après la vente : une remise à 47 jours
+// (vente du 08/07, remise du 24/08) doit se valider seule, pas partir « à confirmer ».
+describe('reconcileEnvelopes — chèque encaissé un mois et demi après', () => {
+  const envCheque = {
+    id: 776, amount_cash: 3776, payment_method: 'cheque',
+    releve_status: null, proof_url: null, session_date: '2026-07-08',
+  }
+  const remise = { credit: 3776, dateIso: '2026-08-24', type: 'cheque_depot', label: 'REMISE CHEQUE A ENC 47729339' }
+
+  it('valide seul une remise à 47 jours', () => {
+    const { results } = reconcileEnvelopes([envCheque], [remise], {})
+    expect(results.find(r => r.env.id === 776).status).toBe('trouve')
   })
 })
