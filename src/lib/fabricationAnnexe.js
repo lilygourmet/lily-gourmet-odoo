@@ -5,11 +5,15 @@ import { supabase } from './supabase'
  * (ordres terminés sur 90 jours) et de quoi chaque chose est faite.
  * → { racines: [nom], combien: {nom: nbFournées}, recettes: {nom: {...}} }
  */
-export async function loadArbreAnnexe() {
+export async function loadArbreAnnexe(frais = false) {
   // Toujours frais : l'API ne met plus cet écran en cache, et le `cb` empêche
   // le navigateur d'en garder une copie. Layla doit voir ses ajustements
   // d'inventaire tout de suite, pas 3 minutes plus tard.
-  const r = await fetch('/api/freezer-list?mode=annexe&cb=' + Date.now())
+  //
+  // `frais` va plus loin : il fait relire les NOMENCLATURES à Odoo. Le serveur
+  // les garde dix minutes en mémoire — c'est bien pour la vitesse, mais après
+  // une correction de recette on veut la voir tout de suite.
+  const r = await fetch('/api/freezer-list?mode=annexe' + (frais ? '&frais=1' : '') + '&cb=' + Date.now())
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   return await r.json()
 }

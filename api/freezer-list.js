@@ -713,9 +713,12 @@ const prepaDe = cle => PREPAS[cle] || PREPAS.glacage
 // ce qui ne bouge pas (la recette, l'emplacement de production). Les stocks,
 // eux, sont relus à chaque ouverture.
 const _memo = {}
-async function memo(cle, calcul) {
+// `frais` : on jette ce qui est en mémoire et on relit Odoo. Sert quand Layla
+// vient de corriger une nomenclature — sans ça elle voyait l'ancienne recette
+// pendant dix minutes, sans comprendre pourquoi.
+async function memo(cle, calcul, frais = false) {
   const vu = _memo[cle]
-  if (vu && Date.now() - vu.t < 600000) return vu.v
+  if (!frais && vu && Date.now() - vu.t < 600000) return vu.v
   const v = await calcul()
   _memo[cle] = { t: Date.now(), v }
   return v
@@ -1960,6 +1963,7 @@ export default async function handler(req, res) {
       const t0 = Date.now()
       const chrono = []
       const top = nom => { chrono.push(`${nom} ${Date.now() - t0} ms`) }
+      const frais = req.query.frais === '1'    // « je viens de changer une recette »
       const uid = await odooAuth()
       top('connexion')
       const lieux = await odooSearchRead(uid, 'stock.location',
@@ -1986,10 +1990,10 @@ export default async function handler(req, res) {
           ['state', '=', 'done'],
           ['date_planned_start', '>=', isoD(d0)],
         ], ['product_id', 'product_qty'], { limit: 3000, order: 'id desc' }),
-        memo('boms', () => odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 })),
+        memo('boms', () => odooSearchRead(uid, 'mrp.bom', [], ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 }), frais),
         memo('bomlignes', () => odooSearchRead(uid, 'mrp.bom.line', [],
           ['bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
-          { limit: 40000 })),
+          { limit: 40000 }), frais),
         memo('tmplnoms', () => odooSearchRead(uid, 'product.template', [], ['id', 'name'], { limit: 8000 })),
         memo('anciensordres', () => odooSearchRead(uid, 'mrp.production', [
           ['location_src_id', 'in', [...lieux.map(l => l.id), 52]],

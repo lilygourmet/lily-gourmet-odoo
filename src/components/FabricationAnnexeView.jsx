@@ -261,10 +261,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
   const ordreDe = nom => ordresLocaux[nom] || ((arbre && arbre.ordres) || {})[nom]
 
   // Relire Odoo : après une création d'ordre, et quand on appuie sur
-  // « mettre à jour ». Il n'y a plus de cache, la lecture est toujours vraie.
+  // « mettre à jour ». `true` fait AUSSI relire les nomenclatures — le serveur
+  // les garde dix minutes, et après une correction de recette on veut la voir
+  // tout de suite, pas au prochain quart d'heure.
   const relireOdoo = () => {
     setRechargement(true)
-    return loadArbreAnnexe()
+    return loadArbreAnnexe(true)
       .then(a => { setArbre(a); garderEcran('annexe', a); setErreur(null); setMajA(new Date()) })
       .catch(e => setErreur(e.message || String(e)))
       .finally(() => setRechargement(false))
