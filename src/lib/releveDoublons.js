@@ -100,9 +100,11 @@ export function memeOperation(a, b) {
   const memeJour = !!a.ligne_date && a.ligne_date === b.ligne_date
   // Une REMISE DE CHÈQUES ne s'identifie que par son montant et son jour : le n° imprimé
   // après « A ENC » n'est pas le même d'un document à l'autre pour la MÊME remise
-  // (l'extrait et le relevé n'impriment pas la même référence). Deux remises du même
-  // montant le même jour, ça n'existe pas en pratique.
-  if (estRemiseCheque(a.label) && estRemiseCheque(b.label)) return memeMontant && memeJour
+  // (l'extrait et le relevé n'impriment pas la même référence).
+  // Mais SEULEMENT entre deux documents différents : deux remises du même montant le même
+  // jour dans le MÊME fichier sont deux remises réelles.
+  const memeFichier = !!a.releve_url && a.releve_url === b.releve_url
+  if (estRemiseCheque(a.label) && estRemiseCheque(b.label)) return !memeFichier && memeMontant && memeJour
   const sa = signatureDepot(a.amount, a.label)
   const sb = signatureDepot(b.amount, b.label)
   if (sa && sb) return sa === sb
