@@ -148,7 +148,16 @@ function Vignette({ nom, photo, taille, rond, plein }) {
     return (
       <span className="shrink-0 grid place-items-center bg-cream-warm overflow-hidden" style={style}>
         {/* la photo entière tient dans le carré, avec un peu d'air autour */}
-        <img src={photo} alt="" className="w-full h-full object-contain p-1" />
+        <img src={photo} alt="" className="w-full h-full object-contain p-1"
+          onError={e => {
+            // Le site n'a pas répondu : on retombe sur la photo servie par Odoo.
+            const img = e.currentTarget
+            if (img.dataset.rep) return
+            const m = /product\.template\/(\d+)\//.exec(img.src)
+            if (!m) return
+            img.dataset.rep = '1'
+            img.src = '/api/freezer-list?mode=photo&id=' + m[1]
+          }} />
       </span>
     )
   }
@@ -240,7 +249,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     return base
   }, [arbre, catalogue])
   const photoDe = n => (arbre && arbre.photos && arbre.photos[n]
-    ? `/api/freezer-list?mode=photo&id=${arbre.photos[n]}` : '')
+    ? `https://lily-gourmet.com/web/image/product.template/${arbre.photos[n]}/image_256` : '')
 
   const enfantsDe = nom => {
     const r = recettes[nom]
@@ -897,21 +906,24 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
               {casesAFaire.map(({ mere, l }) => {
                 const enRupture = (stocks[l.nom] || 0) <= 0
+                // La ligne ne porte pas toujours son gâteau : on le retrouve
+                // dans l'arbre, sinon la case reste sans photo.
+                const parent = mere || (meresDe[l.nom] || [])[0]
                 return (
                   <button key={(mere || '') + '|' + l.nom} onClick={() => ouvrirFiche(l.nom)}
                     className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
                     <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
                     <span className="relative block w-full aspect-square overflow-hidden">
-                      <Vignette nom={l.nom} photo={photoDe(l.nom) || (mere ? photoDe(mere) : '')} plein rond={0} />
-                      {photoDe(l.nom) && mere && mere !== l.nom && <Medaillon meres={[mere]} />}
+                      <Vignette nom={l.nom} photo={photoDe(l.nom) || (parent ? photoDe(parent) : '')} plein rond={0} />
+                      {photoDe(l.nom) && parent && parent !== l.nom && <Medaillon meres={[parent]} />}
                     </span>
                     <span className={'absolute top-1.5 left-1.5 right-1.5 rounded-full px-2 py-1 text-[10px] font-extrabold text-center text-white shadow-md '
                       + (enRupture ? 'bg-danger' : 'bg-[#854F0B]')}>
                       {enRupture ? 'rupture' : 'à remplir'}
                     </span>
-                    {mere && courtNom(mere).toLowerCase() !== courtNom(l.nom).toLowerCase() && (
+                    {parent && courtNom(parent).toLowerCase() !== courtNom(l.nom).toLowerCase() && (
                       <span className="block px-1.5 pt-1 text-[9.5px] text-ink-mute leading-tight truncate">
-                        pour {courtNom(mere)}
+                        pour {courtNom(parent)}
                       </span>
                     )}
                     <span className="flex items-center flex-wrap gap-1 px-1.5 pt-1">
