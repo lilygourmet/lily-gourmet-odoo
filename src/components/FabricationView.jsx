@@ -40,6 +40,12 @@ const aujourdhui = () => new Date().toLocaleDateString('sv-SE', CASA)
 // Le jour d'une coche, à l'heure de Casablanca : `fait_le` arrive en UTC, et
 // une déclaration de 23 h 30 ne doit pas compter pour le lendemain.
 const jourDe = t => (t ? new Date(t).toLocaleDateString('sv-SE', CASA) : '')
+// Cet ordre est-il rattaché à un gâteau ? ⚠️ Odoo écrit parfois une origine
+// COMPOSÉE : « OP/00412,WHLVP/MO/200023 ». Comparer la chaîne entière ne
+// reconnaissait pas le gâteau, et une base récupérait pour sa tournée l'ordre
+// qui lui était réservé. Partout ailleurs le fichier découpe déjà sur la virgule.
+const pourUnGateau = (origine, desGateaux) =>
+  String(origine || '').split(',').some(x => desGateaux.has(x.trim()))
 // La clé porte l'USAGE : une crème au beurre vanille faite pour la crème STK
 // n'est pas celle du 20 cm vanille. Chacun la sienne — sans usage (les bases),
 // la clé reste globale : une base sert tout le monde.
@@ -782,7 +788,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     setLots(l => { const s2 = { ...l }; delete s2[b.produit]; return s2 })
     const desGateaux = new Set(((data && data.ofs) || []).map(o => o.name))
     const libre = ((data && data.ordres) || []).find(o => o.produit === b.produit
-      && o.etat !== 'done' && !faits[o.name] && !desGateaux.has(o.origine))
+      && o.etat !== 'done' && !faits[o.name] && !pourUnGateau(o.origine, desGateaux))
     if (libre) return marquerOrdre(libre.name, b.produit, qty)
     const cree = await creerOfPrepa(b.produit, qty, user?.id, [])
     if (cree && cree.name && !cree.error && !cree.test) {
@@ -1216,7 +1222,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // réassort, on reprend cet ordre-là au lieu d'en créer un deuxième.
     if (!cle.includes('@')) {
       const desGateaux = new Set(((data && data.ofs) || []).map(o => o.name))
-      return siens.filter(o => !desGateaux.has(o.origine)).map(o => o.name)
+      return siens.filter(o => !pourUnGateau(o.origine, desGateaux)).map(o => o.name)
     }
     // Une crème est dédiée : seulement les ordres des gâteaux SÉLECTIONNÉS. Pas
     // ceux de tous les gâteaux du même parfum qui traînent à l'écran (cas vécu :
