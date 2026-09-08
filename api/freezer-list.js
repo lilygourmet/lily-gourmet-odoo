@@ -1260,9 +1260,20 @@ async function manquesDesOrdres(uid, names) {
   const mos = await odooSearchRead(uid, 'mrp.production', [['name', 'in', names]],
     ['id', 'name', 'product_id', 'product_qty', 'product_uom_id', 'origin', 'state', 'components_availability', 'location_src_id', 'date_planned_start'])
   if (!mos.length) return []
-  const moves = await odooSearchRead(uid, 'stock.move',
-    [['raw_material_production_id', 'in', mos.map(m => m.id)]],
-    ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'reserved_availability', 'quantity_done'], { limit: 500 })
+  // ⚠️ PAS de plafond ici. À 500, les derniers ordres revenaient SANS aucun
+  // composant : l'écran « À valider » les affichait alors en vert « prêt », sans
+  // le panneau « noter ce qui a été consommé », et les envoyait à la validation
+  // comme si le stock suivait. On lit page par page jusqu'à épuisement — l'ordre
+  // par id garde les pages cohérentes.
+  const moves = []
+  for (let debut = 0; debut < 10000; debut += 500) {
+    const page = await odooSearchRead(uid, 'stock.move',
+      [['raw_material_production_id', 'in', mos.map(m => m.id)]],
+      ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'reserved_availability', 'quantity_done'],
+      { limit: 500, offset: debut, order: 'id asc' })
+    moves.push(...page)
+    if (page.length < 500) break
+  }
   const idsProd = [...new Set(moves.map(m => m.product_id[0]))]
   const stockParLieu = {}          // "lieu:produit" → { qty, unite }
   const lieux = [...new Set(mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean))]
