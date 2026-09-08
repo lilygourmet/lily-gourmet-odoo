@@ -189,9 +189,17 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   // liste : il ne manque pas, il attend sa validation. Même règle que « À
   // valider Annexe », posée le 2026-09-04.
   const cleArticle = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  // TOUS les producteurs d'un article, pas seulement le dernier vu : une tournée
+  // coupée en deux ordres en a deux, et n'en retenir qu'un laissait l'autre
+  // passer APRÈS son consommateur — exactement ce que le tri veut empêcher.
   const producteurDe = useMemo(() => {
     const m = new Map()
-    for (const l of lignes || []) if (l.produit) m.set(cleArticle(l.produit), l.name)
+    for (const l of lignes || []) {
+      if (!l.produit) continue
+      const k = cleArticle(l.produit)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(l.name)
+    }
     return m
   }, [lignes])
   // Ce qui FABRIQUE part avant ce qui CONSOMME, sinon le second échoue.
@@ -202,8 +210,9 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
       if (!l || vus.has(l.name) || chemin.has(l.name)) return
       chemin.add(l.name)
       for (const c of l.lignes || []) {
-        const four = producteurDe.get(cleArticle(c.produit))
-        if (four && four !== l.name) poser(parNom.get(four), chemin)
+        for (const four of (producteurDe.get(cleArticle(c.produit)) || [])) {
+          if (four !== l.name) poser(parNom.get(four), chemin)
+        }
       }
       chemin.delete(l.name)
       if (!vus.has(l.name)) { vus.add(l.name); sortie.push(l) }
@@ -400,13 +409,13 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
               {l.manques.length > 0 && (
                 <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 text-[12.5px]">
                   {l.manques.map((m, i) => {
-                    const four = producteurDe.get(cleArticle(m.produit))
+                    const fours = (producteurDe.get(cleArticle(m.produit)) || []).filter(n => n !== l.name)
                     return (
                       <div key={i}>
                         • <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}
-                        {four && four !== l.name && (
+                        {fours.length > 0 && (
                           <span className="block text-[11px] text-[#3d6f8e] ml-3">
-                            attend la validation de <b className="font-mono">{four}</b> — dans cette liste
+                            attend la validation de <b className="font-mono">{fours.join(', ')}</b> — dans cette liste
                           </span>
                         )}
                       </div>
