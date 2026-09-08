@@ -1359,8 +1359,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // gâteau.
     const aReserver = [...new Set(ordres.flatMap(n => [...descendanceDe(n)]))]
     if (aReserver.length) reserverOrdres(aReserver, on)
+    // L'enregistrement a échoué (réseau coupé) : on remet l'écran comme avant.
+    // On remet la coche TELLE QU'ELLE ÉTAIT, pas un talon vide : un
+    // `{ fait_le: '' }` faisait perdre le produit, la quantité et les ordres —
+    // la tournée ne comptait plus, et « retirer » repartait sans rien savoir.
     setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
-      .catch(() => setFaits(f => { const n = { ...f }; if (on) delete n[cle]; else n[cle] = { fait_le: '' }; return n }))
+      .catch(() => setFaits(f => {
+        const n = { ...f }
+        if (on) delete n[cle]
+        else n[cle] = avant || { fait_le: new Date().toISOString(), produit, qty, ordres }
+        return n
+      }))
   }
 
   const effacer = () => { setSel([]); setPageRecette(false) }
