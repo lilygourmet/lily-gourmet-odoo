@@ -771,8 +771,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   /** Déclarer N tournées d'une base : on reprend un ordre libre d'Odoo, sinon on en crée un. */
   const declarerBase = async (b, n) => {
     const t = tailleTournee(recettes, b.produit)
-    const qty = n * ((t && t.q) || 0)
+    // Le compteur −/+ gardait sa valeur d'un affichage à l'autre, et il
+    // disparaît dès qu'il ne reste qu'une tournée à faire. Après avoir déclaré
+    // 2 des 3 tournées, le bouton en redéclarait donc 2 au lieu de la dernière.
+    // On ne déclare jamais plus que ce qui reste, et on rend le compteur à sa
+    // valeur d'origine une fois la tournée partie.
+    const combien = Math.max(1, Math.min(b.n || 1, Number(n) || 1))
+    const qty = combien * ((t && t.q) || 0)
     if (!(qty > 0)) return
+    setLots(l => { const s2 = { ...l }; delete s2[b.produit]; return s2 })
     const desGateaux = new Set(((data && data.ofs) || []).map(o => o.name))
     const libre = ((data && data.ordres) || []).find(o => o.produit === b.produit
       && o.etat !== 'done' && !faits[o.name] && !desGateaux.has(o.origine))
