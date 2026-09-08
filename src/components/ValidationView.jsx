@@ -92,12 +92,20 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const [confirmer, setConfirmer] = useState(false)
   const [refus, setRefus] = useState(false)   // annulation groupée en cours
   const [tour, setTour] = useState(0)
+  // Odoo met une à deux secondes à répondre. L'écran s'ouvre entre-temps sur la
+  // liste de la dernière fois — et quand celle-ci était VIDE, il affirmait
+  // « Rien à valider » en toute confiance. Layla, le 2026-09-08 : « pourquoi
+  // 202295 ne va pas dans valider, je l'ai créé dans fabrication CD » — sa
+  // déclaration datait de deux minutes et arrivait bien, une seconde plus tard.
+  // Tant qu'on n'a pas la réponse, on ne dit RIEN sur le vide.
+  const [chargement, setChargement] = useState(true)
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
   const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
   const [ajouts, setAjouts] = useState({})        // { ordre: [ingrédients ajoutés à la main] }
 
   useEffect(() => {
     let vivant = true
+    setChargement(true)
     Promise.all([loadOrdres(), loadFaits()])
       .then(async ([tous, f]) => {
         if (!vivant) return
@@ -136,6 +144,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         setAjouts(a => garder(gardees.ajouts, a))
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
+      .finally(() => { if (vivant) setChargement(false) })
     return () => { vivant = false }
   }, [tour])
 
@@ -303,7 +312,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         </p>
 
         {erreur && <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] mb-3">{erreur}</div>}
-        {!lignes && !erreur && <Skeleton rows={4} />}
+        {(!lignes || (chargement && !lignes.length)) && !erreur && <Skeleton rows={4} />}
         {envoi && <p className="text-center text-ink-mute py-8">Validation en cours dans Odoo…</p>}
 
         {resultats && !envoi && (
@@ -324,7 +333,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
           </>
         )}
 
-        {lignes && !resultats && !envoi && lignes.length === 0 && (
+        {lignes && !chargement && !resultats && !envoi && lignes.length === 0 && (
           <div className="py-14 text-center text-ink-mute text-[14px] bg-cream-warm rounded-xl">
             Rien à valider pour le moment.<br />
             <span className="text-[12.5px]">Ce que l'équipe marque « fait » dans Fabrication CD ou Fabrication Glaçage arrive ici.</span>
