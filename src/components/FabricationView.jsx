@@ -816,7 +816,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const retenus = tous.filter(o => {
       if (o.etat === 'cancel') return false
       const j = jourLigne(o)
-      if (!j || j < debut) return false
+      // Borné à aujourd'hui : Odoo garde des ordres validés dont la date prévue
+      // est dans le futur (2 pour le 3 octobre) — un historique ne se lit pas
+      // à l'envers.
+      if (!j || j < debut || j > aujourdhui()) return false
       return o.etat === 'done' || dejaDeclares.has(o.name)
     })
     const noms = new Set(retenus.map(o => o.name))
