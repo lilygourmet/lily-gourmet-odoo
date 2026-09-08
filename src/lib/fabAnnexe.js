@@ -44,7 +44,11 @@ export const enfantsDe = noeud => noeud?.composants || noeud?.enfants || []
  * faire 2× pour arriver au max, ou 22, selon mon choix »).
  */
 export function tourneesSuggerees(article) {
-  const manque = (article?.maxi || 0) - (article?.stock || 0)
+  // Ce qui reste pour atteindre le maxi, une fois compté ce qui est déjà
+  // déclaré du jour : une tournée à moitié faite ne se redemande pas en entier.
+  const manque = article?.reste !== undefined
+    ? article.reste
+    : (article?.maxi || 0) - (article?.stock || 0)
   const t = article?.tournee || 1
   // Au demi près : le suprême amandes 20 cm a un maxi de 33 pour une tournée
   // de 22 — il y faut une tournée et demie, pas une ni deux.

@@ -417,6 +417,15 @@ export default async function handler(req, res) {
     // de ses tournées, utile dès qu'il apparaît comme composant d'un autre.
     const { data: tout, error } = await sb.from('fab_annexe_articles').select('*').order('produit')
     if (error) throw new Error(`Catalogue illisible : ${error.message}`)
+    // Ce que l'atelier a DÉJÀ déclaré aujourd'hui, en attente dans « À valider
+    // Annexe ». Le stock Odoo ne remonte qu'à la validation : sans ça, l'écran
+    // redemanderait la tournée entière à quelqu'un qui vient de la faire.
+    const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
+    const { data: faits } = await sb.from('prod_fabrications')
+      .select('article, qty').eq('jour', jour).eq('atelier', 'annexe')
+    const declare = {}
+    for (const f of faits || []) declare[f.article] = (declare[f.article] || 0) + (Number(f.qty) || 0)
+
     const catalogue = (tout || []).filter(a => a.actif)
     const lots = Object.fromEntries((tout || []).filter(a => a.tournee > 0).map(a => [a.produit, a.tournee]))
     // Ce qu'on achète, même si Odoo lui connaît une recette : la framboise
@@ -443,17 +452,25 @@ export default async function handler(req, res) {
       if (!p) { articles.push({ ...a, absent: true }); continue }
       const stock = stocks[p.id] || 0
 
+      const dejaFait = declare[a.produit] || 0
+      // On vise le MAXI, pas le mini : ce qui reste pour l'atteindre est le
+      // reliquat à faire (Layla, 2026-09-08).
+      const reste = Math.max(0, a.maxi - stock - dejaFait)
+
       // Le mini est ATTEINT, pas seulement franchi : à 11 pour un mini de 11,
       // l'article se montre (Layla, 2026-09-08). Au-dessus, il ne sort pas.
-      // Un mini à 0 (le caramel) veut alors dire « ne me montre qu'à zéro » —
-      // et une rupture reste visible d'elle-même.
-      if (!seul && stock > a.mini) continue
+      // Un mini à 0 (le caramel) veut alors dire « ne me montre qu'à zéro ».
+      // ⚠️ Et une tournée COMMENCÉE reste à l'écran tant que le maxi n'est pas
+      // atteint : c'est là qu'on voit ce qu'il reste à produire.
+      const aFaire = stock <= a.mini || (dejaFait > 0 && reste > 0)
+      if (!seul && !aFaire) continue
 
       // La liste n'affiche que l'état : ni recette, ni cascade, ni tailles.
       if (!seul) {
         articles.push({
           produit: a.produit, libelle: a.libelle || a.produit, photo: a.photo,
           unite: uniteDe(p), stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
+          dejaFait, reste,
           etat: stock <= 0 ? 'rupture' : 'refaire',
         })
         continue
@@ -465,6 +482,7 @@ export default async function handler(req, res) {
         photo: a.photo || a.produit,
         unite: uniteDe(p),
         stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
+        dejaFait, reste,
         etat: stock <= 0 ? 'rupture' : 'refaire',
         figes: a.figes || [],
         figesNom: a.figes_nom || 'Monté sur place',
