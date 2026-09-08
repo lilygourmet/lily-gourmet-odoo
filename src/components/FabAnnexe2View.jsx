@@ -335,14 +335,28 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             })}
           </div>
         <div className="px-4 pb-3">
-          <div className="h-2.5 rounded-full bg-cream-deep relative overflow-hidden">
-            <div className={`h-full rounded-full ${article.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
-              style={{ width: `${Math.min(100, Math.round((article.stock / article.maxi) * 100))}%` }} />
+          {/* La barre va jusqu'au MAXI : en couleur le stock, en vert ce qui est
+              déjà déclaré du jour, et ce qui reste sombre est à faire. */}
+          <div className="h-2.5 rounded-full bg-cream-deep overflow-hidden flex">
+            <div className={article.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}
+              style={{ width: `${Math.min(100, (article.stock / article.maxi) * 100)}%` }} />
+            {article.dejaFait > 0 && (
+              <div className="bg-success"
+                style={{ width: `${Math.min(100, (article.dejaFait / article.maxi) * 100)}%` }} />
+            )}
           </div>
           <div className="flex justify-between text-[11px] text-ink-mute mt-1.5">
             <span>En stock : <b className="text-ink">{qte(article.stock, article.unite)}</b></span>
+            {article.dejaFait > 0 && (
+              <span className="text-success font-bold">fait {qte(article.dejaFait, article.unite)}</span>
+            )}
             <span>mini {nb(article.mini)}</span><span>maxi {nb(article.maxi)}</span>
           </div>
+          {article.dejaFait > 0 && article.reste > 0 && (
+            <div className="text-[12px] text-ink-soft mt-1.5">
+              Il reste <b className="text-gold">{qte(article.reste, article.unite)}</b> pour atteindre le maxi.
+            </div>
+          )}
         </div>
         </>
       )}
@@ -527,7 +541,12 @@ function CarteArticle({ a, faits, onOuvrir }) {
 
       <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
         <div className="text-[12px] font-extrabold leading-[1.25]">{court || a.libelle}</div>
-        <div className="text-[10.5px] text-ink-mute">reste {qte(a.stock, a.unite)}</div>
+        <div className="text-[10.5px] text-ink-mute">
+          en stock {qte(a.stock, a.unite)}
+          {a.dejaFait > 0 && (
+            <span className="block text-success font-bold">déjà fait {qte(a.dejaFait, a.unite)}</span>
+          )}
+        </div>
         <div className="mt-auto pt-1 text-[11.5px] font-extrabold text-gold leading-tight">
           {sug === 0.5 ? '½' : sug === 1.5 ? '1½' : sug}× · {qte(a.tournee * sug, a.unite)}
         </div>
