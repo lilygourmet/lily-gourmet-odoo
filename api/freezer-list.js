@@ -949,7 +949,39 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
   await odooCall(uid, 'mrp.production', 'action_assign', [[id]]).catch(() => { })
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
+  await rattacherEnfants(uid, id, cree.name)
   return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state }
+}
+
+/**
+ * Donne au(x) ordre(s) que la confirmation vient de faire naître le nom de leur
+ * parent comme origine.
+ *
+ * En confirmant un gâteau, Odoo lance tout seul les ordres de ses crèmes. Mais
+ * quand le parent a été créé par programme, il leur met « / » au lieu du nom du
+ * parent — alors que l'app reconnaît un enfant à son origine. Le 2026-09-08 au
+ * soir, six crèmes se sont donc affichées dans « Demandé par Odoo · stock mini
+ * atteint » comme si elles sortaient de nulle part, au lieu d'être rangées sous
+ * les cinq gâteaux qui les réclamaient.
+ *
+ * Le lien vrai, lui, existe toujours : l'ordre enfant pointe par
+ * `move_dest_ids` sur le mouvement de composant du parent. On s'en sert pour
+ * réparer l'origine. Silencieux : un ordre créé vaut mieux qu'un échec ici.
+ */
+async function rattacherEnfants(uid, idParent, nomParent) {
+  if (!nomParent) return
+  try {
+    const enfants = await odooSearchRead(uid, 'mrp.production',
+      [['move_dest_ids.raw_material_production_id', '=', idParent]], ['id', 'origin'], { limit: 50 })
+    // On ne touche qu'à ce qui n'a pas d'origine utile : si Odoo en a déjà mis
+    // une vraie (l'ordre du dessous en avait bien une), on la laisse.
+    const aReparer = enfants
+      .filter(e => !e.origin || String(e.origin).trim() === '' || String(e.origin).trim() === '/')
+      .map(e => e.id)
+    if (aReparer.length) await odooCall(uid, 'mrp.production', 'write', [aReparer, { origin: nomParent }])
+  } catch (e) {
+    console.warn('[creer-of] rattachement des enfants impossible :', (e.message || e).toString().slice(0, 120))
+  }
 }
 
 /**

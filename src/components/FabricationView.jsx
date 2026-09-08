@@ -1385,8 +1385,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
               {demandeOdoo.length > 0 && (
                 <>
-                  <Titre n="2">Demandé par Odoo</Titre>
-                  <p className="text-[12px] text-ink-mute -mt-1 mb-2">stock mini atteint</p>
+                  {/* Le titre disait « Demandé par Odoo · stock mini atteint ».
+                      Odoo n'a plus AUCUNE règle mini/maxi sur les CD* depuis le
+                      2026-09-08 : c'est l'app qui les tient. Et ce bloc n'a
+                      jamais filtré sur les règles — il ramasse tout ce qui n'est
+                      pas un format de gâteau, y compris des crèmes mal
+                      rattachées à leur gâteau. */}
+                  <Titre n="2">À relancer pour le stock</Titre>
+                  <p className="text-[12px] text-ink-mute -mt-1 mb-2">passé sous le mini de l'app, sans gâteau qui l'attende</p>
                   {demandeOdoo.map(b => {
                     // dans aFaire, pas dans data.ofs : c'est là que le stock
                     // de l'app (celui qui tient compte du « fait ») est calculé
