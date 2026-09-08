@@ -132,6 +132,30 @@ export function noeudAu(articles, chemin) {
 }
 
 /**
+ * Ce qui a été RÉELLEMENT PESÉ pour cette fournée, prêt à imposer à l'ordre
+ * Odoo. La recette de l'article est écrite pour une tournée ; `fois` dit
+ * combien on en a fait.
+ *
+ * Sans ça, Odoo recalculerait les ingrédients au prorata du poids obtenu : un
+ * sirop qui rend 2 600 g au lieu de 2 790 aurait consommé moins de café que ce
+ * qu'on a réellement mis dedans.
+ *
+ * ⚠️ Un même ingrédient peut occuper deux lignes de la recette, et Odoo pose
+ * la consigne sur chacune : on répartit alors le total entre elles.
+ */
+export function peseesDe(noeud, fois) {
+  const par = new Map()
+  for (const l of noeud?.recette || []) {
+    const e = par.get(l.produit) || { total: 0, lignes: 0 }
+    e.total += (Number(l.qty) || 0) * fois
+    e.lignes += 1
+    par.set(l.produit, e)
+  }
+  return Object.fromEntries([...par].map(([nom, e]) =>
+    [nom, Math.round((e.total / e.lignes) * 1000) / 1000]))
+}
+
+/**
  * Une chose fabriquée part TOUT DE SUITE dans « À valider Annexe ».
  *
  * Le pâtissier fait son sirop ce soir et montera peut-être le tiramisu demain :

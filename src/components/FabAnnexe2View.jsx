@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe, bloquants, declares, noeudAu,
-  declarer, envoyerAValider, tourneesSuggerees, pourFois } from '../lib/fabAnnexe'
+  declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 
 // ============================================================
@@ -266,41 +266,82 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const fois = faits[noeud.produit]?.fois ?? noeud.tournees ?? 1
   const majFois = f => setFaits(x => ({ ...x, [noeud.produit]: { fois: Math.max(0.01, Math.round(f * 10000) / 10000), brouillon: true } }))
 
-  // ---------- « combien elle t'en a sorti ? » ----------
+  // ---------- « combien ça a donné ? » ----------
+  // Vaut pour l'article de tête comme pour une préparation : ce qui sort d'une
+  // fournée n'est jamais tout à fait ce que la recette annonce. Les
+  // ingrédients, eux, restent ceux qu'on a pesés (Layla, 2026-09-08).
   if (sortie !== null) {
+    const cible = racine ? article : noeud
+    const prevu = racine ? article.tournee : Math.round((noeud.tourneeTaille || 1) * fois * 100) / 100
     const n = Number(String(sortie).replace(',', '.')) || 0
-    const ecart = n - article.tournee
+    const ecart = Math.round((n - prevu) * 100) / 100
+    // À la pièce on ajuste par 1 ; au gramme, par 10 — sinon il faut cent appuis.
+    const pas = cible.unite === 'u' ? 1 : /^kg$/i.test(cible.unite) ? 0.1 : 10
+    const arrondi = v => Math.round(Math.max(0, v) * 100) / 100
     return (
-      <Cadre {...nav} onRetour={() => setSortie(null)} photo={article.photo}
-        titre={article.libelle} sous="Tournée montée">
+      <Cadre {...nav} onRetour={() => setSortie(null)} photo={racine ? article.photo : null}
+        titre={racine ? article.libelle : propre(noeud.produit)}
+        sous={racine ? 'Tournée montée' : `Recette × ${nb(fois)}`}>
         <div className="px-4 py-6 text-center">
-          <div className="text-[15px] font-bold">Combien de {propre(article.libelle).toLowerCase()} sont sortis ?</div>
-          <div className="text-[12px] text-ink-mute mb-4">La tournée en fait environ {nb(article.tournee)}</div>
+          <div className="text-[15px] font-bold">
+            {racine
+              ? `Combien de ${propre(article.libelle).toLowerCase()} sont sortis ?`
+              : 'Combien ça a donné, au final ?'}
+          </div>
+          <div className="text-[12px] text-ink-mute mb-4">
+            {racine ? 'La tournée en fait environ' : 'La recette en annonce'} {qte(prevu, cible.unite)}
+          </div>
           <div className="flex items-center justify-center gap-2 mb-3">
-            <button onClick={() => setSortie(String(Math.max(0, n - 1)))}
+            <button onClick={() => setSortie(String(arrondi(n - pas)))}
               className="px-4 py-4 rounded-xl border border-cream-deep bg-cream-warm
                          text-[26px] font-extrabold text-bordeaux leading-none">−</button>
-            <input value={sortie} inputMode="numeric" aria-label="Quantité sortie"
+            <input value={sortie} inputMode="decimal" aria-label="Quantité obtenue"
               onChange={e => setSortie(e.target.value)}
-              className="w-[112px] h-[60px] rounded-xl border-2 border-bordeaux bg-cream-warm
-                         text-center font-serif text-[32px] text-ink focus:outline-none" />
-            <button onClick={() => setSortie(String(n + 1))}
+              className="w-[132px] h-[60px] rounded-xl border-2 border-bordeaux bg-cream-warm
+                         text-center font-serif text-[30px] text-ink focus:outline-none" />
+            <button onClick={() => setSortie(String(arrondi(n + pas)))}
               className="px-4 py-4 rounded-xl border border-cream-deep bg-cream-warm
                          text-[26px] font-extrabold text-bordeaux leading-none">+</button>
           </div>
+          <div className="text-[12.5px] text-ink-mute mb-1">{cible.unite}</div>
           <div className="text-[12.5px] text-ink-mute mb-4 min-h-[18px]">
-            {n === 0 ? '' : ecart === 0 ? 'Pile la tournée.'
-              : <><b className="text-gold">{nb(Math.abs(ecart))} de {ecart > 0 ? 'plus' : 'moins'}</b> que prévu.</>}
+            {n === 0 ? '' : ecart === 0 ? 'Pile ce qui était prévu.'
+              : <><b className="text-gold">{qte(Math.abs(ecart), cible.unite)} de {ecart > 0 ? 'plus' : 'moins'}</b> que prévu.</>}
           </div>
+
+          {!racine && (
+            <div className="text-left rounded-xl border border-cream-deep bg-cream-warm mb-4">
+              <div className="px-3 pt-2.5 pb-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-mute">
+                Ce qui sort du stock — ce que tu as pesé
+              </div>
+              {Object.entries(peseesDe(noeud, fois)).map(([nom, q]) => (
+                <div key={nom} className="flex items-baseline gap-3 px-3 py-1.5 border-t border-cream-deep/50">
+                  <span className="flex-1 min-w-0 text-[13px]">{nomAtelier(nom)}</span>
+                  <span className="text-[13px] font-extrabold">
+                    {nb(q * facteurAtelier(nom))} {noeud.recette.find(l => l.produit === nom)?.unite}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button disabled={!(n > 0) || envoi}
             onClick={async () => {
               setEnvoi(true)
               try {
-                const r = await envoyerAValider(article, n, user?.id)
+                const r = racine
+                  ? await envoyerAValider(article, n, user?.id)
+                  : await declarer({
+                      produit: noeud.produit, unite: noeud.unite, fois, qty: n,
+                      ajustements: peseesDe(noeud, fois),
+                    }, user?.id)
                 toast(r.erreur
                   ? `Enregistré, mais Odoo a refusé : ${r.erreur}`
-                  : `${article.libelle} : en attente dans « À valider Annexe »`)
-                setFaits({}); setSortie(null); setChemin([]); setDetails({}); recharger()
+                  : `${racine ? article.libelle : propre(noeud.produit)} : en attente dans « À valider Annexe »`)
+                setSortie(null)
+                if (racine) { setFaits({}); setChemin([]) }
+                else { setFaits(f => ({ ...f, [noeud.produit]: { fois } })); setChemin(chemin.slice(0, -1)) }
+                setDetails({}); recharger()
               } catch (e) {
                 toast('Échec : ' + (e.message || e))
               } finally { setEnvoi(false) }
@@ -497,26 +538,12 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               <div className="text-[11.5px] text-ink-mute mt-0.5">Tu n'en as pas besoin maintenant</div>
             )}
           </div>
-          <button disabled={envoi}
-            onClick={async () => {
-              if (racine) { setSortie(String(article.tournee)); return }
-              setEnvoi(true)
-              try {
-                const r = await declarer({
-                  produit: noeud.produit, unite: noeud.unite, fois,
-                  qty: (noeud.tourneeTaille || 1) * fois,
-                }, user?.id)
-                setFaits(f => ({ ...f, [noeud.produit]: { fois } }))
-                toast(r.erreur
-                  ? `Enregistré, mais Odoo a refusé : ${r.erreur}`
-                  : `${propre(noeud.produit)} : en attente dans « À valider Annexe »`)
-                setChemin(chemin.slice(0, -1))
-              } catch (e) {
-                toast('Échec : ' + (e.message || e))
-              } finally { setEnvoi(false) }
-            }}
-            className="rounded-xl px-4 py-3 text-[13.5px] font-extrabold bg-bordeaux text-cream disabled:opacity-50">
-            {envoi ? 'Envoi…' : "C'est fait →"}
+          <button
+            onClick={() => setSortie(String(racine
+              ? article.tournee
+              : Math.round((noeud.tourneeTaille || 1) * fois * 100) / 100))}
+            className="rounded-xl px-4 py-3 text-[13.5px] font-extrabold bg-bordeaux text-cream">
+            C'est fait →
           </button>
         </div>
       )}
