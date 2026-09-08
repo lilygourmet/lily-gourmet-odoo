@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { annulerDoublons, loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD } from '../lib/fabrication'
 import { buildZplInfo } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
@@ -369,129 +369,6 @@ function Titre({ n, children }) {
   )
 }
 
-// Validation dans Odoo : on coche les ordres, on valide ceux qui sont prêts,
-// et on ne force que si Layla le demande explicitement (action irréversible).
-function ValiderModal({ ordres, user, onClose, onFini }) {
-  const [etat, setEtat] = useState('chargement')   // chargement | liste | envoi | resultat
-  const [lignes, setLignes] = useState([])
-  const [sel, setSel] = useState([])
-  const [resultats, setResultats] = useState([])
-  const [confirmer, setConfirmer] = useState(false)
-
-  useEffect(() => {
-    let vivant = true
-    loadManques(ordres)
-      .then(l => { if (!vivant) return; setLignes(l); setSel(l.map(x => x.name)); setEtat('liste') })
-      .catch(e => { if (vivant) { toast.error(e.message || String(e)); onClose() } })
-    return () => { vivant = false }
-  }, [ordres, onClose])
-
-  const choisis = lignes.filter(l => sel.includes(l.name))
-  const prets = choisis.filter(l => !l.manques.length)
-  const bloques = choisis.filter(l => l.manques.length)
-  const manquesCumules = [...new Map(bloques.flatMap(l => l.manques).map(m => [m.produit, m])).values()]
-
-  const lancer = async (forcer) => {
-    const cibles = (forcer ? bloques : prets).map(l => l.name)
-    if (!cibles.length) return
-    setEtat('envoi')
-    try {
-      const r = await validerDansOdoo(cibles, forcer, user?.id)
-      setResultats(r); setEtat('resultat')
-    } catch (e) { toast.error(e.message || String(e)); setEtat('liste') }
-  }
-
-  const Ligne = ({ l }) => (
-    <div className={'border rounded-xl mb-2 overflow-hidden ' + (l.manques.length ? 'border-l-4 border-l-[#d9a441] border-line' : 'border-l-4 border-l-[#7ba05b] border-line')}>
-      <div className="flex items-center gap-3 px-3 py-2.5 bg-white">
-        <input type="checkbox" checked={sel.includes(l.name)} className="w-5 h-5 accent-[#993556]"
-          onChange={e => setSel(v => (e.target.checked ? [...v, l.name] : v.filter(x => x !== l.name)))} />
-        <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-bold">{propre(l.produit)} — {qteLisible(norm(l.unite) === 'kg' ? l.qty : l.qty / 1000, 'kg')}</div>
-          <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.pour ? ' · ' + l.pour : ''}</div>
-        </div>
-        <span className={'text-[10.5px] font-bold px-2 py-0.5 rounded-full ' + (l.manques.length ? 'bg-[#FFF7E0] text-[#854F0B]' : 'bg-[#EAF3DE] text-ok')}>
-          {l.manques.length ? 'il manque' : 'prêt'}
-        </span>
-      </div>
-      {l.manques.length > 0 && (
-        <div className="border-t border-dashed border-line bg-[#fffdf7] px-3 py-2 text-[12.5px]">
-          {l.manques.map((m, i) => (
-            <div key={i}>• <b>{qteLisible(norm(m.unite) === 'kg' ? m.manque : m.manque / 1000, 'kg')}</b> de {propre(m.produit)}</div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-
-  return (
-    <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-10 overflow-auto"
-      onPointerDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-cream rounded-2xl w-full max-w-[640px] shadow-2xl overflow-hidden">
-        <div className="bg-bordeaux text-cream px-4 py-3 flex items-center gap-3">
-          <b className="text-[16px]">Valider dans Odoo</b>
-          <button onClick={onClose} className="ml-auto bg-white/20 rounded-lg px-3 py-1 text-[12.5px]">Fermer</button>
-        </div>
-        <div className="p-4">
-          {etat === 'chargement' && <p className="text-center text-ink-mute py-8">Vérification des stocks…</p>}
-          {etat === 'envoi' && <p className="text-center text-ink-mute py-8">Validation en cours dans Odoo…</p>}
-
-          {etat === 'liste' && (
-            <>
-              <p className="text-[12.5px] text-ink-mute mb-3">
-                Ce que l'équipe a marqué « fait ». La génoise n'est pas comptée dans les manques.
-              </p>
-              {lignes.map(l => <Ligne key={l.name} l={l} />)}
-              <div className="text-[12.5px] text-ink-soft mb-2">
-                {choisis.length} sélectionné(s) · {prets.length} prêt(s), {bloques.length} à forcer
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={() => lancer(false)} disabled={!prets.length}
-                  className={'flex-1 min-w-[200px] rounded-xl py-3 text-[15px] font-bold ' + (prets.length ? 'bg-bordeaux text-cream' : 'bg-white border border-line text-ink-mute')}>
-                  Valider la sélection{prets.length ? ` (${prets.length})` : ''}
-                </button>
-                <button onClick={() => setConfirmer(true)} disabled={!bloques.length}
-                  className={'rounded-xl py-3 px-4 text-[13.5px] font-bold border ' + (bloques.length ? 'border-danger text-danger bg-white' : 'border-line text-ink-mute bg-white')}>
-                  Forcer la sélection{bloques.length ? ` (${bloques.length})` : ''}
-                </button>
-              </div>
-            </>
-          )}
-
-          {etat === 'resultat' && (
-            <>
-              {resultats.map(r => (
-                <div key={r.name} className={'rounded-xl px-3 py-2.5 mb-2 ' + (r.ok ? 'bg-[#EAF3DE] border border-[#cfe0b8]' : 'bg-[#FCEEE8] border border-[#f0c9c9]')}>
-                  <b className="text-[14px]">{r.ok ? '✓' : '✗'} {r.name}</b>
-                  <div className="text-[12.5px] text-ink-soft">{r.ok ? 'validé dans Odoo' : r.message}</div>
-                </div>
-              ))}
-              <button onClick={onFini} className="w-full bg-bordeaux text-cream rounded-xl py-3 text-[15px] font-bold mt-2">Terminer</button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {confirmer && (
-        <div className="fixed inset-0 z-[80] bg-ink/50 flex items-center justify-center p-4" onPointerDown={e => { if (e.target === e.currentTarget) setConfirmer(false) }}>
-          <div className="bg-white rounded-2xl p-4 max-w-[420px]">
-            <b className="text-[16px]">Forcer la validation ?</b>
-            <p className="text-[13px] text-ink-soft mt-1 mb-2">Odoo enregistrera la fabrication même si le stock ne suit pas. Il manque :</p>
-            {manquesCumules.map((m, i) => (
-              <div key={i} className="text-[13.5px]">• <b>{qteLisible(norm(m.unite) === 'kg' ? m.manque : m.manque / 1000, 'kg')}</b> de {propre(m.produit)}</div>
-            ))}
-            <p className="text-[12px] text-ink-mute mt-2">Le stock de ces articles deviendra négatif dans Odoo.</p>
-            <div className="flex gap-2 mt-3">
-              <button onClick={() => { setConfirmer(false); lancer(true) }} className="flex-1 bg-danger text-cream rounded-xl py-3 text-[14px] font-bold">Forcer</button>
-              <button onClick={() => setConfirmer(false)} className="rounded-xl py-3 px-4 text-[14px] border border-line">Annuler</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function FabricationView({ user, onLogout, onNavigate, activeView }) {
   const [data, setData] = useState(() => dernierEcran('fabrication'))
   const [erreur, setErreur] = useState(null)
@@ -561,7 +438,6 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caduques.join('|')])
-  const [validerOuvert, setValiderOuvert] = useState(false)
 
   const [rechargement, setRechargement] = useState(0)
 
@@ -723,6 +599,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // autres. Il leur revient par `reservePour`, et par lui seul.
     for (const m of misesDeCote) bouge(m.produit, -m.qty)
     return [s, sb]
+    // `basesPretes` n'est pas lu ici : il ne sert qu'à redemander le calcul
+    // quand la liste des bases de Layla est arrivée (elle vit hors de React).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, faits, recettes, misesDeCote, basesPretes])
 
   // Le groupe d'un article = son « usage ». Une préparation fait son propre
@@ -1432,7 +1311,6 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                     (b.manque <= 0.001 || faitBase(b) ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
                     <span className={'basis-full sm:basis-auto flex-1 min-w-0 ' + (baseBarree(b) ? 'line-through opacity-60' : '')}>
                       <span className="text-[14.5px] sm:text-[17px] font-bold">{propre(b.produit)}</span>
-                      {b.ordre && <span className="block text-[11px] text-ink-mute font-mono">demandé par Odoo · {b.ordre}</span>}
                     </span>
                     {b.manque <= 0.001 ? (
                       <span className="text-[13px] font-bold text-ok">en stock ({qteLisible(b.stock, b.unite)})</span>
@@ -1571,12 +1449,6 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           )}
         </div>
       </div>
-
-      {validerOuvert && (
-        <ValiderModal ordres={ordresAValider} user={user}
-          onClose={() => setValiderOuvert(false)}
-          onFini={() => { setValiderOuvert(false); relire() }} />
-      )}
 
       {/* téléphone : barre fixe qui ouvre la recette en page entière */}
       {deuxColonnes && (
