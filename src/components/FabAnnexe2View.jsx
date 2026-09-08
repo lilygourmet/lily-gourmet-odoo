@@ -5,6 +5,7 @@ import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe, bloquants, declares, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
+import { frappe } from '../lib/frappe'
 
 // ============================================================
 // « Fabrication Annexe 2 » — la refonte, article par article.
@@ -86,6 +87,28 @@ function parGateau(articles) {
     g.articles.push(a)
   }
   return groupes
+}
+
+// ------------------------------------------------------------
+// Un pavé de calculette. À l'atelier on tape avec les doigts, parfois farinés,
+// souvent sur tablette : le clavier du système saute, met une virgule là où on
+// veut un point, et cache la moitié de l'écran. Ici chaque touche pousse un
+// chiffre à droite, comme sur une caisse.
+// ------------------------------------------------------------
+function Pave({ onTouche }) {
+  const T = ['7', '8', '9', '4', '5', '6', '1', '2', '3', ',', '0', '←']
+  return (
+    <div className="grid grid-cols-3 gap-2 mt-3">
+      {T.map(t => (
+        <button key={t} onClick={() => onTouche(t)} type="button"
+          className={`h-14 rounded-xl border font-extrabold text-[22px] font-serif
+            ${t === '←' ? 'border-cream-deep bg-cream-deep/40 text-ink-soft'
+                        : 'border-cream-deep bg-cream-warm text-ink'}`}>
+          {t}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 const Titre = ({ children }) => (
@@ -291,19 +314,23 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
           <div className="text-[12px] text-ink-mute mb-4">
             {racine ? 'La tournée en fait environ' : 'La recette en annonce'} {qte(prevu, cible.unite)}
           </div>
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <button onClick={() => setSortie(String(arrondi(n - pas)))}
+          <div className="flex items-center justify-center gap-2">
+            <button onClick={() => setSortie(String(arrondi(n - pas)))} type="button"
+              aria-label={`Retirer ${pas}`}
               className="px-4 py-4 rounded-xl border border-cream-deep bg-cream-warm
                          text-[26px] font-extrabold text-bordeaux leading-none">−</button>
             <input value={sortie} inputMode="decimal" aria-label="Quantité obtenue"
-              onChange={e => setSortie(e.target.value)}
-              className="w-[132px] h-[60px] rounded-xl border-2 border-bordeaux bg-cream-warm
-                         text-center font-serif text-[30px] text-ink focus:outline-none" />
-            <button onClick={() => setSortie(String(arrondi(n + pas)))}
+              onChange={e => setSortie(e.target.value.replace(/[^\d.,]/g, ''))}
+              className="w-[150px] h-[64px] rounded-xl border-2 border-bordeaux bg-cream-warm
+                         text-center font-serif text-[32px] text-ink focus:outline-none" />
+            <button onClick={() => setSortie(String(arrondi(n + pas)))} type="button"
+              aria-label={`Ajouter ${pas}`}
               className="px-4 py-4 rounded-xl border border-cream-deep bg-cream-warm
                          text-[26px] font-extrabold text-bordeaux leading-none">+</button>
           </div>
-          <div className="text-[12.5px] text-ink-mute mb-1">{cible.unite}</div>
+          <div className="text-[12.5px] text-ink-mute mt-1 mb-1">{cible.unite}</div>
+          <Pave onTouche={t => setSortie(v => frappe(v, t))} />
+          <div className="h-3" />
           <div className="text-[12.5px] text-ink-mute mb-4 min-h-[18px]">
             {n === 0 ? '' : ecart === 0 ? 'Pile ce qui était prévu.'
               : <><b className="text-gold">{qte(Math.abs(ecart), cible.unite)} de {ecart > 0 ? 'plus' : 'moins'}</b> que prévu.</>}
