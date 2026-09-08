@@ -428,9 +428,22 @@ export default async function handler(req, res) {
     // redemanderait la tournée entière à quelqu'un qui vient de la faire.
     const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
     const { data: faits } = await sb.from('prod_fabrications')
-      .select('article, qty').eq('jour', jour).eq('atelier', 'annexe')
+      .select('article, qty, ordre').eq('jour', jour).eq('atelier', 'annexe')
+
+    // ⚠️ Une déclaration VALIDÉE ne compte plus : sa production est entrée
+    // dans le stock Odoo, la compter en plus la ferait compter DEUX FOIS —
+    // 22 suprêmes amandes validés en auraient valu 44.
+    const ordres = [...new Set((faits || []).map(f => f.ordre).filter(Boolean))]
+    const clos = new Set()
+    if (ordres.length) {
+      const mos = await sr('mrp.production', [['name', 'in', ordres]], ['name', 'state'])
+      for (const m of mos) if (m.state === 'done' || m.state === 'cancel') clos.add(m.name)
+    }
     const declare = {}
-    for (const f of faits || []) declare[f.article] = (declare[f.article] || 0) + (Number(f.qty) || 0)
+    for (const f of faits || []) {
+      if (f.ordre && clos.has(f.ordre)) continue
+      declare[f.article] = (declare[f.article] || 0) + (Number(f.qty) || 0)
+    }
 
     const catalogue = (tout || []).filter(a => a.actif)
     const lots = Object.fromEntries((tout || []).filter(a => a.tournee > 0).map(a => [a.produit, a.tournee]))
