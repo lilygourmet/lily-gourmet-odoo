@@ -627,9 +627,11 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
       }])
     }
     // Ce que l'équipe a noté à l'écran fait foi : on l'écrit avant tout le reste.
+    const saisisAlaMain = new Set()
     for (const [moveId, valeur] of Object.entries(quantites || {})) {
       const q = Number(valeur)
       if (!(q >= 0)) continue
+      saisisAlaMain.add(Number(moveId))
       await odooCall(uid, 'stock.move', 'write', [[Number(moveId)], { quantity_done: q }]).catch(() => { })
     }
     // Validé par programme, Odoo ne remplit pas les quantités consommées des
@@ -640,6 +642,11 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
       [['raw_material_production_id', '=', mo.id], ['state', 'not in', ['done', 'cancel']]],
       ['product_uom_qty', 'quantity_done'], { limit: 50 })
     for (const r of raws) {
+      // ⚠️ Un ZÉRO tapé à l'écran est une réponse, pas un oubli. Cette passe le
+      // remplaçait par la quantité de la recette : dire « je n'ai pas utilisé
+      // cet ingrédient » le sortait quand même du stock en entier, sans un mot.
+      // On ne complète donc que ce que PERSONNE n'a renseigné.
+      if (saisisAlaMain.has(r.id)) continue
       if (r.quantity_done > 0 || !(r.product_uom_qty > 0)) continue
       await odooCall(uid, 'stock.move', 'write', [[r.id], { quantity_done: r.product_uom_qty }]).catch(() => { })
     }
