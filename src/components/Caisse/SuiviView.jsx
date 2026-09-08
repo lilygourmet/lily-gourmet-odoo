@@ -3,6 +3,7 @@ import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, ECART_MINI } from '../../lib/caisse'
+import { windowFor } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -541,6 +542,40 @@ function NonLieSection() {
       reload()
     } catch (e) { alert('Erreur : ' + (e?.message || e)) }
   }
+  // Caisses rangées par montant arrondi : pour dire, sous chaque ligne, s'il existe une
+  // caisse de ce montant et dans quel état elle est. C'est la question qu'on se pose
+  // devant une ligne qui reste là — sans ça il faut aller fouiller la base.
+  const envsParMontant = useMemo(() => {
+    const m = new Map()
+    for (const e of pendingEnvs) {
+      const k = Math.round(Number(e.amount_cash))
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(e)
+    }
+    return m
+  }, [pendingEnvs])
+  // Caisses PLAUSIBLES pour une ligne : même montant, même moyen de paiement, et une date
+  // compatible (un dépôt suit la vente ; un virement tombe à quelques jours). Sans la date
+  // et le moyen, un montant courant comme 175 dh renvoyait des dizaines de caisses.
+  const caissesPossibles = (l) => {
+    const methode = TYPE_GROUP[l.type] || 'virement'
+    const w = windowFor(methode)
+    const k = Math.round(Number(l.amount))
+    const out = []
+    for (const dk of [k - 1, k, k + 1]) {
+      for (const e of (envsParMontant.get(dk) || [])) {
+        if (Math.abs(Number(e.amount_cash) - Number(l.amount)) >= ECART_MINI) continue
+        if ((e.payment_method || 'cash') !== methode) continue
+        const j = (new Date(l.ligne_date) - new Date(e.session_date)) / 86400000
+        if (j >= w.min && j <= w.max) out.push(e)
+      }
+    }
+    return out.sort((a, b) => String(b.session_date).localeCompare(String(a.session_date)))
+  }
+  const etatCaisse = (e) => e.deja_rapprochee ? '✓ rapprochée'
+    : e.a_confirmer ? '⏳ à confirmer'
+    : e.preuve_manuelle ? '🧾 versée'
+    : 'à verser'
   const TYPE_GROUP = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
   const count = useMemo(() => {
     const c = { cash: 0, cheque: 0, virement: 0 }
@@ -593,6 +628,24 @@ function NonLieSection() {
                 )}
               </div>
             )}
+            {view === 'free' && (() => {
+              const cs = caissesPossibles(l)
+              if (!cs.length) return (
+                <div style={{ fontSize: 11, color: '#8a7a70', marginTop: 2 }}>
+                  Aucune caisse possible — ce reçu n'a pas d'enveloppe Odoo du même montant à une date compatible.
+                </div>
+              )
+              if (cs.length === 1) return (
+                <div style={{ fontSize: 11, color: '#5b2a86', marginTop: 2 }}>
+                  1 caisse possible : {fmtDateCourte(cs[0].session_date)} ({etatCaisse(cs[0])})
+                </div>
+              )
+              return (
+                <div style={{ fontSize: 11, color: '#5b2a86', marginTop: 2 }}>
+                  {cs.length} caisses possibles — ouvre « Lier » pour choisir
+                </div>
+              )
+            })()}
             {view === 'linked' && l.env && (
               <div style={{ fontSize: 11, color: '#0a7d3d', marginTop: 2 }}>
                 → {l.env.destinataire?.name || l.env.source || 'enveloppe'} · {l.env.session_date}{l.env.amount_cash != null ? ` · ${fmtMoney(l.env.amount_cash)}` : ''}

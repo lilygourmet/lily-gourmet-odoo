@@ -358,7 +358,7 @@ function candidatesFor(method, credits) {
 // Espèces : dépôt le jour même ou APRÈS l'encaissement boutique — JAMAIS avant
 // (on ne peut pas déposer un argent pas encore encaissé) → min 0.
 // Chèque : dépôt après la vente, petite tolérance amont pour les dates de remise.
-function windowFor(method) {
+export function windowFor(method) {
   if (method === 'virement') return { min: -5, max: 5 }
   if (method === 'cash')     return { min: 0, max: 100 }
   return { min: -2, max: 100 }
