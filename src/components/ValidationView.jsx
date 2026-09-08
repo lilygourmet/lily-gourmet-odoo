@@ -106,9 +106,12 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   // c'est faux, on n'enregistre RIEN (voir le commentaire de l'effet plus bas).
   const saisiesLues = useRef(false)
 
+  // `chargement` part à vrai et ne repasse à vrai nulle part : inutile, les deux
+  // boutons qui relancent la lecture remettent d'abord la liste à zéro, et une
+  // liste absente suffit à afficher le squelette. Le remettre ici était en plus
+  // un appel d'état interdit dans un effet (react-hooks/set-state-in-effect).
   useEffect(() => {
     let vivant = true
-    setChargement(true)
     Promise.all([loadOrdres(), loadFaits()])
       .then(async ([tous, f]) => {
         if (!vivant) return
