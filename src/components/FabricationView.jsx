@@ -509,7 +509,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const caduques = useMemo(() => {
     const tous = (data && data.ordres) || []
     if (!tous.length || !charge) return []
-    const ouverts = new Set(tous.map(o => o.name))
+    // « Ouvert » veut dire PAS ENCORE VALIDÉ. Un ordre validé reste dix jours
+    // dans la liste que renvoie Odoo : sans ce filtre, sa coche n'était jamais
+    // effacée — le 2026-09-08, 72 coches sur 72 étaient encore comptées, dont
+    // une du 29 août. C'est ce qui nourrissait les fausses tournées, et ça
+    // faisait compter deux fois le stock d'une préparation validée (Odoo l'a
+    // déjà monté, l'app le rajoutait). Les deux autres calculs du fichier
+    // filtrent bien, celui-ci était le seul à ne pas le faire.
+    const ouverts = new Set(tous.filter(o => o.etat !== 'done' && o.etat !== 'cancel').map(o => o.name))
     return Object.entries(faitsBruts)
       .filter(([, info]) => !info || !info.fait_le || new Date(info.fait_le).getTime() < charge)
       .filter(([cle, info]) => {
